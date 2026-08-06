@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Build-Vite-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![MySQL](https://img.shields.io/badge/Database-MySQL-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
-[![License](https://img.shields.io/badge/License-Unspecified-lightgrey.svg)](#开源协议)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](#开源协议)
 
 ---
 
@@ -250,9 +250,9 @@ WisPath_CampusMate_v2.0/
 
 ## 开源协议
 
-本项目**尚未指定开源协议**。在公开发布到 GitHub 前，建议添加许可证文件（如 `LICENSE`）以明确使用与分发条款；未添加许可证时，默认保留所有权利（all rights reserved）。
+本项目采用 **MIT License**，详见仓库根目录的 [`LICENSE`](LICENSE) 文件。
 
-如需采用宽松协议（例如 MIT），可在仓库根目录创建 `LICENSE` 文件。
+MIT 是一款宽松开源协议：任何人可自由使用、复制、修改、合并、发布、分发、再授权及销售本软件，但须保留原始版权声明与许可声明，且软件按"原样"提供，不附任何担保。
 
 ---
 
