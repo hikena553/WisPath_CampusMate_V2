@@ -1,0 +1,238 @@
+/* ===== Light Theme (default) ===== */
+:root {
+  --bg-primary: #f8f9fc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-page: #f8f9fc;
+  --text-primary: #1a1a2e;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --text-placeholder: #bbbbbb;
+  --border-color: rgba(0,0,0,0.06);
+  --border-light: #f0f0f0;
+  --shadow-sm: 0 1px 6px rgba(0,0,0,0.02);
+  --shadow-md: 0 2px 10px rgba(0,0,0,0.03);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.04);
+  --shadow-xl: 0 8px 30px rgba(0,0,0,0.06);
+  --gradient-page: linear-gradient(180deg, #f8f9fc 0%, #ffffff 100%);
+  --gradient-card: linear-gradient(135deg, #eaf4ff 0%, #f0faf0 100%);
+  --hover-bg: rgba(64,158,255,0.04);
+  --sidebar-bg: rgba(255,255,255,0.7);
+  --sidebar-border: rgba(255,255,255,0.8);
+  --accent-blue: #409eff;
+  --accent-green: #67c23a;
+  --accent-orange: #e6a23c;
+  --accent-red: #f56c6c;
+}
+
+/* ===== Dark Theme ===== */
+html.dark {
+  --bg-primary: #141415;
+  --bg-secondary: #1e1e20;
+  --bg-card: #1e1e20;
+  --bg-page: #141415;
+  --text-primary: #e8e8ea;
+  --text-secondary: #a0a0a8;
+  --text-muted: #707078;
+  --text-placeholder: #505058;
+  --border-color: rgba(255,255,255,0.06);
+  --border-light: rgba(255,255,255,0.04);
+  --shadow-sm: 0 1px 6px rgba(0,0,0,0.2);
+  --shadow-md: 0 2px 10px rgba(0,0,0,0.25);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.3);
+  --shadow-xl: 0 8px 30px rgba(0,0,0,0.35);
+  --gradient-page: linear-gradient(180deg, #141415 0%, #1a1a1c 100%);
+  --gradient-card: linear-gradient(135deg, rgba(64,158,255,0.08) 0%, rgba(103,194,58,0.04) 100%);
+  --hover-bg: rgba(64,158,255,0.1);
+  --sidebar-bg: rgba(30,30,32,0.8);
+  --sidebar-border: rgba(255,255,255,0.06);
+}
+
+/* ===== Global Overrides ===== */
+html.dark body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+
+html.dark,
+html.dark body,
+html.dark #app {
+  background: var(--bg-page) !important;
+}
+
+html.dark .app-shell {
+  background: var(--bg-page) !important;
+}
+
+html.dark .topbar {
+  background: var(--bg-secondary) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+html.dark .main-area {
+  background: var(--bg-page) !important;
+}
+
+html.dark .campus-sidebar {
+  background: var(--sidebar-bg) !important;
+  border-color: var(--sidebar-border) !important;
+}
+
+html.dark .side-btn.active {
+  background: rgba(64,158,255,0.15) !important;
+}
+
+html.dark .side-btn .side-label {
+  color: var(--text-secondary) !important;
+}
+
+html.dark .side-btn.active .side-label {
+  color: var(--accent-blue) !important;
+}
+
+html.dark .chart-card,
+html.dark .tag-card,
+html.dark .record-card,
+html.dark .project-card,
+html.dark .grade-card,
+html.dark .exam-card,
+html.dark .goal-item,
+html.dark .link-card,
+html.dark .tutor-card,
+html.dark .section-card,
+html.dark .stat-card,
+html.dark .metric-item {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+html.dark .score-header {
+  background: var(--gradient-card) !important;
+}
+
+html.dark .schedule-grid {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+html.dark .sg-header {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+html.dark .sg-period {
+  background: rgba(255,255,255,0.02) !important;
+}
+
+html.dark .section-card {
+  background: var(--bg-card) !important;
+}
+
+html.dark .welcome-header {
+  background: linear-gradient(135deg, rgba(64,158,255,0.08), rgba(64,158,255,0.03)) !important;
+  border-color: rgba(64,158,255,0.15) !important;
+}
+
+html.dark .filter-btn {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+html.dark .filter-btn.active {
+  background: var(--accent-blue) !important;
+  color: #fff !important;
+}
+
+html.dark .page-tabs {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+html.dark .tab-item.active {
+  background: var(--bg-card) !important;
+}
+
+html.dark .el-dialog,
+html.dark .el-dialog__header,
+html.dark .el-dialog__body,
+html.dark .el-dialog__footer {
+  background: var(--bg-secondary) !important;
+}
+
+html.dark .announce-list {
+  background: var(--bg-card) !important;
+}
+
+html.dark .announce-item {
+  border-bottom-color: var(--border-color) !important;
+}
+
+html.dark .announce-item:hover {
+  background: var(--hover-bg) !important;
+}
+
+html.dark .bubble.assistant {
+  background: rgba(255,255,255,0.06) !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark .quick-card {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+html.dark .ai-result-card {
+  background: linear-gradient(135deg, rgba(64,158,255,0.08), rgba(64,158,255,0.03)) !important;
+}
+
+html.dark .input-container {
+  background: rgba(255,255,255,0.04) !important;
+  border-color: var(--border-color) !important;
+}
+
+html.dark .welcome {
+  background: var(--gradient-page) !important;
+}
+
+html.dark .sg-course {
+  color: var(--text-primary) !important;
+}
+
+html.dark .sgc-name {
+  color: var(--text-primary) !important;
+}
+
+/* ===== Global Cursor Caret Control ===== */
+body { caret-color: transparent; }
+input, textarea, [contenteditable="true"] { caret-color: auto; }
+
+/* ===== Table Header Uniform Style ===== */
+.el-table th.el-table__cell {
+  background: transparent;
+  color: #333;
+  font-weight: 700;
+  border-bottom: 1px solid #e8e8e8 !important;
+}
+
+.el-table tbody tr:nth-child(even) > td {
+  background: #fafafa;
+}
+
+.el-table tbody tr:hover > td {
+  background-color: #f5f5f5 !important;
+}
+
+html.dark .el-table th.el-table__cell {
+  background: transparent;
+  color: var(--text-primary);
+  border-bottom-color: var(--border-color) !important;
+}
+
+html.dark .el-table tbody tr:nth-child(even) > td {
+  background: rgba(255,255,255,0.02);
+}
+
+html.dark .el-table tbody tr:hover > td {
+  background-color: rgba(255,255,255,0.04) !important;
+}
+
+

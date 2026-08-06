@@ -1,0 +1,166 @@
+/* ===== 移动端响应式全局样式 ===== */
+
+/* 基础样式 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ===== 移动端样式覆盖 ===== */
+@media (max-width: 768px) {
+
+  /* --- Element Plus: Dialog 全屏化 --- */
+  .el-dialog {
+    --el-dialog-width: 92vw !important;
+    margin-top: 5vh !important;
+    border-radius: 16px !important;
+  }
+
+  .el-dialog__body {
+    padding: 16px !important;
+  }
+
+  .el-dialog__header {
+    padding: 16px 16px 12px !important;
+  }
+
+  .el-dialog__footer {
+    padding: 12px 16px 16px !important;
+  }
+
+  /* --- Element Plus: Drawer 全宽 --- */
+  .el-drawer {
+    width: 100vw !important;
+  }
+
+  /* --- Element Plus: Tabs 水平滚动 --- */
+  .el-tabs__nav-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .el-tabs__item {
+    white-space: nowrap;
+    padding: 0 12px;
+    min-height: 44px;
+  }
+
+  /* --- Element Plus: Pagination 紧凑模式 --- */
+  .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .el-pagination .el-pagination__sizes {
+    display: none;
+  }
+
+  .el-pagination .el-pagination__jump {
+    display: none;
+  }
+
+  /* --- Element Plus: Table 紧凑 --- */
+  .el-table {
+    font-size: 13px;
+  }
+
+  .el-table th.el-table__cell {
+    font-size: 12px;
+    padding: 6px 0;
+  }
+
+  .el-table td.el-table__cell {
+    padding: 6px 0;
+  }
+
+  /* --- Element Plus: Form 全宽 --- */
+  .el-form-item {
+    margin-bottom: 16px;
+  }
+
+  .el-input,
+  .el-select,
+  .el-textarea {
+    width: 100% !important;
+  }
+
+  /* 输入框字体大小 16px 防止 iOS 自动缩放 */
+  .el-input__inner {
+    font-size: 16px !important;
+  }
+
+  .el-textarea__inner {
+    font-size: 16px !important;
+  }
+
+  /* --- Element Plus: DatePicker 全宽 --- */
+  .el-date-editor {
+    width: 100% !important;
+  }
+
+  /* --- Element Plus: Radio/Checkbox Group 换行 --- */
+  .el-radio-group,
+  .el-checkbox-group {
+    flex-wrap: wrap;
+  }
+
+  /* --- 触摸目标最小尺寸 --- */
+  .el-button--small {
+    min-height: 36px;
+  }
+
+  .el-button {
+    min-height: 44px;
+  }
+
+  /* --- 安全区域适配 --- */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* --- 页面通用移动端样式 --- */
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start !important;
+  }
+
+  .page-header .el-input,
+  .page-header .el-select {
+    width: 100% !important;
+  }
+
+  /* --- 筛选行移动端堆叠 --- */
+  .filter-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .filter-row > * {
+    width: 100% !important;
+  }
+
+  /* --- 隐藏滚动条但保持可滚动 --- */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ===== 平板样式 ===== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .el-dialog {
+    --el-dialog-width: 80vw !important;
+  }
+}
