@@ -127,3 +127,6 @@ tmp/
 
 # ---------- Internal agent / tooling data (not for public repo) ----------
 .workbuddy/
+
+# ---------- Docs (excluded from repo) ----------
+docs/
