@@ -15,3 +15,4 @@ from app.models.notification import Notification, NotificationType
 from app.models.feedback import Feedback, FeedbackType, FeedbackStatus
 from app.models.setting import SystemSetting
 from app.models.profile import StudentProfileSnapshot, ConversationSummary
+from app.models.lost_found import LostFoundItem, LostFoundComment

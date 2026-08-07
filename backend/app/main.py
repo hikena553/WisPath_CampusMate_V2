@@ -25,6 +25,7 @@ from app.api.feedback import router as feedback_router
 from app.api.setting import router as setting_router
 from app.api.grade_analysis import router as grade_analysis_router
 from app.api.profile import router as profile_router
+from app.api.lost_found import router as lost_found_router
 
 import logging
 
@@ -79,6 +80,7 @@ app.include_router(feedback_router)
 app.include_router(setting_router)
 app.include_router(grade_analysis_router)
 app.include_router(profile_router)
+app.include_router(lost_found_router)
 
 
 @app.get("/api/health")

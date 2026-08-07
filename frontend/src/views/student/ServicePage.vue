@@ -9,7 +9,7 @@
 
       <div class="tabs-row">
         <div v-for="tab in formTabs" :key="tab.key" :class="['tab-card', { active: activeForm === tab.key }]" @click="activeForm = tab.key">
-          <span class="tab-icon">{{ tab.icon }}</span>
+          <span class="tab-icon"><el-icon :size="24"><component :is="tab.icon" /></el-icon></span>
           <div>
             <div class="tab-title">{{ tab.label }}</div>
             <div class="tab-desc">{{ tab.desc }}</div>
@@ -132,33 +132,33 @@
       </div>
     </div>
 
-    <!-- toggle button -->
-    <div class="sidebar-toggle" :class="{ collapsed: !sidebarOpen }" @click="sidebarOpen = !sidebarOpen">
-      <span class="toggle-icon">{{ sidebarOpen ? '\u25B6' : '\u25C0' }}</span>
-      <span v-if="!sidebarOpen" class="toggle-label">记录</span>
-    </div>
-
-    <!-- right: records sidebar -->
-    <div v-show="sidebarOpen" class="records-sidebar">
-      <div class="sidebar-header">
-        <h3>申请记录</h3>
-        <span class="sidebar-count">近3个月 {{ totalCount }} 条</span>
-      </div>
-      <div v-if="!groupedMonths.length" class="empty-msg">暂无申请记录</div>
-      <div v-for="group in groupedMonths" :key="group.month" class="month-group">
-        <div class="month-label">{{ group.label }}</div>
-        <div v-for="r in group.records" :key="r._source + '-' + r.id" :class="['record-item', { active: detail && detail.id === r.id && detail._source === r._source }]" @click="viewDetail(r)">
-          <div class="record-top">
-            <span class="record-type">{{ typeLabel(r.type) }}</span>
-            <el-tag :type="statusTagType(r.status)" size="small" effect="plain">{{ statusLabel(r.status) }}</el-tag>
-          </div>
-          <div class="record-title">{{ r.title }}</div>
-          <div class="record-date">{{ formatDate(r.created_at) }}</div>
-          <div v-if="r.status === 'pending'" class="record-actions">
-            <el-button link type="danger" size="small" @click.stop="handleCancel(r)">撤销</el-button>
+    <!-- 右侧双面板 -->
+    <div class="right-panels">
+      <!-- 申请记录面板 -->
+      <div class="records-panel">
+        <div class="panel-header">
+          <h3>申请记录</h3>
+          <span class="panel-count">近3个月 {{ totalCount }} 条</span>
+        </div>
+        <div v-if="!groupedMonths.length" class="empty-msg">暂无申请记录</div>
+        <div v-for="group in groupedMonths" :key="group.month" class="month-group">
+          <div class="month-label">{{ group.label }}</div>
+          <div v-for="r in group.records" :key="r._source + '-' + r.id" :class="['record-item', { active: detail && detail.id === r.id && detail._source === r._source }]" @click="viewDetail(r)">
+            <div class="record-top">
+              <span class="record-type">{{ typeLabel(r.type) }}</span>
+              <el-tag :type="statusTagType(r.status)" size="small" effect="plain">{{ statusLabel(r.status) }}</el-tag>
+            </div>
+            <div class="record-title">{{ r.title }}</div>
+            <div class="record-date">{{ formatDate(r.created_at) }}</div>
+            <div v-if="r.status === 'pending'" class="record-actions">
+              <el-button link type="danger" size="small" @click.stop="handleCancel(r)">撤销</el-button>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- 失物招领面板 -->
+      <LostFoundPanel />
     </div>
 
     <el-dialog v-model="detailVisible" :title="detail?.title || '申请详情'" width="620px">
@@ -221,11 +221,13 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Calendar as CalendarIcon, Document, Promotion, ChatDotRound } from '@element-plus/icons-vue'
 import { getTickets, createTicket, cancelTicket } from '@/api/service'
 import { getMyLeaves, createLeave, deleteLeave } from '@/api/leave'
 import { createFeedback, type FeedbackCreate } from '@/api/feedback'
 import { useAuthStore } from '@/stores/auth'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
+import LostFoundPanel from '@/components/service/LostFoundPanel.vue'
 import type { ServiceTicket, LeaveRequestOut } from '@/types'
 
 const auth = useAuthStore()
@@ -236,7 +238,6 @@ const leaveRecords = ref<LeaveRequestOut[]>([])
 const submitting = ref(false)
 const detailVisible = ref(false)
 const detail = ref<any | null>(null)
-const sidebarOpen = ref(true)
 const formRef = ref<any>(null)
 const feedbackFormRef = ref<any>(null)
 
@@ -289,10 +290,10 @@ const feedbackForm = reactive<FeedbackCreate>({
   contact: ''
 })
 const formTabs = [
-  { key: 'leave', label: '请假申请', icon: '📅', desc: '课假/公假/宿假/事假/病假' },
-  { key: 'certificate', label: '证明申请', icon: '📄', desc: '在校证明/成绩单/在读证明' },
-  { key: 'project', label: '项目申请', icon: '🚀', desc: '竞赛/科研/社会实践/创业' },
-  { key: 'feedback', label: '意见反馈', icon: '💬', desc: '问题反馈/功能建议/投诉' },
+  { key: 'leave', label: '请假申请', icon: CalendarIcon, desc: '课假/公假/宿假/事假/病假' },
+  { key: 'certificate', label: '证明申请', icon: Document, desc: '在校证明/成绩单/在读证明' },
+  { key: 'project', label: '项目申请', icon: Promotion, desc: '竞赛/科研/社会实践/创业' },
+  { key: 'feedback', label: '意见反馈', icon: ChatDotRound, desc: '问题反馈/功能建议/投诉' },
 ]
 
 const currentTab = computed(() => formTabs.find(t => t.key === activeForm.value)!)
@@ -561,50 +562,44 @@ async function handleCancel(row: any) {
 .form-section { background: var(--bg-card); border-radius: 10px; padding: 24px; box-shadow: var(--shadow-md); }
 .file-tag { display: inline-block; margin: 4px 4px 0 0; }
 
-.records-sidebar {
+.right-panels {
   width: 320px; flex-shrink: 0; position: sticky; top: 20px;
-  background: var(--bg-card); border-radius: 10px; padding: 16px;
-  box-shadow: var(--shadow-md); max-height: calc(100vh - 110px); overflow-y: auto;
-  scrollbar-width: none; -ms-overflow-style: none;
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: calc(100vh - 110px);
 }
-.records-sidebar::-webkit-scrollbar { display: none; }
-.sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.sidebar-header h3 { margin: 0; font-size: 16px; }
-.sidebar-count { font-size: 12px; color: var(--text-muted); }
-.empty-msg { text-align: center; color: var(--text-placeholder); padding: 40px 0; font-size: 14px; }
+.records-panel {
+  background: var(--bg-card); border-radius: 10px; padding: 14px;
+  box-shadow: var(--shadow-md); max-height: 45%; overflow-y: auto;
+  scrollbar-width: none;
+}
+.records-panel::-webkit-scrollbar { display: none; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.panel-header h3 { margin: 0; font-size: 14px; }
+.panel-count { font-size: 11px; color: var(--text-muted); }
+.empty-msg { text-align: center; color: var(--text-placeholder); padding: 30px 0; font-size: 13px; }
 
-.month-group { margin-bottom: 16px; }
-.month-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; padding: 0 4px; }
+.month-group { margin-bottom: 12px; }
+.month-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; padding: 0 4px; }
 
 .record-item {
-  padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.15s;
-  border: 1px solid transparent; margin-bottom: 6px;
+  padding: 8px; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  border: 1px solid transparent; margin-bottom: 4px;
 }
 .record-item:hover { background: #f5f7fa; }
 .record-item.active { background: #ecf5ff; border-color: #409eff; }
-.record-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.record-type { font-size: 12px; color: #409eff; font-weight: 500; }
-.record-title { font-size: 13px; color: var(--text-primary); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.record-date { font-size: 11px; color: var(--text-placeholder); }
-.record-actions { margin-top: 4px; }
+.record-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+.record-type { font-size: 11px; color: #409eff; font-weight: 500; }
+.record-title { font-size: 12px; color: var(--text-primary); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-date { font-size: 10px; color: var(--text-placeholder); }
+.record-actions { margin-top: 2px; }
+
+.right-panels > :last-child { flex: 1; min-height: 0; overflow: hidden; }
 
 .detail-panel { max-height: 65vh; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .detail-panel::-webkit-scrollbar { display: none; }
 .detail-status-bar { margin-bottom: 16px; }
 .attachment-link { color: #409eff; text-decoration: none; }
 .attachment-link:hover { text-decoration: underline; }
-
-.sidebar-toggle {
-  width: 28px; height: 48px; flex-shrink: 0; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px 0 0 6px;
-  margin-top: 60px; transition: all 0.2s; position: relative;
-  box-shadow: -2px 0 6px rgba(0,0,0,0.04);
-}
-.sidebar-toggle:hover { background: #ecf5ff; border-color: #409eff; color: #409eff; }
-.sidebar-toggle.collapsed { border-radius: 0 6px 6px 0; box-shadow: 2px 0 6px rgba(0,0,0,0.04); }
-.toggle-icon { font-size: 10px; }
-.toggle-label { position: absolute; bottom: -18px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
 /* ===== Mobile ===== */
 @media (max-width: 767px) {
@@ -613,8 +608,8 @@ async function handleCancel(row: any) {
   .tab-card { min-width: calc(50% - 4px); flex: unset; padding: 10px 12px; }
   .tab-desc { display: none; }
   .form-section { padding: 16px; }
-  .records-sidebar { width: 100%; position: static; max-height: 300px; }
-  .sidebar-toggle { display: none; }
+  .right-panels { width: 100%; position: static; max-height: none; flex-direction: column; }
+  .records-panel { max-height: 250px; }
   .el-col { max-width: 100% !important; flex: 0 0 100% !important; }
 }
 </style>
