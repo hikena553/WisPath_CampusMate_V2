@@ -5,7 +5,7 @@ import { setToken, setUser, getToken, getUser, removeToken } from '@/utils/token
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(getToken())
-  const user = ref<UserInfo | null>(getUser())
+  const user = ref<UserInfo | null>(getUser() as UserInfo | null)
 
   const isLoggedIn = computed(() => !!token.value)
   const role = computed(() => user.value?.role)
@@ -15,12 +15,12 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = t
     user.value = u
     setToken(t)
-    setUser(u)
+    setUser(u as unknown as Record<string, unknown>)
   }
 
   function updateUser(u: UserInfo) {
     user.value = u
-    setUser(u)
+    setUser(u as unknown as Record<string, unknown>)
   }
 
   function logout() {

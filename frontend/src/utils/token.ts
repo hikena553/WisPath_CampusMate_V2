@@ -25,7 +25,7 @@ export function removeToken() {
 
 export function getUser(): Record<string, unknown> | null {
   const raw = localStorage.getItem(USER_KEY)
-  return raw ? JSON.parse(raw) : null
+  return raw ? (JSON.parse(raw) as Record<string, unknown>) : null
 }
 
 export function setUser(user: Record<string, unknown>) {

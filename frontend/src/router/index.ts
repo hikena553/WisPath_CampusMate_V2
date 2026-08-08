@@ -68,7 +68,7 @@ router.beforeEach((to) => {
   // 已登录但访问登录页，根据角色重定向
   if (token && to.path === '/login') {
     const roleMap: Record<string, string> = { teacher: '/teacher', admin: '/admin' }
-    return roleMap[user?.role || ''] || '/student'
+    return roleMap[(user?.role as string) || ''] || '/student'
   }
   
   // 角色检查
