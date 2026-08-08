@@ -373,47 +373,47 @@ onMounted(loadData)
 .approval-page { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 8px 4px; }
 
 .page-header {
-  display: flex; align-items: baseline; gap: 12px;
-  margin-bottom: 20px; padding: 0 4px;
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 12px; padding: 0 4px;
 }
 .page-header h2 {
-  font-size: 22px; font-weight: 700; color: #1a1a2e; margin: 0;
+  font-size: 18px; font-weight: 700; color: #1a1a2e; margin: 0;
 }
-.page-sub { font-size: 14px; color: #888; margin: 0; }
+.page-sub { font-size: 12px; color: #888; margin: 0; }
 .page-sub strong { color: #e6a23c; }
 
-.approval-tabs { --el-tabs-header-height: 44px; }
-.approval-tabs :deep(.el-tabs__header) { margin-bottom: 20px; }
-.approval-tabs :deep(.el-tabs__item) { font-size: 14px; font-weight: 500; }
+.approval-tabs { --el-tabs-header-height: 40px; }
+.approval-tabs :deep(.el-tabs__header) { margin-bottom: 14px; }
+.approval-tabs :deep(.el-tabs__item) { font-size: 13px; font-weight: 500; }
 .approval-tabs :deep(.el-tabs__item.is-active) { font-weight: 600; }
 
 .section-card {
   background: #fff;
-  border-radius: 14px;
-  padding: 20px 22px;
-  margin-bottom: 20px;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
   border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
 }
 
 .section-header {
   display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 .section-header h3 {
-  font-size: 16px; font-weight: 600; color: #1a1a2e; margin: 0;
+  font-size: 14px; font-weight: 600; color: #1a1a2e; margin: 0;
   display: flex; align-items: center; gap: 6px;
 }
 
 .ai-analyze { display: flex; align-items: center; gap: 6px; }
-.analyze-tip { cursor: pointer; color: #909399; font-size: 16px; }
+.analyze-tip { cursor: pointer; color: #909399; font-size: 14px; }
 .analyze-tip:hover { color: #409eff; }
 .analyzing-tag { display: inline-flex; align-items: center; gap: 4px; }
 
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding: 12px 0;
+  margin-top: 10px;
+  padding: 8px 0;
 }
 </style>

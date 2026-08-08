@@ -4,15 +4,24 @@
       <h2>院系班级管理</h2>
     </div>
 
+    <div class="tab-bar">
+      <el-radio-group v-model="activeTab" size="default">
+        <el-radio-button value="all">全部</el-radio-button>
+        <el-radio-button value="college">学院管理</el-radio-button>
+        <el-radio-button value="major">专业管理</el-radio-button>
+        <el-radio-button value="class">班级管理</el-radio-button>
+      </el-radio-group>
+    </div>
+
     <!-- 学院管理 -->
-    <el-card shadow="never" style="margin-bottom: 20px">
+    <el-card v-if="activeTab === 'all' || activeTab === 'college'" shadow="never" style="margin-bottom: 20px">
       <template #header>
         <div class="card-header">
           <span>学院管理</span>
           <el-button type="primary" @click="showCollegeDialog()">新增学院</el-button>
         </div>
       </template>
-      <el-table :data="colleges" stripe border>
+      <el-table :data="paginatedColleges" stripe border>
         <el-table-column prop="code" label="学院代码" width="120" />
         <el-table-column prop="name" label="学院名称" />
         <el-table-column prop="description" label="描述" />
@@ -27,10 +36,19 @@
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="colleges.length > collegePageSize" class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="collegeCurrentPage"
+          :page-size="collegePageSize"
+          :total="colleges.length"
+          layout="total, prev, pager, next"
+          small
+        />
+      </div>
     </el-card>
 
     <!-- 专业管理 -->
-    <el-card shadow="never" style="margin-bottom: 20px">
+    <el-card v-if="activeTab === 'all' || activeTab === 'major'" shadow="never" style="margin-bottom: 20px">
       <template #header>
         <div class="card-header">
           <span>专业管理</span>
@@ -42,7 +60,7 @@
           </div>
         </div>
       </template>
-      <el-table :data="filteredMajors" stripe border>
+      <el-table :data="paginatedMajors" stripe border>
         <el-table-column prop="college_name" label="所属学院" width="140" />
         <el-table-column prop="code" label="专业代码" width="120" />
         <el-table-column prop="name" label="专业名称" />
@@ -58,10 +76,19 @@
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="filteredMajors.length > majorPageSize" class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="majorCurrentPage"
+          :page-size="majorPageSize"
+          :total="filteredMajors.length"
+          layout="total, prev, pager, next"
+          small
+        />
+      </div>
     </el-card>
 
     <!-- 班级管理 -->
-    <el-card shadow="never">
+    <el-card v-if="activeTab === 'all' || activeTab === 'class'" shadow="never">
       <template #header>
         <div class="card-header">
           <span>班级管理</span>
@@ -73,7 +100,7 @@
           </div>
         </div>
       </template>
-      <el-table :data="filteredClassGroups" stripe border>
+      <el-table :data="paginatedClassGroups" stripe border>
         <el-table-column prop="college_name" label="学院" width="140" />
         <el-table-column prop="major_name" label="专业" width="160" />
         <el-table-column prop="grade" label="年级" width="80" />
@@ -89,6 +116,15 @@
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="filteredClassGroups.length > classPageSize" class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="classCurrentPage"
+          :page-size="classPageSize"
+          :total="filteredClassGroups.length"
+          layout="total, prev, pager, next"
+          small
+        />
+      </div>
     </el-card>
 
     <!-- 学院弹窗 -->
@@ -142,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { College, Major, ClassGroup } from '@/types'
 import {
@@ -155,6 +191,7 @@ const colleges = ref<College[]>([])
 const majors = ref<Major[]>([])
 const classGroups = ref<ClassGroup[]>([])
 
+const activeTab = ref('all')
 const majorFilterCollege = ref<number | null>(null)
 const cgFilterMajor = ref<number | null>(null)
 
@@ -164,6 +201,30 @@ const filteredMajors = computed(() =>
 const filteredClassGroups = computed(() =>
   cgFilterMajor.value ? classGroups.value.filter(cg => cg.major_id === cgFilterMajor.value) : classGroups.value
 )
+
+// ─── 分页 ─────────────────────────────────────────────
+const collegeCurrentPage = ref(1)
+const collegePageSize = ref(10)
+const majorCurrentPage = ref(1)
+const majorPageSize = ref(10)
+const classCurrentPage = ref(1)
+const classPageSize = ref(10)
+
+const paginatedColleges = computed(() => {
+  const start = (collegeCurrentPage.value - 1) * collegePageSize.value
+  return colleges.value.slice(start, start + collegePageSize.value)
+})
+const paginatedMajors = computed(() => {
+  const start = (majorCurrentPage.value - 1) * majorPageSize.value
+  return filteredMajors.value.slice(start, start + majorPageSize.value)
+})
+const paginatedClassGroups = computed(() => {
+  const start = (classCurrentPage.value - 1) * classPageSize.value
+  return filteredClassGroups.value.slice(start, start + classPageSize.value)
+})
+
+watch(majorFilterCollege, () => { majorCurrentPage.value = 1 })
+watch(cgFilterMajor, () => { classCurrentPage.value = 1 })
 
 // ─── 学院弹窗 ─────────────────────────────────────────
 const collegeDialogVisible = ref(false)
@@ -280,8 +341,10 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.page-container { padding: 20px; }
-.page-header { margin-bottom: 20px; }
-.page-header h2 { margin: 0; font-size: 20px; }
+.page-container { padding: 16px; }
+.page-header { margin-bottom: 12px; }
+.page-header h2 { margin: 0;   font-size: 18px; }
+.tab-bar { margin-bottom: 14px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.pagination-wrap { display: flex; justify-content: flex-end; margin-top: 10px; }
 </style>

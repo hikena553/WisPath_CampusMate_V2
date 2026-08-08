@@ -3,6 +3,7 @@
     "shadcn": "^4.8.2"
   },
   "dependencies": {
-    "docx": "^9.7.1"
+    "docx": "^9.7.1",
+    "playwright": "^1.52.0"
   }
 }

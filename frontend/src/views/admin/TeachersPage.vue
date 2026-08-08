@@ -280,7 +280,7 @@ onMounted(loadTeachers)
 
 <style scoped>
 .teachers-page {
-  padding: 24px;
+  padding: 16px;
   overflow-y: auto;
   height: 100%;
 }
@@ -289,11 +289,11 @@ onMounted(loadTeachers)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .page-header h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: #333;
   margin: 0;
@@ -314,20 +314,20 @@ onMounted(loadTeachers)
 .batch-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 6px 10px;
   background: #f8faff;
   border-radius: 6px;
 }
 
 .batch-info {
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
 }
 .batch-info strong {
   color: #409eff;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .action-cell :deep(.action-buttons) {
@@ -338,7 +338,7 @@ onMounted(loadTeachers)
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding: 12px 0;
+  margin-top: 10px;
+  padding: 8px 0;
 }
 </style>

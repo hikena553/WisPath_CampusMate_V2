@@ -2,7 +2,7 @@
   <div class="app-shell">
     <header class="topbar">
       <div class="topbar-left" style="cursor:pointer" @click="goTo('/teacher')">
-        <img src="/images/校徽.png" class="topbar-badge" />
+        <img src="/images/校徽_圆形.png" class="topbar-badge" />
         <span class="logo">绵小城</span>
         <span class="logo-divider"></span>
         <span class="motto">博学、笃行、严谨、创新</span>
@@ -383,20 +383,18 @@ body { overflow: hidden; margin: 0; }
 /* ===== Topbar ===== */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; height: 56px; border-bottom: 1px solid rgba(64,158,255,0.1);
-  background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+  padding: 0 24px; height: 56px;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb, #3b82f6);
   flex-shrink: 0; z-index: 100;
-  box-shadow: 0 1px 8px rgba(64,158,255,0.06);
+  box-shadow: 0 2px 12px rgba(29,78,216,0.35);
 }
-.topbar-left { display: flex; align-items: center; gap: 8px; }
-.topbar-badge { height: 32px; width: auto; border-radius: 4px; }
-.logo { font-size: 20px; font-weight: 700; color: var(--accent-blue); letter-spacing: 1px; }
-.logo-divider { width: 1px; height: 20px; background: var(--border-color); margin: 0 6px; }
+.topbar-left { display: flex; align-items: center; gap: 8px; position: relative; z-index: 101; }
+.topbar-badge { height: 36px; width: 36px; border-radius: 50%; object-fit: cover; filter: brightness(0.85) saturate(1.3); }
+.logo { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: 1px; }
+.logo-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.3); margin: 0 6px; }
 .motto {
   font-size: 14px; font-weight: 600;
-  background: linear-gradient(135deg, #c41d7f, #e8a020);
-  background-clip: text; -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: rgba(255,255,255,0.85);
   letter-spacing: 4px;
 }
 .topbar-right { display: flex; align-items: center; gap: 4px; }
@@ -464,4 +462,6 @@ body { overflow: hidden; margin: 0; }
 }
 .avatar-upload-wrap:hover .avatar-overlay { opacity: 1; }
 .crop-container { max-height: 360px; overflow: hidden; }
+:deep(.topbar-right .el-button) { color: rgba(255,255,255,0.85); }
+:deep(.topbar-right .el-button:hover) { color: #ffffff; background: rgba(255,255,255,0.2); }
 </style>

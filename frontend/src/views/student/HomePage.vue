@@ -79,7 +79,7 @@ function showAnnouncementDetail(a: AnnouncementItem) {
 }
 
 function goCampusAnnounce() {
-  router.push('/student/campus?tab=announcements')
+  router.push('/student/campus?tab=teacher-announcements')
 }
 
 onMounted(checkUnread)

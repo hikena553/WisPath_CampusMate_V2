@@ -17,6 +17,7 @@ from app.api.teacher import router as teacher_router
 from app.api.upload import router as upload_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
+from app.api.groups import router as groups_router
 from app.api.announcement import router as announcement_router
 from app.api.admin import router as admin_router
 from app.api.organization import router as organization_router
@@ -88,6 +89,7 @@ app.include_router(teacher_router)
 app.include_router(conversations_router)
 app.include_router(upload_router)
 app.include_router(messages_router)
+app.include_router(groups_router)
 app.include_router(announcement_router)
 app.include_router(admin_router)
 app.include_router(organization_router)

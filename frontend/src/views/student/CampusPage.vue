@@ -172,20 +172,9 @@
           </div>
         </template>
 
-        <template v-else-if="activeTab === 'announcements'">
-          <div v-if="announcements.length" class="announce-list">
-            <a v-for="a in announcements" :key="a.url ?? ''" :href="a.url ?? '#'" target="_blank" class="announce-item">
-              <span class="announce-dot"></span>
-              <span class="announce-title">{{ a.title }}</span>
-              <span class="announce-date">{{ a.date ?? '' }}</span>
-            </a>
-          </div>
-          <el-empty v-else description="暂无公告或获取失败" />
-        </template>
-
         <template v-else-if="activeTab === 'teacher-announcements'">
           <div v-if="tutorAnnouncements.length" class="announce-list">
-            <div v-for="a in tutorAnnouncements" :key="a.id" class="tutor-card" @click="showAnnounceDetail(a)">
+            <div v-for="a in tutorAnnouncements" :key="a.id" :id="`announcement-${a.id}`" class="tutor-card" :class="{ 'highlight': selectedAnnouncementId === a.id }" @click="showAnnounceDetail(a)">
               <div class="tutor-card-top">
                 <el-tag :type="urgencyTag(a.urgency)" size="small" effect="dark" round>{{ urgencyLabel(a.urgency) }}</el-tag>
                 <span class="tutor-teacher">{{ a.teacher_name }}</span>
@@ -232,8 +221,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getFigures, getAnnouncements, getImpression } from '@/api/campus'
-import type { CampusFigure, Announcement, ImpressionItem } from '@/types'
+import { getFigures, getImpression } from '@/api/campus'
+import type { CampusFigure, ImpressionItem } from '@/types'
 import { tilt } from '@/directives/tilt'
 
 const vTilt = tilt
@@ -251,9 +240,11 @@ interface GalleryImage {
 }
 
 const route = useRoute()
-const activeTab = ref(route.query.tab === 'announcements' ? 'teacher-announcements' : 'figures')
+const activeTab = ref((route.query.tab as string) && route.query.tab !== 'announcements'
+  ? (route.query.tab as string)
+  : route.query.announcementId ? 'teacher-announcements' : 'figures')
+const selectedAnnouncementId = ref<number | null>(route.query.announcementId ? Number(route.query.announcementId) : null)
 const figures = ref<CampusFigure[]>([])
-const announcements = ref<Announcement[]>([])
 const tutorAnnouncements = ref<AnnouncementItem[]>([])
 const galleryActive = ref('all')
 const figureDetailVisible = ref(false)
@@ -268,7 +259,6 @@ const tabItems = [
   { key: 'figures', label: '人物风采', icon: '👤' },
   { key: 'sceneries', label: '校园风景', icon: '🏞️' },
   { key: 'impression', label: '绵城印象', icon: '🏛️' },
-  { key: 'announcements', label: '校园公告', icon: '📢' },
   { key: 'teacher-announcements', label: '班级公告', icon: '📋' },
 ]
 
@@ -307,9 +297,18 @@ const filteredGallery = computed(() => {
 
 const impressionData = ref<ImpressionItem[]>([])
 
+function byDateDesc(a: ImpressionItem, b: ImpressionItem) {
+  const da = a.date ? Date.parse(a.date) : NaN
+  const db = b.date ? Date.parse(b.date) : NaN
+  if (Number.isNaN(da) && Number.isNaN(db)) return 0
+  if (Number.isNaN(da)) return 1
+  if (Number.isNaN(db)) return -1
+  return db - da
+}
+
 const impression = computed(() => {
   const all = impressionData.value
-  const bySource = (s: string) => all.filter(i => i.source === s)
+  const bySource = (s: string) => all.filter(i => i.source === s).sort(byDateDesc)
   return {
     entries: bySource('jwc_entries'),
     jxdt: bySource('jwc_jxdt'),
@@ -327,6 +326,7 @@ function groupCollegeNews(all: ImpressionItem[]): Record<string, ImpressionItem[
     if (!map[i.college_key!]) map[i.college_key!] = []
     map[i.college_key!].push(i)
   }
+  for (const key of Object.keys(map)) map[key].sort(byDateDesc)
   return map
 }
 
@@ -450,9 +450,15 @@ function showAnnounceDetail(a: AnnouncementItem) {
 
 onMounted(async () => {
   figures.value = await getFigures() as any
-  announcements.value = await getAnnouncements() as any
   loadTutorAnnouncements()
   loadImpression()
+  if (selectedAnnouncementId.value) {
+    activeTab.value = 'teacher-announcements'
+    setTimeout(() => {
+      const el = document.getElementById(`announcement-${selectedAnnouncementId.value}`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 500)
+  }
 })
 </script>
 
@@ -674,15 +680,6 @@ onMounted(async () => {
 
 /* ===== Announcements ===== */
 .announce-list { display: flex; flex-direction: column; gap: 2px; }
-.announce-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px; text-decoration: none; color: #333;
-  border-bottom: 1px solid #f5f5f5; transition: background .2s;
-}
-.announce-item:hover { background: #f8faff; }
-.announce-dot { width: 6px; height: 6px; border-radius: 50%; background: #409eff; flex-shrink: 0; }
-.announce-item .announce-title { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.announce-item .announce-date { font-size: 12px; color: #bbb; flex-shrink: 0; margin-left: 12px; }
 
 /* ===== Tutor Announcements ===== */
 .tutor-card {
@@ -691,6 +688,7 @@ onMounted(async () => {
   cursor: pointer; transition: transform .15s, box-shadow .15s;
 }
 .tutor-card:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+.tutor-card.highlight { border-color: #409eff; background: rgba(64,158,255,.05); box-shadow: 0 0 0 2px rgba(64,158,255,.2); }
 .tutor-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .tutor-teacher { font-size: 12px; color: #888; }
 .tutor-date { font-size: 11px; color: #bbb; margin-left: auto; }
@@ -714,7 +712,6 @@ onMounted(async () => {
   .link-grid { grid-template-columns: repeat(2, 1fr); }
   .video-section { border-radius: 10px; }
   .campus-video { max-height: 220px; }
-  .announce-item { padding: 12px; }
   .tutor-card { padding: 14px; }
 }
 </style>

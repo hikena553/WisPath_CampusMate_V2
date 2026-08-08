@@ -65,8 +65,8 @@ html.dark .app-shell {
 }
 
 html.dark .topbar {
-  background: var(--bg-secondary) !important;
-  border-bottom-color: var(--border-color) !important;
+  background: #2563eb !important;
+  border-bottom-color: rgba(37,99,235,0.3) !important;
 }
 
 html.dark .main-area {
@@ -233,6 +233,31 @@ html.dark .el-table tbody tr:nth-child(even) > td {
 
 html.dark .el-table tbody tr:hover > td {
   background-color: rgba(255,255,255,0.04) !important;
+}
+
+/* ===== Global Dialog: Centered + Pill Shape ===== */
+.el-overlay-dialog {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.el-dialog {
+  border-radius: 24px !important;
+  margin: 0 !important;
+  overflow: hidden;
+}
+
+.el-dialog__header {
+  border-radius: 24px 24px 0 0;
+}
+
+.el-dialog__body {
+  padding: 20px 24px !important;
+}
+
+.el-dialog__footer {
+  border-radius: 0 0 24px 24px;
 }
 
 

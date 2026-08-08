@@ -27,11 +27,11 @@
     <div class="charts-row">
       <div class="chart-box">
         <h4>学院分布</h4>
-        <VChart v-if="collegePieOptions" :option="collegePieOptions" autoresize style="height:260px" />
+        <VChart v-if="collegePieOptions" :option="collegePieOptions" autoresize style="height:200px" />
       </div>
       <div class="chart-box">
         <h4>危机等级分布</h4>
-        <VChart v-if="crisisPieOptions" :option="crisisPieOptions" autoresize style="height:260px" />
+        <VChart v-if="crisisPieOptions" :option="crisisPieOptions" autoresize style="height:200px" />
       </div>
     </div>
 
@@ -57,8 +57,8 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="college" label="学院" min-width="140" />
-      <el-table-column prop="class_name" label="班级" width="120">
+      <el-table-column prop="college" label="学院" width="120" />
+      <el-table-column prop="class_name" label="班级" min-width="100">
         <template #default="{ row }">
           <el-tag v-if="row.class_name" size="small" effect="plain">{{ row.class_name }}</el-tag>
           <span v-else class="text-muted">--</span>
@@ -321,26 +321,26 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.students-page { padding: 24px; overflow-y: auto; height: 100%; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { font-size: 20px; font-weight: 600; color: #333; margin: 0; }
-.header-actions { display: flex; gap: 12px; }
-.filter-bar { display: flex; gap: 12px; margin-bottom: 16px; }
+.students-page { padding: 16px; overflow-y: auto; height: 100%; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.page-header h2 {   font-size: 18px; font-weight: 600; color: #333; margin: 0; }
+.header-actions { display: flex; gap: 8px; }
+.filter-bar { display: flex; gap: 8px; margin-bottom: 12px; }
 .student-name-cell { display: flex; align-items: center; gap: 8px; }
 .text-muted { color: #999; font-size: 12px; }
 
 .stats-cards {
-  display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
 }
 .stat-card {
-  flex: 1; min-width: 120px; padding: 16px; border-radius: 10px;
-  display: flex; flex-direction: column; gap: 4px;
+  flex: 1; min-width: 100px; padding: 10px 12px; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 2px;
   cursor: default;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
 }
 .stat-card.total { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
 .stat-card.college { background: #f0f5ff; color: #333; border: 1px solid #d6e4ff; }
@@ -348,22 +348,22 @@ onMounted(async () => {
   background: #e8f0ff;
   border-color: #b3cfff;
 }
-.stat-label { font-size: 13px; opacity: 0.85; }
-.stat-value { font-size: 28px; font-weight: 700; }
+.stat-label { font-size: 11px; opacity: 0.85; }
+.stat-value { font-size: 24px; font-weight: 700; }
 
 .charts-row {
-  display: flex; gap: 16px; margin-bottom: 20px;
+  display: flex; gap: 10px; margin-bottom: 14px;
 }
 .chart-box {
-  flex: 1; background: #fff; border-radius: 10px; padding: 16px;
+  flex: 1; background: #fff; border-radius: 8px; padding: 12px;
   border: 1px solid #f0f0f0;
 }
-.chart-box h4 { margin: 0 0 8px; font-size: 14px; color: #333; }
+.chart-box h4 { margin: 0 0 6px; font-size: 13px; color: #333; }
 
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding: 12px 0;
+  margin-top: 10px;
+  padding: 8px 0;
 }
 </style>

@@ -201,24 +201,24 @@ onMounted(() => {
 
 <style scoped>
 .feedback-page {
-  padding: 24px;
+  padding: 16px;
   height: 100%;
   overflow-y: auto;
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .page-header h2 {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
-  margin: 0 0 8px;
+  margin: 0 0 4px;
 }
 
 .subtitle {
   color: #666;
-  font-size: 14px;
+  font-size: 13px;
   margin: 0;
 }
 
@@ -231,100 +231,100 @@ onMounted(() => {
 
 .filter-row {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .feedback-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .feedback-card {
   background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .card-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .title-text {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #1a1a2e;
 }
 
 .card-content {
-  font-size: 14px;
+  font-size: 13px;
   color: #333;
-  line-height: 1.6;
-  margin-bottom: 12px;
+  line-height: 1.5;
+  margin-bottom: 8px;
 }
 
 .card-meta {
   display: flex;
-  gap: 20px;
-  font-size: 12px;
+  gap: 16px;
+  font-size: 11px;
   color: #999;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .card-reply {
   background: #f8f9fa;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
 }
 
 .reply-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
   color: #666;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .reply-time {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 11px;
   color: #999;
 }
 
 .reply-content {
-  font-size: 14px;
+  font-size: 13px;
   color: #333;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .card-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
 .feedback-preview {
   background: #f8f9fa;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 13px;
   color: #333;
 }
 
 .empty-state {
-  padding: 60px 0;
+  padding: 40px 0;
 }
 </style>

@@ -59,6 +59,9 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
     all_ids = db.query(sent_ids.c.receiver_id).union(db.query(received_ids.c.sender_id)).subquery()
     other_users = db.query(User).filter(User.id.in_(db.query(all_ids))).all()
     result = []
+    tutor_conv = None
+    # 获取用户的 tutor_id
+    user_tutor_id = getattr(user, 'tutor_id', None)
     for other in other_users:
         last_msg = db.query(Message).filter(
             or_(
@@ -69,14 +72,34 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
         unread = db.query(Message).filter(
             Message.sender_id == other.id, Message.receiver_id == user.id, Message.read == False
         ).count()
-        result.append(ConversationOut(
+        conv = ConversationOut(
             user_id=other.id,
             user_name=other.name,
             user_avatar=other.avatar,
             last_message=last_msg.content[:80] if last_msg else "",
             last_message_time=last_msg.created_at if last_msg else None,
             unread_count=unread,
-        ))
+        )
+        # 检查是否是辅导员
+        if user_tutor_id and other.id == user_tutor_id:
+            tutor_conv = conv
+        else:
+            result.append(conv)
+    # 如果学生有辅导员，将辅导员会话始终置顶
+    if user_tutor_id:
+        if tutor_conv:
+            result.insert(0, tutor_conv)
+        else:
+            tutor = db.query(User).filter(User.id == user_tutor_id).first()
+            if tutor:
+                result.insert(0, ConversationOut(
+                    user_id=tutor.id,
+                    user_name=tutor.name,
+                    user_avatar=tutor.avatar,
+                    last_message="",
+                    last_message_time=None,
+                    unread_count=0,
+                ))
     return result
 
 @router.get("/{user_id}", response_model=list[MessageOut])
@@ -94,8 +117,13 @@ def get_messages(user_id: int, user: User = Depends(get_current_user), db: Sessi
 
 @router.put("/read/{user_id}")
 def mark_read(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    print(f"[DEBUG] mark_read: user_id={user_id}, current_user={user.id}")
+    count = db.query(Message).filter(
+        Message.sender_id == user_id, Message.receiver_id == user.id, Message.read == False
+    ).count()
+    print(f"[DEBUG] Found {count} unread messages to mark")
     db.query(Message).filter(
         Message.sender_id == user_id, Message.receiver_id == user.id, Message.read == False
     ).update({"read": True})
     db.commit()
-    return {"message": "marked read"}
+    return {"message": "marked read", "count": count}

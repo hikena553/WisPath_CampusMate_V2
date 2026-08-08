@@ -23,3 +23,11 @@ export function adminDeleteCourse(id: number) {
 export function adminBatchDeleteCourses(ids: number[]) {
   return request.delete('/admin/courses/batch', { data: { ids } })
 }
+
+export function adminGetSemesters() {
+  return request.get<{ value: string; label: string }[]>('/admin/semesters')
+}
+
+export function adminImportCourses(formData: FormData) {
+  return request.post('/admin/courses/import', formData)
+}

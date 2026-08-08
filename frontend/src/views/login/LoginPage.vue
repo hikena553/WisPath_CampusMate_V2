@@ -10,7 +10,7 @@
           <img src="/images/mascot.png" alt="绵小城" class="brand-mascot" />
         </div>
         <h1 class="brand-title">绵小城</h1>
-        <p class="brand-sub">智慧校园 · AI 服务平台</p>
+        <p class="brand-sub">校园智能小助手</p>
       </div>
       <div class="login-card">
         <h2 class="card-title">欢迎回来</h2>
@@ -24,7 +24,7 @@
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="loading" class="login-btn" size="large" @click="handleLogin">
-              {{ loading ? '登录中...' : '进入智慧校园' }}
+              {{ loading ? '登录中...' : '进入绵小城' }}
             </el-button>
           </el-form-item>
         </el-form>

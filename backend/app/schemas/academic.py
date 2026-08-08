@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import date, time
-from typing import Optional, List
+from typing import Optional, List, Any
 
 
 class CourseOut(BaseModel):
@@ -61,3 +61,27 @@ class ExamOut(BaseModel):
     location: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CourseImportRow(BaseModel):
+    """导入课程的单行数据"""
+    class_name: str
+    course_name: str
+    teacher: str
+    location: str = ""
+    day_of_week: int
+    start_period: int
+    end_period: int
+    week_start: int
+    week_end: int
+    credit: Optional[float] = None
+
+
+class CourseImportResult(BaseModel):
+    """课程导入结果"""
+    total: int = 0
+    created: int = 0
+    skipped: int = 0
+    errors: list[dict[str, Any]] = []
+    matched_classes: list[str] = []
+    unmatched_classes: list[str] = []

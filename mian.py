@@ -39,12 +39,12 @@ def _wait_for_backend(url="http://127.0.0.1:8000/api/health", timeout=30):
         try:
             resp = urllib.request.urlopen(url, timeout=2)
             if resp.status == 200:
-                print("  ✓ 后端已就绪")
+                print("  [OK] Backend is ready")
                 return True
         except (urllib.error.URLError, OSError):
             pass
         time.sleep(0.5)
-    print("✗ 后端启动超时，请检查后端日志")
+    print("[FAIL] Backend startup timeout, check logs")
     sys.exit(1)
 
 
@@ -53,7 +53,7 @@ def _check_vite():
     node_modules = os.path.join(FRONTEND_DIR, "node_modules")
     if not os.path.isdir(node_modules):
         print("=" * 50)
-        print("  ✗ 前端依赖未安装")
+        print("  [FAIL] Frontend dependencies not installed")
         print(f"  请运行: cd {FRONTEND_DIR} && npm install")
         print("=" * 50)
         sys.exit(1)

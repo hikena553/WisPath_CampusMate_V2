@@ -310,7 +310,7 @@ onMounted(() => {
 
 <style scoped>
 .knowledge-page {
-  padding: 24px;
+  padding: 16px;
   overflow-y: auto;
   height: 100%;
 }
@@ -319,11 +319,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .page-header h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: #333;
   margin: 0;
@@ -331,19 +331,19 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 
 .filter-bar {
   display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding: 12px 0;
+  margin-top: 10px;
+  padding: 8px 0;
 }
 </style>

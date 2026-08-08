@@ -242,13 +242,13 @@ async function handleDelete(id: number) {
 </script>
 
 <style scoped>
-.figures-page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.page-header h2 { margin: 0; font-size: 20px; color: #1a1a2e; }
-.filter-bar { margin-bottom: 16px; }
-.avatar-upload-area { display: flex; align-items: center; gap: 16px; }
+.figures-page { padding: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.page-header h2 { margin: 0;   font-size: 18px; color: #1a1a2e; }
+.filter-bar { margin-bottom: 12px; }
+.avatar-upload-area { display: flex; align-items: center; gap: 12px; }
 .avatar-preview {
-  width: 100px; height: 120px; border-radius: 8px;
+  width: 80px; height: 96px; border-radius: 6px;
   border: 2px dashed #d9d9d9; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   background: #fafafa; transition: border-color .2s;
@@ -257,18 +257,18 @@ async function handleDelete(id: number) {
 .avatar-preview.has-image { border: 2px solid #e0e0e0; background: #fff; }
 .avatar-img { width: 100%; height: 100%; object-fit: cover; }
 .avatar-placeholder {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   color: #bbb; cursor: default;
 }
-.avatar-placeholder span { font-size: 12px; }
-.proof-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-.proof-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.avatar-placeholder span { font-size: 11px; }
+.proof-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.proof-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .proof-name { flex: 1; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding: 12px 0;
+  margin-top: 10px;
+  padding: 8px 0;
 }
 </style>

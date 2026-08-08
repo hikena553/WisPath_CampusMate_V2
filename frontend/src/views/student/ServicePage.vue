@@ -140,26 +140,28 @@
           <h3>申请记录</h3>
           <span class="panel-count">近3个月 {{ totalCount }} 条</span>
         </div>
-        <div v-if="!groupedMonths.length" class="empty-msg">暂无申请记录</div>
-        <div v-for="group in groupedMonths" :key="group.month" class="month-group">
-          <div class="month-label">{{ group.label }}</div>
-          <div v-for="r in group.records" :key="r._source + '-' + r.id" :class="['record-item', { active: detail && detail.id === r.id && detail._source === r._source }]" @click="viewDetail(r)">
-            <div class="record-top">
-              <span class="record-type">{{ typeLabel(r.type) }}</span>
-              <el-tag :type="statusTagType(r.status)" size="small" effect="plain">{{ statusLabel(r.status) }}</el-tag>
-            </div>
-            <div class="record-title">{{ r.title }}</div>
-            <div class="record-date">{{ formatDate(r.created_at) }}</div>
-            <div v-if="r.status === 'pending'" class="record-actions">
-              <el-button link type="danger" size="small" @click.stop="handleCancel(r)">撤销</el-button>
+        <div class="records-content">
+          <div v-if="!groupedMonths.length" class="empty-msg">暂无申请记录</div>
+          <div v-for="group in groupedMonths" :key="group.month" class="month-group">
+            <div class="month-label">{{ group.label }}</div>
+            <div v-for="r in group.records" :key="r._source + '-' + r.id" :class="['record-item', { active: detail && detail.id === r.id && detail._source === r._source }]" @click="viewDetail(r)">
+              <div class="record-top">
+                <span class="record-type">{{ typeLabel(r.type) }}</span>
+                <el-tag :type="statusTagType(r.status)" size="small" effect="plain">{{ statusLabel(r.status) }}</el-tag>
+              </div>
+              <div class="record-title">{{ r.title }}</div>
+              <div class="record-date">{{ formatDate(r.created_at) }}</div>
+              <div v-if="r.status === 'pending'" class="record-actions">
+                <el-button link type="danger" size="small" @click.stop="handleCancel(r)">撤销</el-button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- 失物招领面板 -->
-      <LostFoundPanel />
     </div>
+
+    <!-- 失物招领浮动气泡 -->
+    <LostFoundWidget />
 
     <el-dialog v-model="detailVisible" :title="detail?.title || '申请详情'" width="620px">
       <div v-if="detail" class="detail-panel">
@@ -227,7 +229,7 @@ import { getMyLeaves, createLeave, deleteLeave } from '@/api/leave'
 import { createFeedback, type FeedbackCreate } from '@/api/feedback'
 import { useAuthStore } from '@/stores/auth'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
-import LostFoundPanel from '@/components/service/LostFoundPanel.vue'
+import LostFoundWidget from '@/components/service/LostFoundWidget.vue'
 import type { ServiceTicket, LeaveRequestOut } from '@/types'
 
 const auth = useAuthStore()
@@ -565,17 +567,24 @@ async function handleCancel(row: any) {
 .right-panels {
   width: 320px; flex-shrink: 0; position: sticky; top: 20px;
   display: flex; flex-direction: column; gap: 12px;
-  max-height: calc(100vh - 110px);
+  height: calc(100vh - 110px);
 }
 .records-panel {
-  background: var(--bg-card); border-radius: 10px; padding: 14px;
-  box-shadow: var(--shadow-md); max-height: 45%; overflow-y: auto;
+  background: var(--bg-card); border-radius: 10px; padding: 0;
+  box-shadow: var(--shadow-md); flex: 1; overflow-y: auto;
   scrollbar-width: none;
+  min-height: 0;
 }
 .records-panel::-webkit-scrollbar { display: none; }
-.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg-card); padding: 14px 14px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
 .panel-header h3 { margin: 0; font-size: 14px; }
 .panel-count { font-size: 11px; color: var(--text-muted); }
+.records-content { padding: 0 14px 14px; }
 .empty-msg { text-align: center; color: var(--text-placeholder); padding: 30px 0; font-size: 13px; }
 
 .month-group { margin-bottom: 12px; }
@@ -593,7 +602,7 @@ async function handleCancel(row: any) {
 .record-date { font-size: 10px; color: var(--text-placeholder); }
 .record-actions { margin-top: 2px; }
 
-.right-panels > :last-child { flex: 1; min-height: 0; overflow: hidden; }
+.right-panels > :last-child { flex-shrink: 0; }
 
 .detail-panel { max-height: 65vh; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .detail-panel::-webkit-scrollbar { display: none; }

@@ -387,6 +387,110 @@ def class_evaluation(user: User = Depends(require_role(UserRole.TEACHER, UserRol
     }
 
 
+class ClassStatsOut(BaseModel):
+    total_students: int = 0
+    gender_stats: dict = {}
+    crisis_stats: dict = {}
+    grade_stats: dict = {}
+    political_stats: dict = {}
+    hometown_stats: dict = {}
+    crisis_trend: list = []
+
+
+@router.get("/class-stats", response_model=ClassStatsOut)
+def class_stats(user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)), db: Session = Depends(get_db)):
+    query = db.query(User).filter(User.role == UserRole.STUDENT)
+    if user.role != UserRole.ADMIN:
+        query = query.filter(User.tutor_id == user.id)
+    students = query.all()
+    student_ids = [s.id for s in students]
+    total = len(student_ids)
+    
+    if total == 0:
+        return ClassStatsOut()
+    
+    # 性别统计
+    gender_counts = {}
+    for s in students:
+        gender = s.gender or "未知"
+        gender_counts[gender] = gender_counts.get(gender, 0) + 1
+    
+    # 危机统计
+    crisis_counts = {"severe": 0, "moderate": 0, "mild": 0, "resolved": 0}
+    if student_ids:
+        crisis_data = db.query(
+            AIDialogSummary.level,
+            func.count(AIDialogSummary.id)
+        ).filter(AIDialogSummary.student_id.in_(student_ids)
+        ).group_by(AIDialogSummary.level).all()
+        for level, count in crisis_data:
+            if level in crisis_counts:
+                crisis_counts[level] = count
+        
+        resolved_count = db.query(AIDialogSummary).filter(
+            AIDialogSummary.student_id.in_(student_ids),
+            AIDialogSummary.resolved == True
+        ).count()
+        crisis_counts["resolved"] = resolved_count
+    
+    # 成绩分布统计
+    grade_stats = {"excellent": 0, "good": 0, "medium": 0, "pass": 0, "fail": 0}
+    if student_ids:
+        grades = db.query(Grade).filter(Grade.student_id.in_(student_ids)).all()
+        for g in grades:
+            if g.score >= 90:
+                grade_stats["excellent"] += 1
+            elif g.score >= 80:
+                grade_stats["good"] += 1
+            elif g.score >= 70:
+                grade_stats["medium"] += 1
+            elif g.score >= 60:
+                grade_stats["pass"] += 1
+            else:
+                grade_stats["fail"] += 1
+    
+    # 政治面貌统计
+    political_counts = {}
+    for s in students:
+        status = s.political_status or "未知"
+        political_counts[status] = political_counts.get(status, 0) + 1
+    
+    # 生源地统计（取前10个省份）
+    hometown_counts = {}
+    for s in students:
+        hometown = s.hometown or "未知"
+        hometown_counts[hometown] = hometown_counts.get(hometown, 0) + 1
+    hometown_sorted = dict(sorted(hometown_counts.items(), key=lambda x: x[1], reverse=True)[:10])
+    
+    # 预警趋势统计（按月统计最近6个月）
+    crisis_trend = []
+    if student_ids:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func as safunc, extract
+        
+        now = datetime.now()
+        for i in range(5, -1, -1):
+            month_date = now - timedelta(days=30 * i)
+            year = month_date.year
+            month = month_date.month
+            count = db.query(AIDialogSummary).filter(
+                AIDialogSummary.student_id.in_(student_ids),
+                extract('year', AIDialogSummary.created_at) == year,
+                extract('month', AIDialogSummary.created_at) == month
+            ).count()
+            crisis_trend.append({"month": f"{year}-{month:02d}", "count": count})
+    
+    return ClassStatsOut(
+        total_students=total,
+        gender_stats=gender_counts,
+        crisis_stats=crisis_counts,
+        grade_stats=grade_stats,
+        political_stats=political_counts,
+        hometown_stats=hometown_sorted,
+        crisis_trend=crisis_trend,
+    )
+
+
 class ContactSuggestionOut(BaseModel):
     student_id: int
     student_name: str

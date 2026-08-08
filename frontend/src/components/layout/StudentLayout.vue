@@ -2,44 +2,40 @@
   <div class="app-shell">
     <header class="topbar">
       <div class="topbar-left" style="cursor:pointer" @click="goTo('/student')">
-        <img src="/images/校徽.png" class="topbar-badge" />
+        <img src="/images/校徽_圆形.png" class="topbar-badge" />
         <span class="logo">绵小城</span>
         <template v-if="!isMobile">
           <span class="logo-divider"></span>
           <span class="motto">博学、笃行、严谨、创新</span>
         </template>
       </div>
+      <div class="topbar-nav">
+        <template v-if="!isMobile">
+          <div class="nav-item" :class="{ 'nav-active': route.path === '/student' }" @click="goTo('/student')">
+            <el-icon :size="16"><ChatDotRound /></el-icon>
+            <span>绵小城</span>
+          </div>
+          <div class="nav-item" :class="{ 'nav-active': route.path === '/student/campus' }" @click="goTo('/student/campus')">
+            <el-icon :size="16"><PictureFilled /></el-icon>
+            <span>校园风采</span>
+          </div>
+          <div class="nav-item" :class="{ 'nav-active': route.path === '/student/schedule' }" @click="goTo('/student/schedule')">
+            <el-icon :size="16"><Calendar /></el-icon>
+            <span>学业中心</span>
+          </div>
+          <div class="nav-item" :class="{ 'nav-active': route.path === '/student/service' }" @click="goTo('/student/service')">
+            <el-icon :size="16"><Service /></el-icon>
+            <span>办事服务</span>
+          </div>
+          <div class="nav-item nav-contact" @click="showContact = true" style="position:relative">
+            <el-icon :size="16"><Message /></el-icon>
+            <span>联系</span>
+            <el-badge v-if="unreadCount" is-dot class="contact-badge" />
+          </div>
+        </template>
+      </div>
       <div class="topbar-right">
         <template v-if="!isMobile">
-          <el-tooltip content="AI 对话" placement="bottom" :show-after="200" :hide-after="100">
-            <el-button text circle @click="goTo('/student')" :class="{ 'nav-active': route.path === '/student' }">
-              <el-icon :size="18"><ChatDotRound /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="校园风采" placement="bottom" :show-after="200" :hide-after="100">
-            <el-button text circle @click="goTo('/student/campus')" :class="{ 'nav-active': route.path === '/student/campus' }">
-              <el-icon :size="18"><PictureFilled /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="学业中心" placement="bottom" :show-after="200" :hide-after="100">
-            <el-button text circle @click="goTo('/student/schedule')" :class="{ 'nav-active': route.path === '/student/schedule' }">
-              <el-icon :size="18"><Calendar /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="办事服务" placement="bottom" :show-after="200" :hide-after="100">
-            <el-button text circle @click="goTo('/student/service')" :class="{ 'nav-active': route.path === '/student/service' }">
-              <el-icon :size="18"><Service /></el-icon>
-            </el-button>
-          </el-tooltip>
-        </template>
-        <el-tooltip content="联系辅导员" placement="bottom">
-          <el-button text circle @click="showContact = true" style="position:relative">
-            <el-icon :size="18"><Message /></el-icon>
-            <el-badge v-if="unreadCount" is-dot class="contact-badge" />
-          </el-button>
-        </el-tooltip>
-        <template v-if="!isMobile">
-          <el-divider direction="vertical" />
           <el-dropdown trigger="click">
             <span class="user-btn">
               <el-avatar :size="28" :src="auth.user?.avatar || ''">{{ auth.userName?.[0] }}</el-avatar>
@@ -187,7 +183,7 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="showContact" title="联系辅导员" size="400px" @open="onContactOpen">
+    <el-drawer v-model="showContact" title="消息" size="min(880px, 92vw)" @open="onContactOpen">
       <StudentContactPanel :key="contactKey" @read="pollUnread" />
     </el-drawer>
   </div>
@@ -202,6 +198,7 @@ import { uploadFile } from '@/api/upload'
 import { ElMessage } from 'element-plus'
 import StudentContactPanel from '@/components/chat/StudentContactPanel.vue'
 import { getConversations } from '@/api/messages'
+import { getGroups } from '@/api/groups'
 import Cropper from 'cropperjs'
 import { ChatDotRound, PictureFilled, Calendar, Service, Message, User, SwitchButton, CameraFilled } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
@@ -216,7 +213,7 @@ const { isMobile } = useResponsive()
 const mobileNavItems = [
   { key: 'campus', label: '校园风采', icon: PictureFilled, route: '/student/campus' },
   { key: 'schedule', label: '学业中心', icon: Calendar, route: '/student/schedule' },
-  { key: 'agent', label: '绵小城', iconImg: '/images/校徽.png', center: true, route: '/student' },
+  { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/student' },
   { key: 'service', label: '办事服务', icon: Service, route: '/student/service' },
   { key: 'profile', label: '个人中心', icon: User, route: '/student/profile' },
 ]
@@ -251,7 +248,10 @@ const unreadCount = ref(0)
 async function pollUnread() {
   try {
     const convs: any[] = await getConversations()
-    unreadCount.value = convs.reduce((sum: number, c: any) => sum + (c.unread_count ?? 0), 0)
+    const groupConvs: any[] = await getGroups()
+    unreadCount.value =
+      convs.reduce((sum: number, c: any) => sum + (c.unread_count ?? 0), 0) +
+      groupConvs.reduce((sum: number, g: any) => sum + (g.unread_count ?? 0), 0)
   } catch {}
 }
 
@@ -430,37 +430,44 @@ async function handleSaveProfile() {
 }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; height: 56px; border-bottom: 1px solid rgba(64,158,255,0.1);
-  background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+  padding: 0 24px; height: 56px;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb, #3b82f6);
   flex-shrink: 0; z-index: 100;
-  box-shadow: 0 1px 8px rgba(64,158,255,0.06);
+  box-shadow: 0 2px 12px rgba(29,78,216,0.35);
 }
 @media (max-width: 767px) {
   .topbar-right { gap: 0; }
 }
-.topbar-left { display: flex; align-items: center; gap: 8px; }
-.topbar-badge { height: 32px; width: auto; border-radius: 4px; }
-.logo { font-size: 20px; font-weight: 700; color: var(--accent-blue); letter-spacing: 1px; }
-.logo-divider { width: 1px; height: 20px; background: var(--border-color); margin: 0 6px; }
+.topbar-left { display: flex; align-items: center; gap: 8px; cursor: pointer; position: relative; z-index: 101; }
+.topbar-badge { height: 36px; width: 36px; border-radius: 50%; object-fit: cover; filter: brightness(0.85) saturate(1.3); }
+.logo { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: 1px; }
+.logo-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.3); margin: 0 6px; }
 .motto {
   font-size: 14px; font-weight: 600;
-  background: linear-gradient(135deg, #c41d7f, #e8a020);
-  background-clip: text; -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: rgba(255,255,255,0.85);
   letter-spacing: 4px;
 }
-.topbar-right { display: flex; align-items: center; gap: 4px; }
+.topbar-nav {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: auto;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 3px;
+  padding: 4px 6px; border-radius: 6px;
+  color: rgba(255,255,255,0.85); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.25s ease; white-space: nowrap;
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.15); color: #ffffff;
+}
 .nav-active {
-  color: #6366f1 !important; background: rgba(99,102,241,.1) !important;
-  position: relative;
+  background: rgba(255,255,255,0.95) !important; color: #1e40af !important;
 }
-.nav-active::after {
-  content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: 16px; height: 2px; background: #6366f1; border-radius: 1px;
-}
-.user-btn { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
-.user-btn:hover { background: var(--hover-bg); }
-.user-name { font-size: 14px; color: var(--text-primary); }
+.nav-active .el-icon { color: #1e40af; }
+.topbar-right { display: flex; align-items: center; gap: 4px; }
+.user-btn { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 8px; border-radius: 8px; color: #ffffff; }
+.user-btn:hover { background: rgba(255,255,255,0.2); }
+.user-name { font-size: 14px; color: #ffffff; }
 .main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; -ms-overflow-style: none; scrollbar-width: none; }
 .main-area::-webkit-scrollbar { display: none; }
 .main-area.has-bottom-bar { padding-bottom: 56px; }
@@ -480,6 +487,9 @@ async function handleSaveProfile() {
 .tutor-display { display: flex; align-items: center; gap: 12px; }
 .tutor-hint { font-size: 12px; color: var(--text-muted); }
 .contact-badge { position: absolute; top: 2px; right: 2px; }
+:deep(.topbar-right .el-button) { color: rgba(255,255,255,0.85); }
+:deep(.topbar-right .el-button:hover) { color: #ffffff; background: rgba(255,255,255,0.2); }
+:deep(.topbar-right .el-divider--vertical) { border-color: rgba(255,255,255,0.3); }
 </style>
 
 <style>

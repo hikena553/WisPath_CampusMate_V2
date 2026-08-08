@@ -290,24 +290,24 @@ onMounted(() => {
 
 <style scoped>
 .setting-page {
-  padding: 24px;
+  padding: 16px;
   height: 100%;
   overflow-y: auto;
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .page-header h2 {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
-  margin: 0 0 8px;
+  margin: 0 0 4px;
 }
 
 .subtitle {
   color: #666;
-  font-size: 14px;
+  font-size: 13px;
   margin: 0;
 }
 
@@ -324,28 +324,28 @@ onMounted(() => {
 
 .setting-section {
   background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
+  gap: 6px;
+  font-size: 14px;
   font-weight: 600;
   color: #1a1a2e;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
   border-bottom: 1px solid #f0f0f0;
 }
 
 .setting-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .setting-item {
@@ -359,21 +359,21 @@ onMounted(() => {
 }
 
 .setting-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #333;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .setting-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: #999;
 }
 
 .setting-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .required {
@@ -388,9 +388,9 @@ onMounted(() => {
 
 .ai-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 20px;
-  padding-top: 16px;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid #f0f0f0;
 }
 </style>

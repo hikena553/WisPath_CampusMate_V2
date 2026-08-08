@@ -16,11 +16,10 @@
         <el-select v-model="filterClassGroupId" placeholder="选择班级" clearable @change="loadCourses" style="width: 200px">
           <el-option v-for="cg in filteredClassGroups" :key="cg.id" :label="cg.name" :value="cg.id" />
         </el-select>
-        <el-select v-model="filterSemester" placeholder="选择学期" style="width: 160px" @change="loadCourses">
-          <el-option label="2024-2025-1" value="2024-2025-1" />
-          <el-option label="2024-2025-2" value="2024-2025-2" />
-          <el-option label="2025-2026-1" value="2025-2026-1" />
+        <el-select v-model="filterSemester" placeholder="选择学期" style="width: 200px" @change="loadCourses">
+          <el-option v-for="s in semesters" :key="s.value" :label="s.label" :value="s.value" />
         </el-select>
+        <el-button type="primary" plain @click="showImportDialog">导入课程表</el-button>
       </div>
     </el-card>
 
@@ -28,7 +27,7 @@
     <el-card shadow="never" v-if="filterClassGroupId && filterSemester">
       <template #header>
         <div class="card-header">
-          <span>{{ currentClassName }} — {{ filterSemester }} 课程表</span>
+          <span>{{ currentClassName }} — {{ semesterLabel }} 课程表</span>
           <el-button type="primary" @click="showAddDialog()">添加课程</el-button>
         </div>
       </template>
@@ -93,26 +92,94 @@
         <el-button type="primary" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 导入弹窗 -->
+    <el-dialog v-model="importDialogVisible" title="导入课程表" width="550px">
+      <el-form label-width="80px">
+        <el-form-item label="目标学院">
+          <el-select v-model="importCollegeId" placeholder="选择学院" style="width: 100%">
+            <el-option v-for="c in colleges" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="学期">
+          <el-select v-model="importSemester" placeholder="选择学期" style="width: 100%">
+            <el-option v-for="s in semesters" :key="s.value" :label="s.label" :value="s.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="上传文件">
+          <el-upload
+            ref="uploadRef"
+            :auto-upload="false"
+            :limit="1"
+            accept=".xlsx,.xls"
+            :on-change="onFileChange"
+            :on-remove="onFileRemove"
+            drag
+          >
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">拖拽 Excel 文件到此处 或 <em>点击上传</em></div>
+            <template #tip>
+              <div class="el-upload__tip" style="margin-top: 8px">
+                支持 .xlsx / .xls 格式。表头需包含：班级名称、课程名称、授课教师、上课地点、星期、开始节次、结束节次、开始周、结束周、学分
+              </div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+
+      <!-- 导入结果 -->
+      <div v-if="importResult" class="import-result">
+        <el-alert
+          :type="importResult.errors.length > 0 ? 'warning' : 'success'"
+          :closable="false"
+          show-icon
+        >
+          <template #title>
+            共 {{ importResult.total }} 条，成功 {{ importResult.created }} 条，跳过 {{ importResult.skipped }} 条
+            <span v-if="importResult.errors.length">，异常 {{ importResult.errors.length }} 条</span>
+          </template>
+        </el-alert>
+        <div v-if="importResult.unmatched_classes.length" style="margin-top: 8px">
+          <span style="color: #e6a23c">未匹配班级：</span>
+          <el-tag v-for="cls in importResult.unmatched_classes" :key="cls" size="small" type="warning" style="margin: 2px 4px">{{ cls }}</el-tag>
+        </div>
+        <div v-if="importResult.errors.length" style="margin-top: 8px; max-height: 150px; overflow-y: auto">
+          <div v-for="(err, i) in importResult.errors" :key="i" style="font-size: 12px; color: #f56c6c; margin: 2px 0">
+            第{{ err.row }}行: {{ err.msg }}
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="importDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="handleImport" :loading="importLoading">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete } from '@element-plus/icons-vue'
+import { Delete, UploadFilled } from '@element-plus/icons-vue'
 import type { College, Major, ClassGroup, Course } from '@/types'
+import type { UploadFile, UploadInstance } from 'element-plus'
 import { getColleges, getMajors, getClassGroups } from '@/api/organization'
-import { adminGetCourses, adminCreateCourse, adminUpdateCourse, adminDeleteCourse } from '@/api/academic'
+import {
+  adminGetCourses, adminCreateCourse, adminUpdateCourse, adminDeleteCourse,
+  adminGetSemesters, adminImportCourses,
+} from '@/api/academic'
 
 const colleges = ref<College[]>([])
 const majors = ref<Major[]>([])
 const classGroups = ref<ClassGroup[]>([])
 const courses = ref<Course[]>([])
+const semesters = ref<{ value: string; label: string }[]>([])
 
 const filterCollegeId = ref<number | null>(null)
 const filterMajorId = ref<number | null>(null)
 const filterClassGroupId = ref<number | null>(null)
-const filterSemester = ref('2024-2025-2')
+const filterSemester = ref('')
 
 const periods = [1, 3, 5, 7, 9]
 
@@ -125,6 +192,10 @@ const filteredClassGroups = computed(() =>
 const currentClassName = computed(() => {
   const cg = classGroups.value.find(c => c.id === filterClassGroupId.value)
   return cg ? cg.name : ''
+})
+const semesterLabel = computed(() => {
+  const s = semesters.value.find(s => s.value === filterSemester.value)
+  return s ? s.label : filterSemester.value
 })
 
 function onCollegeChange() {
@@ -204,6 +275,57 @@ async function handleDelete(id: number) {
   loadCourses()
 }
 
+// ─── 导入 ─────────────────────────────────────────────
+const importDialogVisible = ref(false)
+const importCollegeId = ref<number | null>(null)
+const importSemester = ref('')
+const importFile = ref<File | null>(null)
+const importLoading = ref(false)
+const importResult = ref<any>(null)
+const uploadRef = ref<UploadInstance>()
+
+function showImportDialog() {
+  importCollegeId.value = filterCollegeId.value
+  importSemester.value = filterSemester.value
+  importFile.value = null
+  importResult.value = null
+  uploadRef.value?.clearFiles()
+  importDialogVisible.value = true
+}
+
+function onFileChange(file: UploadFile) {
+  importFile.value = file.raw || null
+}
+
+function onFileRemove() {
+  importFile.value = null
+}
+
+async function handleImport() {
+  if (!importCollegeId.value) { ElMessage.warning('请选择目标学院'); return }
+  if (!importSemester.value) { ElMessage.warning('请选择学期'); return }
+  if (!importFile.value) { ElMessage.warning('请上传课程表文件'); return }
+
+  importLoading.value = true
+  importResult.value = null
+  try {
+    const fd = new FormData()
+    fd.append('file', importFile.value)
+    fd.append('college_id', String(importCollegeId.value))
+    fd.append('semester', importSemester.value)
+    const res = await adminImportCourses(fd)
+    importResult.value = res
+    ElMessage.success(`导入完成：成功 ${(res as any).created} 条`)
+    if (filterClassGroupId.value && filterSemester.value) {
+      loadCourses()
+    }
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.detail || '导入失败')
+  } finally {
+    importLoading.value = false
+  }
+}
+
 // ─── 加载 ─────────────────────────────────────────────
 async function loadCourses() {
   if (!filterClassGroupId.value || !filterSemester.value) { courses.value = []; return }
@@ -211,35 +333,54 @@ async function loadCourses() {
   courses.value = data as any
 }
 
+async function loadSemesters() {
+  try {
+    const data = await adminGetSemesters()
+    semesters.value = data as any
+    if (semesters.value.length > 0 && !filterSemester.value) {
+      filterSemester.value = semesters.value[0].value
+    }
+  } catch {
+    semesters.value = [
+      { value: '2025-2026-1', label: '2025-2026 第一学期' },
+      { value: '2025-2026-2', label: '2025-2026 第二学期' },
+    ]
+    filterSemester.value = semesters.value[0].value
+  }
+}
+
 onMounted(async () => {
   const [c, m, cg] = await Promise.all([getColleges(), getMajors(), getClassGroups()])
   colleges.value = c as any
   majors.value = m as any
   classGroups.value = cg as any
+  loadSemesters()
 })
 </script>
 
 <style scoped>
-.page-container { padding: 20px; }
-.page-header { margin-bottom: 20px; }
-.page-header h2 { margin: 0; font-size: 20px; }
+.page-container { padding: 16px; }
+.page-header { margin-bottom: 12px; }
+.page-header h2 { margin: 0;   font-size: 18px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.filter-bar { display: flex; gap: 12px; flex-wrap: wrap; }
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .schedule-grid { border: 1px solid #e4e7ed; border-radius: 4px; overflow: hidden; }
 .grid-row { display: flex; }
 .grid-row.header { background: #f5f7fa; font-weight: 600; }
-.cell { flex: 1; min-height: 48px; display: flex; align-items: center; justify-content: center; border-right: 1px solid #e4e7ed; border-bottom: 1px solid #e4e7ed; padding: 4px; }
+.cell { flex: 1; min-height: 40px; display: flex; align-items: center; justify-content: center; border-right: 1px solid #e4e7ed; border-bottom: 1px solid #e4e7ed; padding: 3px; }
 .cell:last-child { border-right: none; }
-.period-header, .period-cell { width: 80px; flex: none; font-size: 13px; color: #666; }
-.day-header { font-size: 14px; }
-.day-cell { cursor: pointer; position: relative; min-height: 80px; align-items: stretch; justify-content: stretch; }
+.period-header, .period-cell { width: 64px; flex: none; font-size: 12px; color: #666; }
+.day-header { font-size: 13px; }
+.day-cell { cursor: pointer; position: relative; min-height: 64px; align-items: stretch; justify-content: stretch; }
 .day-cell:hover { background: #f0f9ff; }
-.empty-cell { color: #ccc; font-size: 20px; width: 100%; text-align: center; padding-top: 20px; }
-.course-card { background: linear-gradient(135deg, #409eff, #66b1ff); color: #fff; border-radius: 6px; padding: 6px 8px; width: 100%; cursor: pointer; position: relative; }
-.course-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
-.course-info { font-size: 11px; opacity: 0.9; }
-.course-weeks { font-size: 10px; opacity: 0.7; margin-top: 2px; }
-.delete-icon { position: absolute; top: 2px; right: 2px; cursor: pointer; opacity: 0; transition: opacity 0.2s; }
+.empty-cell { color: #ccc; font-size: 16px; width: 100%; text-align: center; padding-top: 14px; }
+.course-card { background: linear-gradient(135deg, #409eff, #66b1ff); color: #fff; border-radius: 4px; padding: 4px 6px; width: 100%; cursor: pointer; position: relative; }
+.course-name { font-weight: 600; font-size: 12px; margin-bottom: 1px; }
+.course-info { font-size: 10px; opacity: 0.9; }
+.course-weeks { font-size: 10px; opacity: 0.7; margin-top: 1px; }
+.delete-icon { position: absolute; top: 1px; right: 1px; cursor: pointer; opacity: 0; transition: opacity 0.2s; }
 .course-card:hover .delete-icon { opacity: 1; }
+
+.import-result { margin-top: 12px; }
 </style>

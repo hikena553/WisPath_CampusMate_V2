@@ -104,6 +104,20 @@ export function deleteTeacherSchedule(id: number) {
   return request.delete(`/teacher/schedules/${id}`)
 }
 
+export interface ClassStats {
+  total_students: number
+  gender_stats: Record<string, number>
+  crisis_stats: Record<string, number>
+  grade_stats: Record<string, number>
+  political_stats: Record<string, number>
+  hometown_stats: Record<string, number>
+  crisis_trend: { month: string; count: number }[]
+}
+
+export function getClassStats() {
+  return request.get<ClassStats>('/teacher/class-stats')
+}
+
 export interface ContactSuggestion {
   student_id: number
   student_name: string

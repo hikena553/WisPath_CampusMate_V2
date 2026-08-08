@@ -148,3 +148,23 @@ export function importData(role: 'student' | 'teacher', file: File) {
   formData.append('file', file)
   return request.post<ImportResult>(`/admin/import?role=${role}`, formData)
 }
+
+export interface DashboardStats {
+  teacher_count: number
+  student_count: number
+  college_count: number
+  knowledge_count: number
+  document_count: number
+  student_gender_stats: Record<string, number>
+  teacher_gender_stats: Record<string, number>
+  conversation_count: number
+  message_count: number
+  college_stats: { college: string; count: number }[]
+  teacher_college_stats: { college: string; count: number }[]
+  crisis_stats: { level: string; count: number }[]
+  avg_response_time?: number
+}
+
+export function getDashboardStats() {
+  return request.get<DashboardStats>('/admin/dashboard')
+}

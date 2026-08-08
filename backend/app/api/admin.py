@@ -13,12 +13,15 @@ from app.models.user import User, UserRole
 from app.models.campus import CampusFigure
 from app.models.crisis import AIDialogSummary
 from app.models.academic import Course, ClassGroup, Major, College
+from app.models.knowledge import KnowledgeItem
+from app.models.document import Document
+from app.models.conversation import Conversation, ConversationMessage
 from app.schemas.admin import (
     KnowledgeItemCreate, KnowledgeItemUpdate, KnowledgeItemOut,
     DocumentOut, TeacherCreate, TeacherOut, StudentBriefOut, StudentUpdate, ImportResult,
 )
 from app.schemas.campus import CampusFigureOut, CampusFigureCreate, CampusFigureUpdate
-from app.schemas.academic import CourseOut, CourseCreate
+from app.schemas.academic import CourseOut, CourseCreate, CourseImportResult
 from app.services import knowledge_service
 from app.services.import_export_service import export_users, import_users
 from app.services.scoring import calc_radar_score
@@ -643,3 +646,281 @@ def admin_batch_delete_courses(
     count = db.query(Course).filter(Course.id.in_(ids)).delete(synchronize_session=False)
     db.commit()
     return {"ok": True, "deleted": count}
+
+
+@router.get("/semesters")
+def admin_list_semesters(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """获取最近12个学期列表，从当前学期往前推算"""
+    from datetime import date
+    today = date.today()
+    year = today.year
+    month = today.month
+
+    # 当前学期: 3-8月为春季学期(2), 9-2月为秋季学期(1)
+    if 3 <= month <= 8:
+        current = (year - 1, year, 2)
+    else:
+        current = (year, year + 1, 1)
+
+    semesters: list[dict] = []
+    y_start, y_end, term = current
+    for i in range(12):
+        semesters.append({
+            "value": f"{y_start}-{y_end}-{term}",
+            "label": f"{y_start}-{y_end} 第{'一' if term == 1 else '二'}学期",
+        })
+        if term == 1:
+            y_start -= 1
+            y_end -= 1
+            term = 2
+        else:
+            term = 1
+
+    # 同时合并数据库中已有的学期
+    db_semesters = [r[0] for r in db.query(Course.semester).distinct().order_by(Course.semester.desc()).all()]
+    existing_values = {s["value"] for s in semesters}
+    for s in db_semesters:
+        if s and s not in existing_values:
+            semesters.append({"value": s, "label": s})
+            existing_values.add(s)
+
+    # 按学期倒序排列
+    def sort_key(s: dict) -> tuple:
+        try:
+            parts = s["value"].split("-")
+            return (-int(parts[0]), -int(parts[2]))
+        except (IndexError, ValueError):
+            return (0, 0)
+
+    semesters.sort(key=sort_key)
+
+    # 补全 label
+    for s in semesters:
+        if "第" not in s["label"]:
+            parts = s["value"].split("-")
+            if len(parts) == 3:
+                s["label"] = f"{parts[0]}-{parts[1]} 第{'一' if parts[2] == '1' else '二'}学期"
+
+    return semesters
+
+
+@router.post("/courses/import", response_model=CourseImportResult)
+async def admin_import_courses(
+    file: UploadFile = File(...),
+    college_id: int = Query(...),
+    semester: str = Query(...),
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """导入课程表 Excel，自动匹配学院下的班级"""
+    import io
+    import openpyxl
+
+    college = db.query(College).get(college_id)
+    if not college:
+        raise HTTPException(400, "学院不存在")
+
+    # 加载该学院下所有班级
+    major_ids = [m.id for m in db.query(Major).filter(Major.college_id == college_id).all()]
+    class_groups = db.query(ClassGroup).filter(ClassGroup.major_id.in_(major_ids)).all() if major_ids else []
+    cg_map: dict[str, int] = {}  # 班级名 -> id
+    for cg in class_groups:
+        cg_map[cg.name] = cg.id
+        # 也支持简称匹配，如去掉学院前缀
+        short = cg.name
+        for m in db.query(Major).filter(Major.id == cg.major_id).all():
+            short = short.replace(m.name, "").strip()
+        if short and short != cg.name:
+            cg_map[short] = cg.id
+
+    result = CourseImportResult()
+    result.matched_classes = list(cg_map.keys())
+
+    try:
+        contents = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(contents))
+        ws = wb.active
+
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        if not rows:
+            raise HTTPException(400, "Excel 文件为空（至少需要表头行和一行数据）")
+
+        headers = [str(h).strip() if h else "" for h in next(ws.iter_rows(min_row=1, max_row=1, values_only=True))]
+
+        def find_col(*keys: str) -> int:
+            for i, h in enumerate(headers):
+                hl = h.lower().replace(" ", "").replace("_", "")
+                for k in keys:
+                    if k.lower().replace(" ", "").replace("_", "") == hl:
+                        return i
+            return -1
+
+        idx_class = find_col("班级名称", "班级", "className", "class_name", "classname")
+        idx_name = find_col("课程名称", "课程", "courseName", "course_name", "coursename", "name")
+        idx_teacher = find_col("授课教师", "教师", "teacher")
+        idx_location = find_col("上课地点", "教室", "地点", "location", "classroom")
+        idx_day = find_col("星期", "day_of_week", "day")
+        idx_start = find_col("开始节次", "start_period", "start")
+        idx_end = find_col("结束节次", "end_period", "end")
+        idx_ws = find_col("开始周", "week_start", "weekstart")
+        idx_we = find_col("结束周", "week_end", "weekend")
+        idx_credit = find_col("学分", "credit")
+
+        if idx_class < 0 or idx_name < 0:
+            raise HTTPException(400, "Excel 缺少必要列：班级名称、课程名称")
+
+        for row_idx, row in enumerate(rows, start=2):
+            try:
+                class_name = str(row[idx_class]).strip() if idx_class < len(row) and row[idx_class] else ""
+                course_name = str(row[idx_name]).strip() if idx_name < len(row) and row[idx_name] else ""
+
+                if not class_name or not course_name:
+                    result.errors.append({"row": row_idx, "msg": "班级名称或课程名称为空"})
+                    continue
+
+                # 匹配班级
+                cg_id = cg_map.get(class_name)
+                if cg_id is None:
+                    # 模糊匹配
+                    for name, cid in cg_map.items():
+                        if class_name in name or name in class_name:
+                            cg_id = cid
+                            break
+                if cg_id is None:
+                    if class_name not in result.unmatched_classes:
+                        result.unmatched_classes.append(class_name)
+                    result.errors.append({"row": row_idx, "msg": f"未匹配到班级「{class_name}」"})
+                    continue
+
+                teacher = str(row[idx_teacher]).strip() if idx_teacher >= 0 and idx_teacher < len(row) and row[idx_teacher] else "未知"
+                location = str(row[idx_location]).strip() if idx_location >= 0 and idx_location < len(row) and row[idx_location] else "待定"
+
+                day_val = row[idx_day] if idx_day >= 0 and idx_day < len(row) else None
+                if isinstance(day_val, str):
+                    day_map = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
+                    day_val = day_map.get(day_val.strip().replace("周", "").replace("星期", ""), 1)
+                day_of_week = int(day_val) if day_val is not None else 1
+                if day_of_week < 1 or day_of_week > 5:
+                    result.errors.append({"row": row_idx, "msg": f"无效的星期值「{day_val}」"})
+                    continue
+
+                start_period = int(row[idx_start]) if idx_start >= 0 and idx_start < len(row) and row[idx_start] is not None else 1
+                end_period = int(row[idx_end]) if idx_end >= 0 and idx_end < len(row) and row[idx_end] is not None else 2
+                week_start = int(row[idx_ws]) if idx_ws >= 0 and idx_ws < len(row) and row[idx_ws] is not None else 1
+                week_end = int(row[idx_we]) if idx_we >= 0 and idx_we < len(row) and row[idx_we] is not None else 16
+                credit = float(row[idx_credit]) if idx_credit >= 0 and idx_credit < len(row) and row[idx_credit] is not None else None
+
+                result.total += 1
+
+                # 检查重复
+                dup = db.query(Course).filter(
+                    Course.class_group_id == cg_id,
+                    Course.semester == semester,
+                    Course.name == course_name,
+                    Course.day_of_week == day_of_week,
+                    Course.start_period == start_period,
+                ).first()
+                if dup:
+                    result.skipped += 1
+                    result.errors.append({"row": row_idx, "msg": f"已存在相同课程「{course_name}」，跳过"})
+                    continue
+
+                obj = Course(
+                    class_group_id=cg_id,
+                    semester=semester,
+                    name=course_name,
+                    teacher=teacher,
+                    location=location,
+                    day_of_week=day_of_week,
+                    start_period=start_period,
+                    end_period=end_period,
+                    week_start=week_start,
+                    week_end=week_end,
+                    credit=credit,
+                )
+                db.add(obj)
+                result.created += 1
+            except Exception as e:
+                result.errors.append({"row": row_idx, "msg": str(e)})
+
+        if result.created > 0:
+            db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"解析 Excel 失败：{str(e)}")
+
+    return result
+
+
+# ========== 仪表盘统计 ==========
+
+@router.get("/dashboard")
+def dashboard_stats(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    teacher_count = db.query(User).filter(User.role == UserRole.TEACHER).count()
+    student_count = db.query(User).filter(User.role == UserRole.STUDENT).count()
+    college_count = db.query(College).count()
+    knowledge_count = db.query(KnowledgeItem).count()
+    document_count = db.query(Document).count()
+
+    student_gender_rows = db.query(User.gender, func.count(User.id)).filter(
+        User.role == UserRole.STUDENT, User.gender.isnot(None)
+    ).group_by(User.gender).all()
+    student_gender_stats = {g or "未知": c for g, c in student_gender_rows}
+
+    teacher_gender_rows = db.query(User.gender, func.count(User.id)).filter(
+        User.role == UserRole.TEACHER, User.gender.isnot(None)
+    ).group_by(User.gender).all()
+    teacher_gender_stats = {g or "未知": c for g, c in teacher_gender_rows}
+
+    conversation_count = db.query(Conversation).count()
+    message_count = db.query(ConversationMessage).count()
+
+    college_rows = db.query(User.college, func.count(User.id)).filter(
+        User.role == UserRole.STUDENT, User.college.isnot(None)
+    ).group_by(User.college).all()
+    college_stats = [{"college": c, "count": n} for c, n in college_rows]
+
+    teacher_college_rows = db.query(User.college, func.count(User.id)).filter(
+        User.role == UserRole.TEACHER, User.college.isnot(None)
+    ).group_by(User.college).all()
+    teacher_college_stats = [{"college": c, "count": n} for c, n in teacher_college_rows]
+
+    crisis_sub = db.query(
+        AIDialogSummary.student_id,
+        AIDialogSummary.level,
+        func.row_number().over(
+            partition_by=AIDialogSummary.student_id,
+            order_by=AIDialogSummary.created_at.desc()
+        ).label("rn")
+    ).subquery()
+
+    crisis_counts = db.query(crisis_sub.c.level, func.count(crisis_sub.c.student_id)).filter(
+        crisis_sub.c.rn == 1
+    ).group_by(crisis_sub.c.level).all()
+    crisis_stats = [{"level": level.value, "count": n} for level, n in crisis_counts]
+
+    no_crisis = student_count - sum(n for _, n in crisis_counts)
+    if no_crisis > 0:
+        crisis_stats.append({"level": "none", "count": no_crisis})
+
+    return {
+        "teacher_count": teacher_count,
+        "student_count": student_count,
+        "college_count": college_count,
+        "knowledge_count": knowledge_count,
+        "document_count": document_count,
+        "student_gender_stats": student_gender_stats,
+        "teacher_gender_stats": teacher_gender_stats,
+        "conversation_count": conversation_count,
+        "message_count": message_count,
+        "college_stats": college_stats,
+        "teacher_college_stats": teacher_college_stats,
+        "crisis_stats": crisis_stats,
+    }

@@ -1,20 +1,18 @@
 <template>
   <div class="home-dashboard">
-    <!-- ===== Welcome Header ===== -->
-    <div class="welcome-header animate-fade-in-up">
-      <div class="welcome-left">
-        <div class="welcome-greeting">
-          <h1 class="text-gradient">{{ greeting }}, {{ authStore.userName || '教师' }}  <span class="wave">👋</span></h1>
-          <p class="welcome-sub">今天有 <strong class="animate-pulse">{{ pendingCount }}</strong> 件待办事项 · {{ todayStr }}</p>
-        </div>
-        <div class="header-tags">
-          <el-tag v-if="stats.pending_leave_count > 0" type="warning" effect="plain" class="animate-scale-in delay-200">
-            <el-icon><WarningFilled /></el-icon> 待批请假 {{ stats.pending_leave_count }} 条
-          </el-tag>
-          <el-tag v-if="stats.severe_alert_count > 0" type="danger" effect="plain" class="animate-scale-in delay-300">
-            <el-icon><WarningFilled /></el-icon> 高危预警 {{ stats.severe_alert_count }} 条
-          </el-tag>
-        </div>
+    <!-- ===== 第一层：欢迎横幅（精简版） ===== -->
+    <div class="welcome-banner">
+      <div class="welcome-content">
+        <h2 class="welcome-title">{{ greeting }}，{{ authStore.userName || '教师' }}</h2>
+        <span class="today-text">{{ todayStr }}</span>
+      </div>
+      <div class="welcome-tags">
+        <el-tag v-if="pendingCount > 0" type="warning" size="small" effect="plain">
+          <el-icon><WarningFilled /></el-icon> {{ pendingCount }} 件待办
+        </el-tag>
+        <el-tag v-if="stats.severe_alert_count > 0" type="danger" size="small" effect="plain">
+          <el-icon><WarningFilled /></el-icon> {{ stats.severe_alert_count }} 条高危预警
+        </el-tag>
       </div>
     </div>
 
@@ -24,99 +22,155 @@
       <span class="ai-label">绵小城</span>
     </div>
 
-    <!-- ===== 统计卡片行 ===== -->
-    <el-row :gutter="20" class="stats-row">
-      <el-col :xs="12" :sm="6" v-for="(card, index) in statCards" :key="card.label">
-        <div class="stat-card hover-lift animate-fade-in-up" :style="{ '--card-color': card.color, animationDelay: `${index * 0.05 + 0.1}s` }" @click="navigateTo(card.link)">
-          <div class="stat-icon-wrapper">
-            <el-icon :size="28"><component :is="card.icon" /></el-icon>
+    <!-- ===== 第一层：KPI统计卡片 ===== -->
+    <div class="kpi-cards">
+      <div class="kpi-card" v-for="card in statCards" :key="card.label"
+        :style="{ '--kpi-color': card.color }" @click="navigateTo(card.link)">
+        <div class="kpi-icon">
+          <el-icon :size="24"><component :is="card.icon" /></el-icon>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-value">{{ card.value }}</div>
+          <div class="kpi-label">{{ card.label }}</div>
+        </div>
+        <div class="kpi-trend" v-if="card.trend !== undefined" :class="card.trend >= 0 ? 'trend-up' : 'trend-down'">
+          {{ card.trend >= 0 ? '↑' : '↓' }} {{ Math.abs(card.trend) }}%
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 第二层：数据分析区（左2:右1） ===== -->
+    <div class="analytics-row">
+      <!-- 左侧：雷达图 + 成绩分布 + 政治面貌 + 预警趋势 + 生源地 -->
+      <div class="analytics-left">
+        <!-- 第一行：雷达图 + 成绩分布 -->
+        <div class="chart-row">
+          <div class="chart-half">
+            <div class="section-title" @click="navigateTo('/teacher/students')">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>班级综合评估</span>
+              <el-link type="primary" :underline="false" class="section-link">
+                学生档案 <el-icon><DArrowRight /></el-icon>
+              </el-link>
+            </div>
+            <div class="chart-container">
+              <VChart v-if="evaluationRadarOptions" :option="evaluationRadarOptions" autoresize />
+              <el-empty v-else description="暂无评估数据" :image-size="60" />
+            </div>
           </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ card.value }}</div>
-            <div class="stat-label">{{ card.label }}</div>
-          </div>
-          <div class="stat-trend" v-if="card.trend !== undefined">
-            <span :class="card.trend >= 0 ? 'trend-up' : 'trend-down'">
-              {{ card.trend >= 0 ? '↑' : '↓' }} {{ Math.abs(card.trend) }}%
-            </span>
+          <div class="chart-half">
+            <div class="section-title">
+              <el-icon><Histogram /></el-icon>
+              <span>成绩分布</span>
+            </div>
+            <div class="chart-container">
+              <VChart v-if="gradeBarOptions" :option="gradeBarOptions" autoresize />
+              <el-empty v-else description="暂无数据" :image-size="60" />
+            </div>
           </div>
         </div>
-      </el-col>
-    </el-row>
 
-    <!-- ===== 综合评价行 ===== -->
-    <el-row :gutter="20" class="charts-row">
-      <!-- 班级综合评价雷达 -->
-      <el-col :xs="24" :md="12">
-        <div class="section-card animate-fade-in-left delay-300">
-          <div class="section-header" @click="navigateTo('/teacher/students')">
-            <h3><el-icon><DataAnalysis /></el-icon> 班级综合评估</h3>
-            <el-link type="primary" :underline="false">
-              学生档案 <el-icon><DArrowRight /></el-icon>
-            </el-link>
+        <!-- 第二行：政治面貌 + 预警趋势 -->
+        <div class="chart-row">
+          <div class="chart-half">
+            <div class="section-title">
+              <el-icon><UserFilled /></el-icon>
+              <span>政治面貌分布</span>
+            </div>
+            <div class="chart-container">
+              <VChart v-if="politicalPieOptions" :option="politicalPieOptions" autoresize />
+              <el-empty v-else description="暂无数据" :image-size="60" />
+            </div>
+          </div>
+          <div class="chart-half">
+            <div class="section-title">
+              <el-icon><WarningFilled /></el-icon>
+              <span>预警趋势</span>
+            </div>
+            <div class="chart-container">
+              <VChart v-if="crisisTrendOptions" :option="crisisTrendOptions" autoresize />
+              <el-empty v-else description="暂无数据" :image-size="60" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 第三行：生源地分布（全宽） -->
+        <div class="chart-full">
+          <div class="section-title">
+            <el-icon><Location /></el-icon>
+            <span>生源地分布</span>
           </div>
           <div class="chart-container">
-            <VChart v-if="evaluationRadarOptions" :option="evaluationRadarOptions" autoresize />
-            <el-empty v-else description="暂无评估数据" :image-size="80" />
+            <VChart v-if="hometownBarOptions" :option="hometownBarOptions" autoresize />
+            <el-empty v-else description="暂无数据" :image-size="60" />
           </div>
         </div>
-      </el-col>
+      </div>
 
-      <!-- 班级指标卡片 -->
-      <el-col :xs="24" :md="12">
-        <div class="section-card animate-fade-in-right delay-300">
-          <div class="section-header" style="cursor:default">
-            <h3><el-icon><DataBoard /></el-icon> 班级指标</h3>
-            <el-link type="primary" :underline="false" @click="navigateTo('/teacher/students')">
-              学生档案 <el-icon><DArrowRight /></el-icon>
-            </el-link>
+      <!-- 右侧：两个饼图 -->
+      <div class="analytics-right">
+        <div class="chart-section half">
+          <div class="section-title">
+            <el-icon><UserFilled /></el-icon>
+            <span>性别比例</span>
           </div>
-          <div class="metrics-grid">
-            <div class="metric-item animate-scale-in delay-400">
-              <div class="metric-value" style="color:#5b8def">{{ evalData.total_students }}</div>
-              <div class="metric-label">学生总数</div>
-            </div>
-            <div class="metric-item animate-scale-in delay-450">
-              <div class="metric-value" style="color:#67c23a">{{ evalData.avg_gpa?.toFixed(2) || '-' }}</div>
-              <div class="metric-label">平均绩点</div>
-            </div>
-            <div class="metric-item animate-scale-in delay-500">
-              <div class="metric-value" style="color:#e6a23c">{{ evalData.avg_score?.toFixed(1) || '-' }}</div>
-              <div class="metric-label">平均成绩</div>
-            </div>
-            <div class="metric-item animate-scale-in delay-600">
-              <div class="metric-value" style="color:#f56c6c">{{ evalData.crisis?.total || 0 }}</div>
-              <div class="metric-label">预警总数</div>
-            </div>
-            <div class="metric-item animate-scale-in delay-700">
-              <div class="metric-value" style="color:#909399">{{ evalData.pending_leaves || 0 }}</div>
-              <div class="metric-label">待处理请假</div>
-            </div>
-            <div class="metric-item animate-scale-in delay-800">
-              <div class="metric-value" style="color:#909399">{{ evalData.crisis?.resolved || 0 }}</div>
-              <div class="metric-label">已处理预警</div>
-            </div>
+          <div class="chart-container pie-chart">
+            <VChart v-if="genderPieOptions" :option="genderPieOptions" autoresize />
+            <el-empty v-else description="暂无数据" :image-size="60" />
           </div>
         </div>
-      </el-col>
-    </el-row>
-
-    <!-- ===== 底部行：日程计划 + 班级公告 ===== -->
-    <el-row :gutter="20" class="bottom-row">
-      <!-- 日程计划 - 日历 -->
-      <el-col :xs="24" :md="12">
-        <div class="section-card animate-fade-in-up delay-400">
-          <div class="section-header" style="cursor:default">
-            <h3><el-icon><Calendar /></el-icon> 日程计划</h3>
-            <div class="cal-nav">
-              <el-button text @click="prevMonth">&lt;</el-button>
-              <span class="cal-title">{{ calYear }}年{{ calMonth }}月</span>
-              <el-button text @click="nextMonth">&gt;</el-button>
-              <el-button text @click="todayMonth" size="small" style="margin-left:4px">今天</el-button>
-            </div>
+        <div class="chart-divider"></div>
+        <div class="chart-section half">
+          <div class="section-title">
+            <el-icon><WarningFilled /></el-icon>
+            <span>心理危机分布</span>
           </div>
+          <div class="chart-container pie-chart">
+            <VChart v-if="crisisPieOptions" :option="crisisPieOptions" autoresize />
+            <el-empty v-else description="暂无数据" :image-size="60" />
+          </div>
+        </div>
+        <div class="chart-divider"></div>
+        <div class="ai-analysis-section">
+          <div class="section-title">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>AI 班级分析</span>
+          </div>
+          <div v-if="!analysisResult && !analysisLoading" class="analysis-placeholder">
+            <p>点击按钮，AI 将为您分析班级数据</p>
+            <el-button type="primary" @click="handleClassAnalysis" :loading="analysisLoading" size="small">
+              开始分析
+            </el-button>
+          </div>
+          <div v-else-if="analysisLoading" class="analysis-loading">
+            <el-icon class="loading-icon"><DataAnalysis /></el-icon>
+            <p>AI 正在分析班级数据...</p>
+          </div>
+          <div v-else class="analysis-content">
+            <div class="analysis-text">{{ analysisResult }}</div>
+            <el-button text type="primary" size="small" @click="handleClassAnalysis">
+              重新分析
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-          <!-- 日历表格 -->
+    <!-- ===== 第三层：日程 + 公告（1:1） ===== -->
+    <div class="schedule-row">
+      <!-- 左侧：日历 + 提醒 -->
+      <div class="schedule-section">
+        <div class="section-title">
+          <el-icon><Calendar /></el-icon>
+          <span>日程安排</span>
+        </div>
+        <div class="calendar-wrapper">
+          <div class="cal-nav">
+            <el-button text size="small" @click="prevMonth">&lt;</el-button>
+            <span class="cal-title">{{ calYear }}年{{ calMonth }}月</span>
+            <el-button text size="small" @click="nextMonth">&gt;</el-button>
+            <el-button text size="small" @click="todayMonth" style="margin-left:4px">今天</el-button>
+          </div>
           <table class="cal-table">
             <thead><tr>
               <th v-for="d in ['日','一','二','三','四','五','六']" :key="d">{{ d }}</th>
@@ -142,131 +196,144 @@
               </tr>
             </tbody>
           </table>
-
-          <!-- 红点图例说明 -->
           <div class="cal-legend">
-            <span><span class="dot-leave" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px"></span>待批请假</span>
-            <span style="margin-left:12px"><span class="dot-schedule" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px"></span>日程安排</span>
-          </div>
-
-          <!-- 待批请假弹窗 -->
-          <el-dialog v-model="leaveDetailVisible" title="待处理事项" width="420px">
-            <div v-if="selectedDayLeaves.length === 0" class="empty-tip">今日无待处理事项</div>
-            <div v-for="l in selectedDayLeaves" :key="l.id" class="schedule-item" @click="navigateTo('/teacher/approval')">
-              <div class="schedule-dot dot-warning"></div>
-              <div class="schedule-content">
-                <div class="schedule-title">{{ l.student_name }} 的请假申请</div>
-                <div class="schedule-meta">{{ l.start_date }} ~ {{ l.end_date }} · {{ typeLabel(l.leave_type) }}</div>
-              </div>
-              <el-button text size="small" type="primary" @click.stop="navigateTo('/teacher/approval')">详情</el-button>
-            </div>
-          </el-dialog>
-
-          <!-- 添加日程弹窗 -->
-          <el-dialog v-model="scheduleDialogVisible" title="添加日程" width="400px">
-            <p style="margin-bottom:12px;color:#666">日期：<strong>{{ selectedDateStr }}</strong></p>
-            <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="请输入日程内容" />
-            <template #footer>
-              <el-button @click="scheduleDialogVisible = false">取消</el-button>
-              <el-button type="primary" @click="handleAddSchedule">保存</el-button>
-            </template>
-          </el-dialog>
-
-          <!-- 近3日提醒 -->
-          <div class="reminder-section">
-            <h4 class="reminder-title">📌 未来3日提醒</h4>
-            <div v-if="upcomingReminders.length === 0" class="empty-tip">未来3天暂无日程安排</div>
-            <div v-for="r in upcomingReminders" :key="r.id" class="reminder-item">
-              <div class="reminder-date">{{ r.date.slice(5) }}</div>
-              <div class="reminder-content">{{ r.content }}</div>
-              <el-button text type="danger" size="small" @click="handleDeleteSchedule(r.id)">删除</el-button>
-            </div>
+            <span><span class="dot-leave"></span> 待批请假</span>
+            <span><span class="dot-schedule"></span> 日程安排</span>
           </div>
         </div>
-      </el-col>
-
-      <!-- 班级公告 · 我发布的 -->
-      <el-col :xs="24" :md="12">
-        <div class="section-card animate-fade-in-up delay-500">
-          <div class="section-header" style="cursor:default">
-            <h3><el-icon><Notification /></el-icon> 班级公告 · 我发布的</h3>
-            <el-button type="primary" size="small" @click="openCreateDialog">发布公告</el-button>
-          </div>
-          <div class="announce-list" style="min-height:60px">
-            <div v-if="myAnnouncements.length === 0" class="empty-tip">暂无公告</div>
-            <div v-for="a in myAnnouncements" :key="a.id" class="announce-item">
-              <el-tag :type="urgencyTagType(a.urgency)" size="small" effect="plain" style="flex-shrink:0">
-                {{ urgencyLabel(a.urgency) }}
-              </el-tag>
-              <div class="announce-content">
-                <div class="announce-title">{{ a.title }}</div>
-                <div class="announce-date">{{ new Date(a.created_at).toLocaleString('zh-CN') }}</div>
-              </div>
-              <a v-if="a.attachment_url" :href="a.attachment_url" target="_blank" class="attach-link" @click.stop>📎</a>
-              <el-button text type="danger" size="small" @click="handleDelete(a.id)">删除</el-button>
-            </div>
+        <div class="upcoming-section">
+          <div class="reminder-title">📌 近期提醒</div>
+          <div v-if="upcomingReminders.length === 0" class="empty-tip-small">暂无提醒</div>
+          <div v-for="r in upcomingReminders.slice(0, 3)" :key="r.id" class="reminder-item">
+            <span class="reminder-date">{{ r.date.slice(5) }}</span>
+            <span class="reminder-content">{{ r.content }}</span>
+            <el-button text type="danger" size="small" @click="handleDeleteSchedule(r.id)">删除</el-button>
           </div>
         </div>
+      </div>
 
-        <!-- 发布公告 Dialog -->
-        <el-dialog v-model="createDialogVisible" title="发布公告" width="520px">
-          <el-form label-position="top">
-            <el-form-item label="标题">
-              <el-input v-model="createForm.title" placeholder="公告标题" maxlength="200" />
-            </el-form-item>
-            <el-form-item label="内容">
-              <el-input v-model="createForm.content" type="textarea" :rows="4" placeholder="公告内容" />
-            </el-form-item>
-            <el-form-item label="紧急程度">
-              <el-radio-group v-model="createForm.urgency">
-                <el-radio value="normal">普通</el-radio>
-                <el-radio value="important">重要</el-radio>
-                <el-radio value="urgent">紧急</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="附件（可选）">
-              <input type="file" @change="(e: any) => { if (e.target?.files?.[0]) createFile = e.target.files[0] }" />
-            </el-form-item>
-          </el-form>
-          <template #footer>
-            <el-button @click="createDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="handleCreate">发布</el-button>
-          </template>
-        </el-dialog>
-      </el-col>
-    </el-row>
+      <!-- 右侧：公告（Tab切换） -->
+      <div class="announcements-section">
+        <el-tabs v-model="activeAnnouncementTab" class="announcement-tabs">
+          <el-tab-pane label="校园公告" name="campus">
+            <div class="announcement-list">
+              <div v-if="campusAnnouncements.length === 0" class="empty-tip-small">暂无校园公告</div>
+              <a v-for="(item, index) in campusAnnouncements.slice(0, 5)" :key="index"
+                :href="item.url || '#'" target="_blank" class="campus-item">
+                <span class="campus-title">{{ item.title }}</span>
+                <span class="campus-date">{{ item.date }}</span>
+              </a>
+            </div>
+            <el-button text type="primary" size="small" class="view-all-btn"
+              href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" target="_blank">
+              查看更多 <el-icon><DArrowRight /></el-icon>
+            </el-button>
+          </el-tab-pane>
+          <el-tab-pane label="班级公告" name="class">
+            <div class="tab-header">
+              <el-button type="primary" size="small" @click="openCreateDialog">发布公告</el-button>
+            </div>
+            <div class="announcement-list">
+              <div v-if="myAnnouncements.length === 0" class="empty-tip-small">暂无公告</div>
+              <div v-for="a in myAnnouncements.slice(0, 5)" :key="a.id" class="announcement-item">
+                <el-tag :type="urgencyTagType(a.urgency)" size="small" effect="plain">
+                  {{ urgencyLabel(a.urgency) }}
+                </el-tag>
+                <div class="announcement-content">
+                  <div class="announcement-title">{{ a.title }}</div>
+                  <div class="announcement-date">{{ formatDate(a.created_at) }}</div>
+                </div>
+                <a v-if="a.attachment_url" :href="a.attachment_url" target="_blank" class="attach-link" @click.stop>📎</a>
+                <el-button text type="danger" size="small" @click="handleDelete(a.id)">删除</el-button>
+              </div>
+            </div>
+            <el-button v-if="myAnnouncements.length > 5" text type="primary" size="small" class="view-all-btn">
+              查看全部 <el-icon><DArrowRight /></el-icon>
+            </el-button>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </div>
+
+    <!-- 发布公告 Dialog -->
+    <el-dialog v-model="createDialogVisible" title="发布公告" width="520px">
+      <el-form label-position="top">
+        <el-form-item label="标题">
+          <el-input v-model="createForm.title" placeholder="公告标题" maxlength="200" />
+        </el-form-item>
+        <el-form-item label="内容">
+          <el-input v-model="createForm.content" type="textarea" :rows="4" placeholder="公告内容" />
+        </el-form-item>
+        <el-form-item label="紧急程度">
+          <el-radio-group v-model="createForm.urgency">
+            <el-radio value="normal">普通</el-radio>
+            <el-radio value="important">重要</el-radio>
+            <el-radio value="urgent">紧急</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="附件（可选）">
+          <input type="file" @change="(e: any) => { if (e.target?.files?.[0]) createFile = e.target.files[0] }" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleCreate">发布</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 待批请假弹窗 -->
+    <el-dialog v-model="leaveDetailVisible" title="待处理事项" width="420px">
+      <div v-if="selectedDayLeaves.length === 0" class="empty-tip">今日无待处理事项</div>
+      <div v-for="l in selectedDayLeaves" :key="l.id" class="schedule-item" @click="navigateTo('/teacher/approval')">
+        <div class="schedule-dot dot-warning"></div>
+        <div class="schedule-content">
+          <div class="schedule-title">{{ l.student_name }} 的请假申请</div>
+          <div class="schedule-meta">{{ l.start_date }} ~ {{ l.end_date }} · {{ typeLabel(l.leave_type) }}</div>
+        </div>
+        <el-button text size="small" type="primary" @click.stop="navigateTo('/teacher/approval')">详情</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 添加日程弹窗 -->
+    <el-dialog v-model="scheduleDialogVisible" title="添加日程" width="400px">
+      <p style="margin-bottom:12px;color:#666">日期：<strong>{{ selectedDateStr }}</strong></p>
+      <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="请输入日程内容" />
+      <template #footer>
+        <el-button @click="scheduleDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleAddSchedule">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
-  WarningFilled, DataAnalysis, DataBoard,
-  Calendar, Notification, UserFilled,
-  WarningFilled as WarnIcon,
-  EditPen, DArrowRight
+  WarningFilled, DataAnalysis, Calendar, UserFilled,
+  WarningFilled as WarnIcon, EditPen, DArrowRight, Histogram, Location
 } from '@element-plus/icons-vue'
 import { getAlerts } from '@/api/crisis'
 import { getPendingLeaves } from '@/api/leave'
-import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule } from '@/api/teacher'
-import type { DashboardStats, ClassEvaluation } from '@/api/teacher'
+import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getClassStats } from '@/api/teacher'
+import type { DashboardStats, ClassEvaluation, ClassStats } from '@/api/teacher'
 import { getAnnouncements } from '@/api/campus'
 import { getTeacherAnnouncements, createAnnouncement, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import type { CrisisAlert, LeaveRequestOut, Announcement } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useAiAnalysis } from '@/composables/useAiAnalysis'
 
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { RadarChart } from 'echarts/charts'
+import { RadarChart, PieChart, BarChart, LineChart } from 'echarts/charts'
 import {
   TooltipComponent, LegendComponent,
-  RadarComponent
+  RadarComponent, GridComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 
-use([CanvasRenderer, RadarChart, TooltipComponent, LegendComponent, RadarComponent])
+use([CanvasRenderer, RadarChart, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, RadarComponent, GridComponent])
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -282,6 +349,44 @@ const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
 const createForm = reactive({ title: '', content: '', urgency: 'normal' })
 const createFile = ref<File | null>(null)
+const classStats = ref<ClassStats>({
+  total_students: 0,
+  gender_stats: {},
+  crisis_stats: {},
+  grade_stats: {},
+  political_stats: {},
+  hometown_stats: {},
+  crisis_trend: [],
+})
+const campusAnnouncements = ref<Announcement[]>([])
+const activeAnnouncementTab = ref('campus')
+
+// ===== AI 班级分析 =====
+const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
+
+function buildAnalysisPrompt() {
+  const stats = classStats.value
+  return `作为辅导员老师，请分析以下班级数据并给出指导建议：
+
+班级数据：
+- 学生总数：${stats.total_students}
+- 性别比例：${JSON.stringify(stats.gender_stats)}
+- 政治面貌：${JSON.stringify(stats.political_stats)}
+- 心理危机分布：高危${stats.crisis_stats?.severe || 0}人、中危${stats.crisis_stats?.moderate || 0}人、低危${stats.crisis_stats?.mild || 0}人、已解决${stats.crisis_stats?.resolved || 0}人
+- 成绩分布：优秀${stats.grade_stats?.excellent || 0}人、良好${stats.grade_stats?.good || 0}人、中等${stats.grade_stats?.medium || 0}人、及格${stats.grade_stats?.pass || 0}人、不及格${stats.grade_stats?.fail || 0}人
+
+请从以下方面进行分析：
+1. 班级整体概况
+2. 心理健康状况分析
+3. 学业成绩分析
+4. 辅导员工作建议
+
+请用简洁专业的语言，控制在500字以内。`
+}
+
+async function handleClassAnalysis() {
+  await runAnalysis(buildAnalysisPrompt(), { skipCache: true })
+}
 
 const pendingCount = computed(() =>
   stats.value.pending_leave_count + stats.value.severe_alert_count
@@ -299,6 +404,10 @@ const todayStr = computed(() => {
   const week = ['日', '一', '二', '三', '四', '五', '六']
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${week[d.getDay()]}`
 })
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('zh-CN')
+}
 
 const statCards = computed(() => [
   {
@@ -362,14 +471,9 @@ const evaluationRadarOptions = computed(() => {
         lineStyle: { color: '#5b8def', width: 2 },
         itemStyle: { color: '#5b8def' },
       }],
-      animationDuration: 2000,
+      animationDuration: 1500,
       animationEasing: 'cubicOut' as const,
-      animationDelay: function(idx: number) {
-        return idx * 100;
-      }
     }],
-    animationDuration: 2000,
-    animationEasing: 'cubicOut' as const,
   }
 })
 
@@ -377,6 +481,266 @@ function typeLabel(t: string) {
   const map: Record<string, string> = { competition: '比赛', sick: '病假', personal: '事假', other: '其他' }
   return map[t] || t
 }
+
+// ===== 性别比例饼图 =====
+const genderPieOptions = computed(() => {
+  const data = classStats.value.gender_stats
+  if (!data || Object.keys(data).length === 0) return null
+  
+  const colors = ['#5b8def', '#f56c6c', '#67c23a', '#e6a23c', '#909399']
+  const pieData = Object.entries(data).map(([name, value], index) => ({
+    name,
+    value,
+    itemStyle: { color: colors[index % colors.length] }
+  }))
+  
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c}人 ({d}%)'
+    },
+    legend: {
+      orient: 'horizontal',
+      bottom: 5,
+      textStyle: { color: '#666', fontSize: 11 }
+    },
+    series: [{
+      name: '性别分布',
+      type: 'pie',
+      radius: ['35%', '65%'],
+      center: ['50%', '42%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 4,
+        borderColor: '#fff',
+        borderWidth: 2
+      },
+      label: { show: false },
+      emphasis: {
+        label: { show: true, fontSize: 13, fontWeight: 'bold' }
+      },
+      data: pieData,
+    }]
+  }
+})
+
+// ===== 心理危机比例饼图 =====
+const crisisPieOptions = computed(() => {
+  const data = classStats.value.crisis_stats
+  if (!data) return null
+  
+  const colors = ['#f56c6c', '#e6a23c', '#67c23a', '#909399']
+  const names = ['高危', '中危', '低危', '已解决']
+  const values = [data.severe || 0, data.moderate || 0, data.mild || 0, data.resolved || 0]
+  
+  const total = values.reduce((sum, v) => sum + v, 0)
+  if (total === 0) return null
+  
+  const pieData = names.map((name, index) => ({
+    name,
+    value: values[index],
+    itemStyle: { color: colors[index] }
+  }))
+  
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c}人 ({d}%)'
+    },
+    legend: {
+      orient: 'horizontal',
+      bottom: 5,
+      textStyle: { color: '#666', fontSize: 11 }
+    },
+    series: [{
+      name: '危机分布',
+      type: 'pie',
+      radius: ['35%', '65%'],
+      center: ['50%', '42%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 4,
+        borderColor: '#fff',
+        borderWidth: 2
+      },
+      label: { show: false },
+      emphasis: {
+        label: { show: true, fontSize: 13, fontWeight: 'bold' }
+      },
+      data: pieData,
+    }]
+  }
+})
+
+// ===== 成绩分布柱状图 =====
+const gradeBarOptions = computed(() => {
+  const data = classStats.value.grade_stats
+  if (!data) return null
+  
+  const categories = ['优秀', '良好', '中等', '及格', '不及格']
+  const values = [data.excellent || 0, data.good || 0, data.medium || 0, data.pass || 0, data.fail || 0]
+  
+  const total = values.reduce((sum, v) => sum + v, 0)
+  if (total === 0) return null
+  
+  const colors = ['#67c23a', '#5b8def', '#e6a23c', '#f56c6c', '#909399']
+  
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    grid: {
+      left: '3%', right: '4%', bottom: '8%', top: '8%', containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: categories,
+      axisLabel: { color: '#666', fontSize: 11 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#666' }
+    },
+    series: [{
+      name: '人数',
+      type: 'bar',
+      barWidth: '50%',
+      data: values.map((value, index) => ({
+        value,
+        itemStyle: { color: colors[index], borderRadius: [3, 3, 0, 0] }
+      })),
+    }],
+  }
+})
+
+// ===== 政治面貌饼图 =====
+const politicalPieOptions = computed(() => {
+  const data = classStats.value.political_stats
+  if (!data || Object.keys(data).length === 0) return null
+  
+  const total = Object.values(data).reduce((sum, v) => sum + v, 0)
+  if (total === 0) return null
+  
+  const colors = ['#5b8def', '#67c23a', '#e6a23c', '#f56c6c', '#909399']
+  const pieData = Object.entries(data).map(([name, value], index) => ({
+    name,
+    value,
+    itemStyle: { color: colors[index % colors.length] }
+  }))
+  
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c}人 ({d}%)'
+    },
+    legend: {
+      orient: 'horizontal',
+      bottom: 5,
+      textStyle: { color: '#666', fontSize: 11 }
+    },
+    series: [{
+      name: '政治面貌',
+      type: 'pie',
+      radius: ['35%', '65%'],
+      center: ['50%', '42%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 4,
+        borderColor: '#fff',
+        borderWidth: 2
+      },
+      label: { show: false },
+      emphasis: {
+        label: { show: true, fontSize: 13, fontWeight: 'bold' }
+      },
+      data: pieData,
+    }]
+  }
+})
+
+// ===== 预警趋势折线图 =====
+const crisisTrendOptions = computed(() => {
+  const data = classStats.value.crisis_trend
+  if (!data || data.length === 0) return null
+  
+  return {
+    tooltip: {
+      trigger: 'axis',
+      formatter: '{b}<br/>预警数量: {c}'
+    },
+    grid: {
+      left: '3%', right: '4%', bottom: '8%', top: '8%', containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: data.map(d => d.month),
+      axisLabel: { color: '#666', fontSize: 11 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#666' }
+    },
+    series: [{
+      name: '预警数量',
+      type: 'line',
+      data: data.map(d => d.count),
+      smooth: true,
+      lineStyle: { color: '#f56c6c', width: 2 },
+      itemStyle: { color: '#f56c6c' },
+      areaStyle: {
+        color: {
+          type: 'linear',
+          x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(245,108,108,0.3)' },
+            { offset: 1, color: 'rgba(245,108,108,0.05)' }
+          ]
+        }
+      }
+    }]
+  }
+})
+
+// ===== 生源地柱状图 =====
+const hometownBarOptions = computed(() => {
+  const data = classStats.value.hometown_stats
+  if (!data || Object.keys(data).length === 0) return null
+  
+  const categories = Object.keys(data)
+  const values = Object.values(data)
+  
+  const total = values.reduce((sum, v) => sum + v, 0)
+  if (total === 0) return null
+  
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    grid: {
+      left: '3%', right: '4%', bottom: '10%', top: '8%', containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: categories,
+      axisLabel: { color: '#666', fontSize: 11, rotate: categories.length > 5 ? 30 : 0 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#666' }
+    },
+    series: [{
+      name: '人数',
+      type: 'bar',
+      data: values,
+      itemStyle: {
+        color: '#5b8def',
+        borderRadius: [3, 3, 0, 0]
+      }
+    }]
+  }
+})
 
 function navigateTo(path: string) {
   router.push(path)
@@ -389,7 +753,7 @@ function goAgent() {
 // ===== Calendar State =====
 interface CalDay {
   num: number
-  month: number  // 0=current, -1=prev, 1=next
+  month: number
   isToday: boolean
   isPast: boolean
   hasLeave: boolean
@@ -415,7 +779,6 @@ const calWeeks = computed(() => {
   const daysInPrev = new Date(y, m - 1, 0).getDate()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
-  // 构建请假映射
   const leaveMap = new Map<string, LeaveRequestOut[]>()
   pendingLeaves.value.forEach(l => {
     const d = l.start_date
@@ -423,7 +786,6 @@ const calWeeks = computed(() => {
     leaveMap.get(d)!.push(l)
   })
 
-  // 构建课程表映射
   const scheduleMap = new Map<string, boolean>()
   schedules.value.forEach(s => { scheduleMap.set(s.date, true) })
 
@@ -600,156 +962,560 @@ async function loadData() {
   try {
     evalData.value = await getClassEvaluation()
   } catch { /* ignore */ }
+  try {
+    classStats.value = await getClassStats()
+  } catch { /* ignore */ }
+  try {
+    campusAnnouncements.value = await getAnnouncements()
+  } catch { /* ignore */ }
 }
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   loadData()
   loadMyAnnouncements()
   loadSchedules()
+  pollTimer = setInterval(() => {
+    loadData()
+    loadSchedules()
+    loadMyAnnouncements()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 
 <style scoped>
 /* ===== Global ===== */
 .home-dashboard {
-  height: 100%; overflow-y: auto; overflow-x: hidden;
-  padding: 8px 4px 120px;
-  position: relative;
-  animation: fadeInUp 0.35s ease-out;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px;
 }
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeInLeft {
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes fadeInRight {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes slideInDown {
-  from { opacity: 0; transform: translateY(-30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-@keyframes countUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in-up { animation: fadeInUp 0.35s ease-out; }
-.animate-fade-in-left { animation: fadeInLeft 0.35s ease-out; }
-.animate-fade-in-right { animation: fadeInRight 0.35s ease-out; }
-.animate-scale-in { animation: scaleIn 0.3s ease-out; }
-.animate-slide-in-down { animation: slideInDown 0.3s ease-out; }
-.animate-pulse { animation: pulse 2s ease-in-out infinite; }
-.animate-shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
-}
-
-.delay-100 { animation-delay: 0.03s; }
-.delay-200 { animation-delay: 0.06s; }
-.delay-300 { animation-delay: 0.09s; }
-.delay-400 { animation-delay: 0.12s; }
-.delay-500 { animation-delay: 0.15s; }
-.delay-600 { animation-delay: 0.18s; }
-.delay-700 { animation-delay: 0.21s; }
-.delay-800 { animation-delay: 0.24s; }
-
-.text-gradient {
-  background: linear-gradient(135deg, #5b8def 0%, #8fb8ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.text-glow {
-  text-shadow: 0 0 10px rgba(91, 141, 239, 0.3);
-}
-
-.hover-lift {
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
-}
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
-}
-
-/* ===== Welcome Header ===== */
-.welcome-header {
+/* ===== Welcome Banner ===== */
+.welcome-banner {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 28px;
-  padding: 24px 28px;
+  align-items: center;
+  padding: 12px 18px;
   background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
-  border-radius: 16px;
-  border: 1px solid rgba(91, 141, 239, 0.12);
-  position: relative;
-  overflow: hidden;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(91, 141, 239, 0.1);
 }
-.welcome-header::before {
-  content: '';
-  position: absolute;
-  top: -40%;
-  right: -10%;
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(91,141,239,0.06) 0%, transparent 70%);
-  border-radius: 50%;
+
+.welcome-content {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
-.welcome-greeting h1 {
-  font-size: 24px;
-  font-weight: 700;
+
+.welcome-title {
+  font-size: 16px;
+  font-weight: 600;
   color: #1a1a2e;
-  margin: 0 0 6px;
-}
-.wave { display: inline-block; animation: wave 2s infinite; }
-@keyframes wave {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(15deg); }
-  75% { transform: rotate(-10deg); }
-}
-.welcome-sub {
-  font-size: 14px;
-  color: #888;
   margin: 0;
 }
-.welcome-sub strong { color: #e6a23c; }
-.header-tags {
+
+.today-text {
+  font-size: 12px;
+  color: #888;
+}
+
+.welcome-tags {
   display: flex;
+  gap: 6px;
+}
+
+/* ===== KPI Cards ===== */
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.kpi-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--kpi-color) 12%, white);
+  color: var(--kpi-color);
+  flex-shrink: 0;
+}
+
+.kpi-info {
+  flex: 1;
+}
+
+.kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a2e;
+  line-height: 1.2;
+}
+
+.kpi-label {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.kpi-trend {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trend-up { color: #67c23a; }
+.trend-down { color: #f56c6c; }
+
+/* ===== Analytics Row ===== */
+.analytics-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.analytics-left, .analytics-right {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+
+.analytics-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.chart-half {
+  min-width: 0;
+}
+
+.chart-full {
+  width: 100%;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.section-title:hover {
+  opacity: 0.7;
+}
+
+.section-link {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.chart-container {
+  width: 100%;
+  height: 160px;
+}
+
+.chart-divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 6px 0;
+}
+
+/* ===== AI Analysis ===== */
+.ai-analysis-section {
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.analysis-placeholder {
+  text-align: center;
+  padding: 12px 8px;
+  color: #888;
+}
+
+.analysis-placeholder p {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+}
+
+.analysis-loading {
+  text-align: center;
+  padding: 12px 8px;
+}
+
+.loading-icon {
+  font-size: 20px;
+  color: #5b8def;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.analysis-content {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #555;
+}
+
+.analysis-text {
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* ===== Schedule Row ===== */
+.schedule-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.schedule-section, .announcements-section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+
+/* ===== Calendar ===== */
+.calendar-wrapper {
+  margin-bottom: 10px;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  min-width: 80px;
+  text-align: center;
+}
+
+.cal-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cal-table th {
+  font-size: 11px;
+  color: #999;
+  font-weight: 500;
+  padding: 4px 0;
+  text-align: center;
+}
+
+.cal-table td {
+  text-align: center;
+  padding: 3px 0;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  height: 32px;
+}
+
+.cal-table td:hover {
+  background: rgba(91,141,239,0.06);
+}
+
+.cal-other { opacity: 0.25; pointer-events: none; }
+.cal-past { opacity: 0.4; cursor: default; }
+.cal-past:hover { background: transparent !important; }
+.cal-past .cal-day-num { color: #ccc; }
+
+.cal-today .cal-day-num {
+  background: #5b8def;
+  color: #fff;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  border-radius: 50%;
+  font-weight: 600;
+}
+
+.cal-day-num { font-size: 12px; font-weight: 500; }
+
+.cal-dots {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  min-height: 5px;
+  margin-top: 1px;
+}
+
+.dot-leave {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f56c6c;
+  display: inline-block;
+}
+
+.dot-schedule {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #67c23a;
+  display: inline-block;
+}
+
+.cal-legend {
+  font-size: 10px;
+  color: #999;
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.cal-legend span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ===== Upcoming Section ===== */
+.upcoming-section {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 10px;
+}
+
+.reminder-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.reminder-item {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  margin-top: 12px;
+  padding: 4px 0;
+}
+
+.reminder-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5b8def;
+  background: #f0f7ff;
+  padding: 1px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.reminder-content {
+  flex: 1;
+  font-size: 12px;
+  color: #555;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== Announcements ===== */
+.announcement-tabs {
+  height: 100%;
+}
+
+.tab-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.announcement-list {
+  min-height: 140px;
+}
+
+.announcement-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.announcement-item:last-child {
+  border-bottom: none;
+}
+
+.announcement-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.announcement-title {
+  font-size: 13px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.announcement-date {
+  font-size: 11px;
+  color: #999;
+  margin-top: 1px;
+}
+
+.attach-link {
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.campus-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f5f5;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.campus-item:last-child {
+  border-bottom: none;
+}
+
+.campus-item:hover {
+  background: #f8f9ff;
+}
+
+.campus-title {
+  font-size: 13px;
+  color: #333;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 10px;
+}
+
+.campus-date {
+  font-size: 11px;
+  color: #999;
+  flex-shrink: 0;
+}
+
+.view-all-btn {
+  margin-top: 6px;
+}
+
+/* ===== Common ===== */
+.empty-tip {
+  text-align: center;
+  color: #bbb;
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+.empty-tip-small {
+  text-align: center;
+  color: #bbb;
+  padding: 14px 0;
+  font-size: 12px;
+}
+
+/* ===== Schedule Items ===== */
+.schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.schedule-item:hover {
+  background: rgba(91,141,239,0.05);
+}
+
+.schedule-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-warning { background: #e6a23c; }
+
+.schedule-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.schedule-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.schedule-meta {
+  font-size: 11px;
+  color: #999;
+  margin-top: 1px;
 }
 
 /* ===== AI Floating Button ===== */
 .ai-float {
   position: fixed;
-  bottom: 32px;
-  right: 32px;
+  bottom: 24px;
+  right: 24px;
   z-index: 999;
   display: flex;
   flex-direction: column;
@@ -757,351 +1523,63 @@ onMounted(() => {
   cursor: pointer;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
 .ai-float:hover { transform: scale(1.1); }
+
 .ai-mascot {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
-  transition: transform 0.15s ease;
   animation: mascot-float 2s ease-in-out infinite;
 }
-.ai-float:hover .ai-mascot { transform: scale(1.15) translateY(-4px); }
+
 @keyframes mascot-float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-4px); }
 }
+
 .ai-label {
-  margin-top: 4px;
-  font-size: 12px;
+  margin-top: 3px;
+  font-size: 11px;
   font-weight: 600;
   color: #5b8def;
   background: rgba(255,255,255,0.9);
-  padding: 2px 10px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-
-/* ===== Stat Cards ===== */
-.stats-row { margin-bottom: 24px !important; }
-.stat-card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 20px 22px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-  position: relative;
-  overflow: hidden;
-  opacity: 0;
-  transform: translateY(20px);
-  animation: fadeInUp 0.35s ease-out forwards;
-}
-.stat-card::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: var(--card-color);
-  border-radius: 0 2px 2px 0;
-}
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(0,0,0,0.08);
-}
-.stat-card:active {
-  transform: translateY(-2px);
-}
-.stat-icon-wrapper {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--card-color) 12%, white);
-  color: var(--card-color);
-  flex-shrink: 0;
-}
-.stat-info { flex: 1; }
-.stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a1a2e;
-  line-height: 1.2;
-}
-.stat-label {
-  font-size: 13px;
-  color: #888;
-  margin-top: 2px;
-}
-.stat-trend { text-align: right; }
-.trend-up { color: #67c23a; font-size: 13px; font-weight: 600; }
-.trend-down { color: #f56c6c; font-size: 13px; font-weight: 600; }
-
-/* ===== Section Cards ===== */
-.section-card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 20px 22px;
-  margin-bottom: 20px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-}
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-.section-header:hover { opacity: 0.7; }
-.section-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* ===== Charts ===== */
-.charts-row { margin-bottom: 0 !important; }
-.chart-container {
-  width: 100%;
-  height: 260px;
-  animation: scaleIn 0.8s ease-out;
-  animation-delay: 0.4s;
-  animation-fill-mode: both;
-}
-
-/* ===== Schedule List ===== */
-.schedule-list { min-height: 120px; }
-.empty-tip {
-  text-align: center;
-  color: #bbb;
-  padding: 32px 0;
-  font-size: 14px;
-}
-.schedule-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 6px;
-}
-.schedule-item:hover {
-  background: rgba(91,141,239,0.05);
-}
-.schedule-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.dot-warning { background: #e6a23c; }
-.dot-danger { background: #f56c6c; }
-.dot-info { background: #909399; }
-.dot-success { background: #67c23a; }
-.schedule-content { flex: 1; min-width: 0; }
-.schedule-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.schedule-meta {
-  font-size: 12px;
-  color: #999;
-  margin-top: 2px;
-}
-
-/* ===== Announcement List ===== */
-.announce-list { min-height: 120px; }
-.announce-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  transition: all 0.2s ease;
-  margin-bottom: 2px;
-  opacity: 0;
-  transform: translateY(10px);
-  animation: fadeInUp 0.4s ease-out forwards;
-}
-.announce-item:nth-child(2) { animation-delay: 0.05s; }
-.announce-item:nth-child(3) { animation-delay: 0.1s; }
-.announce-item:nth-child(4) { animation-delay: 0.15s; }
-.announce-item:hover { 
-  background: rgba(91,141,239,0.04); 
-  transform: translateY(-2px);
-}
-.announce-badge {
-  width: 6px;
-  height: 24px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-.badge-blue { background: #5b8def; }
-.badge-green { background: #67c23a; }
-.badge-orange { background: #e6a23c; }
-.badge-purple { background: #9b59b6; }
-.announce-content { flex: 1; min-width: 0; }
-.announce-title {
-  font-size: 13.5px;
-  color: #333;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.announce-date {
-  font-size: 12px;
-  color: #bbb;
-  margin-top: 2px;
-}
-.announce-list .empty-tip { text-align: center; color: #bbb; padding: 16px 0; font-size: 13px; }
-.announce-list .announce-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 0; border-bottom: 1px solid #f5f5f5;
-}
-.announce-list .announce-item:last-child { border-bottom: none; }
-
-/* ===== Metrics Grid ===== */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  padding: 4px 0;
-}
-.metric-item {
-  text-align: center;
-  padding: 16px 8px;
-  border-radius: 10px;
-  background: #f8faff;
-  border: 1px solid rgba(91,141,239,0.06);
-  transition: all 0.3s ease;
-  opacity: 0;
-  transform: scale(0.9);
-  animation: scaleIn 0.3s ease-out forwards;
-}
-.metric-item:hover {
-  background: #f0f7ff;
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(91,141,239,0.1);
-}
-.metric-value {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.2;
-  transition: all 0.3s ease;
-}
-.metric-label {
-  font-size: 12px;
-  color: #888;
-  margin-top: 4px;
-  transition: color 0.3s ease;
-}
-.metric-item:hover .metric-value {
-  transform: scale(1.1);
-}
-.metric-item:hover .metric-label {
-  color: #5b8def;
-}
-
-/* ===== Calendar ===== */
-.cal-nav { display: flex; align-items: center; gap: 2px; }
-.cal-title { font-size: 14px; font-weight: 600; color: #333; min-width: 100px; text-align: center; }
-.cal-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-.cal-table th {
-  font-size: 12px; color: #999; font-weight: 500;
-  padding: 6px 0; text-align: center;
-}
-.cal-table td {
-  text-align: center; padding: 6px 0;
-  cursor: pointer; border-radius: 6px;
-  transition: all 0.2s ease;
-  vertical-align: top;
-  position: relative;
-  height: 48px;
-}
-.cal-table td:hover { 
-  background: rgba(91,141,239,0.06); 
-  transform: scale(1.1);
-}
-.cal-other { opacity: 0.25; pointer-events: none; }
-.cal-past { opacity: 0.4; cursor: default; }
-.cal-past:hover { background: transparent !important; transform: none !important; }
-.cal-past .cal-day-num { color: #ccc; }
-.cal-today .cal-day-num {
-  background: #5b8def; color: #fff;
-  display: inline-block; width: 26px; height: 26px;
-  line-height: 26px; border-radius: 50%;
-  font-weight: 600;
-  animation: pulse 2s ease-in-out infinite;
-}
-.cal-day-num { font-size: 13px; font-weight: 500; }
-.cal-dots { display: flex; justify-content: center; gap: 3px; min-height: 8px; margin-top: 2px; }
-.dot-leave { width: 6px; height: 6px; border-radius: 50%; background: #f56c6c; display: inline-block; }
-.dot-schedule { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; display: inline-block; }
-.cal-has-leave .cal-day-num { position: relative; }
-.cal-legend { font-size: 11px; color: #999; margin-bottom: 12px; padding: 4px 0; }
-
-/* ===== Reminder Section ===== */
-.reminder-section {
-  border-top: 1px solid #f0f0f0;
-  padding-top: 14px;
-  margin-top: 4px;
-}
-.reminder-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #555;
-  margin: 0 0 10px;
-}
-.reminder-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  padding: 1px 8px;
   border-radius: 8px;
-  margin-bottom: 4px;
-  transition: all 0.2s ease;
-  opacity: 0;
-  transform: translateX(-20px);
-  animation: fadeInLeft 0.3s ease-out forwards;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
 }
-.reminder-item:nth-child(2) { animation-delay: 0.05s; }
-.reminder-item:nth-child(3) { animation-delay: 0.1s; }
-.reminder-item:nth-child(4) { animation-delay: 0.15s; }
-.reminder-item:hover { 
-  background: rgba(91,141,239,0.04); 
-  transform: translateX(4px);
+
+/* ===== Responsive ===== */
+@media (max-width: 1200px) {
+  .kpi-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
-.reminder-date {
-  font-size: 12px;
-  font-weight: 600;
-  color: #5b8def;
-  background: #f0f7ff;
-  padding: 2px 10px;
-  border-radius: 10px;
-  flex-shrink: 0;
+
+@media (max-width: 1024px) {
+  .analytics-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .schedule-row {
+    grid-template-columns: 1fr;
+  }
 }
-.reminder-content { flex: 1; font-size: 13px; color: #555; }
-.announce-list .announce-content { flex: 1; min-width: 0; }
-.announce-list .announce-title { font-size: 13.5px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.announce-list .announce-date { font-size: 11px; color: #bbb; margin-top: 1px; }
-.attach-link { text-decoration: none; font-size: 16px; cursor: pointer; }
+
+@media (max-width: 768px) {
+  .kpi-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .welcome-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .welcome-content {
+    flex-direction: column;
+    gap: 3px;
+  }
+}
 </style>
