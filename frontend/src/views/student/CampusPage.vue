@@ -55,34 +55,108 @@
         </template>
 
         <template v-else-if="activeTab === 'impression'">
-          <div class="link-section">
-            <h3 class="sec-title"><span class="sec-dot"></span> 绵城印象</h3>
-            <div class="link-grid">
-              <div v-for="item in impressionItems" :key="item.title" class="link-card" @click="openLink(item.url)">
-                <span class="link-icon">{{ item.icon }}</span>
-                <div class="link-text">
-                  <strong>{{ item.title }}</strong>
-                  <small>了解更多 →</small>
-                </div>
+          <!-- ① 教务系统入口 -->
+          <div class="imp-section">
+            <div class="imp-sec-title"><span class="sec-dot"></span> 教务系统入口</div>
+            <div class="entry-grid">
+              <div v-for="e in impression.entries" :key="e.url" class="entry-item" v-tilt @click="openLink(e.url)">
+                <span class="entry-icon">{{ entryIcon(e.title) }}</span>
+                <p>{{ e.title }}</p>
               </div>
             </div>
           </div>
-          <div class="link-section">
-            <h3 class="sec-title"><span class="sec-dot"></span> 专业分院</h3>
-            <div class="link-grid">
-              <div v-for="item in collegeItems" :key="item.name" class="link-card" @click="openLink(item.url)">
-                <span class="link-icon">{{ item.icon }}</span>
-                <div class="link-text">
-                  <strong>{{ item.name }}</strong>
-                  <small>进入官网 →</small>
-                </div>
+
+          <!-- ② 教学动态 + 通知公告 -->
+          <div class="imp-duo">
+            <div class="imp-card" v-tilt>
+              <div class="imp-card-head">
+                <span class="imp-card-title">📰 教学动态</span>
+                <a class="imp-more" href="https://jwc.mycc.edu.cn/jwgl/jxdt.htm" target="_blank">查看详情 →</a>
+              </div>
+              <div v-if="impression.jxdt.length" class="jxdt-first" @click="openLink(impression.jxdt[0].url)">
+                <img :src="impression.jxdt[0].image_url ?? ''" class="jxdt-first-img" />
+                <span class="jxdt-first-title">{{ impression.jxdt[0].title }}</span>
+              </div>
+              <div v-for="a in impression.jxdt.slice(1)" :key="a.url" class="news-row" @click="openLink(a.url)">
+                <span class="news-date">{{ shortDate(a.date) }}</span>
+                <span class="news-text">{{ a.title }}</span>
+              </div>
+            </div>
+            <div class="imp-card" v-tilt>
+              <div class="imp-card-head">
+                <span class="imp-card-title">📢 通知公告</span>
+                <a class="imp-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" target="_blank">查看详情 →</a>
+              </div>
+              <div v-for="a in impression.tzgg" :key="a.url" class="announce-row" @click="openLink(a.url)">
+                <span class="announce-date">{{ a.date }}</span>
+                <span class="news-text">{{ a.title }}</span>
               </div>
             </div>
           </div>
-          <div class="link-section">
-            <h3 class="sec-title"><span class="sec-dot"></span> 走进城市学院</h3>
-            <div class="link-grid">
-              <div v-for="item in campusLifeItems" :key="item.title" class="link-card" @click="openLink(item.url)">
+
+          <!-- ③ 高教信息 + 教学建设 -->
+          <div class="imp-duo">
+            <div class="imp-card" v-tilt>
+              <div class="imp-card-head">
+                <span class="imp-card-title">🎓 高教信息</span>
+                <a class="imp-more" href="https://jwc.mycc.edu.cn/gjxx.htm" target="_blank">查看详情 →</a>
+              </div>
+              <div v-for="a in impression.gjxx" :key="a.url" class="news-row" @click="openLink(a.url)">
+                <span class="news-date">{{ a.date }}</span>
+                <span class="news-text">{{ a.title }}</span>
+              </div>
+            </div>
+            <div class="imp-card" v-tilt>
+              <div class="imp-card-head">
+                <span class="imp-card-title">📚 教学建设</span>
+                <a class="imp-more" href="https://jwc.mycc.edu.cn/jxjs.htm" target="_blank">查看详情 →</a>
+              </div>
+              <div v-for="a in impression.jxjs" :key="a.url" class="news-row" @click="openLink(a.url)">
+                <span class="news-date">{{ a.date }}</span>
+                <span class="news-text">{{ a.title }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ④ 专业分院（实时新闻） -->
+          <div class="imp-section">
+            <div class="imp-sec-title"><span class="sec-dot"></span> 专业分院
+              <span class="imp-tag">新闻实时更新</span>
+            </div>
+            <div class="college-grid">
+              <div v-for="c in collegeCards" :key="c.name" class="college-card" v-tilt @click="openLink(c.url)">
+                <div class="college-head">
+                  <span class="college-icon">{{ c.icon }}</span>
+                  <span class="college-name">{{ c.name }}</span>
+                </div>
+                <div v-for="n in impression.collegeNews[c.name] || []" :key="n.url" class="college-news">
+                  <span class="news-dot">▪</span><span class="news-text">{{ n.title }}</span>
+                </div>
+                <span class="college-link">进入官网 →</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ⑤ 图书馆公告 -->
+          <div class="imp-card imp-library" v-tilt>
+            <div class="imp-card-head">
+              <span class="imp-card-title">📚 图书馆公告</span>
+              <div class="imp-head-right">
+                <span class="imp-tag">30分钟更新</span>
+                <a class="imp-more" href="https://lib.mycc.edu.cn/" target="_blank">进入图书馆官网 →</a>
+              </div>
+            </div>
+            <div v-for="a in impression.library" :key="a.title" class="news-row" @click="openLink(a.url)">
+              <span class="news-date">{{ a.date }}</span>
+              <span class="news-text">{{ a.title }}</span>
+            </div>
+          </div>
+
+          <!-- ⑥ 绵城印象 -->
+          <div class="imp-section">
+            <div class="imp-sec-title"><span class="sec-dot"></span> 绵城印象</div>
+            <div class="imp-grid">
+              <div v-for="item in campusLifeItems" :key="item.title" class="imp-card-link" v-tilt @click="openLink(item.url)">
                 <span class="link-icon">{{ item.icon }}</span>
                 <div class="link-text">
                   <strong>{{ item.title }}</strong>
@@ -153,8 +227,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getFigures, getAnnouncements } from '@/api/campus'
-import type { CampusFigure, Announcement } from '@/types'
+import { getFigures, getAnnouncements, getImpression } from '@/api/campus'
+import type { CampusFigure, Announcement, ImpressionItem } from '@/types'
+import { tilt } from '@/directives/tilt'
+
+const vTilt = tilt
 import FigureCard from '@/components/campus/FigureCard.vue'
 import {
   getStudentAnnouncements, markAnnouncementRead,
@@ -223,12 +300,32 @@ const filteredGallery = computed(() => {
   return galleryImages.filter(i => i.campus === galleryActive.value)
 })
 
-const impressionItems = [
-  { title: '仪器设备', url: 'https://www.mycc.edu.cn/mcyx/yqsb.htm', icon: '🔬' },
-  { title: '生活条件', url: 'https://www.mycc.edu.cn/mcyx/shtj.htm', icon: '🏠' },
-]
+const impressionData = ref<ImpressionItem[]>([])
 
-const collegeItems = [
+const impression = computed(() => {
+  const all = impressionData.value
+  const bySource = (s: string) => all.filter(i => i.source === s)
+  return {
+    entries: bySource('jwc_entries'),
+    jxdt: bySource('jwc_jxdt'),
+    tzgg: bySource('jwc_tzgg'),
+    gjxx: bySource('jwc_gjxx'),
+    jxjs: bySource('jwc_jxjs'),
+    library: bySource('library'),
+    collegeNews: groupCollegeNews(all),
+  }
+})
+
+function groupCollegeNews(all: ImpressionItem[]): Record<string, ImpressionItem[]> {
+  const map: Record<string, ImpressionItem[]> = {}
+  for (const i of all.filter(x => x.source === 'college_news')) {
+    if (!map[i.college_key!]) map[i.college_key!] = []
+    map[i.college_key!].push(i)
+  }
+  return map
+}
+
+const collegeCards = [
   { name: '马克思主义学院', url: 'https://mksxy.mycc.edu.cn/', icon: '📖' },
   { name: '人工智能学院', url: 'https://xdjsxy.mycc.edu.cn/', icon: '🤖' },
   { name: '智能制造与工程学院', url: 'https://xdcsjsxy.mycc.edu.cn/', icon: '⚙️' },
@@ -237,6 +334,27 @@ const collegeItems = [
   { name: '创意设计学院', url: 'https://cysjxy.mycc.edu.cn/', icon: '🎨' },
   { name: '终身教育学院', url: 'https://jxjy.mycc.edu.cn/', icon: '📚' },
 ]
+
+function entryIcon(title: string) {
+  const map: Record<string, string> = {
+    '教务管理系统': '🖥️', '实习管理系统': '🏢', '实验管理平台': '🧪',
+    '超星在线学习平台': '📖', '教学质量管理平台': '📊', '毕业论文(设计)管理系统': '📝',
+    '教学校历': '🗓️', '作息时间': '⏰', '课表查询': '📋',
+  }
+  return map[title] || '🔗'
+}
+
+function shortDate(d: string | null) {
+  if (!d) return ''
+  const m = d.match(/\d{4}[-.]\d{2}[-.]\d{2}/)
+  return m ? m[0].replace(/\./g, '-') : d
+}
+
+async function loadImpression() {
+  try {
+    impressionData.value = await getImpression()
+  } catch { /* 静默 */ }
+}
 
 const galleryImages: GalleryImage[] = [
   { title: '安州校区博润楼', image_url: '/images/campus/安州校区博润楼.jpg', campus: '安州' },
@@ -301,6 +419,7 @@ onMounted(async () => {
   figures.value = await getFigures() as any
   announcements.value = await getAnnouncements() as any
   loadTutorAnnouncements()
+  loadImpression()
 })
 </script>
 
@@ -442,25 +561,56 @@ onMounted(async () => {
   color: #fff; font-size: 16px; cursor: pointer;
 }
 
-/* ===== Link Sections (impression) ===== */
-.link-section { margin-bottom: 28px; }
-.sec-title {
-  font-size: 16px; font-weight: 600; color: #1a1a2e;
-  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+/* ===== Impression ===== */
+.imp-section { margin-bottom: 24px; }
+.imp-sec-title { font-size: 16px; font-weight: 600; color: #1a1a2e; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.sec-dot { width: 4px; height: 16px; background: #409eff; border-radius: 2px; flex-shrink: 0; }
+.imp-tag { font-size: 11px; color: #999; background: #f5f7fa; padding: 2px 10px; border-radius: 10px; font-weight: 400; }
+.entry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+.entry-item { background: #f5f7fa; border-radius: 10px; padding: 14px 6px; text-align: center; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
+.entry-icon { font-size: 26px; display: block; }
+.entry-item p { font-size: 12px; color: #444; margin: 6px 0 0; }
+.imp-duo { display: flex; gap: 18px; margin-bottom: 22px; }
+.imp-card { flex: 1; background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 6px rgba(0,0,0,.04); transition: transform .18s ease, box-shadow .18s ease; }
+.imp-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.imp-card-title { font-size: 15px; font-weight: 700; color: #1a1a2e; border-left: 3px solid #409eff; padding-left: 8px; }
+.imp-more { font-size: 12px; color: #409eff; text-decoration: none; }
+.imp-head-right { display: flex; gap: 12px; align-items: center; }
+.jxdt-first { position: relative; border-radius: 8px; overflow: hidden; margin-bottom: 12px; cursor: pointer; }
+.jxdt-first-img { width: 100%; height: 120px; object-fit: cover; display: block; }
+.jxdt-first-title { position: absolute; left: 0; right: 0; bottom: 0; padding: 24px 12px 10px; background: linear-gradient(transparent, rgba(0,0,0,.65)); color: #fff; font-size: 13px; font-weight: 600; }
+.news-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #444; line-height: 2.05; cursor: pointer; }
+.news-row:hover .news-text { color: #409eff; }
+.news-date { color: #999; font-size: 12px; flex-shrink: 0; width: 86px; }
+.news-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.announce-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #444; line-height: 2.05; cursor: pointer; }
+.announce-date { color: #409eff; font-size: 12px; flex-shrink: 0; width: 56px; font-weight: 600; }
+.announce-row:hover .news-text { color: #409eff; }
+.college-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.college-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 6px rgba(0,0,0,.04); cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
+.college-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.college-icon { font-size: 28px; }
+.college-name { font-size: 15px; font-weight: 700; color: #1a1a2e; }
+.college-news { display: flex; gap: 6px; font-size: 12px; color: #666; line-height: 1.85; }
+.news-dot { color: #409eff; flex-shrink: 0; }
+.college-link { margin-top: 10px; display: inline-block; font-size: 12px; color: #409eff; }
+.imp-library { margin-bottom: 22px; }
+.imp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.imp-card-link { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: #fff; border-radius: 12px; cursor: pointer; border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02); transition: transform .18s ease, box-shadow .18s ease; }
+.link-icon { font-size: 32px; }
+.link-text strong { font-size: 14px; color: #1a1a2e; display: block; }
+.link-text small { font-size: 12px; color: #409eff; }
+
+/* 3D 倾斜统一处理：卡片元素 */
+.entry-item, .imp-card, .college-card, .imp-card-link { transform-style: preserve-3d; }
+
+/* 移动端 */
+@media (max-width: 767px) {
+  .imp-duo { flex-direction: column; }
+  .entry-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+  .college-grid { grid-template-columns: repeat(2, 1fr); }
+  .imp-grid { grid-template-columns: repeat(2, 1fr); }
 }
-.sec-dot { width: 4px; height: 16px; background: #409eff; border-radius: 2px; }
-.link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.link-card {
-  display: flex; align-items: center; gap: 14px; padding: 16px 18px;
-  background: #fff; border-radius: 12px; cursor: pointer;
-  border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02);
-  transition: transform .2s, box-shadow .2s;
-}
-.link-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.06); }
-.link-icon { font-size: 32px; flex-shrink: 0; }
-.link-text { display: flex; flex-direction: column; min-width: 0; }
-.link-text strong { font-size: 14px; color: #1a1a2e; }
-.link-text small { font-size: 12px; color: #999; margin-top: 2px; }
 
 /* ===== Announcements ===== */
 .announce-list { display: flex; flex-direction: column; gap: 2px; }
