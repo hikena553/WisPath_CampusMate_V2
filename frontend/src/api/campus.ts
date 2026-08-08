@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { CampusFigure, CampusScenery, Announcement } from '@/types'
+import type { CampusFigure, CampusScenery, Announcement, ImpressionItem } from '@/types'
 
 export function getFigures(category?: string) {
   return request.get<CampusFigure[]>('/campus/figures', { params: { category } })
@@ -32,6 +32,10 @@ export function getAnnouncements() {
 
 export function getGallery() {
   return request.get<GalleryImage[]>('/campus/gallery')
+}
+
+export function getImpression() {
+  return request.get<ImpressionItem[]>('/campus/impression')
 }
 
 export interface GalleryImage {

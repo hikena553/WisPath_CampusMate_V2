@@ -125,6 +125,16 @@ export interface Announcement {
   url: string | null
 }
 
+export interface ImpressionItem {
+  source: string
+  college_key: string | null
+  title: string
+  image_url: string | null
+  url: string
+  date: string | null
+  fetched_at: string
+}
+
 export interface Course {
   id: number
   name: string
@@ -196,4 +206,28 @@ export interface ServiceTicket {
   applicant_college: string
   form_data: Record<string, any> | null
   attachments: string[] | null
+}
+
+export interface LostFoundComment {
+  id: number
+  item_id: number
+  user_id: number
+  user_name: string | null
+  content: string
+  created_at: string
+}
+
+export interface LostFoundItem {
+  id: number
+  user_id: number
+  user_name: string | null
+  type: 'lost' | 'found'
+  title: string
+  description: string
+  location: string
+  contact: string
+  image_url: string | null
+  status: 'open' | 'claimed' | 'closed'
+  created_at: string
+  comments?: LostFoundComment[] | null
 }
