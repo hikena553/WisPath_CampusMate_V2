@@ -45,18 +45,20 @@ async def _periodic_refresh():
             await asyncio.to_thread(refresh_impression_data)
         except Exception:
             pass
-        await asyncio.sleep(1800)  # 30 分钟
+        await asyncio.sleep(1800)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
+    import contextlib
     import importlib
     importlib.import_module("app.seed")
-    from app.services.impression_crawler import refresh_impression_data
     task = asyncio.create_task(_periodic_refresh())
     yield
     task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
 
 app = FastAPI(title="智慧校园AI服务平台", version="0.2.0", lifespan=lifespan)
