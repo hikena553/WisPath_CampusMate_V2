@@ -37,12 +37,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _periodic_refresh():
+    import asyncio
+    from app.services.impression_crawler import refresh_impression_data
+    while True:
+        try:
+            await asyncio.to_thread(refresh_impression_data)
+        except Exception:
+            pass
+        await asyncio.sleep(1800)  # 30 分钟
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Base.metadata.create_all(bind=engine)  # Alembic manages schema now
+    import asyncio
     import importlib
     importlib.import_module("app.seed")
+    from app.services.impression_crawler import refresh_impression_data
+    task = asyncio.create_task(_periodic_refresh())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="智慧校园AI服务平台", version="0.2.0", lifespan=lifespan)

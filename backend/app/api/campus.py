@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from bs4 import BeautifulSoup
 
 from app.core.database import get_db
-from app.models.campus import CampusFigure, CampusScenery
+from app.models.campus import CampusFigure, CampusScenery, CampusImpressionItem
+from app.services.impression_crawler import get_impression_cache, refresh_impression_data
 from app.schemas.campus import CampusFigureOut, CampusSceneryOut, AnnouncementOut, GalleryImageOut
 
 router = APIRouter(prefix="/api/campus", tags=["campus"])
@@ -91,3 +92,21 @@ async def list_announcements():
         return items[:10]
     except Exception:
         return []
+
+
+@router.get("/impression")
+def get_impression(db: Session = Depends(get_db)):
+    """绵城印象聚合数据：缓存 → 数据库 → 实时爬取兜底"""
+    cached = get_impression_cache()
+    if cached is not None:
+        return cached
+    rows = db.query(CampusImpressionItem).order_by(CampusImpressionItem.id.desc()).limit(500).all()
+    if rows:
+        data = [
+            {"source": r.source, "college_key": r.college_key, "title": r.title,
+             "image_url": r.image_url, "url": r.url, "date": r.date, "fetched_at": r.fetched_at}
+            for r in rows
+        ]
+        return data
+    # 数据库为空 → 实时爬取兜底
+    return refresh_impression_data()
