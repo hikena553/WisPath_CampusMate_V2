@@ -152,19 +152,6 @@
             </div>
           </div>
 
-          <!-- ⑥ 绵城印象 -->
-          <div class="imp-section">
-            <div class="imp-sec-title"><span class="sec-dot"></span> 绵城印象</div>
-            <div class="imp-grid">
-              <div v-for="item in campusLifeItems" :key="item.title" class="imp-card-link" v-tilt @click="openLink(item.url)">
-                <span class="link-icon">{{ item.icon }}</span>
-                <div class="link-text">
-                  <strong>{{ item.title }}</strong>
-                  <small>了解更多 →</small>
-                </div>
-              </div>
-            </div>
-          </div>
         </template>
 
         <template v-else-if="activeTab === 'announcements'">
@@ -380,12 +367,6 @@ const galleryImages: GalleryImage[] = [
   { title: '游仙校区篮球场', image_url: '/images/campus/游仙校区篮球场.jpg', campus: '游仙' },
 ]
 
-const campusLifeItems = [
-  { title: '校园文化', url: 'https://www.mycc.edu.cn/zjcsxy/xywh.htm', icon: '🎭' },
-  { title: '学校动态', url: 'https://www.mycc.edu.cn/zjcsxy/xxdt.htm', icon: '📰' },
-  { title: '校园服务', url: 'https://www.mycc.edu.cn/zjcsxy/xyfw.htm', icon: '🎯' },
-]
-
 function openLink(url: string) {
   window.open(url, '_blank')
 }
@@ -595,21 +576,15 @@ onMounted(async () => {
 .news-dot { color: #409eff; flex-shrink: 0; }
 .college-link { margin-top: 10px; display: inline-block; font-size: 12px; color: #409eff; }
 .imp-library { margin-bottom: 22px; }
-.imp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.imp-card-link { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: #fff; border-radius: 12px; cursor: pointer; border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02); transition: transform .18s ease, box-shadow .18s ease; }
-.link-icon { font-size: 32px; }
-.link-text strong { font-size: 14px; color: #1a1a2e; display: block; }
-.link-text small { font-size: 12px; color: #409eff; }
 
 /* 3D 倾斜统一处理：卡片元素 */
-.entry-item, .imp-card, .college-card, .imp-card-link { transform-style: preserve-3d; }
+.entry-item, .imp-card, .college-card { transform-style: preserve-3d; }
 
 /* 移动端 */
 @media (max-width: 767px) {
   .imp-duo { flex-direction: column; }
   .entry-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
   .college-grid { grid-template-columns: repeat(2, 1fr); }
-  .imp-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ===== Announcements ===== */
