@@ -15,7 +15,7 @@ class TestJwcCrawlers:
     def test_fetch_jwc_entries_sync(self):
         with patch("httpx.get") as mock_get:
             resp = MagicMock()
-            resp.text = '<div class="function-icons"><a class="icon-item" href="/x.htm"><p>教务管理系统</p></a></div>'
+            resp.content = '<div class="function-icons"><a class="icon-item" href="/x.htm"><p>教务管理系统</p></a></div>'.encode("utf-8")
             mock_get.return_value = resp
             items = fetch_jwc_entries()
             assert items[0].title == "教务管理系统"
@@ -25,8 +25,8 @@ class TestJwcCrawlers:
         detail_html = '<div><img src="/__local/ABC/IMG.png"></div>'
         with patch("httpx.get") as mock_get:
             mock_get.side_effect = [
-                MagicMock(text=list_html),
-                MagicMock(text=detail_html),
+                MagicMock(content=list_html.encode("utf-8")),
+                MagicMock(content=detail_html.encode("utf-8")),
             ]
             items = fetch_jwc_jxdt()
             assert items[0].image_url.endswith("IMG.png")
@@ -35,8 +35,8 @@ class TestJwcCrawlers:
         list_html = '<ul><li><a href="info/1012/2.htm"><h3>无图动态测试新闻标题</h3></a></li></ul>'
         with patch("httpx.get") as mock_get:
             mock_get.side_effect = [
-                MagicMock(text=list_html),
-                MagicMock(text="<div>no image</div>"),
+                MagicMock(content=list_html.encode("utf-8")),
+                MagicMock(content="<div>no image</div>".encode("utf-8")),
             ]
             items = fetch_jwc_jxdt()
             assert items == []
@@ -46,7 +46,7 @@ class TestCollegeCrawler:
     def test_fetch_college_news_loops_sites(self):
         html = '<a href="info/1/2.htm">学院新闻标题 <span>2026.07.15</span></a>'
         with patch("httpx.get") as mock_get:
-            mock_get.return_value = MagicMock(text=html)
+            mock_get.return_value = MagicMock(content=html.encode("utf-8"))
             items = fetch_college_news()
             assert len(items) >= 7
             assert items[0].source == "college_news"

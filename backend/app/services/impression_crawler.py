@@ -57,8 +57,7 @@ def get_impression_cache() -> list[dict] | None:
 
 def _get(url: str, timeout: float = 10) -> str:
     resp = httpx.get(url, timeout=timeout, follow_redirects=True)
-    resp.encoding = resp.encoding or "utf-8"
-    return resp.text
+    return resp.content.decode("utf-8", errors="replace")
 
 
 def fetch_jwc_entries() -> list[AnnouncementItem]:
@@ -124,11 +123,13 @@ def _library_news_via_playwright() -> list[AnnouncementItem]:
     items = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto("https://lib.mycc.edu.cn/", wait_until="networkidle", timeout=30000)
-        page.wait_for_timeout(2000)
-        text = page.inner_text("body")
-        browser.close()
+        try:
+            page = browser.new_page()
+            page.goto("https://lib.mycc.edu.cn/", wait_until="networkidle", timeout=30000)
+            page.wait_for_timeout(2000)
+            text = page.inner_text("body")
+        finally:
+            browser.close()
     idx = text.find("新闻公告")
     if idx == -1:
         return []
@@ -165,6 +166,11 @@ def crawl_all() -> list[AnnouncementItem]:
 
 
 def _save_to_db(items: list[AnnouncementItem]) -> None:
+    """将爬取结果写入数据库（全表替换）。
+
+    注意：使用 delete-all + insert 模式，在 delete 之后、commit 之前若进程异常退出，
+    会导致数据丢失。当前设计由 refresh_impression_data 作为单一写入者保证安全性。
+    """
     db: Session = SessionLocal()
     try:
         db.query(CampusImpressionItem).delete()
@@ -188,7 +194,11 @@ def _save_to_db(items: list[AnnouncementItem]) -> None:
 
 
 def refresh_impression_data() -> list[dict]:
-    """定时任务入口：先入库再更新缓存"""
+    """定时任务入口：先入库再更新缓存。
+
+    注意：本函数包含同步阻塞网络请求，应在后台线程中调用（如 asyncio.to_thread），
+    不要在 FastAPI 异步事件循环中直接调用。
+    """
     try:
         items = crawl_all()
         _save_to_db(items)
