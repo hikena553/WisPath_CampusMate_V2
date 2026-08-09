@@ -85,9 +85,6 @@ frontend/debug.log
 backend/uploads/
 backend/static/uploads/
 uploads/
-*.sqlite
-*.sqlite3
-*.db
 
 # Backend logs
 backend/logs/
