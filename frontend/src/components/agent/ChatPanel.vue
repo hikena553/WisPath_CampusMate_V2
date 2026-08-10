@@ -90,7 +90,9 @@
           <!-- Quick Action Cards -->
           <div class="quick-grid">
             <div class="quick-card" v-for="a in actions" :key="a.label" @click="quickSend(a.example)">
-              <div class="qc-icon" :style="{ background: a.color + '12', color: a.color }">{{ a.icon }}</div>
+              <div class="qc-icon" :style="{ background: a.color + '12', color: a.color }">
+                <el-icon :size="18"><component :is="a.icon" /></el-icon>
+              </div>
               <div class="qc-body">
                 <strong>{{ a.label }}</strong>
                 <small>{{ a.desc }}</small>
@@ -275,6 +277,7 @@ import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
   Promotion, Paperclip, Picture, Document, Microphone, CopyDocument, EditPen, Operation, MagicStick, ArrowDown, Close, Delete,
+  DocumentChecked, Warning, UserFilled, FirstAidKit, Bell, OfficeBuilding, Trophy, Calendar, DataLine,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MianCharacter from './MianCharacter.vue'
@@ -330,21 +333,21 @@ const micTooltip = computed(() => {
 })
 
 const studentActions = [
-  { icon: '📅', label: '请假申请', desc: '比赛、病假、事假直接说', color: '#409eff', example: '下周二参加ACM区域赛需要请假三天，从5月26号到5月28号' },
-  { icon: '📝', label: '记录成长', desc: '获奖/比赛自动写入档案', color: '#67c23a', example: '我获得了挑战杯省赛二等奖，主办方是教育厅，级别是省级' },
-  { icon: '📚', label: '查课表', desc: '看看今天上什么课', color: '#e6a23c', example: '查一下这周一的课表' },
-  { icon: '📊', label: '查成绩', desc: '查看各科成绩和GPA', color: '#f56c6c', example: '帮我查一下这个学期的成绩和绩点' },
-  { icon: '📢', label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下教务处发布了哪些最新通知' },
-  { icon: '🏫', label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '怎么申请在校证明？需要准备哪些材料？' },
+  { icon: DocumentChecked, label: '请假申请', desc: '比赛、病假、事假直接说', color: '#409eff', example: '下周二参加ACM区域赛需要请假三天，从5月26号到5月28号' },
+  { icon: Trophy, label: '记录成长', desc: '获奖/比赛自动写入档案', color: '#67c23a', example: '我获得了挑战杯省赛二等奖，主办方是教育厅，级别是省级' },
+  { icon: Calendar, label: '查课表', desc: '看看今天上什么课', color: '#e6a23c', example: '查一下这周一的课表' },
+  { icon: DataLine, label: '查成绩', desc: '查看各科成绩和GPA', color: '#f56c6c', example: '帮我查一下这个学期的成绩和绩点' },
+  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下教务处发布了哪些最新通知' },
+  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '怎么申请在校证明？需要准备哪些材料？' },
 ]
 
 const teacherActions = [
-  { icon: '📋', label: '请假审批', desc: '查看待批请假申请', color: '#409eff', example: '查看当前待审批的请假' },
-  { icon: '⚠️', label: '预警管理', desc: '查看学生心理预警', color: '#f56c6c', example: '查看当前预警列表' },
-  { icon: '👥', label: '学生档案', desc: '查看名下学生成长', color: '#67c23a', example: '查看所有学生档案' },
-  { icon: '🆘', label: '危机干预', desc: '记录干预措施', color: '#e6a23c', example: '记录危机干预' },
-  { icon: '📢', label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下教务处发布了哪些最新通知' },
-  { icon: '🏫', label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '奖助学金的申请流程是什么？' },
+  { icon: DocumentChecked, label: '请假审批', desc: '查看待批请假申请', color: '#409eff', example: '查看当前待审批的请假' },
+  { icon: Warning, label: '预警管理', desc: '查看学生心理预警', color: '#f56c6c', example: '查看当前预警列表' },
+  { icon: UserFilled, label: '学生档案', desc: '查看名下学生成长', color: '#67c23a', example: '查看所有学生档案' },
+  { icon: FirstAidKit, label: '危机干预', desc: '记录干预措施', color: '#e6a23c', example: '记录危机干预' },
+  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下教务处发布了哪些最新通知' },
+  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '奖助学金的申请流程是什么？' },
 ]
 
 const actions = computed(() => props.role === 'teacher' ? teacherActions : studentActions)
