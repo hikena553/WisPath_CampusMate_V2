@@ -307,7 +307,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -971,6 +971,7 @@ async function loadData() {
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let lastRefreshAt = 0
 
 onMounted(() => {
   loadData()
@@ -981,10 +982,40 @@ onMounted(() => {
     loadSchedules()
     loadMyAnnouncements()
   }, 30000)
+  lastRefreshAt = Date.now()
+})
+
+onActivated(() => {
+  // 距上次刷新超过 60 秒才触发轻量刷新
+  if (Date.now() - lastRefreshAt >= 60_000) {
+    loadData()
+    loadSchedules()
+    loadMyAnnouncements()
+    lastRefreshAt = Date.now()
+  }
+  // 恢复轮询（若被 onDeactivated 暂停）
+  if (pollTimer === null) {
+    pollTimer = setInterval(() => {
+      loadData()
+      loadSchedules()
+      loadMyAnnouncements()
+    }, 30000)
+  }
+})
+
+onDeactivated(() => {
+  // 暂停轮询，但保留组件状态
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 })
 
 onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer)
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 })
 </script>
 

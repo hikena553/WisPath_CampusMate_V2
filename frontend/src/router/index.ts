@@ -1,6 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getToken, getUser } from '@/utils/token'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    role?: string
+    keepAlive?: boolean
+  }
+}
+
 const publicPaths = ['/login']
 
 const router = createRouter({
@@ -31,11 +38,11 @@ const router = createRouter({
       component: () => import('@/components/layout/TeacherLayout.vue'),
       meta: { role: 'teacher' },
       children: [
-        { path: '', component: () => import('@/views/teacher/HomePage.vue') },
-        { path: 'agent', component: () => import('@/views/teacher/AgentPage.vue') },
-        { path: 'students', component: () => import('@/views/teacher/StudentsPage.vue') },
-        { path: 'approval', component: () => import('@/views/teacher/ApprovalPage.vue') },
-        { path: 'messages', component: () => import('@/views/teacher/MessagesPage.vue') },
+        { path: '', name: 'teacher-home', component: () => import('@/views/teacher/HomePage.vue'), meta: { keepAlive: true } },
+        { path: 'agent', name: 'teacher-agent', component: () => import('@/views/teacher/AgentPage.vue'), meta: { keepAlive: false } },
+        { path: 'students', name: 'teacher-students', component: () => import('@/views/teacher/StudentsPage.vue'), meta: { keepAlive: true } },
+        { path: 'approval', name: 'teacher-approval', component: () => import('@/views/teacher/ApprovalPage.vue'), meta: { keepAlive: true } },
+        { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
       ],
     },
     {

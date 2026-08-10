@@ -6,7 +6,7 @@
         <p class="page-sub">共 <strong>{{ filteredStudents.length }}</strong> 名学生</p>
       </div>
       <div class="header-actions">
-        <el-input v-model="search" placeholder="搜索姓名/学号/学院" style="width:220px" clearable @input="loadStudents">
+        <el-input v-model="search" placeholder="搜索姓名/学号/学院" style="width:220px" clearable @input="debouncedLoadStudents">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
       </div>
@@ -346,6 +346,14 @@ async function loadStudents() {
     students.value = await getStudents(search.value || undefined)
     loaded.value = true
   } catch {}
+}
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+const debouncedLoadStudents = () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    loadStudents()
+  }, 300)
 }
 
 function crisisType(level: string) {

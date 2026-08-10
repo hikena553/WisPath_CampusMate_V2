@@ -57,7 +57,11 @@
         </div>
       </aside>
       <main class="main-area">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <keep-alive :include="cachedNames">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </main>
     </div>
 
@@ -185,6 +189,9 @@ import {
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+// 缓存 teacher 端重型页面，避免切换时 ECharts 重建与数据重拉
+const cachedNames = ['teacher-home', 'teacher-students', 'teacher-approval']
 
 const sidebarCollapsed = ref(false)
 const showProfile = ref(false)

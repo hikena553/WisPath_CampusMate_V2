@@ -83,11 +83,11 @@
 
 ### 一键启动（推荐）
 
-项目根目录提供 `mian.py` 一键启动脚本，会先后拉起后端（FastAPI，:8000）与前端（Vite，:5173），并在退出时清理所有子进程：
+项目根目录提供 `main.py` 一键启动脚本，会先后拉起后端（FastAPI，:8000）与前端（Vite，:5173），并在退出时清理所有子进程：
 
 ```bash
 # 在项目根目录执行（需先装好前后端依赖，见下方“环境要求”）
-python mian.py
+python main.py
 ```
 
 - 脚本会等待后端 `/api/health` 健康检查通过后再启动前端；
@@ -138,7 +138,7 @@ npm run build      # vue-tsc 类型检查 + Vite 构建
 
 ```
 WisPath_CampusMate_v2.0/
-├── mian.py                 # 一键启动脚本（先后拉起前后端）
+├── main.py                 # 一键启动脚本（先后拉起前后端）
 ├── backend/
 │   ├── app/
 │   │   ├── main.py          # 入口，注册路由 + /api/health

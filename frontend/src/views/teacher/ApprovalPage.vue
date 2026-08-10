@@ -310,18 +310,38 @@ async function loadData() {
   }
 }
 
+function chunk<T>(arr: T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    result.push(arr.slice(i, i + size))
+  }
+  return result
+}
+
 async function loadAnalysis() {
-  for (const leave of pendingLeaves.value) {
-    if (!analysisMap.value[leave.id]) {
-      analysisMap.value[leave.id] = { suggestion: 'approve', reason: '分析中...' }
-      try {
-        const result = await analyzeLeave(leave.id)
-        console.log('[AI分析]', leave.id, result)
-        analysisMap.value[leave.id] = result
-      } catch (e) {
-        console.error('[AI分析失败]', leave.id, e)
-        analysisMap.value[leave.id] = { suggestion: 'approve', reason: 'AI分析暂时不可用' }
-      }
+  // 筛选尚未分析的记录
+  const todo = pendingLeaves.value.filter((leave) => !analysisMap.value[leave.id])
+  // 先放占位符，UI 立即显示"分析中"
+  for (const leave of todo) {
+    analysisMap.value[leave.id] = { suggestion: 'approve', reason: '分析中...' }
+  }
+  // 分批并发（每批 4 个）
+  const batches = chunk(todo, 4)
+  for (const batch of batches) {
+    const results = await Promise.all(
+      batch.map(async (leave) => {
+        try {
+          const result = await analyzeLeave(leave.id)
+          console.log('[AI分析]', leave.id, result)
+          return { id: leave.id, result }
+        } catch (e) {
+          console.error('[AI分析失败]', leave.id, e)
+          return { id: leave.id, result: { suggestion: 'approve', reason: 'AI分析暂时不可用' } }
+        }
+      })
+    )
+    for (const { id, result } of results) {
+      analysisMap.value[id] = result
     }
   }
 }
