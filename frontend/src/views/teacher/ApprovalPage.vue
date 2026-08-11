@@ -187,7 +187,11 @@
     </el-tabs>
 
     <el-dialog v-model="rejectVisible" title="拒绝理由" width="420px" :close-on-click-modal="false">
-      <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝理由" />
+      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules">
+        <el-form-item label="拒绝理由" prop="reason">
+          <el-input v-model="rejectForm.reason" type="textarea" :rows="3" placeholder="必填，请填写拒绝理由，如：请假天数超出规定" maxlength="200" show-word-limit />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="rejectVisible = false">取消</el-button>
         <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
@@ -197,7 +201,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose,
@@ -214,9 +218,12 @@ const approvedLeaves = ref<LeaveRequestOut[]>([])
 const rejectedLeaves = ref<LeaveRequestOut[]>([])
 const analysisMap = ref<Record<number, { suggestion: string; reason: string }>>({})
 const rejectVisible = ref(false)
-const rejectReason = ref('')
 const rejectTarget = ref<LeaveRequestOut | null>(null)
-
+const rejectFormRef = ref<any>()
+const rejectForm = reactive({ reason: '' })
+const rejectRules = {
+  reason: [{ required: true, message: '请填写拒绝理由', trigger: 'blur' }],
+}
 // 请假分页相关状态
 const currentPageLeaves = ref(1)
 const pageSizeLeaves = ref(50)
@@ -356,14 +363,18 @@ async function handleApprove(row: LeaveRequestOut) {
 
 function showReject(row: LeaveRequestOut) {
   rejectTarget.value = row
-  rejectReason.value = ''
+  rejectForm.reason = ''
+  rejectFormRef.value?.clearValidate?.()
   rejectVisible.value = true
 }
 
 async function confirmReject() {
   if (!rejectTarget.value) return
+  if (rejectFormRef.value) {
+    try { await rejectFormRef.value.validate() } catch { return }
+  }
   try {
-    await reviewLeaveApi(rejectTarget.value.id, 'reject', rejectReason.value || undefined)
+    await reviewLeaveApi(rejectTarget.value.id, 'reject', rejectForm.reason || undefined)
     ElMessage.success('已拒绝')
     rejectVisible.value = false
     loadData()

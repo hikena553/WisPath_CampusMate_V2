@@ -257,12 +257,12 @@
 
     <!-- 发布公告 Dialog -->
     <el-dialog v-model="createDialogVisible" title="发布公告" width="520px">
-      <el-form label-position="top">
-        <el-form-item label="标题">
-          <el-input v-model="createForm.title" placeholder="公告标题" maxlength="200" />
+      <el-form ref="announcementFormRef" :model="createForm" label-position="top" :rules="announcementRules">
+        <el-form-item label="标题" prop="title">
+          <el-input v-model="createForm.title" placeholder="请输入公告标题，如：关于五一放假安排的通知" maxlength="200" />
         </el-form-item>
-        <el-form-item label="内容">
-          <el-input v-model="createForm.content" type="textarea" :rows="4" placeholder="公告内容" />
+        <el-form-item label="内容" prop="content">
+          <el-input v-model="createForm.content" type="textarea" :rows="4" placeholder="请输入公告内容，建议包含时间、地点、注意事项等" />
         </el-form-item>
         <el-form-item label="紧急程度">
           <el-radio-group v-model="createForm.urgency">
@@ -297,7 +297,11 @@
     <!-- 添加日程弹窗 -->
     <el-dialog v-model="scheduleDialogVisible" title="添加日程" width="400px">
       <p style="margin-bottom:12px;color:#666">日期：<strong>{{ selectedDateStr }}</strong></p>
-      <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="请输入日程内容" />
+      <el-form ref="scheduleFormRef" :model="{ content: scheduleContent }" :rules="scheduleRules">
+        <el-form-item prop="content">
+          <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="必填，请输入日程内容，如：期中考试监考" />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="scheduleDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleAddSchedule">保存</el-button>
@@ -349,6 +353,11 @@ const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
 const createForm = reactive({ title: '', content: '', urgency: 'normal' })
 const createFile = ref<File | null>(null)
+const announcementFormRef = ref<any>()
+const announcementRules = {
+  title: [{ required: true, message: '请输入公告标题', trigger: 'blur' }],
+  content: [{ required: true, message: '请输入公告内容', trigger: 'blur' }],
+}
 const classStats = ref<ClassStats>({
   total_students: 0,
   gender_stats: {},
@@ -767,6 +776,10 @@ const calMonth = ref(now.getMonth() + 1)
 const schedules = ref<{ id: number; date: string; content: string }[]>([])
 const scheduleDialogVisible = ref(false)
 const scheduleContent = ref('')
+const scheduleFormRef = ref<any>()
+const scheduleRules = {
+  content: [{ required: true, message: '请输入日程内容', trigger: 'blur' }],
+}
 const selectedDateStr = ref('')
 const leaveDetailVisible = ref(false)
 const selectedDayLeaves = ref<LeaveRequestOut[]>([])
@@ -871,9 +884,8 @@ function onDayClick(day: CalDay) {
 }
 
 async function handleAddSchedule() {
-  if (!scheduleContent.value.trim()) {
-    ElMessage.warning('请输入日程内容')
-    return
+  if (scheduleFormRef.value) {
+    try { await scheduleFormRef.value.validate() } catch { return }
   }
   try {
     await createTeacherSchedule(selectedDateStr.value, scheduleContent.value)
@@ -920,9 +932,8 @@ function openCreateDialog() {
 }
 
 async function handleCreate() {
-  if (!createForm.title.trim() || !createForm.content.trim()) {
-    ElMessage.warning('请填写标题和内容')
-    return
+  if (announcementFormRef.value) {
+    try { await announcementFormRef.value.validate() } catch { return }
   }
   const fd = new FormData()
   fd.append('title', createForm.title)

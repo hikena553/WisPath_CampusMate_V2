@@ -33,14 +33,14 @@
     <p class="hint">拖动旋转 · 滚轮缩放 · 悬停查看标注名称 · 点击查看详情</p>
 
     <el-dialog v-model="showForm" title="添加标注点" width="400px">
-      <el-form :model="poiForm" label-width="70px">
-        <el-form-item label="名称">
-          <el-input v-model="poiForm.name" placeholder="如：图书馆" />
+      <el-form ref="poiFormRef" :model="poiForm" label-width="70px" :rules="poiRules">
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="poiForm.name" placeholder="必填，如：图书馆" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="poiForm.description" type="textarea" :rows="3" placeholder="可选描述" />
+          <el-input v-model="poiForm.description" type="textarea" :rows="3" placeholder="选填，简单描述该地点的用途或注意事项" />
         </el-form-item>
-        <el-form-item label="类型">
+        <el-form-item label="类型" prop="type">
           <el-select v-model="poiForm.type">
             <el-option label="教学楼" value="building" />
             <el-option label="食堂" value="food" />
@@ -113,6 +113,11 @@ const containerRef = ref<HTMLDivElement>()
 const currentArea = ref('anzhou')
 const addingMode = ref(false)
 const showForm = ref(false)
+const poiFormRef = ref<any>()
+const poiRules = {
+  name: [{ required: true, message: '请输入标注点名称', trigger: 'blur' }],
+  type: [{ required: true, message: '请选择标注点类型', trigger: 'change' }],
+}
 const showDetail = ref(false)
 const showManage = ref(false)
 const hoverPoi = ref<number | null>(null)
@@ -286,10 +291,17 @@ function toggleAddMode() {
 }
 
 function savePoi() {
-  if (!poiForm.name) {
-    ElMessage.warning('请输入名称')
+  if (poiFormRef.value) {
+    poiFormRef.value.validate((valid: boolean) => {
+      if (!valid) return
+      submitPoi()
+    })
     return
   }
+  submitPoi()
+}
+
+function submitPoi() {
   const poi: PoiItem = {
     id: nextId.value++,
     name: poiForm.name,

@@ -24,71 +24,99 @@
       </div>
     </div>
 
-    <div class="charts-row">
-      <div class="chart-card">
-        <div class="chart-card-header"><el-icon style="margin-right:6px"><DataAnalysis /></el-icon> 综合能力雷达</div>
-        <v-chart :option="radarOption" class="chart" autoresize />
+    <!-- 综合能力画像 -->
+    <div class="analytics-card">
+      <div class="analytics-head">
+        <span class="head-bar"></span>
+        <span class="head-title">综合能力画像</span>
+        <span class="head-sub">多维能力评分与成长类型构成</span>
       </div>
-      <div class="chart-card">
-        <div class="chart-card-header"><el-icon style="margin-right:6px"><Histogram /></el-icon> 成长类型分布</div>
-        <v-chart :option="barOption" class="chart" autoresize />
-      </div>
-    </div>
-
-    <div class="charts-row">
-      <div class="chart-card wide">
-        <div class="chart-card-header"><el-icon style="margin-right:6px"><TrendCharts /></el-icon> 成长趋势</div>
-        <v-chart :option="lineOption" class="chart" autoresize />
-      </div>
-      <div class="chart-card wide">
-        <div class="chart-card-header"><el-icon style="margin-right:6px"><DataLine /></el-icon> 学习绩点轨迹</div>
-        <v-chart :option="gpaOption" class="chart" autoresize />
+      <div class="analytics-body duo">
+        <div class="panel panel-radar">
+          <div class="panel-title"><el-icon><DataAnalysis /></el-icon>综合能力雷达</div>
+          <v-chart :option="radarOption" class="chart radar-chart" autoresize />
+        </div>
+        <div class="panel-divider"></div>
+        <div class="panel panel-bar">
+          <div class="panel-title"><el-icon><Histogram /></el-icon>成长类型分布</div>
+          <v-chart :option="barOption" class="chart bar-chart" autoresize />
+        </div>
       </div>
     </div>
 
-    <div class="split-row">
-      <div class="tag-card">
-        <div class="tag-card-header">
-          <span><el-icon style="margin-right:6px"><Coin /></el-icon> 技能标签</span>
-          <el-button size="small" type="primary" plain @click="saveSkills">保存</el-button>
+    <!-- 成长历程 -->
+    <div class="analytics-card">
+      <div class="analytics-head">
+        <span class="head-bar"></span>
+        <span class="head-title">成长历程</span>
+        <span class="head-sub">月度成长趋势与学期绩点轨迹</span>
+      </div>
+      <div class="analytics-body duo">
+        <div class="panel">
+          <div class="panel-title"><el-icon><TrendCharts /></el-icon>成长趋势</div>
+          <v-chart :option="lineOption" class="chart line-chart" autoresize />
         </div>
-        <div class="preset-tags">
-          <el-tag v-for="p in skillPresets" :key="p"
-            :type="localSkills.includes(p) ? 'primary' : 'info'"
-            :effect="localSkills.includes(p) ? 'dark' : 'plain'"
-            class="preset-tag" @click="toggleSkill(p)">
-            {{ p }}
-          </el-tag>
-        </div>
-        <div class="tag-cloud">
-          <el-tag v-for="s in localSkills" :key="s" closable :type="skillPresets.includes(s) ? 'primary' : 'warning'"
-            @close="removeSkill(s)" class="skill-tag">{{ s }}</el-tag>
-        </div>
-        <div class="tag-input-row">
-          <el-input v-model="newSkill" placeholder="自定义技能" size="small" @keyup.enter="addCustomSkill" />
-          <el-button size="small" type="primary" @click="addCustomSkill">添加</el-button>
+        <div class="panel-divider"></div>
+        <div class="panel">
+          <div class="panel-title"><el-icon><DataLine /></el-icon>学习绩点轨迹</div>
+          <v-chart :option="gpaOption" class="chart line-chart" autoresize />
         </div>
       </div>
-      <div class="tag-card">
-        <div class="tag-card-header">
-          <span><el-icon style="margin-right:6px"><Star /></el-icon> 兴趣领域</span>
-          <el-button size="small" type="primary" plain @click="saveSkills">保存</el-button>
+    </div>
+
+    <!-- 技能与兴趣 -->
+    <div class="analytics-card">
+      <div class="analytics-head">
+        <span class="head-bar"></span>
+        <span class="head-title">技能与兴趣</span>
+        <span class="head-sub">点击预设标签即可切换，或自定义添加</span>
+        <el-button size="small" type="primary" plain class="head-save" @click="saveSkills">保存</el-button>
+      </div>
+      <div class="analytics-body">
+        <!-- 已选标签 -->
+        <div class="cloud-block">
+          <div class="cloud-title">已选标签</div>
+          <div class="tag-cloud">
+            <el-tag v-for="s in localSkills" :key="'s-' + s" closable type="primary"
+              @close="removeSkill(s)" class="skill-tag">{{ s }}</el-tag>
+            <el-tag v-for="s in localInterests" :key="'i-' + s" closable type="success"
+              @close="removeInterest(s)" class="skill-tag">{{ s }}</el-tag>
+            <span v-if="!localSkills.length && !localInterests.length" class="cloud-empty">暂无已选标签，点击下方预设或自定义添加</span>
+          </div>
         </div>
-        <div class="preset-tags">
-          <el-tag v-for="p in interestPresets" :key="p"
-            :type="localInterests.includes(p) ? 'success' : 'info'"
-            :effect="localInterests.includes(p) ? 'dark' : 'plain'"
-            class="preset-tag" @click="toggleInterest(p)">
-            {{ p }}
-          </el-tag>
+        <!-- 预设标签 -->
+        <div class="preset-block">
+          <div class="preset-row">
+            <span class="preset-label">技能</span>
+            <div class="preset-tags">
+              <el-tag v-for="p in skillPresets" :key="p"
+                :type="localSkills.includes(p) ? 'primary' : 'info'"
+                :effect="localSkills.includes(p) ? 'dark' : 'plain'"
+                class="preset-tag" @click="toggleSkill(p)">
+                {{ p }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="preset-row">
+            <span class="preset-label">兴趣</span>
+            <div class="preset-tags">
+              <el-tag v-for="p in interestPresets" :key="p"
+                :type="localInterests.includes(p) ? 'success' : 'info'"
+                :effect="localInterests.includes(p) ? 'dark' : 'plain'"
+                class="preset-tag" @click="toggleInterest(p)">
+                {{ p }}
+              </el-tag>
+            </div>
+          </div>
         </div>
-        <div class="tag-cloud">
-          <el-tag v-for="s in localInterests" :key="s" closable :type="interestPresets.includes(s) ? 'success' : 'warning'"
-            @close="removeInterest(s)" class="skill-tag">{{ s }}</el-tag>
-        </div>
+        <!-- 自定义添加 -->
         <div class="tag-input-row">
-          <el-input v-model="newInterest" placeholder="自定义兴趣" size="small" @keyup.enter="addCustomInterest" />
-          <el-button size="small" type="primary" @click="addCustomInterest">添加</el-button>
+          <el-radio-group v-model="customType" size="small">
+            <el-radio-button value="skill">技能</el-radio-button>
+            <el-radio-button value="interest">兴趣</el-radio-button>
+          </el-radio-group>
+          <el-input v-model="newTag" placeholder="自定义标签" size="small" @keyup.enter="addCustomTag" />
+          <el-button size="small" type="primary" @click="addCustomTag">添加</el-button>
         </div>
       </div>
     </div>
@@ -183,27 +211,27 @@
     </div>
 
     <el-dialog v-model="projectDialogVisible" :title="editingProject ? '编辑项目' : '添加项目'" width="500px">
-      <el-form :model="projectForm" label-width="100px">
-        <el-form-item label="项目名称">
-          <el-input v-model="projectForm.project_name" placeholder="请输入项目名称" />
+      <el-form ref="projectFormRef" :model="projectForm" label-width="100px" :rules="projectRules">
+        <el-form-item label="项目名称" prop="project_name">
+          <el-input v-model="projectForm.project_name" placeholder="请输入项目名称，如：基于大数据的智慧校园平台" />
         </el-form-item>
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="开始日期">
-              <el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            <el-form-item label="开始日期" prop="start_date">
+              <el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" placeholder="请选择开始日期" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="结束日期">
-              <el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" clearable />
+              <el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" clearable placeholder="选填，不填表示进行中" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-form-item label="是否团队">
-          <el-switch v-model="projectForm.is_team" />
+          <el-switch v-model="projectForm.is_team" active-text="团队" inactive-text="个人" />
         </el-form-item>
-        <el-form-item v-if="projectForm.is_team" label="团队成员">
-          <el-input v-model="projectForm.team_members" placeholder="逗号分隔，如：张三, 李四, 王五" />
+        <el-form-item v-if="projectForm.is_team" label="团队成员" prop="team_members">
+          <el-input v-model="projectForm.team_members" placeholder="必填，逗号分隔，如：张三, 李四, 王五" />
         </el-form-item>
         <el-form-item label="项目成果">
           <UploadBtn v-model="projectForm.attachment_url" />
@@ -216,11 +244,11 @@
     </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="'添加成长记录 — ' + typeLabel(form.type)" width="600px" class="growth-dialog">
-      <el-form :model="form" label-width="100px">
+      <el-form ref="growthFormRef" :model="form" label-width="100px" :rules="growthRules">
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="类型">
-              <el-select v-model="form.type" @change="onTypeChange">
+            <el-form-item label="类型" prop="type">
+              <el-select v-model="form.type" placeholder="请选择记录类型" @change="onTypeChange">
                 <el-option label="荣誉" value="honor" />
                 <el-option label="竞赛" value="competition" />
                 <el-option label="实践" value="practice" />
@@ -230,26 +258,26 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="日期">
-              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            <el-form-item label="日期" prop="date">
+              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" style="width:100%" placeholder="请选择发生日期" />
             </el-form-item>
           </el-col>
         </el-row>
 
         <template v-if="form.type === 'honor'">
-          <el-form-item label="荣誉等级">
-            <el-select v-model="form.honor_level" style="width:100%">
+          <el-form-item label="荣誉等级" prop="honor_level">
+            <el-select v-model="form.honor_level" placeholder="请选择荣誉等级" style="width:100%">
               <el-option label="校级" value="校级" />
               <el-option label="省级" value="省级" />
               <el-option label="国家级" value="国家级" />
               <el-option label="国际级" value="国际级" />
             </el-select>
           </el-form-item>
-          <el-form-item label="荣誉名称">
-            <el-input v-model="form.title" placeholder="例如：国家奖学金" />
+          <el-form-item label="荣誉名称" prop="title">
+            <el-input v-model="form.title" placeholder="必填，例如：国家奖学金" />
           </el-form-item>
           <el-form-item label="荣誉描述">
-            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="颁发单位、获奖时间等" />
+            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，颁发单位、获奖时间等" />
           </el-form-item>
           <el-form-item label="证明材料">
             <UploadBtn v-model="form.attachment_url" />
@@ -257,14 +285,14 @@
         </template>
 
         <template v-if="form.type === 'competition'">
-          <el-form-item label="竞赛名称">
-            <el-input v-model="form.title" placeholder="例如：ACM-ICPC国际大学生程序设计竞赛" />
+          <el-form-item label="竞赛名称" prop="title">
+            <el-input v-model="form.title" placeholder="必填，例如：ACM-ICPC国际大学生程序设计竞赛" />
           </el-form-item>
           <el-form-item label="主办方">
-            <el-input v-model="form.organizer" placeholder="例如：ACM/ICPC组委会" />
+            <el-input v-model="form.organizer" placeholder="选填，例如：ACM/ICPC组委会" />
           </el-form-item>
-          <el-form-item label="竞赛等级">
-            <el-select v-model="form.competition_level" style="width:100%">
+          <el-form-item label="竞赛等级" prop="competition_level">
+            <el-select v-model="form.competition_level" placeholder="请选择竞赛等级" style="width:100%">
               <el-option label="校级" value="校级" />
               <el-option label="省级" value="省级" />
               <el-option label="国家级" value="国家级" />
@@ -272,7 +300,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="获奖情况">
-            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="金奖/银奖/铜奖/一等奖等" />
+            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，金奖/银奖/铜奖/一等奖等" />
           </el-form-item>
           <el-form-item label="证明材料">
             <UploadBtn v-model="form.attachment_url" />
@@ -280,8 +308,8 @@
         </template>
 
         <template v-if="form.type === 'practice'">
-          <el-form-item label="实践类型">
-            <el-select v-model="form.practice_type" style="width:100%">
+          <el-form-item label="实践类型" prop="practice_type">
+            <el-select v-model="form.practice_type" placeholder="请选择实践类型" style="width:100%">
               <el-option label="社会志愿活动" value="社会志愿活动" />
               <el-option label="三下乡" value="三下乡" />
               <el-option label="支教" value="支教" />
@@ -290,14 +318,14 @@
               <el-option label="其他社会实践" value="其他社会实践" />
             </el-select>
           </el-form-item>
-          <el-form-item label="实践名称">
-            <el-input v-model="form.title" placeholder="例如：暑期三下乡支教活动" />
+          <el-form-item label="实践名称" prop="title">
+            <el-input v-model="form.title" placeholder="必填，例如：暑期三下乡支教活动" />
           </el-form-item>
           <el-form-item label="实践描述">
-            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="实践内容、服务时长等" />
+            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，实践内容、服务时长等" />
           </el-form-item>
           <el-form-item label="荣誉证明">
-            <el-input v-model="form.practice_certificate" type="textarea" :rows="2" placeholder="优秀志愿者证书/表彰文件等" />
+            <el-input v-model="form.practice_certificate" type="textarea" :rows="2" placeholder="选填，优秀志愿者证书/表彰文件等" />
           </el-form-item>
           <el-form-item label="证明材料">
             <UploadBtn v-model="form.attachment_url" />
@@ -305,11 +333,11 @@
         </template>
 
         <template v-if="form.type === 'paper'">
-          <el-form-item label="论文题目">
-            <el-input v-model="form.paper_name" placeholder="论文完整标题" />
+          <el-form-item label="论文题目" prop="paper_name">
+            <el-input v-model="form.paper_name" placeholder="必填，论文完整标题" />
           </el-form-item>
-          <el-form-item label="期刊类型">
-            <el-select v-model="form.paper_type" style="width:100%">
+          <el-form-item label="期刊类型" prop="paper_type">
+            <el-select v-model="form.paper_type" placeholder="请选择期刊类型" style="width:100%">
               <el-option label="普刊" value="普刊" />
               <el-option label="核心期刊" value="核心期刊" />
               <el-option label="SCI" value="SCI" />
@@ -319,7 +347,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="第一作者">
-            <el-input v-model="form.first_author" placeholder="姓名" />
+            <el-input v-model="form.first_author" placeholder="姓名，如：张三" />
           </el-form-item>
           <el-row :gutter="20">
             <el-col :span="12">
@@ -334,7 +362,7 @@
             </el-col>
           </el-row>
           <el-form-item label="备注">
-            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="发表时间、期刊名称等" />
+            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，发表时间、期刊名称等" />
           </el-form-item>
           <el-form-item label="证明材料">
             <UploadBtn v-model="form.attachment_url" />
@@ -342,8 +370,8 @@
         </template>
 
         <template v-if="form.type === 'achievement'">
-          <el-form-item label="成果类型">
-            <el-select v-model="form.achievement_type" style="width:100%">
+          <el-form-item label="成果类型" prop="achievement_type">
+            <el-select v-model="form.achievement_type" placeholder="请选择成果类型" style="width:100%">
               <el-option label="发明专利" value="发明专利" />
               <el-option label="实用新型专利" value="实用新型专利" />
               <el-option label="外观设计专利" value="外观设计专利" />
@@ -351,14 +379,14 @@
               <el-option label="作品著作权" value="作品著作权" />
             </el-select>
           </el-form-item>
-          <el-form-item label="成果名称">
-            <el-input v-model="form.achievement_name" placeholder="专利/软著名称" />
+          <el-form-item label="成果名称" prop="achievement_name">
+            <el-input v-model="form.achievement_name" placeholder="必填，专利/软著名称" />
           </el-form-item>
           <el-form-item label="成果标题">
-            <el-input v-model="form.title" placeholder="简短标题（可选）" />
+            <el-input v-model="form.title" placeholder="选填，简短标题（可选）" />
           </el-form-item>
           <el-form-item label="成果描述">
-            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="授权号、申请日等信息" />
+            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，授权号、申请日等信息" />
           </el-form-item>
           <el-form-item label="证明材料">
             <UploadBtn v-model="form.attachment_url" />
@@ -375,7 +403,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { DataAnalysis, Histogram, TrendCharts, DataLine, Coin, Star, Collection, FolderOpened, Link, User, UserFilled, ArrowRight } from '@element-plus/icons-vue'
+import { DataAnalysis, Histogram, TrendCharts, DataLine, Collection, FolderOpened, Link, User, UserFilled, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -400,12 +428,45 @@ const recordsExpanded = ref(false)
 const projectsExpanded = ref(false)
 const dialogVisible = ref(false)
 const form = ref<Record<string, any>>({ type: 'honor', title: '', description: '', date: '' })
+const growthFormRef = ref()
+const projectFormRef = ref()
+
+const projectRules = {
+  project_name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
+  start_date: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
+  team_members: [{ required: true, message: '请填写团队成员', trigger: 'blur' }],
+}
+
+const growthRules = computed(() => {
+  const base: Record<string, any> = {
+    type: [{ required: true, message: '请选择记录类型', trigger: 'change' }],
+    date: [{ required: true, message: '请选择日期', trigger: 'change' }],
+  }
+  const t = form.value.type
+  if (t === 'honor') {
+    base.honor_level = [{ required: true, message: '请选择荣誉等级', trigger: 'change' }]
+    base.title = [{ required: true, message: '请输入荣誉名称', trigger: 'blur' }]
+  } else if (t === 'competition') {
+    base.title = [{ required: true, message: '请输入竞赛名称', trigger: 'blur' }]
+    base.competition_level = [{ required: true, message: '请选择竞赛等级', trigger: 'change' }]
+  } else if (t === 'practice') {
+    base.practice_type = [{ required: true, message: '请选择实践类型', trigger: 'change' }]
+    base.title = [{ required: true, message: '请输入实践名称', trigger: 'blur' }]
+  } else if (t === 'paper') {
+    base.paper_name = [{ required: true, message: '请输入论文题目', trigger: 'blur' }]
+    base.paper_type = [{ required: true, message: '请选择期刊类型', trigger: 'change' }]
+  } else if (t === 'achievement') {
+    base.achievement_type = [{ required: true, message: '请选择成果类型', trigger: 'change' }]
+    base.achievement_name = [{ required: true, message: '请输入成果名称', trigger: 'blur' }]
+  }
+  return base
+})
 
 // 技能编辑
 const localSkills = ref<string[]>([])
 const localInterests = ref<string[]>([])
-const newSkill = ref('')
-const newInterest = ref('')
+const newTag = ref('')
+const customType = ref<'skill' | 'interest'>('skill')
 
 function toggleSkill(s: string) {
   const idx = localSkills.value.indexOf(s)
@@ -415,13 +476,6 @@ function toggleSkill(s: string) {
 
 function removeSkill(s: string) {
   localSkills.value = localSkills.value.filter(x => x !== s)
-}
-
-function addCustomSkill() {
-  const s = newSkill.value.trim()
-  if (!s) return
-  if (!localSkills.value.includes(s)) localSkills.value.push(s)
-  newSkill.value = ''
 }
 
 function toggleInterest(s: string) {
@@ -434,11 +488,15 @@ function removeInterest(s: string) {
   localInterests.value = localInterests.value.filter(x => x !== s)
 }
 
-function addCustomInterest() {
-  const s = newInterest.value.trim()
+function addCustomTag() {
+  const s = newTag.value.trim()
   if (!s) return
-  if (!localInterests.value.includes(s)) localInterests.value.push(s)
-  newInterest.value = ''
+  if (customType.value === 'skill') {
+    if (!localSkills.value.includes(s)) localSkills.value.push(s)
+  } else {
+    if (!localInterests.value.includes(s)) localInterests.value.push(s)
+  }
+  newTag.value = ''
 }
 
 async function saveSkills() {
@@ -471,6 +529,9 @@ function editProject(p: StudentProject) {
 }
 
 async function handleSaveProject() {
+  if (projectFormRef.value) {
+    try { await projectFormRef.value.validate() } catch { return }
+  }
   try {
     if (editingProject.value) {
       await updateProject(editingProject.value.id, projectForm.value as any)
@@ -682,12 +743,18 @@ onMounted(async () => {
 })
 
 async function handleAdd() {
+  if (growthFormRef.value) {
+    try { await growthFormRef.value.validate() } catch { return }
+  }
   const payload: Record<string, any> = {}
   for (const k of Object.keys(form.value)) {
     if (form.value[k] !== '' && form.value[k] !== undefined) {
       payload[k] = form.value[k]
     }
   }
+  // 论文/成果类型必填的"标题"字段来自各自的名称字段，回填给 title
+  if (!payload.title && payload.paper_name) payload.title = payload.paper_name
+  if (!payload.title && payload.achievement_name) payload.title = payload.achievement_name
   try {
     await createGrowthRecord(payload as any)
     ElMessage.success('添加成功')
@@ -786,21 +853,68 @@ async function handleAdd() {
 }
 .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
-/* ===== Charts Row ===== */
-.charts-row { display: flex; gap: 16px; margin-bottom: 16px; }
-.chart-card {
-  flex: 1; background: var(--bg-card); border-radius: 14px; padding: 18px 20px;
-  border: 1px solid var(--border-color); box-shadow: var(--shadow-md);
+/* ===== Analytics Sections ===== */
+.analytics-card {
+  background: var(--bg-card);
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  margin-bottom: 16px;
+  overflow: hidden;
   opacity: 0;
   transform: translateY(20px);
   animation: fadeInUp 0.35s ease-out forwards;
 }
-.chart-card:nth-child(1) { animation-delay: 0.1s; }
-.chart-card:nth-child(2) { animation-delay: 0.15s; }
-.chart-card.wide { flex: 1; }
-.chart-card-header {
-  font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;
-  display: flex; align-items: center;
+.analytics-card:nth-child(1) { animation-delay: 0.1s; }
+.analytics-card:nth-child(2) { animation-delay: 0.15s; }
+.analytics-card:nth-child(3) { animation-delay: 0.2s; }
+.analytics-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-light);
+  background: linear-gradient(180deg, var(--hover-bg) 0%, rgba(64,158,255,0) 100%);
+}
+.head-bar {
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, var(--accent-blue) 0%, var(--accent-green) 100%);
+}
+.head-title { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1; }
+.head-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1;
+  margin-left: 2px;
+}
+.head-save { margin-left: auto; }
+.analytics-body { padding: 18px 20px 20px; }
+.analytics-body.duo { display: flex; align-items: stretch; }
+.panel { flex: 1; min-width: 0; }
+.panel-radar { flex: 5; }
+.panel-bar { flex: 7; }
+.panel-divider {
+  width: 1px;
+  margin: 2px 22px;
+  background: var(--border-light);
+  flex-shrink: 0;
+}
+.panel-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.panel-title .el-icon {
+  color: var(--accent-blue);
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 .chart { 
   width: 100%; 
@@ -809,27 +923,47 @@ async function handleAdd() {
   animation-delay: 0.4s;
   animation-fill-mode: both;
 }
-.chart-card.wide .chart { height: 200px; }
+.radar-chart { height: 280px; }
+.line-chart { height: 230px; }
 
-/* ===== Split Row (Skills + Interests) ===== */
-.split-row { display: flex; gap: 16px; margin-bottom: 20px; }
-.tag-card {
-  flex: 1; background: var(--bg-card); border-radius: 14px; padding: 18px 20px;
-  border: 1px solid var(--border-color); box-shadow: var(--shadow-md);
-  opacity: 0;
-  transform: translateX(-20px);
-  animation: fadeInLeft 0.35s ease-out forwards;
+/* ===== Tags (Skills + Interests) ===== */
+.cloud-block { margin-bottom: 16px; }
+.cloud-title {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  margin-bottom: 8px;
 }
-.tag-card:nth-child(1) { animation-delay: 0.15s; }
-.tag-card:nth-child(2) { 
-  animation-name: fadeInRight;
-  animation-delay: 0.2s;
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; }
+.cloud-empty {
+  font-size: 12px; color: var(--text-placeholder);
+  line-height: 24px;
 }
-.tag-card-header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 14px; font-size: 14px; font-weight: 600; color: var(--text-primary);
+.skill-tag { 
+  font-size: 12px; 
+  padding: 3px 12px; 
+  border-radius: 16px;
+  transition: all 0.2s ease;
 }
-.preset-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.skill-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.preset-block {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-light);
+}
+.preset-row { display: flex; align-items: flex-start; gap: 12px; }
+.preset-label {
+  flex-shrink: 0;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-muted);
+  line-height: 24px;
+  width: 32px;
+}
+.preset-tags { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .preset-tag { 
   cursor: pointer; 
   font-size: 12px;
@@ -841,18 +975,8 @@ async function handleAdd() {
 .preset-tag:active {
   transform: scale(0.95);
 }
-.tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.skill-tag { 
-  font-size: 12px; 
-  padding: 3px 12px; 
-  border-radius: 16px;
-  transition: all 0.2s ease;
-}
-.skill-tag:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-.tag-input-row { display: flex; gap: 8px; }
+.tag-input-row { display: flex; gap: 8px; align-items: center; }
+.tag-input-row .el-input { flex: 1; }
 
 /* ===== Section ===== */
 .section-header {
@@ -1036,9 +1160,15 @@ async function handleAdd() {
   .score-stats { gap: 16px; justify-content: center; }
   .stat-num { font-size: 20px; }
   .charts-row { flex-direction: column; }
-  .chart { height: 200px; }
-  .chart-card.wide .chart { height: 180px; }
+  .chart { height: 210px; }
+  .radar-chart { height: 240px; }
+  .line-chart { height: 200px; }
   .split-row { flex-direction: column; }
+  .analytics-body.duo { flex-direction: column; }
+  .panel { flex: none; }
+  .panel-divider { width: 100%; height: 1px; margin: 14px 12px; }
+  .analytics-head { flex-wrap: wrap; row-gap: 6px; padding: 12px 16px; }
+  .head-sub { display: none; }
   .project-grid { grid-template-columns: 1fr; }
   .record-card { padding: 12px; }
   .record-title { font-size: 13px; }

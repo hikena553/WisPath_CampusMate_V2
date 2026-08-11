@@ -60,7 +60,7 @@
     <!-- 移动端底部导航栏 -->
     <MobileTabBar v-if="isMobile" :items="mobileNavItems" :active-key="activeNavKey" @select="handleNavSelect" />
 
-    <el-dialog v-model="showProfile" title="个人资料" width="560px" :close-on-click-modal="false">
+    <el-dialog v-model="showProfile" title="个人资料" width="800px" :close-on-click-modal="false">
       <div class="profile-layout">
         <div class="profile-avatar-col">
           <div class="avatar-upload-wrap" @click="triggerFileInput">
@@ -75,7 +75,7 @@
           <input ref="fileInputRef" type="file" accept="image/*" style="display:none" @change="onFileSelect" />
         </div>
         <div class="profile-form-col">
-          <el-form :model="profileForm" label-width="90px" size="small">
+          <el-form :model="profileForm" label-width="90px">
             <el-row :gutter="12">
               <el-col :span="12">
                 <el-form-item label="学号"><el-input v-model="profileForm.username" disabled /></el-form-item>
@@ -84,7 +84,7 @@
                 <el-form-item label="姓名"><el-input v-model="profileForm.name" disabled /></el-form-item>
               </el-col>
             </el-row>
-            <el-row :gutter="12">
+            <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="性别">
                   <el-select v-model="profileForm.gender" placeholder="请选择" style="width:100%">

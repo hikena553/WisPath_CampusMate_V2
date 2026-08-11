@@ -10,8 +10,8 @@
       <div class="form-section">
         <div class="form-card">
           <h3>提交反馈</h3>
-          <el-form :model="form" label-width="80px">
-            <el-form-item label="反馈类型">
+          <el-form ref="formRef" :model="form" label-width="80px" :rules="formRules">
+            <el-form-item label="反馈类型" prop="type">
               <el-select v-model="form.type" placeholder="请选择反馈类型" style="width: 100%">
                 <el-option label="问题反馈" value="bug" />
                 <el-option label="功能建议" value="feature" />
@@ -19,11 +19,11 @@
                 <el-option label="其他" value="other" />
               </el-select>
             </el-form-item>
-            <el-form-item label="标题">
-              <el-input v-model="form.title" placeholder="请简要描述您的反馈" maxlength="100" show-word-limit />
+            <el-form-item label="标题" prop="title">
+              <el-input v-model="form.title" placeholder="请简要描述您的反馈，如：课表无法加载" maxlength="100" show-word-limit />
             </el-form-item>
-            <el-form-item label="详细内容">
-              <el-input v-model="form.content" type="textarea" :rows="5" placeholder="请详细描述您的问题或建议" maxlength="1000" show-word-limit />
+            <el-form-item label="详细内容" prop="content">
+              <el-input v-model="form.content" type="textarea" :rows="5" placeholder="请详细描述您的问题或建议，越具体越有助于我们改进" maxlength="1000" show-word-limit />
             </el-form-item>
             <el-form-item label="联系方式">
               <el-input v-model="form.contact" placeholder="手机号/邮箱（选填，方便我们联系您）" />
@@ -72,6 +72,13 @@ import { createFeedback, getFeedbacks, type Feedback, type FeedbackCreate } from
 const loading = ref(false)
 const submitting = ref(false)
 const feedbacks = ref<Feedback[]>([])
+const formRef = ref<any>()
+
+const formRules = {
+  type: [{ required: true, message: '请选择反馈类型', trigger: 'change' }],
+  title: [{ required: true, message: '请输入反馈标题', trigger: 'blur' }],
+  content: [{ required: true, message: '请输入详细内容', trigger: 'blur' }],
+}
 
 const form = ref<FeedbackCreate>({
   type: 'other',
@@ -130,15 +137,9 @@ function resetForm() {
 }
 
 async function handleSubmit() {
-  if (!form.value.title.trim()) {
-    ElMessage.warning('请输入标题')
-    return
+  if (formRef.value) {
+    try { await formRef.value.validate() } catch { return }
   }
-  if (!form.value.content.trim()) {
-    ElMessage.warning('请输入详细内容')
-    return
-  }
-  
   submitting.value = true
   try {
     await createFeedback(form.value)

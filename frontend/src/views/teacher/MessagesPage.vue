@@ -255,7 +255,7 @@
     <!-- ============= 创建群聊弹窗 ============= -->
     <el-dialog v-model="showCreateGroup" title="创建群聊" width="520px" :close-on-click-modal="false">
       <div class="create-group-form">
-        <el-input v-model="newGroupName" placeholder="请输入群名称" maxlength="20" show-word-limit size="large" />
+        <el-input v-model="newGroupName" placeholder="必填，请输入群名称" maxlength="20" show-word-limit size="large" />
         <div class="member-search-box" style="margin-top:14px">
           <el-input v-model="memberSearch" placeholder="搜索成员（学号/工号/姓名）" size="small"
             @input="searchMembersForGroup" clearable>
@@ -616,6 +616,10 @@ function cancelEditAnnouncement() {
 
 async function saveAnnouncement() {
   if (!activeId.value) return
+  if (!announcementText.value.trim()) {
+    ElMessage.warning('请输入群公告内容')
+    return
+  }
   savingAnnouncement.value = true
   try {
     await updateGroupAnnouncement(activeId.value, announcementText.value)

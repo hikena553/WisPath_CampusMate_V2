@@ -32,15 +32,15 @@
     </div>
 
     <el-dialog v-model="createVisible" title="发布信息" width="520px">
-      <el-form :model="form" label-width="80px">
-        <el-form-item label="类型" required>
+      <el-form ref="formRef" :model="form" label-width="80px" :rules="formRules">
+        <el-form-item label="类型" prop="type">
           <el-radio-group v-model="form.type">
             <el-radio value="lost">寻物启事</el-radio>
             <el-radio value="found">失物招领</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="物品名称" required>
-          <el-input v-model="form.title" placeholder="如：黑色钱包 / 蓝色水杯" maxlength="50" show-word-limit />
+        <el-form-item label="物品名称" prop="title">
+          <el-input v-model="form.title" placeholder="必填，如：黑色钱包 / 蓝色水杯" maxlength="50" show-word-limit />
         </el-form-item>
         <el-form-item label="详细描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="物品特征、品牌、内装物品等" />
@@ -113,6 +113,11 @@ const activeType = ref('all')
 const items = ref<LostFoundItem[]>([])
 const loading = ref(false)
 const submitting = ref(false)
+const formRef = ref<any>()
+const formRules = {
+  type: [{ required: true, message: '请选择类型', trigger: 'change' }],
+  title: [{ required: true, message: '请填写物品名称', trigger: 'blur' }],
+}
 
 const createVisible = ref(false)
 const detailVisible = ref(false)
@@ -139,9 +144,8 @@ function openCreate() {
 }
 
 async function submit() {
-  if (!form.title.trim()) {
-    ElMessage.warning('请填写物品名称')
-    return
+  if (formRef.value) {
+    try { await formRef.value.validate() } catch { return }
   }
   submitting.value = true
   try {
