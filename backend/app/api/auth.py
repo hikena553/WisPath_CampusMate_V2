@@ -37,7 +37,7 @@ def list_teachers(db: Session = Depends(get_db), user: User = Depends(get_curren
 
 @router.put("/profile")
 def update_profile(data: ProfileUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    for field in ("avatar", "gender", "political_status", "title", "hometown", "phone", "department", "class_name", "age", "tutor_id"):
+    for field in ("avatar", "gender", "political_status", "title", "hometown", "phone", "department", "class_name", "age"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(user, field, val)

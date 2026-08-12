@@ -263,7 +263,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onUpdated } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUpdated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAgentStore } from '@/stores/agent'
@@ -442,10 +442,14 @@ function handleOverflowCommand(command: number) {
 
 function previewPendingFile(file: File) {
   if (file.type.startsWith('image/')) {
+    if (previewImage.value.startsWith('blob:')) {
+      URL.revokeObjectURL(previewImage.value)
+    }
     previewImage.value = URL.createObjectURL(file)
   } else {
     const url = URL.createObjectURL(file)
     window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
 }
 
@@ -469,7 +473,13 @@ function renderMarkdown(text: string): string {
   let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   html = html
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" class="msg-link">$1</a>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, (_match, label, url) => {
+      const safeUrl = url.replace(/"/g, '&quot;')
+      if (/^javascript:/i.test(safeUrl.trim())) {
+        return label
+      }
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="msg-link">${label}</a>`
+    })
     .replace(/\n/g, '<br>')
   return html
 }
@@ -541,6 +551,7 @@ async function send() {
   store.addMessage(userMsg)
   input.value = ''
   editingOriginal.value = null
+  closePreview()
   pendingFiles.value = []
   pendingImagePreview.value = ''
   charState.value = 'thinking'
@@ -684,8 +695,8 @@ onMounted(() => {
   scrollToBottom()
 })
 
-onUpdated(() => {
-  scrollToBottom()
+onUnmounted(() => {
+  closePreview()
 })
 </script>
 

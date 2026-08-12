@@ -67,7 +67,7 @@ def _get_client() -> AsyncOpenAI:
     if _client_instance is None or config_hash != _client_config_hash:
         if not config['api_key']:
             raise RuntimeError("LLM 未配置 API Key，请在系统设置中配置")
-        _client_instance = AsyncOpenAI(api_key=config['api_key'], base_url=config['base_url'])
+        _client_instance = AsyncOpenAI(api_key=config['api_key'], base_url=config['base_url'], timeout=60.0)
         _client_config_hash = config_hash
     return _client_instance
 

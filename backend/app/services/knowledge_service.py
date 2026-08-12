@@ -12,6 +12,11 @@ UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "docume
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _escape_like(value: str) -> str:
+    """转义 SQL LIKE 通配符，防止 LIKE 注入"""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def search_knowledge(db: Session, query: str, limit: int = 5) -> list[dict]:
     """搜索知识库（问答对 + 文档分块）"""
     results = []
@@ -22,9 +27,10 @@ def search_knowledge(db: Session, query: str, limit: int = 5) -> list[dict]:
 
     conditions = []
     for kw in keywords[:5]:
-        conditions.append(KnowledgeItem.question.like(f"%{kw}%"))
-        conditions.append(KnowledgeItem.answer.like(f"%{kw}%"))
-        conditions.append(KnowledgeItem.tags.like(f"%{kw}%"))
+        safe_kw = _escape_like(kw)
+        conditions.append(KnowledgeItem.question.like(f"%{safe_kw}%", escape="\\"))
+        conditions.append(KnowledgeItem.answer.like(f"%{safe_kw}%", escape="\\"))
+        conditions.append(KnowledgeItem.tags.like(f"%{safe_kw}%", escape="\\"))
 
     if conditions:
         items = db.query(KnowledgeItem).filter(or_(*conditions)).limit(limit).all()
@@ -145,17 +151,22 @@ def save_chunks(db: Session, document_id: int, chunks: list[str]):
     db.commit()
 
 
-def get_all_knowledge_items(db: Session, category: str = None, search: str = None) -> list[KnowledgeItem]:
-    """获取所有知识库条目"""
+def get_all_knowledge_items(db: Session, category: str = None, search: str = None):
+    """获取知识库条目查询对象（由调用方决定分页）"""
     query = db.query(KnowledgeItem)
     if category:
         query = query.filter(KnowledgeItem.category == category)
     if search:
-        like = f"%{search}%"
+        safe_search = _escape_like(search)
+        like = f"%{safe_search}%"
         query = query.filter(
-            or_(KnowledgeItem.question.like(like), KnowledgeItem.answer.like(like), KnowledgeItem.tags.like(like))
+            or_(
+                KnowledgeItem.question.like(like, escape="\\"),
+                KnowledgeItem.answer.like(like, escape="\\"),
+                KnowledgeItem.tags.like(like, escape="\\"),
+            )
         )
-    return query.all()
+    return query
 
 
 def create_knowledge_item(db: Session, category: str, question: str, answer: str, tags: str = None) -> KnowledgeItem:

@@ -288,6 +288,9 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
 
         await _try_extract_skills(message, user)
 
+        # #16 持久化 AI 回复
+        _save_assistant_response(conv_id, full_reply, message, user)
+
     except Exception:
         logger.exception("AI对话处理异常")
         error_msg = "抱歉，我暂时无法回答，请稍后再试。你也可以联系辅导员获取帮助。"
@@ -355,6 +358,17 @@ async def _try_extract_skills(user_message: str, user: User):
         logger.debug("技能提取失败", exc_info=True)
 
 
+async def _safe_summarize(db, conv_id: int):
+    """安全地在后台执行对话摘要，确保 session 正确关闭"""
+    try:
+        from app.services.conversation_memory import summarize_conversation
+        await summarize_conversation(db, conv_id)
+    except Exception:
+        logger.exception("后台对话摘要失败")
+    finally:
+        db.close()
+
+
 def _save_assistant_response(conv_id: int | None, reply: str, user_message: str, user: User):
     if not conv_id:
         return
@@ -379,7 +393,9 @@ def _save_assistant_response(conv_id: int | None, reply: str, user_message: str,
             import asyncio
             try:
                 asyncio.get_running_loop()
-                asyncio.ensure_future(summarize_conversation(db, conv_id))
+                # 用新 session 避免 use-after-close
+                summary_db = SessionLocal()
+                asyncio.ensure_future(_safe_summarize(summary_db, conv_id))
             except RuntimeError:
                 pass
     except Exception:

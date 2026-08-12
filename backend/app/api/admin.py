@@ -52,11 +52,10 @@ def list_knowledge(
 ):
     """获取知识库列表（分页）"""
     query = knowledge_service.get_all_knowledge_items(db, category, search)
-    total = len(query)
+    total = query.count()
     total_pages = (total + page_size - 1) // page_size
     start = (page - 1) * page_size
-    end = start + page_size
-    items = query[start:end]
+    items = query.offset(start).limit(page_size).all()
 
     return PaginatedResponse(
         items=[KnowledgeItemOut.model_validate(item) for item in items],
@@ -107,7 +106,8 @@ async def upload_document(
     db: Session = Depends(get_db),
 ):
     allowed_types = {"pdf", "docx", "txt"}
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    filename = file.filename or "unnamed"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in allowed_types:
         raise HTTPException(status_code=400, detail="仅支持 PDF/DOCX/TXT 格式")
 
@@ -116,8 +116,16 @@ async def upload_document(
     upload_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "documents"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = upload_dir / file.filename
+    # #6 路径清洗：只保留文件名部分，防止路径穿越
+    safe_name = Path(filename).name
+    file_path = upload_dir / safe_name
+
+    # #7 大小限制：10MB
+    MAX_UPLOAD_SIZE = 10 * 1024 * 1024
     content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="文件大小超过 10MB 限制")
+
     with open(file_path, "wb") as f:
         f.write(content)
 
@@ -211,20 +219,33 @@ def list_teachers(
     db: Session = Depends(get_db),
 ):
     """获取教师列表（分页）"""
-    query = db.query(User).filter(User.role == UserRole.TEACHER)
+    # #9 子查询：一次性聚合每位教师的学生数量
+    from sqlalchemy import func as sa_func
+    student_count_sub = (
+        db.query(User.tutor_id, sa_func.count(User.id).label("cnt"))
+        .filter(User.role == UserRole.STUDENT, User.tutor_id.isnot(None))
+        .group_by(User.tutor_id)
+        .subquery()
+    )
+
+    query = (
+        db.query(User, sa_func.coalesce(student_count_sub.c.cnt, 0).label("student_count"))
+        .outerjoin(student_count_sub, User.id == student_count_sub.c.tutor_id)
+        .filter(User.role == UserRole.TEACHER)
+    )
     if search:
-        like = f"%{search}%"
-        query = query.filter(User.name.like(like) | User.username.like(like) | User.college.like(like))
+        from app.services.knowledge_service import _escape_like
+        safe = _escape_like(search)
+        like = f"%{safe}%"
+        query = query.filter(User.name.like(like, escape="\\") | User.username.like(like, escape="\\") | User.college.like(like, escape="\\"))
 
     total = query.count()
     total_pages = (total + page_size - 1) // page_size
     start = (page - 1) * page_size
-    end = start + page_size
-    teachers = query.offset(start).limit(page_size).all()
+    rows = query.offset(start).limit(page_size).all()
 
     result = []
-    for t in teachers:
-        student_count = db.query(User).filter(User.role == UserRole.STUDENT, User.tutor_id == t.id).count()
+    for t, student_count in rows:
         result.append(TeacherOut(
             id=t.id,
             username=t.username,
@@ -330,31 +351,50 @@ def list_students(
     """获取学生列表（分页）"""
     query = db.query(User).filter(User.role == UserRole.STUDENT)
     if search:
-        like = f"%{search}%"
-        query = query.filter(User.name.like(like) | User.username.like(like))
+        from app.services.knowledge_service import _escape_like
+        safe = _escape_like(search)
+        like = f"%{safe}%"
+        query = query.filter(User.name.like(like, escape="\\") | User.username.like(like, escape="\\"))
     if college:
-        query = query.filter(User.college.like(f"%{college}%"))
+        from app.services.knowledge_service import _escape_like
+        safe_college = _escape_like(college)
+        query = query.filter(User.college.like(f"%{safe_college}%", escape="\\"))
     if class_name:
         query = query.filter(User.class_name == class_name)
 
     total = query.count()
     total_pages = (total + page_size - 1) // page_size
     start = (page - 1) * page_size
-    end = start + page_size
     students = query.offset(start).limit(page_size).all()
+
+    # #10 批量查询：一次获取本页所有学生的最新危机记录
+    student_ids = [s.id for s in students]
+    latest_crisis_map: dict[int, str] = {}
+    if student_ids:
+        from sqlalchemy import func as sa_func
+        crisis_sub = (
+            db.query(
+                AIDialogSummary.student_id,
+                AIDialogSummary.level,
+                sa_func.row_number().over(
+                    partition_by=AIDialogSummary.student_id,
+                    order_by=AIDialogSummary.created_at.desc()
+                ).label("rn")
+            )
+            .filter(AIDialogSummary.student_id.in_(student_ids))
+            .subquery()
+        )
+        crisis_rows = db.query(crisis_sub).filter(crisis_sub.c.rn == 1).all()
+        latest_crisis_map = {r.student_id: r.level.value for r in crisis_rows}
 
     result = []
     for s in students:
         score = calc_radar_score(db, s.id, s)
-        latest_crisis = db.query(AIDialogSummary).filter(
-            AIDialogSummary.student_id == s.id
-        ).order_by(AIDialogSummary.created_at.desc()).first()
-
         result.append(StudentBriefOut(
             id=s.id, username=s.username, name=s.name,
             college=s.college, class_name=s.class_name, avatar=s.avatar,
             score=score,
-            crisis_level=latest_crisis.level.value if latest_crisis else None,
+            crisis_level=latest_crisis_map.get(s.id),
         ))
 
     return PaginatedResponse(

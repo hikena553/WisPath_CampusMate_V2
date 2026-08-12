@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { getToken } from '@/utils/token'
 
+const MAX_CACHE_SIZE = 50
 const cacheMap = new Map<string, string>()
 
 function cacheKey(pageType: string, prompt: string) {
@@ -61,6 +62,10 @@ export function useAiAnalysis(pageType: string) {
         }
       }
 
+      if (cacheMap.size >= MAX_CACHE_SIZE) {
+        const oldest = cacheMap.keys().next().value
+        if (oldest !== undefined) cacheMap.delete(oldest)
+      }
       cacheMap.set(key, rawResult.value)
     } finally {
       loading.value = false

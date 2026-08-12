@@ -45,7 +45,7 @@ async def _periodic_refresh():
         try:
             await asyncio.to_thread(refresh_impression_data)
         except Exception:
-            pass
+            logger.exception("后台定期刷新任务异常")
         await asyncio.sleep(1800)
 
 
