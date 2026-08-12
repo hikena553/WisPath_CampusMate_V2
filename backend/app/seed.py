@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from datetime import date, timedelta
 from app.core.database import SessionLocal, engine, Base
 from app.core.security import hash_password
+from app.core.crypto import is_encrypted, encrypt_value, is_sensitive_key, _SENSITIVE_KEYS
 from app.models.user import User, UserRole
 from app.models.campus import CampusFigure, CampusScenery
 from app.models.academic import College, Major, ClassGroup, Course, Grade
@@ -587,10 +588,34 @@ if db.query(AIDialogSummary).count() == 0:
     seeded = True
 
 
-db.close()
 logger.info("Seed data created successfully")
 logger.info("Colleges: 7 (AI/ME/CD/BUS/HE/MARX/LIFE), Majors: 34, ClassGroups: 22")
 logger.info("Students: 2024001~2024009 (9 students)")
 logger.info("Teachers: t1001~t1007 (7 teachers)")
 logger.info("Tutor bindings: 陈慧敏→张三/赵六/郑十一, 张伟明→王五/钱七, etc.")
 logger.info("Test accounts: all use password '123456'")
+
+
+# ─── 敏感设置加密迁移（幂等） ──────────────────────────────
+from app.models.setting import SystemSetting
+
+try:
+    sensitive_settings = db.query(SystemSetting).filter(
+        SystemSetting.key.in_(list(_SENSITIVE_KEYS))
+    ).all()
+    migrated = 0
+    for s in sensitive_settings:
+        if is_sensitive_key(s.key) and s.value and not is_encrypted(s.value):
+            s.value = encrypt_value(s.value)
+            migrated += 1
+    if migrated:
+        db.commit()
+        logger.info(f"加密迁移完成：已加密 {migrated} 项敏感设置")
+    else:
+        logger.info("敏感设置已加密，无需迁移")
+except Exception:
+    logger.exception("敏感设置加密迁移失败")
+    db.rollback()
+
+
+db.close()

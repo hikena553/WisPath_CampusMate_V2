@@ -4,6 +4,7 @@ from datetime import date
 from openai import AsyncOpenAI, APIError
 
 from app.core.config import settings
+from app.core.crypto import decrypt_value
 from app.core.database import get_db
 from app.models.user import User, UserRole
 from app.models.setting import SystemSetting
@@ -45,8 +46,12 @@ def _get_llm_config() -> dict:
             return default
         return env_fallback or default
 
+    # api_key 可能是加密存储的，需要解密；env_fallback 来自 .env 不需要解密
+    raw_key = _val('llm_api_key', settings.llm_api_key) or ""
+    api_key = decrypt_value(raw_key) if raw_key else raw_key
+
     return {
-        'api_key': _val('llm_api_key', settings.llm_api_key),
+        'api_key': api_key,
         'base_url': _val('llm_base_url', settings.LLM_BASE_URL),
         'model': _val('llm_model', settings.LLM_MODEL, "qwen-turbo"),
         'agent_model': _val('llm_agent_model', settings.LLM_AGENT_MODEL),
