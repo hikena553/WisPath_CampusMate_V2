@@ -32,7 +32,8 @@ async def upload_file(file: UploadFile = File(...), user: User = Depends(get_cur
         if not mime_type.startswith(ALLOWED_MIME_PREFIXES):
             raise HTTPException(400, f"文件内容类型不匹配: {mime_type}")
     except ImportError:
-        pass
+        import logging
+        logging.getLogger(__name__).warning("python-magic 未安装，MIME 类型校验已跳过")
     safe_name = re.sub(r'[^\w.-]', '_', Path(filename).stem)[:64]
     save_name = f"{safe_name}_{uuid.uuid4().hex[:8]}{ext}"
     save_path = UPLOAD_DIR / save_name

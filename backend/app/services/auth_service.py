@@ -15,7 +15,7 @@ def login_user(db: Session, username: str, password: str) -> dict | None:
     user = authenticate_user(db, username, password)
     if not user:
         return None
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    token = create_access_token({"sub": str(user.id), "role": user.role.value, "ph": user.password_hash[:8]})
     from app.schemas.user import UserInfo
     return {
         "access_token": token,

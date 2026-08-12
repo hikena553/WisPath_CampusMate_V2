@@ -323,7 +323,29 @@ TEACHER_TOOL_DEFINITIONS = [
 ]
 
 
+# 简单的每用户工具调用限速（每分钟 30 次）
+_tool_call_counters: dict[int, list[float]] = {}
+_TOOL_RATE_LIMIT = 30
+_TOOL_RATE_WINDOW = 60.0
+
+
+def _check_tool_rate_limit(user_id: int) -> bool:
+    """返回 True 表示允许调用，False 表示超限"""
+    import time
+    now = time.monotonic()
+    calls = _tool_call_counters.setdefault(user_id, [])
+    # 清理过期记录
+    _tool_call_counters[user_id] = [t for t in calls if now - t < _TOOL_RATE_WINDOW]
+    if len(_tool_call_counters[user_id]) >= _TOOL_RATE_LIMIT:
+        return False
+    _tool_call_counters[user_id].append(now)
+    return True
+
+
 async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = None) -> dict:
+    if not _check_tool_rate_limit(user.id):
+        return {"error": "工具调用过于频繁，请稍后再试"}
+
     db = SessionLocal()
     try:
         handler = {
@@ -555,8 +577,14 @@ def _query_exams(db: Session, args: dict, user: User) -> dict:
 
 def _query_knowledge(db: Session, args: dict, user: User) -> dict:
     query = args.get("query", "")
+    from app.services.knowledge_service import _escape_like
+    safe_q = _escape_like(query)
     items = db.query(KnowledgeItem).filter(
-        or_(KnowledgeItem.question.like(f"%{query}%"), KnowledgeItem.answer.like(f"%{query}%"), KnowledgeItem.tags.like(f"%{query}%"))
+        or_(
+            KnowledgeItem.question.like(f"%{safe_q}%", escape="\\"),
+            KnowledgeItem.answer.like(f"%{safe_q}%", escape="\\"),
+            KnowledgeItem.tags.like(f"%{safe_q}%", escape="\\"),
+        )
     ).limit(5).all()
     if not items:
         return {"message": "未找到相关信息", "items": []}
@@ -624,8 +652,10 @@ def _query_students(db: Session, args: dict, user: User) -> dict:
     query = db.query(User).filter(User.role == UserRole.STUDENT, User.tutor_id == user.id)
     search = args.get("search")
     if search:
-        like = f"%{search}%"
-        query = query.filter(or_(User.name.like(like), User.username.like(like), User.college.like(like)))
+        from app.services.knowledge_service import _escape_like
+        safe = _escape_like(search)
+        like = f"%{safe}%"
+        query = query.filter(or_(User.name.like(like, escape="\\"), User.username.like(like, escape="\\"), User.college.like(like, escape="\\")))
     students = query.all()
     if not students:
         return {"message": "暂无名下学生", "students": []}
@@ -722,8 +752,10 @@ def _query_student_detail(db: Session, args: dict, user: User) -> dict:
     ).first()
     if not student:
         # 模糊搜索
+        from app.services.knowledge_service import _escape_like
+        safe_name = _escape_like(student_name)
         student = db.query(User).filter(
-            User.name.like(f"%{student_name}%"), User.role == UserRole.STUDENT, User.tutor_id == user.id
+            User.name.like(f"%{safe_name}%", escape="\\"), User.role == UserRole.STUDENT, User.tutor_id == user.id
         ).first()
     if not student:
         return {"success": False, "message": f"未找到名为'{student_name}'的学生（或该学生不在你名下）"}

@@ -36,17 +36,17 @@ instance.interceptors.response.use(
 )
 
 const request = {
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return instance.get(url, config) as any
+  get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return instance.get(url, config) as unknown as Promise<T>
   },
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.post(url, data, config) as any
+  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return instance.post(url, data, config) as unknown as Promise<T>
   },
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.put(url, data, config) as any
+  put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return instance.put(url, data, config) as unknown as Promise<T>
   },
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return instance.delete(url, config) as any
+  delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return instance.delete(url, config) as unknown as Promise<T>
   },
 }
 

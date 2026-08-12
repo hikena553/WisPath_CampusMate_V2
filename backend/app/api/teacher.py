@@ -130,9 +130,11 @@ def list_students(
     if user.role != UserRole.ADMIN:
         query = query.filter(User.tutor_id == user.id)
     if search:
-        like = f"%{search}%"
+        from app.services.knowledge_service import _escape_like
+        safe = _escape_like(search)
+        like = f"%{safe}%"
         query = query.filter(
-            User.name.like(like) | User.username.like(like) | User.college.like(like)
+            User.name.like(like, escape="\\") | User.username.like(like, escape="\\") | User.college.like(like, escape="\\")
         )
     students = query.all()
     student_ids = [s.id for s in students]

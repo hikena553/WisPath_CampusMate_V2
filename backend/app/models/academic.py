@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date, time
 from sqlalchemy import String, Float, Integer, Date, Time, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -92,7 +92,7 @@ class Exam(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     student_id: Mapped[int] = mapped_column(index=True)
     course_name: Mapped[str] = mapped_column(String(100))
-    exam_date: Mapped[str] = mapped_column(Date)
-    start_time: Mapped[str] = mapped_column(Time)
-    end_time: Mapped[str] = mapped_column(Time)
+    exam_date: Mapped[date] = mapped_column(Date)
+    start_time: Mapped[time] = mapped_column(Time)
+    end_time: Mapped[time] = mapped_column(Time)
     location: Mapped[str] = mapped_column(String(100))

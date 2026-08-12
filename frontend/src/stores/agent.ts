@@ -24,8 +24,12 @@ function createAgentStore(role: 'student' | 'teacher') {
     const messages = ref<ChatMessage[]>(loadMessages(storageKey))
     const loading = ref(false)
 
+    let saveTimer: ReturnType<typeof setTimeout> | null = null
     watch(messages, (val) => {
-      localStorage.setItem(storageKey, JSON.stringify(val.slice(-100)))
+      if (saveTimer) clearTimeout(saveTimer)
+      saveTimer = setTimeout(() => {
+        localStorage.setItem(storageKey, JSON.stringify(val.slice(-100)))
+      }, 300)
     }, { deep: true })
 
     function addMessage(msg: ChatMessage) {

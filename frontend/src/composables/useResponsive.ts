@@ -9,6 +9,7 @@ const isDesktop = ref(true)
 
 let mqlMobile: MediaQueryList | null = null
 let mqlTablet: MediaQueryList | null = null
+let refCount = 0
 
 function update() {
   isMobile.value = mqlMobile?.matches ?? false
@@ -19,16 +20,23 @@ function update() {
 export function useResponsive() {
   onMounted(() => {
     if (typeof window === 'undefined') return
-    mqlMobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    mqlTablet = window.matchMedia(`(max-width: ${TABLET_BREAKPOINT - 1}px)`)
-    update()
-    mqlMobile.addEventListener('change', update)
-    mqlTablet.addEventListener('change', update)
+    if (refCount === 0) {
+      mqlMobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+      mqlTablet = window.matchMedia(`(max-width: ${TABLET_BREAKPOINT - 1}px)`)
+      update()
+      mqlMobile.addEventListener('change', update)
+      mqlTablet.addEventListener('change', update)
+    }
+    refCount++
   })
 
   onUnmounted(() => {
-    mqlMobile?.removeEventListener('change', update)
-    mqlTablet?.removeEventListener('change', update)
+    refCount--
+    if (refCount <= 0) {
+      refCount = 0
+      mqlMobile?.removeEventListener('change', update)
+      mqlTablet?.removeEventListener('change', update)
+    }
   })
 
   return { isMobile, isTablet, isDesktop }

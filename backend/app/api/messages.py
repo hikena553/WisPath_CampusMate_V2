@@ -1,7 +1,10 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.database import get_db
+
+logger = logging.getLogger(__name__)
 from app.core.deps import get_current_user
 from app.core.security import decode_access_token
 from app.models.user import User
@@ -117,11 +120,11 @@ def get_messages(user_id: int, user: User = Depends(get_current_user), db: Sessi
 
 @router.put("/read/{user_id}")
 def mark_read(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    print(f"[DEBUG] mark_read: user_id={user_id}, current_user={user.id}")
+    logger.debug("mark_read: user_id=%s, current_user=%s", user_id, user.id)
     count = db.query(Message).filter(
         Message.sender_id == user_id, Message.receiver_id == user.id, Message.read == False
     ).count()
-    print(f"[DEBUG] Found {count} unread messages to mark")
+    logger.debug("Found %d unread messages to mark", count)
     db.query(Message).filter(
         Message.sender_id == user_id, Message.receiver_id == user.id, Message.read == False
     ).update({"read": True})

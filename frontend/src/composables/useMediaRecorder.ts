@@ -6,6 +6,7 @@ export function useMediaRecorder() {
   const isRecording = ref(false)
   const isSupported = ref(false)
   const error = ref('')
+  const transcript = ref('')
   const transcribing = ref(false)
 
   let mediaRecorder: MediaRecorder | null = null
@@ -55,7 +56,7 @@ export function useMediaRecorder() {
       if (!resp.ok) { error.value = '转写失败'; return }
       const data = await resp.json()
       if (data.text) {
-        error.value = data.text
+        transcript.value = data.text
       }
     } catch {
       error.value = '网络错误'
@@ -70,5 +71,5 @@ export function useMediaRecorder() {
     }
   })
 
-  return { isRecording, isSupported, transcribing, error, start, stop }
+  return { isRecording, isSupported, transcribing, error, transcript, start, stop }
 }

@@ -263,7 +263,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onUpdated, onUnmounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAgentStore } from '@/stores/agent'
@@ -315,8 +315,8 @@ watch(input, () => {
   nextTick(autoResize)
 })
 
-watch(() => recorder.error.value, (val) => {
-  if (val && val !== '转写失败' && val !== '网络错误' && val !== '无法访问麦克风' && val !== '录音失败') {
+watch(() => recorder.transcript.value, (val) => {
+  if (val) {
     input.value += val
   }
 })

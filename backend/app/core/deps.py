@@ -22,6 +22,9 @@ def get_current_user(
     user = db.query(User).filter(User.id == int(user_id)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+    # 校验密码是否已变更（密码修改后旧 Token 失效）
+    if payload.get("ph") and not user.password_hash.startswith(payload["ph"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="密码已修改，请重新登录")
     return user
 
 
