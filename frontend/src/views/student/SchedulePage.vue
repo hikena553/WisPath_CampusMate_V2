@@ -84,8 +84,12 @@
               </div>
               <div style="border-bottom:1px solid #ebeef5;margin:0"></div>
               <div class="card-body" style="padding:0;overflow-x:auto">
-                <div v-if="isHoliday" class="holiday-watermark">🎉 放假中</div>
-                <Transition :name="'slide-' + slideDir" mode="out-in">
+                <div v-if="isHoliday" class="holiday-box">
+                  <div class="holiday-icon">🎉</div>
+                  <div class="holiday-title">当前为假期，暂无课程安排</div>
+                  <div class="holiday-sub">假期愉快，注意劳逸结合哦</div>
+                </div>
+                <Transition v-else :name="'slide-' + slideDir" mode="out-in">
                   <div :key="currentWeek">
                     <table class="schedule-table">
                       <thead>
@@ -890,7 +894,7 @@ async function loadGradeAnalysis() {
 }
 
 // ===== 课程表 =====
-const days = ['周一', '周二', '周三', '周四', '周五']
+const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const periodTimes: Record<number, string> = { 1: '08:00', 2: '08:55', 3: '10:00', 4: '10:55', 5: '14:00', 6: '14:55', 7: '15:50', 8: '16:45', 9: '19:00', 10: '19:55' }
 function periodTimeLabel(p: number) { return periodTimes[p] || '' }
 const courses = ref<Course[]>([])
@@ -901,14 +905,14 @@ const scheduleReady = ref(false)
 const currentWeek = computed(() => Math.max(1, baseWeek.value + weekOffset.value))
 const currentWeekCourses = computed(() => { const wk = currentWeek.value; return courses.value.filter(c => wk >= c.week_start && wk <= c.week_end) })
 const uniqueCourseCount = computed(() => new Set(currentWeekCourses.value.map(c => c.name)).size)
-const maxPeriod = computed(() => { const wk = currentWeek.value; const wkCourses = courses.value.filter(c => wk >= c.week_start && wk <= c.week_end); return Math.max(...wkCourses.map(c => c.end_period), 10) })
+const maxPeriod = 10
 const dayMap: Record<string, number> = { '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 7 }
 
 const courseGrid = computed(() => {
   const wk = currentWeek.value
   const rows = []
-  for (let p = 1; p <= maxPeriod.value; p++) {
-    const cells = days.map(day => ({ day, courses: courses.value.filter(c => c.day_of_week === dayMap[day] && c.start_period === p && wk >= c.week_start && wk <= c.week_end) }))
+  for (let p = 1; p <= maxPeriod; p++) {
+    const cells = days.map(day => ({ day, courses: courses.value.filter(c => c.day_of_week === dayMap[day] && c.start_period <= p && c.end_period >= p && wk >= c.week_start && wk <= c.week_end) }))
     rows.push({ period: p, cells })
   }
   return rows
@@ -941,18 +945,21 @@ function calcCurrentSemester() {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
   let semesterStartYear: number, term: number
-  
+
   if (month >= 9) {
+    // 9月起进入新学年第一学期
     semesterStartYear = year
     term = 1
   } else if (month >= 3) {
-    semesterStartYear = year
+    // 3~8月属于上学年第二学期
+    semesterStartYear = year - 1
     term = 2
   } else {
+    // 1~2月寒假属上学年第一学期末
     semesterStartYear = year - 1
     term = 1
   }
-  
+
   return {
     label: `${semesterStartYear}-${semesterStartYear + 1}学年${term === 1 ? '第一' : '第二'}学期`,
     year: semesterStartYear,
@@ -962,7 +969,9 @@ function calcCurrentSemester() {
 }
 
 const currentSemester = computed(() => calcCurrentSemester())
-const isHoliday = computed(() => calcCurrentRealWeek() > currentSemester.value.maxWeeks)
+
+const semesterKey = computed(() => `${currentSemester.value.year}-${currentSemester.value.year + 1}-${currentSemester.value.term}`)
+const isHoliday = computed(() => currentWeek.value > currentSemester.value.maxWeeks)
 
 const isCurrentRealWeek = computed(() => currentWeek.value === calcCurrentRealWeek())
 
@@ -1197,7 +1206,7 @@ const gpaOption = computed(() => {
 onMounted(async () => {
   loadGoals()
   generateQrCodes()
-  const coursePromise = fetchCourses().then(d => { courses.value = d as any }).catch(() => {})
+  const coursePromise = fetchCourses({ semester: semesterKey.value }).then(d => { courses.value = d as any }).catch(() => {})
   const gradesPromise = getGrades().then(d => { grades.value = d as any }).catch(() => {})
   const examsPromise = getExams().then(d => { exams.value = d as any }).catch(() => {})
   const growthProfilePromise = getGrowthProfile().catch(() => null)
@@ -1205,7 +1214,11 @@ onMounted(async () => {
   const projectsPromise = getProjects().catch(() => [])
   const noticesPromise = getStudentAnnouncements().catch(() => [])
   await Promise.all([coursePromise, gradesPromise, examsPromise])
-  if (courses.value.length) { baseWeek.value = Math.min(...courses.value.map(c => c.week_start)); const realWeek = calcCurrentRealWeek(); weekOffset.value = realWeek - baseWeek.value }
+  if (courses.value.length) {
+    baseWeek.value = Math.min(...courses.value.map(c => c.week_start))
+    const realWeek = calcCurrentRealWeek()
+    weekOffset.value = realWeek - baseWeek.value
+  }
   scheduleReady.value = true
   if (semesters.value.length) selectedSem.value = semesters.value[0]
   for (const sem of semesters.value) { if (goalInputs.value[sem] == null) { goalInputs.value[sem] = goals.value[sem] ?? 3.5 } }
@@ -1226,7 +1239,7 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 async function refreshAllData() {
   try {
     const [coursesData, gradesData, profileData, recordsData, projectsData, noticesData] = await Promise.all([
-      fetchCourses().catch(() => courses.value),
+      fetchCourses({ semester: semesterKey.value }).catch(() => courses.value),
       getGrades().catch(() => grades.value),
       getGrowthProfile().catch(() => profile.value),
       getGrowthRecords().catch(() => growthRecords.value),
@@ -1314,7 +1327,10 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 
 /* ===== 课表表格 ===== */
 .schedule-table { width: 100%; border-collapse: collapse; }
-.holiday-watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 48px; font-weight: 800; color: rgba(64, 158, 255, 0.12); pointer-events: none; white-space: nowrap; z-index: 5; letter-spacing: 8px; }
+.holiday-box { padding: 80px 20px; text-align: center; }
+.holiday-box .holiday-icon { font-size: 56px; margin-bottom: 12px; }
+.holiday-box .holiday-title { font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+.holiday-box .holiday-sub { font-size: 14px; color: #c0c4cc; }
 .schedule-table th, .schedule-table td { border: 1px solid #ebeef5; text-align: center; vertical-align: middle; padding: 0; }
 .schedule-table thead th { background: #f5f7fa; font-size: 14px; font-weight: 600; padding: 12px 8px; color: #303133; }
 .schedule-table .period-cell { background: #fafafa; padding: 12px 8px; font-size: 13px; min-width: 80px; }

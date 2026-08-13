@@ -36,14 +36,14 @@
         <!-- 表头 -->
         <div class="grid-row header">
           <div class="cell period-header">节次</div>
-          <div class="cell day-header" v-for="d in 5" :key="d">周{{ ['一','二','三','四','五'][d-1] }}</div>
+          <div class="cell day-header" v-for="d in 7" :key="d">周{{ ['一','二','三','四','五','六','日'][d-1] }}</div>
         </div>
         <!-- 课表行 -->
         <div class="grid-row" v-for="p in periods" :key="p">
           <div class="cell period-cell">{{ p }}-{{ p+1 }}</div>
           <div
             class="cell day-cell"
-            v-for="d in 5" :key="d"
+            v-for="d in 7" :key="d"
             @click="onCellClick(d, p)"
           >
             <div v-if="getCourseAt(d, p)" class="course-card" @click.stop="showEditDialog(getCourseAt(d, p)!)">

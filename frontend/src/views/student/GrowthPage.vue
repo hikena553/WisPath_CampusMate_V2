@@ -164,6 +164,9 @@
               <span v-if="r.achievement_name" class="detail-item">{{ r.achievement_name }}</span>
               <span v-if="r.achievement_type" class="detail-item">[{{ r.achievement_type }}]</span>
             </div>
+            <div class="record-more">
+              <el-button size="small" text type="primary" @click="viewRecord(r)">查看详情</el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -200,6 +203,7 @@
             <el-link type="primary" :href="p.attachment_url" target="_blank" :icon="Link">查看附件</el-link>
           </div>
           <div class="project-actions">
+            <el-button size="small" text type="primary" @click="viewProject(p)">查看详情</el-button>
             <el-button size="small" text type="primary" @click="editProject(p)">编辑</el-button>
             <el-button size="small" text type="danger" @click="handleDeleteProject(p.id)">删除</el-button>
           </div>
@@ -209,6 +213,79 @@
         </div>
       </Transition>
     </div>
+
+    <el-dialog v-model="recordDetailVisible" title="成长记录详情" width="560px" class="growth-dialog">
+      <div v-if="viewingRecord" class="project-detail">
+        <div class="detail-head">
+          <el-tag :type="typeTagType(viewingRecord.type)" size="small" effect="dark" round>{{ typeLabel(viewingRecord.type) }}</el-tag>
+          <div class="project-info">
+            <div class="project-name">{{ viewingRecord.title }}</div>
+            <div class="project-date">{{ formatDate(viewingRecord.date) }}</div>
+          </div>
+        </div>
+        <el-descriptions :column="1" border class="detail-descriptions">
+          <el-descriptions-item label="记录类型">{{ typeLabel(viewingRecord.type) }}</el-descriptions-item>
+          <el-descriptions-item label="发生日期">{{ formatDate(viewingRecord.date) }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.description" label="描述">{{ viewingRecord.description }}</el-descriptions-item>
+
+          <el-descriptions-item v-if="viewingRecord.type === 'honor' && viewingRecord.honor_level" label="荣誉等级">{{ viewingRecord.honor_level }}</el-descriptions-item>
+
+          <el-descriptions-item v-if="viewingRecord.type === 'competition' && viewingRecord.organizer" label="主办方">{{ viewingRecord.organizer }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.type === 'competition' && viewingRecord.competition_level" label="竞赛等级">{{ viewingRecord.competition_level }}</el-descriptions-item>
+
+          <el-descriptions-item v-if="viewingRecord.type === 'practice' && viewingRecord.practice_type" label="实践类型">{{ viewingRecord.practice_type }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.type === 'practice' && viewingRecord.practice_certificate" label="荣誉证明">{{ viewingRecord.practice_certificate }}</el-descriptions-item>
+
+          <el-descriptions-item v-if="viewingRecord.type === 'paper' && viewingRecord.paper_name" label="论文题目">{{ viewingRecord.paper_name }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.type === 'paper' && viewingRecord.paper_type" label="期刊类型">{{ viewingRecord.paper_type }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.type === 'paper' && viewingRecord.first_author" label="第一作者">{{ viewingRecord.first_author }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.type === 'paper' && viewingRecord.second_author" label="第二作者">{{ viewingRecord.second_author }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.type === 'paper' && viewingRecord.third_author" label="第三作者">{{ viewingRecord.third_author }}</el-descriptions-item>
+
+          <el-descriptions-item v-if="viewingRecord.type === 'achievement' && viewingRecord.achievement_type" label="成果类型">{{ viewingRecord.achievement_type }}</el-descriptions-item>
+          <el-descriptions-item v-if="viewingRecord.type === 'achievement' && viewingRecord.achievement_name" label="成果名称">{{ viewingRecord.achievement_name }}</el-descriptions-item>
+
+          <el-descriptions-item label="证明材料">
+            <el-link v-if="viewingRecord.attachment_url" type="primary" :href="viewingRecord.attachment_url" target="_blank" :icon="Link">查看附件</el-link>
+            <span v-else class="detail-empty">无</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="recordDetailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="projectDetailVisible" title="项目详情" width="520px" class="growth-dialog">
+      <div v-if="viewingProject" class="project-detail">
+        <div class="detail-head">
+          <div class="project-icon" :class="viewingProject.is_team ? 'team' : 'solo'">
+            <el-icon :size="22"><UserFilled v-if="viewingProject.is_team" /><User v-else /></el-icon>
+          </div>
+          <div class="project-info">
+            <div class="project-name">{{ viewingProject.project_name }}</div>
+            <div class="project-date">{{ viewingProject.start_date }} ~ {{ viewingProject.end_date || '至今' }}</div>
+          </div>
+        </div>
+        <el-descriptions :column="1" border class="detail-descriptions">
+          <el-descriptions-item label="项目类型">
+            <el-tag :type="viewingProject.is_team ? 'primary' : 'success'" size="small" effect="dark" round>
+              {{ viewingProject.is_team ? '团队项目' : '个人项目' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="viewingProject.team_members" label="团队成员">{{ viewingProject.team_members }}</el-descriptions-item>
+          <el-descriptions-item label="开始日期">{{ viewingProject.start_date }}</el-descriptions-item>
+          <el-descriptions-item label="结束日期">{{ viewingProject.end_date || '进行中' }}</el-descriptions-item>
+          <el-descriptions-item label="项目成果">
+            <el-link v-if="viewingProject.attachment_url" type="primary" :href="viewingProject.attachment_url" target="_blank" :icon="Link">查看附件</el-link>
+            <span v-else class="detail-empty">无</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="projectDetailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="projectDialogVisible" :title="editingProject ? '编辑项目' : '添加项目'" width="500px">
       <el-form ref="projectFormRef" :model="projectForm" label-width="100px" :rules="projectRules">
@@ -511,6 +588,10 @@ async function saveSkills() {
 const projects = ref<StudentProject[]>([])
 const loaded = ref(false)
 const projectDialogVisible = ref(false)
+const projectDetailVisible = ref(false)
+const viewingProject = ref<StudentProject | null>(null)
+const recordDetailVisible = ref(false)
+const viewingRecord = ref<GrowthRecord | null>(null)
 const editingProject = ref<StudentProject | null>(null)
 const projectForm = ref<Record<string, any>>({
   project_name: '', start_date: '', end_date: null, is_team: false, team_members: '', attachment_url: '',
@@ -520,6 +601,16 @@ function openProjectDialog() {
   editingProject.value = null
   projectForm.value = { project_name: '', start_date: '', end_date: null, is_team: false, team_members: '', attachment_url: '' }
   projectDialogVisible.value = true
+}
+
+function viewProject(p: StudentProject) {
+  viewingProject.value = p
+  projectDetailVisible.value = true
+}
+
+function viewRecord(r: GrowthRecord) {
+  viewingRecord.value = r
+  recordDetailVisible.value = true
 }
 
 function editProject(p: StudentProject) {
@@ -1080,6 +1171,8 @@ async function handleAdd() {
 }
 .record-meta { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 4px; }
 .record-details { display: flex; gap: 8px; flex-wrap: wrap; }
+.record-more { margin-top: 2px; opacity: 0; transform: translateX(-6px); transition: all 0.15s ease; }
+.record-card:hover .record-more { opacity: 1; transform: translateX(0); }
 .detail-item {
   font-size: 12px;
   color: var(--text-muted);
@@ -1152,6 +1245,13 @@ async function handleAdd() {
 
 /* ===== Dialog overrides ===== */
 :deep(.el-dialog__body) { padding: 20px 24px; }
+
+/* ===== Project Detail ===== */
+.project-detail .detail-head {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+}
+.project-detail .detail-descriptions :deep(.el-descriptions__label) { font-weight: 600; }
+.detail-empty { color: var(--text-placeholder); }
 
 /* ===== Mobile ===== */
 @media (max-width: 767px) {
