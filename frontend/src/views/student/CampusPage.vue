@@ -611,7 +611,7 @@ onMounted(async () => {
 .entry-icon { font-size: 26px; display: block; }
 .entry-item p { font-size: 12px; color: #444; margin: 6px 0 0; }
 .imp-duo { display: flex; gap: 18px; margin-bottom: 22px; }
-.imp-card { flex: 1; background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 6px rgba(0,0,0,.04); transition: transform .18s ease, box-shadow .18s ease; }
+.imp-card { flex: 1; min-width: 0; background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 6px rgba(0,0,0,.04); transition: transform .18s ease, box-shadow .18s ease; }
 .imp-card-jx { flex: 1.5; }
 .imp-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .imp-card-title { font-size: 15px; font-weight: 700; color: #1a1a2e; border-left: 3px solid #409eff; padding-left: 8px; }

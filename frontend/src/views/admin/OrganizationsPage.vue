@@ -130,9 +130,9 @@
     <!-- 学院弹窗 -->
     <el-dialog v-model="collegeDialogVisible" :title="editingCollege ? '编辑学院' : '新增学院'" width="450px">
       <el-form :model="collegeForm" label-width="80px">
-        <el-form-item label="学院名称"><el-input v-model="collegeForm.name" /></el-form-item>
-        <el-form-item label="学院代码"><el-input v-model="collegeForm.code" placeholder="如 SE、DS" /></el-form-item>
-        <el-form-item label="描述"><el-input v-model="collegeForm.description" type="textarea" /></el-form-item>
+        <el-form-item label="学院名称" required><el-input v-model="collegeForm.name" placeholder="如：软件学院" /></el-form-item>
+        <el-form-item label="学院代码" required><el-input v-model="collegeForm.code" placeholder="如 SE、DS" /></el-form-item>
+        <el-form-item label="描述"><el-input v-model="collegeForm.description" type="textarea" placeholder="学院简介" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="collegeDialogVisible = false">取消</el-button>
@@ -143,14 +143,14 @@
     <!-- 专业弹窗 -->
     <el-dialog v-model="majorDialogVisible" :title="editingMajor ? '编辑专业' : '新增专业'" width="450px">
       <el-form :model="majorForm" label-width="80px">
-        <el-form-item label="所属学院">
-          <el-select v-model="majorForm.college_id" placeholder="请选择">
+        <el-form-item label="所属学院" required>
+          <el-select v-model="majorForm.college_id" placeholder="请选择学院">
             <el-option v-for="c in colleges" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="专业名称"><el-input v-model="majorForm.name" /></el-form-item>
-        <el-form-item label="专业代码"><el-input v-model="majorForm.code" /></el-form-item>
-        <el-form-item label="描述"><el-input v-model="majorForm.description" type="textarea" /></el-form-item>
+        <el-form-item label="专业名称" required><el-input v-model="majorForm.name" placeholder="如：软件工程" /></el-form-item>
+        <el-form-item label="专业代码" required><el-input v-model="majorForm.code" placeholder="如：SE01" /></el-form-item>
+        <el-form-item label="描述"><el-input v-model="majorForm.description" type="textarea" placeholder="专业简介" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="majorDialogVisible = false">取消</el-button>
@@ -161,13 +161,13 @@
     <!-- 班级弹窗 -->
     <el-dialog v-model="classGroupDialogVisible" :title="editingClassGroup ? '编辑班级' : '新增班级'" width="450px">
       <el-form :model="classGroupForm" label-width="80px">
-        <el-form-item label="所属专业">
-          <el-select v-model="classGroupForm.major_id" placeholder="请选择">
+        <el-form-item label="所属专业" required>
+          <el-select v-model="classGroupForm.major_id" placeholder="请选择专业">
             <el-option v-for="m in majors" :key="m.id" :label="`${m.college_name} - ${m.name}`" :value="m.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="年级"><el-input-number v-model="classGroupForm.grade" :min="2020" :max="2030" /></el-form-item>
-        <el-form-item label="班级名称"><el-input v-model="classGroupForm.name" placeholder="如 2024级软件工程1班" /></el-form-item>
+        <el-form-item label="班级名称" required><el-input v-model="classGroupForm.name" placeholder="如 2024级软件工程1班" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="classGroupDialogVisible = false">取消</el-button>

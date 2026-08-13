@@ -26,7 +26,7 @@
               <el-input v-model="form.content" type="textarea" :rows="5" placeholder="请详细描述您的问题或建议，越具体越有助于我们改进" maxlength="1000" show-word-limit />
             </el-form-item>
             <el-form-item label="联系方式">
-              <el-input v-model="form.contact" placeholder="手机号/邮箱（选填，方便我们联系您）" />
+              <el-input v-model="form.contact" placeholder="手机号/邮箱，方便我们联系您" />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="handleSubmit" :loading="submitting">提交反馈</el-button>

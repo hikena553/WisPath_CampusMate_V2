@@ -34,10 +34,10 @@
             <el-form-item label="姓名"><el-input v-model="editForm.name" disabled /></el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="学院"><el-input v-model="editForm.college" /></el-form-item>
+        <el-form-item label="学院"><el-input v-model="editForm.college" placeholder="请输入学院" /></el-form-item>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="班级"><el-input v-model="editForm.class_name" /></el-form-item>
+            <el-form-item label="班级"><el-input v-model="editForm.class_name" placeholder="请输入班级" /></el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="辅导员">

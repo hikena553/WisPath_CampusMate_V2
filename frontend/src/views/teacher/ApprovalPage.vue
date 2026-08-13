@@ -189,7 +189,7 @@
     <el-dialog v-model="rejectVisible" title="拒绝理由" width="420px" :close-on-click-modal="false">
       <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules">
         <el-form-item label="拒绝理由" prop="reason">
-          <el-input v-model="rejectForm.reason" type="textarea" :rows="3" placeholder="必填，请填写拒绝理由，如：请假天数超出规定" maxlength="200" show-word-limit />
+          <el-input v-model="rejectForm.reason" type="textarea" :rows="3" placeholder="请填写拒绝理由，如：请假天数超出规定" maxlength="200" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>

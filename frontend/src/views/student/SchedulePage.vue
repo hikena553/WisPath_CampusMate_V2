@@ -549,10 +549,10 @@
               <el-form-item label="项目名称" prop="project_name"><el-input v-model="projectForm.project_name" placeholder="请输入项目名称，如：基于大数据的智慧校园平台" /></el-form-item>
               <el-row :gutter="20">
                 <el-col :span="12"><el-form-item label="开始日期" prop="start_date"><el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" placeholder="请选择开始日期" /></el-form-item></el-col>
-                <el-col :span="12"><el-form-item label="结束日期"><el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" clearable placeholder="选填，不填表示进行中" /></el-form-item></el-col>
+                <el-col :span="12"><el-form-item label="结束日期"><el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" clearable placeholder="不填表示进行中" /></el-form-item></el-col>
               </el-row>
               <el-form-item label="是否团队"><el-switch v-model="projectForm.is_team" active-text="团队" inactive-text="个人" /></el-form-item>
-              <el-form-item v-if="projectForm.is_team" label="团队成员" prop="team_members"><el-input v-model="projectForm.team_members" placeholder="必填，逗号分隔，如：张三, 李四, 王五" /></el-form-item>
+              <el-form-item v-if="projectForm.is_team" label="团队成员" prop="team_members"><el-input v-model="projectForm.team_members" placeholder="逗号分隔，如：张三, 李四, 王五" /></el-form-item>
               <el-form-item label="项目成果"><UploadBtn v-model="projectForm.attachment_url" /></el-form-item>
             </el-form>
             <template #footer>
@@ -581,40 +581,40 @@
               </el-row>
               <template v-if="form.type === 'honor'">
                 <el-form-item label="荣誉等级" prop="honor_level"><el-select v-model="form.honor_level" placeholder="请选择荣誉等级" style="width:100%"><el-option label="校级" value="校级" /><el-option label="省级" value="省级" /><el-option label="国家级" value="国家级" /><el-option label="国际级" value="国际级" /></el-select></el-form-item>
-                <el-form-item label="荣誉名称" prop="title"><el-input v-model="form.title" placeholder="必填，例如：国家奖学金" /></el-form-item>
-                <el-form-item label="荣誉描述"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，颁发单位、获奖时间等" /></el-form-item>
+                <el-form-item label="荣誉名称" prop="title"><el-input v-model="form.title" placeholder="例如：国家奖学金" /></el-form-item>
+                <el-form-item label="荣誉描述"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="颁发单位、获奖时间等" /></el-form-item>
                 <el-form-item label="证明材料"><UploadBtn v-model="form.attachment_url" /></el-form-item>
               </template>
               <template v-if="form.type === 'competition'">
-                <el-form-item label="竞赛名称" prop="title"><el-input v-model="form.title" placeholder="必填，例如：ACM-ICPC国际大学生程序设计竞赛" /></el-form-item>
-                <el-form-item label="主办方"><el-input v-model="form.organizer" placeholder="选填，例如：ACM/ICPC组委会" /></el-form-item>
+                <el-form-item label="竞赛名称" prop="title"><el-input v-model="form.title" placeholder="例如：ACM-ICPC国际大学生程序设计竞赛" /></el-form-item>
+                <el-form-item label="主办方"><el-input v-model="form.organizer" placeholder="例如：ACM/ICPC组委会" /></el-form-item>
                 <el-form-item label="竞赛等级" prop="competition_level"><el-select v-model="form.competition_level" placeholder="请选择竞赛等级" style="width:100%"><el-option label="校级" value="校级" /><el-option label="省级" value="省级" /><el-option label="国家级" value="国家级" /><el-option label="国际级" value="国际级" /></el-select></el-form-item>
-                <el-form-item label="获奖情况"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，金奖/银奖/铜奖/一等奖等" /></el-form-item>
+                <el-form-item label="获奖情况"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="金奖/银奖/铜奖/一等奖等" /></el-form-item>
                 <el-form-item label="证明材料"><UploadBtn v-model="form.attachment_url" /></el-form-item>
               </template>
               <template v-if="form.type === 'practice'">
                 <el-form-item label="实践类型" prop="practice_type"><el-select v-model="form.practice_type" placeholder="请选择实践类型" style="width:100%"><el-option label="社会志愿活动" value="社会志愿活动" /><el-option label="三下乡" value="三下乡" /><el-option label="支教" value="支教" /><el-option label="西部计划" value="西部计划" /><el-option label="筑梦扬帆计划" value="筑梦扬帆计划" /><el-option label="其他社会实践" value="其他社会实践" /></el-select></el-form-item>
-                <el-form-item label="实践名称" prop="title"><el-input v-model="form.title" placeholder="必填，例如：暑期三下乡支教活动" /></el-form-item>
-                <el-form-item label="实践描述"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，实践内容、服务时长等" /></el-form-item>
-                <el-form-item label="荣誉证明"><el-input v-model="form.practice_certificate" type="textarea" :rows="2" placeholder="选填，优秀志愿者证书/表彰文件等" /></el-form-item>
+                <el-form-item label="实践名称" prop="title"><el-input v-model="form.title" placeholder="例如：暑期三下乡支教活动" /></el-form-item>
+                <el-form-item label="实践描述"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="实践内容、服务时长等" /></el-form-item>
+                <el-form-item label="荣誉证明"><el-input v-model="form.practice_certificate" type="textarea" :rows="2" placeholder="优秀志愿者证书/表彰文件等" /></el-form-item>
                 <el-form-item label="证明材料"><UploadBtn v-model="form.attachment_url" /></el-form-item>
               </template>
               <template v-if="form.type === 'paper'">
-                <el-form-item label="论文题目" prop="paper_name"><el-input v-model="form.paper_name" placeholder="必填，论文完整标题" /></el-form-item>
+                <el-form-item label="论文题目" prop="paper_name"><el-input v-model="form.paper_name" placeholder="论文完整标题" /></el-form-item>
                 <el-form-item label="期刊类型" prop="paper_type"><el-select v-model="form.paper_type" placeholder="请选择期刊类型" style="width:100%"><el-option label="普刊" value="普刊" /><el-option label="核心期刊" value="核心期刊" /><el-option label="SCI" value="SCI" /><el-option label="EI" value="EI" /><el-option label="顶刊" value="顶刊" /><el-option label="会议论文" value="会议论文" /></el-select></el-form-item>
                 <el-form-item label="第一作者"><el-input v-model="form.first_author" placeholder="姓名，如：张三" /></el-form-item>
                 <el-row :gutter="20">
-                  <el-col :span="12"><el-form-item label="第二作者"><el-input v-model="form.second_author" placeholder="姓名（选填）" /></el-form-item></el-col>
-                  <el-col :span="12"><el-form-item label="第三作者"><el-input v-model="form.third_author" placeholder="姓名（选填）" /></el-form-item></el-col>
+                  <el-col :span="12"><el-form-item label="第二作者"><el-input v-model="form.second_author" placeholder="姓名" /></el-form-item></el-col>
+                  <el-col :span="12"><el-form-item label="第三作者"><el-input v-model="form.third_author" placeholder="姓名" /></el-form-item></el-col>
                 </el-row>
-                <el-form-item label="备注"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，发表时间、期刊名称等" /></el-form-item>
+                <el-form-item label="备注"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="发表时间、期刊名称等" /></el-form-item>
                 <el-form-item label="证明材料"><UploadBtn v-model="form.attachment_url" /></el-form-item>
               </template>
               <template v-if="form.type === 'achievement'">
                 <el-form-item label="成果类型" prop="achievement_type"><el-select v-model="form.achievement_type" placeholder="请选择成果类型" style="width:100%"><el-option label="发明专利" value="发明专利" /><el-option label="实用新型专利" value="实用新型专利" /><el-option label="外观设计专利" value="外观设计专利" /><el-option label="软件著作权" value="软件著作权" /><el-option label="作品著作权" value="作品著作权" /></el-select></el-form-item>
-                <el-form-item label="成果名称" prop="achievement_name"><el-input v-model="form.achievement_name" placeholder="必填，专利/软著名称" /></el-form-item>
-                <el-form-item label="成果标题"><el-input v-model="form.title" placeholder="选填，简短标题（可选）" /></el-form-item>
-                <el-form-item label="成果描述"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="选填，授权号、申请日等信息" /></el-form-item>
+                <el-form-item label="成果名称" prop="achievement_name"><el-input v-model="form.achievement_name" placeholder="专利/软著名称" /></el-form-item>
+                <el-form-item label="成果标题"><el-input v-model="form.title" placeholder="简短标题" /></el-form-item>
+                <el-form-item label="成果描述"><el-input v-model="form.description" type="textarea" :rows="2" placeholder="授权号、申请日等信息" /></el-form-item>
                 <el-form-item label="证明材料"><UploadBtn v-model="form.attachment_url" /></el-form-item>
               </template>
             </el-form>

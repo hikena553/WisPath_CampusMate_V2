@@ -79,8 +79,8 @@
           </el-select>
         </el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="开始日期" prop="start_date"><el-date-picker v-model="leaveForm.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="结束日期" prop="end_date"><el-date-picker v-model="leaveForm.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="开始日期" prop="start_date"><el-date-picker v-model="leaveForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="结束日期" prop="end_date"><el-date-picker v-model="leaveForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width:100%" /></el-form-item></el-col>
         </el-row>
         <el-form-item label="请假理由" prop="reason"><el-input v-model="leaveForm.reason" type="textarea" :rows="3" placeholder="请详细描述请假原因" /></el-form-item>
       </el-form>
@@ -124,8 +124,8 @@
         <el-form-item label="项目名称" prop="title"><el-input v-model="projectForm.title" placeholder="请输入项目名称" /></el-form-item>
         <el-form-item label="指导老师"><el-input v-model="projectForm.advisor" placeholder="指导老师姓名" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="开始日期" prop="start_date"><el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="结束日期" prop="end_date"><el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="开始日期" prop="start_date"><el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="结束日期" prop="end_date"><el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width:100%" /></el-form-item></el-col>
         </el-row>
         <el-form-item label="项目简介" prop="content"><el-input v-model="projectForm.content" type="textarea" :rows="3" placeholder="请描述项目背景、目标" /></el-form-item>
       </el-form>
@@ -146,7 +146,7 @@
         </el-form-item>
         <el-form-item label="标题" prop="title"><el-input v-model="feedbackForm.title" placeholder="请简要描述" maxlength="100" show-word-limit /></el-form-item>
         <el-form-item label="详细内容" prop="content"><el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述" maxlength="1000" show-word-limit /></el-form-item>
-        <el-form-item label="联系方式"><el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱（选填）" /></el-form-item>
+        <el-form-item label="联系方式"><el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱，方便我们联系您" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="serviceDialogs.feedback = false">取消</el-button>
@@ -175,13 +175,13 @@
     <el-dialog v-model="showChangePassword" title="修改密码" width="400px" :close-on-click-modal="false">
       <el-form :model="passwordForm" label-width="100px">
         <el-form-item label="旧密码" required>
-          <el-input v-model="passwordForm.old_password" type="password" show-password />
+          <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
         </el-form-item>
         <el-form-item label="新密码" required>
-          <el-input v-model="passwordForm.new_password" type="password" show-password />
+          <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20位，建议包含字母和数字" />
         </el-form-item>
         <el-form-item label="确认新密码" required>
-          <el-input v-model="passwordForm.confirm_password" type="password" show-password />
+          <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入新密码" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -203,8 +203,8 @@
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="性别">
-              <el-select v-model="profileForm.gender" placeholder="请选择" style="width:100%">
+            <el-form-item label="性别" required>
+              <el-select v-model="profileForm.gender" placeholder="请选择性别" style="width:100%">
                 <el-option label="男" value="男" />
                 <el-option label="女" value="女" />
               </el-select>
@@ -212,14 +212,14 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="年龄">
-              <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" />
+              <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" placeholder="1-120" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-form-item label="学院"><el-input v-model="profileForm.college" disabled placeholder="请输入学院" /></el-form-item>
-        <el-form-item label="班级"><el-input v-model="profileForm.className" placeholder="请输入班级" /></el-form-item>
+        <el-form-item label="班级" required><el-input v-model="profileForm.className" placeholder="请输入班级" /></el-form-item>
         <el-form-item label="政治面貌">
-          <el-select v-model="profileForm.political_status" placeholder="请选择" style="width:100%">
+          <el-select v-model="profileForm.political_status" placeholder="请选择政治面貌" style="width:100%">
             <el-option label="群众" value="群众" />
             <el-option label="共青团员" value="共青团员" />
             <el-option label="中共预备党员" value="中共预备党员" />
@@ -231,7 +231,7 @@
             <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="请输入籍贯" /></el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="联系电话"><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
+            <el-form-item label="联系电话" required><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
           </el-col>
         </el-row>
         <el-form-item label="辅导员">

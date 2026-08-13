@@ -40,7 +40,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="物品名称" prop="title">
-          <el-input v-model="form.title" placeholder="必填，如：黑色钱包 / 蓝色水杯" maxlength="50" show-word-limit />
+          <el-input v-model="form.title" placeholder="如：黑色钱包 / 蓝色水杯" maxlength="50" show-word-limit />
         </el-form-item>
         <el-form-item label="详细描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="物品特征、品牌、内装物品等" />

@@ -86,8 +86,8 @@
             </el-row>
             <el-row :gutter="16">
               <el-col :span="12">
-                <el-form-item label="性别">
-                  <el-select v-model="profileForm.gender" placeholder="请选择" style="width:100%">
+                <el-form-item label="性别" required>
+                  <el-select v-model="profileForm.gender" placeholder="请选择性别" style="width:100%">
                     <el-option label="男" value="男" />
                     <el-option label="女" value="女" />
                   </el-select>
@@ -95,18 +95,18 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="年龄">
-                  <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" />
+                  <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" placeholder="1-120" />
                 </el-form-item>
               </el-col>
             </el-row>
             <el-form-item label="学院"><el-input v-model="profileForm.college" disabled /></el-form-item>
-            <el-form-item label="班级">
+            <el-form-item label="班级" required>
               <el-select v-model="profileForm.class_name" filterable allow-create default-first-option clearable placeholder="选择或输入班级" style="width:100%">
                 <el-option v-for="c in classOptions" :key="c" :label="c" :value="c" />
               </el-select>
             </el-form-item>
             <el-form-item label="政治面貌">
-              <el-select v-model="profileForm.political_status" placeholder="请选择" style="width:100%">
+              <el-select v-model="profileForm.political_status" placeholder="请选择政治面貌" style="width:100%">
                 <el-option label="中共党员" value="dangyuan" />
                 <el-option label="中共预备党员" value="yubei" />
                 <el-option label="共青团员" value="tuanyuan" />
@@ -123,15 +123,15 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="所属单位"><el-input v-model="profileForm.department" placeholder="所属单位" /></el-form-item>
+                <el-form-item label="所属单位"><el-input v-model="profileForm.department" placeholder="请输入所属单位" /></el-form-item>
               </el-col>
             </el-row>
             <el-row :gutter="12">
               <el-col :span="12">
-                <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="籍贯" /></el-form-item>
+                <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="请输入籍贯" /></el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="联系电话"><el-input v-model="profileForm.phone" placeholder="手机号" /></el-form-item>
+                <el-form-item label="联系电话" required><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
               </el-col>
             </el-row>
             <el-form-item label="辅导员">
@@ -176,13 +176,13 @@
     <el-dialog v-model="showChangePassword" title="修改密码" width="400px" :close-on-click-modal="false">
       <el-form :model="passwordForm" label-width="100px">
         <el-form-item label="旧密码" required>
-          <el-input v-model="passwordForm.old_password" type="password" show-password />
+          <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
         </el-form-item>
         <el-form-item label="新密码" required>
-          <el-input v-model="passwordForm.new_password" type="password" show-password />
+          <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20位，建议包含字母和数字" />
         </el-form-item>
         <el-form-item label="确认新密码" required>
-          <el-input v-model="passwordForm.confirm_password" type="password" show-password />
+          <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入新密码" />
         </el-form-item>
       </el-form>
       <template #footer>

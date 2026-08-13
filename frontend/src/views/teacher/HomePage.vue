@@ -299,7 +299,7 @@
       <p style="margin-bottom:12px;color:#666">日期：<strong>{{ selectedDateStr }}</strong></p>
       <el-form ref="scheduleFormRef" :model="{ content: scheduleContent }" :rules="scheduleRules">
         <el-form-item prop="content">
-          <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="必填，请输入日程内容，如：期中考试监考" />
+          <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="请输入日程内容，如：期中考试监考" />
         </el-form-item>
       </el-form>
       <template #footer>

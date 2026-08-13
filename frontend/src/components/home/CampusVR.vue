@@ -35,13 +35,13 @@
     <el-dialog v-model="showForm" title="添加标注点" width="400px">
       <el-form ref="poiFormRef" :model="poiForm" label-width="70px" :rules="poiRules">
         <el-form-item label="名称" prop="name">
-          <el-input v-model="poiForm.name" placeholder="必填，如：图书馆" />
+          <el-input v-model="poiForm.name" placeholder="如：图书馆" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="poiForm.description" type="textarea" :rows="3" placeholder="选填，简单描述该地点的用途或注意事项" />
+          <el-input v-model="poiForm.description" type="textarea" :rows="3" placeholder="简单描述该地点的用途或注意事项" />
         </el-form-item>
         <el-form-item label="类型" prop="type">
-          <el-select v-model="poiForm.type">
+          <el-select v-model="poiForm.type" placeholder="请选择类型" style="width:100%">
             <el-option label="教学楼" value="building" />
             <el-option label="食堂" value="food" />
             <el-option label="图书馆" value="library" />

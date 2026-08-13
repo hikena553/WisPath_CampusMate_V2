@@ -36,8 +36,8 @@
               </el-select>
             </el-form-item>
             <el-row :gutter="20">
-              <el-col :span="12"><el-form-item label="开始日期" prop="form_data.start_date"><el-date-picker v-model="form.form_data.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="12"><el-form-item label="结束日期" prop="form_data.end_date"><el-date-picker v-model="form.form_data.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="开始日期" prop="form_data.start_date"><el-date-picker v-model="form.form_data.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="结束日期" prop="form_data.end_date"><el-date-picker v-model="form.form_data.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width:100%" /></el-form-item></el-col>
             </el-row>
             <el-form-item label="请假理由" prop="content"><el-input v-model="form.content" type="textarea" :rows="3" placeholder="请详细描述请假原因" /></el-form-item>
             <template v-if="form.form_data.leave_type === '课假' || form.form_data.leave_type === '公假'">
@@ -88,8 +88,8 @@
             <el-form-item label="指导老师"><el-input v-model="form.form_data.advisor" placeholder="指导老师姓名" /></el-form-item>
             <el-form-item label="团队成员"><el-input v-model="form.form_data.team_members" placeholder="成员姓名（多个用逗号隔开）" /></el-form-item>
             <el-row :gutter="20">
-              <el-col :span="12"><el-form-item label="开始日期" prop="form_data.start_date"><el-date-picker v-model="form.form_data.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="12"><el-form-item label="结束日期" prop="form_data.end_date"><el-date-picker v-model="form.form_data.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="开始日期" prop="form_data.start_date"><el-date-picker v-model="form.form_data.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="结束日期" prop="form_data.end_date"><el-date-picker v-model="form.form_data.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width:100%" /></el-form-item></el-col>
             </el-row>
             <el-form-item label="预算（元）"><el-input-number v-model="form.form_data.budget" :min="0" :step="100" style="width:200px" /></el-form-item>
             <el-form-item label="项目简介" prop="content"><el-input v-model="form.content" type="textarea" :rows="4" placeholder="请描述项目背景、目标、预期成果" /></el-form-item>
@@ -122,7 +122,7 @@
             <el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述您的问题或建议" maxlength="1000" show-word-limit />
           </el-form-item>
           <el-form-item label="联系方式">
-            <el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱（选填，方便我们联系您）" />
+            <el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱，方便我们联系您" />
           </el-form-item>
           <el-form-item>
             <el-button type="primary" @click="handleSubmit" :loading="submitting">提交反馈</el-button>

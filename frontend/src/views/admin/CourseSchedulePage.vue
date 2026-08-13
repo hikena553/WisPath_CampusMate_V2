@@ -63,11 +63,11 @@
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="editingCourse ? '编辑课程' : '新增课程'" width="500px">
       <el-form :model="courseForm" label-width="80px">
-        <el-form-item label="课程名称"><el-input v-model="courseForm.name" /></el-form-item>
-        <el-form-item label="授课教师"><el-input v-model="courseForm.teacher" /></el-form-item>
-        <el-form-item label="上课地点"><el-input v-model="courseForm.location" /></el-form-item>
-        <el-form-item label="星期">
-          <el-select v-model="courseForm.day_of_week" style="width: 100%">
+        <el-form-item label="课程名称" required><el-input v-model="courseForm.name" placeholder="如：高等数学" /></el-form-item>
+        <el-form-item label="授课教师" required><el-input v-model="courseForm.teacher" placeholder="如：张老师" /></el-form-item>
+        <el-form-item label="上课地点" required><el-input v-model="courseForm.location" placeholder="如：教学楼A-301" /></el-form-item>
+        <el-form-item label="星期" required>
+          <el-select v-model="courseForm.day_of_week" placeholder="请选择星期" style="width: 100%">
             <el-option v-for="d in 5" :key="d" :label="'周' + ['一','二','三','四','五'][d-1]" :value="d" />
           </el-select>
         </el-form-item>
@@ -96,17 +96,17 @@
     <!-- 导入弹窗 -->
     <el-dialog v-model="importDialogVisible" title="导入课程表" width="550px">
       <el-form label-width="80px">
-        <el-form-item label="目标学院">
+        <el-form-item label="目标学院" required>
           <el-select v-model="importCollegeId" placeholder="选择学院" style="width: 100%">
             <el-option v-for="c in colleges" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="学期">
+        <el-form-item label="学期" required>
           <el-select v-model="importSemester" placeholder="选择学期" style="width: 100%">
             <el-option v-for="s in semesters" :key="s.value" :label="s.label" :value="s.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="上传文件">
+        <el-form-item label="上传文件" required>
           <el-upload
             ref="uploadRef"
             :auto-upload="false"
