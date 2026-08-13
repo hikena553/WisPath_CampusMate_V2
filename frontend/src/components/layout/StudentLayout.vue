@@ -100,7 +100,11 @@
               </el-col>
             </el-row>
             <el-form-item label="学院"><el-input v-model="profileForm.college" disabled /></el-form-item>
-            <el-form-item label="班级"><el-input v-model="profileForm.class_name" placeholder="班级" /></el-form-item>
+            <el-form-item label="班级">
+              <el-select v-model="profileForm.class_name" filterable allow-create default-first-option clearable placeholder="选择或输入班级" style="width:100%">
+                <el-option v-for="c in classOptions" :key="c" :label="c" :value="c" />
+              </el-select>
+            </el-form-item>
             <el-form-item label="政治面貌">
               <el-select v-model="profileForm.political_status" placeholder="请选择" style="width:100%">
                 <el-option label="中共党员" value="dangyuan" />
@@ -112,7 +116,11 @@
             </el-form-item>
             <el-row :gutter="12">
               <el-col :span="12">
-                <el-form-item label="职称"><el-input v-model="profileForm.title" placeholder="职称/职务" /></el-form-item>
+                <el-form-item label="职称">
+                  <el-select v-model="profileForm.title" filterable allow-create default-first-option clearable placeholder="选择或输入职称/职务" style="width:100%">
+                    <el-option v-for="t in titleOptions" :key="t" :label="t" :value="t" />
+                  </el-select>
+                </el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item label="所属单位"><el-input v-model="profileForm.department" placeholder="所属单位" /></el-form-item>
@@ -275,6 +283,10 @@ const profileForm = reactive({
   class_name: '',
   tutor_id: null as number | null,
 })
+
+const titleOptions = ['班长', '团支书', '学习委员', '组织委员', '宣传委员', '生活委员', '心理委员', '体育委员', '学生会主席', '学生会副主席', '学生会干事', '无']
+
+const classOptions = ['2023级软件工程1班', '2023级软件工程2班', '2024级软件工程1班', '2024级软件工程2班', '2024级计算机科学与技术1班', '2024级计算机科学与技术2班', '2024级数据科学与大数据技术1班', '2025级软件工程1班', '2025级计算机科学与技术1班']
 
 onMounted(async () => {
   try {
