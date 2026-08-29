@@ -167,6 +167,13 @@
       </Transition>
     </Teleport>
 
+    <!-- Voice Call Overlay -->
+    <VoiceCallOverlay
+      :visible="showVoiceCall"
+      :conversation-id="conversationId"
+      @close="showVoiceCall = false"
+    />
+
     <!-- Input Bar -->
     <div class="input-bar">
       <div class="input-container">
@@ -245,6 +252,18 @@
             </button>
           </el-tooltip>
 
+          <!-- Phone -->
+          <el-tooltip content="语音通话" placement="top">
+            <button
+              type="button"
+              class="action-icon-btn"
+              :disabled="loading"
+              @click="handlePhoneCall"
+            >
+              <el-icon :size="18"><Phone /></el-icon>
+            </button>
+          </el-tooltip>
+
           <!-- Send Button -->
           <button
             type="button"
@@ -276,12 +295,13 @@ import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, CopyDocument, EditPen, Operation, MagicStick, ArrowDown, Close, Delete,
+  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, Operation, MagicStick, ArrowDown, Close, Delete,
   DocumentChecked, Warning, UserFilled, FirstAidKit, Bell, OfficeBuilding, Trophy, Calendar, DataLine,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MianCharacter from './MianCharacter.vue'
 import DeepThinking from './DeepThinking.vue'
+import VoiceCallOverlay from './VoiceCallOverlay.vue'
 
 const { isMobile } = useResponsive()
 
@@ -292,7 +312,13 @@ const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false })
-const emit = defineEmits<{ toggleSidebar: [] }>()
+const emit = defineEmits<{ toggleSidebar: []; phoneCall: [] }>()
+const showVoiceCall = ref(false)
+
+function handlePhoneCall() {
+  showVoiceCall.value = true
+}
+
 const store = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore()
 const convStore = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
 const router = useRouter()
