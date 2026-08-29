@@ -4,6 +4,7 @@ import logging
 import mimetypes
 import httpx
 from fastapi import WebSocket
+from starlette.websockets import WebSocketDisconnect
 
 from app.services.llm_service import _get_client, _get_llm_config, build_system_prompt
 from app.models.user import User
@@ -13,7 +14,7 @@ from app.core.database import SessionLocal
 logger = logging.getLogger(__name__)
 
 
-async def dashscope_stt(audio_bytes: bytes, filename: str = "audio.webm") -> str:
+async def dashscope_stt(audio_bytes: bytes, filename: str = "audio.webm", client: httpx.AsyncClient | None = None) -> str:
     """调用 DashScope 语音识别 API"""
     config = _get_llm_config()
     if not config["api_key"]:
@@ -25,13 +26,18 @@ async def dashscope_stt(audio_bytes: bytes, filename: str = "audio.webm") -> str
     files = {"file": (filename, audio_bytes, mime_type)}
     data = {"model": "paraformer-v2"}
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    if client is not None:
         resp = await client.post(url, headers=headers, data=data, files=files)
         resp.raise_for_status()
         return resp.json().get("text", "")
+    else:
+        async with httpx.AsyncClient(timeout=30) as owned_client:
+            resp = await owned_client.post(url, headers=headers, data=data, files=files)
+            resp.raise_for_status()
+            return resp.json().get("text", "")
 
 
-async def dashscope_tts(text: str):
+async def dashscope_tts(text: str, client: httpx.AsyncClient | None = None):
     """调用 DashScope CosyVoice TTS，yield 音频块（PCM 16kHz 16bit mono）"""
     config = _get_llm_config()
     if not config["api_key"]:
@@ -52,12 +58,20 @@ async def dashscope_tts(text: str):
         },
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    if client is not None:
         async with client.stream("POST", url, headers=headers, json=payload) as resp:
             resp.raise_for_status()
             async for chunk in resp.aiter_bytes(4096):
                 if chunk:
                     yield chunk
+    else:
+        tts_timeout = httpx.Timeout(connect=10, read=120, write=10, pool=10)
+        async with httpx.AsyncClient(timeout=tts_timeout) as owned_client:
+            async with owned_client.stream("POST", url, headers=headers, json=payload) as resp:
+                resp.raise_for_status()
+                async for chunk in resp.aiter_bytes(4096):
+                    if chunk:
+                        yield chunk
 
 
 async def handle_voice_connection(
@@ -65,15 +79,21 @@ async def handle_voice_connection(
     user: User,
     conversation_id: int | None,
 ):
-    """语音通话主循环：接收音频 → STT → LLM → TTS → 回传"""
+    """语音通话主循环：接收音频 -> STT -> LLM -> TTS -> 回传"""
     audio_buffer = bytearray()
     history: list[dict] = []
 
-    # 如果有 conversation_id，加载历史消息
-    if conversation_id:
-        db = SessionLocal()
-        try:
-            # Verify ownership
+    # 单一数据库会话，贯穿整个连接生命周期
+    db = SessionLocal()
+    # 共享 HTTP 客户端，TTS 使用更长的超时
+    tts_timeout = httpx.Timeout(connect=10, read=120, write=10, pool=10)
+    http_client = httpx.AsyncClient(timeout=tts_timeout)
+
+    try:
+        await websocket.accept()
+
+        # 如果有 conversation_id，加载历史消息
+        if conversation_id:
             conv = db.query(Conversation).filter(
                 Conversation.id == conversation_id,
                 Conversation.user_id == user.id,
@@ -90,12 +110,9 @@ async def handle_voice_connection(
                 )
                 for m in msgs:
                     history.append({"role": m.role, "content": m.content})
-        finally:
-            db.close()
 
-    system_prompt = build_system_prompt(user)
+        system_prompt = build_system_prompt(user)
 
-    try:
         while True:
             raw = await websocket.receive_text()
             msg = json.loads(raw)
@@ -114,12 +131,11 @@ async def handle_voice_connection(
                 # 1. STT
                 await websocket.send_json({"type": "state", "state": "processing"})
                 try:
-                    text = await dashscope_stt(bytes(audio_buffer))
+                    text = await dashscope_stt(bytes(audio_buffer), client=http_client)
                 except Exception as e:
                     logger.exception("STT 失败")
-                    await websocket.send_json({"type": "error", "message": f"语音识别失败: {e}"})
+                    await websocket.send_json({"type": "error", "message": "语音识别失败，请重试"})
                     await websocket.send_json({"type": "state", "state": "listening"})
-                    audio_buffer.clear()
                     continue
                 finally:
                     audio_buffer.clear()
@@ -157,7 +173,7 @@ async def handle_voice_connection(
                 # 3. TTS
                 await websocket.send_json({"type": "state", "state": "speaking"})
                 try:
-                    async for audio_chunk in dashscope_tts(full_response):
+                    async for audio_chunk in dashscope_tts(full_response, client=http_client):
                         await websocket.send_json({
                             "type": "ai_audio",
                             "data": base64.b64encode(audio_chunk).decode(),
@@ -170,9 +186,12 @@ async def handle_voice_connection(
                 history.append({"role": "user", "content": text})
                 history.append({"role": "assistant", "content": full_response})
 
-                # 保存到数据库
+                # 历史上限，防止内存无限增长
+                if len(history) > 50:
+                    history = history[-50:]
+
+                # 保存到数据库（复用同一个 session）
                 if conversation_id:
-                    db = SessionLocal()
                     try:
                         db.add(ConversationMessage(conversation_id=conversation_id, role="user", content=text))
                         db.add(ConversationMessage(conversation_id=conversation_id, role="assistant", content=full_response))
@@ -180,13 +199,21 @@ async def handle_voice_connection(
                     except Exception:
                         db.rollback()
                         logger.exception("保存语音对话消息失败")
-                    finally:
-                        db.close()
 
                 await websocket.send_json({"type": "state", "state": "listening"})
 
             elif msg["type"] == "ping":
                 await websocket.send_json({"type": "pong"})
 
-    except Exception as e:
-        logger.info(f"语音连接关闭: {e}")
+    except WebSocketDisconnect:
+        logger.info("语音连接正常断开")
+    except Exception:
+        logger.exception("语音连接异常断开")
+    finally:
+        audio_buffer.clear()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+        await http_client.aclose()
+        db.close()
