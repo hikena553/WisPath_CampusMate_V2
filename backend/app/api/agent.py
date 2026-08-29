@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -32,8 +34,23 @@ async def chat_api(req: ChatRequest, user: User = Depends(get_current_user), db:
         db.refresh(conv)
         conv_id = conv.id
 
+    async def generate():
+        async for event in chat(req.message, req.history, user, conv_id=conv_id, file_url=req.file_url, deep_think=req.deep_think):
+            if isinstance(event, dict):
+                if event["type"] == "reasoning":
+                    yield f"event: reasoning\ndata: {json.dumps(event['content'], ensure_ascii=False)}\n\n"
+                elif event["type"] == "content":
+                    yield f"event: content\ndata: {json.dumps(event['content'], ensure_ascii=False)}\n\n"
+            else:
+                # 兼容旧的 __SUGGESTIONS__ 格式
+                if isinstance(event, str) and event.startswith("__SUGGESTIONS__:"):
+                    suggestions_data = event[len("__SUGGESTIONS__:"):]
+                    yield f"event: suggestions\ndata: {suggestions_data}\n\n"
+                else:
+                    yield event
+
     return StreamingResponse(
-        chat(req.message, req.history, user, conv_id=conv_id, file_url=req.file_url, deep_think=req.deep_think),
+        generate(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )

@@ -115,16 +115,24 @@ async def call_llm_with_tools(messages: list[dict], tools: list[dict]) -> tuple[
     return msg.content or "", None
 
 
-async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None):
-    """流式输出LLM响应，返回 ('chunk', 文本) 或 ('tool_calls', 列表) 或 ('done', 完整文本)。"""
+async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None, deep_think: bool = False):
+    """流式输出LLM响应，返回 ('chunk', 文本) 或 ('reasoning', 思考内容) 或 ('tool_calls', 列表) 或 ('done', 完整文本)。"""
     config = _get_llm_config()
     kwargs = {
-        "model": config['model'],
+        "model": config.get('agent_model') or config['model'],
         "messages": messages,
-        "temperature": config['temperature'],
         "stream": True,
-        "max_tokens": config.get('max_tokens', 4096),
     }
+
+    # 深度思考模式使用更大的 max_tokens（思考+正文共享）
+    if deep_think:
+        kwargs["max_tokens"] = config.get('max_tokens', 4096) * 2
+        kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+        logger.info("Deep think enabled, model: %s, extra_body: %s", kwargs["model"], kwargs["extra_body"])
+    else:
+        kwargs["max_tokens"] = config.get('max_tokens', 4096)
+        kwargs["temperature"] = config['temperature']
+
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
@@ -145,7 +153,12 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None)
         if not delta:
             continue
 
-        if delta.content:
+        # 使用 getattr 检测 reasoning_content
+        reasoning = getattr(delta, 'reasoning_content', None)
+        if reasoning:
+            logger.debug("yield reasoning: %s...", reasoning[:50])
+            yield ("reasoning", reasoning)
+        elif delta.content:
             content += delta.content
             yield ("chunk", delta.content)
 
@@ -192,7 +205,7 @@ async def generate_reply(prompt: str, user: User):
 
 
 async def chat(message: str, history: list[dict], user: User, conv_id: int | None = None, file_url: str | None = None, deep_think: bool = False):
-    system_prompt = build_system_prompt(user, deep_think=deep_think)
+    system_prompt = build_system_prompt(user)
 
     from app.services.student_profile_engine import get_latest_profile
     from app.services.conversation_memory import get_relevant_memories
@@ -228,20 +241,24 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
     try:
         tools = TOOL_DEFINITIONS if user.role == UserRole.STUDENT else TEACHER_TOOL_DEFINITIONS
         full_reply = ""
+        full_thinking = ""
         tool_calls_detected = None
 
-        stream = call_llm_stream(messages, tools)
+        stream = call_llm_stream(messages, tools, deep_think=deep_think)
         async for event_type, data in stream:
-            if event_type == "chunk":
+            if event_type == "reasoning":
+                full_thinking += data
+                yield {"type": "reasoning", "content": data}
+            elif event_type == "chunk":
                 full_reply += data
-                yield data
+                yield {"type": "content", "content": data}
             elif event_type == "tool_calls":
                 tool_calls_detected = data
                 break
             elif event_type == "done":
                 full_reply = data
             elif event_type == "error":
-                yield "抱歉，我暂时无法回答，请稍后再试。"
+                yield {"type": "content", "content": "抱歉，我暂时无法回答，请稍后再试。"}
                 return
 
         if tool_calls_detected:
@@ -264,11 +281,14 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
                 })
 
             full_reply = ""
-            second_stream = call_llm_stream(messages, [])
+            second_stream = call_llm_stream(messages, [], deep_think=deep_think)
             async for event_type2, data2 in second_stream:
-                if event_type2 == "chunk":
+                if event_type2 == "reasoning":
+                    full_thinking += data2
+                    yield {"type": "reasoning", "content": data2}
+                elif event_type2 == "chunk":
                     full_reply += data2
-                    yield data2
+                    yield {"type": "content", "content": data2}
                 elif event_type2 == "done":
                     full_reply = data2
 
@@ -289,7 +309,7 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
         await _try_extract_skills(message, user)
 
         # #16 持久化 AI 回复
-        _save_assistant_response(conv_id, full_reply, message, user)
+        _save_assistant_response(conv_id, full_reply, message, user, full_thinking)
 
     except Exception:
         logger.exception("AI对话处理异常")
@@ -369,7 +389,7 @@ async def _safe_summarize(db, conv_id: int):
         db.close()
 
 
-def _save_assistant_response(conv_id: int | None, reply: str, user_message: str, user: User):
+def _save_assistant_response(conv_id: int | None, reply: str, user_message: str, user: User, thinking: str = ""):
     if not conv_id:
         return
     db = SessionLocal()
@@ -377,7 +397,12 @@ def _save_assistant_response(conv_id: int | None, reply: str, user_message: str,
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
             return
-        db.add(ConversationMessage(conversation_id=conv_id, role="assistant", content=reply))
+        db.add(ConversationMessage(
+            conversation_id=conv_id,
+            role="assistant",
+            content=reply,
+            thinking_content=thinking if thinking else None,
+        ))
         if conv.title == "新对话" and user_message:
             clean = user_message.replace("\n", " ").replace("\r", "").strip()
             title = clean[:20] + ("…" if len(clean) > 20 else "")

@@ -114,8 +114,8 @@
               <div v-if="isImageMessage(msg)" class="bubble-image">
                 <img :src="extractImageUrl(msg)" @click="previewImage = extractImageUrl(msg)" />
               </div>
-              <div v-if="msg.content || msg.role === 'user'" class="msg-text">
-                <DeepThinking v-if="msg.role === 'assistant' && msg.thinking" :thinking="msg.thinking" />
+              <div v-if="msg.content || msg.thinking || msg.role === 'user'" class="msg-text">
+                <DeepThinking v-if="msg.role === 'assistant' && msg.thinking" :thinking="msg.thinking" :is-thinking="thinkingState === 'thinking' && msg.id === store.messages[store.messages.length - 1]?.id" />
                 <span v-html="renderMarkdown(msg.content)"></span>
               </div>
               <div v-else class="thinking-bubble">
@@ -195,7 +195,7 @@
             @input="autoResize"
             @keydown.enter.prevent="send"
           ></textarea>
-          <div v-if="inputCharCount > 0" class="char-counter" :class="{ warn: charRatio > 0.9, over: isOverLimit }">
+          <div class="char-counter" :class="{ warn: charRatio > 0.9, over: isOverLimit }">
             {{ inputCharCount.toLocaleString() }} / {{ MAX_INPUT_CHARS.toLocaleString() }}
           </div>
         </div>
@@ -288,6 +288,7 @@ const { isMobile } = useResponsive()
 const charState = ref<'idle' | 'thinking' | 'speaking'>('idle')
 const charBubble = ref('')
 const deepThinkEnabled = ref(false)
+const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false })
@@ -307,8 +308,10 @@ const editingOriginal = ref<string | null>(null)
 function autoResize() {
   const el = textareaRef.value
   if (!el) return
+  // 先设置为 auto 让浏览器重新计算 scrollHeight
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 160) + 'px'
+  // 然后设置为实际高度（最小24px，最大160px）
+  el.style.height = Math.max(24, Math.min(el.scrollHeight, 160)) + 'px'
 }
 
 watch(input, () => {
@@ -471,16 +474,68 @@ function extractImageUrl(msg: ChatMessage): string {
 
 function renderMarkdown(text: string): string {
   let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  html = html
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, (_match, label, url) => {
-      const safeUrl = url.replace(/"/g, '&quot;')
-      if (/^javascript:/i.test(safeUrl.trim())) {
-        return label
-      }
-      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="msg-link">${label}</a>`
+
+  // 代码块（```...```）
+  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
+    return `<pre class="msg-code-block"><code>${code.trim()}</code></pre>`
+  })
+
+  // 行内代码（`...`）
+  html = html.replace(/`([^`]+)`/g, '<code class="msg-inline-code">$1</code>')
+
+  // 表格
+  html = html.replace(/^(\|.+\|)\n(\|[\s\-:]+\|)\n((?:\|.+\|\n?)+)/gm, (_match, header, separator, body) => {
+    const headers = header.split('|').filter((c: string) => c.trim()).map((c: string) =>
+      `<th class="msg-th">${c.trim()}</th>`
+    )
+    const rows = body.trim().split('\n').map((row: string) => {
+      const cells = row.split('|').filter((c: string) => c.trim()).map((c: string) =>
+        `<td class="msg-td">${c.trim()}</td>`
+      )
+      return `<tr class="msg-tr">${cells.join('')}</tr>`
     })
-    .replace(/\n/g, '<br>')
+    return `<table class="msg-table"><thead><tr>${headers.join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`
+  })
+
+  // 标题（### ## #）
+  html = html.replace(/^### (.+)$/gm, '<h4 class="msg-h4">$1</h4>')
+  html = html.replace(/^## (.+)$/gm, '<h3 class="msg-h3">$1</h3>')
+  html = html.replace(/^# (.+)$/gm, '<h2 class="msg-h2">$1</h2>')
+
+  // 粗体 + 斜体（***...***）
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+
+  // 粗体（**...**）
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+
+  // 斜体（*...*）
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+
+  // 删除线（~~...~~）
+  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>')
+
+  // 引用（> ...）
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote class="msg-quote">$1</blockquote>')
+
+  // 无序列表（- 或 *）
+  html = html.replace(/^[\-\*] (.+)$/gm, '<li class="msg-li">$1</li>')
+  html = html.replace(/(<li class="msg-li">.*<\/li>\n?)+/g, '<ul class="msg-ul">$&</ul>')
+
+  // 有序列表（1. 2. 3.）
+  html = html.replace(/^\d+\. (.+)$/gm, '<li class="msg-li">$1</li>')
+
+  // 链接（[文本](URL)）
+  html = html.replace(/\[(.+?)\]\((.+?)\)/g, (_match, label, url) => {
+    const safeUrl = url.replace(/"/g, '&quot;')
+    if (/^javascript:/i.test(safeUrl.trim())) {
+      return label
+    }
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="msg-link">${label}</a>`
+  })
+
+  // 换行
+  html = html.replace(/\n/g, '<br>')
+
   return html
 }
 
@@ -569,48 +624,60 @@ async function send() {
   const history = store.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
 
   let lastAssistantContent = ''
+  let deepThinkingActive = deepThinkEnabled.value
+  thinkingState.value = 'idle'
 
   try {
     await sendChatMessage(
       text,
       history,
       (chunk) => {
+        // 深度思考完毕，开始接收回复内容
+        if (deepThinkingActive) {
+          deepThinkingActive = false
+          thinkingState.value = 'done'
+        }
+        // 开始接收正文时才关闭 loading
+        if (loading.value) {
+          loading.value = false
+        }
         const last = store.messages[store.messages.length - 1]
         if (last) {
-          if (deepThinkEnabled.value) {
-            last.content += chunk
-            const thinkMatch = last.content.match(/##思考过程\s*([\s\S]*?)##回答/)
-            const answerMatch = last.content.match(/##回答\s*([\s\S]*)/)
-            if (thinkMatch) last.thinking = thinkMatch[1].trim()
-            if (answerMatch) last.content = answerMatch[1].trim()
-          } else {
-            last.content += chunk
-          }
+          store.updateMessage(last.id, { content: last.content + chunk })
         }
         if (charState.value !== 'speaking') {
           charState.value = 'speaking'
           charBubble.value = ''
         }
+        scrollToBottom()
       },
       (full: string) => {
         loading.value = false
         charState.value = 'idle'
         charBubble.value = ''
-        if (deepThinkEnabled.value) {
-          const last = store.messages[store.messages.length - 1]
-          if (last) {
-            const thinkMatch = full.match(/##思考过程\s*([\s\S]*?)##回答/)
-            const answerMatch = full.match(/##回答\s*([\s\S]*)/)
-            if (thinkMatch) last.thinking = thinkMatch[1].trim()
-            if (answerMatch) last.content = answerMatch[1].trim()
-          }
-        }
         lastAssistantContent = full
         setTimeout(() => { charBubble.value = '有什么可以帮你的？' }, 500)
       },
       (suggestions) => {
         const last = store.messages[store.messages.length - 1]
-        if (last) last.suggestions = suggestions
+        if (last) {
+          store.updateMessage(last.id, { suggestions })
+        }
+      },
+      (reasoning) => {
+        // 进入思考状态
+        if (thinkingState.value === 'idle') {
+          thinkingState.value = 'thinking'
+        }
+        // 思考开始时关闭 loading 状态
+        if (loading.value) {
+          loading.value = false
+        }
+        const last = store.messages[store.messages.length - 1]
+        if (last) {
+          store.updateMessage(last.id, { thinking: (last.thinking || '') + reasoning })
+        }
+        scrollToBottom()
       },
       uploadedFileUrl || undefined,
       cid || undefined,
@@ -892,15 +959,17 @@ onUnmounted(() => {
 .msg-avatar-col :deep(.mc-name) { display: none; }
 
 .msg-bubble-col { max-width: 85%; min-width: 0; }
+.msg-row.assistant .msg-bubble-col { width: 85%; }
 .msg-row.user .msg-bubble-col { display: flex; flex-direction: column; align-items: flex-end; }
 
-.bubble { 
-  padding: 10px 14px; border-radius: 16px; line-height: 1.45; 
+.bubble {
+  padding: 10px 14px; border-radius: 16px; line-height: 1.45;
   font-size: 14px; word-break: break-word;
 }
 .bubble.assistant {
   background: #f0f4f9; color: #1a1a1a; border-bottom-left-radius: 4px;
   box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  width: 100%;
 }
 .bubble.user {
   background: linear-gradient(135deg, #409eff, #337ecc); color: #fff;
@@ -910,6 +979,87 @@ onUnmounted(() => {
 .bubble-image img { max-width: 240px; border-radius: 10px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
 .msg-text :deep(.msg-link) { color: #409eff; text-decoration: underline; }
 .bubble.user .msg-text :deep(a) { color: #fff; text-decoration: underline; }
+
+/* ── Markdown Styles ── */
+.msg-text :deep(.msg-code-block) {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.msg-text :deep(.msg-code-block code) {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+.msg-text :deep(.msg-inline-code) {
+  background: rgba(175, 184, 193, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: monospace;
+}
+.msg-text :deep(.msg-h2) {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin: 12px 0 8px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #eee;
+}
+.msg-text :deep(.msg-h3) {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 10px 0 6px 0;
+}
+.msg-text :deep(.msg-h4) {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 8px 0 4px 0;
+}
+.msg-text :deep(.msg-quote) {
+  border-left: 3px solid #ddd;
+  padding-left: 12px;
+  margin: 8px 0;
+  color: #666;
+  font-style: italic;
+}
+.msg-text :deep(.msg-ul) {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+.msg-text :deep(.msg-li) {
+  margin: 4px 0;
+  list-style-type: disc;
+}
+.msg-text :deep(.msg-table) {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 13px;
+}
+.msg-text :deep(.msg-th),
+.msg-text :deep(.msg-td) {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+.msg-text :deep(.msg-th) {
+  background: #f6f8fa;
+  font-weight: 600;
+}
+.msg-text :deep(.msg-tr:nth-child(even)) {
+  background: #f9f9f9;
+}
+.bubble.user .msg-text :deep(.msg-code-block) {
+  background: rgba(255, 255, 255, 0.2);
+}
+.bubble.user .msg-text :deep(.msg-inline-code) {
+  background: rgba(255, 255, 255, 0.2);
+}
 
 .msg-time { font-size: 11px; color: #bbb; margin-top: 4px; padding-left: 4px; }
 .msg-row.user .msg-time { padding-right: 4px; }
@@ -1063,6 +1213,7 @@ onUnmounted(() => {
   font-size: 15px; font-family: inherit; color: #1f2937; resize: none;
   line-height: 1.5; padding: 4px 6px; min-height: 24px; max-height: 160px;
   overflow-y: auto;
+  transition: height 0.3s ease;
 }
 .chat-textarea::placeholder { color: #9ca3af; }
 .chat-textarea::-webkit-scrollbar { width: 4px; }

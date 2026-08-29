@@ -72,19 +72,10 @@ def _get_client() -> AsyncOpenAI:
     return _client_instance
 
 
-def build_system_prompt(user: User | None = None, deep_think: bool = False) -> str:
+def build_system_prompt(user: User | None = None) -> str:
     role_name = {"student": "同学", "teacher": "老师", "admin": "管理员"}
     greeting = role_name.get(user.role.value, "同学") if user else "同学"
     college = f"，来自{user.college}" if user and user.college else ""
-
-    deep_think_instruction = ""
-    if deep_think:
-        deep_think_instruction = """
-## 深度思考模式
-请先进行推理思考，再用 ##思考过程 和 ##回答 两个部分输出。
-- ##思考过程：分析用户问题，逐步推理，考虑各种可能性
-- ##回答：给出最终答案
-思考过程要详细、有逻辑，回答要简洁直接。"""
 
     if user and user.role == UserRole.STUDENT:
         return f"""你是绵阳城市学院的智慧校园AI助手"绵小城"，{greeting}{college}的校园智能管家。
@@ -110,7 +101,7 @@ def build_system_prompt(user: User | None = None, deep_think: bool = False) -> s
 - 回答简洁，控制在150字以内
 - 信息模糊时反问补充，确认后再执行
 - 请假类型映射：比赛/竞赛→competition，生病→sick，事假/个人→personal，其他→other
-- 不知道的说"我需要向老师确认后回答你"{deep_think_instruction}"""
+- 不知道的说"我需要向老师确认后回答你" """
     else:
         return f"""你是绵阳城市学院的智慧校园AI助手"绵小城"，{greeting}{college}的教学管理助手。
 
@@ -127,7 +118,7 @@ def build_system_prompt(user: User | None = None, deep_think: bool = False) -> s
 - 审批操作前向教师确认，避免误操作
 - 回答简洁专业，控制在200字以内
 - 教师说"分析这个请假" → 用 analyze_leave 进行AI分析
-- 不知道的说"我需要确认后回答你"{deep_think_instruction}"""
+- 不知道的说"我需要确认后回答你" """
 
 
 def speech_to_text(audio_bytes: bytes, filename: str) -> str:

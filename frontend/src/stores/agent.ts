@@ -36,6 +36,13 @@ function createAgentStore(role: 'student' | 'teacher') {
       messages.value.push(msg)
     }
 
+    function updateMessage(id: string, patch: Partial<ChatMessage>) {
+      const msg = messages.value.find(m => m.id === id)
+      if (msg) {
+        Object.assign(msg, patch)
+      }
+    }
+
     function replaceMessages(msgs: ChatMessage[]) {
       messages.value = msgs
       localStorage.setItem(storageKey, JSON.stringify(msgs.slice(-100)))
@@ -46,7 +53,7 @@ function createAgentStore(role: 'student' | 'teacher') {
       localStorage.removeItem(storageKey)
     }
 
-    return { messages, loading, addMessage, replaceMessages, clearMessages }
+    return { messages, loading, addMessage, updateMessage, replaceMessages, clearMessages }
   })
 }
 

@@ -51,6 +51,7 @@ pip-delete-this-directory.txt
 .env
 .env.*
 !.env.example
+backend/.env
 
 # ---------- Node / Frontend (Vue 3 + Vite) ----------
 node_modules/

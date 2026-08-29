@@ -2,8 +2,7 @@
   <div class="deep-thinking">
     <div class="dt-header" @click="expanded = !expanded">
       <el-icon :size="14" :class="['dt-arrow', { expanded }]"><ArrowRight /></el-icon>
-      <span class="dt-label">思考过程</span>
-      <el-tag size="small" effect="plain" type="warning" style="margin-left:6px">深度思考</el-tag>
+      <span class="dt-label">深度思考<span v-if="!isThinking && elapsed > 0">（已用时 {{ elapsed }} 秒）</span></span>
     </div>
     <Transition name="dt-expand">
       <div v-if="expanded" class="dt-body">
@@ -14,11 +13,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 
-defineProps<{ thinking: string }>()
+const props = defineProps<{
+  thinking: string
+  isThinking?: boolean
+}>()
 
 const expanded = ref(false)
+const elapsed = ref(0)
+let timer: ReturnType<typeof setInterval> | null = null
+
+// 当有思考内容时自动展开
+watch(() => props.thinking, (newVal) => {
+  if (newVal && !expanded.value) {
+    expanded.value = true
+  }
+}, { immediate: true })
+
+// 思考开始时启动计时器
+watch(() => props.isThinking, (newVal) => {
+  if (newVal) {
+    elapsed.value = 0
+    timer = setInterval(() => {
+      elapsed.value++
+    }, 1000)
+  } else {
+    if (timer) {
+      clearInterval(timer)
+      timer = null
+    }
+  }
+}, { immediate: true })
+
+// 思考完成时自动折叠
+watch(() => props.isThinking, (newVal, oldVal) => {
+  if (oldVal === true && newVal === false) {
+    expanded.value = false
+  }
+})
+
+onUnmounted(() => {
+  if (timer) {
+    clearInterval(timer)
+  }
+})
 
 function renderThinking(text: string): string {
   let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
