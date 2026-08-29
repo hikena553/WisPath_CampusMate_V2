@@ -8,6 +8,7 @@ export interface UseVoiceCallOptions {
   onStateChange?: (state: VoiceState) => void
   onAudioLevel?: (level: number) => void
   onAIText?: (text: string) => void
+  onTranscript?: (text: string, final: boolean) => void
   onError?: (message: string) => void
 }
 
@@ -110,7 +111,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   function handleServerMessage(msg: Record<string, unknown>) {
     switch (msg.type) {
       case 'transcript':
-        // 用户语音识别结果（可用于字幕显示）
+        if (msg.text) {
+          options.onTranscript?.(msg.text as string, msg.final as boolean)
+        }
         break
 
       case 'ai_text':

@@ -5,20 +5,11 @@
         <div class="voice-container">
           <!-- 顶部导航 -->
           <div class="voice-top-bar">
-            <div class="top-left">
-              <button class="top-btn" disabled>
-                <el-icon :size="20"><MoreFilled /></el-icon>
-              </button>
-            </div>
-            <div class="top-center">
-              <div class="top-label">
-                <el-icon :size="14"><ChatDotRound /></el-icon>
-                <span>绵小城助手</span>
-              </div>
-            </div>
+            <div class="top-left" />
+            <div class="top-center" />
             <div class="top-right">
-              <button class="top-btn text-btn" @click="handleClose" title="切换到文字模式">
-                字
+              <button class="top-btn end-top-btn" @click="handleClose" title="结束通话">
+                <el-icon :size="20"><CloseBold /></el-icon>
               </button>
             </div>
           </div>
@@ -65,23 +56,41 @@
               <div v-if="isMuted" class="btn-slash" />
             </button>
 
-            <!-- 演示（禁用） -->
-            <button class="control-btn" disabled>
-              <el-icon :size="24"><Document /></el-icon>
-              <div class="btn-slash" />
-            </button>
-
-            <!-- 摄像头（禁用） -->
-            <button class="control-btn" disabled>
-              <el-icon :size="24"><VideoCamera /></el-icon>
-              <div class="btn-slash" />
-            </button>
-
-            <!-- 结束通话 -->
-            <button class="control-btn end-btn" @click="handleClose">
-              <el-icon :size="24"><CloseBold /></el-icon>
+            <!-- 对话记录 -->
+            <button
+              :class="['control-btn', { active: showChatPanel }]"
+              @click="showChatPanel = !showChatPanel"
+            >
+              <el-icon :size="24"><ChatDotRound /></el-icon>
             </button>
           </div>
+
+          <!-- 液态玻璃对话框 -->
+          <Transition name="glass-panel">
+            <div v-if="showChatPanel" class="glass-overlay" @click.self="showChatPanel = false">
+              <div class="glass-panel">
+                <div class="glass-header">
+                  <span>对话记录</span>
+                  <button class="glass-close" @click="showChatPanel = false">
+                    <el-icon :size="16"><CloseBold /></el-icon>
+                  </button>
+                </div>
+                <div class="glass-body" ref="chatListRef">
+                  <div v-if="chatHistory.length === 0" class="glass-empty">
+                    暂无对话记录
+                  </div>
+                  <div
+                    v-for="(entry, i) in chatHistory"
+                    :key="i"
+                    :class="['glass-msg', entry.role]"
+                  >
+                    <div class="glass-msg-role">{{ entry.role === 'user' ? '你' : '绵小城' }}</div>
+                    <div class="glass-msg-text">{{ entry.text }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Transition>
 
           <!-- 底部声明 -->
           <p class="voice-disclaimer">内容由 AI 生成</p>
@@ -92,11 +101,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted } from 'vue'
+import { ref, watch, computed, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Microphone, Document, VideoCamera, CloseBold,
-  MoreFilled, ChatDotRound,
+  Microphone, CloseBold, ChatDotRound,
 } from '@element-plus/icons-vue'
 import { useVoiceCall, type VoiceState } from '@/composables/useVoiceCall'
 import { useAudioVisualizer } from '@/composables/useAudioVisualizer'
@@ -113,14 +121,51 @@ const isMuted = ref(false)
 const errorMsg = ref('')
 const aiSubtitle = ref('')
 const audioLevel = ref(0)
+const showChatPanel = ref(false)
+const chatListRef = ref<HTMLElement>()
+
+// 对话历史记录
+interface ChatEntry { role: 'user' | 'assistant'; text: string }
+const chatHistory = ref<ChatEntry[]>([])
+
+// 自动滚动到底部
+function scrollChatToBottom() {
+  nextTick(() => {
+    if (chatListRef.value) {
+      chatListRef.value.scrollTop = chatListRef.value.scrollHeight
+    }
+  })
+}
+
+watch(chatHistory, scrollChatToBottom, { deep: true })
 
 const { frequencyData, connect, disconnect: disconnectVisualizer } = useAudioVisualizer(9)
 
 const { state, isMuted: voiceMuted, startCall, endCall, toggleMute } = useVoiceCall({
   get conversationId() { return props.conversationId },
-  onStateChange: (s) => { callState.value = s },
+  onStateChange: (s) => {
+    callState.value = s
+    // 当从 processing 变为 speaking 时，开始新的 AI 回复
+    if (s === 'speaking') {
+      aiSubtitle.value = ''
+    }
+  },
   onAudioLevel: (level) => { audioLevel.value = level },
-  onAIText: (text) => { aiSubtitle.value += text },
+  onTranscript: (text, final) => {
+    if (final && text.trim()) {
+      // 用户说完，添加到对话历史
+      chatHistory.value.push({ role: 'user', text })
+    }
+  },
+  onAIText: (text) => {
+    aiSubtitle.value += text
+    // 实时更新最后一条 AI 消息
+    if (chatHistory.value.length > 0 && chatHistory.value[chatHistory.value.length - 1].role === 'assistant') {
+      chatHistory.value[chatHistory.value.length - 1].text = aiSubtitle.value
+    } else {
+      chatHistory.value.push({ role: 'assistant', text: aiSubtitle.value })
+    }
+  },
   onError: (msg) => { errorMsg.value = msg },
 })
 
@@ -225,7 +270,6 @@ onUnmounted(() => {
 
 .voice-container {
   width: 100%;
-  max-width: 420px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -282,20 +326,18 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.7);
 }
 
+.end-top-btn {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.end-top-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
 .top-center {
   display: flex;
   justify-content: center;
-}
-
-.top-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(99, 102, 241, 0.2);
-  border-radius: 20px;
-  padding: 6px 16px;
-  color: #a5b4fc;
-  font-size: 13px;
 }
 
 /* 中央可视化区 */
@@ -405,15 +447,6 @@ onUnmounted(() => {
   border-radius: 1px;
 }
 
-.end-btn {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-.end-btn:hover {
-  background: rgba(239, 68, 68, 0.25);
-}
-
 /* 底部声明 */
 .voice-disclaimer {
   text-align: center;
@@ -441,12 +474,144 @@ onUnmounted(() => {
   opacity: 0;
 }
 
+/* 液态玻璃对话框 */
+.glass-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+.glass-panel {
+  width: 90%;
+  max-width: 480px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.glass-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.glass-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.glass-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.glass-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.glass-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.glass-empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+.glass-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  line-height: 1.5;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.glass-msg.user {
+  align-self: flex-end;
+  background: rgba(99, 102, 241, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  border-bottom-right-radius: 4px;
+}
+
+.glass-msg.assistant {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  border-bottom-left-radius: 4px;
+}
+
+.glass-msg-role {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 4px;
+}
+
+.glass-msg-text {
+  white-space: pre-wrap;
+}
+
+/* 液态玻璃面板动画 */
+.glass-panel-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.glass-panel-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.glass-panel-enter-from {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.glass-panel-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
 /* 移动端适配 */
 @media (max-width: 767px) {
-  .voice-container {
-    max-width: 100%;
-  }
-
   .voice-controls {
     gap: 16px;
   }
@@ -454,6 +619,11 @@ onUnmounted(() => {
   .control-btn {
     width: 52px;
     height: 52px;
+  }
+
+  .glass-panel {
+    width: 95%;
+    max-height: 75vh;
   }
 }
 </style>
