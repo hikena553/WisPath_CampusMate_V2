@@ -1,6 +1,7 @@
 import json
 import base64
 import logging
+import mimetypes
 import httpx
 from fastapi import WebSocket
 
@@ -20,10 +21,12 @@ async def dashscope_stt(audio_bytes: bytes, filename: str = "audio.webm") -> str
 
     url = f"{config['base_url'].rstrip('/')}/audio/transcriptions"
     headers = {"Authorization": f"Bearer {config['api_key']}"}
-    files = {"file": (filename, audio_bytes, "audio/webm")}
+    mime_type = mimetypes.guess_type(filename)[0] or "audio/webm"
+    files = {"file": (filename, audio_bytes, mime_type)}
+    data = {"model": "paraformer-v2"}
 
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(url, headers=headers, files=files)
+        resp = await client.post(url, headers=headers, data=data, files=files)
         resp.raise_for_status()
         return resp.json().get("text", "")
 
@@ -70,14 +73,23 @@ async def handle_voice_connection(
     if conversation_id:
         db = SessionLocal()
         try:
-            msgs = (
-                db.query(ConversationMessage)
-                .filter(ConversationMessage.conversation_id == conversation_id)
-                .order_by(ConversationMessage.id)
-                .all()
-            )
-            for m in msgs:
-                history.append({"role": m.role, "content": m.content})
+            # Verify ownership
+            conv = db.query(Conversation).filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user.id,
+            ).first()
+            if not conv:
+                logger.warning(f"对话 {conversation_id} 不属于用户 {user.id}")
+                conversation_id = None
+            else:
+                msgs = (
+                    db.query(ConversationMessage)
+                    .filter(ConversationMessage.conversation_id == conversation_id)
+                    .order_by(ConversationMessage.id)
+                    .all()
+                )
+                for m in msgs:
+                    history.append({"role": m.role, "content": m.content})
         finally:
             db.close()
 
