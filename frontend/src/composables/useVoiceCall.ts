@@ -34,6 +34,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let silenceFrames = 0
   let speechFrames = 0
   let isSpeaking = false
+  let audioQueue: ArrayBuffer[] = []
+  let isPlaying = false
+  let nextPlayTime = 0
 
   const VAD_ENERGY_THRESHOLD = 0.02
   const VAD_SPEECH_FRAMES = 3
@@ -131,6 +134,10 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       case 'state':
         if (msg.state === 'listening') {
           setState('listening')
+          // 重置音频播放时间，避免与下一次TTS重叠
+          if (playbackAudioCtx) {
+            nextPlayTime = playbackAudioCtx.currentTime
+          }
         } else if (msg.state === 'processing') {
           setState('processing')
         } else if (msg.state === 'speaking') {
@@ -161,6 +168,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   async function playAudioChunk(buffer: ArrayBuffer) {
     if (!playbackAudioCtx) {
       playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
+      nextPlayTime = playbackAudioCtx.currentTime
     }
 
     // PCM 16bit mono → AudioBuffer
@@ -173,10 +181,17 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     const audioBuffer = playbackAudioCtx.createBuffer(1, float32.length, 16000)
     audioBuffer.getChannelData(0).set(float32)
 
+    // 使用调度播放，确保音频块按顺序播放，不会重叠
     const source = playbackAudioCtx.createBufferSource()
     source.buffer = audioBuffer
     source.connect(playbackAudioCtx.destination)
-    source.start()
+
+    // 计算播放时间：确保在上一个块结束后开始
+    const startTime = Math.max(nextPlayTime, playbackAudioCtx.currentTime)
+    source.start(startTime)
+
+    // 更新下一块的开始时间
+    nextPlayTime = startTime + audioBuffer.duration
   }
 
   async function startCapture() {

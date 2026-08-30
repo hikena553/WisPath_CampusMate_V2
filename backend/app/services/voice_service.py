@@ -108,6 +108,17 @@ async def dashscope_tts(text: str, client: httpx.AsyncClient | None = None):
                         yield chunk
 
 
+async def safe_send_json(websocket: WebSocket, data: dict) -> bool:
+    """安全地发送JSON消息，如果连接已关闭则返回False"""
+    try:
+        if websocket.client_state.CONNECTED:
+            await websocket.send_json(data)
+            return True
+    except Exception:
+        logger.debug("WebSocket发送失败，连接可能已关闭")
+    return False
+
+
 async def handle_voice_connection(
     websocket: WebSocket,
     user: User,
@@ -161,22 +172,23 @@ async def handle_voice_connection(
                     continue
 
                 # 1. STT
-                await websocket.send_json({"type": "state", "state": "processing"})
+                if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
+                    break
                 try:
                     text = await dashscope_stt(bytes(audio_buffer), client=http_client)
                 except Exception as e:
                     logger.exception("STT 失败")
-                    await websocket.send_json({"type": "error", "message": "语音识别失败，请重试"})
-                    await websocket.send_json({"type": "state", "state": "listening"})
+                    await safe_send_json(websocket, {"type": "error", "message": "语音识别失败，请重试"})
+                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
                     continue
                 finally:
                     audio_buffer.clear()
 
                 if not text or not text.strip():
-                    await websocket.send_json({"type": "state", "state": "listening"})
+                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
                     continue
 
-                await websocket.send_json({"type": "transcript", "text": text, "final": True})
+                await safe_send_json(websocket, {"type": "transcript", "text": text, "final": True})
 
                 # 2. LLM
                 messages = [{"role": "system", "content": system_prompt}]
@@ -185,31 +197,34 @@ async def handle_voice_connection(
 
                 full_response = ""
                 try:
-                    async for chunk in _get_client().chat.completions.create(
+                    stream = await _get_client().chat.completions.create(
                         model=_get_llm_config()["model"],
                         messages=messages,
                         stream=True,
                         temperature=0.7,
                         max_tokens=1024,
-                    ):
+                    )
+                    async for chunk in stream:
                         delta = chunk.choices[0].delta if chunk.choices else None
                         if delta and delta.content:
                             full_response += delta.content
-                            await websocket.send_json({"type": "ai_text", "text": delta.content})
+                            if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
+                                break
                 except Exception as e:
                     logger.exception("LLM 失败")
-                    await websocket.send_json({"type": "error", "message": "AI 回复失败"})
-                    await websocket.send_json({"type": "state", "state": "listening"})
+                    await safe_send_json(websocket, {"type": "error", "message": "AI 回复失败"})
+                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
                     continue
 
                 # 3. TTS
-                await websocket.send_json({"type": "state", "state": "speaking"})
+                await safe_send_json(websocket, {"type": "state", "state": "speaking"})
                 try:
                     async for audio_chunk in dashscope_tts(full_response, client=http_client):
-                        await websocket.send_json({
+                        if not await safe_send_json(websocket, {
                             "type": "ai_audio",
                             "data": base64.b64encode(audio_chunk).decode(),
-                        })
+                        }):
+                            break
                 except Exception as e:
                     logger.exception("TTS 失败")
                     # TTS 失败不阻断，文字已发送
@@ -237,10 +252,10 @@ async def handle_voice_connection(
                         db.rollback()
                         logger.exception("保存语音对话消息失败")
 
-                await websocket.send_json({"type": "state", "state": "listening"})
+                await safe_send_json(websocket, {"type": "state", "state": "listening"})
 
             elif msg["type"] == "ping":
-                await websocket.send_json({"type": "pong"})
+                await safe_send_json(websocket, {"type": "pong"})
 
     except WebSocketDisconnect:
         logger.info("语音连接正常断开")
