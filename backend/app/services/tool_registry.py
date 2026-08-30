@@ -1,5 +1,5 @@
 import json, re, httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
@@ -396,6 +396,19 @@ def _create_leave(db: Session, args: dict, user: User) -> dict:
         missing.append("reason（请假原因）")
     if missing:
         return {"success": False, "message": f"缺少必要参数：{', '.join(missing)}，请补充完整后重试"}
+
+    try:
+        start_d = date.fromisoformat(str(start_date)[:10])
+        end_d = date.fromisoformat(str(end_date)[:10])
+    except ValueError:
+        return {"success": False, "message": "日期格式不正确，请使用 YYYY-MM-DD 格式"}
+    today = date.today()
+    if start_d < today:
+        return {"success": False, "message": "开始日期不能早于今天"}
+    if end_d < start_d:
+        return {"success": False, "message": "结束日期不能早于开始日期"}
+    if (end_d - start_d).days > 14:
+        return {"success": False, "message": "请假时长不能超过15天"}
 
     leave = LeaveRequest(
         student_id=user.id,

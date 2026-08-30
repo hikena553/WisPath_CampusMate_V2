@@ -146,7 +146,7 @@
                       <el-icon class="is-loading" :size="14"><Loading /></el-icon>
                       <span>正在更新...</span>
                     </div>
-                    <div v-html="scheduleRendered"></div>
+                    <div v-html="scheduleHtml"></div>
                   </div>
                   <div v-else-if="scheduleLoading" class="ai-loading-card">
                     <div class="ai-loading-header">
@@ -328,7 +328,7 @@
                 <el-icon class="is-loading" :size="14"><Loading /></el-icon>
                 <span>正在更新...</span>
               </div>
-              <div class="ai-result-content" v-html="gradeRendered"></div>
+              <div class="ai-result-content" v-html="gradeHtml"></div>
             </div>
             <div v-else-if="gradeLoading" class="ai-loading-card">
               <div class="ai-loading-header">
@@ -394,6 +394,7 @@
                   <div class="panel-divider"></div>
                   <div class="panel panel-bar">
                     <div class="panel-title"><el-icon><Histogram /></el-icon>成长类型分布</div>
+                    <div class="chart-unit">单位：数量</div>
                     <v-chart v-if="profile?.stats_by_type?.length" :option="growthBarOption" class="chart bar-chart" autoresize />
                     <el-empty v-else description="暂无数据" :image-size="48" />
                   </div>
@@ -410,12 +411,14 @@
                 <div class="analytics-body duo">
                   <div class="panel">
                     <div class="panel-title"><el-icon><TrendCharts /></el-icon>成长趋势</div>
+                    <div class="chart-unit">单位：记录数</div>
                     <v-chart v-if="profile?.monthly_trend?.length" :option="growthLineOption" class="chart line-chart" autoresize />
                     <el-empty v-else description="暂无数据" :image-size="48" />
                   </div>
                   <div class="panel-divider"></div>
                   <div class="panel">
                     <div class="panel-title"><el-icon><DataLine /></el-icon>学习绩点轨迹</div>
+                    <div class="chart-unit">单位：绩点</div>
                     <v-chart v-if="profile?.gpa_trend?.length" :option="gpaOption" class="chart line-chart" autoresize />
                     <el-empty v-else description="暂无数据" :image-size="48" />
                   </div>
@@ -457,12 +460,12 @@
                   </div>
                   <!-- 自定义添加 -->
                   <div class="tag-input-row">
-                    <el-radio-group v-model="customType" size="small">
+                    <el-radio-group v-model="customType">
                       <el-radio-button value="skill">技能</el-radio-button>
                       <el-radio-button value="interest">兴趣</el-radio-button>
                     </el-radio-group>
-                    <el-input v-model="newTag" placeholder="自定义标签" size="small" @keyup.enter="addCustomTag" />
-                    <el-button size="small" type="primary" @click="addCustomTag">添加</el-button>
+                    <el-input v-model="newTag" placeholder="自定义标签" @keyup.enter="addCustomTag" />
+                    <el-button type="primary" @click="addCustomTag">添加</el-button>
                   </div>
                 </div>
               </div>
@@ -517,12 +520,12 @@
                 <div class="section-header">
                   <span><el-icon style="margin-right:6px"><FolderOpened /></el-icon> 项目展示 <el-tag v-if="projects.length" size="small" type="info" effect="plain" style="margin-left:8px">{{ projects.length }}</el-tag></span>
                   <div style="display:flex;gap:8px">
-                    <el-button v-if="projects.length > 2" size="small" text type="primary" @click="allProjectsVisible = true">查看全部</el-button>
+                    <el-button v-if="projects.length > 3" size="small" text type="primary" @click="showAllProjects = !showAllProjects">{{ showAllProjects ? '收起' : '展开更多' }}</el-button>
                     <el-button type="primary" size="small" @click="openProjectDialog">添加项目</el-button>
                   </div>
                 </div>
-                <div v-if="projects.length" class="project-grid project-scroll">
-                  <div v-for="p in projects.slice(0, 2)" :key="p.id" class="project-card">
+                <div v-if="projects.length" class="project-grid">
+                  <div v-for="p in visibleProjects" :key="p.id" class="project-card">
                     <div class="project-top">
                       <div class="project-icon" :class="p.is_team ? 'team' : 'solo'">
                         <el-icon :size="22"><UserFilled v-if="p.is_team" /><User v-else /></el-icon>
@@ -665,30 +668,6 @@
             </div>
           </el-dialog>
 
-          <!-- 查看全部项目 -->
-          <el-dialog v-model="allProjectsVisible" title="全部项目展示" width="680px" top="5vh">
-            <div class="all-projects-scroll">
-              <div v-for="p in projects" :key="p.id" class="project-card">
-                <div class="project-top">
-                  <div class="project-icon" :class="p.is_team ? 'team' : 'solo'">
-                    <el-icon :size="22"><UserFilled v-if="p.is_team" /><User v-else /></el-icon>
-                  </div>
-                  <div class="project-info">
-                    <div class="project-name">{{ p.project_name }}</div>
-                    <div class="project-date">{{ p.start_date }} ~ {{ p.end_date || '至今' }}</div>
-                  </div>
-                </div>
-                <div v-if="p.is_team && p.team_members" class="project-members">成员: {{ p.team_members }}</div>
-                <div v-if="p.attachment_url" class="project-attach">
-                  <el-link type="primary" :href="p.attachment_url" target="_blank" :icon="Link">查看附件</el-link>
-                </div>
-                <div class="project-actions" style="opacity:1;transform:none">
-                  <el-button size="small" text type="primary" @click="editProject(p); allProjectsVisible = false">编辑</el-button>
-                  <el-button size="small" text type="danger" @click="handleDeleteProject(p.id)">删除</el-button>
-                </div>
-              </div>
-            </div>
-          </el-dialog>
         </div>
 
         <!-- 计算规则说明弹窗（独立于各页签，始终可触发） -->
@@ -847,6 +826,7 @@ import { getGrowthRecords, createGrowthRecord, getGrowthProfile, updateSkills, g
 import type { GrowthProfile, StudentProject } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
 import { getStudentAnnouncements, type AnnouncementItem } from '@/api/announcement'
+import { renderMarkdown } from '@/utils/markdown'
 import QRCode from 'qrcode'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
 
@@ -985,13 +965,14 @@ function goNextWeek() { slideDir.value = 'left'; weekOffset.value++ }
 function resetWeek() { if (isCurrentRealWeek.value) { ElMessage.info('已经在本周了'); return } if (courses.value.length) { const realWeek = calcCurrentRealWeek(); slideDir.value = currentWeek.value > realWeek ? 'right' : 'left'; baseWeek.value = Math.min(...courses.value.map(c => c.week_start)); weekOffset.value = realWeek - baseWeek.value } }
 
 // ===== 课程AI分析 =====
-const { loading: scheduleLoading, rawResult: scheduleRaw, renderedResult: scheduleRendered, fromCache: scheduleFromCache, analyze: runScheduleAnalysis, reset: resetSchedule } = useAiAnalysis('schedule')
+const { loading: scheduleLoading, rawResult: scheduleRaw, fromCache: scheduleFromCache, analyze: runScheduleAnalysis, reset: resetSchedule } = useAiAnalysis('schedule')
+const scheduleHtml = computed(() => renderMarkdown(scheduleRaw.value))
 
 async function startScheduleAiAnalysis(opts?: { stream?: boolean }) {
   const scheduleData = courses.value.map(c => ({ name: c.name, teacher: c.teacher, location: c.location, day: dayLabel(c.day_of_week), periods: `第${c.start_period}-${c.end_period}节`, weeks: `第${c.week_start}-${c.week_end}周` }))
   const todayCoursesData = todayCourses.value.map(c => ({ name: c.name, teacher: c.teacher, location: c.location, periods: `第${c.start_period}-${c.end_period}节` }))
-  const prompt = `请根据以下课表数据，为学生提供详细的学习规划建议：\n1. 每日学习时间安排建议\n2. 课前预习和课后复习的安排\n3. 各科目的学习重点和方法\n4. 周末和空闲时间的利用建议\n5. 考试周的复习规划\n\n本周课程安排：\n${JSON.stringify(scheduleData, null, 2)}\n\n今日课程：\n${JSON.stringify(todayCoursesData, null, 2)}\n\n当前周数：第${currentWeek.value}周`
-  try { if (opts?.stream) resetSchedule(); await runScheduleAnalysis(prompt, opts?.stream ? { skipCache: true, onStream: (chunk) => { scheduleRaw.value += chunk } } : undefined) } catch (e: any) { ElMessage.error('AI 分析失败：' + (e.message || '请稍后重试')) }
+  const prompt = `请根据以下课表数据，为学生提供详细的学习规划建议：\n1. 每日学习时间安排建议\n2. 课前预习和课后复习的安排\n3. 各科目的学习重点和方法\n4. 周末和空闲时间的利用建议\n5. 考试周的复习规划\n\n要求：基于数据直接给出分析结论与建议，不要反问、不要向用户提问；行文紧凑，段落之间不留空行。\n\n本周课程安排：\n${JSON.stringify(scheduleData, null, 2)}\n\n今日课程：\n${JSON.stringify(todayCoursesData, null, 2)}\n\n当前周数：第${currentWeek.value}周`
+  try { if (opts?.stream) resetSchedule(); await runScheduleAnalysis(prompt, opts?.stream ? { skipCache: true } : undefined) } catch (e: any) { ElMessage.error('AI 分析失败：' + (e.message || '请稍后重试')) }
 }
 
 // ===== 考试成绩 =====
@@ -1002,12 +983,13 @@ const goals = ref<Record<string, number>>({})
 const goalInputs = ref<Record<string, number>>({})
 
 // ===== AI 学情分析 =====
-const { loading: gradeLoading, rawResult: gradeRaw, renderedResult: gradeRendered, fromCache: gradeFromCache, analyze: runGradeAnalysis, reset: resetGrade } = useAiAnalysis('grades')
+const { loading: gradeLoading, rawResult: gradeRaw, fromCache: gradeFromCache, analyze: runGradeAnalysis, reset: resetGrade } = useAiAnalysis('grades')
+const gradeHtml = computed(() => renderMarkdown(gradeRaw.value))
 
 async function startAiAnalysis(opts?: { stream?: boolean }) {
   const gradesData = grades.value.map(g => ({ course: g.course_name, score: g.score, gpa: g.gpa, credit: g.credit, semester: g.semester }))
-  const prompt = `请分析以下学生的成绩数据，给出学情分析报告：\n1. 整体学业表现评估\n2. 各学期绩点变化趋势分析\n3. 优势科目和薄弱科目识别\n4. 学习建议和改进方向\n\n成绩数据：\n${JSON.stringify(gradesData, null, 2)}\n\n当前学期：${semesters.value[0] || '未知'}\n目标绩点：${goals.value[semesters.value[0]] ?? '未设置'}`
-  try { if (opts?.stream) resetGrade(); await runGradeAnalysis(prompt, opts?.stream ? { skipCache: true, onStream: (chunk) => { gradeRaw.value += chunk } } : undefined) } catch (e: any) { ElMessage.error('AI 分析失败：' + (e.message || '请稍后重试')) }
+  const prompt = `请分析以下学生的成绩数据，给出学情分析报告：\n1. 整体学业表现评估\n2. 各学期绩点变化趋势分析\n3. 优势科目和薄弱科目识别\n4. 学习建议和改进方向\n\n要求：基于数据直接给出分析结论与建议，不要反问、不要向用户提问；行文紧凑，段落之间不留空行。\n\n成绩数据：\n${JSON.stringify(gradesData, null, 2)}\n\n当前学期：${semesters.value[0] || '未知'}\n目标绩点：${goals.value[semesters.value[0]] ?? '未设置'}`
+  try { if (opts?.stream) resetGrade(); await runGradeAnalysis(prompt, opts?.stream ? { skipCache: true } : undefined) } catch (e: any) { ElMessage.error('AI 分析失败：' + (e.message || '请稍后重试')) }
 }
 
 const semesters = computed(() => [...new Set(grades.value.map(g => g.semester))].sort().reverse())
@@ -1028,7 +1010,7 @@ const profile = ref<GrowthProfile | null>(null)
 const growthRecords = ref<GrowthRecord[]>([])
 const dialogVisible = ref(false)
 const allRecordsVisible = ref(false)
-const allProjectsVisible = ref(false)
+const showAllProjects = ref(false)
 const form = ref<Record<string, any>>({ type: 'honor', title: '', description: '', date: '' })
 const growthFormRef = ref()
 const projectFormRef = ref()
@@ -1068,6 +1050,7 @@ const localInterests = ref<string[]>([])
 const newTag = ref('')
 const customType = ref<'skill' | 'interest'>('skill')
 const projects = ref<StudentProject[]>([])
+const visibleProjects = computed(() => showAllProjects.value ? projects.value : projects.value.slice(0, 3))
 const loaded = ref(false)
 const growthLoaded = ref(false)
 const notices = ref<AnnouncementItem[]>([])
@@ -1166,9 +1149,9 @@ const radarOption = computed(() => ({
 }))
 const growthBarOption = computed(() => ({
   tooltip: { trigger: 'axis' },
-  grid: { left: 55, right: 20, top: 20, bottom: 40 },
+  grid: { left: 32, right: 20, top: 20, bottom: 40 },
   xAxis: { type: 'category', data: (profile.value?.stats_by_type ?? []).map(s => s.name), name: '成长类型', nameLocation: 'center', nameGap: 25, axisLabel: { color: '#666' } },
-  yAxis: { type: 'value', name: '数量', nameLocation: 'center', nameGap: 35, minInterval: 1, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+  yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
   series: [{ type: 'bar', data: (profile.value?.stats_by_type ?? []).map(s => s.value), barWidth: '40%', itemStyle: { borderRadius: [6, 6, 0, 0], color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#409eff' }, { offset: 1, color: '#67c23a' }] } }, animationDuration: 1500, animationEasing: 'elasticOut' as const, animationDelay: function(idx: number) { return idx * 200 } }],
   animationDuration: 1500, animationEasing: 'cubicOut' as const,
 }))
@@ -1180,9 +1163,9 @@ const growthLineOption = computed(() => {
   const gTypeLabels: Record<string, string> = { honor: '荣誉', competition: '竞赛', practice: '实践', paper: '论文', achievement: '成果' }
   return {
     tooltip: { trigger: 'axis' }, legend: { data: types.map(t => gTypeLabels[t] || t), bottom: 0 },
-    grid: { left: 55, right: 20, top: 20, bottom: 65 },
+    grid: { left: 32, right: 20, top: 20, bottom: 65 },
     xAxis: { type: 'category', data: months, name: '月份', nameLocation: 'center', nameGap: 25, axisLabel: { color: '#666' } },
-    yAxis: { type: 'value', name: '记录数', nameLocation: 'center', nameGap: 35, minInterval: 1, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: types.map(t => ({ name: gTypeLabels[t] || t, type: 'line', smooth: true, data: months.map(m => trend.find(item => item.month === m && item.type === t)?.count ?? 0), itemStyle: { color: colors[t] || '#909399' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: (colors[t] || '#909399') + '40' }, { offset: 1, color: (colors[t] || '#909399') + '05' }] } }, animationDuration: 2000, animationEasing: 'cubicOut' as const, animationDelay: function(idx: number) { return idx * 100 } })),
     animationDuration: 2000, animationEasing: 'cubicOut' as const,
   }
@@ -1195,9 +1178,9 @@ const gpaOption = computed(() => {
   const minGpa = Math.max(0, Math.floor(Math.min(...values) * 10) / 10 - 0.3)
   return {
     tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].axisValue}<br/>平均绩点: ${p[0].value}` },
-    grid: { left: 55, right: 60, top: 30, bottom: 40 },
+    grid: { left: 32, right: 60, top: 30, bottom: 40 },
     xAxis: { type: 'category', data: semLabels, name: '学期', nameLocation: 'center', nameGap: 25, axisLabel: { color: '#666', fontSize: 13 } },
-    yAxis: { type: 'value', min: minGpa, max: 4.0, name: '绩点', nameLocation: 'center', nameGap: 35, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+    yAxis: { type: 'value', min: minGpa, max: 4.0, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [{ type: 'line', data: values, smooth: true, symbol: 'circle', symbolSize: 10, lineStyle: { color: '#e6a23c', width: 3 }, itemStyle: { color: '#e6a23c' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#e6a23c40' }, { offset: 1, color: '#e6a23c05' }] } }, markLine: { data: [{ yAxis: 3.5, label: { formatter: '优秀线 3.5', color: '#67c23a' } }, { yAxis: 2.5, label: { formatter: '警戒线 2.5', color: '#f56c6c' } }], silent: true, lineStyle: { type: 'dashed' } }, animationDuration: 2000, animationEasing: 'cubicOut' as const, animationDelay: function(idx: number) { return idx * 200 } }],
     animationDuration: 2000, animationEasing: 'cubicOut' as const,
   }
@@ -1352,8 +1335,38 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .today-course-name { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
 .today-course-detail { font-size: 13px; color: #909399; }
 .ai-analysis-content { font-size: 14px; line-height: 1.9; color: #606266; padding: 4px 0; }
-.ai-analysis-content p { margin-bottom: 10px; }
+.ai-analysis-content :deep(p) { margin-bottom: 10px; }
 .no-today { text-align: center; padding: 20px; color: #999; font-size: 14px; background: #fafafa; border-radius: 12px; border: 1px dashed #e0e0e0; }
+
+/* ===== AI 分析结果 Markdown 样式 ===== */
+.ai-result-card :deep(.md-h2),
+.ai-result-content :deep(.md-h2) { font-size: 18px; font-weight: 700; color: #1a1a2e; margin: 16px 0 10px; padding-left: 10px; border-left: 4px solid #409eff; }
+.ai-result-card :deep(.md-h3),
+.ai-result-content :deep(.md-h3) { font-size: 16px; font-weight: 700; color: #1a1a2e; margin: 14px 0 8px; }
+.ai-result-card :deep(.md-h4),
+.ai-result-content :deep(.md-h4) { font-size: 15px; font-weight: 700; color: #1a1a2e; margin: 12px 0 6px; }
+.ai-result-card :deep(.md-ul),
+.ai-result-content :deep(.md-ul) { margin: 8px 0; padding-left: 22px; list-style: disc; }
+.ai-result-card :deep(.md-li),
+.ai-result-content :deep(.md-li) { margin: 4px 0; }
+.ai-result-card :deep(.md-code-block),
+.ai-result-content :deep(.md-code-block) { background: #f6f8fa; border-radius: 6px; padding: 12px 14px; margin: 10px 0; overflow-x: auto; }
+.ai-result-card :deep(.md-code-block code),
+.ai-result-content :deep(.md-code-block code) { font-family: 'Consolas', 'Menlo', monospace; font-size: 13px; color: #333; }
+.ai-result-card :deep(.md-inline-code),
+.ai-result-content :deep(.md-inline-code) { background: #f0f2f5; border-radius: 4px; padding: 1px 6px; font-family: 'Consolas', 'Menlo', monospace; font-size: 13px; color: #c7254e; }
+.ai-result-card :deep(.md-quote),
+.ai-result-content :deep(.md-quote) { margin: 8px 0; padding: 8px 14px; border-left: 3px solid #e0e0e0; background: #fafafa; color: #909399; }
+.ai-result-card :deep(.md-table),
+.ai-result-content :deep(.md-table) { border-collapse: collapse; margin: 10px 0; width: 100%; }
+.ai-result-card :deep(.md-table th),
+.ai-result-card :deep(.md-table td),
+.ai-result-content :deep(.md-table th),
+.ai-result-content :deep(.md-table td) { border: 1px solid #e0e0e0; padding: 6px 10px; text-align: left; }
+.ai-result-card :deep(.md-table th),
+.ai-result-content :deep(.md-table th) { background: #f5f7fa; font-weight: 600; }
+.ai-result-card :deep(strong),
+.ai-result-content :deep(strong) { color: #1a1a2e; }
 
 /* ===== 右侧栏 ===== */
 .sidebar-right { width: 200px; flex-shrink: 0; position: sticky; top: 0; align-self: flex-start; display: flex; flex-direction: column; gap: 12px; }
@@ -1393,7 +1406,8 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .grade-chart-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
 .grade-chart-card .chart-title { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 12px; }
 .grade-chart { width: 100%; height: 220px; }
-.grade-dual-row { display: grid; grid-template-columns: 1fr 1.5fr; gap: 16px; margin-bottom: 16px; }
+.grade-dual-row { display: grid; grid-template-columns: 1fr 2.2fr; gap: 16px; margin-bottom: 16px; }
+.grade-dual-row .goal-section:only-child { grid-column: 1 / -1; }
 .grade-course-section { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
 .weak-courses-section { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.04); margin-bottom: 20px; }
 .section-title { font-size: 16px; font-weight: 700; color: #1a1a2e; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 2px solid #409eff; display: flex; align-items: center; gap: 6px; }
@@ -1521,6 +1535,12 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
   height: 14px;
   flex-shrink: 0;
 }
+.chart-unit {
+  font-size: 12px;
+  color: var(--text-placeholder, #909399);
+  line-height: 1;
+  margin: -6px 0 8px 20px;
+}
 .radar-chart { height: 280px; }
 .line-chart { height: 230px; }
 .chart { width: 100%; height: 220px; }
@@ -1555,9 +1575,6 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .detail-item { font-size: 12px; color: var(--text-muted); }
 .projects-section { margin-bottom: 24px; }
 .project-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
-.project-scroll { max-height: 380px; overflow-y: auto; scrollbar-width: thin; }
-.project-scroll::-webkit-scrollbar { width: 4px; }
-.project-scroll::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
 .project-card { background: var(--bg-card); border-radius: 14px; padding: 18px 20px; border: 1px solid var(--border-color); box-shadow: var(--shadow-md); transition: all 0.2s; }
 .project-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
 .project-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
@@ -1647,9 +1664,6 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .all-records-scroll { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; }
 .all-records-scroll::-webkit-scrollbar { width: 4px; }
 .all-records-scroll::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
-.all-projects-scroll { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; scrollbar-width: thin; }
-.all-projects-scroll::-webkit-scrollbar { width: 4px; }
-.all-projects-scroll::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
 
 /* ===== 移动端适配 ===== */
 @media (max-width: 767px) {

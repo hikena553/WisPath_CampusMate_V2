@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -40,6 +41,13 @@ def list_my_requests(user: User = Depends(get_current_user), db: Session = Depen
 
 @router.post("/create", response_model=LeaveRequestOut)
 def create_leave(req: LeaveRequestCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    today = date.today()
+    if req.start_date < today:
+        raise HTTPException(status_code=400, detail="开始日期不能早于今天")
+    if req.end_date < req.start_date:
+        raise HTTPException(status_code=400, detail="结束日期不能早于开始日期")
+    if (req.end_date - req.start_date).days > 14:
+        raise HTTPException(status_code=400, detail="请假时长不能超过15天")
     leave = LeaveRequest(
         student_id=user.id,
         start_date=req.start_date,

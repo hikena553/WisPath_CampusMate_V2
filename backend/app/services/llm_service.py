@@ -39,16 +39,16 @@ def _get_llm_config() -> dict:
     db_settings = _get_db_settings()
 
     def _val(key: str, env_fallback: str, default: str = "") -> str:
-        if key in db_settings:
-            v = db_settings[key]
-            if v:
-                return v
-            return default
-        return env_fallback or default
+        # 数据库设置优先，未配置时才回退到 .env
+        if key in db_settings and db_settings[key]:
+            return db_settings[key]
+        if env_fallback:
+            return env_fallback
+        return default
 
-    # api_key 可能是加密存储的，需要解密；env_fallback 来自 .env 不需要解密
-    raw_key = _val('llm_api_key', settings.llm_api_key) or ""
-    api_key = decrypt_value(raw_key) if raw_key else raw_key
+    # api_key 特殊处理：数据库存的是加密值，需解密后判断是否有效（为空则回退 .env）
+    db_key = decrypt_value(db_settings.get('llm_api_key') or "")
+    api_key = db_key or settings.llm_api_key
 
     return {
         'api_key': api_key,
@@ -78,7 +78,12 @@ def build_system_prompt(user: User | None = None) -> str:
     college = f"，来自{user.college}" if user and user.college else ""
 
     if user and user.role == UserRole.STUDENT:
+        weekday_names = ["一", "二", "三", "四", "五", "六", "日"]
+        today = date.today()
+        today_str = f"{today.isoformat()}（星期{weekday_names[today.weekday()]}）"
         return f"""你是绵阳城市学院的智慧校园AI助手"绵小城"，{greeting}{college}的校园智能管家。
+
+今天是 {today_str}。计算相对日期（如"下周二"、"明天"、"下周"）时以此为准。
 
 ## 能力
 1. 请假 → create_leave | 2. 成长档案 → create_growth_record + confirm_growth_record | 3. 办事申请 → submit_service_request
@@ -101,6 +106,7 @@ def build_system_prompt(user: User | None = None) -> str:
 - 回答简洁，控制在150字以内
 - 信息模糊时反问补充，确认后再执行
 - 请假类型映射：比赛/竞赛→competition，生病→sick，事假/个人→personal，其他→other
+- 回答使用纯文本，避免 Markdown 标记（#、列表、代码块等），需要强调重点时可用 **加粗**
 - 不知道的说"我需要向老师确认后回答你" """
     else:
         return f"""你是绵阳城市学院的智慧校园AI助手"绵小城"，{greeting}{college}的教学管理助手。
@@ -118,6 +124,7 @@ def build_system_prompt(user: User | None = None) -> str:
 - 审批操作前向教师确认，避免误操作
 - 回答简洁专业，控制在200字以内
 - 教师说"分析这个请假" → 用 analyze_leave 进行AI分析
+- 回答使用纯文本，避免 Markdown 标记（#、列表、代码块等），需要强调重点时可用 **加粗**
 - 不知道的说"我需要确认后回答你" """
 
 

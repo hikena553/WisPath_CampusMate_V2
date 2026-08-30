@@ -132,6 +132,8 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None,
     else:
         kwargs["max_tokens"] = config.get('max_tokens', 4096)
         kwargs["temperature"] = config['temperature']
+        # 未开启深度思考时显式关闭思考，避免推理模型默认返回 reasoning_content
+        kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
 
     if tools:
         kwargs["tools"] = tools
@@ -153,12 +155,13 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None,
         if not delta:
             continue
 
-        # 使用 getattr 检测 reasoning_content
+        # 使用 getattr 检测 reasoning_content；仅在用户开启深度思考时才透出思考过程
         reasoning = getattr(delta, 'reasoning_content', None)
-        if reasoning:
+        if deep_think and reasoning:
             logger.debug("yield reasoning: %s...", reasoning[:50])
             yield ("reasoning", reasoning)
-        elif delta.content:
+
+        if delta.content:
             content += delta.content
             yield ("chunk", delta.content)
 

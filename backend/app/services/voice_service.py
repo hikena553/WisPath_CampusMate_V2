@@ -1,51 +1,85 @@
+import io
 import json
+import wave
 import base64
 import logging
-import mimetypes
 import httpx
+from datetime import datetime, timezone
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 from app.services.llm_service import _get_client, _get_llm_config, build_system_prompt
 from app.models.user import User
 from app.models.conversation import Conversation, ConversationMessage
+from app.models.setting import SystemSetting
 from app.core.database import SessionLocal
+from app.core.config import settings
+from app.core.crypto import decrypt_value
 
 logger = logging.getLogger(__name__)
 
+DASHSCOPE_STT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/transcriptions"
+DASHSCOPE_STT_MODEL = "paraformer-realtime-v2"
+DASHSCOPE_TTS_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation"
 
-async def dashscope_stt(audio_bytes: bytes, filename: str = "audio.webm", client: httpx.AsyncClient | None = None) -> str:
-    """调用 DashScope 语音识别 API"""
-    config = _get_llm_config()
-    if not config["api_key"]:
-        raise RuntimeError("LLM 未配置 API Key")
 
-    url = f"{config['base_url'].rstrip('/')}/audio/transcriptions"
-    headers = {"Authorization": f"Bearer {config['api_key']}"}
-    mime_type = mimetypes.guess_type(filename)[0] or "audio/webm"
-    files = {"file": (filename, audio_bytes, mime_type)}
-    data = {"model": "paraformer-v2"}
+def _get_dashscope_api_key() -> str:
+    """获取 DashScope（阿里云百炼）语音 API Key：优先数据库设置，回退到 .env"""
+    db = SessionLocal()
+    try:
+        row = db.query(SystemSetting).filter(SystemSetting.key == "dashscope_api_key").first()
+        if row and row.value:
+            decrypted = decrypt_value(row.value)
+            if decrypted:
+                return decrypted
+    except Exception:
+        logger.exception("读取 DashScope API Key 失败")
+    finally:
+        db.close()
+    return settings.DASHSCOPE_API_KEY
+
+
+def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sample_width: int = 2) -> bytes:
+    """将裸 PCM（16kHz 16bit mono）包装成 WAV，供语音识别接口使用"""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(sample_width)
+        w.setframerate(sample_rate)
+        w.writeframes(pcm_bytes)
+    return buf.getvalue()
+
+
+async def dashscope_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = None) -> str:
+    """调用 DashScope 语音识别 API（Paraformer）"""
+    api_key = _get_dashscope_api_key()
+    if not api_key:
+        raise RuntimeError("语音识别未配置 DashScope API Key")
+
+    headers = {"Authorization": f"Bearer {api_key}"}
+    wav_bytes = pcm_to_wav(audio_bytes)
+    files = {"file": ("audio.wav", wav_bytes, "audio/wav")}
+    data = {"model": DASHSCOPE_STT_MODEL}
 
     if client is not None:
-        resp = await client.post(url, headers=headers, data=data, files=files)
+        resp = await client.post(DASHSCOPE_STT_URL, headers=headers, data=data, files=files)
         resp.raise_for_status()
         return resp.json().get("text", "")
     else:
         async with httpx.AsyncClient(timeout=30) as owned_client:
-            resp = await owned_client.post(url, headers=headers, data=data, files=files)
+            resp = await owned_client.post(DASHSCOPE_STT_URL, headers=headers, data=data, files=files)
             resp.raise_for_status()
             return resp.json().get("text", "")
 
 
 async def dashscope_tts(text: str, client: httpx.AsyncClient | None = None):
     """调用 DashScope CosyVoice TTS，yield 音频块（PCM 16kHz 16bit mono）"""
-    config = _get_llm_config()
-    if not config["api_key"]:
-        raise RuntimeError("LLM 未配置 API Key")
+    api_key = _get_dashscope_api_key()
+    if not api_key:
+        raise RuntimeError("语音合成未配置 DashScope API Key")
 
-    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation"
     headers = {
-        "Authorization": f"Bearer {config['api_key']}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     payload = {
@@ -59,7 +93,7 @@ async def dashscope_tts(text: str, client: httpx.AsyncClient | None = None):
     }
 
     if client is not None:
-        async with client.stream("POST", url, headers=headers, json=payload) as resp:
+        async with client.stream("POST", DASHSCOPE_TTS_URL, headers=headers, json=payload) as resp:
             resp.raise_for_status()
             async for chunk in resp.aiter_bytes(4096):
                 if chunk:
@@ -67,7 +101,7 @@ async def dashscope_tts(text: str, client: httpx.AsyncClient | None = None):
     else:
         tts_timeout = httpx.Timeout(connect=10, read=120, write=10, pool=10)
         async with httpx.AsyncClient(timeout=tts_timeout) as owned_client:
-            async with owned_client.stream("POST", url, headers=headers, json=payload) as resp:
+            async with owned_client.stream("POST", DASHSCOPE_TTS_URL, headers=headers, json=payload) as resp:
                 resp.raise_for_status()
                 async for chunk in resp.aiter_bytes(4096):
                     if chunk:
@@ -90,8 +124,6 @@ async def handle_voice_connection(
     http_client = httpx.AsyncClient(timeout=tts_timeout)
 
     try:
-        await websocket.accept()
-
         # 如果有 conversation_id，加载历史消息
         if conversation_id:
             conv = db.query(Conversation).filter(
@@ -195,6 +227,11 @@ async def handle_voice_connection(
                     try:
                         db.add(ConversationMessage(conversation_id=conversation_id, role="user", content=text))
                         db.add(ConversationMessage(conversation_id=conversation_id, role="assistant", content=full_response))
+                        conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+                        if conv:
+                            if conv.title == "新对话":
+                                conv.title = text[:20] + ("…" if len(text) > 20 else "")
+                            conv.updated_at = datetime.now(timezone.utc)
                         db.commit()
                     except Exception:
                         db.rollback()

@@ -50,15 +50,57 @@ export function useAiAnalysis(pageType: string) {
 
       const reader = resp.body!.getReader()
       const decoder = new TextDecoder()
+      let buffer = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const text = decoder.decode(value)
+      const parseEvent = (raw: string): { type: string; text: string } | null => {
+        if (!raw.trim()) return null
+        let type = 'message'
+        let data = ''
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('event: ')) type = line.slice(7).trim()
+          else if (line.startsWith('data: ')) data = line.slice(6)
+        }
+        if (!data) return null
+        let text = data
+        try {
+          const parsed = JSON.parse(data)
+          if (typeof parsed === 'string') text = parsed
+        } catch {
+          /* 兼容旧协议，直接使用原始 data */
+        }
+        return { type, text }
+      }
+
+      const append = (text: string) => {
         rawResult.value += text
         renderedResult.value = rawResult.value
         if (options?.onStream) {
           options.onStream(text)
+        }
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+
+        for (const event of events) {
+          const parsed = parseEvent(event)
+          if (!parsed) continue
+          // 仅保留正文内容，忽略 reasoning 思考片段和 suggestions
+          if (parsed.type === 'content' || parsed.type === 'message') {
+            append(parsed.text)
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        const parsed = parseEvent(buffer)
+        if (parsed && (parsed.type === 'content' || parsed.type === 'message')) {
+          append(parsed.text)
         }
       }
 

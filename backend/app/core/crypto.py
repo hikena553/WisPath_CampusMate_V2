@@ -13,6 +13,7 @@ from app.core.config import settings
 # 敏感设置 key 集合：这些值在数据库中加密存储，接口返回时脱敏
 _SENSITIVE_KEYS = {
     "llm_api_key",
+    "dashscope_api_key",
 }
 
 # 加密值前缀

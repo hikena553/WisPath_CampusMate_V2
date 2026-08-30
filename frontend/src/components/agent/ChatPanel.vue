@@ -116,7 +116,7 @@
               </div>
               <div v-if="msg.content || msg.thinking || msg.role === 'user'" class="msg-text">
                 <DeepThinking v-if="msg.role === 'assistant' && msg.thinking" :thinking="msg.thinking" :is-thinking="thinkingState === 'thinking' && msg.id === store.messages[store.messages.length - 1]?.id" />
-                <span v-html="renderMarkdown(msg.content)"></span>
+                <div class="msg-text-body" v-html="renderMessageContent(msg)"></div>
               </div>
               <div v-else class="thinking-bubble">
                 <span class="typing-dot" v-for="d in 3" :key="d" :style="{ animationDelay: (d * 0.15) + 's' }"></span>
@@ -170,8 +170,8 @@
     <!-- Voice Call Overlay -->
     <VoiceCallOverlay
       :visible="showVoiceCall"
-      :conversation-id="conversationId"
-      @close="showVoiceCall = false"
+      :conversation-id="voiceConvId"
+      @close="handleVoiceClose"
     />
 
     <!-- Input Bar -->
@@ -314,9 +314,36 @@ const MAX_INPUT_CHARS = 8000
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false })
 const emit = defineEmits<{ toggleSidebar: []; phoneCall: [] }>()
 const showVoiceCall = ref(false)
+const voiceConvId = ref<number | null>(null)
 
-function handlePhoneCall() {
+async function handlePhoneCall() {
+  let cid = props.conversationId
+  if (!cid) {
+    const conv = await convStore.createConversation('normal')
+    cid = conv?.id ?? null
+  }
+  voiceConvId.value = cid
   showVoiceCall.value = true
+}
+
+async function handleVoiceClose() {
+  showVoiceCall.value = false
+  const cid = voiceConvId.value
+  voiceConvId.value = null
+  if (!cid) return
+  // 等待后端落库后，拉取最新消息并同步到智能体对话
+  await new Promise(r => setTimeout(r, 400))
+  await convStore.fetchMessages(cid)
+  store.replaceMessages(
+    convStore.messages.map(m => ({
+      id: m.id.toString(),
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+    })),
+  )
+  convStore.setActive(cid)
+  convStore.fetchList()
 }
 
 const store = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore()
@@ -362,21 +389,21 @@ const micTooltip = computed(() => {
 })
 
 const studentActions = [
-  { icon: DocumentChecked, label: '请假申请', desc: '比赛、病假、事假直接说', color: '#409eff', example: '下周二参加ACM区域赛需要请假三天，从5月26号到5月28号' },
-  { icon: Trophy, label: '记录成长', desc: '获奖/比赛自动写入档案', color: '#67c23a', example: '我获得了挑战杯省赛二等奖，主办方是教育厅，级别是省级' },
-  { icon: Calendar, label: '查课表', desc: '看看今天上什么课', color: '#e6a23c', example: '查一下这周一的课表' },
-  { icon: DataLine, label: '查成绩', desc: '查看各科成绩和GPA', color: '#f56c6c', example: '帮我查一下这个学期的成绩和绩点' },
-  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下教务处发布了哪些最新通知' },
-  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '怎么申请在校证明？需要准备哪些材料？' },
+  { icon: DocumentChecked, label: '请假申请', desc: '比赛、病假、事假直接说', color: '#409eff', example: '我需要请假' },
+  { icon: Trophy, label: '记录成长', desc: '获奖/比赛自动写入档案', color: '#67c23a', example: '我要记录成长成果' },
+  { icon: Calendar, label: '查课表', desc: '看看今天上什么课', color: '#e6a23c', example: '查一下我的课表' },
+  { icon: DataLine, label: '查成绩', desc: '查看各科成绩和GPA', color: '#f56c6c', example: '查一下我的成绩' },
+  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下官网通知' },
+  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '查询校园知识' },
 ]
 
 const teacherActions = [
-  { icon: DocumentChecked, label: '请假审批', desc: '查看待批请假申请', color: '#409eff', example: '查看当前待审批的请假' },
-  { icon: Warning, label: '预警管理', desc: '查看学生心理预警', color: '#f56c6c', example: '查看当前预警列表' },
-  { icon: UserFilled, label: '学生档案', desc: '查看名下学生成长', color: '#67c23a', example: '查看所有学生档案' },
+  { icon: DocumentChecked, label: '请假审批', desc: '查看待批请假申请', color: '#409eff', example: '查看待审批的请假' },
+  { icon: Warning, label: '预警管理', desc: '查看学生心理预警', color: '#f56c6c', example: '查看学生预警' },
+  { icon: UserFilled, label: '学生档案', desc: '查看名下学生成长', color: '#67c23a', example: '查看学生档案' },
   { icon: FirstAidKit, label: '危机干预', desc: '记录干预措施', color: '#e6a23c', example: '记录危机干预' },
-  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下教务处发布了哪些最新通知' },
-  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '奖助学金的申请流程是什么？' },
+  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下官网通知' },
+  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '查询校园知识' },
 ]
 
 const actions = computed(() => props.role === 'teacher' ? teacherActions : studentActions)
@@ -498,66 +525,24 @@ function extractImageUrl(msg: ChatMessage): string {
   return m ? m[0] : ''
 }
 
-function renderMarkdown(text: string): string {
-  let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// 轻量渲染：保留加粗，删除 markdown 标记符号（#、*、`、~ 及行首列表标记）
+function renderMessageContent(msg: ChatMessage): string {
+  let html = msg.content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 
-  // 代码块（```...```）
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
-    return `<pre class="msg-code-block"><code>${code.trim()}</code></pre>`
-  })
-
-  // 行内代码（`...`）
-  html = html.replace(/`([^`]+)`/g, '<code class="msg-inline-code">$1</code>')
-
-  // 表格
-  html = html.replace(/^(\|.+\|)\n(\|[\s\-:]+\|)\n((?:\|.+\|\n?)+)/gm, (_match, header, separator, body) => {
-    const headers = header.split('|').filter((c: string) => c.trim()).map((c: string) =>
-      `<th class="msg-th">${c.trim()}</th>`
-    )
-    const rows = body.trim().split('\n').map((row: string) => {
-      const cells = row.split('|').filter((c: string) => c.trim()).map((c: string) =>
-        `<td class="msg-td">${c.trim()}</td>`
-      )
-      return `<tr class="msg-tr">${cells.join('')}</tr>`
-    })
-    return `<table class="msg-table"><thead><tr>${headers.join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`
-  })
-
-  // 标题（### ## #）
-  html = html.replace(/^### (.+)$/gm, '<h4 class="msg-h4">$1</h4>')
-  html = html.replace(/^## (.+)$/gm, '<h3 class="msg-h3">$1</h3>')
-  html = html.replace(/^# (.+)$/gm, '<h2 class="msg-h2">$1</h2>')
-
-  // 粗体 + 斜体（***...***）
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-
-  // 粗体（**...**）
+  // 加粗：**text**
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
 
-  // 斜体（*...*）
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+  // 删除行首标题标记（#）
+  html = html.replace(/^\s*#{1,6}\s+/gm, '')
 
-  // 删除线（~~...~~）
-  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>')
+  // 删除行首列表标记（-、*）
+  html = html.replace(/^\s*[-*]\s+/gm, '')
 
-  // 引用（> ...）
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote class="msg-quote">$1</blockquote>')
-
-  // 无序列表（- 或 *）
-  html = html.replace(/^[\-\*] (.+)$/gm, '<li class="msg-li">$1</li>')
-  html = html.replace(/(<li class="msg-li">.*<\/li>\n?)+/g, '<ul class="msg-ul">$&</ul>')
-
-  // 有序列表（1. 2. 3.）
-  html = html.replace(/^\d+\. (.+)$/gm, '<li class="msg-li">$1</li>')
-
-  // 链接（[文本](URL)）
-  html = html.replace(/\[(.+?)\]\((.+?)\)/g, (_match, label, url) => {
-    const safeUrl = url.replace(/"/g, '&quot;')
-    if (/^javascript:/i.test(safeUrl.trim())) {
-      return label
-    }
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="msg-link">${label}</a>`
-  })
+  // 删除其余 markdown 符号（#、*、反引号、波浪线）
+  html = html.replace(/[#*`~]/g, '')
 
   // 换行
   html = html.replace(/\n/g, '<br>')
@@ -805,7 +790,7 @@ onUnmounted(() => {
 
 /* ── Messages Area ── */
 .messages { flex: 1; overflow: hidden; padding: 0; }
-.messages.scrolling { overflow-y: auto; padding: 12px 0; scroll-behavior: smooth; }
+.messages.scrolling { overflow-y: auto; padding: 12px 0; scroll-behavior: auto; }
 .messages.scrolling::-webkit-scrollbar { width: 4px; }
 .messages.scrolling::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
 .messages.scrolling::-webkit-scrollbar-thumb:hover { background: #b0b5bd; }
@@ -1007,11 +992,14 @@ onUnmounted(() => {
 .bubble.user .msg-text :deep(a) { color: #fff; text-decoration: underline; }
 
 /* ── Markdown Styles ── */
+.msg-text-body { line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
+.msg-text-body > *:first-child { margin-top: 0; }
+.msg-text-body > *:last-child { margin-bottom: 0; }
 .msg-text :deep(.msg-code-block) {
   background: #f6f8fa;
   border-radius: 6px;
-  padding: 12px;
-  margin: 8px 0;
+  padding: 10px;
+  margin: 4px 0;
   overflow-x: auto;
   font-size: 13px;
   line-height: 1.5;
@@ -1030,42 +1018,47 @@ onUnmounted(() => {
   font-family: monospace;
 }
 .msg-text :deep(.msg-h2) {
-  font-size: 1.3em;
+  font-size: 1.2em;
   font-weight: 600;
-  margin: 12px 0 8px 0;
-  padding-bottom: 4px;
+  margin: 8px 0 4px 0;
+  padding-bottom: 3px;
   border-bottom: 1px solid #eee;
 }
 .msg-text :deep(.msg-h3) {
-  font-size: 1.1em;
+  font-size: 1.05em;
   font-weight: 600;
-  margin: 10px 0 6px 0;
+  margin: 6px 0 3px 0;
 }
 .msg-text :deep(.msg-h4) {
   font-size: 1em;
   font-weight: 600;
-  margin: 8px 0 4px 0;
+  margin: 4px 0 2px 0;
 }
 .msg-text :deep(.msg-quote) {
   border-left: 3px solid #ddd;
-  padding-left: 12px;
-  margin: 8px 0;
+  padding-left: 10px;
+  margin: 4px 0;
   color: #666;
   font-style: italic;
 }
-.msg-text :deep(.msg-ul) {
-  padding-left: 20px;
-  margin: 8px 0;
-}
-.msg-text :deep(.msg-li) {
+.msg-text :deep(.msg-ul),
+.msg-text :deep(.msg-ol) {
+  padding-left: 1.4em;
   margin: 4px 0;
-  list-style-type: disc;
 }
+.msg-text :deep(.msg-li),
+.msg-text :deep(.msg-ol-li) {
+  margin: 2px 0;
+  list-style-position: inside;
+}
+.msg-text :deep(.msg-li) { list-style-type: disc; }
+.msg-text :deep(.msg-ol-li) { list-style-type: decimal; }
 .msg-text :deep(.msg-table) {
   border-collapse: collapse;
-  margin: 8px 0;
+  margin: 4px 0;
   width: 100%;
   font-size: 13px;
+  table-layout: fixed;
 }
 .msg-text :deep(.msg-th),
 .msg-text :deep(.msg-td) {

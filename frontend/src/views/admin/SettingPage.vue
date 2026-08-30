@@ -86,6 +86,13 @@
             </div>
             <el-input-number v-model="aiMaxTokens" :min="1000" :max="50000" :step="1000" />
           </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-name">语音服务 API Key（DashScope）</div>
+              <div class="setting-desc">语音识别/合成使用阿里云百炼，需单独配置，在阿里云百炼控制台获取</div>
+            </div>
+            <el-input v-model="settingsMap['dashscope_api_key']" placeholder="请输入 DashScope API Key" type="password" show-password style="width: 300px" />
+          </div>
         </div>
         <div class="ai-actions">
           <el-button type="primary" @click="handleSaveAI" :loading="savingAI">
@@ -221,6 +228,7 @@ async function handleSaveAI() {
       llm_agent_temperature: aiTemperature.value.toString(),
       llm_agent_max_tokens: aiMaxTokens.value.toString(),
       max_chat_history: settingsMap['max_chat_history'] || '50',
+      dashscope_api_key: settingsMap['dashscope_api_key'] || '',
     }
     await batchUpdateSettings(aiSettings)
     ElMessage.success('AI配置已保存')

@@ -249,13 +249,42 @@ const form = reactive({
   form_data: {} as Record<string, any>,
 })
 
+// 请假时间合理性校验
+function todayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function validateStartDate(_rule: any, value: string, callback: (e?: Error) => void) {
+  if (!value) return callback()
+  if (value < todayStr()) return callback(new Error('开始日期不能早于今天'))
+  callback()
+}
+
+function validateEndDate(_rule: any, value: string, callback: (e?: Error) => void) {
+  if (!value) return callback()
+  const start = form.form_data.start_date
+  if (!start) return callback()
+  if (value < start) return callback(new Error('结束日期不能早于开始日期'))
+  const s = new Date(start + 'T00:00:00')
+  const e = new Date(value + 'T00:00:00')
+  if ((e.getTime() - s.getTime()) / 86400000 > 14) return callback(new Error('请假时长不能超过15天'))
+  callback()
+}
+
 // 表单验证规则（仅用于普通表单）
 const formRules = computed(() => {
   if (activeForm.value === 'leave') {
     return {
       'form_data.leave_type': [{ required: true, message: '请选择请假类型', trigger: 'change' }],
-      'form_data.start_date': [{ required: true, message: '请选择开始日期', trigger: 'change' }],
-      'form_data.end_date': [{ required: true, message: '请选择结束日期', trigger: 'change' }],
+      'form_data.start_date': [
+        { required: true, message: '请选择开始日期', trigger: 'change' },
+        { validator: validateStartDate, trigger: 'change' },
+      ],
+      'form_data.end_date': [
+        { required: true, message: '请选择结束日期', trigger: 'change' },
+        { validator: validateEndDate, trigger: 'change' },
+      ],
       'content': [{ required: true, message: '请填写请假理由', trigger: 'blur' }],
     }
   }
@@ -470,6 +499,20 @@ async function handleSubmit() {
   try {
     if (activeForm.value === 'leave') {
       // 请假申请提交到leave_requests表（教师审批页面可见）
+      const sd = form.form_data.start_date
+      const ed = form.form_data.end_date
+      if (sd && sd < todayStr()) {
+        ElMessage.error('开始日期不能早于今天')
+        return
+      }
+      if (sd && ed && ed < sd) {
+        ElMessage.error('结束日期不能早于开始日期')
+        return
+      }
+      if (sd && ed && (new Date(ed + 'T00:00:00').getTime() - new Date(sd + 'T00:00:00').getTime()) / 86400000 > 14) {
+        ElMessage.error('请假时长不能超过15天')
+        return
+      }
       const reason = form.form_data.leave_type ? `[${form.form_data.leave_type}] ${form.content}` : form.content
       await createLeave({
         start_date: form.form_data.start_date,
