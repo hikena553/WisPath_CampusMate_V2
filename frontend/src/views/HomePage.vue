@@ -34,7 +34,6 @@
     <div class="container">
       <CampusVR />
       <Announcements />
-      <CampusShowcase />
     </div>
 
     <footer class="footer">
@@ -48,7 +47,6 @@ import { useRouter } from 'vue-router'
 import { ArrowDown } from '@element-plus/icons-vue'
 import CampusVR from '@/components/home/CampusVR.vue'
 import Announcements from '@/components/home/Announcements.vue'
-import CampusShowcase from '@/components/home/CampusShowcase.vue'
 
 const router = useRouter()
 

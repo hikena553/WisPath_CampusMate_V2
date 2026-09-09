@@ -10,7 +10,7 @@ from app.core.database import SessionLocal, engine, Base
 from app.core.security import hash_password
 from app.core.crypto import is_encrypted, encrypt_value, is_sensitive_key, _SENSITIVE_KEYS
 from app.models.user import User, UserRole
-from app.models.campus import CampusFigure, CampusScenery
+from app.models.campus import CampusScenery
 from app.models.academic import College, Major, ClassGroup, Course, Grade
 from app.models.growth import GrowthRecord, RecordType
 from app.models.service import ServiceTicket, TicketType, TicketStatus
@@ -337,19 +337,8 @@ if db.query(Course).count() == 0:
 
 
 # ═══════════════════════════════════════════════════════════
-# 4. 校园人物 & 风景
+# 4. 校园风景
 # ═══════════════════════════════════════════════════════════
-
-if db.query(CampusFigure).count() == 0:
-    db.add_all([
-        CampusFigure(name="张三", title="国家奖学金获得者", avatar="/images/avatar1.jpg", description="人工智能学院2024级学生，GPA 3.5+", category="student"),
-        CampusFigure(name="赵六", title="ACM竞赛金牌得主", avatar="/images/avatar2.jpg", description="ICPC亚洲区域赛金牌，人工智能学院", category="student"),
-        CampusFigure(name="周九", title="优秀学生干部", avatar="/images/avatar3.jpg", description="商学院学生会主席", category="student"),
-        CampusFigure(name="王老师", title="优秀教师", avatar="/images/avatar4.jpg", description="人工智能学院副教授，主持多项省级课题", category="teacher"),
-        CampusFigure(name="陈慧敏", title="优秀辅导员", avatar="/images/avatar5.jpg", description="人工智能学院辅导员，从事学生工作10年", category="teacher"),
-    ])
-    db.commit()
-    seeded = True
 
 if db.query(CampusScenery).count() == 0:
     db.add_all([

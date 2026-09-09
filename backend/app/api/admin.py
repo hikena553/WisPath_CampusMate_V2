@@ -10,7 +10,6 @@ from app.core.database import get_db
 from app.core.deps import require_role
 from app.core.security import hash_password
 from app.models.user import User, UserRole
-from app.models.campus import CampusFigure
 from app.models.crisis import AIDialogSummary
 from app.models.academic import Course, ClassGroup, Major, College
 from app.models.knowledge import KnowledgeItem
@@ -20,7 +19,6 @@ from app.schemas.admin import (
     KnowledgeItemCreate, KnowledgeItemUpdate, KnowledgeItemOut,
     DocumentOut, TeacherCreate, TeacherOut, StudentBriefOut, StudentUpdate, ImportResult,
 )
-from app.schemas.campus import CampusFigureOut, CampusFigureCreate, CampusFigureUpdate
 from app.schemas.academic import CourseOut, CourseCreate, CourseImportResult
 from app.services import knowledge_service
 from app.services.import_export_service import export_users, import_users
@@ -490,6 +488,9 @@ def reset_password(
 
 # ========== 数据导入导出 ==========
 
+
+# ========== 课程管理 ==========
+
 @router.get("/export")
 def export_data(
     role: str = Query(..., description="student 或 teacher"),
@@ -529,64 +530,6 @@ async def import_data(
     user_role = UserRole.STUDENT if role == "student" else UserRole.TEACHER
     result = import_users(db, user_role, content)
     return ImportResult(**result)
-
-
-# ========== 人物风采管理 ==========
-
-@router.get("/figures", response_model=list[CampusFigureOut])
-def list_figures(
-    category: str | None = None,
-    user: User = Depends(require_role(UserRole.ADMIN)),
-    db: Session = Depends(get_db),
-):
-    query = db.query(CampusFigure)
-    if category:
-        query = query.filter(CampusFigure.category == category)
-    return query.all()
-
-
-@router.post("/figures", response_model=CampusFigureOut)
-def create_figure(
-    data: CampusFigureCreate,
-    user: User = Depends(require_role(UserRole.ADMIN)),
-    db: Session = Depends(get_db),
-):
-    figure = CampusFigure(**data.model_dump())
-    db.add(figure)
-    db.commit()
-    db.refresh(figure)
-    return figure
-
-
-@router.put("/figures/{figure_id}", response_model=CampusFigureOut)
-def update_figure(
-    figure_id: int,
-    data: CampusFigureUpdate,
-    user: User = Depends(require_role(UserRole.ADMIN)),
-    db: Session = Depends(get_db),
-):
-    figure = db.query(CampusFigure).filter(CampusFigure.id == figure_id).first()
-    if not figure:
-        raise HTTPException(status_code=404, detail="人物不存在")
-    for key, val in data.model_dump(exclude_unset=True).items():
-        setattr(figure, key, val)
-    db.commit()
-    db.refresh(figure)
-    return figure
-
-
-@router.delete("/figures/{figure_id}")
-def delete_figure(
-    figure_id: int,
-    user: User = Depends(require_role(UserRole.ADMIN)),
-    db: Session = Depends(get_db),
-):
-    figure = db.query(CampusFigure).filter(CampusFigure.id == figure_id).first()
-    if not figure:
-        raise HTTPException(status_code=404, detail="人物不存在")
-    db.delete(figure)
-    db.commit()
-    return {"message": "删除成功"}
 
 
 # ========== 课程管理 ==========

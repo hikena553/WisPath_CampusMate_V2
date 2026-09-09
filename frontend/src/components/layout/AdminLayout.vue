@@ -68,7 +68,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   HomeFilled, Document, User, UserFilled,
-  SwitchButton, Fold, Expand, ChatDotRound, Setting, Star
+  SwitchButton, Fold, Expand, ChatDotRound, Setting
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -84,7 +84,6 @@ const navItems = [
   { path: '/admin/students', label: '学生管理', icon: UserFilled },
   { path: '/admin/organizations', label: '院系班级', icon: HomeFilled },
   { path: '/admin/courses', label: '课程表管理', icon: Document },
-  { path: '/admin/figures', label: '人物风采', icon: Star },
   { path: '/admin/feedbacks', label: '反馈管理', icon: ChatDotRound },
   { path: '/admin/settings', label: '系统设置', icon: Setting },
 ]
@@ -195,7 +194,6 @@ body { overflow: hidden; margin: 0; }
 .page-container > :deep(.data-page),
 .page-container > :deep(.setting-page),
 .page-container > :deep(.feedback-page),
-.page-container > :deep(.figures-page),
 .page-container > :deep(.admin-home) {
   padding: 24px 28px;
   min-height: 100%;

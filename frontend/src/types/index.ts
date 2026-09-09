@@ -100,16 +100,6 @@ export interface GrowthRecord {
   achievement_name?: string | null
 }
 
-export interface CampusFigure {
-  id: number
-  name: string
-  title: string
-  avatar: string
-  description: string
-  category: 'student' | 'teacher' | 'alumni'
-  proofs?: string | null
-}
-
 export interface CampusScenery {
   id: number
   title: string

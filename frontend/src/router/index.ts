@@ -56,7 +56,6 @@ const router = createRouter({
         { path: 'students', component: () => import('@/views/admin/StudentsPage.vue') },
         { path: 'organizations', component: () => import('@/views/admin/OrganizationsPage.vue') },
         { path: 'courses', component: () => import('@/views/admin/CourseSchedulePage.vue') },
-        { path: 'figures', component: () => import('@/views/admin/FiguresPage.vue') },
         { path: 'feedbacks', component: () => import('@/views/admin/FeedbackPage.vue') },
         { path: 'settings', component: () => import('@/views/admin/SettingPage.vue') },
       ],

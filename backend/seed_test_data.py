@@ -26,7 +26,7 @@ from app.models.service import ServiceTicket, TicketType, TicketStatus
 from app.models.crisis import AIDialogSummary, CrisisLevel, InterventionType
 from app.models.certificate import Certificate, AwardLevel, CertStatus
 from app.models.knowledge import KnowledgeItem
-from app.models.campus import CampusFigure, CampusScenery
+from app.models.campus import CampusScenery
 from app.models.feedback import Feedback, FeedbackType, FeedbackStatus
 from app.models.notification import Notification, NotificationType
 from app.models.message import Message
@@ -564,20 +564,7 @@ def main():
     db.commit()
     logging.info(f"知识库新增：{added}")
 
-    # ── 14. 校园人物 & 风景 ────────────────────────────────
-    figures = [
-        ("刘嘉懿", "国家奖学金获得者", "人工智能学院2023级，GPA 3.9，主持省级大创项目", "student", None),
-        ("陈思远", "优秀学生标兵", "商学院2023级学生会主席，组织多项大型活动", "student", None),
-        ("郑皓", "ACM亚洲区域赛银奖", "智能制造与工程学院2023级，算法竞赛达人", "student", None),
-        ("何老师", "校级教学名师", "深耕程序设计教学15年，指导多项国家级竞赛", "teacher", None),
-        ("优秀校友·刘芳", "知名互联网企业架构师", "2015届计算机科学与技术专业毕业，现就职于头部互联网公司", "alumni", None),
-    ]
-    fadd = 0
-    for name, title, desc, cat, proofs in figures:
-        if not db.query(CampusFigure).filter(CampusFigure.name == name).first():
-            db.add(CampusFigure(name=name, title=title, avatar=f"/images/avatar{rng.randint(1,5)}.jpg",
-                                description=desc, category=cat, proofs=proofs))
-            fadd += 1
+    # ── 14. 校园风景 ────────────────────────────────
     sceneries = [
         ("安州校区图书馆", "/images/lib_anzhou.jpg", "藏书丰富，环境优雅", "校园中心", "anzhou"),
         ("游仙校区体育馆", "/images/gym_youxian.jpg", "综合性体育场馆", "校园东侧", "youxian"),

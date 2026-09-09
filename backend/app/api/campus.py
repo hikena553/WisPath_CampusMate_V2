@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from bs4 import BeautifulSoup
 
 from app.core.database import get_db
-from app.models.campus import CampusFigure, CampusScenery, CampusImpressionItem
+from app.models.campus import CampusScenery, CampusImpressionItem
 from app.services.impression_crawler import get_impression_cache, refresh_impression_data
-from app.schemas.campus import CampusFigureOut, CampusSceneryOut, AnnouncementOut, GalleryImageOut
+from app.schemas.campus import CampusSceneryOut, AnnouncementOut, GalleryImageOut
 
 router = APIRouter(prefix="/api/campus", tags=["campus"])
 
@@ -27,14 +27,6 @@ def _get_cached(key: str):
 
 def _set_cache(key: str, data: list):
     _cache[key] = (time.time(), data)
-
-
-@router.get("/figures", response_model=list[CampusFigureOut])
-def list_figures(category: str | None = None, db: Session = Depends(get_db)):
-    query = db.query(CampusFigure)
-    if category:
-        query = query.filter(CampusFigure.category == category)
-    return query.all()
 
 
 @router.get("/sceneries", response_model=list[CampusSceneryOut])

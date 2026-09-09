@@ -17,7 +17,7 @@
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path === '/student/campus' }" @click="goTo('/student/campus')">
             <el-icon :size="16"><PictureFilled /></el-icon>
-            <span>校园风采</span>
+            <span>校园资讯</span>
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path === '/student/schedule' }" @click="goTo('/student/schedule')">
             <el-icon :size="16"><Calendar /></el-icon>
@@ -219,7 +219,7 @@ const { isMobile } = useResponsive()
 
 // 移动端底部导航
 const mobileNavItems = [
-  { key: 'campus', label: '校园风采', icon: PictureFilled, route: '/student/campus' },
+  { key: 'campus', label: '校园资讯', icon: PictureFilled, route: '/student/campus' },
   { key: 'schedule', label: '学业中心', icon: Calendar, route: '/student/schedule' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/student' },
   { key: 'service', label: '办事服务', icon: Service, route: '/student/service' },

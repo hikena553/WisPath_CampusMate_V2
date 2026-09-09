@@ -1,299 +1,172 @@
 <template>
   <div class="campus-page">
-    <aside class="campus-sidebar">
-      <button v-for="t in tabItems" :key="t.key"
-        :class="['side-btn', { active: activeTab === t.key }]"
-        @click="activeTab = t.key">
-        <span class="side-icon">{{ t.icon }}</span>
-        <span class="side-label">{{ t.label }}</span>
-      </button>
-    </aside>
+    <!-- ① 校园风光轮播图 -->
+    <section class="campus-carousel">
+      <el-carousel :interval="4000" height="320px" arrow="hover" trigger="click">
+        <el-carousel-item v-for="img in galleryImages" :key="img.image_url">
+          <div class="carousel-item">
+            <img :src="img.image_url" class="carousel-img" />
+            <div class="carousel-overlay">
+              <span class="carousel-title">{{ img.title }}</span>
+              <span class="carousel-campus">{{ img.campus }}</span>
+            </div>
+          </div>
+        </el-carousel-item>
+      </el-carousel>
+    </section>
 
-    <div class="campus-main">
-      <Transition name="fade-slide" mode="out-in">
-        <div :key="activeTab" class="tab-content">
-        <template v-if="activeTab === 'figures'">
-          <div class="figure-grid">
-            <FigureCard v-for="f in figures" :key="f.id" :figure="f" @click="openFigureDetail(f)" />
-            <div class="figure-card teacher-card" @click="openLink('https://www.mycc.edu.cn/mcyx/msfc.htm')">
-              <div class="teacher-badge">师</div>
-              <h3>名师风采</h3>
-              <span class="card-hint">了解更多 →</span>
-            </div>
-          </div>
-        </template>
-
-        <template v-else-if="activeTab === 'sceneries'">
-          <div class="gallery-filter">
-            <button v-for="f in galleryFilters" :key="f.key"
-              :class="['filter-btn', { active: galleryActive === f.key }]"
-              @click="galleryActive = f.key">{{ f.label }}</button>
-          </div>
-          <div v-if="galleryImages.length" class="gallery-grid">
-            <div v-for="img in filteredGallery" :key="img.image_url" class="gallery-card" @click="openPreview(img)">
-              <img :src="img.image_url" class="gallery-img" loading="lazy" />
-              <div class="gallery-overlay">
-                <span class="gallery-label">{{ img.title }}</span>
-                <span class="gallery-campus">{{ img.campus }}</span>
-              </div>
-            </div>
-          </div>
-          <el-empty v-else description="暂无校园风光图片" />
-          <Teleport to="body">
-            <div v-if="previewVisible" class="preview-mask" @click.self="previewVisible = false">
-              <div class="preview-container">
-                <img :src="previewUrl" class="preview-img" />
-                <div class="preview-bar">
-                  <button class="preview-nav" :disabled="previewIndex <= 0" @click="previewPrev">‹</button>
-                  <span class="preview-counter">{{ previewIndex + 1 }} / {{ filteredGallery.length }}</span>
-                  <button class="preview-nav" :disabled="previewIndex >= filteredGallery.length - 1" @click="previewNext">›</button>
-                  <button class="preview-close" @click="previewVisible = false">✕</button>
-                </div>
-              </div>
-            </div>
-          </Teleport>
-        </template>
-
-        <template v-else-if="activeTab === 'impression'">
-          <!-- ① 教务系统入口 -->
-          <div class="imp-section">
-            <div class="imp-sec-title"><span class="sec-dot"></span> 教务系统入口</div>
-            <div class="entry-grid">
-              <div v-for="e in impression.entries" :key="e.url" class="entry-item" v-tilt @click="openLink(e.url)">
-                <span class="entry-icon">{{ entryIcon(e.title) }}</span>
-                <p>{{ e.title }}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- ② 教学动态 + 通知公告 -->
-          <div class="imp-duo">
-            <div class="imp-card imp-card-jx" v-tilt>
-              <div class="imp-card-head">
-                <span class="imp-card-title">📰 教学动态</span>
-                <a class="imp-more" href="https://jwc.mycc.edu.cn/jwgl/jxdt.htm" target="_blank">查看详情 →</a>
-              </div>
-              <div v-if="impression.jxdt.length" class="jxdt-first" @click="openLink(impression.jxdt[0].url)">
-                <img v-if="impression.jxdt[0].image_url" :src="impression.jxdt[0].image_url" class="jxdt-first-img" />
-                <span class="jxdt-first-title">{{ impression.jxdt[0].title }}</span>
-              </div>
-              <div v-for="a in impression.jxdt.slice(1)" :key="a.url" class="news-row jxdt-date-row" @click="openLink(a.url)">
-                <span class="jxdt-day">▪ <b>{{ splitJxdtDay(a.date) }}</b> <span class="jxdt-ym">{{ splitJxdtYm(a.date) }}</span></span>
-                <span class="news-text">{{ a.title }}</span>
-              </div>
-            </div>
-            <div class="imp-card" v-tilt>
-              <div class="imp-card-head">
-                <span class="imp-card-title">📢 通知公告</span>
-                <a class="imp-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" target="_blank">查看详情 →</a>
-              </div>
-              <div v-for="a in impression.tzgg" :key="a.url" class="tzgg-row" @click="openLink(a.url)">
-                <span class="tzgg-date">📌 <b>{{ splitTzggMd(a.date) }}</b> <span class="tzgg-y">{{ splitTzggY(a.date) }}</span></span>
-                <span class="news-text">{{ a.title }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ③ 高教信息 + 教学建设 -->
-          <div class="imp-duo">
-            <div class="imp-card" v-tilt>
-              <div class="imp-card-head">
-                <span class="imp-card-title">🎓 高教信息</span>
-                <a class="imp-more" href="https://jwc.mycc.edu.cn/gjxx.htm" target="_blank">查看详情 →</a>
-              </div>
-              <div v-for="a in impression.gjxx" :key="a.url" class="news-row" @click="openLink(a.url)">
-                <span class="news-text">{{ a.title }}</span>
-                <span class="news-date-right">{{ a.date }}</span>
-              </div>
-            </div>
-            <div class="imp-card" v-tilt>
-              <div class="imp-card-head">
-                <span class="imp-card-title">📚 教学建设</span>
-                <a class="imp-more" href="https://jwc.mycc.edu.cn/jxjs.htm" target="_blank">查看详情 →</a>
-              </div>
-              <div v-for="a in impression.jxjs" :key="a.url" class="news-row" @click="openLink(a.url)">
-                <span class="news-text">{{ a.title }}</span>
-                <span class="news-date-right">{{ a.date }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ④ 专业分院（实时新闻卡片） -->
-          <div class="imp-section">
-            <div class="imp-sec-title imp-sec-between"><span class="sec-dot"></span> 专业分院
-              <span class="imp-tag">新闻实时更新</span>
-            </div>
-            <div class="college-grid">
-              <div v-for="c in collegeCards" :key="c.name" class="college-card" v-tilt @click="openLink(c.url)">
-                <div class="college-head">
-                  <span class="college-icon">{{ c.icon }}</span>
-                  <span class="college-name">{{ c.name }}</span>
-                </div>
-                <div v-for="n in impression.collegeNews[c.name] || []" :key="n.url" class="college-news">
-                  <span class="news-dot">▪</span><span class="news-text">{{ n.title }}</span>
-                </div>
-                <span class="college-link">进入官网 →</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ⑤ 图书馆公告（三列横排） -->
-          <div class="imp-card imp-library" v-tilt>
-            <div class="imp-card-head">
-              <span class="imp-card-title">📚 图书馆公告</span>
-              <div class="imp-head-right">
-                <span class="imp-tag">30分钟更新</span>
-                <a class="imp-more" href="https://lib.mycc.edu.cn/" target="_blank">进入图书馆官网 →</a>
-              </div>
-            </div>
-            <div class="lib-grid">
-              <div v-for="a in impression.library" :key="a.title" class="lib-item" @click="openLink(a.url)">
-                <span class="lib-date">📌 <b>{{ splitLibMd(a.date) }}</b></span>
-                <span class="news-text">{{ a.title }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ⑥ 绵城印象 -->
-          <div class="imp-section">
-            <div class="imp-sec-title"><span class="sec-dot"></span> 绵城印象</div>
-            <div class="imp-grid">
-              <div v-for="item in impressionItems" :key="item.title" class="imp-card-link" v-tilt @click="openLink(item.url)">
-                <div class="link-top">
-                  <span class="link-icon">{{ item.icon }}</span>
-                  <div class="link-text">
-                    <strong>{{ item.title }}</strong>
-                    <small>了解更多 →</small>
-                  </div>
-                </div>
-                <div class="link-desc">{{ item.desc }}</div>
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <template v-else-if="activeTab === 'teacher-announcements'">
-          <div v-if="tutorAnnouncements.length" class="announce-list">
-            <div v-for="a in tutorAnnouncements" :key="a.id" :id="`announcement-${a.id}`" class="tutor-card" :class="{ 'highlight': selectedAnnouncementId === a.id }" @click="showAnnounceDetail(a)">
-              <div class="tutor-card-top">
-                <el-tag :type="urgencyTag(a.urgency)" size="small" effect="dark" round>{{ urgencyLabel(a.urgency) }}</el-tag>
-                <span class="tutor-teacher">{{ a.teacher_name }}</span>
-                <span class="tutor-date">{{ new Date(a.created_at).toLocaleString('zh-CN') }}</span>
-              </div>
-              <div class="tutor-title">{{ a.title }}</div>
-              <div class="tutor-content">{{ a.content.slice(0, 120) }}{{ a.content.length > 120 ? '...' : '' }}</div>
-              <div v-if="a.attachment_url" class="tutor-attach">
-                <a :href="a.attachment_url" target="_blank" @click.stop>📎 下载附件</a>
-              </div>
-            </div>
-          </div>
-          <el-empty v-else description="暂无班级公告" />
-        </template>
-        </div>
-      </Transition>
-    </div>
-
-    <!-- Figure Detail Dialog -->
-    <el-dialog v-model="figureDetailVisible" :title="selectedFigure?.name || '人物详情'" width="480px" :close-on-click-modal="true">
-      <template v-if="selectedFigure">
-        <div class="figure-detail">
-          <div class="figure-detail-avatar">
-            <el-avatar :size="80" :src="selectedFigure.avatar">{{ selectedFigure.name[0] }}</el-avatar>
-          </div>
-          <h3 class="figure-detail-name">{{ selectedFigure.name }}</h3>
-          <span class="figure-detail-title">{{ selectedFigure.title }}</span>
-          <p class="figure-detail-desc">{{ selectedFigure.description }}</p>
-          <el-tag size="small" effect="plain" :class="['figure-detail-tag', 'tag-' + selectedFigure.category]">
-            {{ selectedFigure.category === 'student' ? '优秀学生' : selectedFigure.category === 'teacher' ? '优秀教师' : '杰出校友' }}
-          </el-tag>
-          <div v-if="selectedFigure.proofs" class="figure-detail-proofs">
-            <h4>证明材料</h4>
-            <div v-for="p in JSON.parse(selectedFigure.proofs)" :key="p.url" class="proof-link">
-              <el-link type="primary" :href="p.url" target="_blank">{{ p.name }}</el-link>
+    <!-- ② 教务系统入口 -->
+    <section class="campus-section">
+      <div class="section-title"><span class="sec-dot"></span> 教务系统入口</div>
+      <div class="entry-groups">
+        <div v-for="(items, groupName) in entryGroups" :key="groupName" class="entry-group">
+          <div class="entry-group-title">{{ groupName }}</div>
+          <div class="entry-grid">
+            <div v-for="e in items" :key="e.url" class="entry-item" @click="openLink(e.url)">
+              <el-icon class="entry-icon"><component :is="getEntryIcon(e.title)" /></el-icon>
+              <p>{{ e.title }}</p>
+              <span v-if="isExternalLink(e.url)" class="entry-external">↗</span>
             </div>
           </div>
         </div>
-      </template>
-    </el-dialog>
+      </div>
+    </section>
+
+    <!-- ② 教学动态 + 通知公告 -->
+    <section class="campus-duo">
+      <div class="campus-card campus-card-jx" v-tilt>
+        <div class="card-head">
+          <span class="card-title"><el-icon><DataBoard /></el-icon> 教学动态</span>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/jxdt.htm" target="_blank">查看详情 →</a>
+        </div>
+        <div v-if="impression.jxdt.length" class="jxdt-first" @click="openLink(impression.jxdt[0].url)">
+          <img v-if="impression.jxdt[0].image_url" :src="impression.jxdt[0].image_url" class="jxdt-first-img" />
+          <span class="jxdt-first-title">{{ impression.jxdt[0].title }}</span>
+        </div>
+        <div v-for="a in impression.jxdt.slice(1)" :key="a.url" class="news-row jxdt-date-row" @click="openLink(a.url)">
+          <span class="jxdt-day"><b>{{ splitDay(a.date) }}</b><span class="jxdt-month">{{ splitMonth(a.date) }}</span></span>
+          <span class="news-text">{{ a.title }}</span>
+        </div>
+      </div>
+      <div class="campus-card" v-tilt>
+        <div class="card-head">
+          <span class="card-title"><el-icon><Notification /></el-icon> 通知公告</span>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" target="_blank">查看详情 →</a>
+        </div>
+        <div v-for="a in impression.tzgg" :key="a.url" class="tzgg-row" @click="openLink(a.url)">
+          <span class="tzgg-date">{{ formatDate(a.date) }}</span>
+          <span class="news-text">{{ removeCommonPrefix(a.title) }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③ 高教信息 + 教学建设 -->
+    <section class="campus-duo">
+      <div class="campus-card campus-card-gjxx" v-tilt>
+        <div class="card-head">
+          <span class="card-title"><el-icon><School /></el-icon> 高教信息</span>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/gjxx.htm" target="_blank">查看详情 →</a>
+        </div>
+        <div class="gjxx-grid">
+          <div v-for="a in impression.gjxx" :key="a.url" class="gjxx-item" @click="openLink(a.url)">
+            <el-icon class="gjxx-icon"><Document /></el-icon>
+            <span class="gjxx-title">{{ removeCommonPrefix(a.title) }}</span>
+            <el-icon class="gjxx-arrow"><ArrowRight /></el-icon>
+          </div>
+        </div>
+      </div>
+      <div class="campus-card" v-tilt>
+        <div class="card-head">
+          <span class="card-title"><el-icon><Collection /></el-icon> 教学建设</span>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jxjs.htm" target="_blank">查看详情 →</a>
+        </div>
+        <div v-for="a in impression.jxjs" :key="a.url" class="build-row" @click="openLink(a.url)">
+          <span class="build-mark"></span>
+          <el-tooltip :content="removeCommonPrefix(a.title)" placement="top" :show-after="300">
+            <span class="build-text">{{ removeCommonPrefix(a.title) }}</span>
+          </el-tooltip>
+          <span class="build-date">{{ a.date }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ④ 专业分院 -->
+    <section class="campus-card campus-card-college">
+      <div class="card-head">
+        <span class="card-title"><el-icon><School /></el-icon> 专业分院</span>
+        <span class="section-tag">新闻实时更新</span>
+      </div>
+      <div class="card-body">
+        <div class="college-grid">
+          <div v-for="c in collegeCards" :key="c.name" class="college-card" @click="openLink(c.url)">
+            <div class="college-head">
+              <el-icon class="college-icon" :style="{ color: c.color }"><component :is="c.icon" /></el-icon>
+              <span class="college-name">{{ c.name }}</span>
+            </div>
+            <div v-for="n in impression.collegeNews[c.name] || []" :key="n.url" class="college-news">
+              <span class="news-dot">▪</span><span class="news-text">{{ n.title }}</span>
+            </div>
+            <span class="college-link">进入官网 →</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ⑤ 绵城印象 + 图书馆 -->
+    <section class="campus-duo">
+      <div class="campus-card" v-tilt>
+        <div class="card-head">
+          <span class="card-title"><el-icon><OfficeBuilding /></el-icon> 绵城印象</span>
+          <a class="card-more" href="https://www.mycc.edu.cn/mcyx/" target="_blank">了解更多 →</a>
+        </div>
+        <div class="impression-list">
+          <div v-for="item in impressionItems" :key="item.title" class="impression-row" @click="openLink(item.url)">
+            <el-icon class="impression-icon" :style="{ color: item.color }"><component :is="item.icon" /></el-icon>
+            <div class="impression-info">
+              <span class="impression-name">{{ item.title }}</span>
+              <span class="impression-desc">{{ item.desc }}</span>
+            </div>
+            <el-icon class="impression-arrow"><ArrowRight /></el-icon>
+          </div>
+        </div>
+      </div>
+      <div class="campus-card campus-card-library" v-tilt>
+        <div class="card-head">
+          <span class="card-title"><el-icon><Reading /></el-icon> 图书馆公告</span>
+          <a class="card-more" href="https://lib.mycc.edu.cn/" target="_blank">进入官网 →</a>
+        </div>
+        <div class="lib-list">
+          <div v-for="a in impression.library" :key="a.title" class="lib-item" @click="openLink(a.url)">
+            <span class="lib-date">{{ formatDate(a.date) }}</span>
+            <span class="lib-title">{{ a.title }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { getFigures, getImpression } from '@/api/campus'
-import type { CampusFigure, ImpressionItem } from '@/types'
+import { getImpression } from '@/api/campus'
+import type { ImpressionItem } from '@/types'
 import { tilt } from '@/directives/tilt'
+import {
+  Calendar, Monitor, DataLine, Reading, TrendCharts,
+  Document, Clock, Box, Van, ArrowRight,
+  Notification, DataBoard,
+  School, Collection,
+  SetUp, Histogram, HomeFilled, OfficeBuilding
+} from '@element-plus/icons-vue'
 
 const vTilt = tilt
-import FigureCard from '@/components/campus/FigureCard.vue'
-import {
-  getStudentAnnouncements, markAnnouncementRead,
-  type AnnouncementItem,
-} from '@/api/announcement'
-import { ElMessageBox } from 'element-plus'
 
 interface GalleryImage {
   title: string
   image_url: string
   campus: string
 }
-
-const route = useRoute()
-const activeTab = ref((route.query.tab as string) && route.query.tab !== 'announcements'
-  ? (route.query.tab as string)
-  : route.query.announcementId ? 'teacher-announcements' : 'figures')
-const selectedAnnouncementId = ref<number | null>(route.query.announcementId ? Number(route.query.announcementId) : null)
-const figures = ref<CampusFigure[]>([])
-const tutorAnnouncements = ref<AnnouncementItem[]>([])
-const galleryActive = ref('all')
-const figureDetailVisible = ref(false)
-const selectedFigure = ref<CampusFigure | null>(null)
-
-function openFigureDetail(f: CampusFigure) {
-  selectedFigure.value = f
-  figureDetailVisible.value = true
-}
-
-const tabItems = [
-  { key: 'figures', label: '人物风采', icon: '👤' },
-  { key: 'sceneries', label: '校园风景', icon: '🏞️' },
-  { key: 'impression', label: '绵城印象', icon: '🏛️' },
-  { key: 'teacher-announcements', label: '班级公告', icon: '📋' },
-]
-
-const previewVisible = ref(false)
-const previewIndex = ref(0)
-
-const previewUrl = computed(() => {
-  const list = filteredGallery.value
-  return list[previewIndex.value]?.image_url || ''
-})
-
-
-function openPreview(img: GalleryImage) {
-  previewIndex.value = filteredGallery.value.indexOf(img)
-  previewVisible.value = true
-}
-
-function previewPrev() {
-  if (previewIndex.value > 0) previewIndex.value--
-}
-
-function previewNext() {
-  if (previewIndex.value < filteredGallery.value.length - 1) previewIndex.value++
-}
-
-const galleryFilters = [
-  { key: 'all', label: '全部' },
-  { key: '安州', label: '安州校区' },
-  { key: '游仙', label: '游仙校区' },
-]
-
-const filteredGallery = computed(() => {
-  if (galleryActive.value === 'all') return galleryImages
-  return galleryImages.filter(i => i.campus === galleryActive.value)
-})
 
 const impressionData = ref<ImpressionItem[]>([])
 
@@ -306,9 +179,30 @@ function byDateDesc(a: ImpressionItem, b: ImpressionItem) {
   return db - da
 }
 
+// 去掉公共前缀
+function removeCommonPrefix(title: string) {
+  const prefixes = ['绵阳城市学院关于', '绵阳城市学院']
+  for (const p of prefixes) {
+    if (title.startsWith(p)) {
+      return title.slice(p.length)
+    }
+  }
+  return title
+}
+
+// 去重（按title去重）
+function deduplicateByTitle(items: ImpressionItem[]) {
+  const seen = new Set<string>()
+  return items.filter(item => {
+    if (seen.has(item.title)) return false
+    seen.add(item.title)
+    return true
+  })
+}
+
 const impression = computed(() => {
   const all = impressionData.value
-  const bySource = (s: string) => all.filter(i => i.source === s).sort(byDateDesc)
+  const bySource = (s: string) => deduplicateByTitle(all.filter(i => i.source === s).sort(byDateDesc))
   return {
     entries: bySource('jwc_entries'),
     jxdt: bySource('jwc_jxdt'),
@@ -331,62 +225,97 @@ function groupCollegeNews(all: ImpressionItem[]): Record<string, ImpressionItem[
 }
 
 const collegeCards = [
-  { name: '马克思主义学院', url: 'https://mksxy.mycc.edu.cn/', icon: '📖' },
-  { name: '人工智能学院', url: 'https://xdjsxy.mycc.edu.cn/', icon: '🤖' },
-  { name: '智能制造与工程学院', url: 'https://xdcsjsxy.mycc.edu.cn/', icon: '⚙️' },
-  { name: '健康与教育学院', url: 'https://xdfw.mycc.edu.cn/', icon: '🏥' },
-  { name: '商学院', url: 'https://jgxy.mycc.edu.cn/', icon: '📊' },
-  { name: '创意设计学院', url: 'https://cysjxy.mycc.edu.cn/', icon: '🎨' },
-  { name: '终身教育学院', url: 'https://jxjy.mycc.edu.cn/', icon: '📚' },
+  { name: '马克思主义学院', url: 'https://mksxy.mycc.edu.cn/', icon: Reading, color: '#e74c3c' },
+  { name: '人工智能学院', url: 'https://xdjsxy.mycc.edu.cn/', icon: Monitor, color: '#409eff' },
+  { name: '智能制造与工程学院', url: 'https://xdcsjsxy.mycc.edu.cn/', icon: SetUp, color: '#e67e22' },
+  { name: '健康与教育学院', url: 'https://xdfw.mycc.edu.cn/', icon: OfficeBuilding, color: '#27ae60' },
+  { name: '商学院', url: 'https://jgxy.mycc.edu.cn/', icon: Histogram, color: '#9b59b6' },
+  { name: '创意设计学院', url: 'https://cysjxy.mycc.edu.cn/', icon: Collection, color: '#f39c12' },
+  { name: '终身教育学院', url: 'https://jxjy.mycc.edu.cn/', icon: School, color: '#1abc9c' },
 ]
 
-function entryIcon(title: string) {
-  const map: Record<string, string> = {
-    '教务管理系统': '🖥️', '实习管理系统': '🏢', '实验管理平台': '🧪',
-    '超星在线学习平台': '📖', '教学质量管理平台': '📊', '毕业论文(设计)管理系统': '📝',
-    '教学校历': '🗓️', '作息时间': '⏰', '课表查询': '📋',
+// 教务系统入口图标映射
+const entryIconMap: Record<string, any> = {
+  '教务管理系统': Monitor,
+  '课表查询': Calendar,
+  '教学校历': DataLine,
+  '超星在线学习平台': Reading,
+  '教学质量管理平台': TrendCharts,
+  '毕业论文(设计)管理系统': Document,
+  '实习管理系统': Box,
+  '实验管理平台': Van,
+  '作息时间': Clock,
+}
+
+// 入口分组关键词
+const entryGroupMap: Record<string, string[]> = {
+  '教学服务': ['教务管理系统', '课表查询', '教学校历'],
+  '学习与质量': ['超星在线学习平台', '教学质量管理平台', '毕业论文'],
+  '实践与管理': ['实习管理系统', '实验管理平台', '作息时间'],
+}
+
+// 获取入口图标
+function getEntryIcon(title: string) {
+  for (const [key, icon] of Object.entries(entryIconMap)) {
+    if (title.includes(key) || key.includes(title)) {
+      return icon
+    }
   }
-  return map[title] || '🔗'
+  return Monitor
 }
 
-function splitJxdtDay(d: string | null) {
-  if (!d) return ''
-  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (m) return m[3].replace(/^0/, '')
-  return d
+// 判断是否为外部链接
+function isExternalLink(url: string) {
+  return !url.includes('mycc.edu.cn')
 }
 
-function splitJxdtYm(d: string | null) {
-  if (!d) return ''
-  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (m) return `${m[1]}-${m[2]}`
-  return d
+// 获取入口分组
+function getEntryGroup(title: string) {
+  for (const [group, keywords] of Object.entries(entryGroupMap)) {
+    if (keywords.some(k => title.includes(k))) {
+      return group
+    }
+  }
+  return '其他'
 }
 
-function splitTzggMd(d: string | null) {
-  if (!d) return ''
-  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (m) return `${m[2]}-${m[3]}`
-  return d.slice(0, 5)
-}
+// 按分组整理入口数据
+const entryGroups = computed(() => {
+  const groups: Record<string, any[]> = {}
+  for (const entry of impression.value.entries) {
+    const group = getEntryGroup(entry.title)
+    if (!groups[group]) groups[group] = []
+    groups[group].push(entry)
+  }
+  return groups
+})
 
-function splitTzggY(d: string | null) {
-  if (!d) return ''
-  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (m) return m[1]
-  return d.slice(0, 4)
-}
-
-function splitLibMd(d: string | null) {
+// 统一日期格式：MM-DD
+function formatDate(d: string | null) {
   if (!d) return ''
   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (m) return `${m[2]}-${m[3]}`
   return d.slice(5, 10)
 }
 
+// 日期邮戳格式：日 + 月
+function splitDay(d: string | null) {
+  if (!d) return ''
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (m) return m[3].replace(/^0/, '')
+  return ''
+}
+
+function splitMonth(d: string | null) {
+  if (!d) return ''
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (m) return m[2] + '月'
+  return ''
+}
+
 const impressionItems = [
-  { title: '仪器设备', url: 'https://www.mycc.edu.cn/mcyx/yqsb.htm', icon: '🔬', desc: '学校拥有智能制造、人工智能等现代化实验实训设备，为实践教学提供有力支撑。' },
-  { title: '生活条件', url: 'https://www.mycc.edu.cn/mcyx/shtj.htm', icon: '🏠', desc: '标准化学生公寓、多个学生食堂与运动场馆，营造舒适便捷的校园生活环境。' },
+  { title: '仪器设备', url: 'https://www.mycc.edu.cn/mcyx/yqsb.htm', icon: SetUp, color: '#e67e22', desc: '学校拥有智能制造、人工智能等现代化实验实训设备，为实践教学提供有力支撑。' },
+  { title: '生活条件', url: 'https://www.mycc.edu.cn/mcyx/shtj.htm', icon: HomeFilled, color: '#27ae60', desc: '标准化学生公寓、多个学生食堂与运动场馆，营造舒适便捷的校园生活环境。' },
 ]
 
 async function loadImpression() {
@@ -423,295 +352,487 @@ function openLink(url: string) {
   window.open(url, '_blank')
 }
 
-function urgencyTag(u: string) {
-  const map: Record<string, string> = { urgent: 'danger', important: 'warning', normal: '' }
-  return map[u] || ''
-}
-function urgencyLabel(u: string) {
-  const map: Record<string, string> = { urgent: '紧急', important: '重要', normal: '普通' }
-  return map[u] || u
-}
-
-async function loadTutorAnnouncements() {
-  try {
-    tutorAnnouncements.value = await getStudentAnnouncements()
-    for (const a of tutorAnnouncements.value) {
-      try { await markAnnouncementRead(a.id) } catch { /* ignore */ }
-    }
-  } catch { /* ignore */ }
-}
-
-function showAnnounceDetail(a: AnnouncementItem) {
-  ElMessageBox.alert(a.content, a.title, {
-    confirmButtonText: '关闭',
-    type: a.urgency === 'urgent' ? 'warning' : 'info',
-  })
-}
-
 onMounted(async () => {
-  figures.value = await getFigures() as any
-  loadTutorAnnouncements()
   loadImpression()
-  if (selectedAnnouncementId.value) {
-    activeTab.value = 'teacher-announcements'
-    setTimeout(() => {
-      const el = document.getElementById(`announcement-${selectedAnnouncementId.value}`)
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 500)
-  }
 })
 </script>
 
 <style scoped>
-.campus-page { display: flex; gap: 20px; padding: 4px 0; height: 100%; overflow: hidden; }
-
-/* ===== Sidebar ===== */
-.campus-sidebar {
-  width: 160px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px;
-  background: #f5f7fa; border-radius: 14px; padding: 6px;
-  overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none;
+.campus-page {
+  height: 100%;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 12px 24px 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-.campus-sidebar::-webkit-scrollbar { display: none; }
-.side-btn {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 11px 14px; border: none; border-radius: 10px;
-  background: transparent; color: #666; font-size: 13px; font-weight: 500;
-  cursor: pointer; transition: all .2s; text-align: left;
+.campus-page::-webkit-scrollbar { display: none; }
+.campus-page > *:not(.campus-carousel) {
+  padding-left: 0;
+  padding-right: 0;
 }
-.side-btn:hover { color: #409eff; background: rgba(64,158,255,.06); }
-.side-btn.active { background: #fff; color: #409eff; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-.side-icon { font-size: 18px; flex-shrink: 0; }
-
-/* ===== Main Content ===== */
-.campus-main { flex: 1; min-width: 0; overflow-y: auto; }
-
-/* ===== Tab Transition ===== */
-.fade-slide-enter-active, .fade-slide-leave-active { transition: all .2s ease; }
-.fade-slide-enter-from { opacity: 0; transform: translateY(8px); }
-.fade-slide-leave-to { opacity: 0; transform: translateY(-4px); }
-.tab-content { min-height: 200px; }
-
-/* ===== Figure Grid ===== */
-.figure-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-.figure-card :deep(.el-avatar) { font-size: 28px !important; }
-.figure-card { position: relative; }
-.teacher-card {
-  background: linear-gradient(135deg, #f0f7ff, #e8f4fd);
-  border-radius: 14px; padding: 28px 20px; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  border: 1px solid rgba(64,158,255,.1);
-  transition: transform .2s, box-shadow .2s;
-}
-.teacher-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(64,158,255,.15); }
-.teacher-card h3 { margin: 0; font-size: 16px; color: #1a1a2e; }
-
-/* ===== Figure Detail Dialog ===== */
-.figure-detail {
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  padding: 10px 0;
-}
-.figure-detail-avatar { margin-bottom: 16px; }
-.figure-detail-avatar .el-avatar { border: 3px solid rgba(64,158,255,.15); }
-.figure-detail-name { font-size: 20px; font-weight: 700; color: #1a1a2e; margin: 0 0 8px; }
-.figure-detail-title {
-  font-size: 13px; color: #409eff; background: rgba(64,158,255,.08);
-  padding: 4px 16px; border-radius: 12px; display: inline-block; margin-bottom: 16px;
-}
-.figure-detail-desc {
-  font-size: 14px; color: #555; line-height: 1.7; margin: 0 0 16px;
-  text-align: left; white-space: pre-wrap;
-}
-.figure-detail-tag {
-  border: none !important; color: #fff !important; font-weight: 600;
-  padding: 4px 14px; border-radius: 20px; font-size: 12px;
-  letter-spacing: 0.5px;
-}
-.tag-student {
-  background: linear-gradient(135deg, #409eff, #67c23a) !important;
-  box-shadow: 0 2px 8px rgba(64,158,255,.3);
-}
-.tag-teacher {
-  background: linear-gradient(135deg, #e6a23c, #f56c6c) !important;
-  box-shadow: 0 2px 8px rgba(230,162,60,.3);
-}
-.tag-alumni {
-  background: linear-gradient(135deg, #9b59b6, #3498db) !important;
-  box-shadow: 0 2px 8px rgba(155,89,182,.3);
-}
-.figure-detail-proofs { margin-top: 16px; text-align: left; }
-.figure-detail-proofs h4 { font-size: 14px; color: #333; margin: 0 0 8px; }
-.proof-link { margin: 4px 0; }
-.teacher-badge {
-  width: 72px; height: 72px; border-radius: 50%;
-  background: linear-gradient(135deg, #409eff, #67c23a);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; color: #fff; font-weight: 700;
-}
-.card-hint { font-size: 12px; color: #409eff; }
-
-/* ===== Gallery ===== */
-.gallery-filter { display: flex; gap: 8px; margin-bottom: 20px; }
-.filter-btn {
-  padding: 7px 18px; border: 1px solid #e8e8e8; border-radius: 20px;
-  background: #fff; color: #666; font-size: 13px; cursor: pointer;
-  transition: all .2s;
-}
-.filter-btn:hover { border-color: #409eff; color: #409eff; }
-.filter-btn.active { background: #409eff; color: #fff; border-color: #409eff; }
-.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.gallery-card {
-  position: relative; border-radius: 12px; overflow: hidden; cursor: pointer;
-  transition: transform .25s, box-shadow .25s; aspect-ratio: 16 / 10;
-}
-.gallery-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,.15); }
-.gallery-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.gallery-overlay {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 40px 14px 10px;
-  background: linear-gradient(transparent, rgba(0,0,0,.6));
-  display: flex; justify-content: space-between; align-items: flex-end;
-  pointer-events: none;
-}
-.gallery-label { color: #fff; font-size: 14px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,.4); }
-.gallery-campus {
-  font-size: 11px; padding: 2px 10px; border-radius: 10px;
-  background: rgba(255,255,255,.2); backdrop-filter: blur(4px); color: #fff;
+.campus-section:last-child {
+  padding-bottom: 32px;
 }
 
-/* ===== Preview ===== */
-.preview-mask {
-  position: fixed; inset: 0; z-index: 9999;
-  background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center;
+/* ===== Section ===== */
+.campus-section { margin-bottom: 24px; }
+.section-title {
+  font-size: 16px; font-weight: 600; color: #1a1a2e;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
 }
-.preview-container { position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.preview-img { max-width: 90vw; max-height: 78vh; border-radius: 8px; }
-.preview-bar { display: flex; align-items: center; gap: 12px; }
-.preview-nav {
-  width: 40px; height: 40px; border-radius: 50%; border: none;
-  background: rgba(255,255,255,.15); color: #fff; font-size: 22px;
-  cursor: pointer; transition: background .2s;
-}
-.preview-nav:hover { background: rgba(255,255,255,.3); }
-.preview-nav:disabled { opacity: .3; cursor: default; }
-.preview-counter { color: rgba(255,255,255,.7); font-size: 14px; }
-.preview-close {
-  position: absolute; top: -40px; right: 0; width: 36px; height: 36px;
-  border-radius: 50%; border: none; background: rgba(255,255,255,.15);
-  color: #fff; font-size: 16px; cursor: pointer;
-}
-
-/* ===== Impression ===== */
-.imp-section { margin-bottom: 24px; }
-.imp-sec-title { font-size: 16px; font-weight: 600; color: #1a1a2e; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.imp-sec-between { justify-content: space-between; }
+.section-between { justify-content: space-between; }
 .sec-dot { width: 4px; height: 16px; background: #409eff; border-radius: 2px; flex-shrink: 0; }
-.imp-tag { font-size: 11px; color: #999; background: #f5f7fa; padding: 2px 10px; border-radius: 10px; font-weight: 400; }
-.entry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; }
-.entry-item { background: #f5f7fa; border-radius: 10px; padding: 14px 6px; text-align: center; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
-.entry-icon { font-size: 26px; display: block; }
-.entry-item p { font-size: 12px; color: #444; margin: 6px 0 0; }
-.imp-duo { display: flex; gap: 18px; margin-bottom: 22px; }
-.imp-card { flex: 1; min-width: 0; background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 6px rgba(0,0,0,.04); transition: transform .18s ease, box-shadow .18s ease; }
-.imp-card-jx { flex: 1.5; }
-.imp-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.imp-card-title { font-size: 15px; font-weight: 700; color: #1a1a2e; border-left: 3px solid #409eff; padding-left: 8px; }
-.imp-more { font-size: 12px; color: #409eff; text-decoration: none; }
-.imp-head-right { display: flex; gap: 12px; align-items: center; }
-.jxdt-first { position: relative; border-radius: 8px; overflow: hidden; margin-bottom: 12px; cursor: pointer; background: linear-gradient(135deg, #dbeafe, #60a5fa); min-height: 96px; }
+.section-tag {
+  font-size: 11px; color: #999; background: #f5f7fa;
+  padding: 2px 10px; border-radius: 10px; font-weight: 400;
+}
+
+/* ===== Entry Groups ===== */
+.entry-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.entry-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #86909c;
+  margin-bottom: 10px;
+  padding-left: 4px;
+}
+
+/* ===== Entry Grid ===== */
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.entry-item {
+  background: #fff;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  transition: all .2s ease;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.entry-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(64,158,255,.15);
+  border-color: #409eff;
+}
+.entry-icon {
+  font-size: 28px;
+  color: #409eff;
+  margin-bottom: 8px;
+}
+.entry-item p {
+  font-size: 13px;
+  color: #1d2129;
+  margin: 0;
+  font-weight: 500;
+}
+.entry-external {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  color: #86909c;
+  background: #f2f3f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ===== Duo Cards ===== */
+.campus-duo { display: flex; gap: 18px; margin-bottom: 22px; }
+.campus-card {
+  flex: 1; min-width: 0; background: #fff; border-radius: 14px;
+  padding: 16px 18px; box-shadow: 0 1px 6px rgba(0,0,0,.04);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.campus-card-jx { flex: 1.5; }
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.card-title {
+  font-size: 15px; font-weight: 700; color: #1a1a2e;
+  border-left: 3px solid #409eff; padding-left: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.card-title .el-icon { color: #409eff; }
+.card-more { font-size: 12px; color: #409eff; text-decoration: none; }
+.head-right { display: flex; gap: 12px; align-items: center; }
+
+/* ===== News Rows ===== */
+.jxdt-first {
+  position: relative; border-radius: 8px; overflow: hidden;
+  margin-bottom: 12px; cursor: pointer;
+  background: linear-gradient(135deg, #dbeafe, #60a5fa); min-height: 96px;
+}
 .jxdt-first-img { width: 100%; height: 120px; object-fit: cover; display: block; }
-.jxdt-first-title { position: absolute; left: 0; right: 0; bottom: 0; padding: 24px 12px 10px; background: linear-gradient(transparent, rgba(0,0,0,.65)); color: #fff; font-size: 13px; font-weight: 600; }
-.news-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #444; line-height: 2.05; cursor: pointer; }
+.jxdt-first-title {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 32px 12px 12px;
+  background: linear-gradient(transparent 20%, rgba(0,0,0,.45) 50%, rgba(0,0,0,.8) 100%);
+  color: #fff; font-size: 14px; font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0,0,0,.5);
+}
+.news-row {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: #444; line-height: 2.05; cursor: pointer;
+}
 .news-row:hover .news-text { color: #409eff; }
-.news-date { color: #999; font-size: 12px; flex-shrink: 0; width: 86px; }
 .news-date-right { color: #999; font-size: 11px; flex-shrink: 0; margin-left: auto; }
 .news-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 教学动态：日 + 年月 分离日期 */
-.jxdt-date-row { gap: 6px; }
-.jxdt-day { color: #1a1a2e; font-size: 13px; flex-shrink: 0; width: 82px; }
-.jxdt-day b { font-weight: 700; }
-.jxdt-ym { color: #999; font-size: 11px; }
+/* 教学动态：日 + 月 邮戳样式 */
+.jxdt-date-row { gap: 12px; }
+.jxdt-day {
+  flex-shrink: 0;
+  width: 40px;
+  text-align: center;
+  border-left: 3px solid #409eff;
+  padding-left: 8px;
+}
+.jxdt-day b {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #409eff;
+  line-height: 1.1;
+}
+.jxdt-month {
+  display: block;
+  font-size: 10px;
+  color: #7a8694;
+  margin-top: 2px;
+}
 
-/* 通知公告：月-日 + 年 */
-.tzgg-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; line-height: 2.05; cursor: pointer; }
+/* 通知公告：月-日 */
+.tzgg-row {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: #444; line-height: 2.05; cursor: pointer;
+  padding: 6px 0;
+  border-bottom: 1px dashed #ebeef5;
+}
+.tzgg-row:last-child { border-bottom: none; }
 .tzgg-row:hover .news-text { color: #409eff; }
-.tzgg-date { color: #1a1a2e; font-size: 13px; flex-shrink: 0; width: 110px; }
-.tzgg-date b { font-weight: 700; }
-.tzgg-y { color: #999; font-size: 11px; }
+.tzgg-date {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #7a8694;
+  width: 45px;
+  text-align: center;
+}
 
+/* ===== 高教信息（导航样式） ===== */
+.campus-card-gjxx {
+  background: #f8fafc;
+}
+.gjxx-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gjxx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+.gjxx-item:hover {
+  background: #ecf5ff;
+}
+.gjxx-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #d7e0ec;
+  color: #409eff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  transition: all .2s ease;
+}
+.gjxx-item:hover .gjxx-icon {
+  background: #409eff;
+  border-color: #409eff;
+  color: #fff;
+}
+.gjxx-title {
+  flex: 1;
+  font-size: 13px;
+  color: #42505f;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color .2s ease;
+}
+.gjxx-item:hover .gjxx-title {
+  color: #409eff;
+}
+.gjxx-arrow {
+  flex-shrink: 0;
+  color: #7a8694;
+  transition: transform .2s ease, color .2s ease;
+}
+.gjxx-item:hover .gjxx-arrow {
+  transform: translateX(3px);
+  color: #f56c6c;
+}
+
+/* ===== 教学建设 ===== */
+.build-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 6px;
+  border-bottom: 1px solid #ebeef5;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+.build-row:last-child {
+  border-bottom: none;
+}
+.build-row:hover {
+  background: #ecf5ff;
+}
+.build-mark {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid #409eff;
+  transform: rotate(45deg);
+  margin-top: 6px;
+  transition: all .2s ease;
+}
+.build-row:hover .build-mark {
+  background: #f56c6c;
+  border-color: #f56c6c;
+}
+.build-text {
+  flex: 1;
+  font-size: 13px;
+  color: #42505f;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color .2s ease;
+}
+.build-row:hover .build-text {
+  color: #409eff;
+}
+.build-date {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #7a8694;
+  margin-top: 2px;
+}
+
+/* ===== College ===== */
+.campus-card-college { margin-bottom: 22px; }
+.card-body { padding: 14px 20px 16px; }
 .college-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-.college-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 6px rgba(0,0,0,.04); cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
+.college-card {
+  background: #f8fafc; border-radius: 10px; padding: 16px;
+  border: 1px solid #e4e7ed; cursor: pointer;
+  transition: all .2s ease;
+}
+.college-card:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64,158,255,.15);
+}
 .college-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .college-icon { font-size: 28px; }
 .college-name { font-size: 15px; font-weight: 700; color: #1a1a2e; }
 .college-news { display: flex; gap: 6px; font-size: 12px; color: #666; line-height: 1.85; }
 .news-dot { color: #409eff; flex-shrink: 0; }
 .college-link { margin-top: 10px; display: inline-block; font-size: 12px; color: #409eff; }
-.imp-library { margin-bottom: 22px; }
 
-/* 图书馆公告三列横排 */
-.lib-grid { display: flex; gap: 18px; font-size: 13px; color: #444; line-height: 2.05; }
-.lib-item { flex: 1; display: flex; gap: 8px; cursor: pointer; min-width: 0; }
-.lib-item:hover .news-text { color: #409eff; }
-.lib-item .news-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lib-date { flex-shrink: 0; color: #1a1a2e; }
-.lib-date b { font-weight: 700; }
-
-/* 绵城印象 */
-.imp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.imp-card-link { display: flex; flex-direction: column; gap: 10px; padding: 18px; background: #fff; border-radius: 12px; cursor: pointer; border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02); transition: transform .18s ease, box-shadow .18s ease; }
-.link-top { display: flex; align-items: center; gap: 14px; }
-.link-icon { font-size: 34px; }
-.link-text strong { font-size: 15px; font-weight: 700; color: #1a1a2e; display: block; }
-.link-text small { font-size: 12px; color: #999; }
-.link-desc { font-size: 12px; color: #888; line-height: 1.7; background: #f8fafc; border-radius: 8px; padding: 10px; }
-
-/* 3D 倾斜统一处理：卡片元素 */
-.entry-item, .imp-card, .college-card, .imp-card-link { transform-style: preserve-3d; }
-
-/* 移动端 */
-@media (max-width: 767px) {
-  .imp-duo { flex-direction: column; }
-  .entry-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
-  .college-grid { grid-template-columns: repeat(2, 1fr); }
-  .lib-grid { flex-direction: column; gap: 8px; }
-  .imp-grid { grid-template-columns: repeat(2, 1fr); }
+/* ===== Impression List ===== */
+.impression-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.impression-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+.impression-row:hover {
+  background: #ecf5ff;
+}
+.impression-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.impression-info {
+  flex: 1;
+  min-width: 0;
+}
+.impression-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+}
+.impression-desc {
+  font-size: 12px;
+  color: #7a8694;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.impression-arrow {
+  flex-shrink: 0;
+  color: #7a8694;
+  transition: transform .2s ease, color .2s ease;
+}
+.impression-row:hover .impression-arrow {
+  transform: translateX(3px);
+  color: #409eff;
 }
 
-/* ===== Announcements ===== */
-.announce-list { display: flex; flex-direction: column; gap: 2px; }
-
-/* ===== Tutor Announcements ===== */
-.tutor-card {
-  padding: 18px 20px; border-radius: 12px; margin-bottom: 12px;
-  border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02);
-  cursor: pointer; transition: transform .15s, box-shadow .15s;
+/* ===== Library ===== */
+.campus-card-library { flex: 0.8; }
+.lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.tutor-card:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.06); }
-.tutor-card.highlight { border-color: #409eff; background: rgba(64,158,255,.05); box-shadow: 0 0 0 2px rgba(64,158,255,.2); }
-.tutor-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.tutor-teacher { font-size: 12px; color: #888; }
-.tutor-date { font-size: 11px; color: #bbb; margin-left: auto; }
-.tutor-title { font-size: 15px; font-weight: 600; color: #1a1a2e; margin-bottom: 6px; }
-.tutor-content { font-size: 13px; color: #666; line-height: 1.5; }
-.tutor-attach { margin-top: 8px; }
-.tutor-attach a { color: #409eff; font-size: 13px; text-decoration: none; }
+.lib-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dashed #ebeef5;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+.lib-item:last-child { border-bottom: none; }
+.lib-item:hover { background: #ecf5ff; }
+.lib-date {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #7a8694;
+  width: 45px;
+  text-align: center;
+}
+.lib-title {
+  flex: 1;
+  font-size: 13px;
+  color: #42505f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color .2s ease;
+}
+.lib-item:hover .lib-title {
+  color: #409eff;
+}
+
+/* ===== Carousel ===== */
+.campus-carousel {
+  margin-bottom: 24px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  flex-shrink: 0;
+}
+.campus-carousel :deep(.el-carousel__indicators) {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+.campus-carousel :deep(.el-carousel__indicator) {
+  padding: 4px;
+}
+.campus-carousel :deep(.el-carousel__button) {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.6);
+  opacity: 1;
+}
+.campus-carousel :deep(.el-carousel__indicator.is-active .el-carousel__button) {
+  background: #fff;
+  width: 10px;
+  height: 10px;
+}
+.carousel-item {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.carousel-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.carousel-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 48px 24px 20px;
+  background: linear-gradient(transparent, rgba(0,0,0,.65));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.carousel-title {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.carousel-campus {
+  font-size: 12px;
+  padding: 4px 14px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.25);
+  backdrop-filter: blur(4px);
+  color: #fff;
+}
+
+/* 3D 倾斜统一处理 */
+.entry-item, .campus-card, .college-card { transform-style: preserve-3d; }
 
 /* ===== Mobile ===== */
 @media (max-width: 767px) {
-  .campus-page { flex-direction: column; gap: 12px; padding: 8px 0; }
-  .campus-sidebar {
-    width: 100%; flex-direction: row; overflow-x: auto;
-    border-radius: 10px; padding: 4px; gap: 2px;
-    scrollbar-width: none; -ms-overflow-style: none;
-  }
-  .campus-sidebar::-webkit-scrollbar { display: none; }
-  .side-btn { padding: 8px 12px; white-space: nowrap; font-size: 12px; }
-  .figure-grid { grid-template-columns: repeat(2, 1fr); }
-  .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .link-grid { grid-template-columns: repeat(2, 1fr); }
-  .video-section { border-radius: 10px; }
-  .campus-video { max-height: 220px; }
-  .tutor-card { padding: 14px; }
+  .campus-page { padding: 8px 16px 0; }
+  .campus-carousel { border-radius: 10px; }
+  .campus-duo { flex-direction: column; }
+  .entry-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .entry-item { padding: 12px 8px; }
+  .entry-icon { font-size: 24px; }
+  .entry-item p { font-size: 12px; }
+  .college-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
