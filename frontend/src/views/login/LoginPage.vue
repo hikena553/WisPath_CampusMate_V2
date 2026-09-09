@@ -60,12 +60,10 @@
               <h2 class="section-title">有问必答，<span class="hl">随时在线</span></h2>
               <p class="desc">学习卡壳了？生活迷茫了？随时问绵小城，<b>秒级响应</b>，全年无休，比辅导员回消息还快！</p>
             </div>
-            <div class="media"><div class="frame"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i></div><video src="/videos/chat.webm" poster="/images/intro/01-chat.png" muted loop autoplay playsinline></video></div></div>
           </div>
         </section>
         <section class="section">
           <div class="inner">
-            <div class="media"><div class="frame"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i></div><video src="/videos/voice.webm" muted loop autoplay playsinline></video></div></div>
             <div class="copy">
               <span class="tag">VOICE CHAT</span>
               <h2 class="section-title">想说就说，<span class="hl2">声临其境</span></h2>
@@ -80,12 +78,10 @@
               <h2 class="section-title">校园这么大，<span class="hl3">带你逛遍</span></h2>
               <p class="desc"><b>VR 全景</b> + 高清风景，足不出户打卡安州、游仙每一个角落，校园美景尽收眼底。</p>
             </div>
-            <div class="media"><div class="frame"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i></div><video src="/videos/campus.webm" poster="/images/intro/02-campus.png" muted loop autoplay playsinline></video></div></div>
           </div>
         </section>
         <section class="section">
           <div class="inner">
-            <div class="media"><div class="frame"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i></div><video src="/videos/schedule.webm" poster="/images/intro/03-schedule.png" muted loop autoplay playsinline></video></div></div>
             <div class="copy">
               <span class="tag">STUDY CENTER</span>
               <h2 class="section-title">课表成绩，<span class="hl">心里有数</span></h2>
@@ -100,7 +96,6 @@
               <h2 class="section-title">办事少跑腿，<span class="hl2">一站搞定</span></h2>
               <p class="desc">失物招领、办事流程，校园事务统统交给绵小城，你只管<b>好好学习</b>。</p>
             </div>
-            <div class="media"><div class="frame"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i></div><video src="/videos/service.webm" poster="/images/intro/05-service.png" muted loop autoplay playsinline></video></div></div>
           </div>
         </section>
       </div>
@@ -460,8 +455,8 @@ onUnmounted(() => {
   position: relative; width: 100vw; height: 100vh;
   display: flex; align-items: center; justify-content: center; padding: 60px 80px;
 }
-.inner { display: flex; align-items: center; gap: 64px; width: 100%; max-width: 1240px; }
-.copy { flex: 1; min-width: 0; }
+.inner { width: 100%; max-width: 800px; margin: 0 auto; }
+.copy { max-width: 640px; margin: 0 auto; text-align: center; }
 .tag { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 12px; letter-spacing: 3px; font-weight: 700; margin-bottom: 22px; color: #fff; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); }
 .section-title { font-size: 54px; font-weight: 900; line-height: 1.2; color: #fff; letter-spacing: 1px; margin-bottom: 24px; text-shadow: 0 4px 30px rgba(0,0,0,0.35); }
 .section-title :deep(.hl) { background: linear-gradient(90deg,#ffd54d,#ff8a65); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -469,15 +464,6 @@ onUnmounted(() => {
 .section-title :deep(.hl3) { background: linear-gradient(90deg,#f472b6,#fb923c); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .desc { font-size: 20px; line-height: 1.9; color: rgba(255,255,255,0.75); letter-spacing: 1px; }
 .desc :deep(b) { color: #ffd54d; font-weight: 800; }
-
-.media { flex: 1; min-width: 0; display: flex; justify-content: center; }
-.frame { position: relative; width: 100%; max-width: 560px; border-radius: 18px; overflow: hidden; background: #0f1030; border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 30px 80px rgba(0,0,0,0.55); }
-.frame :deep(video) { width: 100%; display: block; }
-.frame .bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.08); }
-.frame .bar i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.frame .bar .r { background: #ff5f57; }
-.frame .bar .y { background: #febc2e; }
-.frame .bar .g { background: #28c840; }
 
 .hero { text-align: center; }
 .hero-mascot { width: 180px; height: 180px; object-fit: contain; animation: mascot-float 3s ease-in-out infinite; }
@@ -545,12 +531,11 @@ onUnmounted(() => {
 
 /* ============ 响应式 ============ */
 @media (max-width: 860px) {
-  .inner { flex-direction: column; gap: 32px; text-align: center; }
+  .inner { padding: 0 16px; }
   .section { padding: 40px 24px; }
   .section-title { font-size: 34px; }
   .desc { font-size: 16px; }
   .hero-title { font-size: 54px; }
-  .copy { order: 1; } .media { order: 2; }
   .dots { right: 14px; }
 }
 @media (max-width: 767px) {

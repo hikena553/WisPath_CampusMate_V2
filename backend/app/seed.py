@@ -20,6 +20,9 @@ from app.models.knowledge import KnowledgeItem
 
 logger = logging.getLogger(__name__)
 
+# 确保数据库表存在
+Base.metadata.create_all(bind=engine)
+
 db = SessionLocal()
 seeded = False
 
