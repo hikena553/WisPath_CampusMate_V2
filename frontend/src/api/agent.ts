@@ -129,3 +129,21 @@ export async function sendChatMessage(
 
   onDone(full)
 }
+
+
+export async function fetchRecommendations(): Promise<string[]> {
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  try {
+    const resp = await fetch('/api/agent/recommendations', { headers })
+    if (resp.ok) {
+      const data = await resp.json()
+      return data.recommendations || []
+    }
+  } catch (e) {
+    console.error('获取推荐失败', e)
+  }
+  return []
+}

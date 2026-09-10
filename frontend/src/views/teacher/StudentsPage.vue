@@ -105,7 +105,8 @@
     </div>
 
     <!-- Detail Dialog -->
-    <el-dialog v-model="detailVisible" :title="detail ? `${detail.name} - 学生详情` : '学生详情'" width="800px" :close-on-click-modal="false" destroy-on-close class="student-detail-dialog">
+    <!-- 学生详情：桌面端弹窗 -->
+    <el-dialog v-if="!isMobile" v-model="detailVisible" :title="detail ? `${detail.name} - 学生详情` : '学生详情'" width="800px" :close-on-click-modal="false" destroy-on-close class="student-detail-dialog">
       <template v-if="detail">
         <div class="dialog-body">
           <div class="dialog-profile">
@@ -242,6 +243,90 @@
       </template>
     </el-dialog>
 
+    <!-- 学生详情：移动端右滑页面 -->
+    <transition name="slide-right-in">
+      <div v-if="isMobile && detailVisible && detail" class="mobile-detail-page">
+        <div class="mobile-detail-header">
+          <el-button text circle @click="detailVisible = false"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
+          <span class="mobile-detail-title">{{ detail.name }} - 学生详情</span>
+          <div style="width:36px"></div>
+        </div>
+        <div class="mobile-detail-body">
+          <div class="mobile-profile">
+            <el-avatar :size="48" :src="detail.avatar || undefined">{{ detail.name[0] }}</el-avatar>
+            <div class="mobile-profile-info">
+              <strong>{{ detail.name }}</strong>
+              <small>{{ detail.college || '未分配' }} · {{ detail.username }}</small>
+            </div>
+          </div>
+          <el-tabs v-model="detailTab" class="mobile-tabs">
+            <el-tab-pane label="技能" name="skills">
+              <div class="mobile-tab-content">
+                <div v-if="detail.skills_json?.skills?.length" class="mobile-skill-list">
+                  <el-tag v-for="sk in detail.skills_json.skills" :key="sk.name" size="small">{{ sk.name }}</el-tag>
+                </div>
+                <div v-if="detail.skills_json?.interests?.length" class="mobile-skill-list">
+                  <el-tag v-for="i in detail.skills_json.interests" :key="i" size="small" round type="info">{{ i }}</el-tag>
+                </div>
+                <el-empty v-if="!detail.skills_json?.skills?.length && !detail.skills_json?.interests?.length" description="暂无数据" :image-size="48" />
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="成长" name="growth">
+              <div class="mobile-tab-content">
+                <div v-for="r in detail.growth_records" :key="r.id" class="mobile-record-card">
+                  <div class="mobile-record-top">
+                    <el-tag size="small" :type="growthType(r.type)">{{ growthLabel(r.type) }}</el-tag>
+                    <small>{{ r.date }}</small>
+                  </div>
+                  <div class="mobile-record-title">{{ r.title }}</div>
+                  <div v-if="r.description" class="mobile-record-desc">{{ r.description }}</div>
+                </div>
+                <el-empty v-if="!detail.growth_records?.length" description="暂无记录" :image-size="48" />
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="预警" name="crisis">
+              <div class="mobile-tab-content">
+                <div v-for="a in detail.crisis_alerts" :key="a.id" class="mobile-record-card">
+                  <el-alert :title="crisisLabel(a.level)" :type="crisisType(a.level)" :description="a.summary" :closable="false" show-icon />
+                  <small v-if="a.keywords_matched" style="color:#999;margin-top:4px;display:block">关键词：{{ a.keywords_matched }}</small>
+                </div>
+                <el-empty v-if="!detail.crisis_alerts?.length" description="暂无预警" :image-size="48" />
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="项目" name="projects">
+              <div class="mobile-tab-content">
+                <div v-for="p in detail.projects" :key="p.id" class="mobile-record-card">
+                  <div class="mobile-record-top">
+                    <el-tag v-if="p.is_team" size="small" type="primary" round>团队</el-tag>
+                    <el-tag v-else size="small" type="info" round>个人</el-tag>
+                    <small>{{ p.start_date }} ~ {{ p.end_date || '至今' }}</small>
+                  </div>
+                  <div class="mobile-record-title">{{ p.project_name }}</div>
+                  <div v-if="p.team_members" class="mobile-record-desc">成员：{{ p.team_members }}</div>
+                </div>
+                <el-empty v-if="!detail.projects?.length" description="暂无项目" :image-size="48" />
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="请假" name="leave">
+              <div class="mobile-tab-content">
+                <div v-for="l in detail.leave_requests" :key="l.id" class="mobile-record-card">
+                  <div class="mobile-record-top">
+                    <el-tag size="small" :type="l.status === 'approved' ? 'success' : l.status === 'rejected' ? 'danger' : 'warning'">
+                      {{ l.status === 'approved' ? '通过' : l.status === 'rejected' ? '拒绝' : '待批' }}
+                    </el-tag>
+                    <small>{{ l.start_date }} ~ {{ l.end_date }}</small>
+                  </div>
+                  <div class="mobile-record-title">{{ leaveTypeLabel(l.leave_type) }}</div>
+                  <div class="mobile-record-desc">{{ l.reason }}</div>
+                </div>
+                <el-empty v-if="!detail.leave_requests?.length" description="无请假记录" :image-size="48" />
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </div>
+    </transition>
+
     <!-- Contact Dialog -->
     <el-dialog v-model="contactVisible" :title="`发送消息给 ${contactStudent?.name || ''}`" width="420px" :close-on-click-modal="false">
       <el-input v-model="contactMsg" type="textarea" :rows="4" placeholder="输入消息内容..." />
@@ -256,11 +341,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, User, View, ChatDotRound, Close } from '@element-plus/icons-vue'
+import { Search, User, View, ChatDotRound, Close, ArrowLeft } from '@element-plus/icons-vue'
 import { getStudents, getStudentDetail, type StudentSummary, type StudentDetail } from '@/api/teacher'
 import { sendMessage } from '@/api/messages'
 import { ElMessage } from 'element-plus'
+import { useResponsive } from '@/composables/useResponsive'
 
+// keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致
+defineOptions({ name: 'teacher-students' })
+
+const { isMobile } = useResponsive()
 const search = ref('')
 const students = ref<(StudentSummary & { score?: number })[]>([])
 const loaded = ref(false)
@@ -636,4 +726,230 @@ onMounted(loadStudents)
 
 .skill-list { display: flex; flex-direction: column; gap: 6px; }
 .skill-item { display: flex; align-items: center; gap: 6px; }
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 767px) {
+  .students-page {
+    padding: 10px 8px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 0;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions :deep(.el-input) {
+    width: 100% !important;
+  }
+
+  .header-left h2 {
+    font-size: 16px;
+  }
+
+  .filter-bar {
+    gap: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+
+  .filter-bar :deep(.el-select) {
+    width: calc(50% - 3px) !important;
+  }
+
+  .student-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .student-card {
+    padding: 10px;
+  }
+
+  .card-head {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .card-name {
+    font-size: 13px;
+  }
+
+  .card-stats {
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 6px 0;
+  }
+
+  .stat-num {
+    font-size: 14px;
+  }
+
+  .card-actions {
+    gap: 4px;
+  }
+
+  .pagination-wrapper {
+    justify-content: center;
+    padding: 8px 0;
+  }
+
+  .pagination-wrapper :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  /* Dialog mobile overrides */
+  :deep(.student-detail-dialog .el-dialog) {
+    width: 95vw !important;
+    height: 80vh !important;
+    margin: 5vh auto !important;
+  }
+
+  :deep(.student-detail-dialog .el-dialog__body) {
+    height: calc(80vh - 120px) !important;
+    padding: 10px 12px !important;
+  }
+
+  :deep(.el-dialog) {
+    width: 92vw !important;
+    margin: 4vh auto !important;
+  }
+}
+
+/* 移动端右滑详情页 */
+.slide-right-in-enter-active,
+.slide-right-in-leave-active {
+  transition: transform 0.25s ease;
+}
+.slide-right-in-enter-from,
+.slide-right-in-leave-to {
+  transform: translateX(100%);
+}
+
+.mobile-detail-page {
+  position: fixed;
+  inset: 0;
+  background: #f5f7fa;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mobile-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.mobile-detail-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.mobile-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.mobile-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.mobile-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mobile-profile-info strong {
+  font-size: 15px;
+  color: #1a1a1a;
+}
+
+.mobile-profile-info small {
+  font-size: 12px;
+  color: #999;
+}
+
+.mobile-tabs {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0 8px;
+}
+
+.mobile-tabs :deep(.el-tabs__header) {
+  margin-bottom: 8px;
+}
+
+.mobile-tabs :deep(.el-tabs__item) {
+  font-size: 13px;
+  padding: 0 10px;
+  height: 36px;
+  line-height: 36px;
+}
+
+.mobile-tab-content {
+  padding: 0 4px 12px;
+}
+
+.mobile-skill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.mobile-record-card {
+  padding: 10px;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.mobile-record-card:last-child {
+  border-bottom: none;
+}
+
+.mobile-record-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mobile-record-top small {
+  font-size: 11px;
+  color: #999;
+}
+
+.mobile-record-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.mobile-record-desc {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+}
 </style>

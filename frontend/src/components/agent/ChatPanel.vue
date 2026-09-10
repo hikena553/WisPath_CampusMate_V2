@@ -1,9 +1,19 @@
 <template>
   <div class="chat-modern">
-    <!-- 移动端菜单按钮 -->
-    <el-button v-if="showMenuButton" text circle class="menu-toggle" @click="emit('toggleSidebar')">
-      <el-icon :size="20"><Operation /></el-icon>
-    </el-button>
+    <!-- 移动端顶栏 -->
+    <div v-if="showMenuButton" class="mobile-header">
+      <el-button text circle class="menu-toggle" @click="emit('toggleSidebar')">
+        <div class="hamburger-icon">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </el-button>
+      <div class="mobile-header-title">{{ currentTitle }}</div>
+      <el-button text circle class="menu-toggle" :disabled="loading" @click="handlePhoneCall">
+        <el-icon :size="20"><Phone /></el-icon>
+      </el-button>
+    </div>
     <!-- Pending Files Preview (top-right) -->
     <div v-if="pendingFiles.length > 0" class="pending-files-corner">
       <el-tooltip content="清空全部" placement="bottom">
@@ -87,27 +97,12 @@
             <p>你的校园智能管家，所有事情直接跟我聊，一站式办结</p>
           </div>
 
-          <!-- Quick Action Cards -->
-          <div class="quick-grid">
-            <div class="quick-card" v-for="a in actions" :key="a.label" @click="quickSend(a.example)">
-              <div class="qc-icon" :style="{ background: a.color + '12', color: a.color }">
-                <el-icon :size="18"><component :is="a.icon" /></el-icon>
-              </div>
-              <div class="qc-body">
-                <strong>{{ a.label }}</strong>
-                <small>{{ a.desc }}</small>
-              </div>
-            </div>
           </div>
-        </div>
       </div>
 
       <!-- Messages -->
       <template v-for="(msg, _i) in store.messages" :key="msg.id">
         <div :class="['msg-row', msg.role]">
-          <div v-if="msg.role === 'assistant'" class="msg-avatar-col">
-            <MianCharacter state="idle" mini />
-          </div>
           <div class="msg-bubble-col">
             <div :class="['bubble', msg.role]">
               <!-- Render images inline -->
@@ -174,22 +169,25 @@
       @close="handleVoiceClose"
     />
 
+    <!-- 推荐对话 -->
+    <div v-if="store.messages.length === 0" class="recommend-bar">
+      <div class="recommend-title">为你推荐</div>
+      <div class="recommend-list">
+        <button
+          v-for="item in recommendItems"
+          :key="item"
+          class="recommend-item"
+          @click="input = item; send()"
+        >
+          <el-icon><Promotion /></el-icon>
+          <span>{{ item }}</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Input Bar -->
     <div class="input-bar">
       <div class="input-container">
-        <!-- Feature Toggles -->
-        <div class="feature-toggles">
-          <button
-            type="button"
-            :class="['toggle-btn', { active: deepThinkEnabled }]"
-            :disabled="loading"
-            @click="deepThinkEnabled = !deepThinkEnabled"
-          >
-            <el-icon class="toggle-icon"><MagicStick /></el-icon>
-            深度思考
-          </button>
-        </div>
-
         <!-- Text Input -->
         <div class="input-field-wrap">
           <textarea
@@ -210,7 +208,7 @@
         <!-- Bottom Actions -->
         <div class="input-actions">
           <!-- Upload buttons -->
-          <el-dropdown v-if="isMobile" trigger="click" @command="handleUploadCommand" :disabled="loading">
+          <el-dropdown trigger="click" @command="handleUploadCommand" :disabled="loading">
             <button type="button" class="action-icon-btn" :disabled="loading">
               <el-icon :size="18"><Paperclip /></el-icon>
             </button>
@@ -225,18 +223,6 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <template v-else>
-            <el-tooltip content="上传文件" placement="top">
-              <button type="button" class="action-icon-btn" :disabled="loading" @click="triggerUpload">
-                <el-icon><Paperclip /></el-icon>
-              </button>
-            </el-tooltip>
-            <el-tooltip content="上传图片" placement="top">
-              <button type="button" class="action-icon-btn" :disabled="loading" @click="triggerImageUpload">
-                <el-icon><Picture /></el-icon>
-              </button>
-            </el-tooltip>
-          </template>
           <input ref="fileInputRef" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.zip,.rar" style="display:none" @change="onFileSelected" />
           <input ref="imageInputRef" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.svg" style="display:none" @change="onImageSelected" />
 
@@ -252,9 +238,10 @@
             </button>
           </el-tooltip>
 
-          <!-- Phone -->
-          <el-tooltip content="语音通话" placement="top">
+          <!-- Phone (桌面端显示，移动端隐藏) -->
+          <el-tooltip content="语音通话" placement="top" :disabled="isMobile">
             <button
+              v-if="!isMobile"
               type="button"
               class="action-icon-btn"
               :disabled="loading"
@@ -274,6 +261,18 @@
             <el-icon v-if="!loading" :size="18"><Promotion /></el-icon>
             <span v-else class="send-spinner"></span>
           </button>
+
+          <!-- Deep Think Toggle -->
+          <el-tooltip content="深度思考" placement="top">
+            <button
+              type="button"
+              :class="['action-icon-btn', { active: deepThinkEnabled }]"
+              :disabled="loading"
+              @click="deepThinkEnabled = !deepThinkEnabled"
+            >
+              <el-icon :size="18"><MagicStick /></el-icon>
+            </button>
+          </el-tooltip>
         </div>
       </div>
 
@@ -289,14 +288,13 @@ import { useAgentStore } from '@/stores/agent'
 import { useTeacherAgentStore } from '@/stores/teacherAgent'
 import { useConversationStore } from '@/stores/conversation'
 import { useTeacherConversationStore } from '@/stores/teacherConversation'
-import { sendChatMessage } from '@/api/agent'
+import { sendChatMessage, fetchRecommendations } from '@/api/agent'
 import { getToken } from '@/utils/token'
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, Operation, MagicStick, ArrowDown, Close, Delete,
-  DocumentChecked, Warning, UserFilled, FirstAidKit, Bell, OfficeBuilding, Trophy, Calendar, DataLine,
+  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, Menu, MagicStick, ArrowDown, Close, Delete,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MianCharacter from './MianCharacter.vue'
@@ -350,6 +348,13 @@ const store = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore(
 const convStore = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
 const router = useRouter()
 const input = ref('')
+
+// 当前对话标题
+const currentTitle = computed(() => {
+  if (!convStore.activeId) return '新对话'
+  const conv = convStore.list.find(c => c.id === convStore.activeId)
+  return conv?.title || '新对话'
+})
 const msgRef = ref<HTMLElement>()
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
@@ -363,8 +368,8 @@ function autoResize() {
   if (!el) return
   // 先设置为 auto 让浏览器重新计算 scrollHeight
   el.style.height = 'auto'
-  // 然后设置为实际高度（最小24px，最大160px）
-  el.style.height = Math.max(24, Math.min(el.scrollHeight, 160)) + 'px'
+  // 然后设置为实际高度（最小16px，最大160px）
+  el.style.height = Math.max(16, Math.min(el.scrollHeight, 160)) + 'px'
 }
 
 watch(input, () => {
@@ -388,29 +393,21 @@ const micTooltip = computed(() => {
   return '语音输入'
 })
 
-const studentActions = [
-  { icon: DocumentChecked, label: '请假申请', desc: '比赛、病假、事假直接说', color: '#409eff', example: '我需要请假' },
-  { icon: Trophy, label: '记录成长', desc: '获奖/比赛自动写入档案', color: '#67c23a', example: '我要记录成长成果' },
-  { icon: Calendar, label: '查课表', desc: '看看今天上什么课', color: '#e6a23c', example: '查一下我的课表' },
-  { icon: DataLine, label: '查成绩', desc: '查看各科成绩和GPA', color: '#f56c6c', example: '查一下我的成绩' },
-  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下官网通知' },
-  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '查询校园知识' },
-]
-
-const teacherActions = [
-  { icon: DocumentChecked, label: '请假审批', desc: '查看待批请假申请', color: '#409eff', example: '查看待审批的请假' },
-  { icon: Warning, label: '预警管理', desc: '查看学生心理预警', color: '#f56c6c', example: '查看学生预警' },
-  { icon: UserFilled, label: '学生档案', desc: '查看名下学生成长', color: '#67c23a', example: '查看学生档案' },
-  { icon: FirstAidKit, label: '危机干预', desc: '记录干预措施', color: '#e6a23c', example: '记录危机干预' },
-  { icon: Bell, label: '官网通知', desc: '教务处最新公告', color: '#b37feb', example: '查一下官网通知' },
-  { icon: OfficeBuilding, label: '校园知识', desc: '办事流程、规章制度', color: '#909399', example: '查询校园知识' },
-]
-
-const actions = computed(() => props.role === 'teacher' ? teacherActions : studentActions)
-
 const inputCharCount = computed(() => input.value.length)
 const isOverLimit = computed(() => inputCharCount.value > MAX_INPUT_CHARS)
 const charRatio = computed(() => Math.min(inputCharCount.value / MAX_INPUT_CHARS, 1))
+
+// 模块级缓存，跨挂载保持
+const _recommendCache: string[] = []
+
+const recommendItems = ref<string[]>(
+  _recommendCache.length ? [..._recommendCache] : [
+    '帮我查一下下周的课程安排',
+    '我想看看这学期的成绩单',
+    '最近有什么校园活动通知',
+    '帮我记录一下获奖信息',
+  ]
+)
 
 const fileInputRef = ref<HTMLInputElement>()
 const imageInputRef = ref<HTMLInputElement>()
@@ -552,8 +549,15 @@ function renderMessageContent(msg: ChatMessage): string {
 
 function formatTime(ts: string): string {
   if (!ts) return ''
-  const d = new Date(ts)
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  // 后端存储 UTC 时间，需要正确解析
+  let d: Date
+  if (ts.endsWith('Z') || ts.includes('+00:00')) {
+    d = new Date(ts)
+  } else {
+    // 如果没有时区信息，假设是 UTC
+    d = new Date(ts + 'Z')
+  }
+  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Shanghai' })
 }
 
 async function send() {
@@ -722,11 +726,6 @@ async function send() {
   uploadedFileUrl = ''
 }
 
-function quickSend(text: string) {
-  input.value = text
-  send()
-}
-
 function handleSuggestion(s: Suggestion) {
   if (s.link) router.push(s.link)
 }
@@ -771,6 +770,14 @@ watch(() => store.messages.length, () => {
 
 onMounted(() => {
   scrollToBottom()
+  // 动态获取推荐（有缓存则静默刷新）
+  fetchRecommendations().then(items => {
+    if (items.length > 0) {
+      recommendItems.value = items
+      _recommendCache.length = 0
+      _recommendCache.push(...items)
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -784,7 +791,7 @@ onUnmounted(() => {
   display: flex; 
   flex-direction: column; 
   height: 100vh; 
-  background: #fff; 
+  background: linear-gradient(180deg, #f0f8ff 0%, #fafcff 40%, #fff 100%); 
   overflow: hidden;
 }
 
@@ -895,14 +902,14 @@ onUnmounted(() => {
   position: relative; 
   z-index: 1; 
   text-align: center; 
-  padding: 40px 24px; 
-  max-width: 640px; 
-  margin: 0 auto;
+  padding: 30px 24px; 
+  max-width: 600px; 
+  margin: -80px auto 0;
 }
 
 .ai-character { 
   position: relative; 
-  margin: 0 auto 10px; 
+  margin: 0 auto 0px; 
   display: flex; 
   align-items: center; 
   justify-content: center;
@@ -928,42 +935,66 @@ onUnmounted(() => {
   background-clip: text; -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-.welcome-greeting h1 { font-size: 28px; color: #1a1a1a; margin-bottom: 8px; }
-.welcome-greeting p { color: #888; font-size: 14px; line-height: 1.6; margin-bottom: 28px; }
+.welcome-greeting h1 { font-size: 24px; color: #1a1a1a; margin-bottom: 4px; margin-top: 0; }
+.welcome-greeting p { color: #888; font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
 
-/* 快捷卡片 */
-.quick-grid { 
-  display: grid; 
-  grid-template-columns: repeat(3, 1fr); 
-  gap: 10px; 
-  margin-bottom: 24px;
+/* 推荐对话 */
+.recommend-bar {
+  flex-shrink: 0;
+  padding: 0 16px 8px;
+  margin-top: -112px;
+  background: #fff;
+  position: relative;
+  z-index: 10;
 }
-.quick-card {
-  background: #fff; border-radius: 14px; padding: 14px; cursor: pointer;
-  border: 1px solid #f0f0f0; transition: border-color 0.2s, box-shadow 0.2s; 
-  text-align: left;
-  display: flex; gap: 10px; align-items: flex-start;
+.recommend-title {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 6px;
+  padding-left: 14px;
+  max-width: 820px;
+  margin-left: auto;
+  margin-right: auto;
 }
-.quick-card:hover { 
-  border-color: #409eff; 
-  box-shadow: 0 4px 16px rgba(64,158,255,.12); 
+.recommend-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 820px;
+  margin: 0 auto;
+  padding-left: 14px;
 }
-.qc-icon { 
-  width: 36px; height: 36px; border-radius: 10px; 
-  display: flex; align-items: center; justify-content: center; 
-  font-size: 18px; flex-shrink: 0;
+.recommend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #555;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
-.qc-body { min-width: 0; }
-.qc-body strong { font-size: 13px; color: #333; display: block; }
-.qc-body small { font-size: 11px; color: #999; display: block; margin-top: 2px; }
+.recommend-item:hover {
+  border-color: #c0c4cc;
+  background: #f9fafb;
+  color: #333;
+}
+.recommend-item .el-icon {
+  font-size: 14px;
+  color: #409eff;
+}
 
 /* ── Message Bubbles ── */
 .msg-row { 
   display: flex; gap: 8px; padding: 0 20px; margin-bottom: 10px; margin-top: 0; 
-  max-width: 760px; margin-left: auto; margin-right: auto; width: 100%; box-sizing: border-box;
+  max-width: 760px; margin-left: 140px; margin-right: auto; width: 100%; box-sizing: border-box;
 }
 .msg-row:first-child { margin-top: 10px; }
-.msg-row.user { flex-direction: row-reverse; }
+.msg-row.user { flex-direction: row-reverse; margin-left: auto; margin-right: 140px; }
 
 .msg-avatar-col { flex-shrink: 0; }
 .msg-avatar-col { flex-shrink: 0; margin-right: 8px; }
@@ -1168,15 +1199,15 @@ onUnmounted(() => {
 /* ── Input Bar ── */
 .input-bar {
   flex-shrink: 0;
-  padding: 12px 16px 12px;
+  padding: 8px 16px;
   background: #fff;
 }
 .input-container {
-  max-width: 768px;
+  max-width: 820px;
   margin: 0 auto;
   background: #fff;
   border-radius: 24px;
-  padding: 12px 12px 10px;
+  padding: 6px 14px 6px;
   border: 1px solid #e5e7eb;
   box-shadow: 0 2px 12px rgba(0,0,0,.04);
   transition: border-color .2s, box-shadow .2s;
@@ -1190,7 +1221,7 @@ onUnmounted(() => {
 .feature-toggles {
   display: flex;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   padding: 0 4px;
 }
 .toggle-btn {
@@ -1230,15 +1261,14 @@ onUnmounted(() => {
 .chat-textarea {
   width: 100%; border: none; background: transparent; outline: none;
   font-size: 15px; font-family: inherit; color: #1f2937; resize: none;
-  line-height: 1.5; padding: 4px 6px; min-height: 24px; max-height: 160px;
+  line-height: 1.5; padding: 6px 6px 0px; min-height: 16px; max-height: 160px;
   overflow-y: auto;
   transition: height 0.3s ease;
 }
 .chat-textarea::placeholder { color: #9ca3af; }
-.chat-textarea::-webkit-scrollbar { width: 4px; }
+.chat-textarea::-webkit-scrollbar { width: 0; }
 .chat-textarea::-webkit-scrollbar-track { background: transparent; }
-.chat-textarea::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
-.chat-textarea::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.chat-textarea::-webkit-scrollbar-thumb { background: transparent; }
 .char-counter {
   text-align: right;
   font-size: 11px;
@@ -1255,7 +1285,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
-  margin-top: 4px;
+  margin-top: 2px;
   padding: 0 2px;
 }
 
@@ -1327,8 +1357,44 @@ onUnmounted(() => {
 }
 
 /* ── Mobile Menu Button ── */
-.menu-toggle { width: 36px; height: 36px; color: #555; margin: 4px 8px; flex-shrink: 0; }
+.mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+.mobile-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+  flex: 1;
+}
+.mobile-header-placeholder {
+  width: 36px;
+  flex-shrink: 0;
+}
+.menu-toggle { width: 36px; height: 36px; color: #555; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .menu-toggle:hover { color: #409eff; background: rgba(64,158,255,.08); }
+
+.hamburger-icon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 18px;
+  height: 14px;
+  gap: 3px;
+}
+
+.hamburger-icon span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background-color: currentColor;
+  border-radius: 1px;
+}
 
 /* ── Mobile Responsive ── */
 @media (max-width: 767px) {
@@ -1338,9 +1404,8 @@ onUnmounted(() => {
   .ai-character { transform: scale(1.15); margin-bottom: 16px; }
   .welcome-greeting h1 { font-size: 22px; margin-bottom: 6px; }
   .welcome-greeting p { font-size: 13px; margin-bottom: 20px; }
-  .quick-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
-  .quick-card { padding: 12px; }
-  .msg-row { padding: 0 12px; margin-bottom: 8px; }
+  .msg-row { padding: 0 12px; margin-bottom: 8px; margin-left: 0; margin-right: 0; }
+  .msg-row.user { flex-direction: row-reverse; margin-left: 0; margin-right: 0; }
   .bubble { padding: 8px 12px; font-size: 13px; }
   .input-bar { padding: 8px 10px; }
   .input-container { border-radius: 20px; padding: 10px; }

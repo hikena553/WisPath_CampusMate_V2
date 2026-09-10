@@ -126,17 +126,13 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* 聊天过渡动画 */
-.chat-fade-enter-active {
-  transition: opacity .15s ease;
-}
+/* 禁用聊天过渡动画 */
+.chat-fade-enter-active,
 .chat-fade-leave-active {
-  transition: opacity .1s ease;
+  transition: none !important;
 }
-.chat-fade-enter-from {
-  opacity: 0;
-}
+.chat-fade-enter-from,
 .chat-fade-leave-to {
-  opacity: 0;
+  opacity: 1;
 }
 </style>

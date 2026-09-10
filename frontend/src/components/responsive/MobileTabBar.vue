@@ -6,12 +6,15 @@
       :class="['tab-item', { active: activeKey === item.key, center: item.center }]"
       @click="$emit('select', item)"
     >
-      <template v-if="item.iconImg">
-        <img :src="item.iconImg" class="tab-icon-img" />
-      </template>
-      <template v-else>
-        <el-icon :size="item.center ? 22 : 20"><component :is="item.icon" /></el-icon>
-      </template>
+      <div class="tab-icon-wrap">
+        <template v-if="item.iconImg">
+          <img :src="item.iconImg" class="tab-icon-img" />
+        </template>
+        <template v-else>
+          <el-icon :size="item.center ? 22 : 20"><component :is="item.icon" /></el-icon>
+        </template>
+        <span v-if="item.badge && unreadCount" class="tab-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+      </div>
       <span class="tab-label">{{ item.label }}</span>
     </div>
   </div>
@@ -27,11 +30,13 @@ interface TabItem {
   iconImg?: string
   route: string
   center?: boolean
+  badge?: boolean
 }
 
 defineProps<{
   items: TabItem[]
   activeKey: string
+  unreadCount?: number
 }>()
 
 defineEmits<{
@@ -65,25 +70,12 @@ defineEmits<{
   flex: 1;
   height: 100%;
   cursor: pointer;
-  transition: all 0.2s ease;
   color: #999;
   -webkit-tap-highlight-color: transparent;
 }
 
-.tab-item:active {
-  transform: scale(0.95);
-}
-
 .tab-item.active {
   color: #409eff;
-}
-
-.tab-item.active .el-icon {
-  transform: scale(1.1);
-}
-
-.tab-item.active .tab-icon-img {
-  transform: scale(1.1);
 }
 
 /* 中间标签样式 */
@@ -96,7 +88,6 @@ defineEmits<{
   height: 32px;
   border-radius: 8px;
   margin-top: -8px;
-  transition: transform 0.2s ease;
 }
 
 .tab-item.center.active .tab-icon-img {
@@ -114,5 +105,30 @@ defineEmits<{
   width: 22px;
   height: 22px;
   object-fit: contain;
+}
+
+.tab-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #f56c6c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 </style>

@@ -33,7 +33,7 @@ function createConversationStore(role: 'student' | 'teacher') {
     const list = ref<Conversation[]>([])
     const activeId = ref<number | null>(null)
     const messages = ref<ConversationMessage[]>([])
-    const sidebarCollapsed = ref(localStorage.getItem(sidebarKey) !== 'false')
+    const sidebarCollapsed = ref(localStorage.getItem(sidebarKey) === 'true')
 
     watch(sidebarCollapsed, (v) => {
       localStorage.setItem(sidebarKey, v ? 'true' : 'false')

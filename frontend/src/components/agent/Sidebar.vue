@@ -8,14 +8,14 @@
             <el-icon :size="18"><Fold v-if="!collapsed" /><Expand v-else /></el-icon>
           </el-button>
         </el-tooltip>
-        <div class="header-title">对话列表</div>
+        <div class="header-title"></div>
       </div>
       <div class="header-actions">
         <el-input v-model="search" placeholder="搜索..." size="small" clearable class="search-input" :prefix-icon="Search" />
         <div class="action-btns">
           <el-button size="small" type="primary" @click="newNormal"><el-icon><Plus /></el-icon><span>新对话</span></el-button>
           <el-dropdown v-if="props.role !== 'teacher'" trigger="click" @command="newProject">
-            <el-button size="small" plain><el-icon><FolderAdd /></el-icon><span>新项目</span></el-button>
+            <el-button size="small" plain><el-icon><FolderAdd /></el-icon><span>新工作任务</span></el-button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="competition">学科竞赛</el-dropdown-item>
@@ -38,7 +38,6 @@
         <div class="section-header" @click="projectExpanded = !projectExpanded">
           <el-icon><CaretRight v-if="!projectExpanded" /><CaretBottom v-else /></el-icon>
           <span>项目</span>
-          <el-tag size="small" round>{{ projects.length }}</el-tag>
         </div>
         <Transition name="expand">
           <div v-show="projectExpanded" class="section-items">
@@ -77,7 +76,6 @@
         <div class="section-header" @click="historyExpanded = !historyExpanded">
           <el-icon><CaretRight v-if="!historyExpanded" /><CaretBottom v-else /></el-icon>
           <span>历史</span>
-          <el-tag size="small" round>{{ histories.length }}</el-tag>
         </div>
         <Transition name="expand">
           <div v-show="historyExpanded" class="section-items">
@@ -154,10 +152,12 @@ import { useConversationStore, type Conversation } from '@/stores/conversation'
 import { useTeacherConversationStore } from '@/stores/teacherConversation'
 import { useAgentStore } from '@/stores/agent'
 import { useTeacherAgentStore } from '@/stores/teacherAgent'
+import { useResponsive } from '@/composables/useResponsive'
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
 const store = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
 const agentStore = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore()
+const { isMobile } = useResponsive()
 const search = ref('')
 const projectExpanded = ref(false)
 const historyExpanded = ref(true)
@@ -172,7 +172,7 @@ const filteredHistories = computed(() => {
   const q = search.value.toLowerCase()
   return histories.value.filter(c => c.title.toLowerCase().includes(q))
 })
-const collapsed = computed(() => store.sidebarCollapsed)
+const collapsed = computed(() => !isMobile.value && store.sidebarCollapsed)
 
 const isAllSelected = computed(() => {
   return filteredHistories.value.length > 0 && filteredHistories.value.every(c => selectedIds.value.has(c.id))
@@ -209,12 +209,18 @@ async function newProject(template: string) {
   let title = ''
   if (template === 'competition') {
     try {
-      const { value } = await ElMessageBox.prompt('请输入竞赛名称', '新建学科竞赛项目')
+      const { value } = await ElMessageBox.prompt('', '新建学科竞赛项目', {
+        inputPlaceholder: '请输入竞赛名称',
+        customClass: 'sidebar-msgbox',
+      })
       if (!value) return; title = value
     } catch { return }
   } else if (template === 'custom') {
     try {
-      const { value } = await ElMessageBox.prompt('请输入项目名称', '自定义项目')
+      const { value } = await ElMessageBox.prompt('', '自定义项目', {
+        inputPlaceholder: '请输入项目名称',
+        customClass: 'sidebar-msgbox',
+      })
       if (!value) return; title = value
     } catch { return }
   }
@@ -328,10 +334,10 @@ onMounted(() => {
 /* 头部区域 */
 .sidebar-header { 
   flex-shrink: 0; 
-  padding: 12px 10px 8px;
+  padding: 6px 10px 4px;
 }
 
-.header-row { display: flex; align-items: center; gap: 2px; margin-bottom: 10px; }
+.header-row { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; }
 .toggle-btn { 
   width: 28px; height: 28px; flex-shrink: 0; color: #999; border-radius: 6px;
 }
@@ -340,14 +346,24 @@ onMounted(() => {
   background: rgba(99,102,241,.06);
 }
 .header-title { font-size: 13px; font-weight: 600; color: #333; letter-spacing: .5px; }
-.header-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.search-input :deep(.el-input__wrapper) { border-radius: 8px; background: #f0f0f0; box-shadow: none; border: 1px solid transparent; }
+.header-actions { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.search-input :deep(.el-input__wrapper) { border-radius: 6px; background: #f0f0f0; box-shadow: none; border: 1px solid transparent; padding: 0 6px; min-height: 24px; }
+.search-input :deep(.el-input__inner) { font-size: 11px; height: 22px; }
+.search-input :deep(.el-input__prefix) { font-size: 12px; }
 .search-input :deep(.el-input__wrapper:hover) { border-color: #e0e0e0; }
 .search-input :deep(.el-input__wrapper.is-focus) { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.08); }
-.action-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+.action-btns { display: flex; flex-direction: column; gap: 2px; width: 100%; }
 .action-btns .el-button {
-  font-size: 12px; border-radius: 8px; height: 30px;
+  font-size: 12px; border-radius: 6px; height: 28px;
   width: 100%;
+  background: transparent;
+  border: none;
+  color: #606266;
+  justify-content: flex-start;
+}
+.action-btns .el-button:hover {
+  background: rgba(0,0,0,.04);
+  color: #333;
 }
 .action-btns :deep(.el-dropdown) {
   display: block;
@@ -358,10 +374,6 @@ onMounted(() => {
 .action-btns .el-button :deep(.el-icon) {
   margin-right: 4px;
 }
-.action-btns .el-button:hover {
-}
-.action-btns .el-button--primary { background: #6366f1; border-color: #6366f1; }
-.action-btns .el-button--primary:hover { background: #5558e6; border-color: #5558e6; }
 
 /* 可滚动列表 */
 .sidebar-scroll { 
@@ -604,7 +616,45 @@ onMounted(() => {
 @media (max-width: 767px) {
   .sidebar { width: 100%; border-right: none; }
   .sidebar.collapsed { width: 100%; }
+  .sidebar.collapsed .header-title,
+  .sidebar.collapsed .header-actions,
+  .sidebar.collapsed .sidebar-scroll { display: block !important; }
+  .sidebar.collapsed .header-actions { display: flex !important; }
   .toggle-btn { display: none; }
   .conv-more { opacity: 1; }
+}
+</style>
+
+<style>
+.sidebar-msgbox {
+  border-radius: 24px !important;
+  padding: 24px 28px 20px !important;
+}
+.sidebar-msgbox .el-message-box__header {
+  padding-bottom: 12px !important;
+}
+.sidebar-msgbox .el-message-box__title {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+}
+.sidebar-msgbox .el-message-box__content {
+  padding: 0 !important;
+}
+.sidebar-msgbox .el-message-box__input {
+  padding-top: 0 !important;
+}
+.sidebar-msgbox .el-input__wrapper {
+  border-radius: 12px !important;
+  box-shadow: 0 0 0 1px #e4e7ed inset !important;
+}
+.sidebar-msgbox .el-input__wrapper:focus-within {
+  box-shadow: 0 0 0 1px #6366f1 inset !important;
+}
+.sidebar-msgbox .el-message-box__btns {
+  padding-top: 16px !important;
+}
+.sidebar-msgbox .el-message-box__btns .el-button {
+  border-radius: 10px !important;
+  height: 34px !important;
 }
 </style>

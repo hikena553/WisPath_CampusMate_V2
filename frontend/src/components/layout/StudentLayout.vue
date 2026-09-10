@@ -208,7 +208,7 @@ import StudentContactPanel from '@/components/chat/StudentContactPanel.vue'
 import { getConversations } from '@/api/messages'
 import { getGroups } from '@/api/groups'
 import Cropper from 'cropperjs'
-import { ChatDotRound, PictureFilled, Calendar, Service, Message, User, SwitchButton, CameraFilled } from '@element-plus/icons-vue'
+import { ChatDotRound, PictureFilled, Calendar, Grid, Message, User, SwitchButton, CameraFilled, Service } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 
@@ -222,7 +222,7 @@ const mobileNavItems = [
   { key: 'campus', label: '校园资讯', icon: PictureFilled, route: '/student/campus' },
   { key: 'schedule', label: '学业中心', icon: Calendar, route: '/student/schedule' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/student' },
-  { key: 'service', label: '办事服务', icon: Service, route: '/student/service' },
+  { key: 'workbench', label: '工作台', icon: Grid, route: '/student/workbench' },
   { key: 'profile', label: '个人中心', icon: User, route: '/student/profile' },
 ]
 
@@ -232,7 +232,7 @@ const activeNavKey = computed(() => {
   if (path.startsWith('/student/campus')) return 'campus'
   if (path.startsWith('/student/schedule') || path.startsWith('/student/growth') || path.startsWith('/student/grade')) return 'schedule'
   if (path.startsWith('/student/profile')) return 'profile'
-  if (path.startsWith('/student/service') || path.startsWith('/student/feedback')) return 'profile'
+  if (path.startsWith('/student/workbench') || path.startsWith('/student/service') || path.startsWith('/student/feedback')) return 'workbench'
   return 'agent'
 })
 
@@ -448,7 +448,7 @@ async function handleSaveProfile() {
   box-shadow: 0 2px 12px rgba(29,78,216,0.35);
 }
 @media (max-width: 767px) {
-  .topbar-right { gap: 0; }
+  .topbar { display: none; }
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; cursor: pointer; position: relative; z-index: 101; }
 .topbar-badge { height: 36px; width: 36px; border-radius: 50%; object-fit: cover; filter: brightness(0.85) saturate(1.3); }

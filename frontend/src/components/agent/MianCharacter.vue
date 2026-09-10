@@ -31,7 +31,6 @@ defineEmits<{ click: [] }>()
 .mc {
   display: inline-flex; flex-direction: column; align-items: center;
   cursor: pointer; position: relative; user-select: none;
-  animation: bounceIn 0.35s ease-out;
 }
 
 @keyframes bounceIn {
@@ -57,7 +56,6 @@ defineEmits<{ click: [] }>()
   border: 1px solid rgba(99,102,241,.15); border-radius: 12px;
   padding: 6px 14px; font-size: 12px; color: #444; white-space: nowrap;
   box-shadow: 0 4px 20px rgba(99,102,241,.1);
-  animation: slideInUp 0.4s ease-out;
 }
 .mc-bubble::after {
   content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%) rotate(45deg);
@@ -66,9 +64,8 @@ defineEmits<{ click: [] }>()
 }
 
 .mc-scene {
-  position: relative; width: 140px; height: 160px;
+  position: relative; width: 150px; height: 170px;
   display: flex; align-items: center; justify-content: center;
-  animation: float 2s ease-in-out infinite;
 }
 
 @keyframes float {
@@ -82,7 +79,7 @@ defineEmits<{ click: [] }>()
 }
 
 .mc-glow {
-  position: absolute; width: 100px; height: 100px; border-radius: 50%;
+  position: absolute; width: 110px; height: 110px; border-radius: 50%;
   background: radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 70%);
   animation: glow-pulse 2s ease-in-out infinite;
 }
@@ -111,7 +108,7 @@ defineEmits<{ click: [] }>()
 .mc.mini .mc-core { }
 
 .mc-img {
-  width: 120px; height: 120px; object-fit: contain;
+  width: 130px; height: 130px; object-fit: contain;
   pointer-events: none; user-select: none;
   transition: transform 0.15s ease;
 }
@@ -181,5 +178,24 @@ defineEmits<{ click: [] }>()
   0%,100% { transform: rotate(0) translateY(0); }
   25% { transform: rotate(-2deg) translateY(-2px); }
   75% { transform: rotate(2deg) translateY(-2px); }
+}
+
+/* 移动端适配 */
+@media (max-width: 767px) {
+  .mc-scene {
+    width: 100px;
+    height: 120px;
+  }
+  .mc-img {
+    width: 90px;
+    height: 90px;
+  }
+  .mc-glow {
+    width: 70px;
+    height: 70px;
+  }
+  .mc-shadow {
+    width: 35px;
+  }
 }
 </style>

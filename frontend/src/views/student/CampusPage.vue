@@ -3,7 +3,7 @@
     <!-- ① 校园风光轮播图 -->
     <section class="campus-carousel">
       <el-carousel :interval="4000" height="320px" arrow="hover" trigger="click">
-        <el-carousel-item v-for="img in galleryImages" :key="img.image_url">
+        <el-carousel-item v-for="img in carouselImages" :key="img.image_url">
           <div class="carousel-item">
             <img :src="img.image_url" class="carousel-img" />
             <div class="carousel-overlay">
@@ -43,7 +43,7 @@
           <img v-if="impression.jxdt[0].image_url" :src="impression.jxdt[0].image_url" class="jxdt-first-img" />
           <span class="jxdt-first-title">{{ impression.jxdt[0].title }}</span>
         </div>
-        <div v-for="a in impression.jxdt.slice(1)" :key="a.url" class="news-row jxdt-date-row" @click="openLink(a.url)">
+        <div v-for="a in (isMobile ? impression.jxdt.slice(1, 5) : impression.jxdt.slice(1))" :key="a.url" class="news-row jxdt-date-row" @click="openLink(a.url)">
           <span class="jxdt-day"><b>{{ splitDay(a.date) }}</b><span class="jxdt-month">{{ splitMonth(a.date) }}</span></span>
           <span class="news-text">{{ a.title }}</span>
         </div>
@@ -53,7 +53,7 @@
           <span class="card-title"><el-icon><Notification /></el-icon> 通知公告</span>
           <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" target="_blank">查看详情 →</a>
         </div>
-        <div v-for="a in impression.tzgg" :key="a.url" class="tzgg-row" @click="openLink(a.url)">
+        <div v-for="a in (isMobile ? impression.tzgg.slice(0, 5) : impression.tzgg)" :key="a.url" class="tzgg-row" @click="openLink(a.url)">
           <span class="tzgg-date">{{ formatDate(a.date) }}</span>
           <span class="news-text">{{ removeCommonPrefix(a.title) }}</span>
         </div>
@@ -61,7 +61,7 @@
     </section>
 
     <!-- ③ 高教信息 + 教学建设 -->
-    <section class="campus-duo">
+    <section class="campus-duo campus-duo-gjxx">
       <div class="campus-card campus-card-gjxx" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><School /></el-icon> 高教信息</span>
@@ -96,7 +96,8 @@
         <span class="card-title"><el-icon><School /></el-icon> 专业分院</span>
         <span class="section-tag">新闻实时更新</span>
       </div>
-      <div class="card-body">
+      <!-- 桌面端：卡片网格 -->
+      <div class="card-body college-body-pc">
         <div class="college-grid">
           <div v-for="c in collegeCards" :key="c.name" class="college-card" @click="openLink(c.url)">
             <div class="college-head">
@@ -110,11 +111,27 @@
           </div>
         </div>
       </div>
+      <!-- 移动端：标签化 -->
+      <div class="college-body-m">
+        <div class="college-tags">
+          <a
+            v-for="c in collegeCards"
+            :key="c.name"
+            class="college-tag"
+            :style="{ '--tag-color': c.color }"
+            :href="c.url"
+            target="_blank"
+          >
+            <el-icon class="college-tag-icon"><component :is="c.icon" /></el-icon>
+            <span>{{ c.name }}</span>
+          </a>
+        </div>
+      </div>
     </section>
 
     <!-- ⑤ 绵城印象 + 图书馆 -->
     <section class="campus-duo">
-      <div class="campus-card" v-tilt>
+      <div class="campus-card campus-card-impression" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><OfficeBuilding /></el-icon> 绵城印象</span>
           <a class="card-more" href="https://www.mycc.edu.cn/mcyx/" target="_blank">了解更多 →</a>
@@ -161,6 +178,8 @@ import {
 } from '@element-plus/icons-vue'
 
 const vTilt = tilt
+const isMobile = ref(window.innerWidth <= 767)
+window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 767 })
 
 interface GalleryImage {
   title: string
@@ -347,6 +366,13 @@ const galleryImages: GalleryImage[] = [
   { title: '游仙校区田径运动场', image_url: '/images/campus/游仙校区田径运动场.jpg', campus: '游仙' },
   { title: '游仙校区篮球场', image_url: '/images/campus/游仙校区篮球场.jpg', campus: '游仙' },
 ]
+
+const carouselImages = computed(() => {
+  if (!isMobile.value) return galleryImages
+  const anzhou = galleryImages.filter(i => i.campus === '安州')
+  const youxian = galleryImages.filter(i => i.campus === '游仙')
+  return [anzhou[0], anzhou[3], anzhou[5], youxian[0], youxian[2], youxian[7]]
+})
 
 function openLink(url: string) {
   window.open(url, '_blank')
@@ -662,6 +688,7 @@ onMounted(async () => {
 .college-news { display: flex; gap: 6px; font-size: 12px; color: #666; line-height: 1.85; }
 .news-dot { color: #409eff; flex-shrink: 0; }
 .college-link { margin-top: 10px; display: inline-block; font-size: 12px; color: #409eff; }
+.college-body-m { display: none; }
 
 /* ===== Impression List ===== */
 .impression-list {
@@ -828,11 +855,59 @@ onMounted(async () => {
 @media (max-width: 767px) {
   .campus-page { padding: 8px 16px 0; }
   .campus-carousel { border-radius: 10px; }
+  .campus-carousel :deep(.el-carousel__container) { height: 200px !important; }
+  .campus-carousel :deep(.el-carousel__indicators) {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    max-width: calc(100% - 32px);
+    overflow: hidden;
+    justify-content: center;
+  }
+  .campus-carousel :deep(.el-carousel__indicator) { padding: 2px; }
+  .campus-carousel :deep(.el-carousel__button) { width: 5px; height: 5px; }
   .campus-duo { flex-direction: column; }
+  .campus-duo-gjxx { display: none; }
+  .campus-card-impression { display: none; }
   .entry-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .entry-item { padding: 12px 8px; }
   .entry-icon { font-size: 24px; }
   .entry-item p { font-size: 12px; }
-  .college-grid { grid-template-columns: repeat(2, 1fr); }
+  .college-body-pc { display: none; }
+  .college-body-m { display: block; }
+  .college-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 0 4px 24px;
+  }
+  .college-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: #fff;
+    border: 1.5px solid #e4e7ed;
+    color: #333;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .college-tag:active {
+    background: var(--tag-color, #409eff);
+    border-color: var(--tag-color, #409eff);
+    color: #fff;
+    transform: scale(0.96);
+  }
+  .college-tag:active .college-tag-icon {
+    color: #fff;
+  }
+  .college-tag-icon {
+    font-size: 16px;
+    color: var(--tag-color, #409eff);
+  }
 }
 </style>

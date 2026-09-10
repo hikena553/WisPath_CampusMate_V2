@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -11,8 +12,9 @@ from app.models.user import User
 from app.models.conversation import Conversation, ConversationMessage
 from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
-from app.services.llm_service import speech_to_text
+from app.services.llm_service import speech_to_text, _get_client, _get_llm_config, build_system_prompt
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 
@@ -85,3 +87,74 @@ async def speech_to_text_api(file: UploadFile = File(...), user: User = Depends(
         return {"text": text}
     except RuntimeError as e:
         raise HTTPException(502, str(e))
+
+
+@router.get("/recommendations")
+async def get_recommendations(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """根据用户历史对话生成推荐问题"""
+    # 获取用户最近的对话消息
+    recent_messages = (
+        db.query(ConversationMessage)
+        .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
+        .filter(Conversation.user_id == user.id)
+        .order_by(ConversationMessage.timestamp.desc())
+        .limit(20)
+        .all()
+    )
+
+    history_text = ""
+    for msg in reversed(recent_messages):
+        role = "用户" if msg.role == "user" else "助手"
+        history_text += f"{role}: {msg.content[:200]}\n"
+
+    # 如果没有历史对话，返回默认推荐
+    if not history_text.strip():
+        return {"recommendations": [
+            "帮我查一下下周的课程安排",
+            "我想看看这学期的成绩单",
+            "最近有什么校园活动通知",
+            "帮我记录一下获奖信息",
+        ]}
+
+    config = _get_llm_config()
+    prompt = f"""根据以下用户的历史对话记录，生成4个用户可能接下来想问的推荐问题。
+
+要求：
+1. 问题控制在20字以内，自然口语化
+2. 结合用户的历史兴趣和需求
+3. 涵盖校园AI助手的主要功能（课表、成绩、请假、通知、考试、成长记录等）
+4. 直接返回JSON数组格式，不要其他文字
+
+历史对话记录：
+{history_text}
+
+返回格式示例：
+["帮我查一下下周的课程安排", "我想看看这学期的成绩单", "最近有什么校园活动通知", "帮我记录一下获奖信息"]"""
+
+    try:
+        client = _get_client()
+        response = await client.chat.completions.create(
+            model=config['model'],
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        content = response.choices[0].message.content or ""
+        # 提取JSON数组
+        import re
+        match = re.search(r'\[.*?\]', content, re.DOTALL)
+        if match:
+            recommendations = json.loads(match.group())
+            # 确保返回4个
+            if len(recommendations) >= 4:
+                return {"recommendations": recommendations[:4]}
+    except Exception as e:
+        logger.error("生成推荐失败: %s", e)
+
+    # 降级返回默认推荐
+    return {"recommendations": [
+        "查一下我的课表",
+        "查一下我的成绩",
+        "我需要请假",
+        "查一下官网通知",
+    ]}

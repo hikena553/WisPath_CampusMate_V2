@@ -538,18 +538,13 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* 过渡动画 */
+/* 过渡动画 - 仅保留退出动画，取消入场动画 */
 .voice-overlay-enter-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: none;
 }
 
 .voice-overlay-leave-active {
   transition: opacity 0.2s ease;
-}
-
-.voice-overlay-enter-from {
-  opacity: 0;
-  transform: scale(0.95);
 }
 
 .voice-overlay-leave-to {

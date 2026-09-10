@@ -14,46 +14,93 @@
               {{ pendingLeaves.length }} 条待批
             </el-tag>
           </div>
-          <el-table :data="paginatedPendingLeaves" v-if="pendingLeaves.length" style="width:100%"
-            :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
-            <el-table-column prop="student_name" label="学生" width="100" />
-            <el-table-column prop="leave_type" label="类型" width="90">
-              <template #default="{ row }">
-                <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="start_date" label="开始日期" width="110" />
-            <el-table-column prop="end_date" label="结束日期" width="110" />
-            <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
-            <el-table-column label="AI 分析" min-width="200">
-              <template #default="{ row }">
-                <div v-if="analysisMap[row.id]" class="ai-analyze">
-                  <el-tag :type="analysisMap[row.id].suggestion === 'approve' ? 'success' : 'danger'" size="small" effect="plain">
-                    {{ analysisMap[row.id].suggestion === 'approve' ? '建议通过' : '建议拒绝' }}
+          <!-- 桌面端表格 -->
+          <div class="desktop-table">
+            <el-table :data="paginatedPendingLeaves" v-if="pendingLeaves.length" style="width:100%"
+              :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
+              <el-table-column prop="student_name" label="学生" width="100" />
+              <el-table-column prop="leave_type" label="类型" width="90">
+                <template #default="{ row }">
+                  <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="start_date" label="开始日期" width="110" />
+              <el-table-column prop="end_date" label="结束日期" width="110" />
+              <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
+              <el-table-column label="AI 分析" min-width="200">
+                <template #default="{ row }">
+                  <div v-if="analysisMap[row.id]" class="ai-analyze">
+                    <el-tag :type="analysisMap[row.id].suggestion === 'approve' ? 'success' : 'danger'" size="small" effect="plain">
+                      {{ analysisMap[row.id].suggestion === 'approve' ? '建议通过' : '建议拒绝' }}
+                    </el-tag>
+                    <el-tooltip placement="top" :show-after="200">
+                      <template #content>
+                        <div style="max-width:280px;line-height:1.6;font-size:13px">{{ analysisMap[row.id].reason }}</div>
+                      </template>
+                      <el-icon class="analyze-tip"><InfoFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                  <el-tag v-else type="info" size="small" effect="plain" class="analyzing-tag">
+                    <el-icon class="is-loading"><Loading /></el-icon> 分析中
                   </el-tag>
-                  <el-tooltip placement="top" :show-after="200">
-                    <template #content>
-                      <div style="max-width:280px;line-height:1.6;font-size:13px">{{ analysisMap[row.id].reason }}</div>
-                    </template>
-                    <el-icon class="analyze-tip"><InfoFilled /></el-icon>
-                  </el-tooltip>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="180" fixed="right">
+                <template #default="{ row }">
+                  <el-button type="success" size="small" @click="handleApprove(row)">
+                    <el-icon><Check /></el-icon> 通过
+                  </el-button>
+                  <el-button type="danger" size="small" plain @click="showReject(row)">
+                    <el-icon><Close /></el-icon> 拒绝
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <!-- 移动端卡片 -->
+          <div class="mobile-cards" v-if="paginatedPendingLeaves.length">
+            <div class="mobile-card" v-for="row in paginatedPendingLeaves" :key="row.id">
+              <div class="mobile-card-header">
+                <span class="mobile-card-student">{{ row.student_name }}</span>
+                <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+              </div>
+              <div class="mobile-card-body">
+                <div class="mobile-card-row">
+                  <span class="mobile-card-label">日期</span>
+                  <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
                 </div>
-                <el-tag v-else type="info" size="small" effect="plain" class="analyzing-tag">
-                  <el-icon class="is-loading"><Loading /></el-icon> 分析中
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
-              <template #default="{ row }">
+                <div class="mobile-card-row" v-if="row.reason">
+                  <span class="mobile-card-label">原因</span>
+                  <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
+                </div>
+                <div class="mobile-card-row" v-if="analysisMap[row.id]">
+                  <span class="mobile-card-label">AI 分析</span>
+                  <span class="mobile-card-value">
+                    <el-tag :type="analysisMap[row.id].suggestion === 'approve' ? 'success' : 'danger'" size="small" effect="plain">
+                      {{ analysisMap[row.id].suggestion === 'approve' ? '建议通过' : '建议拒绝' }}
+                    </el-tag>
+                    <span class="mobile-ai-reason">{{ analysisMap[row.id].reason }}</span>
+                  </span>
+                </div>
+                <div class="mobile-card-row" v-else>
+                  <span class="mobile-card-label">AI 分析</span>
+                  <span class="mobile-card-value">
+                    <el-tag type="info" size="small" effect="plain" class="analyzing-tag">
+                      <el-icon class="is-loading"><Loading /></el-icon> 分析中
+                    </el-tag>
+                  </span>
+                </div>
+              </div>
+              <div class="mobile-card-actions">
                 <el-button type="success" size="small" @click="handleApprove(row)">
                   <el-icon><Check /></el-icon> 通过
                 </el-button>
                 <el-button type="danger" size="small" plain @click="showReject(row)">
                   <el-icon><Close /></el-icon> 拒绝
                 </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+            </div>
+          </div>
           <div class="pagination-wrapper" v-if="pendingLeaves.length > 0">
             <el-pagination
               v-model:current-page="currentPageLeaves"
@@ -75,26 +122,52 @@
               {{ pendingTickets.length }} 条待批
             </el-tag>
           </div>
-          <el-table :data="paginatedPendingTickets" v-if="pendingTickets.length" style="width:100%"
-            :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
-            <el-table-column prop="type" label="类型" width="90">
-              <template #default="{ row }">
+          <!-- 桌面端表格 -->
+          <div class="desktop-table">
+            <el-table :data="paginatedPendingTickets" v-if="pendingTickets.length" style="width:100%"
+              :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
+              <el-table-column prop="type" label="类型" width="90">
+                <template #default="{ row }">
+                  <el-tag size="small" effect="plain">{{ row.type === 'leave' ? '请假' : '证明' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip />
+              <el-table-column label="操作" width="180" fixed="right">
+                <template #default="{ row }">
+                  <el-button type="success" size="small" @click="handleTicketApprove(row.id)">
+                    <el-icon><Check /></el-icon> 通过
+                  </el-button>
+                  <el-button type="danger" size="small" plain @click="handleTicketReject(row.id)">
+                    <el-icon><Close /></el-icon> 拒绝
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <!-- 移动端卡片 -->
+          <div class="mobile-cards" v-if="paginatedPendingTickets.length">
+            <div class="mobile-card" v-for="row in paginatedPendingTickets" :key="row.id">
+              <div class="mobile-card-header">
+                <span class="mobile-card-student">{{ row.title }}</span>
                 <el-tag size="small" effect="plain">{{ row.type === 'leave' ? '请假' : '证明' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip />
-            <el-table-column label="操作" width="180" fixed="right">
-              <template #default="{ row }">
+              </div>
+              <div class="mobile-card-body">
+                <div class="mobile-card-row" v-if="row.content">
+                  <span class="mobile-card-label">内容</span>
+                  <span class="mobile-card-value mobile-card-reason">{{ row.content }}</span>
+                </div>
+              </div>
+              <div class="mobile-card-actions">
                 <el-button type="success" size="small" @click="handleTicketApprove(row.id)">
                   <el-icon><Check /></el-icon> 通过
                 </el-button>
                 <el-button type="danger" size="small" plain @click="handleTicketReject(row.id)">
                   <el-icon><Close /></el-icon> 拒绝
                 </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+            </div>
+          </div>
           <div class="pagination-wrapper" v-if="pendingTickets.length > 0">
             <el-pagination
               v-model:current-page="currentPageTickets"
@@ -115,23 +188,48 @@
           <div class="section-header">
             <h3><el-icon><CircleCheck /></el-icon> 已通过请假</h3>
           </div>
-          <el-table :data="paginatedApprovedLeaves" v-if="approvedLeaves.length" style="width:100%"
-            :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
-            <el-table-column prop="student_name" label="学生" width="100" />
-            <el-table-column prop="leave_type" label="类型" width="90">
-              <template #default="{ row }">
+          <!-- 桌面端表格 -->
+          <div class="desktop-table">
+            <el-table :data="paginatedApprovedLeaves" v-if="approvedLeaves.length" style="width:100%"
+              :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
+              <el-table-column prop="student_name" label="学生" width="100" />
+              <el-table-column prop="leave_type" label="类型" width="90">
+                <template #default="{ row }">
+                  <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="start_date" label="开始日期" width="110" />
+              <el-table-column prop="end_date" label="结束日期" width="110" />
+              <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
+              <el-table-column label="状态" width="90">
+                <template #default>
+                  <el-tag type="success" size="small" effect="dark">已通过</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <!-- 移动端卡片 -->
+          <div class="mobile-cards" v-if="paginatedApprovedLeaves.length">
+            <div class="mobile-card" v-for="row in paginatedApprovedLeaves" :key="row.id">
+              <div class="mobile-card-header">
+                <span class="mobile-card-student">{{ row.student_name }}</span>
                 <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="start_date" label="开始日期" width="110" />
-            <el-table-column prop="end_date" label="结束日期" width="110" />
-            <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
-            <el-table-column label="状态" width="90">
-              <template #default>
+              </div>
+              <div class="mobile-card-body">
+                <div class="mobile-card-row">
+                  <span class="mobile-card-label">日期</span>
+                  <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
+                </div>
+                <div class="mobile-card-row" v-if="row.reason">
+                  <span class="mobile-card-label">原因</span>
+                  <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
+                </div>
+              </div>
+              <div class="mobile-card-footer">
                 <el-tag type="success" size="small" effect="dark">已通过</el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+            </div>
+          </div>
           <div class="pagination-wrapper" v-if="approvedLeaves.length > 0">
             <el-pagination
               v-model:current-page="currentPageApprovedLeaves"
@@ -152,24 +250,53 @@
           <div class="section-header">
             <h3><el-icon><CircleClose /></el-icon> 已拒绝请假</h3>
           </div>
-          <el-table :data="paginatedRejectedLeaves" v-if="rejectedLeaves.length" style="width:100%"
-            :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
-            <el-table-column prop="student_name" label="学生" width="100" />
-            <el-table-column prop="leave_type" label="类型" width="90">
-              <template #default="{ row }">
+          <!-- 桌面端表格 -->
+          <div class="desktop-table">
+            <el-table :data="paginatedRejectedLeaves" v-if="rejectedLeaves.length" style="width:100%"
+              :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
+              <el-table-column prop="student_name" label="学生" width="100" />
+              <el-table-column prop="leave_type" label="类型" width="90">
+                <template #default="{ row }">
+                  <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="start_date" label="开始日期" width="110" />
+              <el-table-column prop="end_date" label="结束日期" width="110" />
+              <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="reject_reason" label="拒绝理由" min-width="140" show-overflow-tooltip />
+              <el-table-column label="状态" width="90">
+                <template #default>
+                  <el-tag type="danger" size="small" effect="dark">已拒绝</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <!-- 移动端卡片 -->
+          <div class="mobile-cards" v-if="paginatedRejectedLeaves.length">
+            <div class="mobile-card" v-for="row in paginatedRejectedLeaves" :key="row.id">
+              <div class="mobile-card-header">
+                <span class="mobile-card-student">{{ row.student_name }}</span>
                 <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="start_date" label="开始日期" width="110" />
-            <el-table-column prop="end_date" label="结束日期" width="110" />
-            <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
-            <el-table-column prop="reject_reason" label="拒绝理由" min-width="140" show-overflow-tooltip />
-            <el-table-column label="状态" width="90">
-              <template #default>
+              </div>
+              <div class="mobile-card-body">
+                <div class="mobile-card-row">
+                  <span class="mobile-card-label">日期</span>
+                  <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
+                </div>
+                <div class="mobile-card-row" v-if="row.reason">
+                  <span class="mobile-card-label">原因</span>
+                  <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
+                </div>
+                <div class="mobile-card-row" v-if="row.reject_reason">
+                  <span class="mobile-card-label">拒绝理由</span>
+                  <span class="mobile-card-value mobile-card-reason">{{ row.reject_reason }}</span>
+                </div>
+              </div>
+              <div class="mobile-card-footer">
                 <el-tag type="danger" size="small" effect="dark">已拒绝</el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+            </div>
+          </div>
           <div class="pagination-wrapper" v-if="rejectedLeaves.length > 0">
             <el-pagination
               v-model:current-page="currentPageRejectedLeaves"
@@ -446,5 +573,141 @@ onMounted(loadData)
   justify-content: flex-end;
   margin-top: 10px;
   padding: 8px 0;
+}
+
+/* ========== 移动端卡片（默认隐藏） ========== */
+.mobile-cards { display: none; }
+
+/* ========== 移动端响应式 ========== */
+@media (max-width: 767px) {
+  .approval-page {
+    padding: 6px 8px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .section-card {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  /* 隐藏桌面表格，显示移动端卡片 */
+  .desktop-table { display: none; }
+  .mobile-cards { display: block; }
+
+  /* 移动端卡片样式 */
+  .mobile-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mobile-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .mobile-card-student {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+
+  .mobile-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .mobile-card-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .mobile-card-label {
+    flex-shrink: 0;
+    width: 56px;
+    color: #909399;
+    font-weight: 500;
+  }
+
+  .mobile-card-value {
+    flex: 1;
+    color: #333;
+    word-break: break-all;
+  }
+
+  .mobile-card-reason {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .mobile-ai-reason {
+    display: block;
+    font-size: 12px;
+    color: #909399;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  .mobile-card-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+  }
+
+  .mobile-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+  }
+
+  /* 分页居中 */
+  .pagination-wrapper {
+    justify-content: center;
+  }
+
+  .pagination-wrapper :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  :deep(.el-dialog) {
+    width: 92vw !important;
+    max-height: 70vh;
+    margin: 0 auto !important;
+    border-radius: 16px 16px 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+  }
+
+  :deep(.el-dialog__body) {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
 }
 </style>

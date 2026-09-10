@@ -1,260 +1,357 @@
 <template>
-  <div class="profile-page">
-    <!-- Personal Info Card -->
-    <div class="info-card">
-      <div class="info-header">
-        <el-avatar :size="64" :src="auth.user?.avatar || ''" shape="square" class="user-avatar">
-          {{ auth.userName?.[0] }}
-        </el-avatar>
-        <div class="info-text">
-          <div class="user-name">{{ auth.userName }}</div>
-          <div class="user-id">{{ auth.user?.username }}</div>
-        </div>
-        <el-button text circle class="edit-btn" @click="openProfileDialog">
-          <el-icon :size="16"><Edit /></el-icon>
-        </el-button>
-      </div>
-      <div class="info-grid">
-        <div class="info-item">
-          <span class="info-label">学院</span>
-          <span class="info-value">{{ auth.user?.college || '--' }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">班级</span>
-          <span class="info-value">{{ auth.user?.department || '--' }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">性别</span>
-          <span class="info-value">{{ auth.user?.gender || '--' }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">联系电话</span>
-          <span class="info-value">{{ auth.user?.phone || '--' }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Service Applications -->
-    <div class="section-card">
-      <div class="section-title">办事服务</div>
-      <div class="service-grid">
-        <div v-for="s in serviceTypes" :key="s.key" class="service-item" @click="openServiceForm(s.key)">
-          <div class="service-icon" :style="{ background: s.color + '12', color: s.color }">{{ s.icon }}</div>
-          <div class="service-label">{{ s.label }}</div>
-        </div>
-        <div class="service-item" @click="showRecords = true; loadRecords()">
-          <div class="service-icon" style="background:rgba(99,102,241,.1);color:#6366f1">📋</div>
-          <div class="service-label">查看申请</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="section-card">
-      <div class="section-title">快捷入口</div>
-      <div class="quick-list">
-        <div class="quick-item" @click="showChangePassword = true">
-          <el-icon :size="18"><Lock /></el-icon>
-          <span>修改密码</span>
-          <el-icon class="arrow"><ArrowRight /></el-icon>
-        </div>
-        <div class="quick-item" @click="logout">
-          <el-icon :size="18"><SwitchButton /></el-icon>
-          <span>退出登录</span>
-          <el-icon class="arrow"><ArrowRight /></el-icon>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== Service Form Dialogs ===== -->
-    <!-- 请假申请 -->
-    <el-dialog v-model="serviceDialogs.leave" title="请假申请" width="520px" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="leaveForm" label-width="90px" ref="leaveFormRef" :rules="leaveRules">
-        <el-form-item label="姓名"><el-input :model-value="auth.userName" disabled /></el-form-item>
-        <el-form-item label="学号"><el-input :model-value="auth.user?.username" disabled /></el-form-item>
-        <el-form-item label="请假类型" prop="leave_type">
-          <el-select v-model="leaveForm.leave_type" placeholder="请选择" style="width:100%">
-            <el-option label="课假" value="课假" /><el-option label="公假" value="公假" /><el-option label="宿假" value="宿假" />
-            <el-option label="事假" value="事假" /><el-option label="病假" value="病假" /><el-option label="其他" value="其他" />
-          </el-select>
-        </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="开始日期" prop="start_date"><el-date-picker v-model="leaveForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="结束日期" prop="end_date"><el-date-picker v-model="leaveForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width:100%" /></el-form-item></el-col>
-        </el-row>
-        <el-form-item label="请假理由" prop="reason"><el-input v-model="leaveForm.reason" type="textarea" :rows="3" placeholder="请详细描述请假原因" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="serviceDialogs.leave = false">取消</el-button>
-        <el-button type="primary" @click="submitLeave" :loading="submitting">提交申请</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 证明申请 -->
-    <el-dialog v-model="serviceDialogs.certificate" title="证明申请" width="520px" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="certForm" label-width="90px" ref="certFormRef" :rules="certRules">
-        <el-form-item label="姓名"><el-input :model-value="auth.userName" disabled /></el-form-item>
-        <el-form-item label="学号"><el-input :model-value="auth.user?.username" disabled /></el-form-item>
-        <el-form-item label="证明类型" prop="certificate_type">
-          <el-select v-model="certForm.certificate_type" placeholder="请选择" style="width:100%">
-            <el-option label="在校证明" value="在校证明" /><el-option label="成绩单" value="成绩单" />
-            <el-option label="在读证明" value="在读证明" /><el-option label="学籍证明" value="学籍证明" /><el-option label="其他" value="其他" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="用途说明" prop="content"><el-input v-model="certForm.content" type="textarea" :rows="3" placeholder="请说明开具证明的用途" /></el-form-item>
-        <el-form-item label="所需份数"><el-input-number v-model="certForm.quantity" :min="1" :max="20" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="serviceDialogs.certificate = false">取消</el-button>
-        <el-button type="primary" @click="submitCert" :loading="submitting">提交申请</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 项目申请 -->
-    <el-dialog v-model="serviceDialogs.project" title="项目申请" width="520px" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="projectForm" label-width="90px" ref="projectFormRef" :rules="projectRules">
-        <el-form-item label="姓名"><el-input :model-value="auth.userName" disabled /></el-form-item>
-        <el-form-item label="学号"><el-input :model-value="auth.user?.username" disabled /></el-form-item>
-        <el-form-item label="项目类型" prop="project_type">
-          <el-select v-model="projectForm.project_type" placeholder="请选择" style="width:100%">
-            <el-option label="竞赛项目" value="竞赛项目" /><el-option label="科研项目" value="科研项目" /><el-option label="社会实践" value="社会实践" />
-            <el-option label="创业项目" value="创业项目" /><el-option label="学生工作" value="学生工作" /><el-option label="其他" value="其他" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="项目名称" prop="title"><el-input v-model="projectForm.title" placeholder="请输入项目名称" /></el-form-item>
-        <el-form-item label="指导老师"><el-input v-model="projectForm.advisor" placeholder="指导老师姓名" /></el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="开始日期" prop="start_date"><el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="结束日期" prop="end_date"><el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width:100%" /></el-form-item></el-col>
-        </el-row>
-        <el-form-item label="项目简介" prop="content"><el-input v-model="projectForm.content" type="textarea" :rows="3" placeholder="请描述项目背景、目标" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="serviceDialogs.project = false">取消</el-button>
-        <el-button type="primary" @click="submitProject" :loading="submitting">提交申请</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 意见反馈 -->
-    <el-dialog v-model="serviceDialogs.feedback" title="意见反馈" width="520px" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="feedbackForm" label-width="90px" ref="feedbackFormRef" :rules="feedbackRules">
-        <el-form-item label="反馈类型" prop="type">
-          <el-select v-model="feedbackForm.type" placeholder="请选择" style="width:100%">
-            <el-option label="问题反馈" value="bug" /><el-option label="功能建议" value="feature" />
-            <el-option label="投诉" value="complaint" /><el-option label="其他" value="other" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="标题" prop="title"><el-input v-model="feedbackForm.title" placeholder="请简要描述" maxlength="100" show-word-limit /></el-form-item>
-        <el-form-item label="详细内容" prop="content"><el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述" maxlength="1000" show-word-limit /></el-form-item>
-        <el-form-item label="联系方式"><el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱，方便我们联系您" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="serviceDialogs.feedback = false">取消</el-button>
-        <el-button type="primary" @click="submitFeedback" :loading="submitting">提交反馈</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ===== Records Dialog ===== -->
-    <el-drawer v-model="showRecords" title="申请记录" size="420px" direction="rtl">
-      <div v-loading="recordsLoading" class="records-list">
-        <div v-if="!records.length" class="empty-records">暂无申请记录</div>
-        <div v-for="r in records" :key="r.id" class="record-item">
-          <div class="record-top">
-            <span class="record-type">{{ r._typeLabel }}</span>
-            <el-tag :type="r.status === 'approved' ? 'success' : r.status === 'rejected' ? 'danger' : 'warning'" size="small" effect="plain">
-              {{ r.status === 'approved' ? '已通过' : r.status === 'rejected' ? '已拒绝' : '待审批' }}
-            </el-tag>
+  <div class="profile-wrapper">
+    <!-- 主页面 -->
+    <transition :name="slideDirection">
+      <div v-if="!currentPage" key="main" class="profile-page">
+        <!-- 背景图区域 -->
+        <div class="profile-banner" @click="openPage('banner')">
+          <img v-if="bannerUrl" :src="bannerUrl" class="banner-img" />
+          <div v-else class="banner-default" :style="{ background: bannerGradient }"></div>
+          <div class="banner-overlay"></div>
+          <div class="banner-edit-hint">
+            <el-icon><Camera /></el-icon>
+            <span>更换背景</span>
           </div>
-          <div class="record-title">{{ r.title }}</div>
-          <div class="record-date">{{ r.created_at?.slice(0, 10) }}</div>
+        </div>
+
+        <!-- 头部信息卡片 -->
+        <div class="profile-header" @click="openPage('profile')">
+          <el-avatar :size="54" :src="auth.user?.avatar || ''" class="header-avatar">
+            {{ auth.userName?.[0] }}
+          </el-avatar>
+          <div class="header-info">
+            <div class="header-name">{{ auth.userName }}</div>
+            <div class="header-id">{{ auth.user?.username }}</div>
+          </div>
+          <el-icon class="header-arrow"><ArrowRight /></el-icon>
+        </div>
+
+        <!-- 个人成长展示 -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">个人成长</div>
+            <div class="section-more" @click="router.push('/student/growth')">查看详情</div>
+          </div>
+          <div class="growth-summary">
+            <div class="growth-item">
+              <div class="growth-value">{{ growthStats.awards || 0 }}</div>
+              <div class="growth-label">获奖记录</div>
+            </div>
+            <div class="growth-item">
+              <div class="growth-value">{{ growthStats.skills || 0 }}</div>
+              <div class="growth-label">技能标签</div>
+            </div>
+            <div class="growth-item">
+              <div class="growth-value">{{ growthStats.projects || 0 }}</div>
+              <div class="growth-label">项目经历</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 客服与帮助 -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">客服与帮助</div>
+          </div>
+          <div class="menu-list">
+            <div class="menu-item" @click="openPage('feedback')">
+              <el-icon :size="18"><ChatDotRound /></el-icon>
+              <span class="menu-label">意见反馈</span>
+              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+            </div>
+            <div class="menu-item" @click="openPage('help')">
+              <el-icon :size="18"><QuestionFilled /></el-icon>
+              <span class="menu-label">使用帮助</span>
+              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+            </div>
+          </div>
+        </div>
+
+        <!-- 设置与隐私 -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">设置与隐私</div>
+          </div>
+          <div class="menu-list">
+            <div class="menu-item" @click="openPage('password')">
+              <el-icon :size="18"><Lock /></el-icon>
+              <span class="menu-label">修改密码</span>
+              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+            </div>
+            <div class="menu-item" @click="openPage('theme')">
+              <el-icon :size="18"><Sunny /></el-icon>
+              <span class="menu-label">主题设置</span>
+              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+            </div>
+            <div class="menu-item" @click="openPage('about')">
+              <el-icon :size="18"><InfoFilled /></el-icon>
+              <span class="menu-label">关于绵小城</span>
+              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+            </div>
+            <div class="menu-item" @click="logout">
+              <el-icon :size="18"><SwitchButton /></el-icon>
+              <span class="menu-label">退出登录</span>
+              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+            </div>
+          </div>
+        </div>
+
+        <div style="height: 80px;"></div>
+      </div>
+    </transition>
+
+    <!-- 子页面 -->
+    <transition :name="slideDirection">
+      <div v-if="currentPage" key="sub" class="sub-page">
+        <!-- 子页面头部 -->
+        <div class="sub-page-header">
+          <el-button text circle class="back-btn" @click="closePage">
+            <el-icon :size="20"><ArrowLeft /></el-icon>
+          </el-button>
+          <div class="sub-page-title">{{ pageTitle }}</div>
+          <div class="sub-page-placeholder"></div>
+        </div>
+
+        <!-- 个人资料 -->
+        <div v-if="currentPage === 'profile'" class="sub-page-content">
+          <!-- 基本信息 -->
+          <div class="form-group">
+            <div class="form-group-title">基本信息</div>
+            <el-form :model="profileForm" label-width="70px" class="sub-form">
+              <el-form-item label="学号"><el-input :model-value="profileForm.username" disabled /></el-form-item>
+              <el-form-item label="姓名"><el-input :model-value="profileForm.name" disabled /></el-form-item>
+              <el-form-item label="学院"><el-input :model-value="profileForm.college" disabled /></el-form-item>
+              <el-form-item label="班级"><el-input v-model="profileForm.className" placeholder="请输入班级" /></el-form-item>
+            </el-form>
+          </div>
+
+          <!-- 个人信息 -->
+          <div class="form-group">
+            <div class="form-group-title">个人信息</div>
+            <el-form :model="profileForm" label-width="70px" class="sub-form">
+              <el-form-item label="性别">
+                <el-select v-model="profileForm.gender" placeholder="请选择" style="width:100%">
+                  <el-option label="男" value="男" /><el-option label="女" value="女" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="年龄">
+                <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" />
+              </el-form-item>
+              <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="请输入籍贯" /></el-form-item>
+              <el-form-item label="政治面貌">
+                <el-select v-model="profileForm.political_status" placeholder="请选择" style="width:100%">
+                  <el-option label="群众" value="群众" /><el-option label="共青团员" value="共青团员" />
+                  <el-option label="中共预备党员" value="中共预备党员" /><el-option label="中共党员" value="中共党员" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <!-- 联系方式 -->
+          <div class="form-group">
+            <div class="form-group-title">联系方式</div>
+            <el-form :model="profileForm" label-width="70px" class="sub-form">
+              <el-form-item label="联系电话"><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
+              <el-form-item label="辅导员">
+                <el-select v-model="profileForm.tutor_id" placeholder="搜索选择辅导员" filterable style="width:100%">
+                  <el-option v-for="t in teachers" :key="t.id" :label="`${t.name}（${t.username}）`" :value="t.id" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <div class="sub-page-footer">
+            <el-button type="primary" @click="handleSaveProfile" :loading="saving" style="width:100%">保存</el-button>
+          </div>
+        </div>
+
+        <!-- 修改密码 -->
+        <div v-if="currentPage === 'password'" class="sub-page-content">
+          <el-form :model="passwordForm" label-width="80px" class="sub-form">
+            <el-form-item label="旧密码" required>
+              <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
+            </el-form-item>
+            <el-form-item label="新密码" required>
+              <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20位" />
+            </el-form-item>
+            <el-form-item label="确认密码" required>
+              <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入" />
+            </el-form-item>
+            <el-form-item label="验证码" required>
+              <div class="captcha-row">
+                <el-input v-model="passwordForm.captcha" placeholder="请输入验证码" maxlength="4" />
+                <div class="captcha-code" @click="refreshCaptcha">{{ captchaCode }}</div>
+              </div>
+            </el-form-item>
+          </el-form>
+          <div class="sub-page-footer">
+            <el-button type="primary" @click="handleChangePassword" :loading="changingPassword" style="width:100%">确定</el-button>
+          </div>
+        </div>
+
+        <!-- 意见反馈 -->
+        <div v-if="currentPage === 'feedback'" class="sub-page-content">
+          <!-- 提交表单 -->
+          <div class="form-group">
+            <div class="form-group-title">提交反馈</div>
+            <el-form :model="feedbackForm" label-width="70px" class="sub-form">
+              <el-form-item label="反馈类型">
+                <el-select v-model="feedbackForm.type" style="width:100%">
+                  <el-option label="问题反馈" value="bug" /><el-option label="功能建议" value="feature" />
+                  <el-option label="其他" value="other" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="标题"><el-input v-model="feedbackForm.title" placeholder="请简要描述" maxlength="100" /></el-form-item>
+              <el-form-item label="内容"><el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述" /></el-form-item>
+            </el-form>
+            <div class="sub-page-footer">
+              <el-button type="primary" @click="submitFeedback" :loading="submitting" style="width:100%">提交</el-button>
+            </div>
+          </div>
+
+          <!-- 历史记录 -->
+          <div class="form-group">
+            <div class="form-group-title">历史反馈</div>
+            <div v-loading="loadingFeedback" class="feedback-list">
+              <div v-if="feedbackList.length === 0 && !loadingFeedback" class="empty-feedback">暂无反馈记录</div>
+              <div v-for="item in feedbackList" :key="item.id" class="feedback-item">
+                <div class="feedback-header">
+                  <span class="feedback-type">{{ getTypeLabel(item.type) }}</span>
+                  <el-tag :type="getStatusType(item.status)" size="small">{{ getStatusLabel(item.status) }}</el-tag>
+                </div>
+                <div class="feedback-title">{{ item.title }}</div>
+                <div class="feedback-content">{{ item.content }}</div>
+                <div v-if="item.reply" class="feedback-reply">
+                  <div class="reply-label">官方回复：</div>
+                  <div class="reply-content">{{ item.reply }}</div>
+                </div>
+                <div class="feedback-time">{{ item.created_at?.slice(0, 10) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 使用帮助 -->
+        <div v-if="currentPage === 'help'" class="sub-page-content">
+          <div class="help-content">
+            <div class="help-item">
+              <div class="help-question">如何联系绵小城？</div>
+              <div class="help-answer">在首页直接输入你的问题，绵小城会即时回复。</div>
+            </div>
+            <div class="help-item">
+              <div class="help-question">如何查看课表？</div>
+              <div class="help-answer">输入"查课表"即可获取本周课程安排。</div>
+            </div>
+            <div class="help-item">
+              <div class="help-question">如何请假？</div>
+              <div class="help-answer">输入"我要请假"，按提示填写信息即可。</div>
+            </div>
+            <div class="help-item">
+              <div class="help-question">如何查看成绩？</div>
+              <div class="help-answer">输入"查成绩"即可查看各科成绩和GPA。</div>
+            </div>
+            <div class="help-item">
+              <div class="help-question">如何查看通知？</div>
+              <div class="help-answer">输入"查通知"即可获取教务处最新公告。</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 主题设置 -->
+        <div v-if="currentPage === 'theme'" class="sub-page-content">
+          <div class="theme-options">
+            <div class="theme-option" :class="{ active: currentTheme === 'light' }" @click="setTheme('light')">
+              <div class="theme-preview light-preview"></div>
+              <span>浅色模式</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 关于绵小城 -->
+        <div v-if="currentPage === 'about'" class="sub-page-content">
+          <!-- 头部信息 -->
+          <div class="about-header">
+            <img src="/images/校徽_圆形.png" class="about-logo" />
+            <div class="about-name">绵小城</div>
+            <div class="about-version">v1.0.0</div>
+            <div class="about-slogan">你的校园智能管家</div>
+          </div>
+
+          <!-- 功能简介 -->
+          <div class="about-section">
+            <div class="about-section-title">功能简介</div>
+            <div class="about-text">
+              绵小城是绵阳城市学院官方推出的智慧校园AI助手，基于大语言模型技术，为全校师生提供智能化的校园服务。通过自然语言对话，您可以轻松完成课表查询、成绩查询、请假申请、校园通知查看等日常事务，让校园生活更加便捷高效。
+            </div>
+          </div>
+
+          <!-- 项目简介 -->
+          <div class="about-section">
+            <div class="about-section-title">项目简介</div>
+            <div class="about-text">
+              本项目采用前后端分离架构，前端使用 Vue 3 + TypeScript + Element Plus 构建，后端基于 FastAPI + Python 实现，集成大语言模型 API 提供智能对话能力。项目支持学生端和教师端，涵盖智能对话、办事服务、成长档案、校园风采等多个功能模块，致力于打造全方位的智慧校园生态。
+            </div>
+          </div>
+
+          <!-- 核心功能 -->
+          <div class="about-section">
+            <div class="about-section-title">核心功能</div>
+            <div class="about-features">
+              <div class="feature-item">智能对话</div>
+              <div class="feature-item">课表查询</div>
+              <div class="feature-item">成绩查询</div>
+              <div class="feature-item">请假申请</div>
+              <div class="feature-item">成长记录</div>
+              <div class="feature-item">校园通知</div>
+              <div class="feature-item">学业分析</div>
+              <div class="feature-item">办事服务</div>
+            </div>
+          </div>
+
+          <!-- 开发团队 -->
+          <div class="about-section">
+            <div class="about-section-title">开发团队</div>
+            <div class="about-team">
+              <div class="team-info">
+                <div class="team-name">阿里跳动</div>
+                <div class="team-desc">由两位绵阳城市学院校内学生自主开发，致力于用技术创新提升校园数字化服务水平。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 背景设置 -->
+        <div v-if="currentPage === 'banner'" class="sub-page-content">
+          <div class="banner-setting">
+            <div class="banner-section-title">预设背景</div>
+            <div class="preset-grid">
+              <div
+                v-for="preset in presetBanners"
+                :key="preset.id"
+                class="preset-item"
+                :class="{ active: !bannerUrl && bannerGradient === preset.color }"
+                :style="{ background: preset.color }"
+                @click="selectPresetBanner(preset.color)"
+              ></div>
+            </div>
+            
+            <div class="banner-section-title" style="margin-top: 24px;">自定义图片</div>
+            <div class="upload-area" @click="triggerBannerUpload">
+              <el-icon :size="24"><Picture /></el-icon>
+              <span>点击上传图片</span>
+              <span class="upload-hint">支持 JPG、PNG，最大 5MB</span>
+            </div>
+            
+            <div v-if="bannerUrl" class="current-banner">
+              <div class="banner-section-title">当前背景</div>
+              <img :src="bannerUrl" class="current-banner-preview" />
+              <el-button size="small" @click="resetBanner" style="margin-top: 12px;">恢复默认</el-button>
+            </div>
+          </div>
+          <input ref="bannerInputRef" type="file" accept="image/*" style="display:none" @change="handleBannerUpload" />
         </div>
       </div>
-    </el-drawer>
-
-    <!-- Change Password Dialog -->
-    <el-dialog v-model="showChangePassword" title="修改密码" width="400px" :close-on-click-modal="false">
-      <el-form :model="passwordForm" label-width="100px">
-        <el-form-item label="旧密码" required>
-          <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
-        </el-form-item>
-        <el-form-item label="新密码" required>
-          <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20位，建议包含字母和数字" />
-        </el-form-item>
-        <el-form-item label="确认新密码" required>
-          <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入新密码" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showChangePassword = false">取消</el-button>
-        <el-button type="primary" @click="handleChangePassword" :loading="changingPassword">确定</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- Profile Edit Dialog -->
-    <el-dialog v-model="showProfileDialog" title="个人资料" width="640px" :close-on-click-modal="false" class="profile-dialog">
-      <el-form :model="profileForm" label-width="80px" label-position="left" size="large">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="学号"><el-input v-model="profileForm.username" disabled placeholder="请输入学号" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="姓名"><el-input v-model="profileForm.name" disabled placeholder="请输入姓名" /></el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="性别" required>
-              <el-select v-model="profileForm.gender" placeholder="请选择性别" style="width:100%">
-                <el-option label="男" value="男" />
-                <el-option label="女" value="女" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="年龄">
-              <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" placeholder="1-120" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="学院"><el-input v-model="profileForm.college" disabled placeholder="请输入学院" /></el-form-item>
-        <el-form-item label="班级" required><el-input v-model="profileForm.className" placeholder="请输入班级" /></el-form-item>
-        <el-form-item label="政治面貌">
-          <el-select v-model="profileForm.political_status" placeholder="请选择政治面貌" style="width:100%">
-            <el-option label="群众" value="群众" />
-            <el-option label="共青团员" value="共青团员" />
-            <el-option label="中共预备党员" value="中共预备党员" />
-            <el-option label="中共党员" value="中共党员" />
-          </el-select>
-        </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="请输入籍贯" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="联系电话" required><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="辅导员">
-          <el-select
-            v-if="!profileSaved || !profileForm.tutor_id"
-            v-model="profileForm.tutor_id"
-            placeholder="搜索选择辅导员"
-            filterable
-            style="width:100%"
-          >
-            <el-option v-for="t in teachers" :key="t.id" :label="`${t.name}（${t.username}）`" :value="t.id" />
-          </el-select>
-          <template v-else>
-            <el-tag type="success" size="large">{{ tutorName }}</el-tag>
-            <span class="tutor-hint">已绑定，如需变更请联系管理员</span>
-          </template>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showProfileDialog = false" size="large">取消</el-button>
-        <el-button type="primary" @click="handleSaveProfile" :loading="saving" size="large">保存</el-button>
-      </template>
-    </el-dialog>
+    </transition>
   </div>
 </template>
 
@@ -264,179 +361,216 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { updateProfile, getTeachers, changePassword } from '@/api/user'
-import { createTicket, getTickets } from '@/api/service'
-import { createLeave, getMyLeaves } from '@/api/leave'
-import { createFeedback } from '@/api/feedback'
-import { Edit, ArrowRight, Lock, SwitchButton } from '@element-plus/icons-vue'
+import { createFeedback, getFeedbacks } from '@/api/feedback'
+import { uploadFile } from '@/api/upload'
+import {
+  ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
+  ChatDotRound, QuestionFilled, Camera, Picture
+} from '@element-plus/icons-vue'
 
 const router = useRouter()
 const auth = useAuthStore()
 
-const showChangePassword = ref(false)
-const showProfileDialog = ref(false)
-const showRecords = ref(false)
+// 页面状态
+const currentPage = ref<string | null>(null)
+const slideDirection = ref('slide-left')
+
+// 表单状态
 const saving = ref(false)
 const submitting = ref(false)
 const changingPassword = ref(false)
-const recordsLoading = ref(false)
+const uploadingBanner = ref(false)
 const teachers = ref<any[]>([])
-const records = ref<any[]>([])
+const currentTheme = ref(localStorage.getItem('theme') || 'light')
 
-const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '' })
-const profileForm = reactive({ username: '', name: '', college: '', gender: '', age: 18, hometown: '', phone: '', tutor_id: null as number | null, className: '', political_status: '' })
-const profileSaved = ref(false)
-
-const serviceDialogs = reactive({ leave: false, certificate: false, project: false, feedback: false })
-
-const serviceTypes = [
-  { key: 'leave', label: '请假申请', icon: '📅', color: '#409eff' },
-  { key: 'certificate', label: '证明申请', icon: '📄', color: '#67c23a' },
-  { key: 'project', label: '项目申请', icon: '🚀', color: '#e6a23c' },
-  { key: 'feedback', label: '意见反馈', icon: '💬', color: '#f56c6c' },
-]
-
-// --- Leave Form ---
-const leaveFormRef = ref<any>()
-const leaveForm = reactive({ leave_type: '', start_date: '', end_date: '', reason: '' })
-const leaveRules = {
-  leave_type: [{ required: true, message: '请选择请假类型', trigger: 'change' }],
-  start_date: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
-  end_date: [{ required: true, message: '请选择结束日期', trigger: 'change' }],
-  reason: [{ required: true, message: '请填写请假理由', trigger: 'blur' }],
-}
-
-// --- Certificate Form ---
-const certFormRef = ref<any>()
-const certForm = reactive({ certificate_type: '', content: '', quantity: 1 })
-const certRules = {
-  certificate_type: [{ required: true, message: '请选择证明类型', trigger: 'change' }],
-  content: [{ required: true, message: '请填写用途说明', trigger: 'blur' }],
-}
-
-// --- Project Form ---
-const projectFormRef = ref<any>()
-const projectForm = reactive({ project_type: '', title: '', advisor: '', start_date: '', end_date: '', content: '' })
-const projectRules = {
-  project_type: [{ required: true, message: '请选择项目类型', trigger: 'change' }],
-  title: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
-  start_date: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
-  end_date: [{ required: true, message: '请选择结束日期', trigger: 'change' }],
-  content: [{ required: true, message: '请填写项目简介', trigger: 'blur' }],
-}
-
-// --- Feedback Form ---
-const feedbackFormRef = ref<any>()
-const feedbackForm = reactive({ type: 'other', title: '', content: '', contact: '' })
-const feedbackRules = {
-  type: [{ required: true, message: '请选择反馈类型', trigger: 'change' }],
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  content: [{ required: true, message: '请输入详细内容', trigger: 'blur' }],
-}
-
-const tutorName = computed(() => {
-  const t = teachers.value.find(t => t.id === profileForm.tutor_id)
-  return t ? `${t.name}（${t.username}）` : ''
+// 背景图
+const savedBanner = localStorage.getItem('profileBanner') || ''
+const bannerUrl = ref(savedBanner ? savedBanner + (savedBanner.includes('?') ? '&' : '?') + '_t=' + Date.now() : '')
+const bannerInputRef = ref<HTMLInputElement>()
+const bannerGradient = computed(() => {
+  return localStorage.getItem('profileBannerColor') || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
 })
 
-function mapLeaveType(label: string): string {
-  const m: Record<string, string> = { '课假': 'other', '公假': 'competition', '宿假': 'personal', '事假': 'personal', '病假': 'sick', '其他': 'other' }
-  return m[label] || 'other'
+// 预设背景图
+const presetBanners = [
+  { id: 'gradient1', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+  { id: 'gradient2', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
+  { id: 'gradient3', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
+  { id: 'gradient4', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
+  { id: 'gradient5', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
+  { id: 'gradient6', color: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)' },
+]
+
+// 成长统计
+const growthStats = reactive({
+  awards: 0,
+  skills: 0,
+  projects: 0,
+})
+
+const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '', captcha: '' })
+const captchaCode = ref('')
+
+function generateCaptcha() {
+  const chars = '0123456789'
+  let result = ''
+  for (let i = 0; i < 4; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
 }
 
-function openServiceForm(type: string) {
-  ;(serviceDialogs as any)[type] = true
+function refreshCaptcha() {
+  captchaCode.value = generateCaptcha()
+}
+const profileForm = reactive({
+  username: '', name: '', college: '', gender: '', age: 18,
+  hometown: '', phone: '', tutor_id: null as number | null,
+  className: '', political_status: ''
+})
+const feedbackForm = reactive({ type: 'other', title: '', content: '' })
+const feedbackList = ref<any[]>([])
+const loadingFeedback = ref(false)
+
+// 页面标题
+const pageTitle = computed(() => {
+  const titles: Record<string, string> = {
+    profile: '个人资料',
+    password: '修改密码',
+    feedback: '意见反馈',
+    help: '使用帮助',
+    theme: '主题设置',
+    about: '关于绵小城',
+    banner: '更换背景'
+  }
+  return titles[currentPage.value || ''] || ''
+})
+
+// 打开子页面
+function openPage(page: string) {
+  if (page === 'profile') {
+    const u = auth.user
+    if (u) {
+      profileForm.username = u.username
+      profileForm.name = u.name
+      profileForm.college = u.college || ''
+      profileForm.gender = u.gender || ''
+      profileForm.age = u.age ?? 18
+      profileForm.hometown = u.hometown || ''
+      profileForm.phone = u.phone || ''
+      profileForm.tutor_id = u.tutor_id ?? null
+      profileForm.className = (u as any).class_name || ''
+      profileForm.political_status = (u as any).political_status || ''
+    }
+  }
+  slideDirection.value = 'slide-left'
+  currentPage.value = page
+}
+
+// 关闭子页面
+function closePage() {
+  slideDirection.value = 'slide-right'
+  currentPage.value = null
+}
+
+function selectPresetBanner(color: string) {
+  bannerUrl.value = ''
+  localStorage.setItem('profileBannerType', 'gradient')
+  localStorage.setItem('profileBannerColor', color)
+  localStorage.removeItem('profileBanner')
+  ElMessage.success('背景已更新')
+}
+
+function triggerBannerUpload() {
+  bannerInputRef.value?.click()
+}
+
+async function handleBannerUpload(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+  
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过5MB')
+    return
+  }
+  
+  uploadingBanner.value = true
+  try {
+    const { url } = await uploadFile(file)
+    const cacheBusted = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now()
+    bannerUrl.value = cacheBusted
+    localStorage.setItem('profileBanner', url)
+    localStorage.setItem('profileBannerType', 'image')
+    localStorage.removeItem('profileBannerColor')
+    ElMessage.success('背景已更新')
+  } catch {
+    ElMessage.error('上传失败')
+  } finally {
+    uploadingBanner.value = false
+    input.value = ''
+  }
+}
+
+function resetBanner() {
+  bannerUrl.value = ''
+  localStorage.removeItem('profileBanner')
+  localStorage.removeItem('profileBannerType')
+  localStorage.removeItem('profileBannerColor')
+  ElMessage.success('已恢复默认背景')
+}
+
+function applyTheme(theme: string) {
+  currentTheme.value = theme
+  const root = document.documentElement
+  
+  if (theme === 'dark') {
+    root.classList.add('dark')
+    root.style.setProperty('--bg-color', '#1a1a1a')
+    root.style.setProperty('--text-color', '#e5e5e5')
+    root.style.setProperty('--card-bg', '#2a2a2a')
+    root.style.setProperty('--border-color', '#3a3a3a')
+  } else {
+    root.classList.remove('dark')
+    root.style.setProperty('--bg-color', '#f5f7fa')
+    root.style.setProperty('--text-color', '#1a1a1a')
+    root.style.setProperty('--card-bg', '#ffffff')
+    root.style.setProperty('--border-color', '#f0f0f0')
+  }
+  
+  localStorage.setItem('theme', theme)
+}
+
+function setTheme(theme: string) {
+  applyTheme(theme)
+  ElMessage.success('主题已切换')
 }
 
 function logout() { auth.logout(); router.push('/') }
 
-async function submitLeave() {
-  if (!leaveFormRef.value) return
-  try { await leaveFormRef.value.validate() } catch { return }
-  submitting.value = true
-  try {
-    await createLeave({
-      start_date: leaveForm.start_date, end_date: leaveForm.end_date,
-      reason: `[${leaveForm.leave_type}] ${leaveForm.reason}`,
-      leave_type: mapLeaveType(leaveForm.leave_type),
-    })
-    ElMessage.success('请假申请已提交')
-    serviceDialogs.leave = false
-  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
-  finally { submitting.value = false }
-}
-
-async function submitCert() {
-  if (!certFormRef.value) return
-  try { await certFormRef.value.validate() } catch { return }
-  submitting.value = true
-  try {
-    await createTicket({
-      type: 'certificate', title: certForm.certificate_type, content: certForm.content,
-      applicant_name: auth.userName || '', applicant_no: auth.user?.username || '', applicant_college: auth.user?.college || '',
-      form_data: { certificate_type: certForm.certificate_type, quantity: certForm.quantity },
-    })
-    ElMessage.success('证明申请已提交')
-    serviceDialogs.certificate = false
-  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
-  finally { submitting.value = false }
-}
-
-async function submitProject() {
-  if (!projectFormRef.value) return
-  try { await projectFormRef.value.validate() } catch { return }
-  submitting.value = true
-  try {
-    await createTicket({
-      type: 'project', title: projectForm.title, content: projectForm.content,
-      applicant_name: auth.userName || '', applicant_no: auth.user?.username || '', applicant_college: auth.user?.college || '',
-      form_data: { project_type: projectForm.project_type, advisor: projectForm.advisor, start_date: projectForm.start_date, end_date: projectForm.end_date },
-    })
-    ElMessage.success('项目申请已提交')
-    serviceDialogs.project = false
-  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
-  finally { submitting.value = false }
-}
-
-async function submitFeedback() {
-  if (!feedbackFormRef.value) return
-  try { await feedbackFormRef.value.validate() } catch { return }
-  submitting.value = true
-  try {
-    await createFeedback(feedbackForm)
-    ElMessage.success('反馈已提交')
-    serviceDialogs.feedback = false
-  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
-  finally { submitting.value = false }
-}
-
-async function loadRecords() {
-  recordsLoading.value = true
-  try {
-    const [leaves, tickets] = await Promise.all([getMyLeaves(), getTickets()])
-    const leaveRecords = (leaves as any[]).map(r => ({
-      id: r.id, title: `${r.leave_type} ${r.start_date} ~ ${r.end_date}`, status: r.status,
-      created_at: r.created_at, _typeLabel: '请假',
-    }))
-    const ticketRecords = (tickets as any[]).map(r => ({
-      id: r.id, title: r.title, status: r.status, created_at: r.created_at,
-      _typeLabel: r.type === 'certificate' ? '证明' : r.type === 'project' ? '项目' : r.type,
-    }))
-    records.value = [...leaveRecords, ...ticketRecords].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  } catch { records.value = [] }
-  finally { recordsLoading.value = false }
-}
-
 async function handleChangePassword() {
-  if (!passwordForm.old_password || !passwordForm.new_password || !passwordForm.confirm_password) { ElMessage.warning('请填写所有字段'); return }
-  if (passwordForm.new_password !== passwordForm.confirm_password) { ElMessage.error('两次输入的新密码不一致'); return }
-  if (passwordForm.new_password.length < 6) { ElMessage.error('新密码至少6位'); return }
+  if (!passwordForm.old_password || !passwordForm.new_password || !passwordForm.confirm_password) {
+    ElMessage.warning('请填写所有字段'); return
+  }
+  if (passwordForm.new_password !== passwordForm.confirm_password) {
+    ElMessage.error('两次输入的新密码不一致'); return
+  }
+  if (passwordForm.new_password.length < 6) {
+    ElMessage.error('新密码至少6位'); return
+  }
+  if (!passwordForm.captcha || passwordForm.captcha !== captchaCode.value) {
+    ElMessage.error('验证码错误'); refreshCaptcha(); return
+  }
   changingPassword.value = true
   try {
     await changePassword(passwordForm.old_password, passwordForm.new_password)
     ElMessage.success('密码修改成功')
-    showChangePassword.value = false
-    if (auth.user) auth.updateUser({ ...auth.user, password_changed: true })
     passwordForm.old_password = ''; passwordForm.new_password = ''; passwordForm.confirm_password = ''
+    closePage()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '修改失败') }
   finally { changingPassword.value = false }
 }
@@ -452,85 +586,768 @@ async function handleSaveProfile() {
       political_status: profileForm.political_status || null,
     })
     auth.updateUser(updated as any)
-    profileSaved.value = true
     ElMessage.success('保存成功')
-    showProfileDialog.value = false
+    closePage()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '保存失败') }
   finally { saving.value = false }
 }
 
-function openProfileDialog() {
-  const u = auth.user; if (!u) return
-  profileForm.username = u.username; profileForm.name = u.name
-  profileForm.college = u.college || ''; profileForm.gender = u.gender || ''
-  profileForm.age = u.age ?? 18; profileForm.hometown = u.hometown || ''
-  profileForm.phone = u.phone || ''; profileForm.tutor_id = u.tutor_id ?? null
-  profileForm.className = (u as any).class_name || ''; profileForm.political_status = (u as any).political_status || ''
-  profileSaved.value = !!u.tutor_id
-  showProfileDialog.value = true
+async function submitFeedback() {
+  if (!feedbackForm.title || !feedbackForm.content) {
+    ElMessage.warning('请填写标题和内容'); return
+  }
+  submitting.value = true
+  try {
+    await createFeedback(feedbackForm)
+    ElMessage.success('反馈已提交')
+    feedbackForm.title = ''; feedbackForm.content = ''
+    loadFeedbacks()
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
+  finally { submitting.value = false }
 }
 
-onMounted(async () => { try { teachers.value = await getTeachers() } catch {} })
+async function loadFeedbacks() {
+  loadingFeedback.value = true
+  try {
+    feedbackList.value = await getFeedbacks()
+  } catch { feedbackList.value = [] }
+  finally { loadingFeedback.value = false }
+}
+
+function getTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    bug: '问题反馈',
+    feature: '功能建议',
+    other: '其他'
+  }
+  return labels[type] || '其他'
+}
+
+function getStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    pending: '待处理',
+    replied: '已回复',
+    resolved: '已解决'
+  }
+  return labels[status] || status
+}
+
+function getStatusType(status: string) {
+  const types: Record<string, string> = {
+    pending: 'warning',
+    replied: 'success',
+    resolved: 'info'
+  }
+  return types[status] || 'info'
+}
+
+onMounted(async () => {
+  try { teachers.value = await getTeachers() } catch {}
+  refreshCaptcha()
+  loadFeedbacks()
+  applyTheme('light')
+})
 </script>
 
 <style scoped>
-.profile-page { padding: 16px; height: 100%; overflow-y: auto; }
-
-.info-card { background: linear-gradient(135deg, #409eff, #337ecc); border-radius: 16px; padding: 20px; color: #fff; margin-bottom: 16px; }
-.info-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
-.user-avatar { width: 64px !important; height: 64px !important; font-size: 24px; border: 2px solid rgba(255,255,255,0.3); }
-.info-text { flex: 1; }
-.user-name { font-size: 20px; font-weight: 700; }
-.user-id { font-size: 13px; opacity: 0.8; margin-top: 2px; }
-.edit-btn { color: rgba(255,255,255,0.8); }
-.edit-btn:hover { color: #fff; background: rgba(255,255,255,0.15); }
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.info-item { display: flex; flex-direction: column; gap: 2px; }
-.info-label { font-size: 11px; opacity: 0.7; }
-.info-value { font-size: 14px; font-weight: 500; }
-
-.section-card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
-.section-title { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 14px; }
-
-.service-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.service-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0; border-radius: 10px; cursor: pointer; transition: background 0.2s; }
-.service-item:active { background: #f5f7fa; }
-.service-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
-.service-label { font-size: 12px; color: #333; font-weight: 500; }
-
-.quick-list { display: flex; flex-direction: column; }
-.quick-item { display: flex; align-items: center; gap: 10px; padding: 14px 0; border-bottom: 1px solid #f5f5f5; cursor: pointer; color: #333; }
-.quick-item:last-child { border-bottom: none; }
-.quick-item:active { background: #f5f7fa; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
-.quick-item span { flex: 1; font-size: 14px; }
-.arrow { color: #ccc; font-size: 14px; }
-
-.records-list { padding: 0 16px; }
-.empty-records { text-align: center; color: #999; padding: 40px 0; font-size: 14px; }
-.record-item { padding: 12px 0; border-bottom: 1px solid #f5f5f5; }
-.record-item:last-child { border-bottom: none; }
-.record-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.record-type { font-size: 12px; color: #409eff; font-weight: 500; }
-.record-title { font-size: 14px; color: #333; margin-bottom: 4px; }
-.record-date { font-size: 12px; color: #999; }
-
-.tutor-hint { font-size: 12px; color: #999; margin-left: 8px; }
-
-.profile-dialog :deep(.el-dialog__body) {
-  padding: 28px 36px 12px;
+.profile-wrapper {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
 }
-.profile-dialog :deep(.el-form-item__label) {
-  text-align-last: justify;
+
+/* 滑动动画 */
+.slide-left-enter-active,
+.slide-left-leave-active,
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-left-enter-from {
+  transform: translateX(100%);
+}
+.slide-left-leave-to {
+  transform: translateX(-30%);
+}
+.slide-right-enter-from {
+  transform: translateX(-30%);
+}
+.slide-right-leave-to {
+  transform: translateX(100%);
+}
+
+/* 主页面 */
+.profile-page {
+  height: 100%;
+  overflow-y: auto;
+  background: #f5f7fa;
+  position: absolute;
+  width: 100%;
+}
+
+/* 子页面 */
+.sub-page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #f5f7fa;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.sub-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.back-btn {
+  width: 36px;
+  height: 36px;
+  color: #333;
+}
+
+.sub-page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.sub-page-placeholder {
+  width: 36px;
+}
+
+.sub-page-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.sub-form {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+
+/* 表单分组 */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #999;
+  margin-bottom: 10px;
+  padding-left: 4px;
+}
+
+/* 验证码 */
+.captcha-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.captcha-row .el-input {
+  flex: 1;
+}
+
+.captcha-code {
+  width: 100px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+/* 表单样式优化 */
+.sub-form :deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+
+.sub-form :deep(.el-form-item__label) {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  line-height: 40px;
+}
+
+.sub-form :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px #e4e7ed inset;
+  padding: 4px 12px;
+  transition: all 0.2s;
+}
+
+.sub-form :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c0c4cc inset;
+}
+
+.sub-form :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409eff inset;
+}
+
+.sub-form :deep(.el-select .el-input__wrapper) {
+  border-radius: 10px;
+}
+
+.sub-form :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  padding: 12px;
+  resize: none;
+}
+
+.sub-form :deep(.el-input-number) {
+  width: 100%;
+}
+
+.sub-form :deep(.el-input-number .el-input__wrapper) {
+  border-radius: 10px;
+}
+
+.sub-page-footer {
+  padding: 14px 0;
+  margin-top: 8px;
+}
+
+.sub-page-footer .el-button {
+  height: 40px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 背景图 */
+.profile-banner {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.banner-default {
+  width: 100%;
+  height: 100%;
+}
+.banner-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(transparent, #f5f7fa);
+}
+.banner-edit-hint {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  border-radius: 16px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+.profile-banner:hover .banner-edit-hint {
+  opacity: 1;
+}
+
+/* 头部信息 */
+.profile-header {
+  position: relative;
+  margin: -28px 16px 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  cursor: pointer;
+  z-index: 1;
+}
+.header-avatar {
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  font-size: 20px;
+}
+.header-info { flex: 1; }
+.header-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.header-id {
+  font-size: 12px;
+  color: #999;
+  margin-top: 3px;
+}
+.header-arrow {
+  color: #ccc;
+  font-size: 16px;
+}
+
+/* 区域卡片 */
+.section-card {
+  margin: 12px 16px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.section-more {
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+}
+
+/* 成长统计 */
+.growth-summary {
+  display: flex;
+  justify-content: space-around;
+}
+.growth-item { text-align: center; }
+.growth-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #409eff;
+}
+.growth-label {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* 菜单列表 */
+.menu-list {
+  display: flex;
+  flex-direction: column;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid #f5f5f5;
+  cursor: pointer;
+  color: #333;
+}
+.menu-item:last-child { border-bottom: none; }
+.menu-item:active { background: #f5f7fa; }
+.menu-label {
+  flex: 1;
+  font-size: 14px;
+}
+.menu-arrow {
+  color: #ccc;
+  font-size: 14px;
+}
+
+/* 背景设置 */
+.banner-setting {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}
+.banner-section-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 12px;
+}
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.preset-item {
+  height: 60px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+.preset-item:hover { transform: scale(1.02); }
+.preset-item.active {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64,158,255,0.3);
+}
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  border: 2px dashed #e4e7ed;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #999;
+  transition: all 0.2s;
+}
+.upload-area:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+.upload-hint {
+  font-size: 12px;
+  color: #ccc;
+}
+.current-banner {
+  margin-top: 16px;
+}
+.current-banner-preview {
+  width: 100%;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* 主题设置 */
+.theme-options {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: 16px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  background: #f9fafb;
+}
+.theme-option:hover {
+  background: #f5f7fa;
+}
+.theme-option.active {
+  border-color: #409eff;
+  background: rgba(64,158,255,0.05);
+}
+.theme-option span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+.theme-preview {
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  border: 2px solid #eee;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.light-preview { background: linear-gradient(135deg, #fff 0%, #f5f7fa 100%); }
+
+
+/* 关于 */
+.about-header {
+  text-align: center;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.about-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+.about-name {
+  font-size: 19px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.about-version {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+.about-slogan {
+  font-size: 14px;
+  color: #666;
+  margin-top: 8px;
+}
+.about-section {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.about-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 10px;
+  padding-left: 10px;
+  border-left: 3px solid #409eff;
+}
+.about-text {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.8;
   text-align: justify;
 }
+.about-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.feature-item {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f0f8ff 0%, #e8f4ff 100%);
+  border-radius: 20px;
+  font-size: 13px;
+  color: #409eff;
+  border: 1px solid rgba(64,158,255,0.15);
+}
+.about-team {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.team-info {
+  flex: 1;
+}
+.team-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+.team-desc {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+}
 
-@media (max-width: 767px) {
-  .profile-page { padding: 12px; }
-  .info-card { padding: 16px; }
-  .user-avatar { width: 56px !important; height: 56px !important; }
-  .user-name { font-size: 18px; }
-  .service-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .service-icon { width: 40px; height: 40px; font-size: 20px; }
-  .service-label { font-size: 11px; }
+/* 帮助 */
+.help-content {
+  background: #fff;
+  border-radius: 16px;
+  padding: 8px 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.help-item {
+  padding: 14px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+.help-item:last-child { border-bottom: none; }
+.help-question {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.help-question::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  background: linear-gradient(135deg, #409eff 0%, #67c23a 100%);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.help-answer {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.8;
+  padding-left: 12px;
+}
+
+/* 背景设置 */
+.banner-setting {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.banner-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.preset-item {
+  height: 58px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.preset-item:hover { 
+  transform: scale(1.03);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.preset-item.active {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64,158,255,0.3);
+}
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  border: 2px dashed #e4e7ed;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #999;
+  transition: all 0.2s;
+}
+.upload-area:hover {
+  border-color: #409eff;
+  color: #409eff;
+  background: rgba(64,158,255,0.02);
+}
+.upload-hint {
+  font-size: 12px;
+  color: #ccc;
+}
+.current-banner {
+  margin-top: 16px;
+}
+.current-banner-preview {
+  width: 100%;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* 反馈列表 */
+.feedback-list {
+  background: #fff;
+  border-radius: 16px;
+  padding: 8px 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  min-height: 100px;
+}
+
+.empty-feedback {
+  text-align: center;
+  color: #999;
+  padding: 32px 0;
+  font-size: 14px;
+}
+
+.feedback-item {
+  padding: 13px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.feedback-item:last-child {
+  border-bottom: none;
+}
+
+.feedback-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.feedback-type {
+  font-size: 12px;
+  color: #409eff;
+  font-weight: 500;
+}
+
+.feedback-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.feedback-content {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.feedback-reply {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.reply-label {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.reply-content {
+  font-size: 13px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.feedback-time {
+  font-size: 12px;
+  color: #ccc;
 }
 </style>

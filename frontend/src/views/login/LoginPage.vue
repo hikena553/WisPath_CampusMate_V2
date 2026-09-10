@@ -11,8 +11,10 @@
         <div class="brand-icon-wrap">
           <img src="/images/mascot.png" alt="绵小城" class="brand-mascot" />
         </div>
-        <h1 class="brand-title">绵小城</h1>
-        <p class="brand-sub">校园智能小助手</p>
+        <div class="brand-text">
+          <h1 class="brand-title">绵小城</h1>
+          <p class="brand-sub">校园智能小助手</p>
+        </div>
       </div>
       <div class="login-card">
         <h2 class="card-title">欢迎回来</h2>
@@ -540,9 +542,10 @@ onUnmounted(() => {
 }
 @media (max-width: 767px) {
   .login-layer { flex-direction: column; gap: 20px; padding: 20px 16px; transform: translateY(-20px); }
-  .brand-icon-wrap { width: 80px; height: 80px; margin-bottom: 12px; }
-  .brand-mascot { width: 64px; height: 64px; }
-  .brand-title { font-size: 26px; letter-spacing: 2px; }
+  .brand { display: flex; align-items: center; gap: 16px; text-align: left; }
+  .brand-icon-wrap { width: 72px; height: 72px; margin-bottom: 0; flex-shrink: 0; }
+  .brand-mascot { width: 72px; height: 72px; }
+  .brand-title { font-size: 28px; letter-spacing: 2px; margin: 0; }
   .brand-sub { font-size: 13px; margin-top: 4px; }
   .login-card { width: 100%; max-width: 340px; padding: 24px 20px; border-radius: 16px; }
   .card-title { font-size: 20px; }

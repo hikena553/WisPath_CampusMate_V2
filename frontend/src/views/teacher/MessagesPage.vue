@@ -1,6 +1,6 @@
 <template>
   <div class="msg-page">
-    <div class="msg-sidebar">
+    <div class="msg-sidebar" v-show="!isMobile || showSidebar">
       <div class="sidebar-header">
         <div class="header-left">
           <el-dropdown trigger="click" @command="handleHeaderAction">
@@ -91,11 +91,11 @@
     </div>
 
     <!-- 聊天区域 -->
-    <div class="msg-chat">
+    <div class="msg-chat" v-show="!isMobile || !showSidebar">
       <template v-if="activeId">
         <div class="chat-header">
           <div class="chat-header-left">
-            <el-button text circle @click="goBack" class="back-btn">
+            <el-button text circle @click="goBack" class="back-btn" v-show="isMobile">
               <el-icon :size="18"><ArrowLeft /></el-icon>
             </el-button>
             <div class="chat-header-info">
@@ -426,6 +426,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useResponsive } from '@/composables/useResponsive'
 import { useAuthStore } from '@/stores/auth'
 import { getConversations, getMessages, sendMessage, markRead } from '@/api/messages'
 import {
@@ -447,6 +448,8 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const userId = auth.user?.id ?? 0
+const { isMobile } = useResponsive()
+const showSidebar = ref(true)
 
 const conversations = ref<any[]>([])
 const groups = ref<GroupOut[]>([])
@@ -792,6 +795,7 @@ async function loadGroups() { try { groups.value = await getGroups() } catch {} 
 // 打开聊天
 async function openChat(id: number, name: string, type: 'single' | 'group') {
   activeId.value = id; activeName.value = name; activeType.value = type
+  if (isMobile.value) showSidebar.value = false
   try {
     if (type === 'single') {
       messages.value = await getMessages(id)
@@ -805,7 +809,7 @@ async function openChat(id: number, name: string, type: 'single' | 'group') {
     scrollToBottom()
   } catch {}
 }
-function goBack() { activeId.value = null; activeName.value = ''; messages.value = []; currentGroup.value = null }
+function goBack() { activeId.value = null; activeName.value = ''; messages.value = []; currentGroup.value = null; showSidebar.value = true }
 function scrollToBottom() { nextTick(() => msgListRef.value?.scrollTo({ top: msgListRef.value.scrollHeight, behavior: 'smooth' })) }
 
 // 发送
@@ -1132,4 +1136,31 @@ onUnmounted(() => disconnectWs())
 .manage-member-name { font-size: 14px; color: #333; }
 .manage-danger-zone { padding: 12px; background: #fef0f0; border-radius: 8px; border: 1px solid #fde2e2; }
 .manage-danger-actions { display: flex; gap: 10px; }
+
+/* ===== 移动端适配 ===== */
+.back-btn { display: none; }
+@media (max-width: 767px) {
+  .msg-page { flex-direction: column; }
+  .msg-sidebar { width: 100% !important; border-right: none; }
+  .msg-chat { width: 100%; flex: 1; }
+  .back-btn { display: inline-flex; }
+  .msg-bubble { max-width: min(85%, 380px); }
+  .bubble-image { max-width: 200px; }
+  .bubble-file { min-width: 160px; }
+  :deep(.el-dialog) {
+    width: 92vw !important;
+    max-height: 80vh;
+    margin: 0 auto !important;
+    border-radius: 16px 16px 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+  }
+  :deep(.el-dialog__body) {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+}
 </style>

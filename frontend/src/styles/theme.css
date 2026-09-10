@@ -176,11 +176,6 @@ html.dark .bubble.assistant {
   color: var(--text-primary) !important;
 }
 
-html.dark .quick-card {
-  background: var(--bg-card) !important;
-  border-color: var(--border-color) !important;
-}
-
 html.dark .ai-result-card {
   background: linear-gradient(135deg, rgba(64,158,255,0.08), rgba(64,158,255,0.03)) !important;
 }

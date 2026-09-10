@@ -7,6 +7,15 @@ const isMobile = ref(false)
 const isTablet = ref(false)
 const isDesktop = ref(true)
 
+// 模块加载时同步初始化，避免首帧先渲染桌面布局再翻转为移动端造成闪变
+if (typeof window !== 'undefined') {
+  const m = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches
+  const t = !m && window.matchMedia(`(max-width: ${TABLET_BREAKPOINT - 1}px)`).matches
+  isMobile.value = m
+  isTablet.value = t
+  isDesktop.value = !m && !t
+}
+
 let mqlMobile: MediaQueryList | null = null
 let mqlTablet: MediaQueryList | null = null
 let refCount = 0

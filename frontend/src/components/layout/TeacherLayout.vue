@@ -1,6 +1,6 @@
 <template>
   <div class="app-shell">
-    <header class="topbar">
+    <header v-if="!isMobile" class="topbar">
       <div class="topbar-left" style="cursor:pointer" @click="goTo('/teacher')">
         <img src="/images/校徽_圆形.png" class="topbar-badge" />
         <span class="logo">绵小城</span>
@@ -16,7 +16,7 @@
       </div>
     </header>
     <div class="body-area">
-      <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+      <aside v-if="!isMobile" class="sidebar" :class="{ collapsed: sidebarCollapsed }">
         <nav class="sidebar-nav">
           <router-link
             v-for="item in navItems"
@@ -56,7 +56,7 @@
           </el-dropdown>
         </div>
       </aside>
-      <main class="main-area">
+      <main class="main-area" :class="{ 'has-bottom-bar': isMobile }">
         <router-view v-slot="{ Component }">
           <keep-alive :include="cachedNames">
             <component :is="Component" />
@@ -64,6 +64,14 @@
         </router-view>
       </main>
     </div>
+
+    <MobileTabBar
+      v-if="isMobile"
+      :items="mobileNavItems"
+      :active-key="activeNavKey"
+      :unread-count="unreadCount"
+      @select="handleNavSelect"
+    />
 
     <el-dialog v-model="showProfile" title="个人资料" width="800px" :close-on-click-modal="false">
       <div class="profile-layout">
@@ -173,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { updateProfile, changePassword } from '@/api/user'
@@ -181,8 +189,11 @@ import { uploadFile } from '@/api/upload'
 import { getConversations, type ConversationOut } from '@/api/messages'
 import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
+import { useResponsive } from '@/composables/useResponsive'
+import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
+import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
-  HomeFilled, ChatDotRound, CircleCheck, User, Message,
+  HomeFilled, ChatDotRound, User, Message, Notebook,
   SwitchButton, CameraFilled, Fold, Expand
 } from '@element-plus/icons-vue'
 
@@ -191,7 +202,7 @@ const router = useRouter()
 const auth = useAuthStore()
 
 // 缓存 teacher 端重型页面，避免切换时 ECharts 重建与数据重拉
-const cachedNames = ['teacher-home', 'teacher-students', 'teacher-approval']
+const cachedNames = ['teacher-home', 'teacher-students']
 
 const sidebarCollapsed = ref(false)
 const showProfile = ref(false)
@@ -204,13 +215,37 @@ let pendingImageSrc = ''
 const unreadCount = ref(0)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
+const { isMobile } = useResponsive()
+
 const navItems = [
   { path: '/teacher', label: '首页', icon: HomeFilled },
   { path: '/teacher/agent', label: '智能助手', icon: ChatDotRound },
-  { path: '/teacher/approval', label: '审批管理', icon: CircleCheck },
-  { path: '/teacher/students', label: '学生成长', icon: User },
+  { path: '/teacher/students', label: '学生档案', icon: Notebook },
   { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
+  { path: '/teacher/profile', label: '个人中心', icon: User },
 ]
+
+const mobileNavItems = [
+  { key: 'home', label: '首页', icon: HomeFilled, route: '/teacher' },
+  { key: 'students', label: '学生档案', icon: Notebook, route: '/teacher/students' },
+  { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/teacher/agent' },
+  { key: 'messages', label: '消息', icon: Message, route: '/teacher/messages', badge: true },
+  { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
+]
+
+const activeNavKey = computed(() => {
+  const p = route.path
+  if (p === '/teacher') return 'home'
+  if (p.startsWith('/teacher/agent')) return 'agent'
+  if (p.startsWith('/teacher/students')) return 'students'
+  if (p.startsWith('/teacher/messages')) return 'messages'
+  if (p.startsWith('/teacher/profile')) return 'profile'
+  return 'home'
+})
+
+function handleNavSelect(item: any) {
+  router.push(item.route)
+}
 
 function isActive(path: string) {
   return route.path === path
@@ -228,7 +263,13 @@ async function pollUnread() {
   } catch {}
 }
 
-onMounted(() => { pollUnread(); pollTimer = setInterval(pollUnread, 5000) })
+// 布局创建时立即启动预加载（比 onMounted 更早，确保子页面 setup 阶段缓存已就绪）
+prefetchDashboardData()
+
+onMounted(() => {
+  pollUnread()
+  pollTimer = setInterval(pollUnread, 5000)
+})
 onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 
 function goTo(path: string) { router.push(path) }
