@@ -232,7 +232,10 @@ db.commit()
 # 3. 课表（按班级维度，不再逐学生复制）
 # ═══════════════════════════════════════════════════════════
 
-SEMESTER = "2024-2025-2"
+# 当前学期（按当前日期推算，与前端 semesterKey 保持一致）
+from datetime import date as _today_date
+_today = _today_date.today()
+SEMESTER = f"{_today.year - 1}-{_today.year}-2" if 3 <= _today.month <= 8 else f"{_today.year}-{_today.year + 1}-1"
 
 if db.query(Course).count() == 0:
     all_courses = []

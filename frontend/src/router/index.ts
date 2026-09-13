@@ -29,7 +29,7 @@ const router = createRouter({
         { path: 'grade', component: () => import('@/views/student/GradeAnalysisPage.vue') },
         { path: 'grade-analysis', component: () => import('@/views/student/GradeAnalysisPage.vue') },
         { path: 'service', component: () => import('@/views/student/ServicePage.vue') },
-        { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
+        { path: 'workbench', redirect: '/student/service' },
         { path: 'feedback', component: () => import('@/views/student/FeedbackPage.vue') },
         { path: 'profile', component: () => import('@/views/student/ProfilePage.vue') },
       ],
@@ -43,7 +43,6 @@ const router = createRouter({
         { path: 'agent', name: 'teacher-agent', component: () => import('@/views/teacher/AgentPage.vue'), meta: { keepAlive: false } },
         { path: 'students', name: 'teacher-students', component: () => import('@/views/teacher/StudentsPage.vue'), meta: { keepAlive: true } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
-        { path: 'profile', name: 'teacher-profile', component: () => import('@/views/teacher/ProfilePage.vue'), meta: { keepAlive: false } },
       ],
     },
     {

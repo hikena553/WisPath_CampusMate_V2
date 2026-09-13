@@ -114,22 +114,42 @@ def fetch_college_news() -> list[AnnouncementItem]:
 
 
 def _library_news_via_playwright() -> list[AnnouncementItem]:
-    """用 Playwright 渲染图书馆 SPA，提取新闻公告标题+日期"""
+    """用 Playwright 渲染图书馆 SPA，提取新闻公告标题+日期
+
+    优先复用系统已装的 Edge/Chrome（channel 方式，无需下载内置 Chromium），
+    失败再回退官方内置 Chromium；整个渲染路径容错，单模块失败不影响其他来源。
+    """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         logger.warning("playwright not installed")
         return []
-    items = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+
+    def _launch_browser(playwright):
         try:
-            page = browser.new_page()
-            page.goto("https://lib.mycc.edu.cn/", wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(2000)
-            text = page.inner_text("body")
-        finally:
-            browser.close()
+            return playwright.chromium.launch(headless=True, channel="msedge")
+        except Exception:
+            # 部分 Windows 无 Edge / 非 Windows 环境，回退官方内置 Chromium
+            return playwright.chromium.launch(headless=True)
+
+    items = []
+    try:
+        with sync_playwright() as p:
+            try:
+                browser = _launch_browser(p)
+            except Exception as e:
+                logger.warning("library browser launch failed: %s", e)
+                return []
+            try:
+                page = browser.new_page()
+                page.goto("https://lib.mycc.edu.cn/", wait_until="networkidle", timeout=30000)
+                page.wait_for_timeout(2000)
+                text = page.inner_text("body")
+            finally:
+                browser.close()
+    except Exception as e:
+        logger.warning("library playwright render failed: %s", e)
+        return []
     idx = text.find("新闻公告")
     if idx == -1:
         return []

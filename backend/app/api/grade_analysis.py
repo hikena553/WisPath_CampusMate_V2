@@ -21,6 +21,8 @@ class GradeStats(BaseModel):
     highest_gpa: float
     lowest_gpa: float
     pass_rate: float
+    gpa_rank: int = 0
+    total_students: int = 0
 
 
 class SemesterGPA(BaseModel):
@@ -91,7 +93,22 @@ def get_grade_analysis(
     lowest_gpa = min(gpas) if gpas else 0
     pass_count = sum(1 for s in scores if s >= 60)
     pass_rate = (pass_count / len(scores) * 100) if scores else 0
-    
+
+    # 绩点排名（全体有成绩学生按平均绩点降序）
+    gpa_rank, total_students = 0, 0
+    if gpas:
+        rows = (
+            db.query(Grade.student_id, func.avg(Grade.gpa).label("avg_gpa"))
+            .group_by(Grade.student_id)
+            .all()
+        )
+        ranked = sorted(rows, key=lambda r: (r.avg_gpa or 0), reverse=True)
+        total_students = len(ranked)
+        for i, r in enumerate(ranked):
+            if r.student_id == student_id:
+                gpa_rank = i + 1
+                break
+
     stats = GradeStats(
         total_courses=total_courses,
         total_credits=round(total_credits, 1),
@@ -99,7 +116,9 @@ def get_grade_analysis(
         avg_gpa=round(avg_gpa, 2),
         highest_gpa=round(highest_gpa, 2),
         lowest_gpa=round(lowest_gpa, 2),
-        pass_rate=round(pass_rate, 1)
+        pass_rate=round(pass_rate, 1),
+        gpa_rank=gpa_rank,
+        total_students=total_students
     )
     
     # 按学期统计GPA

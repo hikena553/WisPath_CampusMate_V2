@@ -8,6 +8,8 @@ export interface GradeStats {
   highest_gpa: number
   lowest_gpa: number
   pass_rate: number
+  gpa_rank: number
+  total_students: number
 }
 
 export interface SemesterGPA {

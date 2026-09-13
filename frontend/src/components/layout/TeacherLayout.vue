@@ -222,7 +222,6 @@ const navItems = [
   { path: '/teacher/agent', label: '智能助手', icon: ChatDotRound },
   { path: '/teacher/students', label: '学生档案', icon: Notebook },
   { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
-  { path: '/teacher/profile', label: '个人中心', icon: User },
 ]
 
 const mobileNavItems = [
@@ -230,7 +229,7 @@ const mobileNavItems = [
   { key: 'students', label: '学生档案', icon: Notebook, route: '/teacher/students' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/teacher/agent' },
   { key: 'messages', label: '消息', icon: Message, route: '/teacher/messages', badge: true },
-  { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
+  { key: 'profile', label: '个人中心', icon: User, route: '' },
 ]
 
 const activeNavKey = computed(() => {
@@ -239,11 +238,15 @@ const activeNavKey = computed(() => {
   if (p.startsWith('/teacher/agent')) return 'agent'
   if (p.startsWith('/teacher/students')) return 'students'
   if (p.startsWith('/teacher/messages')) return 'messages'
-  if (p.startsWith('/teacher/profile')) return 'profile'
   return 'home'
 })
 
 function handleNavSelect(item: any) {
+  // 个人中心不跳路由，直接打开布局内置的资料弹窗
+  if (item.key === 'profile') {
+    openProfile()
+    return
+  }
   router.push(item.route)
 }
 

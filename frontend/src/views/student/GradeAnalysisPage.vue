@@ -139,7 +139,9 @@ const analysis = ref<GradeAnalysis>({
     avg_gpa: 0,
     highest_gpa: 0,
     lowest_gpa: 0,
-    pass_rate: 0
+    pass_rate: 0,
+    gpa_rank: 0,
+    total_students: 0
   },
   semester_gpa: [],
   course_type_stats: [],

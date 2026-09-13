@@ -43,7 +43,7 @@
           <img v-if="impression.jxdt[0].image_url" :src="impression.jxdt[0].image_url" class="jxdt-first-img" />
           <span class="jxdt-first-title">{{ impression.jxdt[0].title }}</span>
         </div>
-        <div v-for="a in (isMobile ? impression.jxdt.slice(1, 5) : impression.jxdt.slice(1))" :key="a.url" class="news-row jxdt-date-row" @click="openLink(a.url)">
+        <div v-for="a in impression.jxdt.slice(1, 7)" :key="a.url" class="news-row jxdt-date-row" @click="openLink(a.url)">
           <span class="jxdt-day"><b>{{ splitDay(a.date) }}</b><span class="jxdt-month">{{ splitMonth(a.date) }}</span></span>
           <span class="news-text">{{ a.title }}</span>
         </div>
@@ -80,7 +80,7 @@
           <span class="card-title"><el-icon><Collection /></el-icon> 教学建设</span>
           <a class="card-more" href="https://jwc.mycc.edu.cn/jxjs.htm" target="_blank">查看详情 →</a>
         </div>
-        <div v-for="a in impression.jxjs" :key="a.url" class="build-row" @click="openLink(a.url)">
+        <div v-for="a in impression.jxjs.slice(0, 7)" :key="a.url" class="build-row" @click="openLink(a.url)">
           <span class="build-mark"></span>
           <el-tooltip :content="removeCommonPrefix(a.title)" placement="top" :show-after="300">
             <span class="build-text">{{ removeCommonPrefix(a.title) }}</span>
@@ -153,7 +153,7 @@
           <a class="card-more" href="https://lib.mycc.edu.cn/" target="_blank">进入官网 →</a>
         </div>
         <div class="lib-list">
-          <div v-for="a in impression.library" :key="a.title" class="lib-item" @click="openLink(a.url)">
+          <div v-for="a in impression.library.slice(0, 4)" :key="a.title" class="lib-item" @click="openLink(a.url)">
             <span class="lib-date">{{ formatDate(a.date) }}</span>
             <span class="lib-title">{{ a.title }}</span>
           </div>
