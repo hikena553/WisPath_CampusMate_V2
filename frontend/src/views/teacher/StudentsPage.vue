@@ -58,7 +58,7 @@
     </div>
 
     <div v-else class="student-grid">
-      <div v-for="s in pagedStudents" :key="s.id" :class="isMobile ? 'mobile-student-card' : 'student-card'" :class="s.crisis_level ? `level-${s.crisis_level}` : ''">
+      <div v-for="s in pagedStudents" :key="s.id" :class="[isMobile ? 'mobile-student-card' : 'student-card', s.crisis_level ? `level-${s.crisis_level}` : '']">
         <div class="card-head">
           <el-avatar :size="isMobile ? 40 : 48" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
           <div class="card-info">
