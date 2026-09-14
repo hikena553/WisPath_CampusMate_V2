@@ -47,6 +47,23 @@ export function getStudentDetail(id: number) {
   return request.get<StudentDetail>(`/teacher/students/${id}`)
 }
 
+export interface StudentImportResult {
+  created: number
+  skipped: string[]
+}
+
+export interface StudentImportItem {
+  username: string
+  name: string
+  college?: string
+  gender?: string
+  class_name?: string
+}
+
+export function importStudents(students: StudentImportItem[]) {
+  return request.post<StudentImportResult>('/teacher/students/import', { students })
+}
+
 export interface DashboardStats {
   total_students: number
   alert_count: number

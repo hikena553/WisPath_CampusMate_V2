@@ -14,6 +14,7 @@ from app.models.academic import Grade
 from app.models.message import Message
 from app.services.llm_service import _get_client, _get_llm_config
 from app.services.scoring import calc_radar_score
+from app.core.security import hash_password
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
 from pydantic import BaseModel, ConfigDict
 
@@ -610,3 +611,55 @@ async def suggest_contacts(user: User = Depends(require_role(UserRole.TEACHER, U
             {"student_id": s["id"], "student_name": s["name"], "reason": "AI分析暂不可用，建议手动查看", "priority": "medium"}
             for s in student_infos[:3]
         ]
+
+
+class StudentImportItem(BaseModel):
+    username: str
+    name: str
+    college: str | None = None
+    gender: str | None = None
+    class_name: str | None = None
+
+
+class StudentImportRequest(BaseModel):
+    students: list[StudentImportItem]
+
+
+class StudentImportResult(BaseModel):
+    created: int = 0
+    skipped: list[str] = []
+
+
+@router.post("/students/import", response_model=StudentImportResult)
+def import_students(
+    body: StudentImportRequest,
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """批量导入学生账号：默认密码 123456，跳过已存在的学号。"""
+    existing = {row[0] for row in db.query(User.username).all()}
+    created = 0
+    skipped: list[str] = []
+    for item in body.students:
+        username = (item.username or "").strip()
+        name = (item.name or "").strip()
+        if not username or not name:
+            skipped.append(username or "(空学号)")
+            continue
+        if username in existing:
+            skipped.append(username)
+            continue
+        db.add(User(
+            username=username,
+            password_hash=hash_password("123456"),
+            name=name,
+            role=UserRole.STUDENT,
+            college=item.college,
+            gender=item.gender,
+            class_name=item.class_name,
+            tutor_id=user.id if user.role == UserRole.TEACHER else None,
+        ))
+        existing.add(username)
+        created += 1
+    db.commit()
+    return StudentImportResult(created=created, skipped=skipped)

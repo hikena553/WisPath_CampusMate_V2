@@ -226,9 +226,16 @@
           </div>
           <img src="/images/mascot.png" alt="绵小城" class="ms-mascot" />
         </div>
-        <div class="ms-search" @click="openSubPage('students')">
-          <span class="ms-search-icon"><el-icon :size="16"><Search /></el-icon></span>
-          <span class="ms-search-text">搜索姓名 / 学号 / 学院</span>
+        <div class="ms-search">
+          <el-input
+            v-model="search"
+            placeholder="搜索姓名 / 学号 / 学院"
+            clearable
+            class="ms-search-input"
+            @input="debouncedLoadStudents"
+          >
+            <template #prefix><el-icon :size="16"><Search /></el-icon></template>
+          </el-input>
         </div>
       </div>
 
@@ -278,29 +285,54 @@
         </div>
       </div>
 
-      <!-- 最近互动学员 -->
+      <!-- 最近互动学员 / 搜索结果 -->
       <div class="ms-section-title">
-        <span class="ms-section-title-text">最近互动学员</span>
-        <span class="ms-section-title-extra" @click="openSubPage('students')">
+        <span class="ms-section-title-text">{{ isSearching ? '搜索结果' : '最近互动学员' }}</span>
+        <span v-if="isSearching" class="ms-section-title-extra">共 {{ students.length }} 人</span>
+        <span v-else class="ms-section-title-extra" @click="openSubPage('students')">
           查看全部<el-icon :size="12"><ArrowRight /></el-icon>
         </span>
       </div>
-      <div v-if="recentStudents.length" class="ms-card ms-student-list">
-        <div v-for="(s, i) in recentStudents" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === recentStudents.length - 1 }" @click="openDetail(s)">
-          <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
-          <div class="ms-student-info">
-            <div class="ms-student-name">
-              {{ s.name }}
-              <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
-                {{ crisisLabel(s.crisis_level) }}
-              </el-tag>
+
+      <!-- 搜索态：在当前页展示搜索结果 -->
+      <template v-if="isSearching">
+        <div v-if="students.length" class="ms-card ms-student-list">
+          <div v-for="(s, i) in students" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === students.length - 1 }" @click="openDetail(s)">
+            <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
+            <div class="ms-student-info">
+              <div class="ms-student-name">
+                {{ s.name }}
+                <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
+                  {{ crisisLabel(s.crisis_level) }}
+                </el-tag>
+              </div>
+              <div class="ms-student-sub">{{ s.college || '未分配' }} · 综合 {{ s.score ?? '--' }}</div>
             </div>
-            <div class="ms-student-sub">{{ s.college || '未分配' }} · 综合 {{ s.score ?? '--' }}</div>
+            <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
           </div>
-          <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
         </div>
-      </div>
-      <div v-else-if="loaded" class="ms-empty">暂无可展示的学员</div>
+        <div v-else-if="loaded" class="ms-empty">未找到相关学生</div>
+      </template>
+
+      <!-- 非搜索态：最近互动学员 -->
+      <template v-else>
+        <div v-if="recentStudents.length" class="ms-card ms-student-list">
+          <div v-for="(s, i) in recentStudents" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === recentStudents.length - 1 }" @click="openDetail(s)">
+            <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
+            <div class="ms-student-info">
+              <div class="ms-student-name">
+                {{ s.name }}
+                <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
+                  {{ crisisLabel(s.crisis_level) }}
+                </el-tag>
+              </div>
+              <div class="ms-student-sub">{{ s.college || '未分配' }} · 综合 {{ s.score ?? '--' }}</div>
+            </div>
+            <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
+          </div>
+        </div>
+        <div v-else-if="loaded" class="ms-empty">暂无可展示的学员</div>
+      </template>
     </template>
 
     <!-- ============ 移动端右滑子页面 ============ -->
@@ -513,6 +545,16 @@
                 <span>个人中心</span>
                 <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
               </div>
+              <div class="ms-more-item" @click="handleExportStudents">
+                <el-icon color="#67c23a"><Download /></el-icon>
+                <span>导出学生数据</span>
+                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+              </div>
+              <div class="ms-more-item" @click="importVisible = true">
+                <el-icon color="#e6a23c"><Upload /></el-icon>
+                <span>导入学生数据</span>
+                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+              </div>
             </div>
           </template>
         </div>
@@ -631,7 +673,7 @@
     </transition>
 
     <!-- 拒绝对话框 -->
-    <el-dialog v-model="rejectVisible" title="拒绝理由" width="90%" :close-on-click-modal="false">
+    <el-dialog v-model="rejectVisible" title="拒绝理由" width="90%" :close-on-click-modal="false" class="ms-dialog" align-center>
       <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请填写拒绝理由" maxlength="200" show-word-limit />
       <template #footer>
         <el-button @click="rejectVisible = false">取消</el-button>
@@ -640,7 +682,7 @@
     </el-dialog>
 
     <!-- 发布公告 Dialog -->
-    <el-dialog v-model="createDialogVisible" title="发布公告" width="90%" :close-on-click-modal="false">
+    <el-dialog v-model="createDialogVisible" title="发布公告" width="90%" :close-on-click-modal="false" class="ms-dialog" align-center>
       <el-form :model="createForm" label-position="top">
         <el-form-item label="标题" required>
           <el-input v-model="createForm.title" placeholder="请输入公告标题" maxlength="200" />
@@ -661,6 +703,39 @@
         <el-button type="primary" @click="handleCreateAnnouncement">发布</el-button>
       </template>
     </el-dialog>
+
+    <!-- 导入学生数据 Dialog -->
+    <el-dialog v-model="importVisible" title="导入学生数据" width="90%" :close-on-click-modal="false" class="ms-dialog" align-center>
+      <div class="ms-import-tip">
+        <p>请上传 CSV 文件，表头需包含「姓名、学号」两列，可选「学院、性别、班级」。导入的账号默认密码为 123456。</p>
+        <el-link type="primary" :underline="false" @click="handleDownloadTemplate">
+          <el-icon style="margin-right:3px"><Download /></el-icon>下载导入模板
+        </el-link>
+      </div>
+
+      <label class="ms-import-upload">
+        <el-icon :size="18"><Upload /></el-icon>
+        <span>{{ importRows.length ? `已选择 ${importRows.length} 名学生` : '选择 CSV 文件' }}</span>
+        <input type="file" accept=".csv,text/csv" @change="handleImportFile" />
+      </label>
+
+      <div v-if="importRows.length" class="ms-import-preview">
+        <div class="ms-import-preview-head">待导入（预览前 5 条）</div>
+        <div v-for="(r, i) in importRows.slice(0, 5)" :key="i" class="ms-import-preview-row">
+          <span class="ms-import-preview-name">{{ r.name }}</span>
+          <span class="ms-import-preview-username">{{ r.username }}</span>
+          <span class="ms-import-preview-college">{{ r.college || '-' }}</span>
+        </div>
+        <div v-if="importSkipped.length" class="ms-import-skipped">有 {{ importSkipped.length }} 条数据格式不完整，将被忽略</div>
+      </div>
+
+      <template #footer>
+        <el-button @click="importVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importing" :disabled="!importRows.length" @click="confirmImport">
+          {{ importing ? '导入中...' : `确认导入（${importRows.length}）` }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -670,11 +745,11 @@ import { useRouter } from 'vue-router'
 import {
   Search, User, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
   WarningFilled, DataAnalysis, Calendar, Bell, MoreFilled,
-  Histogram, Message, Plus, Check, Loading, Filter,
+  Histogram, Message, Plus, Check, Loading, Filter, Download, Upload,
 } from '@element-plus/icons-vue'
 import {
-  getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats,
-  type StudentSummary, type StudentDetail, type DashboardStats, type ClassEvaluation, type ClassStats,
+  getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats, importStudents,
+  type StudentSummary, type StudentDetail, type DashboardStats, type ClassEvaluation, type ClassStats, type StudentImportItem,
 } from '@/api/teacher'
 import { getPendingLeaves, getAllLeaves, reviewLeave } from '@/api/leave'
 import { getTeacherAnnouncements, createAnnouncement, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
@@ -771,6 +846,12 @@ const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
 const createForm = ref({ title: '', content: '', urgency: 'normal' as 'normal' | 'important' | 'urgent' })
 
+// ===== 导入导出 =====
+const importVisible = ref(false)
+const importing = ref(false)
+const importRows = ref<StudentImportItem[]>([])
+const importSkipped = ref<string[]>([])
+
 // ===== AI 分析 =====
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 const renderedAnalysisHtml = computed(() => renderMarkdown(analysisResult.value))
@@ -824,6 +905,8 @@ const scoreChips = [
 const hasActiveFilter = computed(() => {
   return filterCrisis.value || filterGrowth.value || filterScore.value || filterSkill.value
 })
+
+const isSearching = computed(() => search.value.trim() !== '')
 
 const filteredStudents = computed(() => {
   return students.value.filter(s => {
@@ -1086,6 +1169,121 @@ async function handleDeleteAnnouncement(id: number) {
   } catch { ElMessage.error('删除失败') }
 }
 
+// ===== 数据导入导出 =====
+function handleExportStudents() {
+  if (!students.value.length) { ElMessage.warning('暂无学生数据可导出'); return }
+  const header = ['姓名', '学号', '学院', '综合评分', '心理状态', '成长记录(条)', '请假(次)']
+  const rows = students.value.map(s => [
+    s.name,
+    s.username,
+    s.college || '',
+    s.score ?? '',
+    crisisLevelLabel(s.crisis_level),
+    s.growth_count,
+    s.leave_count,
+  ])
+  const csv = [header, ...rows].map(r => r.map(cell => {
+    const str = String(cell ?? '')
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str
+  }).join(',')).join('\r\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `学生数据_${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  ElMessage.success('已导出学生数据')
+}
+
+function handleDownloadTemplate() {
+  const header = ['姓名', '学号', '学院', '性别', '班级']
+  const example = ['张三', '20240001', '人工智能学院', '男', 'AI2401']
+  const csv = [header, example].map(r => r.join(',')).join('\r\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '学生导入模板.csv'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = []
+  let cur = ''
+  let inQuote = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuote) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++ }
+        else inQuote = false
+      } else cur += ch
+    } else if (ch === '"') {
+      inQuote = true
+    } else if (ch === ',') {
+      cells.push(cur); cur = ''
+    } else cur += ch
+  }
+  cells.push(cur)
+  return cells
+}
+
+function handleImportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  importRows.value = []
+  importSkipped.value = []
+  const reader = new FileReader()
+  reader.onload = () => {
+    try {
+      const text = String(reader.result || '').replace(/^\ufeff/, '')
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      if (lines.length < 2) { ElMessage.warning('文件内容为空或格式不正确'); return }
+      const rows: StudentImportItem[] = []
+      const skipped: string[] = []
+      lines.slice(1).forEach(l => {
+        const [name, username, college, gender, class_name] = parseCsvLine(l)
+        if (name && username) {
+          rows.push({ name, username, college: college || undefined, gender: gender || undefined, class_name: class_name || undefined })
+        } else {
+          skipped.push(l)
+        }
+      })
+      if (!rows.length) { ElMessage.warning('未识别到有效数据，请检查文件格式'); return }
+      importRows.value = rows
+      importSkipped.value = skipped
+    } catch {
+      ElMessage.error('文件解析失败')
+    }
+  }
+  reader.readAsText(file, 'utf-8')
+  input.value = ''
+}
+
+async function confirmImport() {
+  if (!importRows.value.length) return
+  importing.value = true
+  try {
+    const res = await importStudents(importRows.value)
+    ElMessage.success(`成功导入 ${res.created} 名学生${res.skipped.length ? `，跳过 ${res.skipped.length} 条` : ''}`)
+    importVisible.value = false
+    importRows.value = []
+    await loadStudents()
+    loadDashboard()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '导入失败')
+  } finally {
+    importing.value = false
+  }
+}
+
 // ===== AI 分析 =====
 async function handleClassAnalysis() {
   await loadAnalysisData()
@@ -1155,6 +1353,16 @@ function formatTime(t: string) {
 
 function formatDate(dateStr: string) {
   try { return new Date(dateStr).toLocaleDateString('zh-CN') } catch { return dateStr }
+}
+
+function urgencyType(u: string) {
+  const map: Record<string, string> = { urgent: 'danger', important: 'warning', normal: 'info' }
+  return map[u] || 'info'
+}
+
+function urgencyLabel(u: string) {
+  const map: Record<string, string> = { urgent: '紧急', important: '重要', normal: '普通' }
+  return map[u] || '普通'
 }
 
 function scoreClass(score: number) {
@@ -1282,13 +1490,17 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .ms-search {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 12px; padding: 8px 13px;
-  background: rgba(255,255,255,0.94); border-radius: 20px;
-  color: #a6a9ad; font-size: 13px; position: relative; z-index: 1;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  margin-top: 12px; position: relative; z-index: 1;
 }
-.ms-search-icon { display: flex; align-items: center; }
+.ms-search-input :deep(.el-input__wrapper) {
+  background: rgba(255,255,255,0.96);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 4px 14px;
+}
+.ms-search-input :deep(.el-input__wrapper.is-focus) { box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+.ms-search-input :deep(.el-input__inner) { height: 34px; color: #1a1a2e; font-size: 13px; }
+.ms-search-input :deep(.el-input__inner::placeholder) { color: #a6a9ad; }
 
 /* 通用卡片 */
 .ms-card {
@@ -1409,13 +1621,49 @@ onMounted(() => {
 .ms-lease-reason { font-size: 13px; color: #999; line-height: 1.4; margin-bottom: 8px; }
 .ms-lease-actions { display: flex; gap: 8px; }
 
-.ms-announce-card {
-  background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+.ms-announce-publish {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; height: 44px; border: none; border-radius: 12px;
+  background: linear-gradient(135deg, #2374f0 0%, #1a5fe0 100%);
+  color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(35,116,240,0.25);
 }
-.ms-announce-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.ms-announce-title { font-size: 15px; font-weight: 600; color: #1a1a2e; flex: 1; }
-.ms-announce-content { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 8px; }
+.ms-announce-publish:active { transform: scale(0.98); }
+
+.ms-announce-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; padding: 48px 20px; color: #999;
+}
+.ms-announce-empty-icon {
+  width: 64px; height: 64px; border-radius: 50%; background: #f2f4f7;
+  display: flex; align-items: center; justify-content: center; color: #c0c4cc;
+}
+.ms-announce-empty p { margin: 0; font-size: 15px; color: #666; font-weight: 600; }
+.ms-announce-empty span { font-size: 13px; color: #b0b5c0; }
+
+.ms-announce-list { display: flex; flex-direction: column; gap: 10px; }
+.ms-announce-card {
+  display: flex; gap: 12px;
+  background: #fff; border-radius: 14px; padding: 14px;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+  position: relative; overflow: hidden;
+}
+.ms-announce-card.announce-urgent { border-left: 3px solid #f56c6c; }
+.ms-announce-card.announce-important { border-left: 3px solid #e6a23c; }
+.ms-announce-card.announce-normal { border-left: 3px solid #e5e7eb; }
+.ms-announce-icon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.announce-icon-urgent { background: rgba(245,108,108,0.1); color: #f56c6c; }
+.announce-icon-important { background: rgba(230,162,60,0.12); color: #e6a23c; }
+.announce-icon-normal { background: rgba(144,147,153,0.1); color: #909399; }
+.ms-announce-main { flex: 1; min-width: 0; }
+.ms-announce-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ms-announce-title { font-size: 15px; font-weight: 600; color: #1f2937; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-announce-content { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 8px; word-break: break-word; }
 .ms-announce-footer { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #999; }
 
 .ms-more-list { display: flex; flex-direction: column; gap: 10px; }
@@ -1428,6 +1676,28 @@ onMounted(() => {
 .ms-more-item :deep(.el-icon:first-child) { font-size: 22px; }
 .ms-more-item span { flex: 1; }
 .ms-more-item:active { background: #fafafa; }
+
+/* ===== 导入学生数据 ===== */
+.ms-import-tip { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 14px; }
+.ms-import-tip p { margin: 0 0 8px; }
+.ms-import-upload {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 48px; border: 1px dashed #c0c4cc; border-radius: 12px;
+  background: #f7f9fc; color: #409eff; font-size: 14px; cursor: pointer;
+  position: relative; overflow: hidden;
+}
+.ms-import-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ms-import-preview { margin-top: 14px; }
+.ms-import-preview-head { font-size: 12px; color: #999; margin-bottom: 8px; }
+.ms-import-preview-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; background: #f9fafb; border-radius: 8px; margin-bottom: 6px;
+  font-size: 13px;
+}
+.ms-import-preview-name { font-weight: 600; color: #333; }
+.ms-import-preview-username { color: #409eff; }
+.ms-import-preview-college { color: #999; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-import-skipped { margin-top: 8px; font-size: 12px; color: #e6a23c; }
 
 .ms-drawer-body { padding: 0 8px; }
 .ms-drawer-group { margin-bottom: 20px; }
@@ -1469,6 +1739,23 @@ onMounted(() => {
 .mobile-record-top small { font-size: 11px; color: #999; }
 .mobile-record-title { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 4px; }
 .mobile-record-desc { font-size: 12px; color: #666; line-height: 1.5; }
+
+/* ===== 弹窗美化 ===== */
+.ms-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 0;
+}
+.ms-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 18px 18px 10px;
+  text-align: center;
+}
+.ms-dialog :deep(.el-dialog__title) { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+.ms-dialog :deep(.el-dialog__headerbtn) { top: 13px; right: 13px; }
+.ms-dialog :deep(.el-dialog__body) { padding: 8px 18px 16px; }
+.ms-dialog :deep(.el-dialog__footer) { padding: 0 18px 18px; }
+.ms-dialog :deep(.el-dialog__footer .el-button) { border-radius: 22px; padding: 9px 22px; }
 
 /* ===== 桌面端响应式（仅小屏桌面） ===== */
 @media (max-width: 767px) {
