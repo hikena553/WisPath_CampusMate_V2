@@ -9,7 +9,7 @@ from app.models.user import User
 from app.models.message import Message
 from app.models.group import Group, GroupMember, GroupMessage
 from app.schemas.group import (
-    GroupCreate, GroupMemberAdd, GroupMessageSend, AnnouncementUpdate,
+    GroupCreate, GroupMemberAdd, GroupMessageSend, AnnouncementUpdate, AvatarUpdate,
     GroupOut, GroupMemberOut, GroupMessageOut, UserSearchResult
 )
 from app.services.ws_manager import manager
@@ -255,6 +255,22 @@ def update_group_announcement(group_id: int, data: AnnouncementUpdate, user: Use
     group.announcement = data.announcement or None
     db.commit()
     return {"message": "群公告已更新", "announcement": group.announcement}
+
+
+@router.patch("/{group_id}/avatar")
+def update_group_avatar(group_id: int, data: AvatarUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """更新群头像（群主/管理员）"""
+    member = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == user.id).first()
+    if not member or member.role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="仅群主或管理员可设置群头像")
+
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="群组不存在")
+
+    group.avatar = data.avatar_url or None
+    db.commit()
+    return {"message": "群头像已更新", "avatar": group.avatar}
 
 
 @router.post("/{group_id}/leave")

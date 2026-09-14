@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.conversation import Conversation, ConversationMessage
 from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
@@ -89,9 +89,39 @@ async def speech_to_text_api(file: UploadFile = File(...), user: User = Depends(
         raise HTTPException(502, str(e))
 
 
+# 各角色默认推荐问题
+DEFAULT_RECOMMENDATIONS: dict[UserRole, list[str]] = {
+    UserRole.STUDENT: [
+        "帮我查一下下周的课程安排",
+        "我想看看这学期的成绩单",
+        "最近有什么校园活动通知",
+        "帮我记录一下获奖信息",
+    ],
+    UserRole.TEACHER: [
+        "帮我查看今天的待办任务",
+        "查一下班级学生的考勤情况",
+        "帮我看看最近的校园公告",
+        "查询学生的成长记录",
+    ],
+    UserRole.ADMIN: [
+        "帮我查看本周的校园公告",
+        "查一下平台的用户统计",
+        "有什么待处理的系统事项",
+        "帮我查一下通知发布情况",
+    ],
+}
+
+# 各角色可涵盖的功能范围（用于引导 LLM 生成推荐）
+ROLE_FEATURES: dict[UserRole, str] = {
+    UserRole.STUDENT: "课表、成绩、请假、通知、考试、成长记录等",
+    UserRole.TEACHER: "待办任务、学生考勤、学生档案、成长记录、校园公告、班级公告、教学日程等",
+    UserRole.ADMIN: "校园公告、通知发布、用户管理、数据统计、系统事项等",
+}
+
+
 @router.get("/recommendations")
 async def get_recommendations(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """根据用户历史对话生成推荐问题"""
+    """根据用户角色与历史对话生成推荐问题"""
     # 获取用户最近的对话消息
     recent_messages = (
         db.query(ConversationMessage)
@@ -107,22 +137,19 @@ async def get_recommendations(user: User = Depends(get_current_user), db: Sessio
         role = "用户" if msg.role == "user" else "助手"
         history_text += f"{role}: {msg.content[:200]}\n"
 
-    # 如果没有历史对话，返回默认推荐
+    # 如果没有历史对话，按角色返回默认推荐
     if not history_text.strip():
-        return {"recommendations": [
-            "帮我查一下下周的课程安排",
-            "我想看看这学期的成绩单",
-            "最近有什么校园活动通知",
-            "帮我记录一下获奖信息",
-        ]}
+        return {"recommendations": DEFAULT_RECOMMENDATIONS.get(user.role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT])}
 
     config = _get_llm_config()
     prompt = f"""根据以下用户的历史对话记录，生成4个用户可能接下来想问的推荐问题。
 
+用户角色：{'学生' if user.role == UserRole.STUDENT else '教师' if user.role == UserRole.TEACHER else '管理员'}
+
 要求：
 1. 问题控制在20字以内，自然口语化
 2. 结合用户的历史兴趣和需求
-3. 涵盖校园AI助手的主要功能（课表、成绩、请假、通知、考试、成长记录等）
+3. 推荐内容必须贴合该用户角色，涵盖其常用功能（{ROLE_FEATURES.get(user.role, ROLE_FEATURES[UserRole.STUDENT])}），不要推荐其他角色的功能（例如不要给学生推荐班级管理，不要给教师推荐成绩单查询）
 4. 直接返回JSON数组格式，不要其他文字
 
 历史对话记录：
@@ -151,10 +178,5 @@ async def get_recommendations(user: User = Depends(get_current_user), db: Sessio
     except Exception as e:
         logger.error("生成推荐失败: %s", e)
 
-    # 降级返回默认推荐
-    return {"recommendations": [
-        "查一下我的课表",
-        "查一下我的成绩",
-        "我需要请假",
-        "查一下官网通知",
-    ]}
+    # 降级返回按角色的默认推荐
+    return {"recommendations": DEFAULT_RECOMMENDATIONS.get(user.role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT])}

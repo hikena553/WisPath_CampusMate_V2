@@ -60,3 +60,7 @@ class UserSearchResult(BaseModel):
 
 class AnnouncementUpdate(BaseModel):
     announcement: str
+
+
+class AvatarUpdate(BaseModel):
+    avatar_url: str

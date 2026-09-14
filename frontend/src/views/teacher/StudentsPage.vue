@@ -42,17 +42,25 @@
       </el-button>
     </div>
 
-    <el-empty v-if="!filteredStudents.length && loaded" description="暂无学生记录" :image-size="100">
-      <template #image>
-        <el-icon :size="64" color="#ddd"><User /></el-icon>
-      </template>
-      <p style="color:#999;margin-top:8px">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</p>
-    </el-empty>
+    <!-- 移动端：空白状态带吉祥物 -->
+    <div v-if="!filteredStudents.length && loaded" class="empty-wrapper">
+      <div v-if="isMobile" class="mobile-empty-mascot">
+        <img src="/images/mascot.png" class="mascot-img-empty" alt="吉祥物" />
+        <span class="mascot-empty-text">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</span>
+        <span v-if="!hasActiveFilter" class="mascot-empty-sub">添加学生即可开始记录成长档案</span>
+      </div>
+      <el-empty v-else description="暂无学生记录" :image-size="100">
+        <template #image>
+          <el-icon :size="64" color="#ddd"><User /></el-icon>
+        </template>
+        <p style="color:#999;margin-top:8px">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</p>
+      </el-empty>
+    </div>
 
     <div v-else class="student-grid">
-      <div v-for="s in pagedStudents" :key="s.id" class="student-card" :class="s.crisis_level ? `level-${s.crisis_level}` : ''">
+      <div v-for="s in pagedStudents" :key="s.id" :class="isMobile ? 'mobile-student-card' : 'student-card'" :class="s.crisis_level ? `level-${s.crisis_level}` : ''">
         <div class="card-head">
-          <el-avatar :size="48" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
+          <el-avatar :size="isMobile ? 40 : 48" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
           <div class="card-info">
             <strong class="card-name">{{ s.name }}</strong>
             <span class="card-college">{{ s.college || '未分配' }}</span>
@@ -82,13 +90,14 @@
         </div>
 
         <div class="card-actions">
-          <el-button size="small" type="primary" @click="openDetail(s)">
+          <el-button v-if="!isMobile" size="small" type="primary" @click="openDetail(s)">
             <el-icon><View /></el-icon> 详情
           </el-button>
           <el-button size="small" type="success" plain @click="openContact(s)">
             <el-icon><ChatDotRound /></el-icon> 联系
           </el-button>
         </div>
+        <button v-if="isMobile" class="ms-detail-btn" @click="openDetail(s)">详情 <el-icon><ArrowRight /></el-icon></button>
       </div>
     </div>
 

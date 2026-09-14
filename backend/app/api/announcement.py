@@ -1,7 +1,7 @@
 import os
 import uuid
 from pathlib import Path
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User, UserRole
 from app.models.announcement import TeacherAnnouncement, AnnouncementRead, UrgencyLevel, TeacherSchedule
-from app.schemas.announcement import AnnouncementOut, UnreadCountOut, ScheduleOut, ScheduleCreate
+from app.schemas.announcement import AnnouncementOut, UnreadCountOut, ScheduleOut, ScheduleCreate, ScheduleUpdate
 from app.utils.enum_helpers import safe_enum_val
 
 router = APIRouter(tags=["announcement"])
@@ -167,6 +167,45 @@ def mark_read(
 
 # ── Teacher Schedule endpoints ──
 
+def _schedule_out(i: TeacherSchedule) -> ScheduleOut:
+    return ScheduleOut(
+        id=i.id, date=str(i.date), content=i.content,
+        urgency=safe_enum_val(i.urgency),
+        completed=bool(i.completed),
+        completed_at=i.completed_at,
+    )
+
+
+def _schedule_sort_key(i: TeacherSchedule, today: date) -> tuple:
+    """排序规则与完成状态完全解耦，保证勾选完成前后卡片位置稳定：
+    - 紧急任务（无论是否完成）置顶，同一优先级内按日期升序；
+    - 按日期升序自然把逾期（日期较早）的任务排到前面。
+    """
+    urgent = safe_enum_val(i.urgency) == "urgent"
+    return (
+        0 if urgent else 1,
+        i.date,
+    )
+
+
+@router.get("/api/teacher/schedules/overdue", response_model=list[ScheduleOut])
+def list_overdue_schedules(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """逾期未完成任务提醒：所有已过期且未完成的任务，紧急优先、按日期升序。"""
+    if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(403)
+    today = date.today()
+    items = db.query(TeacherSchedule).filter(
+        TeacherSchedule.teacher_id == user.id,
+        TeacherSchedule.date < today,
+        TeacherSchedule.completed.is_(False),
+    ).all()
+    items.sort(key=lambda i: (0 if safe_enum_val(i.urgency) == "urgent" else 1, i.date))
+    return [_schedule_out(i) for i in items]
+
+
 @router.get("/api/teacher/schedules", response_model=list[ScheduleOut])
 def list_schedules(
     year: int = Query(...),
@@ -180,8 +219,10 @@ def list_schedules(
         TeacherSchedule.teacher_id == user.id,
         safunc.extract("year", TeacherSchedule.date) == year,
         safunc.extract("month", TeacherSchedule.date) == month,
-    ).order_by(TeacherSchedule.date).all()
-    return [ScheduleOut(id=i.id, date=str(i.date), content=i.content) for i in items]
+    ).all()
+    today = date.today()
+    items.sort(key=lambda i: _schedule_sort_key(i, today))
+    return [_schedule_out(i) for i in items]
 
 
 @router.post("/api/teacher/schedules", response_model=ScheduleOut)
@@ -196,11 +237,35 @@ def create_schedule(
         d = date.fromisoformat(body.date)
     except ValueError:
         raise HTTPException(400, "日期格式错误")
-    item = TeacherSchedule(teacher_id=user.id, date=d, content=body.content)
+    urgency = body.urgency if body.urgency in ("normal", "important", "urgent") else "normal"
+    item = TeacherSchedule(teacher_id=user.id, date=d, content=body.content, urgency=UrgencyLevel(urgency))
     db.add(item)
     db.commit()
     db.refresh(item)
-    return ScheduleOut(id=item.id, date=str(item.date), content=item.content)
+    return _schedule_out(item)
+
+
+@router.patch("/api/teacher/schedules/{schedule_id}", response_model=ScheduleOut)
+def update_schedule_status(
+    schedule_id: int,
+    body: ScheduleUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """标记任务完成/取消完成。完成时记录 completed_at，取消完成时清空。"""
+    if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(403)
+    item = db.query(TeacherSchedule).filter(
+        TeacherSchedule.id == schedule_id,
+        TeacherSchedule.teacher_id == user.id,
+    ).first()
+    if not item:
+        raise HTTPException(404, "日程不存在")
+    item.completed = body.completed
+    item.completed_at = datetime.now(timezone.utc) if body.completed else None
+    db.commit()
+    db.refresh(item)
+    return _schedule_out(item)
 
 
 @router.delete("/api/teacher/schedules/{schedule_id}")

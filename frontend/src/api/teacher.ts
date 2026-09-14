@@ -88,7 +88,12 @@ export interface ScheduleItem {
   id: number
   date: string
   content: string
+  urgency: string
+  completed: boolean
+  completed_at: string | null
 }
+
+export type ScheduleUrgency = 'normal' | 'important' | 'urgent'
 
 export function getTeacherSchedules(year: number, month: number) {
   return request.get<ScheduleItem[]>('/teacher/schedules', {
@@ -96,8 +101,18 @@ export function getTeacherSchedules(year: number, month: number) {
   })
 }
 
-export function createTeacherSchedule(date: string, content: string) {
-  return request.post<ScheduleItem>('/teacher/schedules', { date, content })
+/** 逾期未完成任务提醒（已过期且未完成） */
+export function getOverdueSchedules() {
+  return request.get<ScheduleItem[]>('/teacher/schedules/overdue')
+}
+
+export function createTeacherSchedule(date: string, content: string, urgency: ScheduleUrgency = 'normal') {
+  return request.post<ScheduleItem>('/teacher/schedules', { date, content, urgency })
+}
+
+/** 标记任务完成 / 取消完成 */
+export function updateTeacherSchedule(id: number, completed: boolean) {
+  return request.patch<ScheduleItem>(`/teacher/schedules/${id}`, { completed })
 }
 
 export function deleteTeacherSchedule(id: number) {

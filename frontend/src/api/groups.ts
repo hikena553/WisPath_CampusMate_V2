@@ -84,6 +84,10 @@ export function updateGroupAnnouncement(groupId: number, announcement: string) {
   return request.put<{ message: string; announcement: string | null }>(`/groups/${groupId}/announcement`, { announcement })
 }
 
+export function updateGroupAvatar(groupId: number, avatarUrl: string) {
+  return request.patch<{ message: string; avatar: string | null }>(`/groups/${groupId}/avatar`, { avatar_url: avatarUrl })
+}
+
 export function leaveGroup(groupId: number) {
   return request.post<{ message: string }>(`/groups/${groupId}/leave`)
 }

@@ -186,6 +186,13 @@
       </div>
     </div>
 
+    <!-- 移动端首页：逾期未处理提醒条 -->
+    <div v-if="isMobile && overdueSchedules.length > 0" class="overdue-home-bar" @click="showTodaySubPage = true">
+      <el-icon><WarningFilled /></el-icon>
+      <span>{{ overdueSchedules.length }} 个任务已逾期未处理，点击查看</span>
+      <el-icon class="overdue-home-arrow"><DArrowRight /></el-icon>
+    </div>
+
     <!-- 移动端：今日任务 + 公告 -->
     <div v-if="isMobile" class="mobile-today-section">
       <div class="mobile-section-card" @click="showTodaySubPage = true" style="cursor:pointer">
@@ -205,9 +212,9 @@
             </div>
           </div>
           <div v-for="s in todaySchedules.slice(0, 2)" :key="'s-'+s.id" class="today-item" style="padding:6px 0">
-            <div class="today-dot dot-schedule"></div>
+            <div class="today-dot" :style="{ background: s.completed ? '#10b981' : s.urgency === 'urgent' ? '#ef4444' : '#3b82f6' }"></div>
             <div class="today-info">
-              <div class="today-title">{{ s.content }}</div>
+              <div class="today-title" :class="{ 'today-done': s.completed }">{{ s.content }}</div>
             </div>
           </div>
           <div v-if="todayLeaves.length + todaySchedules.length > 4" style="font-size:11px;color:#9ca3af;text-align:center;padding-top:4px">
@@ -271,6 +278,21 @@
                 placeholder="请输入日程内容，如：&#10;• 期中考试监考&#10;• 班级会议&#10;• 学生谈话"
                 resize="none"
               />
+            </div>
+
+            <div class="form-section">
+              <div class="form-label">
+                <el-icon color="#667eea"><Flag /></el-icon>
+                <span>任务等级</span>
+              </div>
+              <div class="form-urgency-options">
+                <button
+                  v-for="u in urgencyOptions" :key="u.value"
+                  class="form-urgency-opt"
+                  :class="{ active: scheduleUrgency === u.value, [u.value]: true }"
+                  @click="scheduleUrgency = u.value"
+                >{{ u.label }}</button>
+              </div>
             </div>
 
             <button
@@ -365,17 +387,17 @@
           <!-- 统计 -->
           <div class="task-hero-stats">
             <div class="hero-stat">
-              <span class="hero-stat-num">{{ todayLeaves.length + todaySchedules.length }}</span>
+              <span class="hero-stat-num">{{ totalTodayCount }}</span>
               <span class="hero-stat-label">总计</span>
             </div>
             <div class="hero-stat-divider"></div>
             <div class="hero-stat">
-              <span class="hero-stat-num hero-stat-green">{{ completedTaskIds.size }}</span>
+              <span class="hero-stat-num hero-stat-green">{{ completedTodayCount }}</span>
               <span class="hero-stat-label">已完成</span>
             </div>
             <div class="hero-stat-divider"></div>
             <div class="hero-stat">
-              <span class="hero-stat-num hero-stat-amber">{{ todayLeaves.length + todaySchedules.length - completedTaskIds.size }}</span>
+              <span class="hero-stat-num hero-stat-amber">{{ pendingTodayCount }}</span>
               <span class="hero-stat-label">待处理</span>
             </div>
           </div>
@@ -441,6 +463,14 @@
                   @keyup.enter="addTaskFromPopup"
                   @keyup.escape="popupAdding = false"
                 />
+                <div class="cal-form-urgency">
+                  <button
+                    v-for="u in urgencyOptions" :key="u.value"
+                    class="cal-urgency-opt"
+                    :class="{ active: popupTaskUrgency === u.value, [u.value]: true }"
+                    @click="popupTaskUrgency = u.value"
+                  >{{ u.label }}</button>
+                </div>
                 <div class="cal-form-actions">
                   <button class="cal-form-cancel" @click="popupAdding = false">取消</button>
                   <button class="cal-form-submit" @click="addTaskFromPopup" :disabled="!popupTaskContent.trim()">添加</button>
@@ -450,27 +480,16 @@
           </div>
         </div>
 
-        <!-- 快速添加 -->
-        <div class="task-quick-add">
-          <div class="quick-add-icon"><el-icon><Plus /></el-icon></div>
-          <input
-            v-model="quickTaskContent"
-            class="quick-add-input"
-            placeholder="添加新任务..."
-            @keyup.enter="handleQuickAddTask"
-          />
-          <button
-            v-if="quickTaskContent.trim()"
-            class="quick-add-submit"
-            @click="handleQuickAddTask"
-          >
-            添加
+        <!-- 快速添加：加号悬浮按钮 -->
+        <div class="task-quick-add-fab">
+          <button class="quick-add-fab" @click="openQuickAddDialog">
+            <el-icon :size="22"><Plus /></el-icon>
           </button>
         </div>
 
         <!-- 任务列表 -->
         <div class="task-body">
-          <!-- 待批请假 -->
+          <!-- 待批请假（审批是其唯一完成路径，不提供本地勾选） -->
           <div v-if="todayLeaves.length > 0" class="task-section">
             <div class="task-section-head">
               <span class="task-section-dot" style="background:#f59e0b"></span>
@@ -480,14 +499,8 @@
             <div
               v-for="l in todayLeaves"
               :key="'tl-'+l.id"
-              class="task-card"
-              :class="{ 'task-done': completedTaskIds.has(l.id) }"
+              class="task-card leave-card"
             >
-              <div class="task-card-check" @click="toggleTaskComplete(l.id)">
-                <div class="tc-check" :class="{ checked: completedTaskIds.has(l.id) }">
-                  <el-icon v-if="completedTaskIds.has(l.id)"><Check /></el-icon>
-                </div>
-              </div>
               <div class="task-card-body">
                 <div class="task-card-title">{{ l.student_name }} · {{ typeLabel(l.leave_type) }}</div>
                 <div class="task-card-sub">{{ l.start_date }} ~ {{ l.end_date }}</div>
@@ -496,7 +509,39 @@
             </div>
           </div>
 
-          <!-- 日程安排 -->
+          <!-- 逾期未完成（累积全部，不限日期） -->
+          <div v-if="overdueSchedules.length > 0" class="task-section">
+            <div class="task-section-head">
+              <span class="task-section-dot" style="background:#ef4444"></span>
+              <span class="task-section-title">逾期未完成</span>
+              <span class="task-section-badge orange">{{ overdueSchedules.length }}</span>
+            </div>
+            <div
+              v-for="s in overdueSchedules"
+              :key="'od-'+s.id"
+              class="task-card schedule-card"
+              :class="['task-pending', { 'task-urgent': s.urgency === 'urgent' }]"
+            >
+              <div class="task-card-check" @click="toggleScheduleComplete(s)">
+                <div class="tc-check">
+                  <el-icon v-if="s.completed"><Check /></el-icon>
+                </div>
+              </div>
+              <div class="task-card-body">
+                <div class="task-card-title">{{ s.content }}</div>
+                <div class="task-card-tags">
+                  <span class="ur-badge ur-overdue">逾期 {{ s.date }}</span>
+                  <span v-if="s.urgency === 'urgent'" class="ur-badge ur-urgent">紧急</span>
+                  <span v-else-if="s.urgency === 'important'" class="ur-badge ur-important">重要</span>
+                </div>
+              </div>
+              <button class="task-card-del" @click="handleDeleteSchedule(s.id)">
+                <el-icon><Delete /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- 日程安排（当前所选日期） -->
           <div v-if="todaySchedules.length > 0" class="task-section">
             <div class="task-section-head">
               <span class="task-section-dot" style="background:#3b82f6"></span>
@@ -506,16 +551,24 @@
             <div
               v-for="s in todaySchedules"
               :key="'ts-'+s.id"
-              class="task-card"
-              :class="{ 'task-done': completedTaskIds.has(s.id) }"
+              class="task-card schedule-card"
+              :class="[
+                s.completed ? 'task-completed' : 'task-pending',
+                { 'task-urgent': !s.completed && s.urgency === 'urgent' }
+              ]"
             >
-              <div class="task-card-check" @click="toggleTaskComplete(s.id)">
-                <div class="tc-check" :class="{ checked: completedTaskIds.has(s.id) }">
-                  <el-icon v-if="completedTaskIds.has(s.id)"><Check /></el-icon>
+              <div class="task-card-check" @click="toggleScheduleComplete(s)">
+                <div class="tc-check" :class="{ checked: s.completed }">
+                  <el-icon v-if="s.completed"><Check /></el-icon>
                 </div>
               </div>
               <div class="task-card-body">
                 <div class="task-card-title">{{ s.content }}</div>
+                <div class="task-card-tags">
+                  <span v-if="!s.completed && s.urgency === 'urgent'" class="ur-badge ur-urgent">紧急</span>
+                  <span v-else-if="!s.completed && s.urgency === 'important'" class="ur-badge ur-important">重要</span>
+                  <span v-if="!s.completed && isOverdueSchedule(s)" class="ur-badge ur-overdue">已逾期</span>
+                </div>
               </div>
               <button class="task-card-del" @click="handleDeleteSchedule(s.id)">
                 <el-icon><Delete /></el-icon>
@@ -524,7 +577,7 @@
           </div>
 
           <!-- 空状态 -->
-          <div v-if="todayLeaves.length === 0 && todaySchedules.length === 0" class="task-empty">
+          <div v-if="todayLeaves.length === 0 && todaySchedules.length === 0 && overdueSchedules.length === 0" class="task-empty">
             <img src="/images/mascot.png" class="task-empty-mascot" />
             <div class="task-empty-text">暂无任务安排</div>
             <div class="task-empty-sub">在上方输入框添加新任务</div>
@@ -641,32 +694,6 @@
           <div style="width:36px"></div>
         </div>
         <div class="sub-page-body">
-          <!-- AI 分析（主要功能 · 顶部） -->
-          <div class="mobile-section-card ai-analysis-card">
-            <div class="ai-header">
-              <div class="ai-icon-wrap"><el-icon :size="20"><DataAnalysis /></el-icon></div>
-              <div class="ai-header-text">
-                <span class="ai-title">AI 班级智能分析</span>
-                <span class="ai-desc">基于班级多维数据，智能生成分析报告</span>
-              </div>
-            </div>
-            <div v-if="!analysisResult && !analysisLoading" class="analysis-placeholder">
-              <el-button type="primary" round @click="handleClassAnalysis" :loading="analysisLoading" class="ai-start-btn">
-                <el-icon><MagicStick /></el-icon> 开始智能分析
-              </el-button>
-            </div>
-            <div v-else-if="analysisLoading" class="analysis-loading">
-              <el-icon class="loading-icon" style="font-size:28px"><DataAnalysis /></el-icon>
-              <p style="margin-top:10px;font-size:13px;color:#8b5cf6">AI 正在深度分析班级数据...</p>
-            </div>
-            <div v-else class="analysis-content">
-              <div class="analysis-text">{{ analysisResult }}</div>
-              <div class="analysis-actions">
-                <el-button text type="primary" size="small" @click="handleClassAnalysis"><el-icon><Refresh /></el-icon> 重新分析</el-button>
-              </div>
-            </div>
-          </div>
-
           <!-- 核心数据图表 -->
           <div class="charts-grid">
             <!-- 班级综合评估 -->
@@ -705,6 +732,17 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- 悬浮桌宠：点击查看班级情况分析 -->
+        <div class="mascot-pet" @click="openMascotAnalysis">
+          <transition name="tip-pop">
+            <div v-if="showMascotTip" class="mascot-tip-bubble">
+              <span class="mascot-tip-close" @click.stop="showMascotTip = false"><el-icon><Close /></el-icon></span>
+              <span class="mascot-tip-text">点我查看班级情况分析~</span>
+            </div>
+          </transition>
+          <img src="/images/mascot.png" alt="绵小城" class="mascot-pet-img" />
         </div>
       </div>
     <!-- /transition removed -->
@@ -857,6 +895,53 @@
       </div>
     </el-dialog>
 
+    <!-- 快捷添加任务弹窗（居中自定义）
+        <el-dialog v-model="quickAddDialogVisible" title="添加任务" width="88%" :close-on-click-modal="false">
+          <p style="margin-bottom:12px;color:#666">任务日期：<strong>{{ selectedTaskDate }}</strong></p>
+          <el-form @submit.prevent>
+            <el-form-item>
+              <el-input
+                ref="quickAddInputRef"
+                v-model="quickTaskContent"
+                placeholder="输入任务内容..."
+                maxlength="100"
+                @keyup.enter="handleQuickAddTask"
+              />
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="quickAddDialogVisible = false">取消</el-button>
+            <el-button type="primary" :disabled="!quickTaskContent.trim()" @click="handleQuickAddTask">添加</el-button>
+          </template>
+        </el-dialog>
+        -->
+    <div v-if="quickAddDialogVisible" class="quick-add-overlay" @click.self="quickAddDialogVisible = false">
+      <div class="quick-add-popup">
+        <div class="quick-add-title">添加任务</div>
+        <div class="quick-add-date">{{ selectedTaskDate }}</div>
+        <input
+          ref="quickAddInputRef"
+          v-model="quickTaskContent"
+          class="quick-add-input"
+          placeholder="输入任务内容..."
+          maxlength="100"
+          @keyup.enter="handleQuickAddTask"
+        />
+        <div class="quick-add-urgency">
+          <button
+            v-for="u in urgencyOptions" :key="u.value"
+            class="urgency-opt"
+            :class="{ active: quickTaskUrgency === u.value, [u.value]: true }"
+            @click="quickTaskUrgency = u.value"
+          >{{ u.label }}</button>
+        </div>
+        <div class="quick-add-actions">
+          <button class="quick-add-cancel" @click="quickAddDialogVisible = false">取消</button>
+          <button class="quick-add-submit" :disabled="!quickTaskContent.trim()" @click="handleQuickAddTask">添加</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 添加日程弹窗 -->
     <el-dialog v-model="scheduleDialogVisible" title="添加日程" width="400px">
       <p style="margin-bottom:12px;color:#666">日期：<strong>{{ selectedDateStr }}</strong></p>
@@ -864,37 +949,82 @@
         <el-form-item prop="content">
           <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="请输入日程内容，如：期中考试监考" />
         </el-form-item>
+        <el-form-item label="等级">
+          <el-radio-group v-model="scheduleUrgency">
+            <el-radio value="normal">普通</el-radio>
+            <el-radio value="important">重要</el-radio>
+            <el-radio value="urgent">紧急</el-radio>
+          </el-radio-group>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="scheduleDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleAddSchedule">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 桌宠弹窗：班级情况分析 -->
+    <el-dialog
+      v-model="showAnalysisDialog"
+      class="mascot-analysis-dialog"
+      :append-to-body="true"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="dialog-header">
+          <img src="/images/mascot.png" alt="绵小城" class="dialog-header-mascot" />
+          <div class="dialog-header-text">
+            <div class="dialog-title">班级情况分析</div>
+            <div class="dialog-sub">绵小城基于班级图表与学生成长数据智能生成</div>
+          </div>
+        </div>
+      </template>
+      <div class="dialog-content">
+        <div v-if="analysisLoading" class="dialog-loading">
+          <img src="/images/mascot.png" alt="绵小城" class="dialog-loading-mascot" />
+          <p class="dialog-loading-text">{{ analysisLoadingText }}</p>
+        </div>
+        <div v-else-if="analysisResult" class="analysis-report markdown-body" v-html="renderedAnalysisHtml"></div>
+        <div v-else class="dialog-empty">
+          <el-icon class="dialog-empty-icon"><MagicStick /></el-icon>
+          <p>点击下方按钮，绵小城将为您生成班级分析报告</p>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button round @click="showAnalysisDialog = false">关闭</el-button>
+          <el-button round type="primary" :loading="analysisLoading" @click="startMascotAnalysis">
+            <el-icon><Refresh /></el-icon> 重新分析
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   WarningFilled, DataAnalysis, Calendar, UserFilled,
   WarningFilled as WarnIcon, EditPen, DArrowRight, Histogram, Location,
-  ArrowLeft, Plus, Bell, MagicStick, Refresh, CircleCheck, Check, Delete, Clock, List, Loading, Close
+  ArrowLeft, Plus, Bell, MagicStick, Refresh, Check, Delete, Clock, List, Loading, Close, Flag
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
 import { getAlerts } from '@/api/crisis'
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
-import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getClassStats } from '@/api/teacher'
-import type { DashboardStats, ClassEvaluation, ClassStats, ScheduleItem } from '@/api/teacher'
+import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getClassStats, getOverdueSchedules, updateTeacherSchedule, getStudents } from '@/api/teacher'
+import type { DashboardStats, ClassEvaluation, ClassStats, ScheduleItem, ScheduleUrgency, StudentSummary } from '@/api/teacher'
 import { getAnnouncements } from '@/api/campus'
 import { getTeacherAnnouncements, createAnnouncement, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import type { CrisisAlert, LeaveRequestOut, Announcement, ServiceTicket } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
+import { renderMarkdown } from '@/utils/markdown'
 
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -956,6 +1086,7 @@ function initFromCache() {
   const cachedCampusAnn = getCachedData<Announcement[]>('announcements')
   const cachedSchedules = getCachedData<ScheduleItem[]>('teacher-schedules')
   const cachedMyAnn = getCachedData<AnnouncementItem[]>('teacher-announcements')
+  const cachedOverdue = getCachedData<ScheduleItem[]>('overdue-schedules')
   if (cachedStats) stats.value = cachedStats
   if (cachedAlerts) alerts.value = cachedAlerts
   if (cachedPendingLeaves) pendingLeaves.value = cachedPendingLeaves
@@ -965,6 +1096,7 @@ function initFromCache() {
   if (cachedCampusAnn) campusAnnouncements.value = cachedCampusAnn
   if (cachedSchedules) schedules.value = cachedSchedules
   if (cachedMyAnn) myAnnouncements.value = cachedMyAnn
+  if (cachedOverdue) overdueSchedules.value = cachedOverdue
   // 只要任意缓存有数据，就标记为 ready，避免显示加载占位符
   if (cachedStats || cachedAlerts || cachedPendingLeaves || cachedAnnouncements || cachedEval || cachedClassStats || cachedCampusAnn || cachedSchedules || cachedMyAnn) {
     dataReady.value = true
@@ -1098,22 +1230,36 @@ const todaySchedules = computed(() => {
   return schedules.value.filter(s => s.date === date)
 })
 
-// 切换任务日期
-function changeTaskDate(offset: number) {
-  const d = new Date(selectedTaskDate.value)
-  d.setDate(d.getDate() + offset)
-  selectedTaskDate.value = d.toISOString().slice(0, 10)
+// 任务统计：完成口径只计入日程（请假以审批为完成路径）
+const totalTodayCount = computed(() => todayLeaves.value.length + todaySchedules.value.length)
+const completedTodayCount = computed(() => todaySchedules.value.filter(s => s.completed).length)
+const pendingTodayCount = computed(() => Math.max(totalTodayCount.value - completedTodayCount.value, 0))
+
+function isOverdueSchedule(s: ScheduleItem) {
+  const today = new Date().toISOString().slice(0, 10)
+  return !s.completed && s.date < today
 }
 
-// 标记任务完成
-function toggleTaskComplete(id: number) {
-  const set = new Set(completedTaskIds.value)
-  if (set.has(id)) {
-    set.delete(id)
-  } else {
-    set.add(id)
+// 标记任务完成/取消完成：持久化到后端；原地更新状态不重排列表（勾选后卡片不跳位置）；刷新后不丢失
+async function toggleScheduleComplete(s: ScheduleItem) {
+  const target = !s.completed
+  try {
+    await updateTeacherSchedule(s.id, target)
+    // PATCH 已提交，作废在途的逾期列表请求，防止其旧响应覆盖即将更新的本地状态
+    overdueReqSeq++
+    s.completed = target
+    s.completed_at = target ? new Date().toISOString() : null
+    // 逾期提醒条本地即时同步（不等网络往返）
+    const todayStr = new Date().toISOString().slice(0, 10)
+    if (target) {
+      overdueSchedules.value = overdueSchedules.value.filter(o => o.id !== s.id)
+    } else if (s.date < todayStr) {
+      overdueSchedules.value = [s, ...overdueSchedules.value.filter(o => o.id !== s.id)]
+    }
+    await loadOverdueSchedules() // 本地同步后与服务器对齐（内部有 guard，失败不抛）
+  } catch {
+    ElMessage.error('操作失败')
   }
-  completedTaskIds.value = set
 }
 
 // 格式化日期显示
@@ -1130,27 +1276,108 @@ const taskDateDisplay = computed(() => {
 // ===== AI 班级分析 =====
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 
+// 桌宠与弹窗状态
+const showMascotTip = ref(false)
+const showAnalysisDialog = ref(false)
+const analysisLoadingText = ref('绵小城正在深度分析班级情况...')
+const studentProfiles = ref<StudentSummary[]>([])
+let mascotTipTimer: ReturnType<typeof setTimeout> | null = null
+
+const renderedAnalysisHtml = computed(() => renderMarkdown(analysisResult.value))
+
+// 进入/退出数据分析子页面时控制桌宠提示气泡
+watch(showChartSubPage, (open) => {
+  if (mascotTipTimer) { clearTimeout(mascotTipTimer); mascotTipTimer = null }
+  if (open) {
+    showMascotTip.value = true
+    mascotTipTimer = setTimeout(() => { showMascotTip.value = false }, 6000)
+  } else {
+    showMascotTip.value = false
+  }
+})
+
+function crisisLevelLabel(level?: string | null) {
+  const map: Record<string, string> = { severe: '高危预警', moderate: '中危预警', mild: '低危预警', resolved: '已解决' }
+  return level ? (map[level] || level) : '暂无预警'
+}
+
+/** 拉取手下学生的成长画像（供 AI 分析使用） */
+async function loadStudentProfiles() {
+  if (studentProfiles.value.length) return
+  try {
+    studentProfiles.value = await getStudents()
+  } catch {
+    studentProfiles.value = [] // 拉取失败时退化为仅用汇总数据分析
+  }
+}
+
 function buildAnalysisPrompt() {
   const stats = classStats.value
-  return `作为辅导员老师，请分析以下班级数据并给出指导建议：
+  const ev = evalData.value
+  const g = ev.growth || {}
+  const profiles = studentProfiles.value
+  const listed = profiles.slice(0, 60)
+  const profileLines = listed.map((p) => {
+    const skills = p.skills_json?.skills?.length ?? 0
+    const interests = p.skills_json?.interests?.length ?? 0
+    const crisisNote = p.crisis_level && p.latest_crisis_summary
+      ? `、最近危机「${p.latest_crisis_summary.slice(0, 40)}」`
+      : ''
+    return `- ${p.name}：成长记录${p.growth_count}条、综合评分${p.score}分、心理状态「${crisisLevelLabel(p.crisis_level)}」、技能${skills}项、兴趣${interests}项${crisisNote}`
+  })
+  const profileText = profileLines.length
+    ? profileLines.join('\n') + (profiles.length > listed.length ? `\n（其余${profiles.length - listed.length}名学生未列出）` : '')
+    : '（暂无学生明细数据）'
 
-班级数据：
+  return `作为辅导员老师，请基于以下班级图表数据与手下学生成长数据，分析班级情况并提出建议：
+
+班级图表数据：
 - 学生总数：${stats.total_students}
 - 性别比例：${JSON.stringify(stats.gender_stats)}
 - 政治面貌：${JSON.stringify(stats.political_stats)}
+- 生源地分布：${JSON.stringify(stats.hometown_stats)}
 - 心理危机分布：高危${stats.crisis_stats?.severe || 0}人、中危${stats.crisis_stats?.moderate || 0}人、低危${stats.crisis_stats?.mild || 0}人、已解决${stats.crisis_stats?.resolved || 0}人
 - 成绩分布：优秀${stats.grade_stats?.excellent || 0}人、良好${stats.grade_stats?.good || 0}人、中等${stats.grade_stats?.medium || 0}人、及格${stats.grade_stats?.pass || 0}人、不及格${stats.grade_stats?.fail || 0}人
+- 危机预警趋势（近6个月）：${JSON.stringify(stats.crisis_trend)}
+
+班级成长数据：
+- 平均GPA：${ev.avg_gpa}，平均综合评分：${ev.avg_score}
+- 成长记录统计：荣誉${g.honor || 0}条、竞赛${g.competition || 0}条、实践${g.practice || 0}条、论文${g.paper || 0}条、成果${g.achievement || 0}条
+- 待审批请假：${ev.pending_leaves}人
+
+手下学生成长明细：
+${profileText}
 
 请从以下方面进行分析：
-1. 班级整体概况
-2. 心理健康状况分析
-3. 学业成绩分析
-4. 辅导员工作建议
+1. 班级整体概况与综合能力画像
+2. 学业成绩分析
+3. 心理健康与危机预警分析
+4. 学生成长发展分析（成长记录、技能、竞赛、实践等维度）
+5. 辅导员工作建议（对需重点关注的个别学生点名提醒）
 
-请用简洁专业的语言，控制在500字以内。`
+请用简洁专业的语言，控制在600字以内。`
+}
+
+/** 桌宠：打开分析弹窗（首次自动触发分析） */
+async function openMascotAnalysis() {
+  showMascotTip.value = false
+  showAnalysisDialog.value = true
+  if (!analysisResult.value && !analysisLoading.value) {
+    await startMascotAnalysis()
+  }
+}
+
+/** 桌宠弹窗：重新/开始分析 */
+async function startMascotAnalysis() {
+  if (analysisLoading.value) return
+  analysisLoadingText.value = '绵小城正在收集班级数据与学生成长记录...'
+  await loadStudentProfiles()
+  analysisLoadingText.value = '绵小城正在深度分析班级情况...'
+  await runAnalysis(buildAnalysisPrompt(), { skipCache: true })
 }
 
 async function handleClassAnalysis() {
+  await loadStudentProfiles()
   await runAnalysis(buildAnalysisPrompt(), { skipCache: true })
 }
 
@@ -1513,16 +1740,33 @@ const hometownBarOptions = computed(() => {
 
 const showCrisisSubPage = ref(false)
 const showTodaySubPage = ref(false)
+watch(showTodaySubPage, (open) => {
+  if (open) selectedTaskDate.value = new Date().toISOString().slice(0, 10)
+})
 
 // 任务日期选择
 const selectedTaskDate = ref(new Date().toISOString().slice(0, 10))
-const completedTaskIds = ref<Set<number>>(new Set())
 const quickTaskContent = ref('')
-const datePickerRef = ref<any>(null)
+const quickTaskUrgency = ref<ScheduleUrgency>('normal')
+const quickAddDialogVisible = ref(false)
+const quickAddInputRef = ref<HTMLInputElement>()
 const showDatePopup = ref(false)
 const popupTaskContent = ref('')
+const popupTaskUrgency = ref<ScheduleUrgency>('normal')
 const popupAdding = ref(false)
 const popupInputRef = ref<HTMLInputElement | null>(null)
+
+// 任务等级选项（普通/重要/紧急）
+const urgencyOptions: { value: ScheduleUrgency; label: string }[] = [
+  { value: 'normal', label: '普通' },
+  { value: 'important', label: '重要' },
+  { value: 'urgent', label: '紧急' },
+]
+
+// 逾期未完成任务提醒（已过期且未完成，跨月份）
+const overdueSchedules = ref<ScheduleItem[]>([])
+// 逾期列表请求序号：仅写入最新请求的响应，避免轮询旧数据覆盖刚勾选完成的状态
+let overdueReqSeq = 0
 
 // 弹窗日历逻辑
 const popupYear = ref(new Date().getFullYear())
@@ -1599,7 +1843,8 @@ const popupTasks = computed(() => {
   })
   schedules.value.forEach(s => {
     if (s.date === date) {
-      tasks.push({ id: 's-' + s.id, text: s.content, color: '#3b82f6' })
+      const color = s.completed ? '#10b981' : s.urgency === 'urgent' ? '#ef4444' : '#3b82f6'
+      tasks.push({ id: 's-' + s.id, text: s.content, color })
     }
   })
   return tasks
@@ -1619,29 +1864,29 @@ function selectPopupDate(day: { date: string; other: boolean }) {
   loadSchedules()
 }
 
-// 关闭弹窗并恢复到今天
+// 关闭弹窗：保留用户选择的日期（不重置为今天），否则历史/逾期任务永远无法在列表中查看勾选
 function closePopup() {
-  const today = new Date().toISOString().slice(0, 10)
-  selectedTaskDate.value = today
-  popupYear.value = new Date().getFullYear()
-  popupMonth.value = new Date().getMonth() + 1
   showDatePopup.value = false
 }
 
-// 打开日期选择器
-function openDatePicker() {
-  if (datePickerRef.value) {
-    datePickerRef.value.focus()
-  }
+// 打开快捷添加弹窗并聚焦输入框
+function openQuickAddDialog() {
+  quickAddDialogVisible.value = true
+  quickTaskUrgency.value = 'normal'
+  nextTick(() => {
+    quickAddInputRef.value?.focus()
+  })
 }
 
-// 快速添加任务
+// 快速添加任务（弹窗）
 async function handleQuickAddTask() {
   if (!quickTaskContent.value.trim()) return
   try {
-    await createTeacherSchedule(selectedTaskDate.value, quickTaskContent.value.trim())
+    await createTeacherSchedule(selectedTaskDate.value, quickTaskContent.value.trim(), quickTaskUrgency.value)
     ElMessage.success('任务已添加')
     quickTaskContent.value = ''
+    quickTaskUrgency.value = 'normal'
+    quickAddDialogVisible.value = false
     // 更新日历年月以加载对应月份数据
     const d = new Date(selectedTaskDate.value)
     calYear.value = d.getFullYear()
@@ -1656,9 +1901,10 @@ async function handleQuickAddTask() {
 async function addTaskFromPopup() {
   if (!popupTaskContent.value.trim()) return
   try {
-    await createTeacherSchedule(selectedTaskDate.value, popupTaskContent.value.trim())
+    await createTeacherSchedule(selectedTaskDate.value, popupTaskContent.value.trim(), popupTaskUrgency.value)
     ElMessage.success('任务已添加')
     popupTaskContent.value = ''
+    popupTaskUrgency.value = 'normal'
     popupAdding.value = false
     const d = new Date(selectedTaskDate.value)
     calYear.value = d.getFullYear()
@@ -1697,9 +1943,10 @@ interface CalDay {
 const now = new Date()
 const calYear = ref(now.getFullYear())
 const calMonth = ref(now.getMonth() + 1)
-const schedules = ref<{ id: number; date: string; content: string }[]>([])
+const schedules = ref<ScheduleItem[]>([])
 const scheduleDialogVisible = ref(false)
 const scheduleContent = ref('')
+const scheduleUrgency = ref<ScheduleUrgency>('normal')
 const scheduleDate = ref(new Date().toISOString().slice(0, 10))
 const scheduleFormRef = ref<any>()
 const scheduleRules = {
@@ -1775,7 +2022,7 @@ const upcomingReminders = computed(() => {
   threeDaysLater.setDate(threeDaysLater.getDate() + 3)
   return schedules.value.filter(s => {
     const d = new Date(s.date)
-    return d >= today && d <= threeDaysLater
+    return !s.completed && d >= today && d <= threeDaysLater
   }).sort((a, b) => a.date.localeCompare(b.date))
 })
 
@@ -1804,6 +2051,7 @@ function onDayClick(day: CalDay) {
   } else {
     selectedDateStr.value = day.dateStr
     scheduleContent.value = ''
+    scheduleUrgency.value = 'normal'
     scheduleDialogVisible.value = true
   }
 }
@@ -1813,9 +2061,10 @@ async function handleAddSchedule() {
     try { await scheduleFormRef.value.validate() } catch { return }
   }
   try {
-    await createTeacherSchedule(selectedDateStr.value, scheduleContent.value)
+    await createTeacherSchedule(selectedDateStr.value, scheduleContent.value, scheduleUrgency.value)
     ElMessage.success('日程已添加')
     scheduleDialogVisible.value = false
+    scheduleUrgency.value = 'normal'
     loadSchedules()
   } catch { ElMessage.error('添加失败') }
 }
@@ -1824,9 +2073,10 @@ async function handleAddScheduleFromSubPage() {
   const date = scheduleDate.value
   if (!date || !scheduleContent.value.trim()) return
   try {
-    await createTeacherSchedule(date, scheduleContent.value.trim())
+    await createTeacherSchedule(date, scheduleContent.value.trim(), scheduleUrgency.value)
     ElMessage.success('日程已添加')
     scheduleContent.value = ''
+    scheduleUrgency.value = 'normal'
     showScheduleSubPage.value = false
     loadSchedules()
   } catch { ElMessage.error('添加失败') }
@@ -1843,10 +2093,20 @@ async function handleDeleteSchedule(id: number) {
 async function loadSchedules() {
   const prefetch = getPrefetchPromise()
   if (prefetch) await prefetch
+  // 仅在本地无数据时用缓存兜底：已有数据时跳过缓存，避免轮询期间旧缓存覆盖刚勾选的完成状态
   const cached = getCachedData<ScheduleItem[]>('teacher-schedules')
-  if (cached) schedules.value = cached
+  if (cached && schedules.value.length === 0) schedules.value = cached
   try {
     schedules.value = await getTeacherSchedules(calYear.value, calMonth.value)
+  } catch { /* ignore */ }
+}
+
+async function loadOverdueSchedules() {
+  const seq = ++overdueReqSeq
+  try {
+    const data = await getOverdueSchedules()
+    // 仅当前最新请求的响应才写入，防止过期响应覆盖本地刚同步的勾选状态
+    if (seq === overdueReqSeq) overdueSchedules.value = data
   } catch { /* ignore */ }
 }
 
@@ -1955,6 +2215,7 @@ async function silentRefresh() {
     loadData(),
     loadSchedules(),
     loadMyAnnouncements(),
+    loadOverdueSchedules(),
   ]).catch(() => {})
   lastRefreshAt = Date.now()
   dataReady.value = true // 数据加载完成，允许显示空状态
@@ -1966,6 +2227,8 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  // 返回首页时重置日期到今天
+  selectedTaskDate.value = new Date().toISOString().slice(0, 10)
   // 距上次刷新超过60秒才触发静默刷新（后台更新数据，不触发加载动画）
   if (Date.now() - lastRefreshAt >= 60_000) {
     silentRefresh()
@@ -1988,6 +2251,10 @@ onUnmounted(() => {
   if (pollTimer !== null) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+  if (mascotTipTimer !== null) {
+    clearTimeout(mascotTipTimer)
+    mascotTipTimer = null
   }
 })
 </script>
@@ -2904,6 +3171,37 @@ onUnmounted(() => {
     cursor: not-allowed;
   }
 
+  .form-urgency-options {
+    display: flex;
+    gap: 8px;
+  }
+  .form-urgency-opt {
+    flex: 1;
+    height: 38px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    color: #6b7280;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .form-urgency-opt.active {
+    border-color: #667eea;
+    background: #eef1ff;
+    color: #5b5bd6;
+    font-weight: 600;
+  }
+  .form-urgency-opt.active.important {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #b45309;
+  }
+  .form-urgency-opt.active.urgent {
+    border-color: #ef4444;
+    background: #fef2f2;
+    color: #dc2626;
+  }
+
   .schedule-upcoming-card {
     background: #fff;
     border-radius: 16px;
@@ -3033,6 +3331,7 @@ onUnmounted(() => {
   .task-hero {
     position: relative;
     height: 180px;
+    flex-shrink: 0;
     overflow: hidden;
   }
   .task-hero-bg {
@@ -3370,6 +3669,36 @@ onUnmounted(() => {
   .cal-form-input::placeholder {
     color: #c0c4cc;
   }
+  .cal-form-urgency {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .cal-urgency-opt {
+    flex: 1;
+    height: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fff;
+    color: #6b7280;
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .cal-urgency-opt.active {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #2563eb;
+  }
+  .cal-urgency-opt.active.important {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #b45309;
+  }
+  .cal-urgency-opt.active.urgent {
+    border-color: #ef4444;
+    background: #fef2f2;
+    color: #dc2626;
+  }
   .cal-form-actions {
     display: flex;
     justify-content: flex-end;
@@ -3411,55 +3740,169 @@ onUnmounted(() => {
     cursor: not-allowed;
   }
 
-  /* 快速添加 */
-  .task-quick-add {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 12px;
-    padding: 10px 12px;
-    background: #fff;
-    border-radius: 10px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  /* 快速添加：加号悬浮按钮（固定在底部中央） */
+  .task-quick-add-fab {
+    position: fixed;
+    bottom: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 102;
   }
-  .quick-add-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: #f0f5ff;
-    color: #3b82f6;
+  .quick-add-fab {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: #fff;
+    color: #9ca3af;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+  }
+  .quick-add-fab:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+  }
+
+  /* 快捷添加任务弹窗 */
+  .quick-add-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .quick-add-popup {
+    width: 280px;
+    padding: 20px 16px 16px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+  .quick-add-title {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+  .quick-add-date {
+    text-align: center;
+    font-size: 12px;
+    color: #9ca3af;
+    margin: 6px 0 14px;
   }
   .quick-add-input {
-    flex: 1;
-    border: none;
-    outline: none;
-    font-size: 13px;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #f9fafb;
+    padding: 10px 12px;
+    font-size: 14px;
     color: #1f2937;
-    background: transparent;
+    outline: none;
+  }
+  .quick-add-input:focus {
+    border-color: #3b82f6;
+    background: #fff;
   }
   .quick-add-input::placeholder {
     color: #c0c4cc;
   }
-  .quick-add-submit {
-    flex-shrink: 0;
-    padding: 4px 14px;
-    border-radius: 6px;
+  .quick-add-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .quick-add-cancel {
+    flex: 1;
+    padding: 9px 0;
     border: none;
+    border-radius: 8px;
+    background: #f3f4f6;
+    color: #6b7280;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .quick-add-submit {
+    flex: 1;
+    padding: 9px 0;
+    border: none;
+    border-radius: 8px;
     background: #3b82f6;
     color: #fff;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     cursor: pointer;
+  }
+  .quick-add-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .quick-add-urgency {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .urgency-opt {
+    flex: 1;
+    padding: 7px 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #6b7280;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .urgency-opt.active {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+  }
+  .urgency-opt.active.important {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #b45309;
+  }
+  .urgency-opt.active.urgent {
+    border-color: #ef4444;
+    background: #fef2f2;
+    color: #dc2626;
   }
 
   /* 任务列表区域 */
   .task-body {
     padding: 0 12px 80px;
+  }
+  /* 移动端首页顶部逾期提醒条 */
+  .overdue-home-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(220, 38, 38, 0.35);
+  }
+  .overdue-home-bar span {
+    flex: 1;
+  }
+  .overdue-home-arrow {
+    opacity: 0.8;
   }
   .task-section {
     margin-bottom: 14px;
@@ -3501,8 +3944,44 @@ onUnmounted(() => {
     margin-bottom: 6px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
-  .task-card.task-done {
-    opacity: 0.5;
+  /* 未完成任务：红色系 */
+  .task-card.task-pending {
+    background: #fff7f7;
+    border-left: 3px solid #ef4444;
+  }
+  /* 已完成任务：绿色系 */
+  .task-card.task-completed {
+    background: #f0fdf4;
+    border-left: 3px solid #10b981;
+  }
+  .task-card.task-completed .task-card-title {
+    text-decoration: line-through;
+    color: #6b7280;
+  }
+  /* 紧急未完成：红色强调置顶标记 */
+  .task-card.task-urgent {
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+    box-shadow: 0 1px 6px rgba(239, 68, 68, 0.18);
+  }
+  .task-card-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .ur-badge {
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-weight: 500;
+  }
+  .ur-urgent { background: #dc2626; color: #fff; }
+  .ur-important { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+  .ur-overdue { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+  .leave-card {
+    background: #fffbeb !important;
+    border-left: 3px solid #f59e0b !important;
   }
   .task-card-check {
     flex-shrink: 0;
@@ -3536,6 +4015,10 @@ onUnmounted(() => {
     line-height: 1.4;
   }
   .task-done .task-card-title {
+    text-decoration: line-through;
+    color: #9ca3af;
+  }
+  .today-done {
     text-decoration: line-through;
     color: #9ca3af;
   }
@@ -3600,54 +4083,142 @@ onUnmounted(() => {
     color: #9ca3af;
   }
 
-  /* ---- 数据分析子页面美化 ---- */
-  .ai-analysis-card {
-    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-    border: 1px solid #e9d5ff;
-    border-radius: 14px;
+  /* ---- 数据分析子页面：悬浮桌宠 + 分析弹窗 ---- */
+  .mascot-pet {
+    position: fixed;
+    right: 16px;
+    bottom: 84px;
+    z-index: 130;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    -webkit-tap-highlight-color: transparent;
   }
-  .ai-header {
+  .mascot-pet-img {
+    width: 76px;
+    height: 76px;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 14px rgba(91, 141, 239, 0.45));
+  }
+  .mascot-pet:active .mascot-pet-img { transform: scale(0.92); }
+  @keyframes mascot-pet-bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    30% { transform: translateY(-8px) scale(1.04); }
+    55% { transform: translateY(0) scale(1); }
+    75% { transform: translateY(-4px) scale(1.02); }
+  }
+  .mascot-tip-bubble {
+    position: relative;
+    background: #fff;
+    border: 1px solid #e9d5ff;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    padding: 8px 10px 8px 12px;
+    margin-bottom: 10px;
+    margin-right: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4c1d95;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-tip-bubble::after {
+    content: '';
+    position: absolute;
+    right: 22px;
+    bottom: -6px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-right: 1px solid #e9d5ff;
+    border-bottom: 1px solid #e9d5ff;
+    transform: rotate(45deg);
+  }
+  .mascot-tip-text { white-space: nowrap; }
+  .mascot-tip-close {
+    display: inline-flex;
+    width: 16px; height: 16px;
+    align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: #f3e8ff;
+    color: #7c3aed;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .tip-pop-enter-active,
+  .tip-pop-leave-active {
+    transition: all 0.25s ease !important;
+  }
+  .tip-pop-enter-from,
+  .tip-pop-leave-to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+
+  /* 桌宠分析弹窗 */
+  .dialog-header {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 12px;
   }
-  .ai-icon-wrap {
-    width: 36px; height: 36px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #8b5cf6, #a78bfa);
-    color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+  .dialog-header-mascot {
+    width: 40px; height: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.35));
   }
-  .ai-header-text { display: flex; flex-direction: column; }
-  .ai-title { font-size: 15px; font-weight: 600; color: #4c1d95; }
-  .ai-desc { font-size: 11px; color: #7c3aed; margin-top: 2px; }
-  .ai-start-btn {
-    width: 70%;
-    height: 40px;
-    font-size: 14px;
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-    border: none;
-    box-shadow: 0 4px 14px rgba(139,92,246,0.35);
+  .dialog-header-text { display: flex; flex-direction: column; }
+  .dialog-title { font-size: 16px; font-weight: 700; color: #4c1d95; }
+  .dialog-sub { font-size: 11px; color: #7c3aed; margin-top: 2px; }
+  .dialog-content { min-height: 200px; }
+  .dialog-loading {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 36px 12px; gap: 14px;
   }
-  .analysis-loading { padding: 20px 8px; }
-  .analysis-content { font-size: 13px; line-height: 1.7; color: #374151; }
-  .analysis-text {
-    white-space: pre-wrap;
-    max-height: 300px;
-    overflow-y: auto;
-    padding: 10px 12px;
-    background: #fff;
-    border-radius: 10px;
+  .dialog-loading-mascot {
+    width: 72px; height: 72px; object-fit: contain;
+    animation: mascot-pet-bounce 1.4s ease-in-out infinite !important;
+  }
+  .dialog-loading-text { font-size: 13px; color: #7c3aed; margin: 0; }
+  .dialog-empty {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 36px 12px; gap: 10px;
+    color: #9ca3af; font-size: 13px; margin: 0;
+  }
+  .dialog-empty-icon { font-size: 32px; color: #c4b5fd; }
+  .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+  :deep(.mascot-analysis-dialog) {
+    border-radius: 16px !important;
+    background: linear-gradient(180deg, #faf7ff 0%, #ffffff 42%) !important;
+  }
+  :deep(.mascot-analysis-dialog .el-dialog__header) {
+    padding-bottom: 6px;
+    margin-right: 0;
+  }
+  :deep(.mascot-analysis-dialog .el-dialog__body) {
+    padding-top: 4px;
+  }
+  :deep(.markdown-body) {
     font-size: 13px;
     line-height: 1.75;
+    color: #374151;
   }
-  .analysis-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 8px;
+  :deep(.markdown-body .md-h2),
+  :deep(.markdown-body .md-h3) {
+    font-size: 14px;
+    color: #4c1d95;
+    margin: 14px 0 6px;
+    padding-left: 8px;
+    border-left: 3px solid #8b5cf6;
   }
+  :deep(.markdown-body .md-ul) {
+    padding-left: 18px;
+    margin: 6px 0;
+  }
+  :deep(.markdown-body .md-li) { margin: 3px 0; }
+  :deep(.markdown-body strong) { color: #4c1d95; }
 
   .charts-grid {
     display: flex;

@@ -30,6 +30,9 @@ class ScheduleOut(BaseModel):
     id: int
     date: str
     content: str
+    urgency: str = "normal"
+    completed: bool = False
+    completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,3 +40,8 @@ class ScheduleOut(BaseModel):
 class ScheduleCreate(BaseModel):
     date: str
     content: str
+    urgency: str = "normal"
+
+
+class ScheduleUpdate(BaseModel):
+    completed: bool
