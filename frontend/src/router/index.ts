@@ -29,7 +29,7 @@ const router = createRouter({
         { path: 'grade', component: () => import('@/views/student/GradeAnalysisPage.vue') },
         { path: 'grade-analysis', component: () => import('@/views/student/GradeAnalysisPage.vue') },
         { path: 'service', component: () => import('@/views/student/ServicePage.vue') },
-        { path: 'workbench', redirect: '/student/service' },
+        { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
         { path: 'feedback', component: () => import('@/views/student/FeedbackPage.vue') },
         { path: 'profile', component: () => import('@/views/student/ProfilePage.vue') },
       ],
