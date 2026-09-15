@@ -37,7 +37,7 @@
       <div class="campus-card campus-card-jx" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><DataBoard /></el-icon> 教学动态</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/jxdt.htm" target="_blank">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/jxdt.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/jwgl/jxdt.htm', '教学动态')">查看详情 →</a>
         </div>
         <div v-if="impression.jxdt.length" class="jxdt-first" @click="openLink(impression.jxdt[0].url)">
           <img v-if="impression.jxdt[0].image_url" :src="impression.jxdt[0].image_url" class="jxdt-first-img" />
@@ -51,7 +51,7 @@
       <div class="campus-card" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><Notification /></el-icon> 通知公告</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" target="_blank">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/jwgl/tzgg.htm', '通知公告')">查看详情 →</a>
         </div>
         <div v-for="a in (isMobile ? impression.tzgg.slice(0, 5) : impression.tzgg)" :key="a.url" class="tzgg-row" @click="openLink(a.url)">
           <span class="tzgg-date">{{ formatDate(a.date) }}</span>
@@ -65,7 +65,7 @@
       <div class="campus-card campus-card-gjxx" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><School /></el-icon> 高教信息</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/gjxx.htm" target="_blank">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/gjxx.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/gjxx.htm', '高教信息')">查看详情 →</a>
         </div>
         <div class="gjxx-grid">
           <div v-for="a in impression.gjxx" :key="a.url" class="gjxx-item" @click="openLink(a.url)">
@@ -78,7 +78,7 @@
       <div class="campus-card" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><Collection /></el-icon> 教学建设</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/jxjs.htm" target="_blank">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jxjs.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/jxjs.htm', '教学建设')">查看详情 →</a>
         </div>
         <div v-for="a in impression.jxjs.slice(0, 7)" :key="a.url" class="build-row" @click="openLink(a.url)">
           <span class="build-mark"></span>
@@ -120,7 +120,7 @@
             class="college-tag"
             :style="{ '--tag-color': c.color }"
             :href="c.url"
-            target="_blank"
+            @click.prevent="openLink(c.url, c.name)"
           >
             <el-icon class="college-tag-icon"><component :is="c.icon" /></el-icon>
             <span>{{ c.name }}</span>
@@ -134,7 +134,7 @@
       <div class="campus-card campus-card-impression" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><OfficeBuilding /></el-icon> 绵城印象</span>
-          <a class="card-more" href="https://www.mycc.edu.cn/mcyx/" target="_blank">了解更多 →</a>
+          <a class="card-more" href="https://www.mycc.edu.cn/mcyx/" @click.prevent="openLink('https://www.mycc.edu.cn/mcyx/', '绵城印象')">了解更多 →</a>
         </div>
         <div class="impression-list">
           <div v-for="item in impressionItems" :key="item.title" class="impression-row" @click="openLink(item.url)">
@@ -150,7 +150,7 @@
       <div class="campus-card campus-card-library" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><Reading /></el-icon> 图书馆公告</span>
-          <a class="card-more" href="https://lib.mycc.edu.cn/" target="_blank">进入官网 →</a>
+          <a class="card-more" href="https://lib.mycc.edu.cn/" @click.prevent="openLink('https://lib.mycc.edu.cn/', '图书馆')">进入官网 →</a>
         </div>
         <div class="lib-list">
           <div v-for="a in impression.library.slice(0, 4)" :key="a.title" class="lib-item" @click="openLink(a.url)">
@@ -160,7 +160,6 @@
         </div>
       </div>
     </section>
-
   </div>
 </template>
 
@@ -374,8 +373,10 @@ const carouselImages = computed(() => {
   return [anzhou[0], anzhou[3], anzhou[5], youxian[0], youxian[2], youxian[7]]
 })
 
-function openLink(url: string) {
-  window.open(url, '_blank')
+function openLink(url: string, _title?: string) {
+  if (!url) return
+  const win = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!win) window.location.href = url
 }
 
 onMounted(async () => {

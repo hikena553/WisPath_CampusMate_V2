@@ -139,7 +139,7 @@ const bg2Ref = ref<HTMLCanvasElement>()
 const trackRef = ref<HTMLDivElement>()
 const form = reactive({ username: '', password: '' })
 const rules = {
-  username: [{ required: true, message: '请输入学号/工工号' }],
+  username: [{ required: true, message: '请输入学号/工号' }],
   password: [{ required: true, message: '请输入密码' }],
 }
 
@@ -262,6 +262,8 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 // ---- Login ----
+const roleMap: Record<string, string> = { student: '/student', teacher: '/teacher', admin: '/admin' }
+
 async function handleLogin() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
@@ -270,12 +272,14 @@ async function handleLogin() {
     const res: any = await loginApi(form)
     if (!res?.access_token) throw new Error('响应异常')
     auth.login(res.access_token, res.user)
-    ElMessage.success('登录成功')
-    if (res.user && !res.user.password_changed && res.user.role !== 'admin') {
-      ElMessage.warning('请及时修改初始密码')
+    const target = roleMap[res.user.role] || '/student'
+    const needsPwd = !!res.user && !res.user.password_changed && res.user.role !== 'admin'
+    router.push(target)
+    if (needsPwd) {
+      ElMessage({ type: 'warning', message: '登录成功，请修改初始密码', duration: 3000 })
+    } else {
+      ElMessage.success('登录成功')
     }
-    const roleMap: Record<string, string> = { student: '/student', teacher: '/teacher', admin: '/admin' }
-    router.push(roleMap[res.user.role] || '/student')
   } catch (e: any) {
     if (e?.response) {
       ElMessage.error(e.response.data?.detail || `请求失败 (${e.response.status})`)
