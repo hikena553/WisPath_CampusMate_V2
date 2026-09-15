@@ -333,9 +333,8 @@ const uploadingBanner = ref(false)
 const savedBanner = localStorage.getItem('profileBanner') || ''
 const bannerUrl = ref(savedBanner ? savedBanner + (savedBanner.includes('?') ? '&' : '?') + '_t=' + Date.now() : '')
 const bannerInputRef = ref<HTMLInputElement>()
-const bannerGradient = computed(() => {
-  return localStorage.getItem('profileBannerColor') || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-})
+const DEFAULT_GRADIENT = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+const bannerGradient = ref(localStorage.getItem('profileBannerColor') || DEFAULT_GRADIENT)
 
 // 预设背景图
 const presetBanners = [
@@ -417,6 +416,7 @@ function closePage() {
 
 function selectPresetBanner(color: string) {
   bannerUrl.value = ''
+  bannerGradient.value = color
   localStorage.setItem('profileBannerType', 'gradient')
   localStorage.setItem('profileBannerColor', color)
   localStorage.removeItem('profileBanner')
@@ -460,6 +460,7 @@ async function handleBannerUpload(e: Event) {
 
 function resetBanner() {
   bannerUrl.value = ''
+  bannerGradient.value = DEFAULT_GRADIENT
   localStorage.removeItem('profileBanner')
   localStorage.removeItem('profileBannerType')
   localStorage.removeItem('profileBannerColor')
