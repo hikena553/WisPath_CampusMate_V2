@@ -19,9 +19,9 @@
                   <span class="week-label">第{{ currentWeek }}周</span>
                   <button class="week-nav-btn" @click="goNextWeek">›</button>
                 </div>
-                <el-button v-if="showResetBtn" size="small" text type="primary" @click="resetWeek">回到本周</el-button>
+                <el-button v-if="showResetBtn" size="small" text type="primary" class="reset-week-btn" @click="resetWeek">回到本周</el-button>
                 <el-select v-model="selectedScheduleSem" size="small" class="semester-tag semester-select" popper-class="semester-select-popper" fit-input-width>
-                  <el-option v-for="s in scheduleSemesterOptions" :key="s.value" :label="s.label" :value="s.value" />
+                  <el-option v-for="s in scheduleSemesterOptions" :key="s.value" :label="isMobile ? semesterLabelCompact(s.value) : s.label" :value="s.value" />
                 </el-select>
               </div>
               <div style="border-bottom:1px solid #ebeef5;margin:0"></div>
@@ -183,7 +183,7 @@
               </div>
               <div class="analytics-body">
                 <div class="sem-selector">
-                  <el-select v-model="selectedSem" placeholder="选择学期" style="width:200px">
+                  <el-select v-model="selectedSem" placeholder="选择学期" class="semester-tag semester-select" popper-class="semester-select-popper">
                     <el-option v-for="s in semesters" :key="s" :label="semesterLabel(s)" :value="s" />
                   </el-select>
                   <div v-if="selectedSem" class="sem-stats-inline">
@@ -341,6 +341,53 @@
             </div>
           </div>
           <el-empty v-if="!grades.length && !upcomingExams.length && !gradeAnalysis.semester_gpa.length" description="暂无考试成绩数据" />
+
+          <!-- 移动端：右下角绵小城（点击弹出 AI 学情分析） -->
+          <div class="grades-mascot" @click="mascotDialogVisible = true">
+            <img src="/images/mascot.png" alt="绵小城" draggable="false" />
+          </div>
+
+          <!-- 移动端：AI 学情分析弹窗 -->
+          <el-dialog v-model="mascotDialogVisible" title="AI 学情分析" width="92%" top="6vh" class="mascot-ai-dialog">
+            <div class="mascot-ai-head">
+              <img src="/images/mascot.png" alt="绵小城" draggable="false" />
+              <div class="mascot-ai-head-text">
+                <div class="mascot-ai-title">绵小城学情报告</div>
+                <div class="mascot-ai-sub">个性化学习建议</div>
+              </div>
+              <el-button type="primary" size="small" :loading="gradeLoading && !gradeRaw" @click="startAiAnalysis({ stream: true })">
+                <el-icon v-if="!gradeLoading"><MagicStick /></el-icon>
+                {{ gradeRaw ? '重新分析' : '开始分析' }}
+              </el-button>
+            </div>
+            <div class="mascot-ai-body">
+              <div v-if="gradeRaw" class="ai-result-card">
+                <div v-if="gradeLoading && gradeFromCache" class="ai-refresh-bar">
+                  <el-icon class="is-loading" :size="14"><Loading /></el-icon>
+                  <span>正在更新...</span>
+                </div>
+                <div class="ai-result-content" v-html="gradeHtml"></div>
+              </div>
+              <div v-else-if="gradeLoading" class="ai-loading-card">
+                <div class="ai-loading-header">
+                  <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+                  <span>AI 正在分析您的学情数据...</span>
+                </div>
+                <div class="ai-loading-skeleton">
+                  <div class="skeleton-line" style="width:80%"></div>
+                  <div class="skeleton-line" style="width:60%"></div>
+                  <div class="skeleton-line" style="width:90%"></div>
+                </div>
+              </div>
+              <div v-else class="ai-placeholder ai-placeholder-small">
+                <el-icon :size="32" color="#ddd"><MagicStick /></el-icon>
+                <p>点击"开始分析"按钮，AI 将为您分析学情数据</p>
+              </div>
+            </div>
+            <template #footer>
+              <el-button @click="mascotDialogVisible = false">关闭</el-button>
+            </template>
+          </el-dialog>
 
         </div>
 
@@ -820,6 +867,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import type { Course, Grade, Exam } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
+import { useResponsive } from '@/composables/useResponsive'
 import { getGrowthRecords, createGrowthRecord, getGrowthProfile, updateSkills, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
 import type { GrowthProfile, StudentProject } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
@@ -830,6 +878,7 @@ use([LineChart, BarChart, PieChart, RadarChart, GridComponent, TooltipComponent,
 
 const auth = useAuthStore()
 const route = useRoute()
+const { isMobile } = useResponsive()
 const activeTab = ref((route.query.tab as string) || 'schedule')
 
 // ===== 页签 =====
@@ -1204,6 +1253,13 @@ function semesterLabel(sem?: string) {
   if (parts.length < 3) return sem
   return `${parts[0]}-${parts[1]}学年 第${parts[2] === '1' ? '一' : '二'}学期`
 }
+// 移动端工具栏空间紧张：学期标签用紧凑写法（如 “25-26 第一学期”）
+function semesterLabelCompact(sem?: string) {
+  if (!sem) return ''
+  const parts = sem.split('-')
+  if (parts.length < 3) return sem
+  return `${parts[0].slice(2)}-${parts[1].slice(2)} 第${parts[2] === '1' ? '一' : '二'}学期`
+}
 const gradesBySem = computed(() => { const map: Record<string, Grade[]> = {}; for (const g of grades.value) { if (!map[g.semester]) map[g.semester] = []; map[g.semester].push(g) } return map })
 const semStats = computed(() => { const stats: Record<string, { count: number; avg: number; gpa: string; credits: number }> = {}; for (const [sem, gs] of Object.entries(gradesBySem.value)) { const scores = gs.filter(g => g.score != null).map(g => g.score); const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0; const gpa = gs.length ? (gs.reduce((s, g) => s + (g.gpa || 0), 0) / gs.length).toFixed(2) : '0.00'; const credits = gs.reduce((s, g) => s + (g.credit || 0), 0); stats[sem] = { count: gs.length, avg, gpa, credits } } return stats })
 const upcomingExams = computed(() => { const now = new Date(); return exams.value.filter(e => !e.exam_date || new Date(e.exam_date) >= now).sort((a, b) => (a.exam_date || '').localeCompare(b.exam_date || '')) })
@@ -1304,6 +1360,9 @@ const formulaDialogType = ref<'gpa' | 'score'>('gpa')
 const formulaDialogTitle = computed(() => formulaDialogType.value === 'gpa' ? '当前 GPA 计算说明' : '综合评分计算说明')
 
 function openFormula(type: 'gpa' | 'score') { formulaDialogType.value = type; formulaDialogVisible.value = true }
+
+// ===== 移动端：绵小城弹窗（AI 学情分析） =====
+const mascotDialogVisible = ref(false)
 
 const gpaFormulaCourses = computed(() => [...grades.value].sort((a, b) => (b.gpa ?? 0) - (a.gpa ?? 0)).map(g => ({
   course_name: g.course_name || '未知课程',
@@ -1550,13 +1609,15 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .ai-result-card :deep(.md-h3),
 .ai-result-content :deep(.md-h3) { font-size: 16px; font-weight: 700; color: #1a1a2e; margin: 14px 0 8px; }
 .ai-result-card :deep(.md-h4),
-.ai-result-content :deep(.md-h4) { font-size: 15px; font-weight: 700; color: #1a1a2e; margin: 12px 0 6px; }
-.ai-result-card :deep(.md-ul),
-.ai-result-content :deep(.md-ul) { margin: 8px 0; padding-left: 22px; list-style: disc; }
-.ai-result-card :deep(.md-li),
-.ai-result-content :deep(.md-li) { margin: 4px 0; }
-.ai-result-card :deep(.md-code-block),
-.ai-result-content :deep(.md-code-block) { background: #f6f8fa; border-radius: 6px; padding: 12px 14px; margin: 10px 0; overflow-x: auto; }
+.grades-side-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.side-exam-card { margin-bottom: 0 !important; }
+.side-ai-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.side-ai-card .ai-result-card { max-height: 340px; overflow-y: auto; scrollbar-width: thin; }
+.side-ai-card .ai-result-card::-webkit-scrollbar { width: 4px; }
+.side-ai-card .ai-result-card::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
+.ai-side-body { padding: 14px 16px 16px !important; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ai-side-body .ai-placeholder { flex: 1; height: auto; }
+.exam-list { display: flex; flex-direction: column; gap: 8px; padding-top: 14px !important; }
 .ai-result-card :deep(.md-code-block code),
 .ai-result-content :deep(.md-code-block code) { font-family: 'Consolas', 'Menlo', monospace; font-size: 13px; color: #333; }
 .ai-result-card :deep(.md-inline-code),
@@ -1632,12 +1693,14 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .goal-item-body { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .goal-item-left { display: flex; align-items: center; gap: 10px; }
 .goal-item-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #666; }
-.goal-label { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; }
-.goal-input-wrap { display: flex; align-items: center; }
-.goal-locked { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #999; }
-.goal-achieve { display: flex; align-items: center; gap: 3px; font-size: 13px; }
-.sem-selector { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
-.sem-stats-inline { display: flex; gap: 14px; font-size: 13px; color: #999; }
+.stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.score-mascot { position: relative; flex-shrink: 0; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; }
+.score-mascot img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+/* 移动端专属：右下角绵小城（桌面隐藏） */
+.grades-mascot { display: none; }
+.growth-two-col { display: flex; gap: 16px; }
+.growth-left-col { flex: 1; min-width: 0; }
+.growth-right-col { width: 360px; flex-shrink: 0; }
 .sem-stats-inline b { color: #1a1a2e; font-weight: 600; }
 .grade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .grade-card { background: #fff; border-radius: 10px; padding: 14px 16px; border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02); transition: transform .15s; border-left: 4px solid #ddd; }
@@ -1906,6 +1969,66 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .formula-line { background: #fff; border: 1px dashed #d0d7e2; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #303133; line-height: 1.6; word-break: break-all; }
 .formula-sub { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .formula-sub b { color: #409eff; }
+
+/* ===== 移动端适配 ===== */
+@media (max-width: 767px) {
+  .schedule-page { padding: 8px 12px 0; }
+  .page-tab .el-icon { font-size: 16px; }
+  .page-tab.active::before { display: none; }
+  .content-row { flex-direction: column; }
+  .schedule-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; row-gap: 8px; }
+  .schedule-toolbar .schedule-toolbar-title { flex: 1 0 100%; }
+  /* 标题独占一行；学期选择器紧贴周次导航右侧。
+     wrap 容器是否换行只看 flex-basis：basis 用小值(100px)保证通过换行判定，
+     grow:1 拉伸填满剩余空间——标签已缩短，拉伸后宽度 ≈ 内容宽，无明显空白；空间不足时收缩省略 */
+  .schedule-toolbar .semester-tag.semester-select { width: auto; min-width: 0; margin-left: 0; flex: 1 1 100px; }
+  .schedule-toolbar .semester-tag.semester-select :deep(.el-select__selected-item) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 「回到本周」浮到卡片右上角（标题行右侧空位），脱流不占行宽、不撑行高，周次 + 学期独占一行 */
+  .schedule-toolbar .reset-week-btn { position: absolute; top: 12px; right: 16px; margin: 0; height: 24px; line-height: 24px; padding: 0 8px; }
+  .semester-link { margin-left: 0; margin-top: 8px; }
+  .grade-stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grade-stat-card { padding: 12px; }
+  .grade-stat-card .stat-value { font-size: 16px; }
+  .grade-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .grade-card { padding: 10px 12px; }
+  .gc-score { font-size: 18px; }
+  .sem-selector { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .sem-selector .semester-tag { margin-left: 0; }
+  /* 移动端：AI 学情分析卡片提到核心指标之后、成绩趋势之前 */
+  .grades-view { display: flex; flex-direction: column; }
+  .grades-view .grades-detail-row,
+  .score-stats .stat-item { flex: 0 0 calc((100% - 36px) / 4); min-width: 0; }
+  .score-stats .stat-num { font-size: 18px !important; }
+  .score-mascot { width: 72px; height: 72px; }
+  /* 移动端成绩分析：右下角绵小城（点击弹出 AI 学情分析） */
+  .grades-mascot { display: block; position: fixed; right: 12px; bottom: 68px; width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
+  .grades-mascot:active { transform: scale(.92); }
+  .grades-mascot img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.12)); pointer-events: none; }
+  @keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .stat-num { font-size: 20px; }
+  .growth-two-col { flex-direction: column; }
+  .growth-right-col { width: 100%; }
+  .grades-view > .el-empty { order: 6; }
+  .sem-stats-inline { flex-wrap: wrap; gap: 8px; }
+  .goal-item-body { flex-direction: column; align-items: flex-start; }
+  .record-card { padding: 12px; }
+  .record-title { font-size: 13px; }
+
+  /* 移动端课表：压缩列宽与内容，保证周一~周日全部列一屏展示 */
+  .schedule-table { min-width: 0; }
+  .schedule-table th, .schedule-table td { width: auto; }
+  .schedule-table thead th { padding: 8px 0; font-size: 11px; }
+  .schedule-table td { height: 52px; }
+  .schedule-table .period-cell, .schedule-table thead th:first-child { width: 34px !important; min-width: 34px; padding: 6px 0; }
+  .schedule-table .period-cell .period-name { font-size: 10px; white-space: nowrap; }
+  .schedule-table .period-cell .period-time { display: none; }
+  .schedule-page .card-body { overflow-x: visible; }
+  .schedule-course { padding: 2px; border-left-width: 2px; border-radius: 4px; justify-content: flex-start; }
+  .schedule-course .course-name { font-size: 10px; line-height: 1.25; margin-bottom: 0; white-space: normal; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  .schedule-course .course-teacher { display: none; }
+  .schedule-course .course-loc { font-size: 9px; line-height: 1.2; }
+}
+
 .formula-table-wrap { max-height: 150px; overflow-y: auto; scrollbar-width: thin; }
 .formula-table-wrap::-webkit-scrollbar { width: 4px; }
 .formula-table-wrap::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
@@ -1927,16 +2050,14 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .all-records-scroll::-webkit-scrollbar { width: 4px; }
 .all-records-scroll::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
 
-/* ===== 移动端适配 ===== */
+/* ===== 移动端适配（续） ===== */
 @media (max-width: 767px) {
-  .schedule-page { padding: 8px 12px 0; }
   .content-main { max-width: 100%; }
   .page-tabs { flex-direction: row; order: -1; width: 100%; align-self: auto; position: static; overflow-x: auto; border-radius: 12px; }
   .page-tab { flex: 1; flex-shrink: 0; flex-direction: row; gap: 6px; padding: 10px 16px; justify-content: center; letter-spacing: 0; }
   .page-tab .el-icon { font-size: 16px; }
   .page-tab.active::before { display: none; }
   .content-row { flex-direction: column; }
-  .schedule-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .schedule-toolbar .schedule-toolbar-title { flex: 1 0 100%; }
   .semester-link { margin-left: 0; margin-top: 8px; }
   .grade-stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -1969,12 +2090,6 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
   .line-chart { height: 200px; }
   .record-card { padding: 12px; }
   .record-title { font-size: 13px; }
-
-  /* 移动端课表：固定最小宽度，保证内容完整，横向滑动查看 */
-  .schedule-table { min-width: 720px; }
-  .schedule-page .card-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .schedule-page .card-body::-webkit-scrollbar { height: 6px; }
-  .schedule-page .card-body::-webkit-scrollbar-thumb { background: #c0c4cc; border-radius: 3px; }
 }
 </style>
 
@@ -2009,4 +2124,21 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
   border: 1px solid #e4e7ed;
   background: #fff;
 }
+
+/* 移动端绵小城 AI 弹窗（挂 body 下，全局样式） */
+.mascot-ai-dialog.el-dialog {
+  border-radius: 16px;
+}
+.mascot-ai-dialog .mascot-ai-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 12px;
+}
+.mascot-ai-dialog .mascot-ai-head img { width: 48px; height: 48px; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.mascot-ai-dialog .mascot-ai-head-text { flex: 1; min-width: 0; }
+.mascot-ai-dialog .mascot-ai-title { font-size: 15px; font-weight: 700; color: #1a1a2e; }
+.mascot-ai-dialog .mascot-ai-sub { font-size: 12px; color: #999; margin-top: 2px; }
+.mascot-ai-dialog .mascot-ai-head .el-button { margin-left: auto; }
+.mascot-ai-dialog .mascot-ai-body { max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 </style>
