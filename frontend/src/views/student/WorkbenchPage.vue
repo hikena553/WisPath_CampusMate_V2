@@ -29,30 +29,6 @@
       </div>
     </div>
 
-    <!-- 班级公告 -->
-    <div class="section-card">
-      <div class="section-header">
-        <div class="section-title">班级公告</div>
-        <div class="section-more" @click="openAnnouncements">查看全部</div>
-      </div>
-      <div v-if="announcements.length === 0" class="empty-records">暂无班级公告</div>
-      <div v-else class="announce-list">
-        <div v-for="a in announcements.slice(0, 3)" :key="a.id" class="announce-item" @click="viewAnnouncement(a)">
-          <div class="announce-icon" :class="'announce-icon-' + a.urgency">
-            <el-icon :size="16"><Bell /></el-icon>
-          </div>
-          <div class="announce-info">
-            <div class="announce-top">
-              <span class="announce-title">{{ a.title }}</span>
-              <el-tag :type="urgencyType(a.urgency)" size="small" effect="light" round>{{ urgencyLabel(a.urgency) }}</el-tag>
-            </div>
-            <div class="announce-content">{{ a.content }}</div>
-            <div class="announce-time">{{ formatDate(a.created_at) }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 联系与沟通 -->
     <div class="section-card">
       <div class="section-title">联系与沟通</div>
@@ -76,6 +52,17 @@
             <div class="contact-desc">群聊、私聊、联系辅导员、系统通知</div>
           </div>
           <el-badge v-if="unreadCount" :value="unreadCount" class="contact-badge" />
+          <el-icon class="contact-arrow"><ArrowRight /></el-icon>
+        </div>
+        <div class="contact-item" @click="openAnnouncements">
+          <div class="contact-icon" style="background: rgba(179,127,235,0.1); color: #b37feb;">
+            <el-icon :size="20"><Bell /></el-icon>
+          </div>
+          <div class="contact-info">
+            <div class="contact-name">班级公告</div>
+            <div class="contact-desc">辅导员发布的班级通知</div>
+          </div>
+          <el-badge v-if="announceUnread" :value="announceUnread" class="contact-badge" />
           <el-icon class="contact-arrow"><ArrowRight /></el-icon>
         </div>
         <div class="contact-item" @click="openPage('feedback')">
@@ -396,23 +383,8 @@
           </div>
 
           <!-- 班级公告 -->
-          <div v-if="currentPage === 'announcements'" class="announce-page">
-            <div v-if="announcements.length === 0" class="empty-records">
-              <el-icon :size="48" color="#d0d5dd"><Bell /></el-icon>
-              <span>暂无班级公告</span>
-            </div>
-            <div v-else class="announce-page-list">
-              <div v-for="a in announcements" :key="a.id" class="announce-page-card" :class="'announce-page-' + a.urgency">
-                <div class="announce-page-head">
-                  <span class="announce-page-title">{{ a.title }}</span>
-                  <el-tag :type="urgencyType(a.urgency)" size="small" effect="light" round>{{ urgencyLabel(a.urgency) }}</el-tag>
-                </div>
-                <div class="announce-page-content">{{ a.content }}</div>
-                <div class="announce-page-foot">
-                  <span>{{ a.teacher_name }} · {{ formatDate(a.created_at) }}</span>
-                </div>
-              </div>
-            </div>
+          <div v-if="currentPage === 'announcements'">
+            <AnnouncementPanel @read="refreshAnnounceUnread" />
           </div>
 
           <!-- 消息中心 -->
@@ -560,7 +532,9 @@ import { createTicket, getTickets, cancelTicket } from '@/api/service'
 import { createFeedback } from '@/api/feedback'
 import { getLostFoundItems, createLostFoundItem, getLostFoundItem } from '@/api/lost_found'
 import { getConversations } from '@/api/messages'
-import { getStudentAnnouncements, markAnnouncementRead, type AnnouncementItem } from '@/api/announcement'
+import { getStudentAnnouncements, getUnreadCount } from '@/api/announcement'
+import { usePolling } from '@/composables/usePolling'
+import AnnouncementPanel from '@/components/announcement/AnnouncementPanel.vue'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound, Message,
@@ -576,6 +550,7 @@ const submitting = ref(false)
 const showDetail = ref(false)
 const currentDetail = ref<any>(null)
 const unreadCount = ref(0)
+const announceUnread = ref(0)
 const lostfoundTab = ref<'browse' | 'publish'>('browse')
 
 const leaveRecords = ref<any[]>([])
@@ -587,8 +562,6 @@ const conversationList = ref<any[]>([])
 const tutorMessages = ref<any[]>([])
 const tutorIdRef = ref<number | null>(null)
 const tutorNewMsg = ref('')
-
-const announcements = ref<AnnouncementItem[]>([])
 
 // 办事服务配置
 const serviceItems = [
@@ -758,28 +731,6 @@ function openAnnouncements() {
   currentPage.value = 'announcements'
 }
 
-async function loadAnnouncements() {
-  try {
-    announcements.value = await getStudentAnnouncements() as any
-  } catch {
-    announcements.value = []
-  }
-}
-
-async function viewAnnouncement(a: AnnouncementItem) {
-  try { await markAnnouncementRead(a.id) } catch {}
-}
-
-function urgencyType(u: string) {
-  const map: Record<string, string> = { urgent: 'danger', important: 'warning', normal: 'info' }
-  return map[u] || 'info'
-}
-
-function urgencyLabel(u: string) {
-  const map: Record<string, string> = { urgent: '紧急', important: '重要', normal: '普通' }
-  return map[u] || '普通'
-}
-
 async function loadConversations() {
   try {
     const convs = await getConversations()
@@ -861,14 +812,74 @@ function viewDetail(record: any) {
   showDetail.value = true
 }
 
+// ─── 班级公告未读提醒 ─────────────────────────────────────
+async function refreshAnnounceUnread() {
+  try {
+    const { count } = await getUnreadCount()
+    announceUnread.value = count
+  } catch { /* ignore */ }
+}
+
+/** 拉取未读公告并弹窗提醒（不自动标记已读） */
+async function checkUnreadAnnouncements() {
+  let count = 0
+  let items: any[] = []
+  try {
+    const res = await getUnreadCount()
+    count = res.count
+    if (count > 0) items = (await getStudentAnnouncements(true)) as any
+  } catch { return }
+  announceUnread.value = count
+  if (count > 0 && items.length > 0) {
+    showAnnounceAlert(count, items)
+  }
+}
+
+function announceUrgencyLabel(u: string) {
+  const map: Record<string, string> = { urgent: '紧急', important: '重要', normal: '普通' }
+  return map[u] || '普通'
+}
+
+function showAnnounceAlert(count: number, items: any[]) {
+  const msg = items.slice(0, 5).map((a: any) => `[${announceUrgencyLabel(a.urgency)}] ${a.title}`).join('\n')
+  ElMessageBox.alert(msg, count > 5 ? `您有 ${count} 条未读公告` : '未读公告提醒', {
+    confirmButtonText: '查看公告',
+    type: 'info',
+    dangerouslyUseHTMLString: false,
+  }).then(() => {
+    currentPage.value = 'announcements'
+  }).catch(() => {})
+}
+
+/** 停留期间轮询：未读数比上次增加时弹"新公告"提示 */
+let lastAnnounceUnread = 0
+const announcePolling = usePolling(async () => {
+  try {
+    const { count } = await getUnreadCount()
+    if (count > lastAnnounceUnread) {
+      announceUnread.value = count
+      ElMessageBox.alert(`辅导员发布了 ${count - lastAnnounceUnread} 条新公告`, '新公告提醒', {
+        confirmButtonText: '查看公告',
+        type: 'info',
+        dangerouslyUseHTMLString: false,
+      }).then(() => {
+        currentPage.value = 'announcements'
+      }).catch(() => {})
+    } else {
+      announceUnread.value = count
+    }
+    lastAnnounceUnread = count
+  } catch { /* ignore */ }
+}, 30000)
+
 async function loadData() {
   try {
     const [leaves, ticketList] = await Promise.all([getMyLeaves(), getTickets()])
     leaveRecords.value = leaves as any
     tickets.value = ticketList as any
   } catch {}
-  
-  loadAnnouncements()
+
+  checkUnreadAnnouncements()
 
   // 获取未读消息数
   try {
@@ -1064,6 +1075,7 @@ async function submitLostFound() {
 
 onMounted(() => {
   loadData()
+  announcePolling.start()
 })
 </script>
 
@@ -1308,43 +1320,6 @@ onMounted(() => {
   padding: 20px 0;
   font-size: 13px;
 }
-
-/* 班级公告 */
-.announce-list { display: flex; flex-direction: column; gap: 8px; }
-.announce-item {
-  display: flex; gap: 10px; padding: 10px 12px;
-  background: #f9fafb; border-radius: 10px; cursor: pointer;
-}
-.announce-item:active { background: #eef1f5; }
-.announce-icon {
-  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-}
-.announce-icon-urgent { background: rgba(245,108,108,0.12); color: #f56c6c; }
-.announce-icon-important { background: rgba(230,162,60,0.14); color: #e6a23c; }
-.announce-icon-normal { background: rgba(144,147,153,0.12); color: #909399; }
-.announce-info { flex: 1; min-width: 0; }
-.announce-top { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-.announce-title { font-size: 13px; font-weight: 600; color: #1a1a1a; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.announce-content {
-  font-size: 12px; color: #888; line-height: 1.5; margin-bottom: 3px;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.announce-time { font-size: 11px; color: #ccc; }
-
-/* 公告子页面 */
-.announce-page-list { display: flex; flex-direction: column; gap: 10px; }
-.announce-page-card {
-  background: #fff; border-radius: 12px; padding: 14px;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
-}
-.announce-page-urgent { border-left: 3px solid #f56c6c; }
-.announce-page-important { border-left: 3px solid #e6a23c; }
-.announce-page-normal { border-left: 3px solid #e5e7eb; }
-.announce-page-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.announce-page-title { font-size: 15px; font-weight: 600; color: #1a1a1a; flex: 1; min-width: 0; }
-.announce-page-content { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word; }
-.announce-page-foot { font-size: 12px; color: #999; }
 
 .records-list {
   display: flex;

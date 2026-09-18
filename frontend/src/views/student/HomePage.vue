@@ -51,20 +51,6 @@ async function checkUnread() {
     if (count > 0) {
       const items = await getStudentAnnouncements(true)
       unreadAnnouncements.value = items
-      if (items.length > 0) {
-        const msg = items.slice(0, 5).map(a =>
-          `[${urgencyLabel(a.urgency)}] ${a.title}`
-        ).join('\n')
-        await ElMessageBox.alert(msg, `您有 ${count} 条未读公告`, {
-          confirmButtonText: '我知道了',
-          type: 'info',
-          dangerouslyUseHTMLString: false,
-        })
-        for (const a of items) {
-          try { await markAnnouncementRead(a.id) } catch { /* ignore */ }
-        }
-        unreadAnnouncements.value = []
-      }
     }
   } catch { /* ignore */ }
 }
