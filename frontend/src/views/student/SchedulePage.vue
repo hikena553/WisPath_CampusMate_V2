@@ -133,44 +133,47 @@
             </div>
           </div>
 
-          <!-- 课程画像 -->
-          <div class="analytics-card">
-            <div class="analytics-head">
+          <!-- 课程画像（移动端默认折叠，点击标题行展开，带高度过渡动画） -->
+          <div class="analytics-card course-profile-card" :class="{ 'is-open': courseProfileOpen }">
+            <div class="analytics-head" @click="toggleCourseProfile">
               <span class="head-bar"></span>
               <span class="head-title">课程画像</span>
               <span class="head-sub">课程类型表现与优劣势科目</span>
+              <el-icon class="head-toggle"><ArrowDown /></el-icon>
             </div>
-            <div class="analytics-body duo">
-              <div class="panel" style="flex:5">
-                <div class="panel-title"><el-icon><DataAnalysis /></el-icon>课程类型均分</div>
-                <v-chart v-if="gradeAnalysis.course_type_stats.length" :option="typeOption" class="chart" autoresize />
-                <el-empty v-else description="暂无数据" :image-size="48" />
-              </div>
-              <div class="panel-divider"></div>
-              <div class="panel" style="flex:6">
-                <div class="panel-title"><el-icon><Trophy /></el-icon>优势与待提升课程</div>
-                <div class="course-rank-scroll">
-                  <div class="cr-group-label good">优势课程</div>
-                  <template v-if="gradeAnalysis.top_courses.length">
-                    <div v-for="c in gradeAnalysis.top_courses.slice(0, 4)" :key="'t' + c.course_name" class="course-rank-item">
-                      <span class="cr-name" :title="c.course_name">{{ c.course_name }}</span>
-                      <div class="cr-bar"><div class="cr-bar-inner good" :style="{ width: barWidth(c.score) }"></div></div>
-                      <span class="cr-score good">{{ c.score ?? '--' }}</span>
-                    </div>
-                  </template>
-                  <div v-else class="cr-empty">暂无优势课程记录</div>
-                  <div class="cr-group-label weak">待提升课程</div>
-                  <template v-if="gradeAnalysis.weak_courses.length">
-                    <div v-for="c in gradeAnalysis.weak_courses.slice(0, 4)" :key="'w' + c.course_name" class="course-rank-item">
-                      <span class="cr-name" :title="c.course_name">{{ c.course_name }}</span>
-                      <div class="cr-bar"><div class="cr-bar-inner weak" :style="{ width: barWidth(c.score) }"></div></div>
-                      <span class="cr-score weak">{{ c.score ?? '--' }}</span>
-                    </div>
-                  </template>
-                  <div v-else class="cr-empty">太棒了，暂无薄弱课程</div>
+            <el-collapse-transition>
+              <div v-if="!isMobile || courseProfileOpen" class="analytics-body duo">
+                <div class="panel" style="flex:5">
+                  <div class="panel-title"><el-icon><DataAnalysis /></el-icon>课程类型均分</div>
+                  <v-chart v-if="gradeAnalysis.course_type_stats.length" :option="typeOption" class="chart" autoresize />
+                  <el-empty v-else description="暂无数据" :image-size="48" />
+                </div>
+                <div class="panel-divider"></div>
+                <div class="panel" style="flex:6">
+                  <div class="panel-title"><el-icon><Trophy /></el-icon>优势与待提升课程</div>
+                  <div class="course-rank-scroll">
+                    <div class="cr-group-label good">优势课程</div>
+                    <template v-if="gradeAnalysis.top_courses.length">
+                      <div v-for="c in gradeAnalysis.top_courses.slice(0, 4)" :key="'t' + c.course_name" class="course-rank-item">
+                        <span class="cr-name" :title="c.course_name">{{ c.course_name }}</span>
+                        <div class="cr-bar"><div class="cr-bar-inner good" :style="{ width: barWidth(c.score) }"></div></div>
+                        <span class="cr-score good">{{ c.score ?? '--' }}</span>
+                      </div>
+                    </template>
+                    <div v-else class="cr-empty">暂无优势课程记录</div>
+                    <div class="cr-group-label weak">待提升课程</div>
+                    <template v-if="gradeAnalysis.weak_courses.length">
+                      <div v-for="c in gradeAnalysis.weak_courses.slice(0, 4)" :key="'w' + c.course_name" class="course-rank-item">
+                        <span class="cr-name" :title="c.course_name">{{ c.course_name }}</span>
+                        <div class="cr-bar"><div class="cr-bar-inner weak" :style="{ width: barWidth(c.score) }"></div></div>
+                        <span class="cr-score weak">{{ c.score ?? '--' }}</span>
+                      </div>
+                    </template>
+                    <div v-else class="cr-empty">太棒了，暂无薄弱课程</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </el-collapse-transition>
           </div>
 
           <!-- 学期明细 + 右侧栏 -->
@@ -857,8 +860,8 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
-import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, Grid, PieChart as PieChartIcon, Close, Aim } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, Grid, PieChart as PieChartIcon, Close, Aim } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, ElCollapseTransition } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { LineChart, BarChart, PieChart, RadarChart } from 'echarts/charts'
@@ -880,6 +883,10 @@ const auth = useAuthStore()
 const route = useRoute()
 const { isMobile } = useResponsive()
 const activeTab = ref((route.query.tab as string) || 'schedule')
+
+// ===== 移动端：课程画像折叠（默认收起，点击标题行展开；桌面端恒为展开） =====
+const courseProfileOpen = ref(false)
+function toggleCourseProfile() { if (isMobile.value) courseProfileOpen.value = !courseProfileOpen.value }
 
 // ===== 页签 =====
 
@@ -1701,7 +1708,16 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
 .growth-two-col { display: flex; gap: 16px; }
 .growth-left-col { flex: 1; min-width: 0; }
 .growth-right-col { width: 360px; flex-shrink: 0; }
-.sem-stats-inline b { color: #1a1a2e; font-weight: 600; }
+/* ===== 学期成绩明细：学期选择行（选择器 + 统计胶囊 + 查询链接） ===== */
+.sem-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+/* 宽度必须写死：el-select 默认 width:100% 会撑满整行，而 width:auto 在 flex 里会塌缩
+   （内部 .el-select__selection 是 flex:1/min-width:0/overflow:hidden，按内容测量时为 0，
+   整条只剩尾部箭头）。240px 足够容纳「2025-2026学年 第一学期」不被省略号截断 */
+.sem-selector .semester-tag.semester-select { width: 240px; min-width: 0; margin-left: 0; flex: 0 0 auto; }
+/* 门数/均分/均绩/学分：胶囊分组，避免四个指标连成一串裸文本 */
+.sem-stats-inline { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.sem-stats-inline > span { display: inline-flex; align-items: baseline; gap: 4px; padding: 3px 10px; border-radius: 999px; background: rgba(64,158,255,.07); font-size: 12px; line-height: 18px; color: var(--text-secondary, #6b7280); white-space: nowrap; }
+.sem-stats-inline b { color: #1a1a2e; font-weight: 700; }
 .grade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .grade-card { background: #fff; border-radius: 10px; padding: 14px 16px; border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02); transition: transform .15s; border-left: 4px solid #ddd; }
 .grade-card:hover { transform: translateY(-2px); }
@@ -1777,6 +1793,8 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
   background: linear-gradient(180deg, var(--accent-blue) 0%, var(--accent-green) 100%);
 }
 .head-title { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1; }
+/* 折叠开关箭头：仅移动端的「课程画像」使用，桌面端卡片恒为展开态 */
+.head-toggle { display: none; }
 .head-sub {
   font-size: 12px;
   color: var(--text-muted);
@@ -1992,14 +2010,34 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
   .grade-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .grade-card { padding: 10px 12px; }
   .gc-score { font-size: 18px; }
-  .sem-selector { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .sem-selector { flex-direction: column; align-items: flex-start; gap: 12px; }
   .sem-selector .semester-tag { margin-left: 0; }
-  /* 移动端：AI 学情分析卡片提到核心指标之后、成绩趋势之前 */
+  /* 移动端：选择器占满一行便于点选，统计胶囊收紧字号，查询链接回到左侧与胶囊对齐 */
+  .sem-selector .semester-tag.semester-select { width: 100%; flex: 1 1 auto; min-width: 0; }
+  .sem-stats-inline > span { padding: 2px 9px; font-size: 11px; }
+  .sem-link-action { margin-left: 0; }
+  /* 移动端：成绩分析页统一纵向流式布局，便于末尾 el-empty 排序 */
   .grades-view { display: flex; flex-direction: column; }
+  /* 子项禁止收缩：容器高度受视口约束，卡片又带 overflow:hidden（min-height:auto → 0），
+     展开「课程画像」撑高时空间不足会把上方卡片压扁，而不是交给页面滚动。
+     固定为自然高度后，多出的高度由 .schedule-page 的 overflow-y 接管 */
+  .grades-view > * { flex-shrink: 0; }
   .grades-view .grades-detail-row,
   .score-stats .stat-item { flex: 0 0 calc((100% - 36px) / 4); min-width: 0; }
   .score-stats .stat-num { font-size: 18px !important; }
   .score-mascot { width: 72px; height: 72px; }
+  /* 移动端：AI 学情分析改由右下角绵小城入口承载，隐藏侧栏卡片（桌面端保留） */
+  .side-ai-card { display: none; }
+  /* 移动端：课程画像折叠（点击标题行展开/收起，箭头旋转提示状态） */
+  .course-profile-card .analytics-head { cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .2s ease, border-color .3s ease; }
+  .course-profile-card .analytics-head:active { background: rgba(64,158,255,.08); }
+  /* 收起时抹掉标题行下边框，否则卡片底部会多出一条悬空的线 */
+  .course-profile-card:not(.is-open) .analytics-head { border-bottom-color: transparent; }
+  .course-profile-card .head-toggle { display: inline-flex; margin-left: auto; font-size: 15px; color: var(--text-muted, #909399); transition: transform .3s ease; }
+  .course-profile-card.is-open .head-toggle { transform: rotate(180deg); }
+  /* 过渡期间裁剪内容：组件只在下一帧才写 overflow，补这条避免首帧溢出一闪 */
+  .course-profile-card .el-collapse-transition-enter-active,
+  .course-profile-card .el-collapse-transition-leave-active { overflow: hidden; }
   /* 移动端成绩分析：右下角绵小城（点击弹出 AI 学情分析） */
   .grades-mascot { display: block; position: fixed; right: 12px; bottom: 68px; width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
   .grades-mascot:active { transform: scale(.92); }
@@ -2067,7 +2105,7 @@ watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') acti
   .grade-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .grade-card { padding: 10px 12px; }
   .gc-score { font-size: 18px; }
-  .sem-selector { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .sem-selector { flex-direction: column; align-items: flex-start; gap: 12px; }
   .sem-stats-inline { flex-wrap: wrap; gap: 8px; }
   .goal-item-body { flex-direction: column; align-items: flex-start; }
   .goal-input-wrap { flex-wrap: wrap; }
