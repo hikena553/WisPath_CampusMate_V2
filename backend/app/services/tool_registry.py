@@ -1,5 +1,5 @@
 import json, re, httpx
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
@@ -7,13 +7,18 @@ from app.models.user import User, UserRole
 from app.models.academic import Course, Grade, Exam
 from bs4 import BeautifulSoup
 from app.models.leave import LeaveRequest, LeaveStatus
-from app.models.growth import GrowthRecord, RecordType
+from app.models.growth import GrowthRecord, RecordType, StudentProject
 from app.models.service import ServiceTicket, TicketType
 from app.models.knowledge import KnowledgeItem
-from app.models.campus import CampusScenery
+from app.models.campus import CampusScenery, CampusImpressionItem
 from app.models.lost_found import LostFoundItem, ItemType, ItemStatus
 from app.models.conversation import Conversation, PROJECT_STAGES
 from app.models.crisis import AIDialogSummary, CrisisLevel
+from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, GoalStatus, PlanStatus, TaskStatus
+from app.models.certificate import Certificate
+from app.models.portfolio import StudentResume
+from app.models.community import CommunityPost
+from app.models.favorite import ResourceFavorite
 from sqlalchemy import or_, func
 
 
@@ -242,6 +247,75 @@ TOOL_DEFINITIONS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_plan_overview",
+            "description": "查询学生的学习计划概览：长期目标、进行中的计划与进度、今日待办任务、打卡连续天数。当学生问'我的学习计划''今日任务''计划进度''打卡多少天'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_portfolio",
+            "description": "查询学生的作品集：项目经历、证书荣誉、简历情况。当学生问'我的作品集''有哪些项目''证书情况''简历'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_community_posts",
+            "description": "查询交流社区的帖子：支持按分类筛选、关键词搜索、按热度排序。当学生问'社区里有什么''大家都在聊什么''某某话题的帖子'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string", "description": "搜索关键词，不传则查全部"},
+                    "category": {"type": "string", "enum": ["技术", "提问", "分享", "求助"], "description": "帖子分类，不传则查全部"},
+                    "sort": {"type": "string", "enum": ["latest", "hot"], "description": "排序：latest最新/hot最热，默认 latest"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_community_post",
+            "description": "在交流社区发布帖子。当学生表达了分享/提问/求助的内容并希望发到社区时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "帖子标题"},
+                    "content": {"type": "string", "description": "帖子正文内容"},
+                    "category": {"type": "string", "enum": ["技术", "提问", "分享", "求助"], "description": "帖子分类，默认分享"}
+                },
+                "required": ["title", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_resources",
+            "description": "查询资源中心：学习资源（知识库）、校园信息、行业资讯以及我的收藏。当学生问'有什么学习资源''帮我找资料''我的收藏''就业信息'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string", "description": "搜索关键词，不传则查全部"},
+                    "category": {"type": "string", "enum": ["all", "learning", "industry", "campus"], "description": "资源分类：all全部/learning学习资源/industry行业资讯/campus校园信息，默认 all"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_profile_overview",
+            "description": "查询学生的个人成长画像：技能、兴趣、长期目标、成长记录数、近期打卡情况。当学生问'我的画像''我的技能兴趣''成长目标'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
 ]
 
 
@@ -402,6 +476,13 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             # 失物招领
             "search_lost_found": _search_lost_found,
             "create_lost_found": _create_lost_found,
+            # 学习计划 / 作品集 / 社区 / 资源 / 成长画像
+            "query_plan_overview": _query_plan_overview,
+            "query_portfolio": _query_portfolio,
+            "query_community_posts": _query_community_posts,
+            "create_community_post": _create_community_post,
+            "query_resources": _query_resources,
+            "query_profile_overview": _query_profile_overview,
             # 教师工具
             "query_pending_leaves": _query_pending_leaves,
             "analyze_leave": _analyze_leave,
@@ -1017,4 +1098,240 @@ def _create_lost_found(db: Session, args: dict, user: User) -> dict:
             f"✅ 已在失物招领处发布{kind}：{item.title}{where}（编号 {item.id}），"
             f"联系方式 {item.contact}。请告知学生已登记完成，并提醒可随时补充物品特征或地点。"
         ),
+    }
+
+
+# ============ 学习计划 / 作品集 / 社区 / 资源 / 成长画像工具 ============
+
+_TASK_STATUS_NAMES = {"todo": "待办", "doing": "进行中", "done": "已完成"}
+_TASK_PRIORITY_NAMES = {"high": "高", "medium": "中", "low": "低"}
+
+
+def _query_plan_overview(db: Session, args: dict, user: User) -> dict:
+    today = date.today()
+    goals = db.query(GrowthGoal).filter(
+        GrowthGoal.student_id == user.id, GrowthGoal.status == GoalStatus.ACTIVE
+    ).order_by(GrowthGoal.created_at.desc()).all()
+    plans = db.query(StudyPlan).filter(
+        StudyPlan.student_id == user.id, StudyPlan.status == PlanStatus.ACTIVE
+    ).order_by(StudyPlan.created_at.desc()).limit(20).all()
+
+    plan_list = []
+    for p in plans:
+        tasks = db.query(PlanTask).filter(PlanTask.plan_id == p.id).all()
+        done = sum(1 for t in tasks if t.status == TaskStatus.DONE)
+        plan_list.append({
+            "id": p.id,
+            "title": p.title,
+            "objective": p.objective or "",
+            "stage": p.stage or "",
+            "start_date": str(p.start_date),
+            "end_date": str(p.end_date) if p.end_date else "",
+            "task_total": len(tasks),
+            "task_done": done,
+            "done_rate": round(done * 100 / len(tasks)) if tasks else 0,
+        })
+
+    today_tasks = db.query(PlanTask).join(StudyPlan, StudyPlan.id == PlanTask.plan_id).filter(
+        StudyPlan.student_id == user.id,
+        PlanTask.due_date == today,
+        PlanTask.status != TaskStatus.DONE,
+    ).order_by(PlanTask.priority).all()
+    today_checked = db.query(PlanCheckin).filter(
+        PlanCheckin.student_id == user.id, PlanCheckin.check_date == today
+    ).first() is not None
+
+    streak = 0
+    d = today
+    while True:
+        cur = db.query(PlanCheckin).filter(PlanCheckin.student_id == user.id, PlanCheckin.check_date == d).first()
+        if not cur:
+            break
+        streak += 1
+        d = d - timedelta(days=1)
+
+    goals_data = [{"id": g.id, "goal_type": g.goal_type, "title": g.title, "progress": g.progress,
+                   "target_date": str(g.target_date) if g.target_date else ""} for g in goals]
+    tasks_data = [{"id": t.id, "plan_id": t.plan_id, "title": t.title, "due_date": str(t.due_date),
+                   "priority": _TASK_PRIORITY_NAMES.get(safe_enum_str(t.priority, ""), "中")} for t in today_tasks]
+
+    msg = f"进行中的计划 {len(plan_list)} 个，长期目标 {len(goals_data)} 个，今日待办 {len(tasks_data)} 项"
+    if today_checked:
+        msg += f"，今日已打卡（连续 {streak} 天）"
+    else:
+        msg += "，今日尚未打卡"
+    return {
+        "message": msg,
+        "goals": goals_data,
+        "plans": plan_list,
+        "today_tasks": tasks_data,
+        "checked_today": today_checked,
+        "streak_days": streak,
+    }
+
+
+def _query_portfolio(db: Session, args: dict, user: User) -> dict:
+    projects = db.query(StudentProject).filter(StudentProject.student_id == user.id).order_by(
+        StudentProject.start_date.desc()).all()
+    certificates = db.query(Certificate).filter(Certificate.student_id == user.id).order_by(
+        Certificate.created_at.desc()).all()
+    resumes = db.query(StudentResume).filter(StudentResume.student_id == user.id).order_by(
+        StudentResume.created_at.desc()).all()
+
+    cert_status = {"pending": "待认证", "approved": "已认证", "rejected": "已驳回"}
+    return {
+        "message": f"作品集：项目 {len(projects)} 个，证书 {len(certificates)} 份，简历 {len(resumes)} 份",
+        "projects": [{
+            "id": p.id, "name": p.project_name, "start": str(p.start_date),
+            "end": str(p.end_date) if p.end_date else "",
+            "role": p.my_role or "", "tech_stack": p.tech_stack or "",
+            "description": (p.description or "")[:200],
+            "link": p.project_link or "",
+        } for p in projects],
+        "certificates": [{
+            "id": c.id, "title": c.title,
+            "competition_name": c.competition_name or "",
+            "award_level": c.award_level.value if c.award_level else "",
+            "date": str(c.date) if c.date else "",
+            "status": cert_status.get(safe_enum_str(c.status, ""), safe_enum_str(c.status, "")),
+        } for c in certificates],
+        "resumes": [{"id": r.id, "filename": r.filename, "is_current": bool(r.is_current)} for r in resumes],
+    }
+
+
+def _query_community_posts(db: Session, args: dict, user: User) -> dict:
+    q = (args.get("q") or "").strip()
+    category = (args.get("category") or "").strip()
+    sort = (args.get("sort") or "latest").strip()
+
+    query = db.query(CommunityPost)
+    if category:
+        query = query.filter(CommunityPost.category == category)
+    if q:
+        from app.services.knowledge_service import _escape_like
+        safe_q = _escape_like(q)
+        like = f"%{safe_q}%"
+        query = query.filter(or_(CommunityPost.title.like(like, escape="\\"), CommunityPost.content.like(like, escape="\\")))
+    if sort == "hot":
+        query = query.order_by(CommunityPost.like_count.desc(), CommunityPost.comment_count.desc())
+    else:
+        query = query.order_by(CommunityPost.created_at.desc())
+    posts = query.limit(10).all()
+
+    user_ids = {p.student_id for p in posts}
+    name_map = {u.id: u.name for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+
+    result = []
+    for p in posts:
+        result.append({
+            "id": p.id, "title": p.title, "content": (p.content or "")[:150],
+            "category": p.category,
+            "author": name_map.get(p.student_id, "同学"),
+            "likes": p.like_count, "comments": p.comment_count, "views": p.view_count,
+            "created_at": p.created_at.strftime("%Y-%m-%d %H:%M") if p.created_at else "",
+        })
+    return {"message": f"找到 {len(result)} 条帖子", "posts": result}
+
+
+def _create_community_post(db: Session, args: dict, user: User) -> dict:
+    title = (args.get("title") or "").strip()
+    content = (args.get("content") or "").strip()
+    category = (args.get("category") or "分享").strip()
+    if category not in ("技术", "提问", "分享", "求助"):
+        category = "分享"
+    missing = []
+    if not title:
+        missing.append("title（标题）")
+    if not content:
+        missing.append("content（正文）")
+    if missing:
+        return {"success": False, "message": f"缺少必要参数：{', '.join(missing)}"}
+    post = CommunityPost(
+        student_id=user.id,
+        category=category,
+        title=title[:200],
+        content=content[:5000],
+    )
+    db.add(post)
+    db.commit()
+    db.refresh(post)
+    return {"success": True, "post_id": post.id, "message": f"✅ 帖子已发布到社区（#{post.id}）：{post.title}"}
+
+
+def _query_resources(db: Session, args: dict, user: User) -> dict:
+    q = (args.get("q") or "").strip()
+    category = (args.get("category") or "all").strip()
+
+    items = []
+    # 1) 学习资源（知识库）
+    if category in ("all", "learning"):
+        kb_q = db.query(KnowledgeItem)
+        if q:
+            from app.services.knowledge_service import _escape_like
+            safe_q = _escape_like(q)
+            like = f"%{safe_q}%"
+            kb_q = kb_q.filter(or_(KnowledgeItem.question.like(like, escape="\\"), KnowledgeItem.answer.like(like, escape="\\"), KnowledgeItem.tags.like(like, escape="\\")))
+        for i in kb_q.limit(8).all():
+            items.append({"item_type": "knowledge", "title": i.question, "category": i.category,
+                          "summary": (i.answer or "")[:120], "source": "学习资源"})
+    # 2) 校园信息
+    if category in ("all", "campus"):
+        ci_q = db.query(CampusImpressionItem)
+        if q:
+            from app.services.knowledge_service import _escape_like
+            safe_q = _escape_like(q)
+            like = f"%{safe_q}%"
+            ci_q = ci_q.filter(CampusImpressionItem.title.like(like, escape="\\"))
+        for i in ci_q.limit(8).all():
+            items.append({"item_type": "campus", "title": i.title, "category": i.source,
+                          "summary": i.date or "", "source": "校园信息", "link": i.url or ""})
+    # 3) 行业资讯（知识库中 category 含招聘/就业等关键词的）
+    if category in ("all", "industry"):
+        from app.services.knowledge_service import _escape_like
+        ind_q = db.query(KnowledgeItem).filter(
+            KnowledgeItem.category.in_(["就业", "招聘", "行业", "考证", "职业发展"])
+        )
+        if q:
+            safe_q = _escape_like(q)
+            like = f"%{safe_q}%"
+            ind_q = ind_q.filter(or_(KnowledgeItem.question.like(like, escape="\\"), KnowledgeItem.answer.like(like, escape="\\")))
+        for i in ind_q.limit(8).all():
+            items.append({"item_type": "industry", "title": i.question, "category": i.category,
+                          "summary": (i.answer or "")[:120], "source": "行业资讯"})
+
+    # 4) 我的收藏
+    favorites = db.query(ResourceFavorite).filter(ResourceFavorite.user_id == user.id).order_by(
+        ResourceFavorite.created_at.desc()).limit(10).all()
+
+    return {
+        "message": f"共找到 {len(items)} 条资源，收藏 {len(favorites)} 条",
+        "resources": items,
+        "favorites": [{"title": f.title, "category": f.category or "", "summary": (f.summary or "")[:80],
+                       "item_type": f.item_type} for f in favorites],
+    }
+
+
+def _query_profile_overview(db: Session, args: dict, user: User) -> dict:
+    skills_data = user.skills_json or {"skills": [], "interests": []}
+    skills = [s["name"] if isinstance(s, dict) else str(s) for s in skills_data.get("skills", [])]
+    interests = [str(i) for i in skills_data.get("interests", [])]
+
+    goals = db.query(GrowthGoal).filter(
+        GrowthGoal.student_id == user.id, GrowthGoal.status == GoalStatus.ACTIVE
+    ).order_by(GrowthGoal.created_at.desc()).limit(10).all()
+    goals_data = [{"goal_type": g.goal_type, "title": g.title, "progress": g.progress,
+                   "target_date": str(g.target_date) if g.target_date else ""} for g in goals]
+
+    record_count = db.query(GrowthRecord).filter(GrowthRecord.student_id == user.id).count()
+    today = date.today()
+    checkin_30d = db.query(PlanCheckin).filter(
+        PlanCheckin.student_id == user.id, PlanCheckin.check_date >= today - timedelta(days=30)
+    ).count()
+    return {
+        "message": f"画像：技能 {len(skills)} 项、兴趣 {len(interests)} 项、长期目标 {len(goals_data)} 个、成长记录 {record_count} 条、近30天打卡 {checkin_30d} 天",
+        "skills": skills,
+        "interests": interests,
+        "goals": goals_data,
+        "growth_record_count": record_count,
+        "checkin_last_30d": checkin_30d,
     }

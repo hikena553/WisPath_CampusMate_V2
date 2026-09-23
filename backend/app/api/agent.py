@@ -94,9 +94,10 @@ async def speech_to_text_api(file: UploadFile = File(...), user: User = Depends(
 DEFAULT_RECOMMENDATIONS: dict[UserRole, list[str]] = {
     UserRole.STUDENT: [
         "帮我查一下下周的课程安排",
-        "我想看看这学期的成绩单",
-        "最近有什么校园活动通知",
-        "帮我记录一下获奖信息",
+        "我今天的计划任务有哪些",
+        "查一下我的作品集",
+        "社区最近有什么热门帖子",
+        "有什么好的学习资源推荐",
     ],
     UserRole.TEACHER: [
         "帮我查看今天的待办任务",
@@ -114,7 +115,7 @@ DEFAULT_RECOMMENDATIONS: dict[UserRole, list[str]] = {
 
 # 各角色可涵盖的功能范围（用于引导 LLM 生成推荐）
 ROLE_FEATURES: dict[UserRole, str] = {
-    UserRole.STUDENT: "课表、成绩、请假、通知、考试、成长记录等",
+    UserRole.STUDENT: "课表、成绩、请假、通知、考试、成长记录、学习计划、今日任务、打卡、作品集、社区帖子、资源中心、个人画像等",
     UserRole.TEACHER: "待办任务、学生考勤、学生档案、成长记录、校园公告、班级公告、教学日程等",
     UserRole.ADMIN: "校园公告、通知发布、用户管理、数据统计、系统事项等",
 }
