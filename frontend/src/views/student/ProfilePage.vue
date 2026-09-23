@@ -35,7 +35,7 @@
           <div class="growth-summary">
             <div class="growth-item">
               <div class="growth-value">{{ growthStats.awards || 0 }}</div>
-              <div class="growth-label">获奖记录</div>
+              <div class="growth-label">成长记录</div>
             </div>
             <div class="growth-item">
               <div class="growth-value">{{ growthStats.skills || 0 }}</div>
@@ -44,6 +44,37 @@
             <div class="growth-item">
               <div class="growth-value">{{ growthStats.projects || 0 }}</div>
               <div class="growth-label">项目经历</div>
+            </div>
+          </div>
+
+          <!-- 成长画像：完整度 + 技能/兴趣 + 目标入口 -->
+          <div class="growth-profile-block">
+            <div class="profile-line">
+              <div class="profile-line-label">
+                <el-icon :size="14"><Calendar /></el-icon>
+                <span>成长画像完整度</span>
+              </div>
+              <span class="profile-line-value">{{ imageComplete }}%</span>
+            </div>
+            <el-progress :percentage="imageComplete" :stroke-width="8" :show-text="false" :color="imageComplete === 100 ? '#67c23a' : '#409eff'" class="profile-progress" />
+            <div class="profile-tip" v-if="imageComplete < 100">
+              完善技能、兴趣与目标后，AI 将为你提供更精准的成长建议
+            </div>
+            <div class="profile-tip" v-else>
+              画像已完整，AI 服务已全面开启
+            </div>
+
+            <div v-if="(growthProfile?.skills?.length || 0) > 0 || (growthProfile?.interests?.length || 0) > 0" class="profile-tags">
+              <el-tag v-for="s in (growthProfile?.skills || [])" :key="'s' + s" size="small" type="primary" effect="light" class="profile-tag">{{ s }}</el-tag>
+              <el-tag v-for="i in (growthProfile?.interests || [])" :key="'i' + i" size="small" type="success" effect="plain" class="profile-tag">{{ i }}</el-tag>
+            </div>
+
+            <div class="profile-goal-row">
+              <div class="profile-goal-text">
+                <el-icon :size="14"><FolderOpened /></el-icon>
+                <span>发展目标 {{ goalCount }} 个</span>
+              </div>
+              <el-button size="small" type="primary" plain @click="router.push('/student/plan')">去制定计划</el-button>
             </div>
           </div>
         </div>
@@ -114,6 +145,23 @@
 
         <!-- 个人资料 -->
         <div v-if="currentPage === 'profile'" class="sub-page-content">
+          <!-- 头像设置 -->
+          <div class="form-group">
+            <div class="form-group-title">头像设置</div>
+            <div class="avatar-row">
+              <el-avatar :size="88" :src="profileForm.avatar" shape="square" class="profile-avatar">
+                {{ profileForm.name?.[0] || '?' }}
+              </el-avatar>
+              <div class="avatar-actions">
+                <el-button type="primary" plain size="small" @click="triggerAvatarInput">
+                  <el-icon style="margin-right:4px"><Camera /></el-icon>更换头像
+                </el-button>
+                <div class="avatar-tip">支持 JPG/PNG，上传后将自动裁剪为正方形</div>
+              </div>
+              <input ref="avatarInputRef" type="file" accept="image/*" style="display:none" @change="onAvatarSelect" />
+            </div>
+          </div>
+
           <!-- 基本信息 -->
           <div class="form-group">
             <div class="form-group-title">基本信息</div>
@@ -198,11 +246,12 @@
               <el-form-item label="反馈类型">
                 <el-select v-model="feedbackForm.type" style="width:100%">
                   <el-option label="问题反馈" value="bug" /><el-option label="功能建议" value="feature" />
-                  <el-option label="其他" value="other" />
+                  <el-option label="投诉" value="complaint" /><el-option label="其他" value="other" />
                 </el-select>
               </el-form-item>
               <el-form-item label="标题"><el-input v-model="feedbackForm.title" placeholder="请简要描述" maxlength="100" /></el-form-item>
               <el-form-item label="内容"><el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述" /></el-form-item>
+              <el-form-item label="联系方式"><el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱，方便我们联系您" /></el-form-item>
             </el-form>
             <div class="sub-page-footer">
               <el-button type="primary" @click="submitFeedback" :loading="submitting" style="width:100%">提交</el-button>
@@ -352,23 +401,39 @@
         </div>
       </div>
     </transition>
+
+    <!-- 头像裁剪 -->
+    <el-dialog v-model="avatarCropVisible" title="裁剪头像" width="420px" :close-on-click-modal="false" @opened="onAvatarCropOpened">
+      <div class="crop-container">
+        <img ref="avatarCropImgRef" style="max-width:100%;display:block" />
+      </div>
+      <template #footer>
+        <el-button @click="cancelAvatarCrop">取消</el-button>
+        <el-button type="primary" @click="handleAvatarCropConfirm">确认裁剪</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import Cropper from 'cropperjs'
+import 'cropperjs/dist/cropper.css'
 import { useAuthStore } from '@/stores/auth'
 import { updateProfile, getTeachers, changePassword } from '@/api/user'
 import { createFeedback, getFeedbacks } from '@/api/feedback'
 import { uploadFile } from '@/api/upload'
+import { getGrowthProfile, getProjects, type GrowthProfile } from '@/api/growth'
+import { getGoals } from '@/api/plan'
 import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
-  ChatDotRound, QuestionFilled, Camera, Picture
+  ChatDotRound, QuestionFilled, Camera, Picture, Calendar, FolderOpened
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 
 // 页面状态
@@ -407,6 +472,29 @@ const growthStats = reactive({
   projects: 0,
 })
 
+// 成长画像（供 AI 驾驶舱与推荐使用）
+const growthProfile = ref<GrowthProfile | null>(null)
+const goalCount = ref(0)
+const imageComplete = computed(() => {
+  let score = 0
+  if ((growthProfile.value?.skills?.length || 0) > 0) score += 30
+  if ((growthProfile.value?.interests?.length || 0) > 0) score += 20
+  if (goalCount.value > 0) score += 25
+  if (growthStats.projects > 0 || (growthProfile.value?.total_records || 0) > 0) score += 25
+  return score
+})
+
+async function loadGrowth() {
+  try {
+    const [p, pros, goals] = await Promise.all([getGrowthProfile(), getProjects(), getGoals()])
+    growthProfile.value = p
+    growthStats.awards = p?.total_records || 0
+    growthStats.skills = p?.total_skills || 0
+    growthStats.projects = pros?.length || 0
+    goalCount.value = goals?.length || 0
+  } catch { /* ignore */ }
+}
+
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '', captcha: '' })
 const captchaCode = ref('')
 
@@ -425,9 +513,9 @@ function refreshCaptcha() {
 const profileForm = reactive({
   username: '', name: '', college: '', gender: '', age: 18,
   hometown: '', phone: '', tutor_id: null as number | null,
-  className: '', political_status: ''
+  className: '', political_status: '', avatar: ''
 })
-const feedbackForm = reactive({ type: 'other', title: '', content: '' })
+const feedbackForm = reactive({ type: 'other', title: '', content: '', contact: '' })
 const feedbackList = ref<any[]>([])
 const loadingFeedback = ref(false)
 
@@ -460,6 +548,7 @@ function openPage(page: string) {
       profileForm.tutor_id = u.tutor_id ?? null
       profileForm.className = (u as any).class_name || ''
       profileForm.political_status = (u as any).political_status || ''
+      profileForm.avatar = (u as any).avatar || ''
     }
   }
   slideDirection.value = 'slide-left'
@@ -525,6 +614,74 @@ function resetBanner() {
   ElMessage.success('已恢复默认背景')
 }
 
+// 头像裁剪
+const avatarCropVisible = ref(false)
+const avatarInputRef = ref<HTMLInputElement>()
+const avatarCropImgRef = ref<HTMLImageElement>()
+let avatarCropper: Cropper | null = null
+let pendingAvatarSrc = ''
+
+function triggerAvatarInput() {
+  avatarInputRef.value?.click()
+}
+
+function onAvatarSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过5MB')
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    pendingAvatarSrc = reader.result as string
+    avatarCropVisible.value = true
+  }
+  reader.readAsDataURL(file)
+  input.value = ''
+}
+
+function onAvatarCropOpened() {
+  avatarCropper?.destroy()
+  const img = avatarCropImgRef.value
+  if (!img) return
+  img.src = pendingAvatarSrc
+  avatarCropper = new Cropper(img, {
+    aspectRatio: 1,
+    viewMode: 1,
+    autoCropArea: 1,
+    background: false,
+  })
+}
+
+function cancelAvatarCrop() {
+  avatarCropVisible.value = false
+  avatarCropper?.destroy()
+  avatarCropper = null
+  pendingAvatarSrc = ''
+}
+
+async function handleAvatarCropConfirm() {
+  const cropper = avatarCropper
+  if (!cropper) return
+  const canvas = cropper.getCroppedCanvas({ width: 200, height: 200 })
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) { ElMessage.error('裁剪失败'); return }
+  try {
+    const { url } = await uploadFile(new File([blob], 'avatar.png', { type: 'image/png' }))
+    profileForm.avatar = url
+    ElMessage.success('头像已更新，点击保存后生效')
+  } catch {
+    ElMessage.error('上传失败')
+  }
+  cancelAvatarCrop()
+}
+
 function applyTheme(theme: string) {
   currentTheme.value = theme
   const root = document.documentElement
@@ -585,6 +742,7 @@ async function handleSaveProfile() {
       tutor_id: profileForm.tutor_id || null,
       class_name: profileForm.className || null,
       political_status: profileForm.political_status || null,
+      avatar: profileForm.avatar || null,
     })
     auth.updateUser(updated as any)
     ElMessage.success('保存成功')
@@ -599,9 +757,14 @@ async function submitFeedback() {
   }
   submitting.value = true
   try {
-    await createFeedback(feedbackForm)
+    await createFeedback({
+      type: feedbackForm.type,
+      title: feedbackForm.title,
+      content: feedbackForm.content,
+      contact: feedbackForm.contact || undefined,
+    })
     ElMessage.success('反馈已提交')
-    feedbackForm.title = ''; feedbackForm.content = ''
+    feedbackForm.title = ''; feedbackForm.content = ''; feedbackForm.contact = ''
     loadFeedbacks()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') }
   finally { submitting.value = false }
@@ -646,7 +809,13 @@ onMounted(async () => {
   try { teachers.value = await getTeachers() } catch {}
   refreshCaptcha()
   loadFeedbacks()
+  loadGrowth()
   applyTheme('light')
+  // 支持外部跳转直达子页（如工作台"意见反馈"入口）
+  const page = route.query.page as string | undefined
+  if (page && ['profile', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
+    openPage(page)
+  }
 })
 </script>
 
@@ -750,6 +919,39 @@ onMounted(async () => {
   color: #999;
   margin-bottom: 10px;
   padding-left: 4px;
+}
+
+/* 头像设置 */
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.profile-avatar {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 32px;
+}
+.avatar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.avatar-tip {
+  font-size: 12px;
+  color: #999;
+}
+.crop-container {
+  max-height: 320px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
 }
 
 /* 验证码 */
@@ -956,6 +1158,55 @@ onMounted(async () => {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+}
+
+/* 成长画像块 */
+.growth-profile-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.profile-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.profile-line-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #666;
+}
+.profile-line-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #409eff;
+}
+.profile-progress { margin-bottom: 8px; }
+.profile-tip {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 10px;
+}
+.profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.profile-goal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.profile-goal-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #666;
 }
 
 /* 菜单列表 */

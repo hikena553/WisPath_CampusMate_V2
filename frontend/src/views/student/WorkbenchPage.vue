@@ -29,6 +29,19 @@
       </div>
     </div>
 
+    <!-- 学习成长 -->
+    <div class="section-card">
+      <div class="section-title">学习成长</div>
+      <div class="service-grid">
+        <div v-for="item in resourceItems" :key="item.key" class="service-item" @click="openService(item)">
+          <div class="service-icon" :style="{ background: item.bgColor, color: item.color }">
+            <el-icon :size="20"><component :is="item.icon" /></el-icon>
+          </div>
+          <div class="service-label">{{ item.label }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 联系与沟通 -->
     <div class="section-card">
       <div class="section-title">联系与沟通</div>
@@ -65,7 +78,7 @@
           <el-badge v-if="announceUnread" :value="announceUnread" class="contact-badge" />
           <el-icon class="contact-arrow"><ArrowRight /></el-icon>
         </div>
-        <div class="contact-item" @click="openPage('feedback')">
+        <div class="contact-item" @click="goFeedback">
           <div class="contact-icon" style="background: rgba(179,127,235,0.1); color: #b37feb;">
             <el-icon :size="20"><Promotion /></el-icon>
           </div>
@@ -247,30 +260,6 @@
             </el-form>
             <div class="sub-page-footer">
               <el-button type="primary" @click="submitProject" :loading="submitting" style="width:100%">提交申请</el-button>
-            </div>
-          </div>
-
-          <!-- 意见反馈 -->
-          <div v-if="currentPage === 'feedback'">
-            <el-form :model="feedbackForm" label-position="top" class="sub-form">
-              <el-form-item label="反馈类型">
-                <el-select v-model="feedbackForm.type" placeholder="请选择反馈类型" style="width:100%">
-                  <el-option label="问题反馈" value="bug" /><el-option label="功能建议" value="feature" />
-                  <el-option label="投诉" value="complaint" /><el-option label="其他" value="other" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="标题" required>
-                <el-input v-model="feedbackForm.title" placeholder="请简要描述您的反馈" maxlength="100" show-word-limit />
-              </el-form-item>
-              <el-form-item label="详细内容" required>
-                <el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述您的问题或建议" maxlength="1000" show-word-limit />
-              </el-form-item>
-              <el-form-item label="联系方式">
-                <el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱，方便我们联系您" />
-              </el-form-item>
-            </el-form>
-            <div class="sub-page-footer">
-              <el-button type="primary" @click="submitFeedback" :loading="submitting" style="width:100%">提交反馈</el-button>
             </div>
           </div>
 
@@ -529,7 +518,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { createLeave, getMyLeaves, deleteLeave } from '@/api/leave'
 import { createTicket, getTickets, cancelTicket } from '@/api/service'
-import { createFeedback } from '@/api/feedback'
 import { getLostFoundItems, createLostFoundItem, getLostFoundItem } from '@/api/lost_found'
 import { getConversations } from '@/api/messages'
 import { getStudentAnnouncements, getUnreadCount } from '@/api/announcement'
@@ -539,7 +527,7 @@ import UploadBtn from '@/components/upload/UploadBtn.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound, Message,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell, TrendCharts, Collection
+  InfoFilled, Location, Close, Bell, Collection
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -563,14 +551,18 @@ const tutorMessages = ref<any[]>([])
 const tutorIdRef = ref<number | null>(null)
 const tutorNewMsg = ref('')
 
-// 办事服务配置
+// 办事服务配置（仅办事类，其余功能归类到驾驶舱/学习成长）
 const serviceItems = [
   { key: 'leave', label: '请假申请', icon: Calendar, color: '#409eff', bgColor: 'rgba(64,158,255,0.1)' },
   { key: 'certificate', label: '证明申请', icon: Document, color: '#67c23a', bgColor: 'rgba(103,194,58,0.1)' },
   { key: 'project', label: '项目申请', icon: Promotion, color: '#e6a23c', bgColor: 'rgba(230,162,60,0.1)' },
   { key: 'lostfound', label: '失物招领', icon: Search, color: '#f56c6c', bgColor: 'rgba(245,108,108,0.1)' },
-  { key: 'growth', label: '成长空间', icon: TrendCharts, color: '#722ed1', bgColor: 'rgba(114,46,209,0.1)', link: '/student/growth' },
+]
+
+// 学习成长配置
+const resourceItems = [
   { key: 'resources', label: 'AI 资源空间', icon: Collection, color: '#13c2c2', bgColor: 'rgba(19,194,194,0.1)', link: '/student/resources' },
+  { key: 'community', label: '交流社区', icon: ChatDotRound, color: '#722ed1', bgColor: 'rgba(114,46,209,0.1)', link: '/student/community' },
 ]
 
 // 表单数据
@@ -585,7 +577,6 @@ const projectForm = reactive({
   team_members: '', start_date: '', end_date: '', budget: 0,
   attachments: [] as string[],
 })
-const feedbackForm = reactive({ type: 'other', title: '', content: '', contact: '' })
 const lostfoundForm = reactive({ type: 'lost', title: '', description: '', location: '', contact: '' })
 
 // 页面标题
@@ -594,7 +585,6 @@ const pageTitle = computed(() => {
     leave: '请假申请',
     certificate: '证明申请',
     project: '项目申请',
-    feedback: '意见反馈',
     lostfound: '失物招领',
     messages: '消息中心',
     allRecords: '全部申请',
@@ -801,8 +791,8 @@ function autoResizeChat() {
   el.style.height = Math.max(20, Math.min(el.scrollHeight, 80)) + 'px'
 }
 
-function openPage(page: string) {
-  currentPage.value = page
+function goFeedback() {
+  router.push('/student/profile?page=feedback')
 }
 
 function closePage() {
@@ -1022,24 +1012,6 @@ async function submitProject() {
     Object.assign(projectForm, { project_type: '', title: '', advisor: '', content: '', team_members: '', start_date: '', end_date: '', budget: 0, attachments: [] })
     closePage()
     await loadData()
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '提交失败')
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function submitFeedback() {
-  if (!feedbackForm.title || !feedbackForm.content) {
-    ElMessage.warning('请填写所有必填项')
-    return
-  }
-  submitting.value = true
-  try {
-    await createFeedback(feedbackForm)
-    ElMessage.success('反馈已提交，感谢您的意见！')
-    Object.assign(feedbackForm, { type: 'other', title: '', content: '', contact: '' })
-    closePage()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || '提交失败')
   } finally {

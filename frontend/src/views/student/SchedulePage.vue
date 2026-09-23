@@ -860,6 +860,12 @@
       <div :class="['page-tab', { active: activeTab === 'growth' }]" @click="activeTab = 'growth'">
         <el-icon><TrendCharts /></el-icon> 成长轨迹
       </div>
+      <div class="page-tab" @click="goPlan">
+        <el-icon><Aim /></el-icon> 学习计划
+      </div>
+      <div class="page-tab" @click="goPortfolio">
+        <el-icon><FolderOpened /></el-icon> 我的作品集
+      </div>
     </div>
     </div>
   </div>
@@ -867,7 +873,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
 import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, PieChart as PieChartIcon, Close, Aim } from '@element-plus/icons-vue'
@@ -892,7 +898,12 @@ use([LineChart, BarChart, PieChart, RadarChart, GridComponent, TooltipComponent,
 
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 const { isMobile } = useResponsive()
+
+// ===== 驾驶舱直达入口 =====
+function goPlan() { router.push('/student/plan') }
+function goPortfolio() { router.push('/student/portfolio') }
 
 // ===== 视图状态：home=驾驶舱主页（移动端），schedule/grades/growth=学业子页面 =====
 const tabKeys = ['schedule', 'grades', 'growth'] as const

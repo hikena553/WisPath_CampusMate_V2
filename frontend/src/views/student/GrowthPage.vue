@@ -175,43 +175,50 @@
       </Transition>
     </div>
 
+    <!-- 计划洞察 -->
     <div class="projects-section">
-      <div class="section-header clickable" @click="projectsExpanded = !projectsExpanded">
+      <div class="section-header">
         <span class="header-left">
-          <el-icon class="collapse-icon" :class="{ collapsed: !projectsExpanded }"><ArrowRight /></el-icon>
-          <el-icon style="margin-right:6px"><FolderOpened /></el-icon>
-          项目展示
-          <el-tag v-if="projects.length" size="small" type="info" effect="plain" style="margin-left:8px">{{ projects.length }}</el-tag>
+          <el-icon style="margin-right:6px"><Calendar /></el-icon>
+          计划洞察
         </span>
-        <el-button type="primary" size="small" @click.stop="openProjectDialog">添加项目</el-button>
+        <el-button type="primary" size="small" plain @click="goPlan">去管理计划</el-button>
       </div>
-      <Transition name="collapse">
-        <div v-show="projectsExpanded">
-          <div v-if="projects.length" class="project-grid">
-        <div v-for="p in projects" :key="p.id" class="project-card">
-          <div class="project-top">
-            <div class="project-icon" :class="p.is_team ? 'team' : 'solo'">
-              <el-icon :size="22"><UserFilled v-if="p.is_team" /><User v-else /></el-icon>
-            </div>
-            <div class="project-info">
-              <div class="project-name">{{ p.project_name }}</div>
-              <div class="project-date">{{ p.start_date }} ~ {{ p.end_date || '至今' }}</div>
-            </div>
+      <div v-if="planInsights" class="plan-insight">
+        <div class="insight-stats">
+          <div class="insight-stat">
+            <div class="insight-num">{{ planInsights.completed_plans }}</div>
+            <div class="insight-label">完成计划</div>
           </div>
-          <div v-if="p.is_team && p.team_members" class="project-members">成员: {{ p.team_members }}</div>
-          <div v-if="p.attachment_url" class="project-attach">
-            <el-link type="primary" :href="p.attachment_url" target="_blank" :icon="Link">查看附件</el-link>
+          <div class="insight-stat">
+            <div class="insight-num">{{ planInsights.active_plans }}</div>
+            <div class="insight-label">进行中</div>
           </div>
-          <div class="project-actions">
-            <el-button size="small" text type="primary" @click="viewProject(p)">查看详情</el-button>
-            <el-button size="small" text type="primary" @click="editProject(p)">编辑</el-button>
-            <el-button size="small" text type="danger" @click="handleDeleteProject(p.id)">删除</el-button>
+          <div class="insight-stat" :class="{ 'num-warn': planInsights.expired_plans > 0 }">
+            <div class="insight-num">{{ planInsights.expired_plans }}</div>
+            <div class="insight-label">已逾期</div>
+          </div>
+          <div class="insight-stat">
+            <div class="insight-num">{{ planInsights.task_done }}/{{ planInsights.task_total }}</div>
+            <div class="insight-label">任务完成</div>
+          </div>
+          <div class="insight-stat">
+            <div class="insight-num">{{ planInsights.checkin_total }}</div>
+            <div class="insight-label">累计打卡</div>
+          </div>
+          <div class="insight-stat">
+            <div class="insight-num">{{ planInsights.minutes_total }}</div>
+            <div class="insight-label">学习分钟</div>
           </div>
         </div>
-      </div>
-      <el-empty v-else-if="loaded" description="暂无项目" :image-size="60" />
+        <div v-if="planInsights.risk && planInsights.risk.length" class="insight-risks">
+          <div v-for="(r, i) in planInsights.risk" :key="i" class="risk-item">
+            <el-icon :size="14" style="color:#e6a23c;flex-shrink:0"><WarningFilled /></el-icon>
+            <span class="risk-text">{{ r }}</span>
+          </div>
         </div>
-      </Transition>
+        <div v-else-if="planInsights.total_plans > 0" class="insight-ok">暂无风险，学习节奏良好</div>
+      </div>
     </div>
 
     <el-dialog v-model="recordDetailVisible" title="成长记录详情" width="560px" class="growth-dialog">
@@ -253,70 +260,6 @@
       </div>
       <template #footer>
         <el-button @click="recordDetailVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="projectDetailVisible" title="项目详情" width="520px" class="growth-dialog">
-      <div v-if="viewingProject" class="project-detail">
-        <div class="detail-head">
-          <div class="project-icon" :class="viewingProject.is_team ? 'team' : 'solo'">
-            <el-icon :size="22"><UserFilled v-if="viewingProject.is_team" /><User v-else /></el-icon>
-          </div>
-          <div class="project-info">
-            <div class="project-name">{{ viewingProject.project_name }}</div>
-            <div class="project-date">{{ viewingProject.start_date }} ~ {{ viewingProject.end_date || '至今' }}</div>
-          </div>
-        </div>
-        <el-descriptions :column="1" border class="detail-descriptions">
-          <el-descriptions-item label="项目类型">
-            <el-tag :type="viewingProject.is_team ? 'primary' : 'success'" size="small" effect="dark" round>
-              {{ viewingProject.is_team ? '团队项目' : '个人项目' }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="viewingProject.team_members" label="团队成员">{{ viewingProject.team_members }}</el-descriptions-item>
-          <el-descriptions-item label="开始日期">{{ viewingProject.start_date }}</el-descriptions-item>
-          <el-descriptions-item label="结束日期">{{ viewingProject.end_date || '进行中' }}</el-descriptions-item>
-          <el-descriptions-item label="项目成果">
-            <el-link v-if="viewingProject.attachment_url" type="primary" :href="viewingProject.attachment_url" target="_blank" :icon="Link">查看附件</el-link>
-            <span v-else class="detail-empty">无</span>
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
-      <template #footer>
-        <el-button @click="projectDetailVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="projectDialogVisible" :title="editingProject ? '编辑项目' : '添加项目'" width="500px">
-      <el-form ref="projectFormRef" :model="projectForm" label-width="100px" :rules="projectRules">
-        <el-form-item label="项目名称" prop="project_name">
-          <el-input v-model="projectForm.project_name" placeholder="请输入项目名称，如：基于大数据的智慧校园平台" />
-        </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="开始日期" prop="start_date">
-              <el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" style="width:100%" placeholder="请选择开始日期" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="结束日期">
-              <el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" style="width:100%" clearable placeholder="不填表示进行中" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="是否团队">
-          <el-switch v-model="projectForm.is_team" active-text="团队" inactive-text="个人" />
-        </el-form-item>
-        <el-form-item v-if="projectForm.is_team" label="团队成员" prop="team_members">
-          <el-input v-model="projectForm.team_members" placeholder="逗号分隔，如：张三, 李四, 王五" />
-        </el-form-item>
-        <el-form-item label="项目成果">
-          <UploadBtn v-model="projectForm.attachment_url" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="projectDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveProject">{{ editingProject ? '保存' : '添加' }}</el-button>
       </template>
     </el-dialog>
 
@@ -480,15 +423,17 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { DataAnalysis, Histogram, TrendCharts, DataLine, Collection, FolderOpened, Link, User, UserFilled, ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
+import { DataAnalysis, Histogram, TrendCharts, DataLine, Collection, Link, ArrowRight, Calendar, WarningFilled } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { RadarChart, BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, RadarComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getGrowthRecords, createGrowthRecord, getGrowthProfile, updateSkills, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
-import type { GrowthProfile, StudentProject } from '@/api/growth'
+import { getGrowthRecords, createGrowthRecord, getGrowthProfile, updateSkills } from '@/api/growth'
+import { getPlanInsights } from '@/api/plan'
+import type { GrowthProfile } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
 
@@ -502,17 +447,9 @@ const interestPresets = ['音乐', '运动', '阅读', '游戏', '旅行', '美�
 const profile = ref<GrowthProfile | null>(null)
 const records = ref<GrowthRecord[]>([])
 const recordsExpanded = ref(false)
-const projectsExpanded = ref(false)
 const dialogVisible = ref(false)
 const form = ref<Record<string, any>>({ type: 'honor', title: '', description: '', date: '' })
 const growthFormRef = ref()
-const projectFormRef = ref()
-
-const projectRules = {
-  project_name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
-  start_date: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
-  team_members: [{ required: true, message: '请填写团队成员', trigger: 'blur' }],
-}
 
 const growthRules = computed(() => {
   const base: Record<string, any> = {
@@ -584,67 +521,12 @@ async function saveSkills() {
   } catch { ElMessage.error('保存失败') }
 }
 
-// 项目
-const projects = ref<StudentProject[]>([])
-const loaded = ref(false)
-const projectDialogVisible = ref(false)
-const projectDetailVisible = ref(false)
-const viewingProject = ref<StudentProject | null>(null)
 const recordDetailVisible = ref(false)
 const viewingRecord = ref<GrowthRecord | null>(null)
-const editingProject = ref<StudentProject | null>(null)
-const projectForm = ref<Record<string, any>>({
-  project_name: '', start_date: '', end_date: null, is_team: false, team_members: '', attachment_url: '',
-})
-
-function openProjectDialog() {
-  editingProject.value = null
-  projectForm.value = { project_name: '', start_date: '', end_date: null, is_team: false, team_members: '', attachment_url: '' }
-  projectDialogVisible.value = true
-}
-
-function viewProject(p: StudentProject) {
-  viewingProject.value = p
-  projectDetailVisible.value = true
-}
 
 function viewRecord(r: GrowthRecord) {
   viewingRecord.value = r
   recordDetailVisible.value = true
-}
-
-function editProject(p: StudentProject) {
-  editingProject.value = p
-  projectForm.value = { ...p }
-  projectDialogVisible.value = true
-}
-
-async function handleSaveProject() {
-  if (projectFormRef.value) {
-    try { await projectFormRef.value.validate() } catch { return }
-  }
-  try {
-    if (editingProject.value) {
-      await updateProject(editingProject.value.id, projectForm.value as any)
-      ElMessage.success('项目已更新')
-    } else {
-      await createProject(projectForm.value as any)
-      ElMessage.success('项目已添加')
-    }
-    projectDialogVisible.value = false
-    projects.value = await getProjects()
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '操作失败')
-  }
-}
-
-async function handleDeleteProject(id: number) {
-  try {
-    await ElMessageBox.confirm('确定删除该项目？', '确认')
-    await deleteProject(id)
-    ElMessage.success('已删除')
-    projects.value = await getProjects()
-  } catch {}
 }
 
 // 成长记录表单
@@ -666,6 +548,16 @@ function dotColor(t: string) {
 function formatDate(d: string) {
   if (!d) return ''
   return d.slice(0, 10)
+}
+
+// ---------- 计划洞察 ----------
+const router = useRouter()
+const planInsights = ref<any>(null)
+async function loadPlanInsights() {
+  try { planInsights.value = await getPlanInsights() } catch { planInsights.value = null }
+}
+function goPlan() {
+  router.push('/student/plan')
 }
 
 function onTypeChange() {
@@ -830,7 +722,7 @@ onMounted(async () => {
     localInterests.value = [...(p.interests || [])]
   } catch { /* ignore */ }
   records.value = await getGrowthRecords() as any
-  try { projects.value = await getProjects(); loaded.value = true } catch { /* ignore */ }
+  loadPlanInsights()
 })
 
 async function handleAdd() {
@@ -1184,34 +1076,6 @@ async function handleAdd() {
 
 /* ===== Projects ===== */
 .projects-section { margin-bottom: 24px; }
-.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-.project-card {
-  background: var(--bg-card); border-radius: 14px; padding: 18px 20px;
-  border: 1px solid var(--border-color); box-shadow: var(--shadow-md);
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  opacity: 0;
-  transform: scale(0.9);
-  animation: scaleIn 0.3s ease-out forwards;
-}
-.project-card:nth-child(1) { animation-delay: 0.05s; }
-.project-card:nth-child(2) { animation-delay: 0.1s; }
-.project-card:nth-child(3) { animation-delay: 0.15s; }
-.project-card:nth-child(4) { animation-delay: 0.2s; }
-.project-card:hover { 
-  transform: translateY(-6px) scale(1.02); 
-  box-shadow: 0 12px 32px rgba(0,0,0,0.15);
-}
-.project-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.project-icon {
-  width: 40px; height: 40px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-.project-card:hover .project-icon {
-  transform: rotate(10deg) scale(1.1);
-}
-.project-icon.team { background: rgba(64,158,255,.1); color: var(--accent-blue); }
-.project-icon.solo { background: rgba(103,194,58,.1); color: var(--accent-green); }
 .project-info { flex: 1; min-width: 0; }
 .project-name {
   font-size: 14px;
@@ -1222,26 +1086,7 @@ async function handleAdd() {
   text-overflow: ellipsis;
   transition: color 0.2s ease;
 }
-.project-card:hover .project-name {
-  color: var(--accent-blue);
-}
 .project-date { font-size: 11px; color: var(--text-placeholder); margin-top: 2px; }
-.project-members { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
-.project-attach { margin-bottom: 8px; }
-.project-actions { 
-  display: flex; 
-  gap: 4px; 
-  margin-top: 6px; 
-  padding-top: 8px; 
-  border-top: 1px solid var(--border-light);
-  opacity: 0;
-  transform: translateY(10px);
-  transition: all 0.15s ease;
-}
-.project-card:hover .project-actions {
-  opacity: 1;
-  transform: translateY(0);
-}
 
 /* ===== Dialog overrides ===== */
 :deep(.el-dialog__body) { padding: 20px 24px; }
@@ -1269,8 +1114,37 @@ async function handleAdd() {
   .panel-divider { width: 100%; height: 1px; margin: 14px 12px; }
   .analytics-head { flex-wrap: wrap; row-gap: 6px; padding: 12px 16px; }
   .head-sub { display: none; }
-  .project-grid { grid-template-columns: 1fr; }
   .record-card { padding: 12px; }
   .record-title { font-size: 13px; }
+}
+
+/* 计划洞察 */
+.plan-insight { padding: 4px 2px 2px; }
+.insight-stats {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.insight-stat {
+  flex: 1 1 30%;
+  min-width: 90px;
+  text-align: center;
+  background: #f6f8fc;
+  border-radius: 10px;
+  padding: 10px 6px;
+}
+.insight-num {
+  font-size: 18px; font-weight: 700; color: #1a1a2e;
+}
+.insight-stat.num-warn .insight-num { color: #e6a23c; }
+.insight-label { font-size: 11px; color: #999; margin-top: 2px; }
+.insight-risks { margin-top: 12px; }
+.risk-item {
+  display: flex; align-items: flex-start; gap: 6px;
+  background: #fffaf0; border: 1px solid rgba(230, 162, 60, 0.3);
+  border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+}
+.risk-text { font-size: 12px; color: #8a6d3b; line-height: 1.5; }
+.insight-ok {
+  margin-top: 10px; font-size: 12px; color: #67c23a;
+  background: #f0f9eb; border-radius: 8px; padding: 8px 10px;
 }
 </style>
