@@ -39,6 +39,10 @@ export interface StudentProject {
   is_team: boolean
   team_members: string | null
   attachment_url: string | null
+  tech_stack: string | null
+  my_role: string | null
+  project_link: string | null
+  description: string | null
 }
 
 export function getProjects() {

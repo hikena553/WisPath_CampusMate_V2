@@ -29,6 +29,10 @@ from app.api.grade_analysis import router as grade_analysis_router
 from app.api.profile import router as profile_router
 from app.api.lost_found import router as lost_found_router
 from app.api.voice import router as voice_router
+from app.api.plan import router as plan_router
+from app.api.community import router as community_router
+from app.api.portfolio import router as portfolio_router
+from app.api.resources import router as resources_router
 
 import logging
 
@@ -103,6 +107,10 @@ app.include_router(grade_analysis_router)
 app.include_router(profile_router)
 app.include_router(lost_found_router)
 app.include_router(voice_router)
+app.include_router(plan_router)
+app.include_router(community_router)
+app.include_router(portfolio_router)
+app.include_router(resources_router)
 
 
 @app.get("/api/health")

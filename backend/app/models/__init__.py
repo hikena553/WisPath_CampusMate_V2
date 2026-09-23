@@ -17,3 +17,7 @@ from app.models.feedback import Feedback, FeedbackType, FeedbackStatus
 from app.models.setting import SystemSetting
 from app.models.profile import StudentProfileSnapshot, ConversationSummary
 from app.models.lost_found import LostFoundItem, LostFoundComment
+from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin
+from app.models.community import CommunityPost, CommunityComment, CommunityLike
+from app.models.portfolio import StudentResume
+from app.models.favorite import ResourceFavorite

@@ -92,6 +92,11 @@ class StudentProjectCreate(BaseModel):
     is_team: bool = False
     team_members: str | None = None
     attachment_url: str | None = None
+    # 作品集扩展字段
+    tech_stack: str | None = None
+    my_role: str | None = None
+    project_link: str | None = None
+    description: str | None = None
 
 
 class StudentProjectOut(BaseModel):
@@ -103,5 +108,10 @@ class StudentProjectOut(BaseModel):
     is_team: bool
     team_members: str | None = None
     attachment_url: str | None = None
+    # 作品集扩展字段
+    tech_stack: str | None = None
+    my_role: str | None = None
+    project_link: str | None = None
+    description: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

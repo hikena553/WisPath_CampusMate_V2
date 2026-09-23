@@ -23,6 +23,32 @@ logger = logging.getLogger(__name__)
 # 确保数据库表存在
 Base.metadata.create_all(bind=engine)
 
+
+# ─── 增量迁移：为旧表补充新增列（兼容已初始化的数据库） ───
+def _migrate_legacy_columns():
+    """create_all 不会给已存在的表加列，这里对旧表做轻量 ALTER 补齐"""
+    from sqlalchemy import inspect, text as sa_text
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    # student_projects：作品集扩展字段
+    if "student_projects" in existing_tables:
+        cols = {c["name"] for c in inspector.get_columns("student_projects")}
+        additions = {
+            "tech_stack": "VARCHAR(500) NULL",
+            "my_role": "VARCHAR(200) NULL",
+            "project_link": "VARCHAR(500) NULL",
+            "description": "TEXT NULL",
+        }
+        with engine.begin() as conn:
+            for col, ddl in additions.items():
+                if col not in cols:
+                    conn.execute(sa_text(f"ALTER TABLE student_projects ADD COLUMN {col} {ddl}"))
+                    logging.getLogger(__name__).info(f"迁移：student_projects 新增列 {col}")
+
+
+_migrate_legacy_columns()
+
 db = SessionLocal()
 seeded = False
 

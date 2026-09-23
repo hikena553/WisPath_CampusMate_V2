@@ -59,3 +59,7 @@ class StudentProject(Base):
     is_team: Mapped[bool] = mapped_column(Boolean, default=False)
     team_members: Mapped[str | None] = mapped_column(String(500))
     attachment_url: Mapped[str | None] = mapped_column(String(255))
+    tech_stack: Mapped[str | None] = mapped_column(String(500), default=None, comment="技术栈")
+    my_role: Mapped[str | None] = mapped_column(String(200), default=None, comment="我的角色")
+    project_link: Mapped[str | None] = mapped_column(String(500), default=None, comment="项目链接")
+    description: Mapped[str | None] = mapped_column(Text, default=None, comment="项目描述")
