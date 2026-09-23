@@ -34,8 +34,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let silenceFrames = 0
   let speechFrames = 0
   let isSpeaking = false
-  let audioQueue: ArrayBuffer[] = []
-  let isPlaying = false
   let nextPlayTime = 0
 
   const VAD_ENERGY_THRESHOLD = 0.02

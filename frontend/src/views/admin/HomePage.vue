@@ -589,9 +589,9 @@ async function handleExport(role: 'student' | 'teacher') {
     } else if (data instanceof ArrayBuffer) {
       blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     } else {
-      const text = typeof data === 'string' ? data : JSON.stringify(data)
+      const text = typeof data === 'string' ? data : JSON.stringify(data) ?? ''
       if (text.includes('detail') || text.includes('error')) throw new Error(text)
-      blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      blob = new Blob([text], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     }
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')

@@ -5,6 +5,18 @@ export function getLostFoundItems(params?: { type?: string; status?: string }) {
   return request.get<LostFoundItem[]>('/lost-found/items', { params })
 }
 
+export interface LostFoundSearchResult {
+  keyword: string
+  found: boolean
+  scanned: number
+  matched: LostFoundItem[]
+  candidates: LostFoundItem[]
+}
+
+export function searchLostFoundItems(params: { q: string; type?: string; limit?: number }) {
+  return request.get<LostFoundSearchResult>('/lost-found/search', { params })
+}
+
 export function getLostFoundItem(id: number) {
   return request.get<LostFoundItem>(`/lost-found/items/${id}`)
 }

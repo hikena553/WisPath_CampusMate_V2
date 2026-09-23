@@ -1,8 +1,18 @@
 ﻿<template>
   <div class="schedule-page">
-    <!-- ===== 两栏布局：内容 + 右侧栏 ===== -->
-    <div class="content-row">
+    <!-- ===== 移动端：驾驶舱主页（成长总览 + 内置学业功能区，子页面入口） ===== -->
+    <div v-if="isMobile && activeTab === 'home'" class="dashboard-home">
+      <GrowthDashboard @open="tab => activeTab = tab" />
+    </div>
+    <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 ===== -->
+    <div v-else class="content-row">
       <div class="content-main">
+        <!-- 移动端子页面返回栏 -->
+        <div v-if="isMobile" class="subpage-bar" @click="activeTab = 'home'">
+          <el-icon :size="18"><ArrowLeft /></el-icon>
+          <span class="subpage-title">{{ subPageTitle }}</span>
+          <span class="subpage-spacer"></span>
+        </div>
         <Transition name="tab-fade" mode="out-in">
         <div v-if="activeTab === 'schedule'" key="schedule" class="schedule-view">
           <div v-if="!scheduleReady" class="loading-box">
@@ -839,8 +849,8 @@
           </template>
         </el-dialog>
     </div>
-    <!-- ===== 右侧垂直标签栏（位于 content-row 内，横向排列靠右） ===== -->
-    <div class="page-tabs">
+    <!-- ===== 右侧垂直标签栏（桌面端），移动端由驾驶舱入口卡片代替 ===== -->
+    <div class="page-tabs" v-if="!isMobile">
       <div :class="['page-tab', { active: activeTab === 'schedule' }]" @click="activeTab = 'schedule'">
         <el-icon><Calendar /></el-icon> 课程表
       </div>
@@ -860,7 +870,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
-import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, Grid, PieChart as PieChartIcon, Close, Aim } from '@element-plus/icons-vue'
+import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, PieChart as PieChartIcon, Close, Aim } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElCollapseTransition } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -876,13 +886,26 @@ import type { GrowthProfile, StudentProject } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
 import { renderMarkdown } from '@/utils/markdown'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
+import GrowthDashboard from '@/components/growth/GrowthDashboard.vue'
 
 use([LineChart, BarChart, PieChart, RadarChart, GridComponent, TooltipComponent, MarkLineComponent, LegendComponent, RadarComponent, CanvasRenderer])
 
 const auth = useAuthStore()
 const route = useRoute()
 const { isMobile } = useResponsive()
-const activeTab = ref((route.query.tab as string) || 'schedule')
+
+// ===== 视图状态：home=驾驶舱主页（移动端），schedule/grades/growth=学业子页面 =====
+const tabKeys = ['schedule', 'grades', 'growth'] as const
+const validInitTab = (route.query.tab as string) || ''
+const activeTab = ref<string>(
+  (tabKeys as readonly string[]).includes(validInitTab)
+    ? validInitTab
+    : isMobile.value ? 'home' : 'schedule'
+)
+const subPageTitle = computed(() => {
+  const map: Record<string, string> = { schedule: '课程表', grades: '成绩分析', growth: '成长轨迹' }
+  return map[activeTab.value] || '学业中心'
+})
 
 // ===== 移动端：课程画像折叠（默认收起，点击标题行展开；桌面端恒为展开） =====
 const courseProfileOpen = ref(false)
@@ -1232,10 +1255,6 @@ const visibleGrades = computed(() => {
   const list = selectedSem.value ? gradesBySem.value[selectedSem.value] || [] : []
   return list.slice(0, maxVisible.value)
 })
-const hasMoreGrades = computed(() => {
-  const list = selectedSem.value ? gradesBySem.value[selectedSem.value] || [] : []
-  return list.length > maxVisible.value
-})
 
 watch(selectedSem, () => nextTick(updateGradeCols))
 onMounted(() => { updateGradeCols(); window.addEventListener('resize', updateGradeCols) })
@@ -1458,21 +1477,6 @@ const growthLineOption = computed(() => {
     animationDuration: 2000, animationEasing: 'cubicOut' as const,
   }
 })
-const gpaOption = computed(() => {
-  const data = profile.value?.gpa_trend ?? []
-  if (!data.length) return {}
-  const semLabels = data.map(d => d.semester.replace('2023-2024-1', '23-24 上').replace('2023-2024-2', '23-24 下').replace('2024-2025-1', '24-25 上').replace('2024-2025-2', '24-25 下'))
-  const values = data.map(d => d.gpa)
-  const minGpa = Math.max(0, Math.floor(Math.min(...values) * 10) / 10 - 0.3)
-  return {
-    tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].axisValue}<br/>平均绩点: ${p[0].value}` },
-    grid: { left: 32, right: 60, top: 30, bottom: 40 },
-    xAxis: { type: 'category', data: semLabels, name: '学期', nameLocation: 'center', nameGap: 25, axisLabel: { color: '#666', fontSize: 13 } },
-    yAxis: { type: 'value', min: minGpa, max: 4.0, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
-    series: [{ type: 'line', data: values, smooth: true, symbol: 'circle', symbolSize: 10, lineStyle: { color: '#e6a23c', width: 3 }, itemStyle: { color: '#e6a23c' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#e6a23c40' }, { offset: 1, color: '#e6a23c05' }] } }, markLine: { data: [{ yAxis: 3.5, label: { formatter: '优秀线 3.5', color: '#67c23a' } }, { yAxis: 2.5, label: { formatter: '警戒线 2.5', color: '#f56c6c' } }], silent: true, lineStyle: { type: 'dashed' } }, animationDuration: 2000, animationEasing: 'cubicOut' as const, animationDelay: function(idx: number) { return idx * 200 } }],
-    animationDuration: 2000, animationEasing: 'cubicOut' as const,
-  }
-})
 
 onMounted(async () => {
   loadGoals()
@@ -1510,12 +1514,32 @@ watch(semesters, (list) => {
   for (const sem of list) { if (goalInputs.value[sem] == null) { goalInputs.value[sem] = goals.value[sem] ?? 3.5 } }
 })
 
-watch(() => route.query.tab, (val) => { if (val && typeof val === 'string') activeTab.value = val })
+watch(() => route.query.tab, (val) => {
+  if (val && typeof val === 'string') {
+    const t = val as string
+    if ((tabKeys as readonly string[]).includes(t)) activeTab.value = t
+    else if (t === 'home' && isMobile.value) activeTab.value = 'home'
+  }
+})
 </script>
 
 <style scoped>
 .schedule-page { height: 100%; width: 100%; padding: 12px 16px 0; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .schedule-page::-webkit-scrollbar { display: none; }
+
+/* AI 成长驾驶舱区块（学业中心移动端顶部） */
+/* ===== 移动端：驾驶舱主页 ===== */
+.dashboard-home { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
+
+/* 移动端子页面：返回栏 */
+.subpage-bar {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  padding: 9px 14px; background: #fff; border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer;
+}
+.subpage-bar .el-icon { color: #409eff; font-weight: 700; }
+.subpage-title { font-size: 15px; font-weight: 700; color: #1f2937; flex: 1; text-align: center; }
+.subpage-spacer { width: 18px; }
 
 /* ===== 页签切换动画 ===== */
 .tab-fade-enter-active { transition: opacity .32s cubic-bezier(.16,1,.3,1), transform .32s cubic-bezier(.16,1,.3,1); }

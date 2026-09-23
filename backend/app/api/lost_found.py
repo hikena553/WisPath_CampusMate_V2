@@ -64,6 +64,32 @@ def list_items(
     return [_item_out(db, it) for it in items]
 
 
+@router.get("/search")
+def search_items(
+    q: str = Query(..., min_length=1, description="物品关键词，如 保温杯 / 校园卡"),
+    type: str = Query(default="all", description="lost / found / all"),
+    limit: int = Query(default=5, ge=1, le=20),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """关键词检索失物招领处。
+
+    命中时 matched 非空；未命中时 matched 为空、candidates 给出最新待处理记录，
+    供前端提示"没有直接匹配，是否直接登记"。
+    """
+    from app.services.lost_found_service import search_lost_found_items
+
+    item_type = type if type in ("lost", "found") else "all"
+    result = search_lost_found_items(db, q.strip(), item_type, limit)
+    return {
+        "keyword": q.strip(),
+        "found": bool(result["matches"]),
+        "scanned": result["scanned"],
+        "matched": [_item_out(db, it) for it, _score in result["matches"]],
+        "candidates": [_item_out(db, it) for it in result["candidates"]],
+    }
+
+
 @router.get("/items/{item_id}", response_model=LostFoundItemOut)
 def get_item(item_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     item = db.query(LostFoundItem).filter(LostFoundItem.id == item_id).first()

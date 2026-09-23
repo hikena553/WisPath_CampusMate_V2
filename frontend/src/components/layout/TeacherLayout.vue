@@ -1,5 +1,5 @@
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'app-mobile': isMobile }">
     <header v-if="!isMobile" class="topbar">
       <div class="topbar-left" style="cursor:pointer" @click="goTo('/teacher')">
         <img src="/images/校徽_圆形.png" class="topbar-badge" />
@@ -193,7 +193,7 @@ import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
-  HomeFilled, ChatDotRound, User, Message, Notebook,
+  HomeFilled, ChatDotRound, User, Message, Notebook, Stamp, WarningFilled,
   SwitchButton, CameraFilled, Fold, Expand
 } from '@element-plus/icons-vue'
 
@@ -221,6 +221,8 @@ const navItems = [
   { path: '/teacher', label: '首页', icon: HomeFilled },
   { path: '/teacher/agent', label: '智能助手', icon: ChatDotRound },
   { path: '/teacher/students', label: '学生档案', icon: Notebook },
+  { path: '/teacher/approval', label: '审批管理', icon: Stamp },
+  { path: '/teacher/crisis', label: '预警工作台', icon: WarningFilled },
   { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
 ]
 
@@ -236,7 +238,7 @@ const activeNavKey = computed(() => {
   const p = route.path
   if (p === '/teacher') return 'home'
   if (p.startsWith('/teacher/agent')) return 'agent'
-  if (p.startsWith('/teacher/students')) return 'students'
+  if (p.startsWith('/teacher/students') || p.startsWith('/teacher/approval') || p.startsWith('/teacher/crisis')) return 'students'
   if (p.startsWith('/teacher/messages')) return 'messages'
   if (p.startsWith('/teacher/profile')) return 'profile'
   return 'home'
@@ -417,7 +419,7 @@ async function handleSaveProfile() {
 </script>
 
 <style>
-body { overflow: hidden; margin: 0; }
+body { overflow: hidden; margin: 0; background-color: #0f172a; }
 </style>
 <style scoped>
 .app-shell {
@@ -425,6 +427,22 @@ body { overflow: hidden; margin: 0; }
   flex-direction: column;
   height: 100vh;
   background: linear-gradient(135deg, #f5faff 0%, #f0f8ff 50%, #f8fbff 100%);
+}
+
+/* 移动(App)模式：宽屏下模拟手机容器，居中限宽，交互限制在窄屏内 */
+.app-mobile {
+  max-width: 440px;
+  margin: 0 auto;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
+}
+
+/* 底部导航同样限宽居中，贴合手机容器 */
+.app-mobile :deep(.mobile-tab-bar) {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  left: 0;
+  right: 0;
 }
 
 /* ===== Topbar ===== */

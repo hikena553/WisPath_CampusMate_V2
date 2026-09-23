@@ -15,7 +15,7 @@
             </el-tag>
           </div>
           <!-- 桌面端表格 -->
-          <div class="desktop-table">
+          <div class="desktop-table" v-if="!isMobile">
             <el-table :data="paginatedPendingLeaves" v-if="pendingLeaves.length" style="width:100%"
               :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
               <el-table-column prop="student_name" label="学生" width="100" />
@@ -58,7 +58,7 @@
             </el-table>
           </div>
           <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="paginatedPendingLeaves.length">
+          <div class="mobile-cards" v-if="isMobile && paginatedPendingLeaves.length">
             <div class="mobile-card" v-for="row in paginatedPendingLeaves" :key="row.id">
               <div class="mobile-card-header">
                 <span class="mobile-card-student">{{ row.student_name }}</span>
@@ -123,7 +123,7 @@
             </el-tag>
           </div>
           <!-- 桌面端表格 -->
-          <div class="desktop-table">
+          <div class="desktop-table" v-if="!isMobile">
             <el-table :data="paginatedPendingTickets" v-if="pendingTickets.length" style="width:100%"
               :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
               <el-table-column prop="type" label="类型" width="90">
@@ -146,7 +146,7 @@
             </el-table>
           </div>
           <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="paginatedPendingTickets.length">
+          <div class="mobile-cards" v-if="isMobile && paginatedPendingTickets.length">
             <div class="mobile-card" v-for="row in paginatedPendingTickets" :key="row.id">
               <div class="mobile-card-header">
                 <span class="mobile-card-student">{{ row.title }}</span>
@@ -189,7 +189,7 @@
             <h3><el-icon><CircleCheck /></el-icon> 已通过请假</h3>
           </div>
           <!-- 桌面端表格 -->
-          <div class="desktop-table">
+          <div class="desktop-table" v-if="!isMobile">
             <el-table :data="paginatedApprovedLeaves" v-if="approvedLeaves.length" style="width:100%"
               :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
               <el-table-column prop="student_name" label="学生" width="100" />
@@ -209,7 +209,7 @@
             </el-table>
           </div>
           <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="paginatedApprovedLeaves.length">
+          <div class="mobile-cards" v-if="isMobile && paginatedApprovedLeaves.length">
             <div class="mobile-card" v-for="row in paginatedApprovedLeaves" :key="row.id">
               <div class="mobile-card-header">
                 <span class="mobile-card-student">{{ row.student_name }}</span>
@@ -251,7 +251,7 @@
             <h3><el-icon><CircleClose /></el-icon> 已拒绝请假</h3>
           </div>
           <!-- 桌面端表格 -->
-          <div class="desktop-table">
+          <div class="desktop-table" v-if="!isMobile">
             <el-table :data="paginatedRejectedLeaves" v-if="rejectedLeaves.length" style="width:100%"
               :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
               <el-table-column prop="student_name" label="学生" width="100" />
@@ -272,7 +272,7 @@
             </el-table>
           </div>
           <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="paginatedRejectedLeaves.length">
+          <div class="mobile-cards" v-if="isMobile && paginatedRejectedLeaves.length">
             <div class="mobile-card" v-for="row in paginatedRejectedLeaves" :key="row.id">
               <div class="mobile-card-header">
                 <span class="mobile-card-student">{{ row.student_name }}</span>
@@ -337,6 +337,9 @@ import {
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
+import { useResponsive } from '@/composables/useResponsive'
+
+const { isMobile } = useResponsive()
 
 const activeTab = ref('pending')
 const pendingLeaves = ref<LeaveRequestOut[]>([])

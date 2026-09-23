@@ -1,4 +1,8 @@
+import base64
+import json
 import logging
+import re
+
 import httpx
 from datetime import date
 from openai import AsyncOpenAI, APIError
@@ -23,7 +27,8 @@ def _get_db_settings() -> dict:
         db_settings = db.query(SystemSetting).filter(
             SystemSetting.key.in_([
                 'llm_api_key', 'llm_base_url', 'llm_model',
-                'llm_agent_model', 'llm_agent_temperature', 'llm_agent_max_tokens'
+                'llm_agent_model', 'llm_vision_model',
+                'llm_agent_temperature', 'llm_agent_max_tokens'
             ])
         ).all()
         return {s.key: s.value for s in db_settings}
@@ -55,6 +60,7 @@ def _get_llm_config() -> dict:
         'base_url': _val('llm_base_url', settings.LLM_BASE_URL),
         'model': _val('llm_model', settings.LLM_MODEL, "qwen-turbo"),
         'agent_model': _val('llm_agent_model', settings.LLM_AGENT_MODEL),
+        'vision_model': _val('llm_vision_model', settings.LLM_VISION_MODEL, "qwen-vl-plus"),
         'temperature': float(_val('llm_agent_temperature', str(settings.LLM_AGENT_TEMPERATURE), "0.5")),
         'max_tokens': int(_val('llm_agent_max_tokens', str(settings.LLM_AGENT_MAX_TOKENS), "4096")),
     }
@@ -90,6 +96,19 @@ def build_system_prompt(user: User | None = None) -> str:
 4. 查课表 → query_schedule | 5. 查成绩 → query_grades | 6. 查考试 → query_exams
 7. 查知识 → query_knowledge | 8. 查风景 → query_sceneries | 9. 查通知 → query_announcements
 10. 成绩分析 → analyze_grades | 11. 课表分析 → analyze_schedule | 12. 成长分析 → analyze_growth
+13. 失物招领 → search_lost_found（检索）+ create_lost_found（登记）
+
+## 失物招领（重点能力）
+学生说"我丢了…"、"我的…不见了"、"帮我找找…"、"我捡到了…"时，按下面流程处理，不要让学生自己去失物招领页面：
+1. 先确定物品关键词（如"保温杯"、"校园卡"），信息不足时先反问学生补充丢失/拾取地点与时间
+2. 必须先调用 search_lost_found 检索失物招领处（学生丢东西时 item_type 传 found，学生捡到东西时传 lost）
+3. 检索到匹配记录 → 直接把发布者、地点、联系方式、发布时间告诉学生，并提醒尽快联系认领，**不要**再调用 create_lost_found
+4. 只返回 candidates（没有直接匹配）→ 先自行判断候选里是否其实就有该物品；确实没有再调用 create_lost_found
+5. 确认没有记录 → 调用 create_lost_found 帮学生登记（学生丢东西 type=lost，捡到东西 type=found），title 用物品名称，description 写清特征，location 写丢失/拾取地点，image_url 用图片地址
+6. 登记成功后把记录编号和内容复述给学生确认
+
+消息含 [物品识别结果…] 时：这是学生上传的物品照片经视觉模型识别后的结构化信息，可直接用作关键词和登记内容；若学生没说明丢失还是捡到，默认按"丢了"（type=lost）处理并向学生确认。
+消息含 [图片识别失败…] 时：不要编造物品信息，先请学生用文字描述物品名称、颜色、特征和丢失地点。
 
 ## 上传文件与成长记录
 消息含 [用户上传了证明材料: URL] 时：
@@ -102,7 +121,7 @@ def build_system_prompt(user: User | None = None) -> str:
 项目类型对话时，你作为项目经理引导用户推进阶段任务，完成时更新阶段并记录成果。
 
 ## 规则
-- 请假/获奖立即调用对应工具，不要让学生去其他页面
+- 请假/获奖/失物招领立即调用对应工具，不要让学生去其他页面
 - 回答简洁，控制在150字以内
 - 信息模糊时反问补充，确认后再执行
 - 请假类型映射：比赛/竞赛→competition，生病→sick，事假/个人→personal，其他→other
@@ -129,19 +148,145 @@ def build_system_prompt(user: User | None = None) -> str:
 
 
 def speech_to_text(audio_bytes: bytes, filename: str) -> str:
+    """调用 Token Plan 语音识别（qwen-audio-3.0-asr-flash，多模态生成端点）"""
     config = _get_llm_config()
     if not config['api_key']:
         raise RuntimeError("LLM 未配置 API Key")
-    url = f"{config['base_url'].rstrip('/')}/audio/transcriptions"
-    files = {"file": (filename, audio_bytes, "audio/webm")}
-    headers = {"Authorization": f"Bearer {config['api_key']}"}
+
+    name_lower = (filename or "").lower()
+    if name_lower.endswith(".mp3"):
+        mime, fmt = "audio/mpeg", "mp3"
+    elif name_lower.endswith(".opus") or name_lower.endswith(".ogg"):
+        mime, fmt = "audio/ogg", "opus"
+    else:
+        mime, fmt = "audio/wav", "wav"
+    data_uri = f"data:{mime};base64," + base64.b64encode(audio_bytes).decode()
+
+    payload = {
+        "model": "qwen-audio-3.0-asr-flash",
+        "input": {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_audio", "input_audio": {"data": data_uri}},
+                    ],
+                }
+            ]
+        },
+        "parameters": {"format": fmt, "sample_rate": "16000"},
+    }
+    url = "https://token-plan.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    headers = {"Authorization": f"Bearer {config['api_key']}", "Content-Type": "application/json"}
     try:
-        resp = httpx.post(url, headers=headers, files=files, timeout=30)
+        resp = httpx.post(url, headers=headers, json=payload, timeout=120)
         resp.raise_for_status()
-        data = resp.json()
-        return data.get("text", "")
+        body = resp.json()
+        out = body.get("output") or body
+        return (out.get("text") or (out.get("sentence") or {}).get("text") or "").strip()
     except Exception as e:
         raise RuntimeError(f"语音识别失败: {e}")
+
+
+_IMAGE_RECOGNIZE_PROMPT = """请识别这张图片，用于校园失物招领与成长档案场景。只依据图片中真实可见的内容作答，不要编造。
+
+以严格 JSON 返回（不要额外文字、不要代码块标记）：
+{
+  "is_document": false,
+  "category": "",
+  "name": "",
+  "color": "",
+  "brand": "",
+  "features": "",
+  "document_type": "",
+  "document_title": "",
+  "description": ""
+}
+
+字段说明：
+- is_document: 是否为证书/奖状/成绩单/证明类文档
+- category: 物品大类，如 水杯/钱包/耳机/钥匙/雨伞/校园卡/书包/充电器/证书/其他
+- name: 一句话物品名称，含颜色等关键特征，如"黑色保温杯"
+- features: 显著外观特征、磨损、挂件、内含物等
+- document_type: 仅当 is_document 为 true 时填写（荣誉证书/竞赛获奖/成绩单/其他证明）
+- document_title: 仅当 is_document 为 true 时尽量提取标题原文
+- description: 50 字以内综合描述"""
+
+
+def _parse_json_loose(text: str) -> dict | None:
+    """从可能带代码块或前后缀文字的模型回复中提取第一个 JSON 对象。"""
+    if not text:
+        return None
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        data = json.loads(cleaned)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(0))
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+async def recognize_image(image_url: str, hint: str = "") -> dict:
+    """调用多模态模型识别图片内容。
+
+    成功返回 {"success": True, ...识别字段}；
+    不可用时返回 {"success": False, "reason": ...}，调用方必须降级为让用户文字描述。
+    """
+    from app.utils.image_utils import to_data_url
+
+    config = _get_llm_config()
+    vision_model = config.get('vision_model')
+    if not vision_model:
+        return {"success": False, "reason": "未配置视觉模型 LLM_VISION_MODEL"}
+    if not config['api_key']:
+        return {"success": False, "reason": "未配置 LLM API Key"}
+
+    data_url = to_data_url(image_url)
+    if not data_url:
+        # 本地文件读不到时，公网地址可直接交给模型
+        if image_url.startswith(("http://", "https://")):
+            data_url = image_url
+        else:
+            return {"success": False, "reason": "图片文件无法读取"}
+
+    prompt = _IMAGE_RECOGNIZE_PROMPT
+    if hint:
+        prompt += f"\n\n用户附带的说明（可作为判断线索）：{hint[:300]}"
+
+    try:
+        resp = await _get_client().chat.completions.create(
+            model=vision_model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+            temperature=0.2,
+            max_tokens=600,
+        )
+    except Exception as e:
+        logger.warning("图片识别调用失败（model=%s）: %s", vision_model, e)
+        return {"success": False, "reason": f"图片识别服务不可用: {e}"}
+
+    content = (resp.choices[0].message.content or "").strip()
+    parsed = _parse_json_loose(content)
+    if not parsed:
+        return {"success": False, "reason": "图片识别结果无法解析", "raw": content[:200]}
+    parsed["success"] = True
+    logger.info("图片识别成功: category=%s name=%s", parsed.get("category"), parsed.get("name"))
+    return parsed
 
 
 async def chat_stream(messages: list[dict]):

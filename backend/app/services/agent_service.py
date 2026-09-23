@@ -207,6 +207,60 @@ async def generate_reply(prompt: str, user: User):
         yield "抱歉，分析暂时不可用，请稍后再试。"
 
 
+async def _build_file_context(file_url: str, message: str) -> str:
+    """把上传文件转成模型可理解的上下文。
+
+    - 图片：先用视觉模型识别。证书类文档 → 走成长档案证明材料流程；
+      普通物品 → 注入结构化物品信息，供失物招领检索与登记使用。
+    - 识别失败或非图片文件：降级为文字说明，绝不编造识别内容。
+    """
+    from app.utils.image_utils import is_image_file
+    from app.services.llm_service import recognize_image
+
+    if not is_image_file(file_url):
+        return f"[用户上传了证明材料: {file_url}]\n{message}"
+
+    try:
+        info = await recognize_image(file_url, message)
+    except Exception:
+        logger.exception("图片识别异常")
+        info = {"success": False, "reason": "识别服务异常"}
+
+    if not info.get("success"):
+        return (
+            f"[图片识别失败: {info.get('reason') or '未知原因'}]\n"
+            f"[用户上传了图片: {file_url}]\n{message}"
+        )
+
+    if info.get("is_document"):
+        doc_parts = []
+        for label, key in (("类型", "document_type"), ("标题", "document_title"), ("内容摘要", "description")):
+            val = str(info.get(key) or "").strip()
+            if val:
+                doc_parts.append(f"{label}: {val}")
+        extra = ("\n" + "\n".join(doc_parts)) if doc_parts else ""
+        return f"[用户上传了证明材料: {file_url}]\n[材料识别结果]{extra}\n{message}"
+
+    parts = []
+    for label, key in (("类别", "category"), ("名称", "name"), ("颜色", "color"),
+                       ("品牌", "brand"), ("特征", "features"), ("描述", "description")):
+        val = str(info.get(key) or "").strip()
+        if val:
+            parts.append(f"{label}: {val}")
+    if not parts:
+        return (
+            f"[图片识别失败: 未识别出有效物品信息]\n"
+            f"[用户上传了图片: {file_url}]\n{message}"
+        )
+
+    keyword = str(info.get("name") or info.get("category") or "").strip()
+    return (
+        f"[物品识别结果]\n" + "\n".join(parts) +
+        f"\n[建议检索关键词: {keyword or '见上'}]"
+        f"\n[物品图片地址: {file_url}]\n{message}"
+    )
+
+
 async def chat(message: str, history: list[dict], user: User, conv_id: int | None = None, file_url: str | None = None, deep_think: bool = False):
     system_prompt = build_system_prompt(user)
 
@@ -238,33 +292,61 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
         messages.append(h)
     user_content = message
     if file_url:
-        user_content = f"[用户上传了证明材料: {file_url}]\n{message}"
+        from app.utils.image_utils import is_image_file
+        if is_image_file(file_url):
+            yield {"type": "reasoning", "content": "正在识别图片内容…\n"}
+        try:
+            user_content = await _build_file_context(file_url, message)
+        except Exception:
+            logger.exception("构建文件上下文失败")
+            user_content = f"[用户上传了文件: {file_url}]\n{message}"
     messages.append({"role": "user", "content": user_content})
 
     try:
         tools = TOOL_DEFINITIONS if user.role == UserRole.STUDENT else TEACHER_TOOL_DEFINITIONS
         full_reply = ""
         full_thinking = ""
-        tool_calls_detected = None
+        # 允许多轮工具调用，支持"先检索失物招领、没有再登记"这类多步流程
+        MAX_TOOL_ROUNDS = 3
 
-        stream = call_llm_stream(messages, tools, deep_think=deep_think)
-        async for event_type, data in stream:
-            if event_type == "reasoning":
-                full_thinking += data
-                yield {"type": "reasoning", "content": data}
-            elif event_type == "chunk":
-                full_reply += data
-                yield {"type": "content", "content": data}
-            elif event_type == "tool_calls":
-                tool_calls_detected = data
+        for round_idx in range(MAX_TOOL_ROUNDS + 1):
+            # 最后一轮不再提供工具，强制模型收敛为自然语言回复
+            round_tools = tools if round_idx < MAX_TOOL_ROUNDS else []
+            tool_calls_detected = None
+
+            stream = call_llm_stream(messages, round_tools, deep_think=deep_think)
+            async for event_type, data in stream:
+                if event_type == "reasoning":
+                    full_thinking += data
+                    yield {"type": "reasoning", "content": data}
+                elif event_type == "chunk":
+                    full_reply += data
+                    yield {"type": "content", "content": data}
+                elif event_type == "tool_calls":
+                    tool_calls_detected = data
+                    break
+                elif event_type == "done":
+                    full_reply = data
+                elif event_type == "error":
+                    yield {"type": "content", "content": "抱歉，我暂时无法回答，请稍后再试。"}
+                    return
+
+            if not tool_calls_detected:
                 break
-            elif event_type == "done":
-                full_reply = data
-            elif event_type == "error":
-                yield {"type": "content", "content": "抱歉，我暂时无法回答，请稍后再试。"}
-                return
 
-        if tool_calls_detected:
+            # 按 OpenAI 协议：一条 assistant 消息承载本轮全部 tool_calls，再逐个追加 tool 结果
+            messages.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in tool_calls_detected
+                ],
+            })
             for tc in tool_calls_detected:
                 fn_name = tc.function.name
                 try:
@@ -273,27 +355,13 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
                     fn_args = {}
                 result = await execute_tool(fn_name, fn_args, user, conv_id=conv_id)
                 messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [{"id": tc.id, "type": "function", "function": {"name": fn_name, "arguments": tc.function.arguments}}]
-                })
-                messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
                     "content": json.dumps(result, ensure_ascii=False)
                 })
 
+            # 工具执行细节不面向用户，清空累积文本，等待下一轮生成最终回复
             full_reply = ""
-            second_stream = call_llm_stream(messages, [], deep_think=deep_think)
-            async for event_type2, data2 in second_stream:
-                if event_type2 == "reasoning":
-                    full_thinking += data2
-                    yield {"type": "reasoning", "content": data2}
-                elif event_type2 == "chunk":
-                    full_reply += data2
-                    yield {"type": "content", "content": data2}
-                elif event_type2 == "done":
-                    full_reply = data2
 
         suggestions = _extract_suggestions(full_reply)
         if suggestions:

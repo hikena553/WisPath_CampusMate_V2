@@ -20,6 +20,7 @@ from app.api.messages import router as messages_router
 from app.api.groups import router as groups_router
 from app.api.announcement import router as announcement_router
 from app.api.admin import router as admin_router
+from app.api.knowledge import router as knowledge_router
 from app.api.organization import router as organization_router
 from app.api.notification import router as notification_router
 from app.api.feedback import router as feedback_router
@@ -93,6 +94,7 @@ app.include_router(messages_router)
 app.include_router(groups_router)
 app.include_router(announcement_router)
 app.include_router(admin_router)
+app.include_router(knowledge_router)
 app.include_router(organization_router)
 app.include_router(notification_router)
 app.include_router(feedback_router)

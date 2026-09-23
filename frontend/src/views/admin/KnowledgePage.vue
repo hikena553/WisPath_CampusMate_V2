@@ -97,6 +97,61 @@
           />
         </div>
       </el-tab-pane>
+
+      <el-tab-pane label="RAG 检索测试" name="rag">
+        <div class="rag-panel">
+          <div class="rag-search">
+            <el-input
+              v-model="ragQuery"
+              placeholder="输入检索词，验证问答对与文档分块的混合召回……"
+              :prefix-icon="Search"
+              clearable
+              @keyup.enter="doRagSearch"
+            />
+            <el-button type="primary" :icon="Search" :loading="ragLoading" @click="doRagSearch">检索</el-button>
+          </div>
+          <el-radio-group v-model="ragLimit" size="small" style="margin-bottom:12px">
+            <el-radio-button :value="5">5 条</el-radio-button>
+            <el-radio-button :value="10">10 条</el-radio-button>
+            <el-radio-button :value="20">20 条</el-radio-button>
+          </el-radio-group>
+
+          <div v-loading="ragLoading" class="rag-results" v-if="ragHits.length > 0">
+            <el-alert
+              v-if="ragTraceId"
+              :title="`检索完成 · trace_id：${ragTraceId}`"
+              type="success"
+              :closable="false"
+              style="margin-bottom:12px"
+            />
+            <div v-for="(hit, i) in ragHits" :key="i" class="rag-item">
+              <div class="rag-item-head">
+                <el-tag :type="hit.type === 'qa' ? 'success' : 'warning'" size="small" effect="dark">
+                  {{ hit.type === 'qa' ? '智能问答' : '文档分块' }}
+                </el-tag>
+                <template v-if="hit.type === 'qa'">
+                  <span class="rag-cat" v-if="hit.category">{{ hit.category }}</span>
+                </template>
+                <template v-else>
+                  <span class="rag-cat">文档 #{{ hit.document_id }}</span>
+                </template>
+              </div>
+              <template v-if="hit.type === 'qa'">
+                <div class="rag-question">{{ hit.question }}</div>
+                <div class="rag-answer">{{ hit.answer }}</div>
+              </template>
+              <template v-else>
+                <div class="rag-answer">{{ hit.content }}</div>
+              </template>
+            </div>
+          </div>
+          <el-empty
+            v-else-if="!ragLoading && ragSearched"
+            description="未检索到匹配内容，尝试更换关键词"
+            :image-size="80"
+          />
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 添加/编辑对话框 -->
@@ -138,6 +193,7 @@ import {
   uploadDocument, getDocumentList, deleteDocument,
   type KnowledgeItem, type DocumentInfo,
 } from '@/api/admin'
+import { searchKnowledgeRaw, type KnowledgeHit } from '@/api/knowledge'
 
 const activeTab = ref('qa')
 const items = ref<KnowledgeItem[]>([])
@@ -147,6 +203,37 @@ const searchText = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const submitting = ref(false)
+
+// RAG 检索测试
+const ragQuery = ref('')
+const ragLimit = ref(10)
+const ragHits = ref<KnowledgeHit[]>([])
+const ragLoading = ref(false)
+const ragSearched = ref(false)
+const ragTraceId = ref('')
+
+async function doRagSearch() {
+  const q = ragQuery.value.trim()
+  if (!q) {
+    ElMessage.warning('请输入检索关键词')
+    return
+  }
+  ragLoading.value = true
+  ragSearched.value = true
+  try {
+    const res = await searchKnowledgeWithTrace(q, ragLimit.value)
+    ragHits.value = res.hits
+    ragTraceId.value = res.trace_id
+  } finally {
+    ragLoading.value = false
+  }
+}
+
+// 检索并回传 trace_id，便于管理端演示 RAG 链路追踪（接口规范 §6）
+async function searchKnowledgeWithTrace(q: string, limit: number) {
+  const data = await searchKnowledgeRaw(q, limit)
+  return { hits: data.results, trace_id: data.trace_id }
+}
 
 // 问答对分页相关状态
 const currentItemPage = ref(1)
@@ -345,5 +432,54 @@ onMounted(() => {
   justify-content: flex-end;
   margin-top: 10px;
   padding: 8px 0;
+}
+
+/* RAG 检索测试 */
+.rag-search {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rag-search .el-input {
+  flex: 1;
+}
+
+.rag-results {
+  margin-top: 12px;
+}
+
+.rag-item {
+  background: #f7f9fc;
+  border: 1px solid #eef0f4;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.rag-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rag-cat {
+  font-size: 12px;
+  color: #8a94a6;
+}
+
+.rag-question {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.rag-answer {
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.7;
+  white-space: pre-line;
 }
 </style>

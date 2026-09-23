@@ -131,6 +131,34 @@ export async function sendChatMessage(
 }
 
 
+export interface ProactiveAction {
+  trigger: string
+  student_id: number
+  priority: number
+  action_type: string
+  title: string
+  content: string
+  target_role: string
+}
+
+/** AI 主动发现驾驶舱：拉取当前角色相关的主动触达动作 */
+export async function fetchProactiveActions(): Promise<ProactiveAction[]> {
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  try {
+    const resp = await fetch('/api/agent/proactive', { headers })
+    if (resp.ok) {
+      const data = await resp.json()
+      return data.actions || []
+    }
+  } catch (e) {
+    console.error('获取主动发现动作失败', e)
+  }
+  return []
+}
+
+
 export async function fetchRecommendations(): Promise<string[]> {
   const headers: Record<string, string> = {}
   const token = getToken()

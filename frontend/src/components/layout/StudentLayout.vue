@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell">
-    <header class="topbar">
+  <div class="app-shell" :class="{ 'app-mobile': isMobile }">
+    <header class="topbar" :class="{ 'topbar-mobile': isMobile }">
       <div class="topbar-left" style="cursor:pointer" @click="goTo('/student')">
         <img src="/images/校徽_圆形.png" class="topbar-badge" />
         <span class="logo">绵小城</span>
@@ -19,9 +19,13 @@
             <el-icon :size="16"><PictureFilled /></el-icon>
             <span>校园资讯</span>
           </div>
-          <div class="nav-item" :class="{ 'nav-active': route.path === '/student/schedule' }" @click="goTo('/student/schedule')">
+          <div class="nav-item" :class="{ 'nav-active': route.path === '/student/schedule' || route.path.startsWith('/student/growth') }" @click="goTo('/student/schedule')">
             <el-icon :size="16"><Calendar /></el-icon>
-            <span>学业中心</span>
+            <span>驾驶舱</span>
+          </div>
+          <div class="nav-item" :class="{ 'nav-active': route.path === '/student/resources' }" @click="goTo('/student/resources')">
+            <el-icon :size="16"><Collection /></el-icon>
+            <span>AI 资源空间</span>
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path === '/student/service' }" @click="goTo('/student/service')">
             <el-icon :size="16"><Service /></el-icon>
@@ -208,7 +212,7 @@ import StudentContactPanel from '@/components/chat/StudentContactPanel.vue'
 import { getConversations } from '@/api/messages'
 import { getGroups } from '@/api/groups'
 import Cropper from 'cropperjs'
-import { ChatDotRound, PictureFilled, Calendar, Grid, Message, User, SwitchButton, CameraFilled, Service } from '@element-plus/icons-vue'
+import { ChatDotRound, PictureFilled, Calendar, Grid, Message, User, SwitchButton, CameraFilled, Service, Collection, Odometer } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 
@@ -220,7 +224,7 @@ const { isMobile } = useResponsive()
 // 移动端底部导航
 const mobileNavItems = [
   { key: 'campus', label: '校园资讯', icon: PictureFilled, route: '/student/campus' },
-  { key: 'schedule', label: '学业中心', icon: Calendar, route: '/student/schedule' },
+  { key: 'schedule', label: '驾驶舱', icon: Odometer, route: '/student/schedule' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/student' },
   { key: 'workbench', label: '工作台', icon: Grid, route: '/student/workbench' },
   { key: 'profile', label: '个人中心', icon: User, route: '/student/profile' },
@@ -232,7 +236,7 @@ const activeNavKey = computed(() => {
   if (path.startsWith('/student/campus')) return 'campus'
   if (path.startsWith('/student/schedule') || path.startsWith('/student/growth') || path.startsWith('/student/grade')) return 'schedule'
   if (path.startsWith('/student/profile')) return 'profile'
-  if (path.startsWith('/student/workbench') || path.startsWith('/student/service') || path.startsWith('/student/feedback')) return 'workbench'
+  if (path.startsWith('/student/workbench') || path.startsWith('/student/service') || path.startsWith('/student/feedback') || path.startsWith('/student/resources')) return 'workbench'
   return 'agent'
 })
 
@@ -440,6 +444,22 @@ async function handleSaveProfile() {
   background: linear-gradient(135deg, #f5faff 0%, #f0f8ff 50%, #f8fbff 100%);
   overflow: hidden;
 }
+
+/* 移动(App)模式：宽屏下模拟手机容器，居中限宽 */
+.app-mobile {
+  max-width: 440px;
+  margin: 0 auto;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
+}
+
+/* 底部导航同样限宽居中，贴合手机容器 */
+.app-mobile :deep(.mobile-tab-bar) {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  left: 0;
+  right: 0;
+}
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; height: 56px;
@@ -447,6 +467,8 @@ async function handleSaveProfile() {
   flex-shrink: 0; z-index: 100;
   box-shadow: 0 2px 12px rgba(29,78,216,0.35);
 }
+/* 移动(App)模式隐藏顶部抬头 */
+.topbar-mobile { display: none !important; }
 @media (max-width: 767px) {
   .topbar { display: none; }
 }
@@ -509,6 +531,7 @@ html, body, #app {
   height: 100vh;
   overflow: hidden;
   margin: 0;
+  background-color: #0f172a;
 }
 .el-drawer__header { margin-bottom: 0 !important; padding: 6px 16px !important; }
 .el-drawer__body { padding: 0 !important; }

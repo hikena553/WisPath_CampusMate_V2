@@ -11,10 +11,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    LLM_BASE_URL: str = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
     DASHSCOPE_API_KEY: str = ""
-    LLM_MODEL: str = "qwen-turbo"
-    LLM_AGENT_MODEL: str = "qwen-turbo"
+    LLM_MODEL: str = "deepseek-v4-flash-0731"
+    LLM_AGENT_MODEL: str = "deepseek-v4-flash-0731"
+    LLM_VISION_MODEL: str = "qwen3.8-max"
     LLM_AGENT_TEMPERATURE: float = 0.7
     LLM_AGENT_MAX_TOKENS: int = 10000
     LLM_MAX_INPUT_CHARS: int = 8000

@@ -11,8 +11,32 @@
       </span>
     </div>
 
+    <div class="lf-search">
+      <el-input
+        v-model="keyword"
+        placeholder="搜索物品，如：保温杯 / 校园卡"
+        clearable
+        size="small"
+        :prefix-icon="Search"
+        @keyup.enter="search"
+        @clear="clearSearch"
+      >
+        <template #append>
+          <el-button :icon="Search" :loading="searching" @click="search">搜索</el-button>
+        </template>
+      </el-input>
+    </div>
+
     <div v-if="loading" class="lf-empty">加载中...</div>
-    <div v-else-if="!items.length" class="lf-empty">暂无{{ activeType === 'all' ? '' : tabs.find(t => t.key === activeType)?.label }}信息</div>
+    <div v-else-if="!items.length" class="lf-empty">
+      <template v-if="searchMode">
+        未找到与「{{ keyword }}」直接匹配的记录
+        <div class="lf-empty-actions">
+          <el-button type="primary" size="small" @click="openCreate">直接登记这个物品</el-button>
+        </div>
+      </template>
+      <template v-else>暂无{{ activeType === 'all' ? '' : tabs.find(t => t.key === activeType)?.label }}信息</template>
+    </div>
 
     <div v-else class="lf-list">
       <div v-for="it in items" :key="it.id" class="lf-item" @click="openDetail(it)">
@@ -144,11 +168,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { getLostFoundItems, getLostFoundItem, createLostFoundItem, updateLostFoundStatus, deleteLostFoundItem, createLostFoundComment } from '@/api/lost_found'
+import { getLostFoundItems, getLostFoundItem, createLostFoundItem, updateLostFoundStatus, deleteLostFoundItem, createLostFoundComment, searchLostFoundItems } from '@/api/lost_found'
 import { uploadFile } from '@/api/upload'
 import type { LostFoundItem } from '@/types'
 
@@ -163,6 +187,9 @@ const activeType = ref('all')
 const items = ref<LostFoundItem[]>([])
 const loading = ref(false)
 const submitting = ref(false)
+const keyword = ref('')
+const searching = ref(false)
+const searchMode = ref(false)
 const formRef = ref<any>()
 const formRules = {
   type: [{ required: true, message: '请选择类型', trigger: 'change' }],
@@ -188,8 +215,48 @@ async function load() {
   }
 }
 
+async function search() {
+  const q = keyword.value.trim()
+  if (!q) {
+    ElMessage.warning('请输入要搜索的物品名称')
+    return
+  }
+  searching.value = true
+  try {
+    const res = await searchLostFoundItems({
+      q,
+      type: activeType.value === 'all' ? 'all' : activeType.value,
+      limit: 10,
+    })
+    searchMode.value = true
+    items.value = res.matched
+    if (!res.found) {
+      ElMessage.info(`未找到与「${q}」直接匹配的记录${res.candidates.length ? '，下方可查看最新待处理信息或直接登记' : ''}`)
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '搜索失败')
+  } finally {
+    searching.value = false
+  }
+}
+
+function clearSearch() {
+  searchMode.value = false
+  keyword.value = ''
+  load()
+}
+
+// 切换分类时若处于搜索模式，自动重置为列表浏览
+watch(activeType, () => {
+  if (searchMode.value) {
+    searchMode.value = false
+    keyword.value = ''
+    load()
+  }
+})
+
 function openCreate() {
-  Object.assign(form, { type: 'lost', title: '', description: '', location: '', contact: '', image_url: '' })
+  Object.assign(form, { type: 'lost', title: searchMode.value ? keyword.value.trim() : '', description: '', location: '', contact: '', image_url: '' })
   createVisible.value = true
 }
 
@@ -312,6 +379,9 @@ onMounted(load)
 .lf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .lf-header h3 { margin: 0; font-size: 14px; }
 .lf-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.lf-search { margin-bottom: 10px; }
+.lf-search :deep(.el-input__inner) { border-radius: 0; }
+.lf-empty-actions { margin-top: 12px; }
 .lf-tab {
   font-size: 12px; color: var(--text-secondary); padding: 3px 12px;
   border-radius: 12px; cursor: pointer; background: #f5f7fa; transition: all .15s;

@@ -422,27 +422,6 @@
                 </div>
               </div>
             </div>
-
-            <!-- AI 智能分析 -->
-            <div class="ms-ai-card">
-              <div class="ms-ai-header">
-                <img src="/images/mascot.png" alt="绵小城" class="ms-ai-mascot" />
-                <div class="ms-ai-title">绵小城 · AI 智能分析</div>
-              </div>
-              <div v-if="!analysisResult && !analysisLoading" class="ms-ai-placeholder">
-                <p>点击下方按钮，AI 将结合班级图表与每位学生的成长、心理数据，为你生成深度分析报告。</p>
-                <el-button type="primary" size="small" @click="handleClassAnalysis" :loading="analysisLoading">开始分析</el-button>
-              </div>
-              <div v-else-if="analysisLoading" class="ms-ai-loading">
-                <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-                <span>绵小城正在深度分析班级情况...</span>
-              </div>
-              <div v-else class="ms-ai-result">
-                <!-- eslint-disable-next-line vue/no-v-html -->
-                <div class="ms-ai-text" v-html="renderedAnalysisHtml"></div>
-                <el-button text type="primary" size="small" @click="handleClassAnalysis">重新分析</el-button>
-              </div>
-            </div>
           </template>
 
           <!-- 请假情况 -->
@@ -557,6 +536,17 @@
               </div>
             </div>
           </template>
+        </div>
+
+        <!-- 悬浮智能体：点击生成班级智能分析 -->
+        <div v-if="activeSubPage === 'analysis'" class="mascot-pet" @click="openMascotAnalysis">
+          <transition name="tip-pop">
+            <div v-if="showMascotTip" class="mascot-tip-bubble">
+              <span class="mascot-tip-close" @click.stop="showMascotTip = false"><el-icon><Close /></el-icon></span>
+              <span class="mascot-tip-text">点我生成班级智能分析~</span>
+            </div>
+          </transition>
+          <img src="/images/mascot.png" alt="绵小城" class="mascot-pet-img" />
         </div>
       </div>
     </transition>
@@ -736,16 +726,54 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 悬浮智能体弹窗：班级智能分析 -->
+    <el-dialog
+      v-model="showAnalysisDialog"
+      class="mascot-analysis-dialog"
+      :append-to-body="true"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="dialog-header">
+          <img src="/images/mascot.png" alt="绵小城" class="dialog-header-mascot" />
+          <div class="dialog-header-text">
+            <div class="dialog-title">学生智能分析</div>
+            <div class="dialog-sub">绵小城基于班级图表与学生成长数据智能生成</div>
+          </div>
+        </div>
+      </template>
+      <div class="dialog-content">
+        <div v-if="analysisLoading" class="dialog-loading">
+          <img src="/images/mascot.png" alt="绵小城" class="dialog-loading-mascot" />
+          <p class="dialog-loading-text">{{ analysisLoadingText }}</p>
+        </div>
+        <div v-else-if="analysisResult" class="analysis-report ms-ai-text" v-html="renderedAnalysisHtml"></div>
+        <div v-else class="dialog-empty">
+          <el-icon class="dialog-empty-icon"><MagicStick /></el-icon>
+          <p>点击下方按钮，绵小城将为您生成班级分析报告</p>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button round @click="showAnalysisDialog = false">关闭</el-button>
+          <el-button round type="primary" :loading="analysisLoading" @click="startMascotAnalysis">
+            <el-icon><Refresh /></el-icon> 重新分析
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Search, User, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
   WarningFilled, DataAnalysis, Calendar, Bell, MoreFilled,
-  Histogram, Message, Plus, Check, Loading, Filter, Download, Upload,
+  Histogram, Message, Plus, Check, Filter, Download, Upload,
+  Refresh, MagicStick,
 } from '@element-plus/icons-vue'
 import {
   getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats, importStudents,
@@ -855,6 +883,37 @@ const importSkipped = ref<string[]>([])
 // ===== AI 分析 =====
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 const renderedAnalysisHtml = computed(() => renderMarkdown(analysisResult.value))
+
+// 悬浮智能体与弹窗状态
+const showMascotTip = ref(false)
+const showAnalysisDialog = ref(false)
+const analysisLoadingText = ref('绵小城正在深度分析班级情况...')
+let mascotTipTimer: ReturnType<typeof setTimeout> | null = null
+
+// 进入/退出学生分析子页面时控制悬浮智能体提示气泡
+watch(activeSubPage, (page) => {
+  if (mascotTipTimer) { clearTimeout(mascotTipTimer); mascotTipTimer = null }
+  if (page === 'analysis') {
+    showMascotTip.value = true
+    mascotTipTimer = setTimeout(() => { showMascotTip.value = false }, 6000)
+  } else {
+    showMascotTip.value = false
+  }
+})
+
+function openMascotAnalysis() {
+  showMascotTip.value = false
+  showAnalysisDialog.value = true
+  if (!analysisResult.value && !analysisLoading.value) {
+    startMascotAnalysis()
+  }
+}
+
+async function startMascotAnalysis() {
+  if (analysisLoading.value) return
+  analysisLoadingText.value = '绵小城正在深度分析班级情况...'
+  await handleClassAnalysis()
+}
 
 // ===== 最近互动（按最近聊天排序） =====
 const conversations = ref<ConversationOut[]>([])
@@ -1388,6 +1447,10 @@ onMounted(() => {
   loadStudents()
   loadDashboard()
 })
+
+onUnmounted(() => {
+  if (mascotTipTimer) { clearTimeout(mascotTipTimer); mascotTipTimer = null }
+})
 </script>
 
 <style scoped>
@@ -1596,20 +1659,99 @@ onMounted(() => {
 .ms-chart-card-header { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #1f2937; margin-bottom: 8px; }
 .ms-chart-container { height: 200px; }
 
-.ms-ai-card {
-  background: #fff; border-radius: 14px; padding: 12px; margin-top: 10px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+/* ---- 悬浮智能体 + 分析弹窗 ---- */
+.mascot-pet {
+  position: fixed;
+  right: 16px;
+  bottom: 84px;
+  z-index: 130;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  -webkit-tap-highlight-color: transparent;
 }
-.ms-ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.ms-ai-mascot { width: 36px; height: 36px; object-fit: contain; }
-.ms-ai-title { font-size: 14px; font-weight: 600; color: #1f2937; }
-.ms-ai-placeholder p { font-size: 13px; color: #666; line-height: 1.6; margin: 0 0 12px; }
-.ms-ai-loading { display: flex; align-items: center; gap: 8px; color: #666; font-size: 13px; }
+.mascot-pet-img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 14px rgba(91, 141, 239, 0.45));
+}
+.mascot-pet:active .mascot-pet-img { transform: scale(0.92); }
+@keyframes mascot-pet-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  30% { transform: translateY(-8px) scale(1.04); }
+  55% { transform: translateY(0) scale(1); }
+  75% { transform: translateY(-4px) scale(1.02); }
+}
+.mascot-tip-bubble {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px 8px 12px;
+  margin-bottom: 10px;
+  margin-right: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4c1d95;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mascot-tip-bubble::after {
+  content: '';
+  position: absolute;
+  right: 22px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-right: 1px solid #e9d5ff;
+  border-bottom: 1px solid #e9d5ff;
+  transform: rotate(45deg);
+}
+.mascot-tip-text { white-space: nowrap; }
+.mascot-tip-close {
+  display: inline-flex;
+  width: 16px; height: 16px;
+  align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: #f3e8ff;
+  color: #7c3aed;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.tip-pop-enter-active,
+.tip-pop-leave-active { transition: all 0.25s ease !important; }
+.tip-pop-enter-from,
+.tip-pop-leave-to { opacity: 0; transform: translateY(8px) scale(0.92); }
+
+.dialog-header { display: flex; align-items: center; gap: 10px; }
+.dialog-header-mascot { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.35)); }
+.dialog-header-text { display: flex; flex-direction: column; }
+.dialog-title { font-size: 16px; font-weight: 700; color: #4c1d95; }
+.dialog-sub { font-size: 11px; color: #7c3aed; margin-top: 2px; }
+.dialog-content { min-height: 200px; }
+.dialog-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 12px; gap: 14px; }
+.dialog-loading-mascot { width: 72px; height: 72px; object-fit: contain; animation: mascot-pet-bounce 1.4s ease-in-out infinite !important; }
+.dialog-loading-text { font-size: 13px; color: #7c3aed; margin: 0; }
+.dialog-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 12px; gap: 10px; color: #9ca3af; font-size: 13px; margin: 0; }
+.dialog-empty-icon { font-size: 32px; color: #c4b5fd; }
+.dialog-footer { display: flex; justify-content: flex-end; gap: 8px; }
+
 .ms-ai-text { font-size: 13px; color: #333; line-height: 1.7; }
 .ms-ai-text :deep(.md-h2), .ms-ai-text :deep(.md-h3), .ms-ai-text :deep(.md-h4) { color: #1a1a2e; margin: 10px 0 6px; }
 .ms-ai-text :deep(.md-li) { margin: 4px 0; }
 .ms-ai-text :deep(.md-ul) { padding-left: 18px; }
+
+:deep(.mascot-analysis-dialog) {
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, #faf7ff 0%, #ffffff 42%) !important;
+}
+:deep(.mascot-analysis-dialog .el-dialog__header) { padding-bottom: 6px; margin-right: 0; }
+:deep(.mascot-analysis-dialog .el-dialog__body) { padding-top: 4px; }
 
 .ms-lease-card {
   background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 12px;

@@ -40,28 +40,28 @@
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-name">API Key <span class="required">*</span></div>
-              <div class="setting-desc">通义千问API密钥，在阿里云控制台获取</div>
+              <div class="setting-desc">百炼 Token Plan API Key（sk-sp- 开头），在阿里云百炼控制台获取</div>
             </div>
-            <el-input v-model="settingsMap['llm_api_key']" placeholder="请输入API Key" type="password" show-password style="width: 300px" />
+            <el-input v-model="settingsMap['llm_api_key']" placeholder="请输入 Token Plan API Key（sk-sp- 开头）" type="password" show-password style="width: 300px" />
           </div>
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-name">API 地址</div>
-              <div class="setting-desc">API接口地址，默认使用阿里云通义千问</div>
+              <div class="setting-desc">API接口地址，Token Plan 使用 OpenAI 兼容端点</div>
             </div>
-            <el-input v-model="settingsMap['llm_base_url']" placeholder="需以 /v1 结尾，如 https://dashscope.aliyuncs.com/compatible-mode/v1" style="width: 360px" />
+            <el-input v-model="settingsMap['llm_base_url']" placeholder="如 https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1" style="width: 360px" />
           </div>
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-name">AI模型 <span class="required">*</span></div>
-              <div class="setting-desc">填写模型名称，如 qwen-turbo、gpt-4、claude-3 等</div>
+              <div class="setting-desc">填写模型名称，如 qwen3.8-max、deepseek-v4-flash-0731</div>
             </div>
-            <el-input v-model="settingsMap['llm_model']" placeholder="例: qwen-turbo" style="width: 200px" />
+            <el-input v-model="settingsMap['llm_model']" placeholder="例: deepseek-v4-flash-0731" style="width: 200px" />
           </div>
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-name">智能体模型</div>
-              <div class="setting-desc">智能体使用的模型，可与主模型不同</div>
+              <div class="setting-desc">智能体使用的模型，默认与主模型一致，留空则使用主模型</div>
             </div>
             <el-input v-model="settingsMap['llm_agent_model']" placeholder="留空则使用主模型" style="width: 200px" />
           </div>
@@ -88,10 +88,10 @@
           </div>
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-name">语音服务 API Key（DashScope）</div>
-              <div class="setting-desc">语音识别/合成使用阿里云百炼，需单独配置，在阿里云百炼控制台获取</div>
+              <div class="setting-name">语音服务 API Key（可选，一般无需填写）</div>
+              <div class="setting-desc">语音识别/合成默认复用上方 LLM API Key（千问 qwen-audio-3.0 系列）；仅当使用独立百炼 Key 时才需单独填写</div>
             </div>
-            <el-input v-model="settingsMap['dashscope_api_key']" placeholder="请输入 DashScope API Key" type="password" show-password style="width: 300px" />
+            <el-input v-model="settingsMap['dashscope_api_key']" placeholder="留空则复用 LLM API Key" type="password" show-password style="width: 300px" />
           </div>
         </div>
         <div class="ai-actions">

@@ -11,6 +11,7 @@ from app.models.growth import GrowthRecord, RecordType
 from app.models.service import ServiceTicket, TicketType
 from app.models.knowledge import KnowledgeItem
 from app.models.campus import CampusScenery
+from app.models.lost_found import LostFoundItem, ItemType, ItemStatus
 from app.models.conversation import Conversation, PROJECT_STAGES
 from app.models.crisis import AIDialogSummary, CrisisLevel
 from sqlalchemy import or_, func
@@ -206,6 +207,41 @@ TOOL_DEFINITIONS = [
             "parameters": {"type": "object", "properties": {}}
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_lost_found",
+            "description": "检索失物招领处是否已有某个物品的记录。当学生说'我丢了XX'、'有没有人捡到XX'、'帮我查下失物招领'时必须先调用此工具查询，再决定是否登记。keyword 请填物品通用名（如'保温杯'），不要带'我的''黑色'等修饰词",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keyword": {"type": "string", "description": "物品关键词，多个词用空格分隔，如'保温杯'或'钱包 校园卡'"},
+                    "item_type": {"type": "string", "enum": ["lost", "found", "all"], "description": "检索范围：found=别人捡到待领的（找自己丢的东西优先用这个），lost=他人的寻物启事，all=全部。默认 all"},
+                    "limit": {"type": "integer", "description": "返回条数，默认5"}
+                },
+                "required": ["keyword"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_lost_found",
+            "description": "在失物招领处发布寻物启事或招领信息。仅当 search_lost_found 确认没有匹配记录后调用，用于直接帮学生登记",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string", "enum": ["lost", "found"], "description": "lost=学生丢了东西（发寻物启事），found=学生捡到东西（发招领信息）"},
+                    "title": {"type": "string", "description": "物品名称，简短含关键特征，如'黑色保温杯'"},
+                    "description": {"type": "string", "description": "物品特征（颜色/品牌/外观/内含物），取自用户描述或图片识别结果，不要编造"},
+                    "location": {"type": "string", "description": "丢失或拾到的地点，如'博雅楼3楼自习室'，未知则留空"},
+                    "contact": {"type": "string", "description": "联系方式，留空则默认使用当前用户的手机号/学号"},
+                    "image_url": {"type": "string", "description": "物品图片URL，用户上传了图片时必须填写"}
+                },
+                "required": ["type", "title"]
+            }
+        }
+    },
 ]
 
 
@@ -363,6 +399,9 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "analyze_grades": _analyze_grades,
             "analyze_schedule": _analyze_schedule,
             "analyze_growth": _analyze_growth,
+            # 失物招领
+            "search_lost_found": _search_lost_found,
+            "create_lost_found": _create_lost_found,
             # 教师工具
             "query_pending_leaves": _query_pending_leaves,
             "analyze_leave": _analyze_leave,
@@ -869,4 +908,113 @@ def _analyze_growth(db: Session, args: dict, user: User) -> dict:
         "type": "growth",
         "data": {"records": records_data, "total": len(records_data)},
         "message": f"共{len(records_data)}条成长记录，请根据以上数据给出综合能力评估和发展建议"
+    }
+
+
+# ============ 失物招领工具 ============
+
+_LOST_FOUND_TYPE_NAMES = {"lost": "寻物启事", "found": "招领信息"}
+_LOST_FOUND_STATUS_NAMES = {"open": "待处理", "claimed": "已认领", "closed": "已关闭"}
+
+
+def _serialize_lost_found_item(db: Session, item: LostFoundItem, score: float | None = None) -> dict:
+    """把失物招领记录序列化为便于 LLM 阅读的字典。"""
+    owner = db.query(User).filter(User.id == item.user_id).first()
+    contact = (item.contact or "").strip()
+    if not contact and owner:
+        contact = (owner.phone or "").strip() or owner.username
+    type_val = safe_enum_str(item.type, "")
+    status_val = safe_enum_str(item.status, "")
+    data = {
+        "id": item.id,
+        "type": _LOST_FOUND_TYPE_NAMES.get(type_val, type_val),
+        "title": item.title,
+        "description": (item.description or "")[:150],
+        "location": item.location or "未填写",
+        "contact": contact or "未提供",
+        "publisher": owner.name if owner else "未知",
+        "status": _LOST_FOUND_STATUS_NAMES.get(status_val, status_val),
+        "image_url": item.image_url or "",
+        "created_at": item.created_at.strftime("%Y-%m-%d %H:%M") if item.created_at else "",
+    }
+    if score is not None:
+        data["match_score"] = score
+    return data
+
+
+def _search_lost_found(db: Session, args: dict, user: User) -> dict:
+    keyword = (args.get("keyword") or "").strip()
+    if not keyword:
+        return {"success": False, "message": "缺少必要参数：keyword（物品关键词）"}
+
+    item_type = (args.get("item_type") or "all").strip().lower()
+    if item_type not in ("lost", "found", "all"):
+        item_type = "all"
+    try:
+        limit = int(args.get("limit") or 5)
+    except (TypeError, ValueError):
+        limit = 5
+
+    from app.services.lost_found_service import search_lost_found_items
+    result = search_lost_found_items(db, keyword, item_type, limit)
+    matches = result["matches"]
+
+    if matches:
+        items = [_serialize_lost_found_item(db, it, sc) for it, sc in matches]
+        return {
+            "success": True, "found": True, "keyword": keyword, "count": len(items),
+            "matched": items, "candidates": [],
+            "message": (
+                f"失物招领处检索到 {len(items)} 条与「{keyword}」相关的记录。"
+                "请判断哪条最可能是学生的物品，并把发布者、地点、联系方式告诉学生。"
+                "已有记录时不要重复登记。"
+            ),
+        }
+
+    candidates = [_serialize_lost_found_item(db, it) for it in result["candidates"]]
+    if candidates:
+        msg = (
+            f"失物招领处没有与「{keyword}」直接匹配的记录。以下是最新 {len(candidates)} 条待处理记录，"
+            "请先判断其中是否其实就有学生描述的物品；确认没有后再调用 create_lost_found 帮学生登记。"
+        )
+    else:
+        msg = f"失物招领处没有与「{keyword}」相关的记录，也没有其他待处理记录，可以直接调用 create_lost_found 帮学生登记。"
+    return {
+        "success": True, "found": False, "keyword": keyword, "count": 0,
+        "matched": [], "candidates": candidates, "scanned": result["scanned"],
+        "message": msg,
+    }
+
+
+def _create_lost_found(db: Session, args: dict, user: User) -> dict:
+    item_type = (args.get("type") or "lost").strip().lower()
+    if item_type not in ("lost", "found"):
+        return {"success": False, "message": "type 必须为 lost（寻物启事）或 found（招领信息）"}
+    title = (args.get("title") or "").strip()
+    if not title:
+        return {"success": False, "message": "缺少必要参数：title（物品名称）"}
+
+    contact = (args.get("contact") or "").strip() or (user.phone or "").strip() or user.username
+    item = LostFoundItem(
+        user_id=user.id,
+        type=ItemType(item_type),
+        title=title[:100],
+        description=(args.get("description") or "")[:2000],
+        location=(args.get("location") or "")[:200],
+        contact=contact[:200],
+        image_url=(args.get("image_url") or "").strip() or None,
+        status=ItemStatus.OPEN,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+
+    kind = _LOST_FOUND_TYPE_NAMES[item_type]
+    where = f"，地点：{item.location}" if item.location else ""
+    return {
+        "success": True, "item_id": item.id, "type": item_type, "title": item.title,
+        "message": (
+            f"✅ 已在失物招领处发布{kind}：{item.title}{where}（编号 {item.id}），"
+            f"联系方式 {item.contact}。请告知学生已登记完成，并提醒可随时补充物品特征或地点。"
+        ),
     }

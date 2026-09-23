@@ -792,9 +792,9 @@ def main():
     setting_plan = [
         ("site_name", "绵阳城市学院智慧校园", "系统名称"),
         ("site_announcement", "欢迎使用绵阳城市学院智慧校园服务平台", "系统公告"),
-        ("llm_base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1", "LLM API 地址"),
-        ("llm_model", "qwen-turbo", "主模型"),
-        ("llm_agent_model", "qwen-turbo", "智能体模型"),
+        ("llm_base_url", "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", "LLM API 地址"),
+        ("llm_model", "deepseek-v4-flash-0731", "主模型"),
+        ("llm_agent_model", "deepseek-v4-flash-0731", "智能体模型"),
         ("max_chat_history", "50", "最大对话轮数"),
         ("temperature", "0.7", "生成随机性"),
     ]

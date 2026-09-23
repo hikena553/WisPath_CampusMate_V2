@@ -20,7 +20,7 @@
     <div class="section-card">
       <div class="section-title">办事服务</div>
       <div class="service-grid">
-        <div v-for="item in serviceItems" :key="item.key" class="service-item" @click="openService(item.key)">
+        <div v-for="item in serviceItems" :key="item.key" class="service-item" @click="openService(item)">
           <div class="service-icon" :style="{ background: item.bgColor, color: item.color }">
             <el-icon :size="20"><component :is="item.icon" /></el-icon>
           </div>
@@ -539,7 +539,7 @@ import UploadBtn from '@/components/upload/UploadBtn.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound, Message,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell
+  InfoFilled, Location, Close, Bell, TrendCharts, Collection
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -569,6 +569,8 @@ const serviceItems = [
   { key: 'certificate', label: '证明申请', icon: Document, color: '#67c23a', bgColor: 'rgba(103,194,58,0.1)' },
   { key: 'project', label: '项目申请', icon: Promotion, color: '#e6a23c', bgColor: 'rgba(230,162,60,0.1)' },
   { key: 'lostfound', label: '失物招领', icon: Search, color: '#f56c6c', bgColor: 'rgba(245,108,108,0.1)' },
+  { key: 'growth', label: '成长空间', icon: TrendCharts, color: '#722ed1', bgColor: 'rgba(114,46,209,0.1)', link: '/student/growth' },
+  { key: 'resources', label: 'AI 资源空间', icon: Collection, color: '#13c2c2', bgColor: 'rgba(19,194,194,0.1)', link: '/student/resources' },
 ]
 
 // 表单数据
@@ -709,9 +711,13 @@ function removeLeaveAttachment(i: number) {
   leaveForm.attachments.splice(i, 1)
 }
 
-function openService(key: string) {
-  currentPage.value = key
-  if (key === 'lostfound') loadLostFound()
+function openService(item: { key: string; link?: string }) {
+  if (item.link) {
+    router.push(item.link)
+    return
+  }
+  currentPage.value = item.key
+  if (item.key === 'lostfound') loadLostFound()
 }
 
 function openChat() {

@@ -18,25 +18,33 @@ from app.core.crypto import decrypt_value
 
 logger = logging.getLogger(__name__)
 
-DASHSCOPE_STT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/transcriptions"
-DASHSCOPE_STT_MODEL = "paraformer-realtime-v2"
-DASHSCOPE_TTS_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation"
+TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com"
+VOICE_STT_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/aigc/multimodal-generation/generation"
+VOICE_STT_MODEL = "qwen-audio-3.0-asr-flash"
+VOICE_TTS_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/audio/tts/SpeechSynthesizer"
+VOICE_TTS_MODEL = "qwen-audio-3.0-tts-plus"
+VOICE_TTS_VOICE = "longanhuan_v3.6"
 
 
-def _get_dashscope_api_key() -> str:
-    """获取 DashScope（阿里云百炼）语音 API Key：优先数据库设置，回退到 .env"""
+def _get_voice_api_key() -> str:
+    """获取语音 API Key：优先数据库 llm_api_key（Token Plan，加密存储），
+    兼容旧键 dashscope_api_key，最后回退到 .env"""
     db = SessionLocal()
     try:
-        row = db.query(SystemSetting).filter(SystemSetting.key == "dashscope_api_key").first()
-        if row and row.value:
-            decrypted = decrypt_value(row.value)
-            if decrypted:
-                return decrypted
+        for key_name in ("llm_api_key", "dashscope_api_key"):
+            row = db.query(SystemSetting).filter(SystemSetting.key == key_name).first()
+            if row and row.value:
+                try:
+                    decrypted = decrypt_value(row.value)
+                except Exception:
+                    decrypted = None
+                if decrypted:
+                    return decrypted
     except Exception:
-        logger.exception("读取 DashScope API Key 失败")
+        logger.exception("读取语音 API Key 失败")
     finally:
         db.close()
-    return settings.DASHSCOPE_API_KEY
+    return settings.LLM_API_KEY or settings.DASHSCOPE_API_KEY
 
 
 def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sample_width: int = 2) -> bytes:
@@ -50,62 +58,86 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sa
     return buf.getvalue()
 
 
-async def dashscope_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = None) -> str:
-    """调用 DashScope 语音识别 API（Paraformer）"""
-    api_key = _get_dashscope_api_key()
+async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = None) -> str:
+    """调用 Token Plan 语音识别（qwen-audio-3.0-asr-flash，多模态生成端点）"""
+    api_key = _get_voice_api_key()
     if not api_key:
-        raise RuntimeError("语音识别未配置 DashScope API Key")
+        raise RuntimeError("语音识别未配置 API Key")
 
-    headers = {"Authorization": f"Bearer {api_key}"}
     wav_bytes = pcm_to_wav(audio_bytes)
-    files = {"file": ("audio.wav", wav_bytes, "audio/wav")}
-    data = {"model": DASHSCOPE_STT_MODEL}
+    data_uri = "data:audio/wav;base64," + base64.b64encode(wav_bytes).decode()
+    payload = {
+        "model": VOICE_STT_MODEL,
+        "input": {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_audio", "input_audio": {"data": data_uri}},
+                    ],
+                }
+            ]
+        },
+        "parameters": {"format": "wav", "sample_rate": "16000"},
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    async def _do(cl: httpx.AsyncClient) -> str:
+        resp = await cl.post(VOICE_STT_URL, headers=headers, json=payload)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"语音识别接口返回 {resp.status_code}: {resp.text[:200]}")
+        body = resp.json()
+        out = body.get("output") or body
+        text = out.get("text") or (out.get("sentence") or {}).get("text") or ""
+        return text.strip()
 
     if client is not None:
-        resp = await client.post(DASHSCOPE_STT_URL, headers=headers, data=data, files=files)
-        resp.raise_for_status()
-        return resp.json().get("text", "")
+        return await _do(client)
     else:
-        async with httpx.AsyncClient(timeout=30) as owned_client:
-            resp = await owned_client.post(DASHSCOPE_STT_URL, headers=headers, data=data, files=files)
-            resp.raise_for_status()
-            return resp.json().get("text", "")
+        async with httpx.AsyncClient(timeout=60) as owned_client:
+            return await _do(owned_client)
 
 
-async def dashscope_tts(text: str, client: httpx.AsyncClient | None = None):
-    """调用 DashScope CosyVoice TTS，yield 音频块（PCM 16kHz 16bit mono）"""
-    api_key = _get_dashscope_api_key()
+async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None):
+    """调用 Token Plan 语音合成（qwen-audio-3.0-tts-plus），yield PCM 16kHz 16bit mono 分块"""
+    api_key = _get_voice_api_key()
     if not api_key:
-        raise RuntimeError("语音合成未配置 DashScope API Key")
+        raise RuntimeError("语音合成未配置 API Key")
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
     payload = {
-        "model": "cosyvoice-v2",
-        "input": {"text": text},
-        "parameters": {
-            "voice": "longxiaochun",
+        "model": VOICE_TTS_MODEL,
+        "input": {
+            "text": text,
+            "voice": VOICE_TTS_VOICE,
             "format": "pcm",
             "sample_rate": 16000,
         },
     }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    async def _fetch(cl: httpx.AsyncClient) -> bytes:
+        resp = await cl.post(VOICE_TTS_URL, headers=headers, json=payload)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"语音合成接口返回 {resp.status_code}: {resp.text[:200]}")
+        body = resp.json()
+        audio_url = (body.get("output") or {}).get("audio", {}).get("url")
+        if not audio_url:
+            raise RuntimeError(f"语音合成响应缺少音频地址: {body}")
+        audio_resp = await cl.get(audio_url)
+        audio_resp.raise_for_status()
+        return await audio_resp.aread()
 
     if client is not None:
-        async with client.stream("POST", DASHSCOPE_TTS_URL, headers=headers, json=payload) as resp:
-            resp.raise_for_status()
-            async for chunk in resp.aiter_bytes(4096):
-                if chunk:
-                    yield chunk
+        pcm = await _fetch(client)
     else:
         tts_timeout = httpx.Timeout(connect=10, read=120, write=10, pool=10)
         async with httpx.AsyncClient(timeout=tts_timeout) as owned_client:
-            async with owned_client.stream("POST", DASHSCOPE_TTS_URL, headers=headers, json=payload) as resp:
-                resp.raise_for_status()
-                async for chunk in resp.aiter_bytes(4096):
-                    if chunk:
-                        yield chunk
+            pcm = await _fetch(owned_client)
+
+    # 分块输出，模拟流式，前端可边收边播
+    chunk_size = 16384
+    for i in range(0, len(pcm), chunk_size):
+        yield pcm[i:i + chunk_size]
 
 
 async def safe_send_json(websocket: WebSocket, data: dict) -> bool:
@@ -175,7 +207,7 @@ async def handle_voice_connection(
                 if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
                     break
                 try:
-                    text = await dashscope_stt(bytes(audio_buffer), client=http_client)
+                    text = await tokenplan_stt(bytes(audio_buffer), client=http_client)
                 except Exception as e:
                     logger.exception("STT 失败")
                     await safe_send_json(websocket, {"type": "error", "message": "语音识别失败，请重试"})
@@ -219,7 +251,7 @@ async def handle_voice_connection(
                 # 3. TTS
                 await safe_send_json(websocket, {"type": "state", "state": "speaking"})
                 try:
-                    async for audio_chunk in dashscope_tts(full_response, client=http_client):
+                    async for audio_chunk in tokenplan_tts(full_response, client=http_client):
                         if not await safe_send_json(websocket, {
                             "type": "ai_audio",
                             "data": base64.b64encode(audio_chunk).decode(),

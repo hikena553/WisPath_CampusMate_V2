@@ -294,7 +294,7 @@ import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, Menu, MagicStick, ArrowDown, Close, Delete,
+  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, MagicStick, ArrowDown, Close, Delete,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MianCharacter from './MianCharacter.vue'
@@ -403,7 +403,7 @@ const _recommendCache: string[] = []
 const recommendItems = ref<string[]>(
   _recommendCache.length ? [..._recommendCache] : [
     '帮我查一下下周的课程安排',
-    '我想看看这学期的成绩单',
+    '我丢了保温杯，帮我找找',
     '最近有什么校园活动通知',
     '帮我记录一下获奖信息',
   ]
@@ -607,9 +607,9 @@ async function send() {
   }
 
   const fileNames = pendingFiles.value.map(f => f.name).join(', ')
-  const text = input.value || (uploadedFileUrl ? '请帮我识别这个证明材料并记录到成长档案' : '')
+  const text = input.value || (uploadedFileUrl ? '请帮我看看这个物品，是不是有人捡到了' : '')
   const userContent = pendingFiles.value.length > 0
-    ? `[上传文件: ${fileNames}]\n${input.value || '请帮我识别并记录'}`
+    ? `[上传文件: ${fileNames}]\n${input.value || (uploadedFileUrl ? '请帮我看看这个物品' : '请帮我看看')}`
     : input.value
 
   const userMsg: ChatMessage = {

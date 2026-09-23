@@ -76,6 +76,11 @@ export interface CrisisAlert {
   keywords_matched: string | null
   resolved: boolean
   created_at: string
+  intervention_type?: string | null
+  intervention_note?: string | null
+  resolved_by?: number | null
+  resolved_at?: string | null
+  follow_up_date?: string | null
 }
 
 export interface GrowthRecord {

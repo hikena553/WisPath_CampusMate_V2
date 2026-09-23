@@ -13,6 +13,7 @@ from app.models.conversation import Conversation, ConversationMessage
 from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
 from app.services.llm_service import speech_to_text, _get_client, _get_llm_config, build_system_prompt
+from app.services.proactive_engine import evaluate_student
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -180,3 +181,31 @@ async def get_recommendations(user: User = Depends(get_current_user), db: Sessio
 
     # 降级返回按角色的默认推荐
     return {"recommendations": DEFAULT_RECOMMENDATIONS.get(user.role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT])}
+
+
+@router.get("/proactive")
+async def get_proactive_actions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """AI 主动发现驾驶舱接口（v3.0 实施文档 §4/§6）
+
+    学生：返回自己的主动触达动作（成长里程碑、久未互动关怀等）
+    教师/管理员：返回所带/全体学生的预警与学业关注动作（危机升级、成绩下滑）
+    """
+    from datetime import datetime, timezone
+
+    actions = []
+    if user.role == UserRole.STUDENT:
+        actions = [a for a in evaluate_student(db, user) if a.target_role == "student"]
+    elif user.role in (UserRole.TEACHER, UserRole.ADMIN):
+        students = db.query(User).filter(User.role == UserRole.STUDENT)
+        if user.role == UserRole.TEACHER:
+            students = students.filter(User.tutor_id == user.id)
+        for student in students.all():
+            actions.extend(a for a in evaluate_student(db, student) if a.target_role == "teacher")
+        actions.sort(key=lambda a: a.priority, reverse=True)
+
+    return {
+        "actions": actions[:10],
+        "count": len(actions),
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "trace_id": f"prc-{user.id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+    }
