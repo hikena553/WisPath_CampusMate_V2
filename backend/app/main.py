@@ -1,44 +1,15 @@
-from pathlib import Path
+"""应用入口：只做组装（中间件/静态资源/生命周期/路由注册），业务细节下沉各模块。"""
+import importlib
+import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.core.database import engine, Base
-from app.api.auth import router as auth_router
-from app.api.agent import router as agent_router
-from app.api.campus import router as campus_router
-from app.api.growth import router as growth_router
-from app.api.academic import router as academic_router
-from app.api.service import router as service_router
-from app.api.leave import router as leave_router
-from app.api.crisis import router as crisis_router
-from app.api.teacher import router as teacher_router
-from app.api.upload import router as upload_router
-from app.api.conversations import router as conversations_router
-from app.api.messages import router as messages_router
-from app.api.groups import router as groups_router
-from app.api.announcement import router as announcement_router
-from app.api.admin import router as admin_router
-from app.api.knowledge import router as knowledge_router
-from app.api.organization import router as organization_router
-from app.api.notification import router as notification_router
-from app.api.feedback import router as feedback_router
-from app.api.setting import router as setting_router
-from app.api.grade_analysis import router as grade_analysis_router
-from app.api.profile import router as profile_router
-from app.api.lost_found import router as lost_found_router
-from app.api.voice import router as voice_router
-from app.api.plan import router as plan_router
-from app.api.community import router as community_router
-from app.api.portfolio import router as portfolio_router
-from app.api.resources import router as resources_router
-from app.api.feeds import router as feeds_router
-from app.api.emotions import router as emotions_router
-from app.api.approval import router as approval_router
-from app.api.material import router as material_router
 
-import logging
+from app.api.registry import include_all_routers
+from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,43 +19,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def _periodic_refresh():
-    import asyncio
-    from app.services.impression_crawler import refresh_impression_data
-    while True:
-        try:
-            await asyncio.to_thread(refresh_impression_data)
-        except Exception:
-            logger.exception("后台定期刷新任务异常")
-        await asyncio.sleep(1800)
-
-
-async def _periodic_feed_refresh():
-    """定期抓取外部资讯（论文/开源榜/智能体榜/权威要闻）入库"""
-    import asyncio
-    from app.services.feed_ingest import ingest_all
-    while True:
-        try:
-            await asyncio.to_thread(ingest_all)
-        except Exception:
-            logger.exception("后台定期外部资讯抓取异常")
-        await asyncio.sleep(1800)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import asyncio
-    import contextlib
-    import importlib
+    # 初始化种子数据（幂等）
     importlib.import_module("app.seed")
-    task = asyncio.create_task(_periodic_refresh())
-    feed_task = asyncio.create_task(_periodic_feed_refresh())
+    # 启动后台周期任务，退出时统一回收
+    tasks = start_periodic_tasks()
     yield
-    task.cancel()
-    feed_task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
-        await feed_task
+    await stop_periodic_tasks(tasks)
 
 
 app = FastAPI(title="智慧校园AI服务平台", version="0.2.0", lifespan=lifespan)
@@ -102,38 +44,8 @@ uploads_dir.mkdir(exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
-app.include_router(auth_router)
-app.include_router(agent_router)
-app.include_router(campus_router)
-app.include_router(growth_router)
-app.include_router(academic_router)
-app.include_router(service_router)
-app.include_router(leave_router)
-app.include_router(crisis_router)
-app.include_router(teacher_router)
-app.include_router(conversations_router)
-app.include_router(upload_router)
-app.include_router(messages_router)
-app.include_router(groups_router)
-app.include_router(announcement_router)
-app.include_router(admin_router)
-app.include_router(knowledge_router)
-app.include_router(organization_router)
-app.include_router(notification_router)
-app.include_router(feedback_router)
-app.include_router(setting_router)
-app.include_router(grade_analysis_router)
-app.include_router(profile_router)
-app.include_router(lost_found_router)
-app.include_router(voice_router)
-app.include_router(plan_router)
-app.include_router(community_router)
-app.include_router(portfolio_router)
-app.include_router(resources_router)
-app.include_router(feeds_router)
-app.include_router(emotions_router)
-app.include_router(approval_router)
-app.include_router(material_router)
+# 统一注册业务路由
+include_all_routers(app)
 
 
 @app.get("/api/health")

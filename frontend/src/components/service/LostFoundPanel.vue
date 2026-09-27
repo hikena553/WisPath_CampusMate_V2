@@ -172,7 +172,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { getLostFoundItems, getLostFoundItem, createLostFoundItem, updateLostFoundStatus, deleteLostFoundItem, createLostFoundComment, searchLostFoundItems } from '@/api/lost_found'
+import { getLostFoundItems, getLostFoundItem, createLostFoundItem, updateLostFoundStatus, deleteLostFoundItem, createLostFoundComment, searchLostFoundItems } from '@/api/lostFound'
 import { uploadFile } from '@/api/upload'
 import type { LostFoundItem } from '@/types'
 
