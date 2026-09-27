@@ -75,20 +75,21 @@ def _take_tts_phrases(buffer: str, first_early: bool = False) -> tuple[list[str]
     借鉴豆包/流式语音合成的"早出音"设计：不必等完整句子，
     - 句末标点（。！？!?；;\n…）处必切；
     - 首段（first_early=True）满 4 字即切，把首音前合成等待压到最小；
-    - 后续每 8 字一切，保持合成粒度适中、请求次数可控。
+    - 后续每 6 字一切：粒度比 8 字更细，短语间首包空窗更小、播报更连贯，
+      请求次数仍在可控范围。
     """
     phrases: list[str] = []
     start = 0
-    min_len = 4 if first_early else 8
+    min_len = 4 if first_early else 6
     for i, ch in enumerate(buffer):
         if ch in "。！？!?；;\n…":
             phrases.append(buffer[start:i + 1])
             start = i + 1
-            min_len = 8
+            min_len = 6
         elif i - start >= min_len:
             phrases.append(buffer[start:i + 1])
             start = i + 1
-            min_len = 8
+            min_len = 6
     return phrases, buffer[start:]
 
 

@@ -37,12 +37,16 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let lastSpeechActivityAt = 0   // 最近一次发音活动时刻
   let isSpeaking = false
   let nextPlayTime = 0
+  // 播放代际：每次打断自增。后端在收到 interrupt 前已发出的"在途"ai_audio 块
+  // 到达前端时若代际已变，则整体丢弃，杜绝旧语音与新一轮回答重叠
+  let playbackGeneration = 0
   // 已调度的播放源集合：打断时立即停止所有待播/播放中的音频
   const activeSources = new Set<AudioBufferSourceNode>()
 
   const VAD_ENERGY_THRESHOLD = 0.02
   const VOICE_START_MS = 40   // 连续发音超过该时长视为开始说话（防单帧毛刺）
-  const VOICE_STOP_MS = 400   // 静音持续该时长视为说话结束（说完尽快识别）
+  const VOICE_STOP_MS = 600   // 静音持续该时长视为说话结束（说完尽快识别）
+  const AI_SPEAKING_VAD_FACTOR = 2  // AI 播报期间抬高开口阈值，防扬声器回声自激打断
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
   // 音频上传节流：合并小块音频再发送，避免高频消息挤占 WebSocket，
@@ -142,10 +146,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       case 'state':
         if (msg.state === 'listening') {
           setState('listening')
-          // 重置音频播放时间，避免与下一次TTS重叠
-          if (playbackAudioCtx) {
-            nextPlayTime = playbackAudioCtx.currentTime
-          }
+          // 无论因何进入 listening（打断确认 / 新一轮开始），都作废在途的旧音频块，
+          // 避免旧语音与新一段回答重叠；无在播音频时该操作幂等无害
+          cancelPlayback()
         } else if (msg.state === 'processing') {
           setState('processing')
         } else if (msg.state === 'speaking') {
@@ -174,6 +177,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   }
 
   async function playAudioChunk(buffer: ArrayBuffer) {
+    // 捕获当前代际：若播放期间发生过打断（代际已变），该"在途"块整体作废
+    const gen = playbackGeneration
+
     if (!playbackAudioCtx) {
       playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
       nextPlayTime = playbackAudioCtx.currentTime
@@ -188,6 +194,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
     const audioBuffer = playbackAudioCtx.createBuffer(1, float32.length, 16000)
     audioBuffer.getChannelData(0).set(float32)
+
+    // 解包期间发生了打断：丢弃本块，避免旧语音继续播报
+    if (gen !== playbackGeneration) return
 
     // 使用调度播放，确保音频块按顺序播放，不会重叠
     const source = playbackAudioCtx.createBufferSource()
@@ -208,8 +217,10 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     nextPlayTime = startTime + audioBuffer.duration
   }
 
-  // 打断（barge-in）：立即停止所有排队/播放中的 AI 语音
+  // 打断（barge-in）：立即停止所有排队/播放中的 AI 语音，
+  // 并提升播放代际，使后端已发出但尚未到达的"在途"音频块作废
   function cancelPlayback() {
+    playbackGeneration++
     activeSources.forEach((s) => {
       try {
         s.stop()
@@ -339,7 +350,14 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     }
 
     const now = performance.now()
-    if (energy > VAD_ENERGY_THRESHOLD) {
+    // AI 播报期间（activeSources 非空）抬高开口判定阈值：
+    // 扬声器声音被麦克风拾取时能量通常较低，抬高阈值可避免 AI 自我打断造成卡壳；
+    // 用户正常说话音量远高于该阈值，打断依然灵敏
+    const threshold =
+      activeSources.size > 0
+        ? VAD_ENERGY_THRESHOLD * AI_SPEAKING_VAD_FACTOR
+        : VAD_ENERGY_THRESHOLD
+    if (energy > threshold) {
       if (!isSpeaking) {
         // 连续发音达到阈值才判定开口，避免环境噪声毛刺
         if (speechStartCandidateAt === 0) {
@@ -350,8 +368,14 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         }
         speechStartCandidateAt = 0
         isSpeaking = true
-        // 用户开口说话：立即打断 AI（停止播放 + 通知服务端终止生成）
-        if (state.value === 'speaking' || state.value === 'processing') {
+        // 用户开口说话：立即打断 AI（停止播放 + 通知服务端终止生成）。
+        // 只要此刻有音频在播/待播（含后端已发出、尚未到达的在途块窗口）即打断，
+        // 不依赖状态机，避免 listening 状态窗口内旧语音继续播报
+        if (
+          activeSources.size > 0 ||
+          state.value === 'speaking' ||
+          state.value === 'processing'
+        ) {
           cancelPlayback()
           setState('listening')
           if (ws?.readyState === WebSocket.OPEN) {
@@ -365,6 +389,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       // 静音持续达到阈值：判定说话结束，通知服务端开始识别
       if (now - lastSpeechActivityAt >= VOICE_STOP_MS) {
         isSpeaking = false
+        // 先把节流缓冲中的尾包音频发出，确保服务端收到的音频完整（识别更准）
+        flushPendingAudio()
         if (ws?.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'end_of_speech' }))
         }
@@ -453,6 +479,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     isSpeaking = false
     speechStartCandidateAt = 0
     lastSpeechActivityAt = 0
+    // 丢弃节流缓冲中未发送的音频：静音期间的残留不混入取消静音后的第一段识别
+    pendingAudio = []
+    lastAudioFlushAt = 0
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'mute', muted: isMuted.value }))
     }
@@ -505,6 +534,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       playbackAudioCtx = null
     }
     activeSources.clear()
+    // 通话结束：提升代际，作废任何仍在途/残留的音频块
+    playbackGeneration++
     // 清空未发送的音频缓冲与定时器残留
     pendingAudio = []
     lastAudioFlushAt = 0
