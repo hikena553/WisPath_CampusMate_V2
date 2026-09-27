@@ -35,6 +35,8 @@ const router = createRouter({
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },
         { path: 'community', name: 'student-community', component: () => import('@/views/student/CommunityView.vue'), meta: { keepAlive: false } },
         { path: 'emotion', name: 'student-emotion', component: () => import('@/views/student/EmotionTrashPage.vue'), meta: { keepAlive: false } },
+        { path: 'my-requests', name: 'student-my-requests', component: () => import('@/views/student/MyRequestsPage.vue'), meta: { keepAlive: false } },
+        { path: 'materials', name: 'student-materials', component: () => import('@/views/student/MaterialArchivePage.vue'), meta: { keepAlive: false } },
         { path: 'feedback', component: () => import('@/views/student/FeedbackPage.vue') },
         { path: 'profile', component: () => import('@/views/student/ProfilePage.vue') },
       ],

@@ -181,6 +181,62 @@
           </div>
           <el-empty v-else description="暂无待办申请" :image-size="80" />
         </div>
+
+        <!-- 材料档案审批 -->
+        <div class="section-card">
+          <div class="section-header">
+            <h3><el-icon><FolderOpened /></el-icon> 材料档案</h3>
+            <el-tag v-if="pendingMaterials.length" type="warning" effect="plain" size="small">
+              {{ pendingMaterials.length }} 条待归档
+            </el-tag>
+          </div>
+          <!-- 桌面端表格 -->
+          <div class="desktop-table" v-if="!isMobile">
+            <el-table :data="pendingMaterials" v-if="pendingMaterials.length" style="width:100%"
+              :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
+              <el-table-column prop="applicant_name" label="学生" width="100" />
+              <el-table-column prop="title" label="材料名称" min-width="180" show-overflow-tooltip />
+              <el-table-column label="操作" width="180" fixed="right">
+                <template #default="{ row }">
+                  <el-button type="success" size="small" @click="handleMaterialApprove(row.id)">
+                    <el-icon><Check /></el-icon> 通过归档
+                  </el-button>
+                  <el-button type="danger" size="small" plain @click="handleMaterialReject(row.id)">
+                    <el-icon><Close /></el-icon> 驳回
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <!-- 移动端卡片 -->
+          <div class="mobile-cards" v-if="isMobile && pendingMaterials.length">
+            <div class="mobile-card" v-for="row in pendingMaterials" :key="row.id">
+              <div class="mobile-card-header">
+                <span class="mobile-card-student">{{ row.applicant_name }}</span>
+                <el-tag size="small" effect="plain">材料档案</el-tag>
+              </div>
+              <div class="mobile-card-body">
+                <div class="mobile-card-row">
+                  <span class="mobile-card-label">材料</span>
+                  <span class="mobile-card-value">{{ row.title }}</span>
+                </div>
+                <div class="mobile-card-row">
+                  <span class="mobile-card-label">提交时间</span>
+                  <span class="mobile-card-value">{{ row.created_at ? row.created_at.slice(0, 16) : '' }}</span>
+                </div>
+              </div>
+              <div class="mobile-card-actions">
+                <el-button type="success" size="small" @click="handleMaterialApprove(row.id)">
+                  <el-icon><Check /></el-icon> 通过
+                </el-button>
+                <el-button type="danger" size="small" plain @click="handleMaterialReject(row.id)">
+                  <el-icon><Close /></el-icon> 驳回
+                </el-button>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无待归档材料" :image-size="80" />
+        </div>
       </el-tab-pane>
 
       <el-tab-pane label="已通过" name="approved">
@@ -324,6 +380,18 @@
         <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="rejectMaterialVisible" title="驳回材料" width="420px" :close-on-click-modal="false">
+      <el-form label-position="top">
+        <el-form-item label="驳回理由" required>
+          <el-input v-model="rejectMaterialReason" type="textarea" :rows="3" placeholder="请填写驳回理由，如：材料不清晰、格式不符合要求" maxlength="200" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rejectMaterialVisible = false">取消</el-button>
+        <el-button type="danger" @click="confirmMaterialReject">确认驳回</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -332,10 +400,11 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose,
-  InfoFilled, Loading, Check, Close
+  InfoFilled, Loading, Check, Close, FolderOpened
 } from '@element-plus/icons-vue'
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
+import { getApprovalPending, reviewApproval, getApprovalStats, type ApprovalItem, type ApprovalStats } from '@/api/approval'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
 import { useResponsive } from '@/composables/useResponsive'
 
@@ -344,6 +413,8 @@ const { isMobile } = useResponsive()
 const activeTab = ref('pending')
 const pendingLeaves = ref<LeaveRequestOut[]>([])
 const pendingTickets = ref<ServiceTicket[]>([])
+const pendingMaterials = ref<ApprovalItem[]>([])
+const stats = ref<ApprovalStats | null>(null)
 const approvedLeaves = ref<LeaveRequestOut[]>([])
 const rejectedLeaves = ref<LeaveRequestOut[]>([])
 const analysisMap = ref<Record<number, { suggestion: string; reason: string }>>({})
@@ -351,6 +422,10 @@ const rejectVisible = ref(false)
 const rejectTarget = ref<LeaveRequestOut | null>(null)
 const rejectFormRef = ref<any>()
 const rejectForm = reactive({ reason: '' })
+// 材料档案驳回弹窗状态
+const rejectMaterialTarget = ref<number | null>(null)
+const rejectMaterialReason = ref('')
+const rejectMaterialVisible = ref(false)
 const rejectRules = {
   reason: [{ required: true, message: '请填写拒绝理由', trigger: 'blur' }],
 }
@@ -370,7 +445,7 @@ const pageSizeApprovedLeaves = ref(50)
 const currentPageRejectedLeaves = ref(1)
 const pageSizeRejectedLeaves = ref(50)
 
-const totalPending = computed(() => pendingLeaves.value.length + pendingTickets.value.length)
+const totalPending = computed(() => pendingLeaves.value.length + pendingTickets.value.length + pendingMaterials.value.length)
 
 const paginatedPendingLeaves = computed(() => {
   const start = (currentPageLeaves.value - 1) * pageSizeLeaves.value
@@ -434,17 +509,48 @@ function typeLabel(t: string) {
 }
 
 async function loadData() {
+  loadStats()
   if (activeTab.value === 'pending') {
     try {
       pendingLeaves.value = await getPendingLeaves()
       loadAnalysis()
     } catch {}
     try { pendingTickets.value = (await getTickets()).filter((t: ServiceTicket) => t.status === 'pending') } catch {}
+    try { pendingMaterials.value = await getApprovalPending({ kind: 'material', status: 'pending' }) } catch { pendingMaterials.value = [] }
   } else if (activeTab.value === 'approved') {
     try { approvedLeaves.value = await getAllLeaves('approved') } catch {}
   } else if (activeTab.value === 'rejected') {
     try { rejectedLeaves.value = await getAllLeaves('rejected') } catch {}
   }
+}
+
+async function loadStats() {
+  try { stats.value = await getApprovalStats(30) } catch { stats.value = null }
+}
+
+async function handleMaterialApprove(id: number) {
+  try {
+    await reviewApproval('material', id, 'approve')
+    ElMessage.success('已通过归档')
+    loadData()
+  } catch { ElMessage.error('操作失败') }
+}
+
+function handleMaterialReject(id: number) {
+  rejectMaterialTarget.value = id
+  rejectMaterialReason.value = ''
+  rejectMaterialVisible.value = true
+}
+
+async function confirmMaterialReject() {
+  if (!rejectMaterialTarget.value) return
+  if (!rejectMaterialReason.value.trim()) return ElMessage.warning('请填写驳回原因')
+  try {
+    await reviewApproval('material', rejectMaterialTarget.value, 'reject', rejectMaterialReason.value)
+    ElMessage.success('已驳回')
+    rejectMaterialVisible.value = false
+    loadData()
+  } catch { ElMessage.error('操作失败') }
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

@@ -203,6 +203,21 @@ export interface ServiceTicket {
   attachments: string[] | null
 }
 
+export interface Material {
+  id: number
+  student_id: number
+  title: string
+  category: string
+  category_label: string
+  file_url: string
+  file_name: string
+  file_type: string
+  remark: string | null
+  status: string
+  reject_reason: string | null
+  created_at: string
+}
+
 export interface LostFoundComment {
   id: number
   item_id: number

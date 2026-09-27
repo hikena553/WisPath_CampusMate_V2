@@ -16,6 +16,28 @@
       </div>
     </div>
 
+    <!-- 我的事务 -->
+    <div class="section-card">
+      <div class="section-title">我的事务</div>
+      <div class="my-affairs">
+        <div class="affair-item" @click="router.push('/student/my-requests?tab=leave')">
+          <div class="affair-ico" style="background:rgba(64,158,255,.1);color:#409eff;"><el-icon :size="20"><Calendar /></el-icon></div>
+          <div class="affair-info"><b>我的申请</b><span>请假 / 证明 / 项目</span></div>
+          <div class="affair-count" v-if="leaveRecords.length + tickets.length">{{ leaveRecords.length + tickets.length }}</div>
+        </div>
+        <div class="affair-item" @click="router.push('/student/my-requests?tab=ticket')">
+          <div class="affair-ico" style="background:rgba(230,162,60,.1);color:#e6a23c;"><el-icon :size="20"><Tickets /></el-icon></div>
+          <div class="affair-info"><b>我的工单</b><span>办事进度跟踪</span></div>
+          <div class="affair-count" v-if="tickets.length">{{ tickets.length }}</div>
+        </div>
+        <div class="affair-item" @click="router.push('/student/materials')">
+          <div class="affair-ico" style="background:rgba(103,194,58,.1);color:#67c23a;"><el-icon :size="20"><FolderOpened /></el-icon></div>
+          <div class="affair-info"><b>材料档案</b><span>个人材料归档</span></div>
+          <div class="affair-count" v-if="materialCount">{{ materialCount }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 办事服务 -->
     <div class="section-card">
       <div class="section-title">办事服务</div>
@@ -519,6 +541,7 @@ import { useAuthStore } from '@/stores/auth'
 import { createLeave, getMyLeaves, deleteLeave } from '@/api/leave'
 import { createTicket, getTickets, cancelTicket } from '@/api/service'
 import { getLostFoundItems, createLostFoundItem, getLostFoundItem } from '@/api/lost_found'
+import { getMyMaterials } from '@/api/material'
 import { getConversations } from '@/api/messages'
 import { getStudentAnnouncements, getUnreadCount } from '@/api/announcement'
 import { usePolling } from '@/composables/usePolling'
@@ -527,7 +550,7 @@ import UploadBtn from '@/components/upload/UploadBtn.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound, Message,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell, Collection
+  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -543,6 +566,8 @@ const lostfoundTab = ref<'browse' | 'publish'>('browse')
 
 const leaveRecords = ref<any[]>([])
 const tickets = ref<any[]>([])
+const materialCount = ref(0)
+const materialList = ref<any[]>([])
 const lostfoundItems = ref<any[]>([])
 const lostfoundDetail = ref<any>(null)
 const lostfoundDetailVisible = ref(false)
@@ -875,6 +900,11 @@ async function loadData() {
     tickets.value = ticketList as any
   } catch {}
 
+  try {
+    materialList.value = (await getMyMaterials()) as any
+    materialCount.value = materialList.value.length
+  } catch {}
+
   checkUnreadAnnouncements()
 
   // 获取未读消息数
@@ -1198,6 +1228,15 @@ onMounted(() => {
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
+
+.my-affairs { display: flex; flex-direction: column; gap: 10px; }
+.affair-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fbfcff; border: 1px solid rgba(64,158,255,.08); border-radius: 12px; cursor: pointer; transition: transform .15s; }
+.affair-item:active { transform: scale(.98); }
+.affair-ico { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.affair-info { flex: 1; min-width: 0; }
+.affair-info b { display: block; font-size: 15px; color: #1a1a2e; }
+.affair-info span { font-size: 12px; color: #909399; }
+.affair-count { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: rgba(64,158,255,.1); color: #409eff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 
 .service-item {
   display: flex;
