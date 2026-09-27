@@ -68,19 +68,27 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sa
     return buf.getvalue()
 
 
-def _take_complete_sentences(buffer: str) -> tuple[list[str], str]:
-    """从流式文本缓冲中取出以句末标点结尾的完整句子，返回 (句子列表, 剩余缓冲)。
+def _take_tts_phrases(buffer: str) -> tuple[list[str], str]:
+    """从流式文本缓冲中切出可立即合成的短语，返回 (短语列表, 剩余缓冲)。
 
-    LLM 流式输出期间按句切分，把完整句子立即交给 TTS 合成，
-    实现"边说边出"的同步效果；残余片段留在缓冲继续累积。
+    借鉴流式语音合成的"早出音"设计：不必等完整句子，
+    - 句末标点（。！？!?；;\n…）处必切；
+    - 停顿标点（，、,）处若已积累较完整短语（>=8 字）也切，尽早开讲；
+    - 无标点长句按 20 字硬切兜底，避免首音延迟。
     """
-    sentences: list[str] = []
+    phrases: list[str] = []
     start = 0
     for i, ch in enumerate(buffer):
-        if ch in "。！？!?；;…\n":
-            sentences.append(buffer[start:i + 1])
+        if ch in "。！？!?；;\n…":
+            phrases.append(buffer[start:i + 1])
             start = i + 1
-    return sentences, buffer[start:]
+        elif ch in "，、," and i - start >= 8:
+            phrases.append(buffer[start:i + 1])
+            start = i + 1
+        elif i - start >= 20:
+            phrases.append(buffer[start:i + 1])
+            start = i + 1
+    return phrases, buffer[start:]
 
 
 async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = None) -> str:
@@ -349,39 +357,63 @@ async def handle_voice_connection(
                                    f"请感知并顺应学生的情绪状态，语气温暖、共情地回应；若学生情绪低落或紧张，请给予安抚与支持，"
                                    f"避免生硬说教。回答保持简洁。",
                     })
-                messages.extend(history[-10:])  # 最近 10 条历史
+                messages.extend(history[-8:])  # 最近 8 条历史，控制 LLM 首字延迟
                 messages.append({"role": "user", "content": text})
 
                 sentence_buf = ""
                 speaking_notified = False
                 tts_chain: asyncio.Task | None = None
 
-                def enqueue_tts(sentence: str) -> None:
-                    """把一句文本交给 TTS 后台合成并发送；链式等待保证语音播放顺序"""
-                    nonlocal tts_chain, speaking_notified
+                async def _synth_pcm(phrase: str) -> bytes:
+                    """独立合成一段短语并返回 PCM 字节；失败返回空串，不影响整体"""
+                    pcm = b""
+                    try:
+                        async for chunk in tokenplan_tts(phrase, client=http_client):
+                            pcm += chunk
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        logger.exception("短语语音合成失败")
+                    return pcm
+
+                def enqueue_tts(phrase: str) -> None:
+                    """短语级流式 TTS：合成立即并发发起，发送严格按入队顺序链式执行，
+                    语音不重叠不乱序，且多段合成时间重叠，整体播报显著提前"""
+                    nonlocal tts_chain
                     prev = tts_chain
+                    synth = asyncio.create_task(_synth_pcm(phrase))
 
                     async def runner() -> None:
                         nonlocal speaking_notified
                         if prev is not None:
                             try:
                                 await prev
+                            except asyncio.CancelledError:
+                                raise
                             except Exception:
                                 pass
+                        if cancel_event.is_set():
+                            return
+                        # 前一段已播放完，本段合成大概率已完成，基本零等待
                         try:
-                            async for chunk in tokenplan_tts(sentence, client=http_client):
-                                if cancel_event.is_set():
-                                    break
-                                if not speaking_notified:
-                                    speaking_notified = True
-                                    await safe_send_json(websocket, {"type": "state", "state": "speaking"})
-                                if not await safe_send_json(websocket, {
-                                    "type": "ai_audio",
-                                    "data": base64.b64encode(chunk).decode(),
-                                }):
-                                    break
+                            pcm = await synth
+                        except asyncio.CancelledError:
+                            raise
                         except Exception:
-                            logger.exception("句子语音合成失败")
+                            return
+                        if cancel_event.is_set() or not pcm:
+                            return
+                        if not speaking_notified:
+                            speaking_notified = True
+                            await safe_send_json(websocket, {"type": "state", "state": "speaking"})
+                        for i in range(0, len(pcm), 8192):
+                            if cancel_event.is_set():
+                                break
+                            if not await safe_send_json(websocket, {
+                                "type": "ai_audio",
+                                "data": base64.b64encode(pcm[i:i + 8192]).decode(),
+                            }):
+                                break
 
                     tts_chain = asyncio.create_task(runner())
 
@@ -405,26 +437,29 @@ async def handle_voice_connection(
                         sentence_buf += delta.content
                         if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
                             break
-                        # 按句切分：完整句子立即合成语音，实现"边说边出"
-                        sentences, sentence_buf = _take_complete_sentences(sentence_buf)
-                        for s in sentences:
-                            enqueue_tts(s)
-                        # 无标点长文本硬切，避免首音延迟
-                        if len(sentence_buf) >= 40:
-                            enqueue_tts(sentence_buf)
-                            sentence_buf = ""
+                        # 短语级切分：产出即合成，实现"早开场"（不等完整句子）
+                        phrases, sentence_buf = _take_tts_phrases(sentence_buf)
+                        for p in phrases:
+                            enqueue_tts(p)
+
+                except asyncio.CancelledError:
+                    raise
                 except Exception:
                     logger.exception("LLM 失败")
                     await safe_send_json(websocket, {"type": "error", "message": "AI 回复失败"})
                     await safe_send_json(websocket, {"type": "state", "state": "listening"})
                     return
 
+                # 打断时：已入队的短语通过 runner 内的 cancel_event 检查跳过发送，
+                # 合成任务自然结束，保证本轮历史/DB 正常收尾
                 if not interrupted_llm and sentence_buf.strip():
                     enqueue_tts(sentence_buf)
 
                 if tts_chain is not None:
                     try:
                         await tts_chain
+                    except asyncio.CancelledError:
+                        raise
                     except Exception:
                         pass
 
@@ -489,7 +524,7 @@ async def handle_voice_connection(
                 if round_task is not None and not round_task.done():
                     try:
                         await round_task
-                    except Exception:
+                    except (Exception, asyncio.CancelledError):
                         pass
                 cancel_event.clear()
                 round_task = asyncio.create_task(process_round(payload))
@@ -518,7 +553,7 @@ async def handle_voice_connection(
             round_task.cancel()
             try:
                 await round_task
-            except Exception:
+            except (Exception, asyncio.CancelledError):
                 pass
         # 视觉情绪落库（情绪垃圾桶数据源）
         if emotion_timeline:

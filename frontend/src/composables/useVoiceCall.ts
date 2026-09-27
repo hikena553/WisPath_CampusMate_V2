@@ -42,9 +42,15 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
   const VAD_ENERGY_THRESHOLD = 0.02
   const VOICE_START_MS = 40   // 连续发音超过该时长视为开始说话（防单帧毛刺）
-  const VOICE_STOP_MS = 450   // 静音持续该时长视为说话结束（说完尽快识别）
+  const VOICE_STOP_MS = 400   // 静音持续该时长视为说话结束（说完尽快识别）
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
+  // 音频上传节流：合并小块音频再发送，避免高频消息挤占 WebSocket，
+  // 延迟回答文字/语音的回传（豆包等实时方案的共同做法：音频通道限流保活）
+  const AUDIO_FLUSH_INTERVAL_MS = 60    // 至多每 60ms 发一包
+  const AUDIO_FLUSH_MAX_SAMPLES = 1536  // 每包最多约 96ms 音频
+  let pendingAudio: number[] = []
+  let lastAudioFlushAt = 0
 
   function setState(s: VoiceState) {
     state.value = s
@@ -279,13 +285,12 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         }
 
         if (data.audio && ws?.readyState === WebSocket.OPEN && !isMuted.value) {
-          // 发送音频数据到服务端
+          // 发送音频数据到服务端（节流合并，避免高频消息挤占 WebSocket）
           const int16 = new Int16Array(data.audio.length)
           for (let i = 0; i < data.audio.length; i++) {
             int16[i] = Math.max(-32768, Math.min(32767, data.audio[i] * 32768))
           }
-          const base64 = arrayBufferToBase64(int16.buffer)
-          ws.send(JSON.stringify({ type: 'audio', data: base64 }))
+          pushAudioSamples(int16)
         }
       }
     } catch {
@@ -305,14 +310,13 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         energy = Math.sqrt(energy / samples.length)
         processVAD(energy)
 
-        // 发送音频
+        // 发送音频（节流合并）
         if (ws?.readyState === WebSocket.OPEN && !isMuted.value) {
           const int16 = new Int16Array(samples.length)
           for (let i = 0; i < samples.length; i++) {
             int16[i] = Math.max(-32768, Math.min(32767, samples[i] * 32768))
           }
-          const base64 = arrayBufferToBase64(int16.buffer)
-          ws.send(JSON.stringify({ type: 'audio', data: base64 }))
+          pushAudioSamples(int16)
         }
       }
     }
@@ -375,6 +379,30 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       binary += String.fromCharCode(bytes[i])
     }
     return btoa(binary)
+  }
+
+  // ---- 音频上传节流：采集线程先汇入缓冲，按时间/长度阈值批量发送 ----
+  function pushAudioSamples(int16: Int16Array) {
+    for (let i = 0; i < int16.length; i++) {
+      pendingAudio.push(int16[i])
+    }
+    const now = performance.now()
+    if (
+      now - lastAudioFlushAt >= AUDIO_FLUSH_INTERVAL_MS ||
+      pendingAudio.length >= AUDIO_FLUSH_MAX_SAMPLES
+    ) {
+      lastAudioFlushAt = now
+      flushPendingAudio()
+    }
+  }
+
+  function flushPendingAudio() {
+    if (!pendingAudio.length) return
+    const samples = new Int16Array(pendingAudio)
+    pendingAudio = []
+    if (ws?.readyState === WebSocket.OPEN && !isMuted.value) {
+      ws.send(JSON.stringify({ type: 'audio', data: arrayBufferToBase64(samples.buffer) }))
+    }
   }
 
   function startPing() {
@@ -477,6 +505,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       playbackAudioCtx = null
     }
     activeSources.clear()
+    // 清空未发送的音频缓冲与定时器残留
+    pendingAudio = []
+    lastAudioFlushAt = 0
 
     if (ws) {
       ws.close()
