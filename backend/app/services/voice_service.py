@@ -499,6 +499,11 @@ async def handle_voice_connection(
                 cancel_event.set()
                 await safe_send_json(websocket, {"type": "state", "state": "listening"})
 
+            elif msg["type"] == "mute":
+                # 麦克风静音：丢弃已累积的音频，避免取消静音后识别到静音前残留
+                if msg.get("muted"):
+                    audio_buffer.clear()
+
             elif msg["type"] == "ping":
                 await safe_send_json(websocket, {"type": "pong"})
 

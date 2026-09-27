@@ -167,6 +167,7 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send, cancel
   onTranscript: (text, final) => {
     if (final && text.trim()) {
       // 新的一轮提问开始：此前的 AI 回答作废，只保留最近一次输出
+      stopTypewriter()
       discardAI = false
       // 用户说完，追加用户消息 + 空的 AI 占位（等待回复）
       chatHistory.value.push({ id: `u-${Date.now()}`, role: 'user', text })
@@ -175,6 +176,7 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send, cancel
   },
   onSpeechStart: () => {
     // 用户开口：AI 正在输出的内容立即作废（界面只保留最新一轮）
+    stopTypewriter()
     discardAI = true
     const last = chatHistory.value[chatHistory.value.length - 1]
     if (last && last.role === 'assistant') {
@@ -183,12 +185,14 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send, cancel
   },
   onAIText: (text) => {
     if (discardAI) return
-    // 实时流式更新最后一条 AI 消息
+    // 打字机效果：文本先进缓冲，由定时器逐字落到气泡上
     const last = chatHistory.value[chatHistory.value.length - 1]
-    if (last && last.role === 'assistant') {
-      last.text += text
-    } else {
-      chatHistory.value.push({ id: `a-${Date.now()}`, role: 'assistant', text })
+    if (!last || last.role !== 'assistant') {
+      chatHistory.value.push({ id: `a-${Date.now()}`, role: 'assistant', text: '' })
+    }
+    typeBuffer += text
+    if (!typeTimer) {
+      typeTimer = window.setInterval(typewriterTick, TYPE_INTERVAL_MS)
     }
   },
   onError: (msg) => { errorMsg.value = msg },
@@ -207,6 +211,39 @@ const camVideo = ref<'cam' | null>(null) // 标记视频元素是否就绪
 const camVideoRef = ref<HTMLVideoElement>()
 // 用户开口后，AI 旧回答（文字/语音）作废，只保留最近一轮
 let discardAI = false
+
+// ---- 打字机效果：AI 文本流先进缓冲，定时器逐字落到气泡 ----
+const TYPE_INTERVAL_MS = 35      // 每次输出间隔（毫秒）
+const TYPE_CHARS_PER_TICK = 3    // 每次输出字符数（快于 LLM 生成速率，不拖慢整体）
+let typeBuffer = ''
+let typeTimer: number | null = null
+
+function typewriterTick() {
+  if (discardAI) {
+    stopTypewriter()
+    return
+  }
+  const last = chatHistory.value[chatHistory.value.length - 1]
+  if (!last || last.role !== 'assistant') {
+    stopTypewriter()
+    return
+  }
+  if (!typeBuffer) {
+    stopTypewriter()
+    return
+  }
+  const take = Math.min(TYPE_CHARS_PER_TICK, typeBuffer.length)
+  last.text += typeBuffer.slice(0, take)
+  typeBuffer = typeBuffer.slice(take)
+}
+
+function stopTypewriter() {
+  if (typeTimer !== null) {
+    window.clearInterval(typeTimer)
+    typeTimer = null
+  }
+  typeBuffer = ''
+}
 
 const currentEmotionEmoji = computed(() => {
   if (!currentEmotion.value) return ''
@@ -310,6 +347,7 @@ watch(() => props.visible, async (v) => {
     }
   } else {
     stopPulse()
+    stopTypewriter()
     cancelPlayback()
     await flushEmotionRecords()
     emotionDetection.stop()
@@ -363,6 +401,7 @@ async function handleMicClick() {
 
 function handleClose() {
   stopPulse()
+  stopTypewriter()
   cancelPlayback()
   endCall()
   disconnectVisualizer()

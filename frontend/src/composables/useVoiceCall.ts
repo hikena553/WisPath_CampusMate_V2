@@ -32,16 +32,17 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let pingInterval: ReturnType<typeof setInterval> | null = null
   let reconnectAttempts = 0
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
-  let silenceFrames = 0
-  let speechFrames = 0
+  // VAD 状态（时间制：与帧长无关，worklet / ScriptProcessor 两条路径行为一致）
+  let speechStartCandidateAt = 0 // 连续发音候选起点（毫秒时间戳）
+  let lastSpeechActivityAt = 0   // 最近一次发音活动时刻
   let isSpeaking = false
   let nextPlayTime = 0
   // 已调度的播放源集合：打断时立即停止所有待播/播放中的音频
   const activeSources = new Set<AudioBufferSourceNode>()
 
   const VAD_ENERGY_THRESHOLD = 0.02
-  const VAD_SPEECH_FRAMES = 3
-  const VAD_SILENCE_FRAMES = 12
+  const VOICE_START_MS = 40   // 连续发音超过该时长视为开始说话（防单帧毛刺）
+  const VOICE_STOP_MS = 450   // 静音持续该时长视为说话结束（说完尽快识别）
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
 
@@ -324,10 +325,26 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     // 驱动音量回调
     options.onAudioLevel?.(energy)
 
+    // 麦克风静音时冻结语音活动检测：不打断 AI、不触发说话/结束事件，
+    // 保证取消静音后从干净状态重新开始识别
+    if (isMuted.value) {
+      isSpeaking = false
+      speechStartCandidateAt = 0
+      lastSpeechActivityAt = 0
+      return
+    }
+
+    const now = performance.now()
     if (energy > VAD_ENERGY_THRESHOLD) {
-      speechFrames++
-      silenceFrames = 0
-      if (speechFrames >= VAD_SPEECH_FRAMES && !isSpeaking) {
+      if (!isSpeaking) {
+        // 连续发音达到阈值才判定开口，避免环境噪声毛刺
+        if (speechStartCandidateAt === 0) {
+          speechStartCandidateAt = now
+        }
+        if (now - speechStartCandidateAt < VOICE_START_MS) {
+          return
+        }
+        speechStartCandidateAt = 0
         isSpeaking = true
         // 用户开口说话：立即打断 AI（停止播放 + 通知服务端终止生成）
         if (state.value === 'speaking' || state.value === 'processing') {
@@ -339,12 +356,11 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         }
         options.onSpeechStart?.()
       }
-    } else {
-      silenceFrames++
-      speechFrames = 0
-      if (silenceFrames >= VAD_SILENCE_FRAMES && isSpeaking) {
+      lastSpeechActivityAt = now
+    } else if (isSpeaking) {
+      // 静音持续达到阈值：判定说话结束，通知服务端开始识别
+      if (now - lastSpeechActivityAt >= VOICE_STOP_MS) {
         isSpeaking = false
-        // 语音结束，通知服务端
         if (ws?.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'end_of_speech' }))
         }
@@ -405,6 +421,10 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
   function toggleMute() {
     isMuted.value = !isMuted.value
+    // 切换静音时彻底重置 VAD 状态：关闭后不残留中间态，重新打开立即可用
+    isSpeaking = false
+    speechStartCandidateAt = 0
+    lastSpeechActivityAt = 0
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'mute', muted: isMuted.value }))
     }
@@ -464,9 +484,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     }
 
     reconnectAttempts = 0
-    silenceFrames = 0
-    speechFrames = 0
     isSpeaking = false
+    speechStartCandidateAt = 0
+    lastSpeechActivityAt = 0
   }
 
   onUnmounted(() => {
