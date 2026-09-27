@@ -32,7 +32,8 @@ TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com"
 VOICE_STT_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/aigc/multimodal-generation/generation"
 VOICE_STT_MODEL = "qwen-audio-3.0-asr-flash"
 VOICE_TTS_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/audio/tts/SpeechSynthesizer"
-VOICE_TTS_MODEL = "qwen-audio-3.0-tts-plus"
+# flash 快模型：相比 plus 版首包延迟显著更低，音色兼容（longanhuan_v3.6）
+VOICE_TTS_MODEL = "qwen-audio-3.0-tts-flash"
 VOICE_TTS_VOICE = "longanhuan_v3.6"
 
 
@@ -68,26 +69,26 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sa
     return buf.getvalue()
 
 
-def _take_tts_phrases(buffer: str) -> tuple[list[str], str]:
+def _take_tts_phrases(buffer: str, first_early: bool = False) -> tuple[list[str], str]:
     """从流式文本缓冲中切出可立即合成的短语，返回 (短语列表, 剩余缓冲)。
 
-    借鉴流式语音合成的"早出音"设计：不必等完整句子，
+    借鉴豆包/流式语音合成的"早出音"设计：不必等完整句子，
     - 句末标点（。！？!?；;\n…）处必切；
-    - 停顿标点（，、,）处若已积累较完整短语（>=8 字）也切，尽早开讲；
-    - 无标点长句按 20 字硬切兜底，避免首音延迟。
+    - 首段（first_early=True）满 4 字即切，把首音前合成等待压到最小；
+    - 后续每 8 字一切，保持合成粒度适中、请求次数可控。
     """
     phrases: list[str] = []
     start = 0
+    min_len = 4 if first_early else 8
     for i, ch in enumerate(buffer):
         if ch in "。！？!?；;\n…":
             phrases.append(buffer[start:i + 1])
             start = i + 1
-        elif ch in "，、," and i - start >= 8:
+            min_len = 8
+        elif i - start >= min_len:
             phrases.append(buffer[start:i + 1])
             start = i + 1
-        elif i - start >= 20:
-            phrases.append(buffer[start:i + 1])
-            start = i + 1
+            min_len = 8
     return phrases, buffer[start:]
 
 
@@ -132,7 +133,8 @@ async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = N
 
 
 async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None):
-    """调用 Token Plan 语音合成（qwen-audio-3.0-tts-plus），yield PCM 16kHz 16bit mono 分块"""
+    """调用 Token Plan 语音合成（qwen-audio-3.0-tts-flash 快模型），
+    流式下载音频文件，yield PCM 16kHz 16bit mono 分块（边下载边产出，首块尽早送达）"""
     api_key = _get_voice_api_key()
     if not api_key:
         raise RuntimeError("语音合成未配置 API Key")
@@ -148,7 +150,7 @@ async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None):
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    async def _fetch(cl: httpx.AsyncClient) -> bytes:
+    async def _stream(cl: httpx.AsyncClient):
         resp = await cl.post(VOICE_TTS_URL, headers=headers, json=payload)
         if resp.status_code >= 400:
             raise RuntimeError(f"语音合成接口返回 {resp.status_code}: {resp.text[:200]}")
@@ -156,21 +158,20 @@ async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None):
         audio_url = (body.get("output") or {}).get("audio", {}).get("url")
         if not audio_url:
             raise RuntimeError(f"语音合成响应缺少音频地址: {body}")
-        audio_resp = await cl.get(audio_url)
-        audio_resp.raise_for_status()
-        return await audio_resp.aread()
+        # 流式下载：不等待整段音频下载完成，边收边产出
+        async with cl.stream("GET", audio_url) as audio_resp:
+            audio_resp.raise_for_status()
+            async for chunk in audio_resp.aiter_bytes():
+                yield chunk
 
     if client is not None:
-        pcm = await _fetch(client)
+        async for chunk in _stream(client):
+            yield chunk
     else:
         tts_timeout = httpx.Timeout(connect=10, read=120, write=10, pool=10)
         async with httpx.AsyncClient(timeout=tts_timeout) as owned_client:
-            pcm = await _fetch(owned_client)
-
-    # 分块输出，模拟流式，前端可边收边播
-    chunk_size = 16384
-    for i in range(0, len(pcm), chunk_size):
-        yield pcm[i:i + chunk_size]
+            async for chunk in _stream(owned_client):
+                yield chunk
 
 
 async def safe_send_json(websocket: WebSocket, data: dict) -> bool:
@@ -364,24 +365,28 @@ async def handle_voice_connection(
                 speaking_notified = False
                 tts_chain: asyncio.Task | None = None
 
-                async def _synth_pcm(phrase: str) -> bytes:
-                    """独立合成一段短语并返回 PCM 字节；失败返回空串，不影响整体"""
-                    pcm = b""
+                async def _synth_to_queue(phrase: str, q: asyncio.Queue) -> None:
+                    """独立合成一段短语：边产出边放入队列；结束/异常/被打断时放入 None 信号"""
                     try:
                         async for chunk in tokenplan_tts(phrase, client=http_client):
-                            pcm += chunk
+                            if cancel_event.is_set():
+                                break
+                            await q.put(chunk)
                     except asyncio.CancelledError:
                         raise
                     except Exception:
                         logger.exception("短语语音合成失败")
-                    return pcm
+                    finally:
+                        await q.put(None)
 
                 def enqueue_tts(phrase: str) -> None:
-                    """短语级流式 TTS：合成立即并发发起，发送严格按入队顺序链式执行，
-                    语音不重叠不乱序，且多段合成时间重叠，整体播报显著提前"""
+                    """短语级流式 TTS：合成立即并发发起，发送严格按入队顺序链式执行。
+                    每段音频边下载边发送（首块到达即播报，无需等整段下载完），
+                    且多段合成时间重叠，整体播报显著提前"""
                     nonlocal tts_chain
                     prev = tts_chain
-                    synth = asyncio.create_task(_synth_pcm(phrase))
+                    chunk_q: asyncio.Queue[bytes | None] = asyncio.Queue()
+                    synth = asyncio.create_task(_synth_to_queue(phrase, chunk_q))
 
                     async def runner() -> None:
                         nonlocal speaking_notified
@@ -394,26 +399,23 @@ async def handle_voice_connection(
                                 pass
                         if cancel_event.is_set():
                             return
-                        # 前一段已播放完，本段合成大概率已完成，基本零等待
-                        try:
-                            pcm = await synth
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception:
-                            return
-                        if cancel_event.is_set() or not pcm:
-                            return
-                        if not speaking_notified:
-                            speaking_notified = True
-                            await safe_send_json(websocket, {"type": "state", "state": "speaking"})
-                        for i in range(0, len(pcm), 8192):
+                        while True:
+                            chunk = await chunk_q.get()
+                            if chunk is None:
+                                break
                             if cancel_event.is_set():
                                 break
-                            if not await safe_send_json(websocket, {
-                                "type": "ai_audio",
-                                "data": base64.b64encode(pcm[i:i + 8192]).decode(),
-                            }):
-                                break
+                            if not speaking_notified:
+                                speaking_notified = True
+                                await safe_send_json(websocket, {"type": "state", "state": "speaking"})
+                            for i in range(0, len(chunk), 8192):
+                                if cancel_event.is_set():
+                                    break
+                                if not await safe_send_json(websocket, {
+                                    "type": "ai_audio",
+                                    "data": base64.b64encode(chunk[i:i + 8192]).decode(),
+                                }):
+                                    break
 
                     tts_chain = asyncio.create_task(runner())
 
@@ -437,8 +439,11 @@ async def handle_voice_connection(
                         sentence_buf += delta.content
                         if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
                             break
-                        # 短语级切分：产出即合成，实现"早开场"（不等完整句子）
-                        phrases, sentence_buf = _take_tts_phrases(sentence_buf)
+                        # 短语级切分：产出即合成，实现"早开场"（不等完整句子）；
+                        # 首段满 4 字即切，尽快合出第一段语音（其余段 8 字巡航）
+                        phrases, sentence_buf = _take_tts_phrases(
+                            sentence_buf, first_early=(tts_chain is None)
+                        )
                         for p in phrases:
                             enqueue_tts(p)
 

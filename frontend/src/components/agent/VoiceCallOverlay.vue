@@ -95,16 +95,29 @@
             </TransitionGroup>
           </div>
 
-          <!-- 底部控制栏 -->
+          <!-- 底部控制栏（仿豆包：挂断钮 + 渐变光环麦克风） -->
           <div class="voice-controls">
-            <!-- 麦克风 -->
+            <!-- 结束通话 -->
             <button
-              :class="['control-btn', { active: callState === 'listening', muted: isMuted }]"
+              class="hangup-btn"
+              @click="handleClose"
+              :disabled="callState === 'connecting'"
+              title="结束通话"
+            >
+              <el-icon :size="22"><PhoneFilled /></el-icon>
+            </button>
+            <!-- 麦克风：光环圆钮，状态跟随（收音/思考/播报/静音） -->
+            <button
+              :class="['control-btn', micBtnClass]"
               @click="handleMicClick"
               :disabled="callState === 'connecting'"
+              :title="callState === 'idle' ? '开始通话' : (isMuted ? '取消静音' : '静音')"
             >
-              <el-icon :size="24"><Microphone /></el-icon>
-              <div v-if="isMuted" class="btn-slash" />
+              <span class="mic-ring" />
+              <span class="mic-core">
+                <el-icon :size="26"><Microphone /></el-icon>
+              </span>
+              <span v-if="isMuted" class="btn-slash" />
             </button>
           </div>
 
@@ -120,8 +133,9 @@
 import { ref, watch, computed, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Microphone, CloseBold,
+  Microphone, PhoneFilled, CloseBold,
 } from '@element-plus/icons-vue'
+import { getToken } from '@/utils/token'
 import { useVoiceCall, type VoiceState } from '@/composables/useVoiceCall'
 import { useAudioVisualizer } from '@/composables/useAudioVisualizer'
 import { useEmotionDetection, EMOTION_EMOJI } from '@/composables/useEmotionDetection'
@@ -141,9 +155,12 @@ const errorMsg = ref('')
 const audioLevel = ref(0)
 const convListRef = ref<HTMLElement>()
 
-// 对话历史记录
+// 对话历史记录（多轮保留：新提问不清除旧回答，仿豆包通话界面）
 interface ChatEntry { id: string; role: 'user' | 'assistant'; text: string }
 const chatHistory = ref<ChatEntry[]>([])
+
+// 上次打开面板时的会话 ID（用于判断是否切换了会话，切换才清空本地记录）
+let lastConvId: number | null | undefined
 
 // 自动滚动到底部
 function scrollChatToBottom() {
@@ -156,6 +173,28 @@ function scrollChatToBottom() {
 
 watch(chatHistory, scrollChatToBottom, { deep: true })
 
+// 打开通话面板时拉取该会话的历史消息，保留之前轮次的问答
+async function loadHistory() {
+  if (!props.conversationId) return
+  try {
+    const token = getToken()
+    const resp = await fetch(`/api/agent/conversations/${props.conversationId}/messages`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!resp.ok) return
+    const msgs: { id: number; role: string; content: string }[] = await resp.json()
+    const entries = msgs
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-40)
+      .map((m) => ({ id: `h-${m.id}`, role: m.role as 'user' | 'assistant', text: m.content }))
+    if (entries.length) {
+      chatHistory.value = entries
+    }
+  } catch {
+    // 静默失败，不阻断通话
+  }
+}
+
 const { frequencyData, connect, disconnect: disconnectVisualizer } = useAudioVisualizer(9)
 
 const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send, cancelPlayback } = useVoiceCall({
@@ -166,20 +205,22 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send, cancel
   onAudioLevel: (level) => { audioLevel.value = level },
   onTranscript: (text, final) => {
     if (final && text.trim()) {
-      // 新的一轮提问开始：此前的 AI 回答作废，只保留最近一次输出
+      // 多轮保留：不清除旧问答，仅追加用户消息 + 空的 AI 占位（等待回复）
       stopTypewriter()
       discardAI = false
-      // 用户说完，追加用户消息 + 空的 AI 占位（等待回复）
       chatHistory.value.push({ id: `u-${Date.now()}`, role: 'user', text })
       chatHistory.value.push({ id: `a-${Date.now()}`, role: 'assistant', text: '' })
     }
   },
   onSpeechStart: () => {
-    // 用户开口：AI 正在输出的内容立即作废（界面只保留最新一轮）
+    // 用户开口打断：停止打字机与语音播放，丢弃尚未输出的 AI 文本；
+    // 已输出的旧回答保留在历史中（多轮对话，仿豆包通话界面）
     stopTypewriter()
     discardAI = true
+    cancelPlayback()
     const last = chatHistory.value[chatHistory.value.length - 1]
-    if (last && last.role === 'assistant') {
+    if (last && last.role === 'assistant' && !last.text.trim()) {
+      // 仅移除空的打字占位气泡，不删除已完成的回答
       chatHistory.value.pop()
     }
   },
@@ -201,6 +242,14 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send, cancel
 // 同步 muted 状态
 watch(voiceMuted, (v) => { isMuted.value = v })
 
+// 麦克风按钮状态类（仿豆包：收音蓝色光环呼吸 / 思考播报蓝紫渐变 / 静音红色斜杠）
+const micBtnClass = computed(() => {
+  if (isMuted.value) return 'muted'
+  if (callState.value === 'listening') return 'recording'
+  if (callState.value === 'processing' || callState.value === 'speaking') return 'busy'
+  return ''
+})
+
 // ---- 视觉情绪模块（通话自动开启） ----
 const emotionDetection = useEmotionDetection()
 const camActive = ref(false)
@@ -209,7 +258,7 @@ const currentEmotion = ref<{ emotion: string; label: string; confidence: number 
 const camError = ref('')
 const camVideo = ref<'cam' | null>(null) // 标记视频元素是否就绪
 const camVideoRef = ref<HTMLVideoElement>()
-// 用户开口后，AI 旧回答（文字/语音）作废，只保留最近一轮
+// 用户开口后，AI 未输出的文字作废（已输出的问答保留，多轮对话）
 let discardAI = false
 
 // ---- 打字机效果：AI 文本流先进缓冲，定时器逐字落到气泡 ----
@@ -341,7 +390,12 @@ function stopPulse() {
 watch(() => props.visible, async (v) => {
   if (v) {
     errorMsg.value = ''
-    chatHistory.value = []
+    // 切换了会话才清空本地记录；同会话重开则保留并加载后端历史
+    if (props.conversationId !== lastConvId) {
+      chatHistory.value = []
+      lastConvId = props.conversationId
+    }
+    await loadHistory()
     if (callState.value === 'idle') {
       startPulse()
     }
@@ -758,57 +812,154 @@ onUnmounted(() => {
   transform: translateY(10px);
 }
 
-/* 底部控制栏 */
+/* 底部控制栏（仿豆包：挂断钮 + 炫彩光环麦克风） */
 .voice-controls {
   display: flex;
   justify-content: center;
-  gap: 20px;
+  align-items: center;
+  gap: 28px;
   padding: 16px 0;
   flex-shrink: 0;
 }
 
-.control-btn {
-  width: 56px;
-  height: 56px;
+/* 挂断按钮（红色渐变圆钮） */
+.hangup-btn {
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.75);
+  background: linear-gradient(135deg, #ff6b6b, #e93c3c);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 4px 14px rgba(233, 60, 60, 0.35);
+}
+
+.hangup-btn:hover:not(:disabled) {
+  transform: scale(1.06);
+  box-shadow: 0 6px 20px rgba(233, 60, 60, 0.48);
+}
+
+.hangup-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 麦克风圆钮 */
+.control-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.88);
   color: #5b8def;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: all 0.2s;
-  box-shadow: 0 2px 10px rgba(64, 158, 255, 0.12);
+  transition: all 0.25s;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.18);
 }
 
 .control-btn:hover:not(:disabled) {
   background: #ffffff;
+  transform: scale(1.05);
 }
 
 .control-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.control-btn.active {
-  background: rgba(64, 158, 255, 0.16);
-  color: #409eff;
+.mic-core {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  position: relative;
+  z-index: 1;
 }
 
+/* 炫彩渐变光环（conic 环 + 慢速旋转） */
+.mic-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #409eff, #8f6bff, #ff7eb3, #f7b733, #409eff);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  opacity: 0.45;
+  pointer-events: none;
+  animation: mic-ring-rotate 4s linear infinite;
+}
+
+@keyframes mic-ring-rotate {
+  to { transform: rotate(360deg); }
+}
+
+/* 收音中：蓝色渐变 + 光环呼吸增强 */
+.control-btn.recording {
+  background: linear-gradient(135deg, #409eff, #6fb7ff);
+  color: #fff;
+}
+
+.control-btn.recording .mic-ring {
+  opacity: 1;
+  animation: mic-ring-rotate 2.4s linear infinite, mic-breathe 1.5s ease-in-out infinite;
+}
+
+@keyframes mic-breathe {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.18), 0 0 22px rgba(64, 158, 255, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(64, 158, 255, 0.1), 0 0 36px rgba(64, 158, 255, 0.75);
+  }
+}
+
+/* 思考/播报中：蓝紫渐变 + 柔光脉动 */
+.control-btn.busy {
+  background: linear-gradient(135deg, #8f6bff, #409eff);
+  color: #fff;
+  animation: mic-soft-pulse 2s ease-in-out infinite;
+}
+
+.control-btn.busy .mic-ring {
+  opacity: 0.85;
+}
+
+@keyframes mic-soft-pulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(91, 141, 239, 0.35); }
+  50% { box-shadow: 0 4px 26px rgba(143, 107, 255, 0.6); }
+}
+
+/* 静音：红色斜杠 */
 .control-btn.muted {
-  background: rgba(245, 108, 108, 0.14);
+  background: rgba(245, 108, 108, 0.16);
   color: #f56c6c;
+  box-shadow: 0 4px 14px rgba(245, 108, 108, 0.2);
+}
+
+.control-btn.muted .mic-ring {
+  opacity: 0.3;
+  animation: none;
 }
 
 .btn-slash {
   position: absolute;
-  width: 2px;
-  height: 36px;
+  width: 2.5px;
+  height: 30px;
   background: #ef4444;
   transform: rotate(45deg);
-  border-radius: 1px;
+  border-radius: 2px;
+  z-index: 2;
 }
 
 /* 底部声明 */
@@ -836,12 +987,17 @@ onUnmounted(() => {
 /* 移动端适配 */
 @media (max-width: 767px) {
   .voice-controls {
-    gap: 16px;
+    gap: 22px;
+  }
+
+  .hangup-btn {
+    width: 48px;
+    height: 48px;
   }
 
   .control-btn {
-    width: 52px;
-    height: 52px;
+    width: 56px;
+    height: 56px;
   }
 }
 </style>
