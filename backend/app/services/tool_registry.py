@@ -14,7 +14,7 @@ from app.models.campus import CampusScenery, CampusImpressionItem
 from app.models.lost_found import LostFoundItem, ItemType, ItemStatus
 from app.models.conversation import Conversation, PROJECT_STAGES
 from app.models.crisis import AIDialogSummary, CrisisLevel
-from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, GoalStatus, PlanStatus, TaskStatus
+from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, GoalStatus, PlanStatus, TaskStatus, PlanStage, StageStatus
 from app.models.certificate import Certificate
 from app.models.portfolio import StudentResume
 from app.models.community import CommunityPost
@@ -258,6 +258,34 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "query_plan_stages",
+            "description": "查询学习计划的闯关关卡（阶段任务流）：各关卡状态、任务完成进度、AI 评分与评估意见。当学生问'计划的关卡''阶段任务''闯关进度''第几关'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plan_id": {"type": "integer", "description": "学习计划ID，不传则查询所有进行中计划的关卡"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_plan_stage",
+            "description": "提交学习计划某关卡的阶段成果，AI 将评估打分（0-100）、综合评估、指出不足并给出后续调整建议。当学生说'提交第X关成果''完成这关了''上传阶段成果'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "stage_id": {"type": "integer", "description": "关卡（阶段）ID"},
+                    "result": {"type": "string", "description": "阶段成果说明：完成了哪些任务、产出了什么、数据与收获"}
+                },
+                "required": ["stage_id", "result"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "query_portfolio",
             "description": "查询学生的作品集：项目经历、证书荣誉、简历情况。当学生问'我的作品集''有哪些项目''证书情况''简历'时调用",
             "parameters": {"type": "object", "properties": {}}
@@ -478,6 +506,8 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "create_lost_found": _create_lost_found,
             # 学习计划 / 作品集 / 社区 / 资源 / 成长画像
             "query_plan_overview": _query_plan_overview,
+            "query_plan_stages": _query_plan_stages,
+            "submit_plan_stage": _submit_plan_stage,
             "query_portfolio": _query_portfolio,
             "query_community_posts": _query_community_posts,
             "create_community_post": _create_community_post,
@@ -1167,6 +1197,87 @@ def _query_plan_overview(db: Session, args: dict, user: User) -> dict:
         "today_tasks": tasks_data,
         "checked_today": today_checked,
         "streak_days": streak,
+    }
+
+
+_STAGE_STATUS_NAMES = {"locked": "未解锁", "active": "进行中", "submitted": "待确认", "done": "已完成"}
+
+
+def _query_plan_stages(db: Session, args: dict, user: User) -> dict:
+    """查询计划的闯关关卡（阶段任务流）"""
+    plan_id = args.get("plan_id")
+    query = db.query(StudyPlan).filter(
+        StudyPlan.student_id == user.id,
+        StudyPlan.status == PlanStatus.ACTIVE,
+    )
+    if plan_id:
+        query = query.filter(StudyPlan.id == int(plan_id))
+    plans = query.order_by(StudyPlan.created_at.desc()).all()
+    if not plans:
+        return {"message": "暂无进行中的学习计划", "plans": []}
+
+    result_plans = []
+    for p in plans:
+        stages = db.query(PlanStage).filter(PlanStage.plan_id == p.id).order_by(PlanStage.order_index.asc()).all()
+        stage_list = []
+        for s in stages:
+            tasks = db.query(PlanTask).filter(PlanTask.stage_id == s.id).all()
+            done = sum(1 for t in tasks if t.status == TaskStatus.DONE)
+            key = safe_enum_str(s.status, "locked")
+            stage_list.append({
+                "id": s.id,
+                "title": s.title,
+                "goal": s.goal or "",
+                "status": _STAGE_STATUS_NAMES.get(key, key),
+                "status_key": key,
+                "score": s.score,
+                "evaluation": s.evaluation or "",
+                "weaknesses": s.weaknesses or "",
+                "suggestions": s.suggestions or "",
+                "submitted_result": s.submitted_result or "",
+                "task_total": len(tasks),
+                "task_done": done,
+                "done_rate": round(done * 100 / len(tasks)) if tasks else 0,
+            })
+        result_plans.append({"id": p.id, "title": p.title, "stages": stage_list})
+    return {"message": f"查询到 {len(result_plans)} 个计划的关卡任务流", "plans": result_plans}
+
+
+async def _submit_plan_stage(db: Session, args: dict, user: User) -> dict:
+    """提交关卡成果 -> AI 评估打分、指出不足、给出后续建议"""
+    from app.services.plan_stage_service import ai_evaluate_stage
+    stage_id = args.get("stage_id")
+    result_text = str(args.get("result") or "").strip()
+    if not stage_id:
+        return {"error": "缺少关卡ID（stage_id）"}
+    if not result_text:
+        return {"error": "请填写阶段成果说明"}
+    stage = db.query(PlanStage).join(StudyPlan, StudyPlan.id == PlanStage.plan_id).filter(
+        PlanStage.id == int(stage_id), StudyPlan.student_id == user.id
+    ).first()
+    if not stage:
+        return {"error": "关卡不存在或不属于当前学生"}
+    if safe_enum_str(stage.status, "") == "done":
+        return {"error": "该关卡已完成，无需重复提交"}
+    stage.submitted_result = result_text[:3000]
+    stage.submitted_at = datetime.now(timezone.utc)
+    if safe_enum_str(stage.status, "") == "locked":
+        stage.status = StageStatus.ACTIVE
+    score, evaluation, weaknesses, suggestions = await ai_evaluate_stage(db, stage)
+    stage.score = score
+    stage.evaluation = evaluation
+    stage.weaknesses = weaknesses
+    stage.suggestions = suggestions
+    stage.status = StageStatus.SUBMITTED
+    db.commit()
+    return {
+        "message": f"✅ 已提交关卡「{stage.title}」成果，AI 评分 {score} 分",
+        "stage_id": stage.id,
+        "status": "submitted",
+        "score": score,
+        "evaluation": evaluation,
+        "weaknesses": weaknesses,
+        "suggestions": suggestions,
     }
 
 

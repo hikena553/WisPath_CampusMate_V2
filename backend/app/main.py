@@ -33,6 +33,7 @@ from app.api.plan import router as plan_router
 from app.api.community import router as community_router
 from app.api.portfolio import router as portfolio_router
 from app.api.resources import router as resources_router
+from app.api.feeds import router as feeds_router
 
 import logging
 
@@ -55,6 +56,18 @@ async def _periodic_refresh():
         await asyncio.sleep(1800)
 
 
+async def _periodic_feed_refresh():
+    """定期抓取外部资讯（论文/开源榜/智能体榜/权威要闻）入库"""
+    import asyncio
+    from app.services.feed_ingest import ingest_all
+    while True:
+        try:
+            await asyncio.to_thread(ingest_all)
+        except Exception:
+            logger.exception("后台定期外部资讯抓取异常")
+        await asyncio.sleep(1800)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
@@ -62,10 +75,13 @@ async def lifespan(app: FastAPI):
     import importlib
     importlib.import_module("app.seed")
     task = asyncio.create_task(_periodic_refresh())
+    feed_task = asyncio.create_task(_periodic_feed_refresh())
     yield
     task.cancel()
+    feed_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await task
+        await feed_task
 
 
 app = FastAPI(title="智慧校园AI服务平台", version="0.2.0", lifespan=lifespan)
@@ -111,6 +127,7 @@ app.include_router(plan_router)
 app.include_router(community_router)
 app.include_router(portfolio_router)
 app.include_router(resources_router)
+app.include_router(feeds_router)
 
 
 @app.get("/api/health")

@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     LLM_AGENT_TEMPERATURE: float = 0.7
     LLM_AGENT_MAX_TOKENS: int = 10000
     LLM_MAX_INPUT_CHARS: int = 8000
+    # 外部资讯源令牌（可选，不配置则按匿名限流抓取）
+    GITHUB_TOKEN: str = ""
+    GITEE_TOKEN: str = ""
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),

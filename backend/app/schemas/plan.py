@@ -85,6 +85,7 @@ class StudyPlanOut(BaseModel):
 # ---------- 计划任务 ----------
 class PlanTaskCreate(BaseModel):
     plan_id: int
+    stage_id: int | None = None
     title: str
     description: str | None = None
     due_date: str | None = None
@@ -99,11 +100,13 @@ class PlanTaskUpdate(BaseModel):
     priority: str | None = None
     status: str | None = None
     order_index: int | None = None
+    stage_id: int | None = None
 
 
 class PlanTaskOut(BaseModel):
     id: int
     plan_id: int
+    stage_id: int | None = None
     title: str
     description: str | None = None
     due_date: date | None = None
@@ -115,6 +118,62 @@ class PlanTaskOut(BaseModel):
     checked_today: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------- 计划阶段（任务流关卡） ----------
+class PlanStageCreate(BaseModel):
+    plan_id: int
+    title: str
+    goal: str | None = None
+    order_index: int = 0
+
+
+class PlanStageUpdate(BaseModel):
+    title: str | None = None
+    goal: str | None = None
+    order_index: int | None = None
+    status: str | None = None
+
+
+class PlanStageOut(BaseModel):
+    id: int
+    plan_id: int
+    title: str
+    goal: str | None = None
+    order_index: int = 0
+    status: str
+    ai_generated: bool = False
+    score: int | None = None
+    evaluation: str | None = None
+    weaknesses: str | None = None
+    suggestions: str | None = None
+    submitted_result: str | None = None
+    submitted_at: datetime | None = None
+    created_at: datetime | None = None
+    # 附加统计
+    task_total: int = 0
+    task_done: int = 0
+    done_rate: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StageSubmitRequest(BaseModel):
+    result: str
+
+
+class StageSubmitOut(BaseModel):
+    id: int
+    status: str
+    score: int | None = None
+    evaluation: str | None = None
+    weaknesses: str | None = None
+    suggestions: str | None = None
+
+
+class StageGenerateOut(BaseModel):
+    summary: str
+    stages: list[PlanStageOut]
 
 
 # ---------- 打卡 ----------

@@ -70,6 +70,7 @@ export function deletePlan(id: number) {
 export interface PlanTask {
   id: number
   plan_id: number
+  stage_id: number | null
   title: string
   description: string | null
   due_date: string | null
@@ -85,7 +86,7 @@ export function getTasks(params?: { plan_id?: number; status?: string }) {
   return request.get<PlanTask[]>('/plan/tasks', { params })
 }
 
-export function createTask(data: { plan_id: number; title: string; description?: string | null; due_date?: string | null; priority?: string; order_index?: number }) {
+export function createTask(data: { plan_id: number; stage_id?: number | null; title: string; description?: string | null; due_date?: string | null; priority?: string; order_index?: number }) {
   return request.post<PlanTask>('/plan/tasks', data)
 }
 
@@ -95,6 +96,51 @@ export function updateTask(id: number, data: Partial<PlanTask>) {
 
 export function deleteTask(id: number) {
   return request.delete(`/plan/tasks/${id}`)
+}
+
+// ---------- 阶段任务流（闯关式关卡） ----------
+export interface PlanStage {
+  id: number
+  plan_id: number
+  title: string
+  goal: string | null
+  order_index: number
+  status: 'locked' | 'active' | 'submitted' | 'done'
+  ai_generated: boolean
+  score: number | null
+  evaluation: string | null
+  weaknesses: string | null
+  suggestions: string | null
+  submitted_result: string | null
+  submitted_at: string | null
+  created_at: string | null
+  task_total: number
+  task_done: number
+  done_rate: number
+}
+
+export function getStages(plan_id: number) {
+  return request.get<PlanStage[]>(`/plan/plans/${plan_id}/stages`)
+}
+
+export function aiGenerateStages(plan_id: number) {
+  return request.post<{ summary: string; stages: PlanStage[] }>(`/plan/plans/${plan_id}/stages/ai-generate`)
+}
+
+export function createStage(data: { plan_id: number; title: string; goal?: string | null; order_index?: number }) {
+  return request.post<PlanStage>(`/plan/plans/${data.plan_id}/stages`, data)
+}
+
+export function updateStage(id: number, data: Partial<PlanStage>) {
+  return request.put<PlanStage>(`/plan/stages/${id}`, data)
+}
+
+export function deleteStage(id: number) {
+  return request.delete(`/plan/stages/${id}`)
+}
+
+export function submitStage(id: number, data: { result: string }) {
+  return request.post<{ id: number; status: string; score: number | null; evaluation: string | null; weaknesses: string | null; suggestions: string | null }>(`/plan/stages/${id}/submit`, data)
 }
 
 // ---------- 打卡 ----------

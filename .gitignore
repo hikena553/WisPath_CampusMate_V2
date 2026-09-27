@@ -126,7 +126,12 @@ tmp/
 # ---------- Internal agent / tooling data (not for public repo) ----------
 .workbuddy/
 .trae/
+.trae-html-share-packages/
 CLAUDE.md
+
+# ---------- Local probe scripts / ML model binaries ----------
+backend/_probe_cn.py
+backend/models/
 
 # ---------- Database dumps ----------
 *.sql

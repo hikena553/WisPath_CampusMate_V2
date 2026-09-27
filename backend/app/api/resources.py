@@ -149,7 +149,8 @@ def create_favorite(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if req.item_type not in ("knowledge", "announcement", "community", "campus"):
+    if req.item_type not in ("knowledge", "announcement", "community", "campus",
+                             "papers", "agents", "opensource", "news"):
         raise HTTPException(400, "不支持的资源类型")
     # 去重：同一资源重复收藏直接幂等返回
     exists = db.query(ResourceFavorite).filter(

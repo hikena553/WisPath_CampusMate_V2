@@ -29,6 +29,13 @@ class TaskPriority(str, enum.Enum):
     LOW = "low"
 
 
+class StageStatus(str, enum.Enum):
+    LOCKED = "locked"        # 未解锁（前一阶段未完成）
+    ACTIVE = "active"        # 当前进行中
+    SUBMITTED = "submitted"  # 已提交阶段成果，AI 评估完成
+    DONE = "done"            # 已完成
+
+
 class GrowthGoal(Base):
     """长期发展目标（个人中心成长画像 -> AI 成长地图/驾驶舱）"""
 
@@ -69,12 +76,34 @@ class PlanTask(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("study_plans.id"), index=True)
+    stage_id: Mapped[int | None] = mapped_column(ForeignKey("plan_stages.id"), default=None, index=True, comment="所属阶段(可空=通用任务)")
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text)
     due_date: Mapped[date | None] = mapped_column(Date, default=None)
     priority: Mapped[TaskPriority] = mapped_column(SAEnum(TaskPriority), default=TaskPriority.MEDIUM)
     status: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus), default=TaskStatus.TODO)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PlanStage(Base):
+    """计划内阶段（任务流关卡）：AI 拆解或手动创建，提交成果后由 AI 评估打分"""
+
+    __tablename__ = "plan_stages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("study_plans.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200), comment="阶段/关卡标题")
+    goal: Mapped[str | None] = mapped_column(Text, comment="阶段目标/里程碑说明")
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[StageStatus] = mapped_column(SAEnum(StageStatus), default=StageStatus.LOCKED)
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否 AI 自动拆解")
+    score: Mapped[int | None] = mapped_column(Integer, default=None, comment="AI 评估评分 0-100")
+    evaluation: Mapped[str | None] = mapped_column(Text, comment="AI 综合评估")
+    weaknesses: Mapped[str | None] = mapped_column(Text, comment="AI 指出的不足")
+    suggestions: Mapped[str | None] = mapped_column(Text, comment="AI 对后续任务的改进建议")
+    submitted_result: Mapped[str | None] = mapped_column(Text, comment="用户提交的阶段成果")
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 

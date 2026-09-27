@@ -14,17 +14,23 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, GoalStatus, PlanStatus, TaskStatus
+from app.models.plan import (GrowthGoal, StudyPlan, PlanTask, PlanCheckin, PlanStage,
+                             GoalStatus, PlanStatus, TaskStatus, StageStatus)
 from app.schemas.plan import (
     GrowthGoalCreate, GrowthGoalUpdate, GrowthGoalOut,
     StudyPlanCreate, StudyPlanUpdate, StudyPlanOut,
     PlanTaskCreate, PlanTaskUpdate, PlanTaskOut,
+    PlanStageCreate, PlanStageUpdate, PlanStageOut,
+    StageSubmitRequest, StageSubmitOut, StageGenerateOut,
     CheckinCreate, CheckinOut, StreakOut, TodayTaskOut,
     AISuggestOut, AISuggestItem,
 )
 from app.api.notification import create_notification
 from app.models.notification import NotificationType
 from app.services.llm_service import _get_llm_config, _get_client
+from app.services.plan_stage_service import (
+    ai_generate_stages, ai_evaluate_stage, persist_generated_stages,
+)
 
 router = APIRouter(prefix="/api/plan", tags=["学习计划"])
 
@@ -211,9 +217,10 @@ def delete_plan(plan_id: int, db: Session = Depends(get_db), current_user: User 
     ).first()
     if not plan:
         raise HTTPException(404, "计划不存在")
-    # 先删打卡（含任务关联打卡，解除外键约束），再删任务，最后删计划
+    # 先删打卡（含任务关联打卡，解除外键约束），再删任务/阶段，最后删计划
     db.query(PlanCheckin).filter(PlanCheckin.plan_id == plan_id).delete(synchronize_session=False)
     db.query(PlanTask).filter(PlanTask.plan_id == plan_id).delete(synchronize_session=False)
+    db.query(PlanStage).filter(PlanStage.plan_id == plan_id).delete(synchronize_session=False)
     db.delete(plan)
     db.commit()
     return {"message": "deleted"}
@@ -257,8 +264,13 @@ def create_task(req: PlanTaskCreate, db: Session = Depends(get_db), current_user
     plan = db.query(StudyPlan).filter(StudyPlan.id == req.plan_id, StudyPlan.student_id == current_user.id).first()
     if not plan:
         raise HTTPException(404, "计划不存在")
+    if req.stage_id:
+        stage = db.query(PlanStage).filter(PlanStage.id == req.stage_id, PlanStage.plan_id == req.plan_id).first()
+        if not stage:
+            raise HTTPException(404, "阶段不存在")
     task = PlanTask(
         plan_id=req.plan_id,
+        stage_id=req.stage_id,
         title=req.title.strip(),
         description=req.description,
         due_date=_parse_date(req.due_date),
@@ -283,6 +295,10 @@ def update_task(task_id: int, req: PlanTaskUpdate, db: Session = Depends(get_db)
     data = req.model_dump(exclude_unset=True)
     if "due_date" in data:
         data["due_date"] = _parse_date(data["due_date"])
+    if "stage_id" in data and data["stage_id"] is not None:
+        stage = db.query(PlanStage).filter(PlanStage.id == data["stage_id"], PlanStage.plan_id == task.plan_id).first()
+        if not stage:
+            raise HTTPException(404, "阶段不存在")
     old_status = task.status
     for k, v in data.items():
         if v is not None:
@@ -434,6 +450,156 @@ def get_today(db: Session = Depends(get_db), current_user: User = Depends(get_cu
         ))
     result.sort(key=lambda x: (x.due_date is None, x.due_date or date.max))
     return result
+
+
+# ==================== 阶段任务流（闯关式进度 + AI 拆解/评估） ====================
+
+def _serialize_stage(db: Session, s: PlanStage) -> PlanStageOut:
+    tasks = db.query(PlanTask).filter(PlanTask.stage_id == s.id).all()
+    total = len(tasks)
+    done = sum(1 for t in tasks if t.status == TaskStatus.DONE)
+    out = PlanStageOut.model_validate(s)
+    out.task_total = total
+    out.task_done = done
+    out.done_rate = round(done / total * 100) if total else 0
+    return out
+
+
+def _get_plan_or_404(db: Session, student_id: int, plan_id: int) -> StudyPlan:
+    plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id, StudyPlan.student_id == student_id).first()
+    if not plan:
+        raise HTTPException(404, "计划不存在")
+    return plan
+
+
+def _unlock_next_stage(db: Session, plan_id: int, current_order: int) -> None:
+    """完成当前阶段后，解锁顺序上的下一个阶段（若有）。"""
+    nxt = db.query(PlanStage).filter(
+        PlanStage.plan_id == plan_id,
+        PlanStage.order_index > current_order,
+        PlanStage.status.in_([StageStatus.LOCKED, StageStatus.ACTIVE]),
+    ).order_by(PlanStage.order_index.asc()).first()
+    if nxt and nxt.status == StageStatus.LOCKED:
+        nxt.status = StageStatus.ACTIVE
+
+
+def _auto_complete_plan(db: Session, plan: StudyPlan) -> None:
+    stages = db.query(PlanStage).filter(PlanStage.plan_id == plan.id).all()
+    if stages and all(s.status == StageStatus.DONE for s in stages):
+        plan.status = PlanStatus.COMPLETED
+
+
+@router.get("/plans/{plan_id}/stages", response_model=list[PlanStageOut])
+def list_stages(plan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """阶段任务流列表（按顺序）。"""
+    _get_plan_or_404(db, current_user.id, plan_id)
+    stages = db.query(PlanStage).filter(PlanStage.plan_id == plan_id).order_by(PlanStage.order_index.asc()).all()
+    return [_serialize_stage(db, s) for s in stages]
+
+
+@router.post("/plans/{plan_id}/stages/ai-generate", response_model=StageGenerateOut)
+async def ai_generate_plan_stages(plan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """AI 推理出完成计划的小阶段目标（闯关阶段 + 每阶段任务）。"""
+    plan = _get_plan_or_404(db, current_user.id, plan_id)
+    existing = db.query(PlanStage).filter(PlanStage.plan_id == plan_id).count()
+    if existing > 0:
+        raise HTTPException(409, "该计划已有阶段，可继续手动添加或直接闯关")
+    summary, stage_data = await ai_generate_stages(db, plan, current_user.id)
+    created = persist_generated_stages(db, plan, stage_data, current_user.id)
+    return StageGenerateOut(summary=summary, stages=[_serialize_stage(db, s) for s in created])
+
+
+@router.post("/plans/{plan_id}/stages", response_model=PlanStageOut)
+def create_stage(req: PlanStageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """手动添加阶段。"""
+    plan = _get_plan_or_404(db, current_user.id, req.plan_id)
+    max_order = db.query(PlanStage).filter(PlanStage.plan_id == plan.id).order_by(PlanStage.order_index.desc()).first()
+    order = (max_order.order_index + 1) if max_order else 0
+    # 无任何 active/done 阶段时，新阶段自动激活
+    has_progress = db.query(PlanStage).filter(
+        PlanStage.plan_id == plan.id,
+        PlanStage.status.in_([StageStatus.ACTIVE, StageStatus.SUBMITTED, StageStatus.DONE]),
+    ).count() > 0
+    st = PlanStage(
+        plan_id=plan.id,
+        title=req.title.strip(),
+        goal=req.goal,
+        order_index=order,
+        status=StageStatus.LOCKED if has_progress else StageStatus.ACTIVE,
+        ai_generated=False,
+    )
+    db.add(st)
+    db.commit()
+    db.refresh(st)
+    return _serialize_stage(db, st)
+
+
+@router.put("/stages/{stage_id}", response_model=PlanStageOut)
+def update_stage(stage_id: int, req: PlanStageUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """编辑阶段 / 状态流转（含解锁下一阶段）。"""
+    stage = db.query(PlanStage).join(StudyPlan, StudyPlan.id == PlanStage.plan_id).filter(
+        PlanStage.id == stage_id, StudyPlan.student_id == current_user.id
+    ).first()
+    if not stage:
+        raise HTTPException(404, "阶段不存在")
+    data = req.model_dump(exclude_unset=True)
+    old_status = stage.status
+    for k, v in data.items():
+        if v is not None:
+            setattr(stage, k, v)
+    if stage.status == StageStatus.DONE and old_status != StageStatus.DONE:
+        _unlock_next_stage(db, stage.plan_id, stage.order_index)
+        plan = db.query(StudyPlan).filter(StudyPlan.id == stage.plan_id).first()
+        if plan:
+            _auto_complete_plan(db, plan)
+    db.commit()
+    db.refresh(stage)
+    return _serialize_stage(db, stage)
+
+
+@router.delete("/stages/{stage_id}")
+def delete_stage(stage_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """删除阶段（其下任务一并删除）。"""
+    stage = db.query(PlanStage).join(StudyPlan, StudyPlan.id == PlanStage.plan_id).filter(
+        PlanStage.id == stage_id, StudyPlan.student_id == current_user.id
+    ).first()
+    if not stage:
+        raise HTTPException(404, "阶段不存在")
+    db.query(PlanTask).filter(PlanTask.stage_id == stage.id).delete(synchronize_session=False)
+    db.delete(stage)
+    db.commit()
+    return {"message": "deleted"}
+
+
+@router.post("/stages/{stage_id}/submit", response_model=StageSubmitOut)
+async def submit_stage(stage_id: int, req: StageSubmitRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """提交阶段成果 -> AI 评估打分、综合分析、指出不足、给出后续任务建议。"""
+    if not req.result or not req.result.strip():
+        raise HTTPException(400, "请填写阶段成果说明")
+    stage = db.query(PlanStage).join(StudyPlan, StudyPlan.id == PlanStage.plan_id).filter(
+        PlanStage.id == stage_id, StudyPlan.student_id == current_user.id
+    ).first()
+    if not stage:
+        raise HTTPException(404, "阶段不存在")
+    if stage.status == StageStatus.DONE:
+        raise HTTPException(400, "该阶段已完成，无需重复提交")
+    stage.submitted_result = req.result.strip()[:3000]
+    stage.submitted_at = datetime.now(timezone.utc)
+    if stage.status == StageStatus.LOCKED:
+        stage.status = StageStatus.ACTIVE
+    score, evaluation, weaknesses, suggestions = await ai_evaluate_stage(db, stage)
+    stage.score = score
+    stage.evaluation = evaluation
+    stage.weaknesses = weaknesses
+    stage.suggestions = suggestions
+    stage.status = StageStatus.SUBMITTED
+    db.commit()
+    db.refresh(stage)
+    return StageSubmitOut(
+        id=stage.id, status=stage.status.value,
+        score=stage.score, evaluation=stage.evaluation,
+        weaknesses=stage.weaknesses, suggestions=stage.suggestions,
+    )
 
 
 # ==================== 数字赋能：AI 顺延/重排建议 ====================

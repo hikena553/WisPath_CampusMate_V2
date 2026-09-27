@@ -17,6 +17,7 @@ from app.models.service import ServiceTicket, TicketType, TicketStatus
 from app.models.leave import LeaveRequest, LeaveType, LeaveStatus
 from app.models.crisis import AIDialogSummary, CrisisLevel
 from app.models.knowledge import KnowledgeItem
+from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, PlanStage
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,14 @@ def _migrate_legacy_columns():
                 if col not in cols:
                     conn.execute(sa_text(f"ALTER TABLE student_projects ADD COLUMN {col} {ddl}"))
                     logging.getLogger(__name__).info(f"迁移：student_projects 新增列 {col}")
+
+    # plan_tasks：阶段任务流（所属阶段）
+    if "plan_tasks" in existing_tables:
+        cols = {c["name"] for c in inspector.get_columns("plan_tasks")}
+        if "stage_id" not in cols:
+            with engine.begin() as conn:
+                conn.execute(sa_text("ALTER TABLE plan_tasks ADD COLUMN stage_id INT NULL"))
+                logging.getLogger(__name__).info("迁移：plan_tasks 新增列 stage_id")
 
 
 _migrate_legacy_columns()
