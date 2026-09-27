@@ -1,5 +1,6 @@
 <template>
   <div class="resources-page">
+    <SubPageHeader title="AI 资源空间" fallback="/student" />
     <!-- 吸顶头部：品牌标题 + 操作 + 频道 Tab（移动端横向滚动，参考今日头条/即刻频道栏） -->
     <div class="res-topbar">
       <div class="topbar-main">
@@ -311,6 +312,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { Search, Star, StarFilled, TopRight, Refresh, Share, Setting } from '@element-plus/icons-vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage } from 'element-plus'
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
 import {

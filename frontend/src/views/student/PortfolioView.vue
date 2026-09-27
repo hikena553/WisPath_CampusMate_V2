@@ -1,5 +1,6 @@
 <template>
   <div class="portfolio-page">
+    <SubPageHeader title="我的作品集" fallback="/student" />
     <!-- 顶部标题 -->
     <div class="portfolio-header">
       <div>
@@ -214,6 +215,7 @@
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Link, Paperclip, MagicStick } from '@element-plus/icons-vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import {
   getProjects, createProject, updateProject, deleteProject,
   type StudentProject,

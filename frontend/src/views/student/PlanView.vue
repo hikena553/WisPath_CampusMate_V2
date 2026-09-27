@@ -1,5 +1,6 @@
 <template>
   <div class="plan-page">
+    <SubPageHeader title="学习计划" fallback="/student" />
     <!-- 顶部品牌主视觉 -->
     <div class="plan-hero">
       <div class="hero-glow g1"></div>
@@ -515,6 +516,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowDown, Calendar, WarningFilled, MagicStick, Lock, Check } from '@element-plus/icons-vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import {
   getGoals, createGoal, updateGoal, deleteGoal,
   getPlans, createPlan, updatePlan, deletePlan,

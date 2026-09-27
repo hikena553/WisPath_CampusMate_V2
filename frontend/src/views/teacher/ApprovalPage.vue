@@ -1,5 +1,6 @@
 <template>
   <div class="approval-page">
+    <SubPageHeader title="审批管理" fallback="/teacher" />
     <div class="page-header">
       <h2>审批管理</h2>
       <p class="page-sub">共 <strong>{{ totalPending }}</strong> 条待审批事项</p>
@@ -397,6 +398,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose,

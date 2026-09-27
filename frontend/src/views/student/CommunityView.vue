@@ -1,5 +1,6 @@
 <template>
   <div class="community-page">
+    <SubPageHeader title="交流社区" fallback="/student" />
     <!-- 顶部标题 -->
     <div class="community-header">
       <div>
@@ -172,6 +173,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, View, ChatLineRound, Star, StarFilled } from '@element-plus/icons-vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import {
   getPosts, getPost, createPost, deletePost,
   toggleLike, getComments, createComment, deleteComment, getHotPosts,

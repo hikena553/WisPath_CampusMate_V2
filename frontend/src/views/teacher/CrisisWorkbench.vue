@@ -1,5 +1,6 @@
 <template>
   <div class="crisis-workbench">
+    <SubPageHeader title="心理预警工作台" fallback="/teacher" />
     <!-- 页头 -->
     <div class="wb-header">
       <div class="wb-header-left">
@@ -125,6 +126,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAlerts, resolveAlert, interveneAlert } from '@/api/crisis'

@@ -1,5 +1,6 @@
 <template>
   <div class="grade-analysis-page">
+    <SubPageHeader title="成绩分析" fallback="/student" />
     <div class="page-header">
       <h2 class="text-gradient">成绩分析</h2>
       <p class="subtitle">详细的成绩统计与趋势分析</p>
@@ -117,6 +118,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { Document, TrendCharts, Star, Aim, Trophy, Warning } from '@element-plus/icons-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'

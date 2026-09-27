@@ -1,11 +1,6 @@
 <template>
   <div class="my-req-page">
-    <!-- 吸顶头 -->
-    <div class="topbar">
-      <div class="back" @click="goBack"><el-icon :size="18"><ArrowLeft /></el-icon></div>
-      <div class="topbar-title">我的申请</div>
-      <div class="topbar-right"></div>
-    </div>
+    <SubPageHeader title="我的申请" fallback="/student" />
 
     <el-tabs v-model="activeTab" class="req-tabs" @tab-change="() => load()">
       <el-tab-pane label="请假申请" name="leave" />
@@ -59,14 +54,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Delete } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import { getMyLeaves, deleteLeave } from '@/api/leave'
 import { getTickets, cancelTicket } from '@/api/service'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
 
-const router = useRouter()
 const route = useRoute()
 const activeTab = ref((route.query.tab === 'ticket' ? 'ticket' : 'leave'))
 const leaves = ref<LeaveRequestOut[]>([])
@@ -98,8 +93,6 @@ async function revokeTicket(t: ServiceTicket) {
   try { await ElMessageBox.confirm('确定撤销这条工单吗？', '撤销工单', { type: 'warning' }) } catch { return }
   try { await cancelTicket(t.id); ElMessage.success('已撤销'); load() } catch { ElMessage.error('撤销失败') }
 }
-
-function goBack() { router.back() }
 onMounted(load)
 </script>
 

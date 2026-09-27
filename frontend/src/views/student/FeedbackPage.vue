@@ -1,5 +1,6 @@
 <template>
   <div class="feedback-page">
+    <SubPageHeader title="意见反馈" fallback="/student" />
     <div class="page-header">
       <h2 class="text-gradient">意见反馈</h2>
       <p class="subtitle">您的意见是我们改进的动力</p>
@@ -66,6 +67,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage } from 'element-plus'
 import { createFeedback, getFeedbacks, type Feedback, type FeedbackCreate } from '@/api/feedback'
 

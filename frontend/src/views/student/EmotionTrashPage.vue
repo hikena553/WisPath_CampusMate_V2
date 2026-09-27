@@ -1,10 +1,10 @@
 <template>
   <div class="emotion-page">
+    <SubPageHeader title="情绪垃圾桶" fallback="/student" />
     <!-- 头部主视觉 -->
     <div class="emotion-hero">
       <div class="hero-glow g1"></div>
       <div class="hero-top">
-        <div class="hero-back" @click="goBack"><el-icon :size="20"><ArrowLeft /></el-icon></div>
         <div class="hero-title-wrap">
           <div class="hero-kicker">MOOD · 情绪垃圾桶</div>
           <h2 class="hero-title">把情绪倒进来，轻轻放下</h2>
@@ -98,12 +98,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { ArrowLeft, Delete } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import { fetchEmotionStats, fetchEmotionHistory, clearEmotions, type EmotionStats, type EmotionRecordItem } from '@/api/emotion'
 
-const router = useRouter()
 const stats = ref<EmotionStats>({ total: 0, breakdown: [], trending: [] })
 const history = ref<EmotionRecordItem[]>([])
 
@@ -175,9 +174,6 @@ async function handleClear() {
   }
 }
 
-function goBack() {
-  history.value.length || stats.value.total ? router.back() : router.push('/student')
-}
 onMounted(loadAll)
 </script>
 

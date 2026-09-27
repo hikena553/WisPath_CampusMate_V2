@@ -1,5 +1,6 @@
 <template>
   <div class="service-page">
+    <SubPageHeader title="办事服务" fallback="/student" />
     <!-- left: form area -->
     <div class="form-area">
       <div class="page-header">
@@ -222,6 +223,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar as CalendarIcon, Document, Promotion, ChatDotRound } from '@element-plus/icons-vue'
 import { getTickets, createTicket, cancelTicket } from '@/api/service'

@@ -1,13 +1,12 @@
 <template>
   <div class="material-page">
-    <!-- 吸顶头 -->
-    <div class="topbar">
-      <div class="back" @click="goBack"><el-icon :size="18"><ArrowLeft /></el-icon></div>
-      <div class="topbar-title">材料档案</div>
-      <div class="add" @click="openUpload">
-        <el-icon :size="18"><Plus /></el-icon>
-      </div>
-    </div>
+    <SubPageHeader title="材料档案" fallback="/student">
+      <template #right>
+        <div class="add" @click="openUpload">
+          <el-icon :size="18"><Plus /></el-icon>
+        </div>
+      </template>
+    </SubPageHeader>
 
     <!-- 分类筛选 -->
     <div class="cat-row">
@@ -83,13 +82,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Plus, UploadFilled } from '@element-plus/icons-vue'
+import { Plus, UploadFilled } from '@element-plus/icons-vue'
 import { getMyMaterials, createMaterial, deleteMaterial } from '@/api/material'
 import type { Material } from '@/types'
 
-const router = useRouter()
 const list = ref<Material[]>([])
 const filterCat = ref('')
 const uploadVisible = ref(false)
@@ -155,7 +153,6 @@ async function remove(m: Material) {
   try { await ElMessageBox.confirm('确定删除这条材料吗？', '删除材料', { type: 'warning' }) } catch { return }
   try { await deleteMaterial(m.id); ElMessage.success('已删除'); load() } catch { ElMessage.error('删除失败') }
 }
-function goBack() { router.back() }
 onMounted(load)
 </script>
 

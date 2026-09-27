@@ -1,5 +1,6 @@
 <template>
   <div class="growth-page">
+    <SubPageHeader title="成长档案" fallback="/student" />
     <div class="score-header">
       <div class="score-ring">
         <svg viewBox="0 0 120 120" class="score-svg">
@@ -424,6 +425,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { DataAnalysis, Histogram, TrendCharts, DataLine, Collection, Link, ArrowRight, Calendar, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import VChart from 'vue-echarts'
