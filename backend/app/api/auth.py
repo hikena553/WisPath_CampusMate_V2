@@ -35,6 +35,15 @@ def list_teachers(db: Session = Depends(get_db), user: User = Depends(get_curren
     return [UserInfo.model_validate(t) for t in teachers]
 
 
+@router.get("/me")
+def current_identity(user: User = Depends(get_current_user)):
+    """SSO 统一身份信息：校验 token 并返回当前登录者身份（学号/姓名/角色/需改密标志）。"""
+    from app.schemas.user import UserInfo
+    info = UserInfo.model_validate(user).model_dump()
+    info["password_needs_change"] = not user.password_changed
+    return info
+
+
 @router.put("/profile")
 def update_profile(data: ProfileUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     for field in ("avatar", "gender", "political_status", "title", "hometown", "phone", "department", "class_name", "age"):

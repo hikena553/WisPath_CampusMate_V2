@@ -125,10 +125,29 @@ def review_leave(leave_id: int, req: LeaveApprove, user: User = Depends(require_
     elif req.action == "reject":
         leave.status = LeaveStatus.REJECTED
         leave.tutor_id = user.id
-        leave.reject_reason = req.reject_reason
+        leave.reject_reason = req.reject_reason or ""
     else:
         raise HTTPException(status_code=400, detail="无效操作")
-    db.commit()
+    student = db.query(User).filter(User.id == leave.student_id).first()
+    if student:
+        from app.models.notification import NotificationType
+        from app.services.notification_service import send_notification
+        send_notification(
+            db, student.id,
+            title="请假审批结果",
+            content=(
+                f"你的请假申请（{safe_enum_val(leave.leave_type)}，"
+                f"{leave.start_date}~{leave.end_date}）已{'通过' if leave.status.value == 'approved' else '未通过'}"
+                + (f"，原因：{leave.reject_reason}" if leave.status.value == "rejected" else "")
+            ),
+            notification_type=NotificationType.LEAVE,
+            link="/student/workbench",
+            related_id=leave.id,
+            sender_id=user.id,
+            sms_template="请假审批结果通知",
+        )
+    else:
+        db.commit()
     return {"message": f"已{req.action}"}
 
 

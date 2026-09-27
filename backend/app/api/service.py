@@ -43,7 +43,20 @@ def approve_ticket(ticket_id: int, req: TicketApprove, user: User = Depends(get_
     if not ticket:
         raise HTTPException(status_code=404, detail="工单不存在")
     ticket.status = TicketStatus.APPROVED if req.action == "approve" else TicketStatus.REJECTED
-    db.commit()
+    ticket.approver_id = user.id
+    # 工单进度推送：审批后站内通知申请人
+    from app.models.notification import NotificationType
+    from app.services.notification_service import send_notification
+    send_notification(
+        db, ticket.applicant_id,
+        title="工单审批结果",
+        content=f"你的工单「{ticket.title}」审批结果：{'已通过' if ticket.status.value == 'approved' else '未通过'}",
+        notification_type=NotificationType.APPROVAL,
+        link="/student/workbench",
+        related_id=ticket.id,
+        sender_id=user.id,
+        sms_template="工单审批结果通知",
+    )
     return {"message": f"ticket {req.action}d"}
 
 

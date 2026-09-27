@@ -22,3 +22,5 @@ from app.models.community import CommunityPost, CommunityComment, CommunityLike
 from app.models.portfolio import StudentResume
 from app.models.favorite import ResourceFavorite
 from app.models.emotion import EmotionRecord
+from app.models.material import MaterialArchive
+from app.models.sms import SmsLog
