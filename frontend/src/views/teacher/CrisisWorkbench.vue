@@ -234,6 +234,8 @@ onMounted(loadAlerts)
 
 <style scoped>
 .crisis-workbench {
+  width: 100%;
+  min-width: 0;
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;

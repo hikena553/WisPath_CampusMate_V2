@@ -595,7 +595,9 @@ onMounted(async () => {
 <style scoped>
 /* ========== 移动端优先布局（始终移动宽度居中，参考今日头条/澎湃：吸顶品牌头 + 频道栏 + 卡片信息流） ========== */
 .resources-page {
+  width: 100%;
   max-width: 480px;
+  min-width: 0;
   margin: 0 auto;
   min-height: 100vh;
   background: #f5f6fa;
@@ -614,24 +616,33 @@ onMounted(async () => {
   border-radius: 0 0 18px 18px;
   box-shadow: 0 4px 18px rgba(37, 99, 235, 0.22);
 }
-.topbar-main { display: flex; align-items: center; gap: 10px; }
-.brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.topbar-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; overflow: hidden; }
 .brand-emoji {
   width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
   background: rgba(255, 255, 255, 0.18);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 22px;
 }
-.brand-text { min-width: 0; }
-.res-title { margin: 0; font-size: 18px; font-weight: 700; color: #fff; line-height: 1.3; }
+.brand-text { min-width: 0; flex: 1; overflow: hidden; }
+.res-title { margin: 0; font-size: 18px; font-weight: 700; color: #fff; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .res-sub { margin: 2px 0 0; font-size: 11px; color: rgba(255, 255, 255, 0.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .tb-btn.el-button {
   border: none; background: rgba(255, 255, 255, 0.18); color: #fff;
-  border-radius: 10px; height: 34px;
+  border-radius: 10px; height: 34px; padding: 0 12px;
 }
 .tb-btn.el-button:hover, .tb-btn.el-button.is-plain:hover {
   background: rgba(255, 255, 255, 0.3); color: #fff;
+}
+/* 窄屏：收紧顶栏按钮，避免品牌/按钮把页面撑破 */
+@media (max-width: 767px) {
+  .tb-btn.el-button { padding: 0 8px; }
+}
+@media (max-width: 420px) {
+  .tb-btn-text { display: none; }
+  .tb-btn.el-button { padding: 0 9px; }
+  .tb-btn :deep(.el-icon) { margin-right: 0 !important; }
 }
 
 /* 频道栏：横向滚动胶囊 */

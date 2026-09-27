@@ -104,7 +104,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.my-req-page { max-width: 480px; margin: 0 auto; min-height: 100%; background: #f5f7fb; padding-bottom: 40px; }
+.my-req-page { width: 100%; max-width: 480px; min-width: 0; margin: 0 auto; min-height: 100%; background: #f5f7fb; padding-bottom: 40px; }
 .topbar {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between;

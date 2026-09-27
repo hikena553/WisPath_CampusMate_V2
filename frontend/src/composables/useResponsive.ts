@@ -1,35 +1,23 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import { getUser } from '@/utils/token'
 
 const MOBILE_BREAKPOINT = 768
 const TABLET_BREAKPOINT = 1024
 
-// 教师端/学生端强制移动端布局（v3.0 规划：师/生仅保留 App 移动端，管理员用网页大屏）
-function detectForceMobile(): boolean {
-  const u = getUser()
-  const role = u?.role
-  return role === 'teacher' || role === 'student'
-}
-
-const forceMobile = detectForceMobile()
-
-const isMobile = ref(forceMobile)
+// 响应式状态完全由真实视口驱动：
+// - 移动视口（<768px）：师/生端显示 App 移动布局（440px 容器 + 底部导航）
+// - 平板/桌面视口（>=768px）：显示完整网页布局（顶部导航/侧边栏）
+// 注：不做角色级强制压缩，避免桌面浏览器下子页面媒体查询不触发而出现布局挤压。
+const isMobile = ref(false)
 const isTablet = ref(false)
-const isDesktop = ref(!forceMobile)
+const isDesktop = ref(true)
 
 // 模块加载时同步初始化，避免首帧先渲染桌面布局再翻转为移动端造成闪变
 if (typeof window !== 'undefined') {
   const m = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches
   const t = !m && window.matchMedia(`(max-width: ${TABLET_BREAKPOINT - 1}px)`).matches
-  if (forceMobile) {
-    isMobile.value = true
-    isTablet.value = false
-    isDesktop.value = false
-  } else {
-    isMobile.value = m
-    isTablet.value = t
-    isDesktop.value = !m && !t
-  }
+  isMobile.value = m
+  isTablet.value = t
+  isDesktop.value = !m && !t
 }
 
 let mqlMobile: MediaQueryList | null = null
@@ -37,15 +25,11 @@ let mqlTablet: MediaQueryList | null = null
 let refCount = 0
 
 function update() {
-  if (forceMobile) {
-    isMobile.value = true
-    isTablet.value = false
-    isDesktop.value = false
-    return
-  }
-  isMobile.value = mqlMobile?.matches ?? false
-  isTablet.value = !isMobile.value && (mqlTablet?.matches ?? false)
-  isDesktop.value = !isMobile.value && !isTablet.value
+  const m = mqlMobile?.matches ?? false
+  const t = !m && (mqlTablet?.matches ?? false)
+  isMobile.value = m
+  isTablet.value = t
+  isDesktop.value = !m && !t
 }
 
 export function useResponsive() {
