@@ -379,6 +379,15 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     }
   }
 
+  // 发送自定义 JSON 消息（如视觉情绪上报）
+  function send(data: Record<string, unknown>): boolean {
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(data))
+      return true
+    }
+    return false
+  }
+
   function cleanup() {
     stopPing()
 
@@ -439,5 +448,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     startCall,
     endCall,
     toggleMute,
+    send,
   }
 }

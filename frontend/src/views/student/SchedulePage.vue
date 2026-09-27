@@ -866,6 +866,9 @@
       <div class="page-tab" @click="goPortfolio">
         <el-icon><FolderOpened /></el-icon> 我的作品集
       </div>
+      <div class="page-tab" @click="goEmotion">
+        <el-icon><FirstAidKit /></el-icon> 情绪垃圾桶
+      </div>
     </div>
     </div>
   </div>
@@ -876,7 +879,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
-import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, PieChart as PieChartIcon, Close, Aim } from '@element-plus/icons-vue'
+import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Aim, Grid, PieChart as PieChartIcon, Close, FirstAidKit } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElCollapseTransition } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -904,6 +907,7 @@ const { isMobile } = useResponsive()
 // ===== 驾驶舱直达入口 =====
 function goPlan() { router.push('/student/plan') }
 function goPortfolio() { router.push('/student/portfolio') }
+function goEmotion() { router.push('/student/emotion') }
 
 // ===== 视图状态：home=驾驶舱主页（移动端），schedule/grades/growth=学业子页面 =====
 const tabKeys = ['schedule', 'grades', 'growth'] as const

@@ -21,3 +21,4 @@ from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, PlanSt
 from app.models.community import CommunityPost, CommunityComment, CommunityLike
 from app.models.portfolio import StudentResume
 from app.models.favorite import ResourceFavorite
+from app.models.emotion import EmotionRecord

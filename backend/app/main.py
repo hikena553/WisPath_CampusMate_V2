@@ -34,6 +34,7 @@ from app.api.community import router as community_router
 from app.api.portfolio import router as portfolio_router
 from app.api.resources import router as resources_router
 from app.api.feeds import router as feeds_router
+from app.api.emotions import router as emotions_router
 
 import logging
 
@@ -128,6 +129,7 @@ app.include_router(community_router)
 app.include_router(portfolio_router)
 app.include_router(resources_router)
 app.include_router(feeds_router)
+app.include_router(emotions_router)
 
 
 @app.get("/api/health")

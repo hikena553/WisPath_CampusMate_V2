@@ -30,6 +30,42 @@
                 }"
               />
             </div>
+            <!-- 人脸情绪识别面板（视觉模块） -->
+            <div class="emotion-panel" :class="{ 'emotion-on': camActive }">
+              <div class="emotion-row">
+                <span class="emotion-badge">{{ camActive ? '🎥 视觉情绪' : '👁️ 视觉模块' }}</span>
+                <el-switch
+                  v-model="camActive"
+                  size="small"
+                  :loading="camLoading"
+                  @change="handleCamToggle"
+                />
+              </div>
+              <template v-if="camActive">
+                <div class="emotion-body">
+                  <div class="cam-thumb">
+                    <video
+                      v-if="camVideo"
+                      ref="camVideoRef"
+                      class="cam-video"
+                      muted
+                      playsinline
+                    />
+                    <div v-else class="cam-placeholder">📷</div>
+                  </div>
+                  <div class="emotion-state">
+                    <div v-if="currentEmotion" class="current-emoji">{{ currentEmotionEmoji }}</div>
+                    <div v-else class="current-emoji dim">🔍</div>
+                    <div class="emotion-text">{{ currentEmotion ? currentEmotion.label : '正在检测表情…' }}</div>
+                    <div v-if="currentEmotion" class="emotion-conf">
+                      {{ Math.round(currentEmotion.confidence * 100) }}% 置信
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="emotion-hint">开启摄像头，让绵小城感知你的情绪、更懂你</div>
+              <div v-if="camError" class="emotion-error">{{ camError }}</div>
+            </div>
           </div>
 
           <!-- 状态文字 -->
@@ -92,6 +128,8 @@ import {
 } from '@element-plus/icons-vue'
 import { useVoiceCall, type VoiceState } from '@/composables/useVoiceCall'
 import { useAudioVisualizer } from '@/composables/useAudioVisualizer'
+import { useEmotionDetection, EMOTION_EMOJI } from '@/composables/useEmotionDetection'
+import { batchRecordEmotion } from '@/api/emotion'
 import MianCharacter from './MianCharacter.vue'
 
 const props = defineProps<{
@@ -124,7 +162,7 @@ watch(chatHistory, scrollChatToBottom, { deep: true })
 
 const { frequencyData, connect, disconnect: disconnectVisualizer } = useAudioVisualizer(9)
 
-const { state, isMuted: voiceMuted, startCall, endCall, toggleMute } = useVoiceCall({
+const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send } = useVoiceCall({
   get conversationId() { return props.conversationId },
   onStateChange: (s) => {
     callState.value = s
@@ -151,6 +189,76 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute } = useVoiceC
 
 // 同步 muted 状态
 watch(voiceMuted, (v) => { isMuted.value = v })
+
+// ---- 视觉情绪模块 ----
+const emotionDetection = useEmotionDetection()
+const camActive = ref(false)
+const camLoading = ref(false)
+const currentEmotion = ref<{ emotion: string; label: string; confidence: number } | null>(null)
+const camError = ref('')
+const camVideo = ref<'cam' | null>(null) // 标记视频元素是否就绪
+const camVideoRef = ref<HTMLVideoElement>()
+
+const currentEmotionEmoji = computed(() => {
+  if (!currentEmotion.value) return ''
+  return EMOTION_EMOJI[currentEmotion.value.emotion] ?? '🙂'
+})
+
+// 表情变化时：实时展示 + 通过 WS 上报给后端（结合情绪作答）
+watch(() => emotionDetection.current.value, (snap) => {
+  if (snap) {
+    currentEmotion.value = snap
+    if (callState.value !== 'idle' && callState.value !== 'error') {
+      send({ type: 'emotion', emotion: snap.emotion, confidence: snap.confidence })
+    }
+  }
+})
+
+async function handleCamToggle(v: boolean | string | number) {
+  const enable = v === true || v === 1 || v === 'true'
+  camError.value = ''
+  if (enable) {
+    camLoading.value = true
+    try {
+      const ok = await emotionDetection.start((snap) => {
+        currentEmotion.value = snap
+        if (callState.value !== 'idle' && callState.value !== 'error') {
+          send({ type: 'emotion', emotion: snap.emotion, confidence: snap.confidence })
+        }
+      })
+      if (ok) {
+        camActive.value = true
+        camLoading.value = false
+        await nextTick()
+        const vNode = camVideoRef.value
+        if (vNode) {
+          const camStream = emotionDetection.getVideo()
+          if (camStream && camStream.srcObject) {
+            // 复用检测用的 video 源
+            const src = new MediaStream(
+              ((camStream.srcObject as MediaStream).getVideoTracks())
+            )
+            vNode.srcObject = src
+            vNode.muted = true
+            vNode.playsInline = true
+            await vNode.play().catch(() => {})
+            camVideo.value = 'cam'
+          }
+        }
+      } else {
+        camActive.value = false
+        camError.value = emotionDetection.error.value || '摄像头启动失败'
+      }
+    } finally {
+      camLoading.value = false
+    }
+  } else {
+    emotionDetection.stop()
+    currentEmotion.value = null
+    camVideo.value = null
+    camActive.value = false
+  }
+}
 
 // 声波柱映射：频率数据 → 像素高度（小幅度）
 const visualBars = computed(() => {
@@ -201,10 +309,28 @@ watch(() => props.visible, async (v) => {
     }
   } else {
     stopPulse()
+    await flushEmotionRecords()
+    emotionDetection.stop()
+    currentEmotion.value = null
+    camVideo.value = null
+    camActive.value = false
     endCall()
     disconnectVisualizer()
   }
 })
+
+// 挂断/关闭时：批量上报本通电话的情绪记录（情绪垃圾桶）
+async function flushEmotionRecords() {
+  const timeline = emotionDetection.timeline.value
+  if (!timeline.length) return
+  const records = timeline.slice(-200).map((s) => ({ emotion: s.emotion, confidence: s.confidence }))
+  emotionDetection.clearTimeline()
+  try {
+    await batchRecordEmotion(records)
+  } catch {
+    // 静默失败不阻断挂断
+  }
+}
 
 // 监听 state 变化，连接可视化器
 watch(state, (s) => {
@@ -235,11 +361,17 @@ function handleClose() {
   stopPulse()
   endCall()
   disconnectVisualizer()
+  flushEmotionRecords()
+  emotionDetection.stop()
+  currentEmotion.value = null
+  camVideo.value = null
+  camActive.value = false
   emit('close')
 }
 
 onUnmounted(() => {
   stopPulse()
+  emotionDetection.stop()
 })
 </script>
 
@@ -358,6 +490,107 @@ onUnmounted(() => {
   min-height: 4px;
   border-radius: 2px;
   transition: height 0.08s ease;
+}
+
+/* 视觉情绪面板 */
+.emotion-panel {
+  width: 100%;
+  max-width: 340px;
+  margin: 6px auto 0;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(91, 141, 239, 0.16);
+  border-radius: 16px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.08);
+  backdrop-filter: blur(6px);
+}
+
+.emotion-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.emotion-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5b8def;
+}
+
+.emotion-hint {
+  font-size: 12px;
+  color: rgba(91, 141, 239, 0.6);
+  padding: 4px 0 2px;
+}
+
+.emotion-error {
+  font-size: 12px;
+  color: #f56c6c;
+  padding: 4px 0 0;
+}
+
+.emotion-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.cam-thumb {
+  width: 92px;
+  height: 92px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #101018;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(91, 141, 239, 0.3);
+}
+
+.cam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* 镜像 */
+}
+
+.cam-placeholder {
+  font-size: 28px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.emotion-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+}
+
+.current-emoji {
+  font-size: 38px;
+  line-height: 1.1;
+}
+
+.current-emoji.dim {
+  font-size: 30px;
+  opacity: 0.45;
+}
+
+.emotion-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-top: 2px;
+}
+
+.emotion-conf {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 2px;
 }
 
 /* 状态文字 */

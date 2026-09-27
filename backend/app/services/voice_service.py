@@ -12,11 +12,20 @@ from app.services.llm_service import _get_client, _get_llm_config, build_system_
 from app.models.user import User
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.setting import SystemSetting
+from app.models.emotion import EmotionRecord
 from app.core.database import SessionLocal
 from app.core.config import settings
 from app.core.crypto import decrypt_value
+from app.services.crisis_service import detect_crisis_keywords
 
 logger = logging.getLogger(__name__)
+
+# 负面情绪标签：持续高频出现时触发心理关注上报
+NEGATIVE_EMOTIONS = {"sad", "angry", "fearful", "disgusted"}
+EMOTION_LABELS = {
+    "neutral": "平静", "happy": "开心", "sad": "难过", "angry": "生气",
+    "fearful": "害怕", "disgusted": "厌恶", "surprised": "惊讶",
+}
 
 TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com"
 VOICE_STT_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/aigc/multimodal-generation/generation"
@@ -151,14 +160,91 @@ async def safe_send_json(websocket: WebSocket, data: dict) -> bool:
     return False
 
 
+def _dominant_emotion(emotion_timeline: list[dict]) -> str | None:
+    """取通话期间出现次数最多的情绪，用于结合情绪回应；无数据返回 None"""
+    if not emotion_timeline:
+        return None
+    counts: dict[str, int] = {}
+    for e in emotion_timeline:
+        counts[e["emotion"]] = counts.get(e["emotion"], 0) + 1
+    # 取最近 20 条内最高频情绪，避免整场偏置
+    recent = emotion_timeline[-20:]
+    recent_counts: dict[str, int] = {}
+    for e in recent:
+        recent_counts[e["emotion"]] = recent_counts.get(e["emotion"], 0) + 1
+    if recent_counts:
+        return max(recent_counts.items(), key=lambda x: x[1])[0]
+    return max(counts.items(), key=lambda x: x[1])[0]
+
+
+async def _report_emotional_care(
+    db,
+    user: User,
+    text: str,
+    keywords: list[str],
+    dominant_emotion: str | None,
+    negative_burst: bool,
+):
+    """AI 主动监测：命中危机词或持续负面情绪时，生成心理关注摘要并通知教师端
+
+    复用现有危机机制（AIDialogSummary 表 + 教师端预警），driver 为语音通话中的
+    视觉情绪模块与语音内容。
+    """
+    from app.models.crisis import AIDialogSummary
+    from app.models.user import User, UserRole
+    from app.models.notification import Notification
+
+    emo_label = EMOTION_LABELS.get(dominant_emotion, dominant_emotion) if dominant_emotion else "未检测"
+    if keywords:
+        snippet = f"命中关键词：{', '.join(keywords)}；视觉情绪：{emo_label}"
+        level = "moderate" if any(k in text for k in ("不想活", "自杀", "自残", "想死")) else "mild"
+        summary_text = f"[语音视觉模块上报] 学生在通话中表达心理困扰：{snippet}"
+    elif negative_burst:
+        snippet = f"通话中持续出现负面情绪（{emo_label}）"
+        level = "mild"
+        summary_text = f"[语音视觉模块上报] 学生通话期间情绪低落：{snippet}"
+    else:
+        return
+
+    try:
+        record = AIDialogSummary(
+            student_id=user.id,
+            summary=summary_text,
+            level=level,
+            keywords_matched=",".join(keywords) if keywords else emo_label,
+            raw_snippet=(text or "")[:200],
+        )
+        db.add(record)
+
+        # 通知绑定教师端
+        from app.models.user import User as _U
+        tutor = db.query(_U).filter(_U.id == user.tutor_id).first() if user.tutor_id else None
+        if tutor and tutor.role == UserRole.TEACHER:
+            db.add(Notification(
+                user_id=tutor.id,
+                title=f"心理关注：{user.name}",
+                content=summary_text,
+                type="warning",
+            ))
+        db.commit()
+        logger.info("语音通话心理关注已上报 student_id=%s level=%s", user.id, level)
+    except Exception:
+        db.rollback()
+        logger.exception("语音情绪上报失败")
+
+
 async def handle_voice_connection(
     websocket: WebSocket,
     user: User,
     conversation_id: int | None,
 ):
-    """语音通话主循环：接收音频 -> STT -> LLM -> TTS -> 回传"""
+    """语音通话主循环：接收音频 -> STT -> LLM -> TTS -> 回传
+    视觉模块：通话中接收前端人脸情绪，结合情绪回应并联动心理关注"""
     audio_buffer = bytearray()
     history: list[dict] = []
+
+    # 通话期间记录的情绪时间线（emotion, confidence, ts）
+    emotion_timeline: list[dict] = []
 
     # 单一数据库会话，贯穿整个连接生命周期
     db = SessionLocal()
@@ -197,6 +283,19 @@ async def handle_voice_connection(
                 audio_bytes = base64.b64decode(msg["data"])
                 audio_buffer.extend(audio_bytes)
 
+            elif msg["type"] == "emotion":
+                # 视觉模块上报当前人脸情绪
+                emo = msg.get("emotion")
+                if emo and emo in EMOTION_LABELS:
+                    emotion_timeline.append({
+                        "emotion": emo,
+                        "confidence": float(msg.get("confidence") or 0),
+                        "ts": datetime.now(timezone.utc),
+                    })
+                    # 保留最近 200 条，防止内存膨胀
+                    if len(emotion_timeline) > 200:
+                        emotion_timeline = emotion_timeline[-200:]
+
             elif msg["type"] == "end_of_speech":
                 if len(audio_buffer) < 1000:
                     # 音频太短，忽略
@@ -222,8 +321,29 @@ async def handle_voice_connection(
 
                 await safe_send_json(websocket, {"type": "transcript", "text": text, "final": True})
 
+                # 2. 结合情绪 + 心理关注：提取主导情绪并检测危机词
+                dominant_emotion = _dominant_emotion(emotion_timeline)
+
+                # 2.1 危机关键词上报（AI 主动监测，关键时刻上报教师端）
+                keywords = detect_crisis_keywords(text)
+                negative_burst = len([
+                    e for e in emotion_timeline if e["emotion"] in NEGATIVE_EMOTIONS
+                ]) >= 3
+                if keywords or negative_burst:
+                    await _report_emotional_care(
+                        db, user, text, keywords,
+                        dominant_emotion=dominant_emotion, negative_burst=negative_burst,
+                    )
+
                 # 2. LLM
                 messages = [{"role": "system", "content": system_prompt}]
+                if dominant_emotion:
+                    messages.append({
+                        "role": "system",
+                        "content": f"视觉情绪模块检测到：学生当前情绪状态为【{EMOTION_LABELS.get(dominant_emotion, dominant_emotion)}】。"
+                                   f"请感知并顺应学生的情绪状态，语气温暖、共情地回应；若学生情绪低落或紧张，请给予安抚与支持，"
+                                   f"避免生硬说教。回答保持简洁。",
+                    })
                 messages.extend(history[-10:])  # 最近 10 条历史
                 messages.append({"role": "user", "content": text})
 
@@ -295,6 +415,21 @@ async def handle_voice_connection(
         logger.exception("语音连接异常断开")
     finally:
         audio_buffer.clear()
+        # 视觉情绪落库（情绪垃圾桶数据源）
+        if emotion_timeline:
+            try:
+                for e in emotion_timeline:
+                    db.add(EmotionRecord(
+                        user_id=user.id,
+                        emotion=e["emotion"],
+                        confidence=e["confidence"],
+                        source="voice_call",
+                        conversation_id=conversation_id,
+                    ))
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.exception("情绪记录落库失败")
         try:
             await websocket.close()
         except Exception:

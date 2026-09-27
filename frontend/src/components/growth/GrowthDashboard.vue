@@ -117,6 +117,10 @@
           <el-icon class="space-icon space-icon-orange"><ChatDotRound /></el-icon>
           <div><b>AI 导师</b><span>学习 / 成长答疑</span></div>
         </div>
+        <div class="space-card" @click="go('/student/emotion')">
+          <el-icon class="space-icon space-icon-pink"><FirstAidKit /></el-icon>
+          <div><b>情绪垃圾桶</b><span>通话情绪 · 心理关怀</span></div>
+        </div>
       </div>
     </section>
 
@@ -153,7 +157,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   TrendCharts, Collection, ChatDotRound, MagicStick, Refresh,
-  CircleCheckFilled, Calendar, DataLine, ArrowRight
+  CircleCheckFilled, Calendar, DataLine, ArrowRight, FirstAidKit
 } from '@element-plus/icons-vue'
 import { getGrowthProfile, type GrowthProfile } from '@/api/growth'
 import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'
@@ -300,6 +304,7 @@ onMounted(() => { loadOverview(); loadDiscover() })
 .space-icon-green { color: #67c23a; background: #eaf7e8; }
 .space-icon-violet { color: #7c5cff; background: #f1edff; }
 .space-icon-orange { color: #e6a23c; background: #fdf4e5; }
+.space-icon-pink { color: #f472b6; background: #fdeff6; }
 
 /* ===== 卡4：AI 主动发现 ===== */
 .ai-discover-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }

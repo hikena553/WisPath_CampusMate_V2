@@ -141,3 +141,8 @@ backend/models/
 
 # ---------- Docs (excluded from repo) ----------
 docs/
+
+# ---------- Vendored backend deps / planning docs (not for repo) ----------
+backend/vendor_packages/
+campusmate-v3-implementation-plan/
+campusmate-v3-upgrade-plan/
