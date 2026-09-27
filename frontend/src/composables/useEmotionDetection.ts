@@ -32,21 +32,40 @@ export const EMOTION_EMOJI: Record<string, string> = {
 
 const MODELS_PATH = '/models'
 let modelsLoaded = false
+let faceapiPromise: Promise<any> | null = null
+
+// face-api.js 的 ESM 构建（vite 优先取 module 字段）只有命名导出、没有 default 导出，
+// 而 CJS 互操作场景下 .default 指向整个模块对象。这里同时兼容两种形态，
+// 并缓存同一个 Promise 供加载与推理循环复用，避免重复初始化。
+function loadFaceapi(): Promise<any> {
+  if (!faceapiPromise) {
+    faceapiPromise = import('face-api.js').then((m) => {
+      const ns = (m as any).default ?? m
+      if (!ns || !ns.tf) throw new Error('face-api.js 初始化失败：缺少 tf 命名空间')
+      return ns
+    })
+  }
+  return faceapiPromise
+}
 
 async function loadModels(): Promise<boolean> {
   if (modelsLoaded) return true
-  const faceapi = (await import('face-api.js')).default
-  if (!faceapi || !faceapi.tf) return false
   try {
-    await faceapi.tf.setBackend('webgl')
-  } catch {
-    /* 忽略 backend 设置错误，回归默认 */
+    const faceapi = await loadFaceapi()
+    try {
+      await faceapi.tf.setBackend('webgl')
+    } catch {
+      /* webgl 后端不可用时回退默认（cpu）后端 */
+    }
+    await faceapi.tf.ready()
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_PATH)
+    await faceapi.nets.faceExpressionNet.loadFromUri(MODELS_PATH)
+    modelsLoaded = true
+    return true
+  } catch (e) {
+    console.warn('[emotion] 情绪模型加载失败：', e)
+    return false
   }
-  await faceapi.tf.ready()
-  await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_PATH)
-  await faceapi.nets.faceExpressionNet.loadFromUri(MODELS_PATH)
-  modelsLoaded = true
-  return true
 }
 
 export function useEmotionDetection() {
@@ -111,18 +130,18 @@ export function useEmotionDetection() {
   }
 
   function runDetectionLoop() {
-    const faceapiPromise = import('face-api.js').then((m) => m.default)
+    const faceapiP = loadFaceapi()
     const loop = async () => {
       if (!isRunning.value || !videoEl) return
-      const faceapi = await faceapiPromise
+      const faceapi = await faceapiP
       const now = Date.now()
       if (faceapi && videoEl && videoEl.readyState >= 2) {
-        const detections = await faceapi
+        const detections = (await faceapi
           .detectAllFaces(videoEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 }))
-          .withFaceExpressions()
+          .withFaceExpressions()) as Array<{ expressions: Record<string, number> }>
         if (detections.length > 0) {
           const exp = detections[0].expressions
-          const top = Object.entries(exp).sort((a, b) => b[1] - a[1])[0]
+          const top = Object.entries(exp).sort((a, b) => (b[1] as number) - (a[1] as number))[0]
           const emotion = smoothedEmotion(top[0])
           const confidence = top[1] as number
           const snap: EmotionSnapshot = {
