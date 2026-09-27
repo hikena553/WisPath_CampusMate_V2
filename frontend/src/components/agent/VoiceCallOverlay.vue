@@ -30,16 +30,12 @@
                 }"
               />
             </div>
-            <!-- 人脸情绪识别面板（视觉模块） -->
+            <!-- 人脸情绪识别面板（视觉模块，通话自动开启） -->
             <div class="emotion-panel" :class="{ 'emotion-on': camActive }">
               <div class="emotion-row">
                 <span class="emotion-badge">{{ camActive ? '🎥 视觉情绪' : '👁️ 视觉模块' }}</span>
-                <el-switch
-                  v-model="camActive"
-                  size="small"
-                  :loading="camLoading"
-                  @change="handleCamToggle"
-                />
+                <span v-if="camLoading" class="emotion-auto-hint">启动中…</span>
+                <span v-else-if="!camActive" class="emotion-auto-hint">通话自动开启</span>
               </div>
               <template v-if="camActive">
                 <div class="emotion-body">
@@ -162,7 +158,7 @@ watch(chatHistory, scrollChatToBottom, { deep: true })
 
 const { frequencyData, connect, disconnect: disconnectVisualizer } = useAudioVisualizer(9)
 
-const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send } = useVoiceCall({
+const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send, cancelPlayback } = useVoiceCall({
   get conversationId() { return props.conversationId },
   onStateChange: (s) => {
     callState.value = s
@@ -170,12 +166,23 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send } = use
   onAudioLevel: (level) => { audioLevel.value = level },
   onTranscript: (text, final) => {
     if (final && text.trim()) {
+      // 新的一轮提问开始：此前的 AI 回答作废，只保留最近一次输出
+      discardAI = false
       // 用户说完，追加用户消息 + 空的 AI 占位（等待回复）
       chatHistory.value.push({ id: `u-${Date.now()}`, role: 'user', text })
       chatHistory.value.push({ id: `a-${Date.now()}`, role: 'assistant', text: '' })
     }
   },
+  onSpeechStart: () => {
+    // 用户开口：AI 正在输出的内容立即作废（界面只保留最新一轮）
+    discardAI = true
+    const last = chatHistory.value[chatHistory.value.length - 1]
+    if (last && last.role === 'assistant') {
+      chatHistory.value.pop()
+    }
+  },
   onAIText: (text) => {
+    if (discardAI) return
     // 实时流式更新最后一条 AI 消息
     const last = chatHistory.value[chatHistory.value.length - 1]
     if (last && last.role === 'assistant') {
@@ -190,7 +197,7 @@ const { state, isMuted: voiceMuted, startCall, endCall, toggleMute, send } = use
 // 同步 muted 状态
 watch(voiceMuted, (v) => { isMuted.value = v })
 
-// ---- 视觉情绪模块 ----
+// ---- 视觉情绪模块（通话自动开启） ----
 const emotionDetection = useEmotionDetection()
 const camActive = ref(false)
 const camLoading = ref(false)
@@ -198,6 +205,8 @@ const currentEmotion = ref<{ emotion: string; label: string; confidence: number 
 const camError = ref('')
 const camVideo = ref<'cam' | null>(null) // 标记视频元素是否就绪
 const camVideoRef = ref<HTMLVideoElement>()
+// 用户开口后，AI 旧回答（文字/语音）作废，只保留最近一轮
+let discardAI = false
 
 const currentEmotionEmoji = computed(() => {
   if (!currentEmotion.value) return ''
@@ -214,49 +223,41 @@ watch(() => emotionDetection.current.value, (snap) => {
   }
 })
 
-async function handleCamToggle(v: boolean | string | number) {
-  const enable = v === true || v === 1 || v === 'true'
+// 通话开始后自动开启情绪监测（无需人为开启；摄像头被拒不阻断通话）
+async function startEmotionAuto() {
+  if (camActive.value || camLoading.value) return
   camError.value = ''
-  if (enable) {
-    camLoading.value = true
-    try {
-      const ok = await emotionDetection.start((snap) => {
-        currentEmotion.value = snap
-        if (callState.value !== 'idle' && callState.value !== 'error') {
-          send({ type: 'emotion', emotion: snap.emotion, confidence: snap.confidence })
-        }
-      })
-      if (ok) {
-        camActive.value = true
-        camLoading.value = false
-        await nextTick()
-        const vNode = camVideoRef.value
-        if (vNode) {
-          const camStream = emotionDetection.getVideo()
-          if (camStream && camStream.srcObject) {
-            // 复用检测用的 video 源
-            const src = new MediaStream(
-              ((camStream.srcObject as MediaStream).getVideoTracks())
-            )
-            vNode.srcObject = src
-            vNode.muted = true
-            vNode.playsInline = true
-            await vNode.play().catch(() => {})
-            camVideo.value = 'cam'
-          }
-        }
-      } else {
-        camActive.value = false
-        camError.value = emotionDetection.error.value || '摄像头启动失败'
+  camLoading.value = true
+  try {
+    const ok = await emotionDetection.start((snap) => {
+      currentEmotion.value = snap
+      if (callState.value !== 'idle' && callState.value !== 'error') {
+        send({ type: 'emotion', emotion: snap.emotion, confidence: snap.confidence })
       }
-    } finally {
-      camLoading.value = false
+    })
+    if (ok) {
+      camActive.value = true
+      await nextTick()
+      const vNode = camVideoRef.value
+      if (vNode) {
+        const camStream = emotionDetection.getVideo()
+        if (camStream && camStream.srcObject) {
+          // 复用检测用的 video 源
+          const src = new MediaStream(
+            ((camStream.srcObject as MediaStream).getVideoTracks())
+          )
+          vNode.srcObject = src
+          vNode.muted = true
+          vNode.playsInline = true
+          await vNode.play().catch(() => {})
+          camVideo.value = 'cam'
+        }
+      }
+    } else {
+      camError.value = emotionDetection.error.value || '摄像头启动失败'
     }
-  } else {
-    emotionDetection.stop()
-    currentEmotion.value = null
-    camVideo.value = null
-    camActive.value = false
+  } finally {
+    camLoading.value = false
   }
 }
 
@@ -309,6 +310,7 @@ watch(() => props.visible, async (v) => {
     }
   } else {
     stopPulse()
+    cancelPlayback()
     await flushEmotionRecords()
     emotionDetection.stop()
     currentEmotion.value = null
@@ -348,6 +350,8 @@ async function handleMicClick() {
       const source = await startCall()
       if (source) {
         connect(source)
+        // 通话自动开启情绪监测（不需要人为开启）
+        startEmotionAuto()
       }
     } catch (e) {
       ElMessage.error(e instanceof Error ? e.message : '启动失败')
@@ -359,6 +363,7 @@ async function handleMicClick() {
 
 function handleClose() {
   stopPulse()
+  cancelPlayback()
   endCall()
   disconnectVisualizer()
   flushEmotionRecords()
@@ -521,6 +526,11 @@ onUnmounted(() => {
   font-size: 12px;
   color: rgba(91, 141, 239, 0.6);
   padding: 4px 0 2px;
+}
+
+.emotion-auto-hint {
+  font-size: 12px;
+  color: rgba(91, 141, 239, 0.55);
 }
 
 .emotion-error {

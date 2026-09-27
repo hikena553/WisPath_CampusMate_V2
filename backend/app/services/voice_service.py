@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import wave
@@ -65,6 +66,21 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sa
         w.setframerate(sample_rate)
         w.writeframes(pcm_bytes)
     return buf.getvalue()
+
+
+def _take_complete_sentences(buffer: str) -> tuple[list[str], str]:
+    """从流式文本缓冲中取出以句末标点结尾的完整句子，返回 (句子列表, 剩余缓冲)。
+
+    LLM 流式输出期间按句切分，把完整句子立即交给 TTS 合成，
+    实现"边说边出"的同步效果；残余片段留在缓冲继续累积。
+    """
+    sentences: list[str] = []
+    start = 0
+    for i, ch in enumerate(buffer):
+        if ch in "。！？!?；;…\n":
+            sentences.append(buffer[start:i + 1])
+            start = i + 1
+    return sentences, buffer[start:]
 
 
 async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = None) -> str:
@@ -238,13 +254,21 @@ async def handle_voice_connection(
     user: User,
     conversation_id: int | None,
 ):
-    """语音通话主循环：接收音频 -> STT -> LLM -> TTS -> 回传
-    视觉模块：通话中接收前端人脸情绪，结合情绪回应并联动心理关注"""
+    """语音通话主循环：接收音频 -> STT -> LLM -> 流式句子TTS -> 回传
+    视觉模块：通话中接收前端人脸情绪，结合情绪回应并联动心理关注
+    打断机制：用户开口时前端发送 interrupt，置位 cancel_event，
+    正在进行的生成/合成尽快终止，只保留最近一轮问答。"""
     audio_buffer = bytearray()
     history: list[dict] = []
 
     # 通话期间记录的情绪时间线（emotion, confidence, ts）
     emotion_timeline: list[dict] = []
+
+    # 打断信号：用户开口时置位；新一轮 end_of_speech 开始时清除
+    cancel_event = asyncio.Event()
+
+    # 对话轮次处理任务：串行保证 history/DB 写入顺序
+    round_task: asyncio.Task | None = None
 
     # 单一数据库会话，贯穿整个连接生命周期
     db = SessionLocal()
@@ -274,6 +298,162 @@ async def handle_voice_connection(
 
         system_prompt = build_system_prompt(user)
 
+        # ============================================================
+        # 单轮对话处理：STT -> LLM 流式 -> 句子级 TTS 链（边说边出）
+        # ============================================================
+        async def process_round(audio_bytes: bytes) -> None:
+            """处理一轮 语音->识别->对话->合成；全程监听打断信号 cancel_event"""
+            interrupted_llm = False
+            text = ""
+            full_response = ""
+            try:
+                if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
+                    return
+
+                # 1. STT
+                try:
+                    text = await tokenplan_stt(audio_bytes, client=http_client)
+                except Exception:
+                    logger.exception("STT 失败")
+                    await safe_send_json(websocket, {"type": "error", "message": "语音识别失败，请重试"})
+                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
+                    return
+
+                if cancel_event.is_set():
+                    # 用户已开口打断本轮，丢弃识别结果
+                    return
+                if not text or not text.strip():
+                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
+                    return
+
+                await safe_send_json(websocket, {"type": "transcript", "text": text, "final": True})
+
+                # 2. 情绪 + 心理关注上报
+                dominant_emotion = _dominant_emotion(emotion_timeline)
+                keywords = detect_crisis_keywords(text)
+                negative_burst = len([
+                    e for e in emotion_timeline if e["emotion"] in NEGATIVE_EMOTIONS
+                ]) >= 3
+                if keywords or negative_burst:
+                    await _report_emotional_care(
+                        db, user, text, keywords,
+                        dominant_emotion=dominant_emotion, negative_burst=negative_burst,
+                    )
+
+                # 3. LLM 流式 + 句子级 TTS 链
+                messages = [{"role": "system", "content": system_prompt}]
+                if dominant_emotion:
+                    messages.append({
+                        "role": "system",
+                        "content": f"视觉情绪模块检测到：学生当前情绪状态为【{EMOTION_LABELS.get(dominant_emotion, dominant_emotion)}】。"
+                                   f"请感知并顺应学生的情绪状态，语气温暖、共情地回应；若学生情绪低落或紧张，请给予安抚与支持，"
+                                   f"避免生硬说教。回答保持简洁。",
+                    })
+                messages.extend(history[-10:])  # 最近 10 条历史
+                messages.append({"role": "user", "content": text})
+
+                sentence_buf = ""
+                speaking_notified = False
+                tts_chain: asyncio.Task | None = None
+
+                def enqueue_tts(sentence: str) -> None:
+                    """把一句文本交给 TTS 后台合成并发送；链式等待保证语音播放顺序"""
+                    nonlocal tts_chain, speaking_notified
+                    prev = tts_chain
+
+                    async def runner() -> None:
+                        nonlocal speaking_notified
+                        if prev is not None:
+                            try:
+                                await prev
+                            except Exception:
+                                pass
+                        try:
+                            async for chunk in tokenplan_tts(sentence, client=http_client):
+                                if cancel_event.is_set():
+                                    break
+                                if not speaking_notified:
+                                    speaking_notified = True
+                                    await safe_send_json(websocket, {"type": "state", "state": "speaking"})
+                                if not await safe_send_json(websocket, {
+                                    "type": "ai_audio",
+                                    "data": base64.b64encode(chunk).decode(),
+                                }):
+                                    break
+                        except Exception:
+                            logger.exception("句子语音合成失败")
+
+                    tts_chain = asyncio.create_task(runner())
+
+                try:
+                    stream = await _get_client().chat.completions.create(
+                        model=_get_llm_config()["model"],
+                        messages=messages,
+                        stream=True,
+                        temperature=0.7,
+                        max_tokens=1024,
+                    )
+                    async for chunk in stream:
+                        delta = chunk.choices[0].delta if chunk.choices else None
+                        if not (delta and delta.content):
+                            continue
+                        if cancel_event.is_set():
+                            # 用户开口打断：终止本轮生成，不保留半截回复
+                            interrupted_llm = True
+                            break
+                        full_response += delta.content
+                        sentence_buf += delta.content
+                        if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
+                            break
+                        # 按句切分：完整句子立即合成语音，实现"边说边出"
+                        sentences, sentence_buf = _take_complete_sentences(sentence_buf)
+                        for s in sentences:
+                            enqueue_tts(s)
+                        # 无标点长文本硬切，避免首音延迟
+                        if len(sentence_buf) >= 40:
+                            enqueue_tts(sentence_buf)
+                            sentence_buf = ""
+                except Exception:
+                    logger.exception("LLM 失败")
+                    await safe_send_json(websocket, {"type": "error", "message": "AI 回复失败"})
+                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
+                    return
+
+                if not interrupted_llm and sentence_buf.strip():
+                    enqueue_tts(sentence_buf)
+
+                if tts_chain is not None:
+                    try:
+                        await tts_chain
+                    except Exception:
+                        pass
+
+                # 4. 保存对话历史（被打断的轮次不保留半截回复）
+                history.append({"role": "user", "content": text})
+                if not interrupted_llm and full_response.strip():
+                    history.append({"role": "assistant", "content": full_response})
+                if len(history) > 50:
+                    history[:] = history[-50:]
+
+                if conversation_id:
+                    try:
+                        db.add(ConversationMessage(conversation_id=conversation_id, role="user", content=text))
+                        if not interrupted_llm and full_response.strip():
+                            db.add(ConversationMessage(conversation_id=conversation_id, role="assistant", content=full_response))
+                        conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+                        if conv:
+                            if conv.title == "新对话":
+                                conv.title = text[:20] + ("…" if len(text) > 20 else "")
+                            conv.updated_at = datetime.now(timezone.utc)
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                        logger.exception("保存语音对话消息失败")
+
+                await safe_send_json(websocket, {"type": "state", "state": "listening"})
+            except Exception:
+                logger.exception("语音处理轮次失败")
+
         while True:
             raw = await websocket.receive_text()
             msg = json.loads(raw)
@@ -302,108 +482,21 @@ async def handle_voice_connection(
                     audio_buffer.clear()
                     continue
 
-                # 1. STT
-                if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
-                    break
-                try:
-                    text = await tokenplan_stt(bytes(audio_buffer), client=http_client)
-                except Exception as e:
-                    logger.exception("STT 失败")
-                    await safe_send_json(websocket, {"type": "error", "message": "语音识别失败，请重试"})
-                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
-                    continue
-                finally:
-                    audio_buffer.clear()
+                payload = bytes(audio_buffer)
+                audio_buffer.clear()
 
-                if not text or not text.strip():
-                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
-                    continue
-
-                await safe_send_json(websocket, {"type": "transcript", "text": text, "final": True})
-
-                # 2. 结合情绪 + 心理关注：提取主导情绪并检测危机词
-                dominant_emotion = _dominant_emotion(emotion_timeline)
-
-                # 2.1 危机关键词上报（AI 主动监测，关键时刻上报教师端）
-                keywords = detect_crisis_keywords(text)
-                negative_burst = len([
-                    e for e in emotion_timeline if e["emotion"] in NEGATIVE_EMOTIONS
-                ]) >= 3
-                if keywords or negative_burst:
-                    await _report_emotional_care(
-                        db, user, text, keywords,
-                        dominant_emotion=dominant_emotion, negative_burst=negative_burst,
-                    )
-
-                # 2. LLM
-                messages = [{"role": "system", "content": system_prompt}]
-                if dominant_emotion:
-                    messages.append({
-                        "role": "system",
-                        "content": f"视觉情绪模块检测到：学生当前情绪状态为【{EMOTION_LABELS.get(dominant_emotion, dominant_emotion)}】。"
-                                   f"请感知并顺应学生的情绪状态，语气温暖、共情地回应；若学生情绪低落或紧张，请给予安抚与支持，"
-                                   f"避免生硬说教。回答保持简洁。",
-                    })
-                messages.extend(history[-10:])  # 最近 10 条历史
-                messages.append({"role": "user", "content": text})
-
-                full_response = ""
-                try:
-                    stream = await _get_client().chat.completions.create(
-                        model=_get_llm_config()["model"],
-                        messages=messages,
-                        stream=True,
-                        temperature=0.7,
-                        max_tokens=1024,
-                    )
-                    async for chunk in stream:
-                        delta = chunk.choices[0].delta if chunk.choices else None
-                        if delta and delta.content:
-                            full_response += delta.content
-                            if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
-                                break
-                except Exception as e:
-                    logger.exception("LLM 失败")
-                    await safe_send_json(websocket, {"type": "error", "message": "AI 回复失败"})
-                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
-                    continue
-
-                # 3. TTS
-                await safe_send_json(websocket, {"type": "state", "state": "speaking"})
-                try:
-                    async for audio_chunk in tokenplan_tts(full_response, client=http_client):
-                        if not await safe_send_json(websocket, {
-                            "type": "ai_audio",
-                            "data": base64.b64encode(audio_chunk).decode(),
-                        }):
-                            break
-                except Exception as e:
-                    logger.exception("TTS 失败")
-                    # TTS 失败不阻断，文字已发送
-
-                # 保存对话历史
-                history.append({"role": "user", "content": text})
-                history.append({"role": "assistant", "content": full_response})
-
-                # 历史上限，防止内存无限增长
-                if len(history) > 50:
-                    history = history[-50:]
-
-                # 保存到数据库（复用同一个 session）
-                if conversation_id:
+                # 上一轮（可能正被中断）先收尾，保证 history/DB 写入顺序
+                if round_task is not None and not round_task.done():
                     try:
-                        db.add(ConversationMessage(conversation_id=conversation_id, role="user", content=text))
-                        db.add(ConversationMessage(conversation_id=conversation_id, role="assistant", content=full_response))
-                        conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-                        if conv:
-                            if conv.title == "新对话":
-                                conv.title = text[:20] + ("…" if len(text) > 20 else "")
-                            conv.updated_at = datetime.now(timezone.utc)
-                        db.commit()
+                        await round_task
                     except Exception:
-                        db.rollback()
-                        logger.exception("保存语音对话消息失败")
+                        pass
+                cancel_event.clear()
+                round_task = asyncio.create_task(process_round(payload))
 
+            elif msg["type"] == "interrupt":
+                # 用户开口：终止正在进行的生成与合成（只保留最近一轮回答）
+                cancel_event.set()
                 await safe_send_json(websocket, {"type": "state", "state": "listening"})
 
             elif msg["type"] == "ping":
@@ -415,6 +508,13 @@ async def handle_voice_connection(
         logger.exception("语音连接异常断开")
     finally:
         audio_buffer.clear()
+        # 取消仍在进行的对话轮次，避免连接关闭后任务继续访问已关闭资源
+        if round_task is not None and not round_task.done():
+            round_task.cancel()
+            try:
+                await round_task
+            except Exception:
+                pass
         # 视觉情绪落库（情绪垃圾桶数据源）
         if emotion_timeline:
             try:

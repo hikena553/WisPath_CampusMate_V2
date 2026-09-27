@@ -9,6 +9,7 @@ export interface UseVoiceCallOptions {
   onAudioLevel?: (level: number) => void
   onAIText?: (text: string) => void
   onTranscript?: (text: string, final: boolean) => void
+  onSpeechStart?: () => void
   onError?: (message: string) => void
 }
 
@@ -35,10 +36,12 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let speechFrames = 0
   let isSpeaking = false
   let nextPlayTime = 0
+  // 已调度的播放源集合：打断时立即停止所有待播/播放中的音频
+  const activeSources = new Set<AudioBufferSourceNode>()
 
   const VAD_ENERGY_THRESHOLD = 0.02
   const VAD_SPEECH_FRAMES = 3
-  const VAD_SILENCE_FRAMES = 20
+  const VAD_SILENCE_FRAMES = 12
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
 
@@ -184,12 +187,31 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     source.buffer = audioBuffer
     source.connect(playbackAudioCtx.destination)
 
+    // 登记播放源，供打断时立即停止
+    activeSources.add(source)
+    source.onended = () => {
+      activeSources.delete(source)
+    }
+
     // 计算播放时间：确保在上一个块结束后开始
     const startTime = Math.max(nextPlayTime, playbackAudioCtx.currentTime)
     source.start(startTime)
 
     // 更新下一块的开始时间
     nextPlayTime = startTime + audioBuffer.duration
+  }
+
+  // 打断（barge-in）：立即停止所有排队/播放中的 AI 语音
+  function cancelPlayback() {
+    activeSources.forEach((s) => {
+      try {
+        s.stop()
+      } catch {
+        // 已停止的源忽略
+      }
+    })
+    activeSources.clear()
+    nextPlayTime = playbackAudioCtx ? playbackAudioCtx.currentTime : 0
   }
 
   async function startCapture() {
@@ -307,6 +329,15 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       silenceFrames = 0
       if (speechFrames >= VAD_SPEECH_FRAMES && !isSpeaking) {
         isSpeaking = true
+        // 用户开口说话：立即打断 AI（停止播放 + 通知服务端终止生成）
+        if (state.value === 'speaking' || state.value === 'processing') {
+          cancelPlayback()
+          setState('listening')
+          if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'interrupt' }))
+          }
+        }
+        options.onSpeechStart?.()
       }
     } else {
       silenceFrames++
@@ -425,6 +456,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       playbackAudioCtx.close().catch(() => {})
       playbackAudioCtx = null
     }
+    activeSources.clear()
 
     if (ws) {
       ws.close()
@@ -449,5 +481,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     endCall,
     toggleMute,
     send,
+    cancelPlayback,
   }
 }
