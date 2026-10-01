@@ -8,7 +8,7 @@
           :before-upload="handleImport"
           accept=".xlsx,.xls"
         >
-          <el-button type="success" plain :loading="importing">导入学生</el-button>
+          <el-button type="primary" plain :loading="importing">导入学生</el-button>
         </el-upload>
       </div>
     </div>
@@ -47,7 +47,7 @@
       </el-select>
     </div>
 
-    <el-table :data="paginatedStudents" style="width:100%" border v-loading="loading">
+    <el-table :data="paginatedStudents" style="width:100%" v-loading="loading">
       <el-table-column prop="username" label="学号" width="120" />
       <el-table-column prop="name" label="姓名" width="120">
         <template #default="{ row }">
@@ -73,10 +73,14 @@
           <span v-else class="text-muted">无</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" width="120" fixed="right">
         <template #default="{ row }">
-          <div style="display: inline-flex; align-items: center; gap: 12px;">
-            <el-button type="primary" link size="small" @click="openEdit(row)">编辑</el-button>
+          <div class="table-actions">
+            <el-tooltip content="编辑" placement="top">
+              <el-button class="action-btn edit" circle @click.stop="openEdit(row)">
+                <el-icon><EditPen /></el-icon>
+              </el-button>
+            </el-tooltip>
             <ActionButtons :user-id="row.id" :user-name="row.name" @reset-success="loadStudents" />
           </div>
         </template>
@@ -95,9 +99,9 @@
       />
     </div>
 
-    <el-dialog v-model="editVisible" title="编辑学生信息" width="500px">
-      <el-form v-if="editForm" :model="editForm" label-width="90px" size="small">
-        <el-row :gutter="12">
+    <el-dialog v-model="editVisible" title="编辑学生信息" width="680px">
+      <el-form v-if="editForm" :model="editForm" label-width="100px">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="学号"><el-input v-model="editForm.username" disabled /></el-form-item>
           </el-col>
@@ -106,7 +110,7 @@
           </el-col>
         </el-row>
         <el-form-item label="学院"><el-input v-model="editForm.college" placeholder="请输入学院" /></el-form-item>
-        <el-row :gutter="12">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="班级"><el-input v-model="editForm.class_name" placeholder="请输入班级" /></el-form-item>
           </el-col>
@@ -118,7 +122,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="12">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="性别">
               <el-select v-model="editForm.gender" placeholder="请选择" style="width:100%">
@@ -133,7 +137,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="12">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="联系电话"><el-input v-model="editForm.phone" placeholder="请输入联系电话" /></el-form-item>
           </el-col>
@@ -153,7 +157,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, EditPen } from '@element-plus/icons-vue'
 import { getStudentList, getStudentStats, updateStudent, importData, type StudentBrief, type StudentStats } from '@/api/admin'
 import { getTeachers } from '@/api/user'
 import { use } from 'echarts/core'
@@ -186,7 +190,8 @@ const collegePieOptions = computed(() => {
   if (!stats.value?.college_stats.length) return null
   return {
     tooltip: { trigger: 'item' },
-    series: [{
+    color: ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#38bdf8', '#67c23a', '#e6a23c'],
+      series: [{
       type: 'pie',
       radius: ['30%', '70%'],
       data: stats.value.college_stats.map(c => ({ name: c.college, value: c.count })),
@@ -323,17 +328,17 @@ onMounted(async () => {
 <style scoped>
 .students-page { padding: 16px; overflow-y: auto; height: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.page-header h2 {   font-size: 18px; font-weight: 600; color: #333; margin: 0; }
+.page-header h2 { font-size: 18px; font-weight: 600; color: #1e293b; margin: 0; }
 .header-actions { display: flex; gap: 8px; }
 .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; }
 .student-name-cell { display: flex; align-items: center; gap: 8px; }
-.text-muted { color: #999; font-size: 12px; }
+.text-muted { color: #94a3b8; font-size: 12px; }
 
 .stats-cards {
   display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
 }
 .stat-card {
-  flex: 1; min-width: 100px; padding: 10px 12px; border-radius: 8px;
+  flex: 1; min-width: 100px; padding: 10px 12px; border-radius: 10px;
   display: flex; flex-direction: column; gap: 2px;
   cursor: default;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -342,11 +347,11 @@ onMounted(async () => {
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(0,0,0,0.08);
 }
-.stat-card.total { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
-.stat-card.college { background: #f0f5ff; color: #333; border: 1px solid #d6e4ff; }
+.stat-card.total { background: linear-gradient(135deg, #2563eb, #60a5fa); color: #fff; }
+.stat-card.college { background: #eff6ff; color: #334155; border: 1px solid #dbeafe; }
 .stat-card.college:hover {
-  background: #e8f0ff;
-  border-color: #b3cfff;
+  background: #e2efff;
+  border-color: #93c5fd;
 }
 .stat-label { font-size: 11px; opacity: 0.85; }
 .stat-value { font-size: 24px; font-weight: 700; }
@@ -355,10 +360,10 @@ onMounted(async () => {
   display: flex; gap: 10px; margin-bottom: 14px;
 }
 .chart-box {
-  flex: 1; background: #fff; border-radius: 8px; padding: 12px;
-  border: 1px solid #f0f0f0;
+  flex: 1; background: #fff; border-radius: 10px; padding: 12px;
+  border: 1px solid #eef2f7;
 }
-.chart-box h4 { margin: 0 0 6px; font-size: 13px; color: #333; }
+.chart-box h4 { margin: 0 0 6px; font-size: 13px; color: #334155; }
 
 .pagination-wrapper {
   display: flex;

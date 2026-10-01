@@ -1,13 +1,21 @@
 <template>
-  <div class="action-buttons">
-    <el-button v-if="showViewStudents" type="primary" link @click.stop="$emit('viewStudents')">查看学生</el-button>
-    <el-button type="warning" link @click.stop="showDialog = true">重置密码</el-button>
+  <div class="table-actions">
+    <el-tooltip v-if="showViewStudents" content="查看学生" placement="top">
+      <el-button class="action-btn primary" circle @click.stop="$emit('viewStudents')">
+        <el-icon><View /></el-icon>
+      </el-button>
+    </el-tooltip>
+    <el-tooltip content="重置密码" placement="top">
+      <el-button class="action-btn warn" circle @click.stop="showDialog = true">
+        <el-icon><Key /></el-icon>
+      </el-button>
+    </el-tooltip>
   </div>
 
   <el-dialog
     v-model="showDialog"
     title="确认重置密码"
-    width="400px"
+    width="460px"
     :close-on-click-modal="false"
     append-to-body
   >
@@ -22,6 +30,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { View, Key } from '@element-plus/icons-vue'
 import { resetPassword } from '@/api/admin'
 
 const props = defineProps<{
@@ -54,14 +63,9 @@ async function handleReset() {
 </script>
 
 <style scoped>
-.action-buttons {
+.table-actions {
   display: inline-flex;
-  flex-direction: row;
-  gap: 8px;
   align-items: center;
-}
-
-.action-buttons .el-button {
-  margin-left: 0;
+  gap: 6px;
 }
 </style>

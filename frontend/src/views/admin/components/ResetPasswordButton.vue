@@ -4,7 +4,7 @@
   <el-dialog
     v-model="showDialog"
     title="确认重置密码"
-    width="400px"
+    width="460px"
     :close-on-click-modal="false"
   >
     <p>确定要重置 <strong>{{ userName }}</strong> 的密码为 <code>123456</code> 吗？</p>

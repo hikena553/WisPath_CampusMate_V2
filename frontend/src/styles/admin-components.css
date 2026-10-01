@@ -1,0 +1,593 @@
+/* ============================================================
+   管理员端组件样式（admin-components.css）
+   设计语言参考 GitHub 高收藏开源管理模板：
+   - vue-element-admin / vue-admin-beautiful：圆角卡片 + 浅灰表头
+   - vben admin / PureAdmin：柔和阴影、hover 微交互、图标操作列
+   仅作用于管理员工作区（.main-area）与挂载到 body 的浮层。
+   ============================================================ */
+
+/* ---------- 通用变量 ---------- */
+.main-area {
+  --ad-table-radius: 12px;
+  --ad-table-border: #eef0f4;
+  --ad-table-header-bg: linear-gradient(180deg, #f7f8fb 0%, #f3f5f9 100%);
+  --ad-table-header-color: #454a57;
+  --ad-row-hover: #f6f9ff;
+  --ad-control-radius: 8px;
+  --ad-card-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --ad-card-shadow-hover: 0 8px 24px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.05);
+}
+
+/* ---------- 表格（el-table） ---------- */
+.main-area .el-table {
+  --el-table-border-color: var(--ad-table-border);
+  --el-table-header-bg-color: transparent;
+  --el-table-row-hover-bg-color: var(--ad-row-hover);
+  --el-table-current-row-bg-color: #eef4ff;
+  border-radius: var(--ad-table-radius);
+  overflow: hidden;
+  font-size: 13.5px;
+  border: 1px solid var(--ad-table-border);
+  box-shadow: var(--ad-card-shadow);
+  transition: box-shadow 0.25s ease;
+}
+
+.main-area .el-table:hover {
+  box-shadow: var(--ad-card-shadow-hover);
+}
+
+/* 表头：浅灰渐变 + 加粗 + 置顶排序图标 */
+.main-area .el-table th.el-table__cell {
+  background: var(--ad-table-header-bg);
+  color: var(--ad-table-header-color);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  border-bottom: 1px solid var(--ad-table-border);
+  padding: 12px 0;
+}
+
+.main-area .el-table th.el-table__cell .cell {
+  line-height: 20px;
+}
+
+/* 首列圆角打磨 */
+.main-area .el-table th.el-table__cell:first-child {
+  border-top-left-radius: var(--ad-table-radius);
+}
+.main-area .el-table th.el-table__cell:last-child {
+  border-top-right-radius: var(--ad-table-radius);
+}
+
+/* 单元格垂直居中，行高舒适 */
+.main-area .el-table td.el-table__cell {
+  border-bottom: 1px solid #f4f6f9;
+  padding: 11px 0;
+}
+
+.main-area .el-table tbody tr:last-child td.el-table__cell {
+  border-bottom: none;
+}
+
+/* 斑马纹柔和化（若有 stripe） */
+.main-area .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: #fafbfd;
+}
+
+/* 无数据占位更友好 */
+.main-area .el-table__empty-block {
+  padding: 32px 0;
+}
+
+/* 固定列阴影柔化 */
+.main-area .el-table__fixed-right::before,
+.main-area .el-table__fixed::before {
+  background: rgba(16, 24, 40, 0.06);
+}
+
+/* ---------- 操作列图标按钮组（.table-actions） ---------- */
+.main-area .table-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.main-area .table-actions .action-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #7a8194;
+  transition: all 0.18s ease;
+}
+
+.main-area .table-actions .action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.main-area .table-actions .action-btn .el-icon {
+  font-size: 15px;
+}
+
+/* 覆盖 Element Plus 默认的 .el-button + .el-button { margin-left: 12px }，
+   否则按钮组在 gap:6px 基础上额外叠加边距，导致操作列图标错位/超宽 */
+.main-area .table-actions .el-tooltip__trigger + .el-tooltip__trigger,
+.main-area .table-actions .action-btn + .action-btn {
+  margin-left: 0;
+}
+
+/* 各语义色 hover 背景 */
+.main-area .table-actions .action-btn.edit:hover {
+  background: #ecf5ff;
+  color: #409eff;
+}
+.main-area .table-actions .action-btn.delete:hover {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+.main-area .table-actions .action-btn.warn:hover {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+.main-area .table-actions .action-btn.success:hover {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+.main-area .table-actions .action-btn.info:hover {
+  background: #f4f4f5;
+  color: #909399;
+}
+.main-area .table-actions .action-btn.primary:hover {
+  background: #eef4ff;
+  color: #3b7cff;
+}
+
+/* ---------- 通用卡片（el-card） ---------- */
+.main-area .el-card {
+  --el-card-border-color: #eef0f4;
+  border-radius: var(--ad-table-radius);
+  box-shadow: var(--ad-card-shadow);
+  border: 1px solid #eef0f4;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.main-area .el-card.is-hover-shadow:hover {
+  box-shadow: var(--ad-card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.main-area .el-card__header {
+  border-bottom: 1px solid #f1f3f7;
+  padding: 14px 20px;
+  font-weight: 600;
+  color: #333a4d;
+}
+
+/* ---------- 对话框（el-dialog，挂载 body 全局生效） ---------- */
+.el-dialog {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 48px rgba(16, 24, 40, 0.14), 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+
+.el-dialog .el-dialog__header {
+  padding: 18px 24px 12px;
+  border-bottom: 1px solid #f1f3f7;
+}
+
+.el-dialog .el-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2b3245;
+}
+
+.el-dialog .el-dialog__body {
+  padding: 20px 24px;
+}
+
+.el-dialog .el-dialog__footer {
+  padding: 12px 24px 18px;
+}
+
+/* ---------- 表单（el-form / el-input / el-select / el-input-number） ---------- */
+.main-area .el-form-item__label {
+  color: #4b5264;
+  font-weight: 500;
+}
+
+.main-area .el-input__wrapper,
+.main-area .el-select__wrapper,
+.main-area .el-textarea__inner,
+.main-area .el-input-number .el-input__wrapper {
+  border-radius: var(--ad-control-radius);
+  box-shadow: 0 0 0 1px #e3e6ee inset;
+  transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.main-area .el-input__wrapper:hover,
+.main-area .el-select__wrapper:hover,
+.main-area .el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px #c6cede inset;
+}
+
+.main-area .el-input__wrapper.is-focus,
+.main-area .el-select__wrapper.is-focused,
+.main-area .el-textarea__inner:focus,
+.main-area .el-input-number .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1.5px #409eff inset, 0 0 0 3px rgba(64, 158, 255, 0.12) !important;
+}
+
+/* 数字输入框按钮圆角 */
+.main-area .el-input-number .el-input-number__decrease,
+.main-area .el-input-number .el-input-number__increase {
+  border-radius: 6px;
+  margin: 2px;
+}
+
+/* ---------- 按钮（el-button） ---------- */
+.main-area .el-button {
+  border-radius: var(--ad-control-radius);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.main-area .el-button--primary {
+  background: linear-gradient(135deg, #409eff 0%, #3377ff 100%);
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.28);
+}
+
+.main-area .el-button--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.36);
+}
+
+.main-area .el-button--primary:active {
+  transform: translateY(0);
+}
+
+.main-area .el-button.is-plain:hover {
+  transform: translateY(-1px);
+}
+
+/* ---------- 分页（el-pagination） ---------- */
+.main-area .el-pagination {
+  --el-pagination-button-bg-color: #fff;
+  --el-pagination-hover-color: #409eff;
+}
+
+.main-area .el-pagination .el-pager li {
+  border-radius: 8px;
+  margin: 0 2px;
+  font-weight: 500;
+  transition: all 0.18s ease;
+}
+
+.main-area .el-pagination .el-pager li.is-active {
+  background: linear-gradient(135deg, #409eff 0%, #3377ff 100%);
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.3);
+}
+
+.main-area .el-pagination button {
+  border-radius: 8px;
+}
+
+.main-area .pagination-wrapper,
+.main-area .pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 4px 4px;
+}
+
+/* ---------- 标签（el-tag） ---------- */
+.main-area .el-tag {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* ---------- 表格内头像+姓名 ---------- */
+.main-area .student-name-cell,
+.main-area .teacher-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #333a4d;
+}
+
+/* ---------- 筛选栏卡片化 ---------- */
+.main-area .filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #eef0f4;
+  border-radius: var(--ad-table-radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--ad-card-shadow);
+}
+
+/* ---------- 进度条圆角 ---------- */
+.main-area .el-progress-bar__outer {
+  border-radius: 6px;
+}
+
+/* ---------- 状态圆点动效 ---------- */
+.main-area .status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.main-area .status-dot.pulse {
+  animation: ad-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ad-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(103, 194, 58, 0); }
+}
+
+/* ---------- 暗色主题适配 ---------- */
+html.dark .main-area {
+  --ad-table-border: rgba(255, 255, 255, 0.08);
+  --ad-table-header-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  --ad-table-header-color: #cdd3e0;
+  --ad-row-hover: rgba(64, 158, 255, 0.08);
+  --ad-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --ad-card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+html.dark .main-area .el-table {
+  border-color: var(--ad-table-border);
+}
+
+html.dark .main-area .el-table td.el-table__cell {
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+html.dark .main-area .el-card {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .main-area .el-card__header {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+html.dark .main-area .el-input__wrapper,
+html.dark .main-area .el-select__wrapper,
+html.dark .main-area .el-textarea__inner {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+
+html.dark .el-dialog .el-dialog__header {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+html.dark .main-area .filter-bar {
+  background: #1e1e20;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- 窄屏适配（<=768px） ---------- */
+@media (max-width: 768px) {
+  /* 弹窗 / 确认框避免溢出视口 */
+  .el-dialog,
+  .el-message-box {
+    width: calc(100% - 32px) !important;
+    max-width: 100%;
+  }
+
+  .el-dialog {
+    margin-top: 6vh !important;
+  }
+
+  /* 抽屉最大宽度不超过视口 */
+  .el-drawer {
+    max-width: calc(100% - 24px) !important;
+  }
+
+  /* 分页器窄屏换行并居中 */
+  .main-area .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 6px;
+  }
+  .main-area .el-pagination .el-pagination__total,
+  .main-area .el-pagination .el-pagination__sizes {
+    display: none;
+  }
+
+  /* 表格表头禁止换行，避免行高错位 */
+  .main-area .el-table th .cell {
+    white-space: nowrap;
+  }
+
+  /* 筛选栏控件自适应宽度 */
+  .main-area .filter-bar .el-input {
+    width: 100% !important;
+  }
+  .main-area .filter-bar .el-select {
+    width: calc(50% - 8px) !important;
+  }
+  .main-area .filter-bar .el-date-editor {
+    width: calc(50% - 8px) !important;
+  }
+
+  /* 工具卡内部按钮换行不挤压 */
+  .main-area .el-card .el-button + .el-button {
+    margin-left: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-area .filter-bar .el-select {
+    width: 100% !important;
+  }
+  .main-area .filter-bar .el-date-editor {
+    width: 100% !important;
+  }
+
+  /* 表格操作列保持图标形态，避免被挤压换行 */
+  .main-area .el-table__body-wrapper {
+    overflow-x: auto;
+  }
+
+  /* 统计卡片网格在超窄屏单列 */
+  .main-area .stats-grid,
+  .main-area .stat-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ============================================================
+   弹窗 / 表单全局布局修复
+   - 输入控件统一放大，保证文字 / 日期正常显示
+   - 弹窗内表单控件占满整行，弹窗宽度与内容匹配
+   - 过长表单支持双列与横向滑动
+   ============================================================ */
+
+/* ---------- 弹窗内表单尺寸 ---------- */
+.el-dialog .el-form-item {
+  margin-bottom: 20px;
+}
+
+.el-dialog .el-form-item__label {
+  font-size: 13.5px;
+  color: #4b5264;
+  font-weight: 500;
+  line-height: 36px;
+}
+
+/* 输入控件统一高度（min-height 而非 height，兼容不同组件） */
+.el-dialog .el-input__wrapper {
+  min-height: 36px;
+  padding: 1px 12px;
+}
+.el-dialog .el-select__wrapper {
+  min-height: 36px;
+  padding: 0 12px;
+}
+.el-dialog .el-input__inner,
+.el-dialog .el-select__inner,
+.el-dialog .el-textarea__inner {
+  font-size: 14px;
+}
+.el-dialog .el-textarea__inner {
+  padding: 9px 12px;
+  line-height: 1.6;
+}
+
+/* 弹窗内控件默认占满剩余宽度，与 label 完全对齐 */
+.el-dialog .el-form-item__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.el-dialog .el-form-item__content > .el-input,
+.el-dialog .el-form-item__content > .el-select,
+.el-dialog .el-form-item__content > .el-textarea,
+.el-dialog .el-form-item__content > .el-input-number,
+.el-dialog .el-form-item__content > .el-date-editor,
+.el-dialog .el-form-item__content > .el-cascader {
+  width: 100% !important;
+}
+
+/* 日期范围选择器：占满整行 */
+.el-dialog .el-date-editor--daterange,
+.el-dialog .el-date-editor--datetimerange {
+  width: 100% !important;
+}
+
+/* 密码输入框等复合控件宽度修正 */
+.el-dialog .el-input-group {
+  width: 100%;
+}
+
+/* 弹窗最小宽度：防止过窄挤爆内容 */
+.el-dialog {
+  min-width: 460px;
+}
+
+/* ---------- 长表单：双列排布（字段较多时使用 .form-grid-2） ---------- */
+.el-dialog .form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 22px;
+}
+
+.el-dialog .form-grid-2 .form-full {
+  grid-column: 1 / -1;
+}
+
+.el-dialog .form-grid-2 .el-form-item {
+  margin-bottom: 18px;
+}
+
+/* ---------- 长表单 / 宽表格：横向滑动容器 ---------- */
+.el-dialog .form-scroll-x {
+  overflow-x: auto;
+  margin: 0 -8px;
+  padding: 0 8px 4px;
+}
+
+.el-dialog .form-scroll-x > .el-form {
+  min-width: 640px;
+}
+
+/* 容器自身限定内容最小宽度（直接作为 div 包裹表单项时） */
+.el-dialog .form-scroll-x {
+  min-width: 600px;
+}
+
+/* ---------- 弹窗底部操作栏对齐 ---------- */
+.el-dialog .dialog-footer,
+.el-dialog .el-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---------- 表格操作列：禁止换行，保证图标对齐 ---------- */
+.main-area .table-actions {
+  white-space: nowrap;
+}
+
+/* 表格超出时容器内横滑（窄屏表格宽列完整可见） */
+.main-area .el-table {
+  width: 100%;
+}
+.main-area .el-table--scrollable-x .el-table__body-wrapper {
+  overflow-x: auto;
+}
+
+/* 表单状态提示行（含错误信息时不压缩行高） */
+.el-dialog .el-form-item.is-error .el-form-item__error {
+  position: static;
+  padding-top: 2px;
+  line-height: 1.5;
+}
+
+/* ---------- 弹窗暗色适配 ---------- */
+html.dark .el-dialog .el-form-item__label {
+  color: #cdd3e0;
+}
+html.dark .el-dialog .el-dialog__footer {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ---------- 弹窗在窄屏下也不低于该宽度，交由媒体查询缩放 ---------- */
+@media (max-width: 520px) {
+  .el-dialog {
+    min-width: 0;
+  }
+}

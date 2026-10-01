@@ -9,6 +9,12 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* 管理端工具条在中等宽度下自动换行，避免横向溢出 */
+.filter-bar,
+.header-actions {
+  flex-wrap: wrap;
+}
+
 /* ===== 移动端样式覆盖 ===== */
 @media (max-width: 768px) {
 
@@ -145,6 +151,13 @@ body {
 
   .filter-row > * {
     width: 100% !important;
+  }
+
+  /* --- 系统设置页条目纵向堆叠 --- */
+  .setting-item {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 6px;
   }
 
   /* --- 隐藏滚动条但保持可滚动 --- */

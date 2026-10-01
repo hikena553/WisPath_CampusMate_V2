@@ -24,9 +24,9 @@
       </div>
     </template>
 
-    <el-dialog v-model="editVisible" title="编辑学生信息" width="500px" append-to-body>
-      <el-form v-if="editForm" :model="editForm" label-width="90px" size="small">
-        <el-row :gutter="12">
+    <el-dialog v-model="editVisible" title="编辑学生信息" width="640px" append-to-body>
+      <el-form v-if="editForm" :model="editForm" label-width="100px">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="学号"><el-input v-model="editForm.username" disabled /></el-form-item>
           </el-col>
@@ -35,7 +35,7 @@
           </el-col>
         </el-row>
         <el-form-item label="学院"><el-input v-model="editForm.college" placeholder="请输入学院" /></el-form-item>
-        <el-row :gutter="12">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="班级"><el-input v-model="editForm.class_name" placeholder="请输入班级" /></el-form-item>
           </el-col>
