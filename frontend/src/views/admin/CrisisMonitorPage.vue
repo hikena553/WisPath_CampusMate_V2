@@ -27,24 +27,24 @@
 
       <!-- 算法流程回显 -->
       <div class="algo-flow">
-        <div class="flow-node">
-          <span class="flow-no">1</span>
-          <div class="flow-main"><b>关键词规则层</b><i>命中预警敏感词库即触发候选（当前 {{ config.keywords.length }} 词）</i></div>
+        <div class="algo-step">
+          <span class="algo-step-no">1</span>
+          <div class="algo-step-main"><b>关键词规则层</b><i>命中预警敏感词库即触发候选（当前 {{ config.keywords.length }} 词）</i></div>
         </div>
-        <span class="flow-arrow">→</span>
-        <div class="flow-node">
-          <span class="flow-no">2</span>
-          <div class="flow-main"><b>LLM 语义分级</b><i>结合上下文判定风险等级并提取情绪特征</i></div>
+        <span class="algo-step-arrow">→</span>
+        <div class="algo-step">
+          <span class="algo-step-no">2</span>
+          <div class="algo-step-main"><b>LLM 语义分级</b><i>结合上下文判定风险等级并提取情绪特征</i></div>
         </div>
-        <span class="flow-arrow">→</span>
-        <div class="flow-node">
-          <span class="flow-no">3</span>
-          <div class="flow-main"><b>脱敏摘要生成</b><i>不含姓名、班级、学号等可识别信息</i></div>
+        <span class="algo-step-arrow">→</span>
+        <div class="algo-step">
+          <span class="algo-step-no">3</span>
+          <div class="algo-step-main"><b>脱敏摘要生成</b><i>不含姓名、班级、学号等可识别信息</i></div>
         </div>
-        <span class="flow-arrow">→</span>
-        <div class="flow-node">
-          <span class="flow-no">4</span>
-          <div class="flow-main"><b>预警上报与干预闭环</b><i>记录预警 → 通知辅导员 → 干预随访</i></div>
+        <span class="algo-step-arrow">→</span>
+        <div class="algo-step">
+          <span class="algo-step-no">4</span>
+          <div class="algo-step-main"><b>预警上报与干预闭环</b><i>记录预警 → 通知辅导员 → 干预随访</i></div>
         </div>
       </div>
 
@@ -553,7 +553,7 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.flow-node {
+.algo-step {
   flex: 1 1 170px;
   display: flex;
   align-items: flex-start;
@@ -565,7 +565,7 @@ onMounted(() => {
   min-width: 150px;
 }
 
-.flow-no {
+.algo-step-no {
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -580,25 +580,25 @@ onMounted(() => {
   margin-top: 1px;
 }
 
-.flow-main {
+.algo-step-main {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.flow-main b {
+.algo-step-main b {
   font-size: 13px;
   color: #1f2937;
 }
 
-.flow-main i {
+.algo-step-main i {
   font-style: normal;
   font-size: 11.5px;
   color: #8a94a6;
   line-height: 1.5;
 }
 
-.flow-arrow {
+.algo-step-arrow {
   align-self: center;
   color: #c0c8d4;
   font-size: 15px;
@@ -730,7 +730,7 @@ onMounted(() => {
 @media (max-width: 900px) {
   .algo-controls { grid-template-columns: 1fr; gap: 16px; }
   .ctrl-actions { justify-content: flex-start; }
-  .flow-arrow { display: none; }
+  .algo-step-arrow { display: none; }
 }
 
 .stat-card {
