@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -39,8 +40,13 @@ def update_college(college_id: int, data: CollegeCreate, db: Session = Depends(g
     obj = db.query(College).get(college_id)
     if not obj:
         raise HTTPException(404, "学院不存在")
+    old_name = obj.name
+    new_name = data.name if data.name else old_name
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(obj, k, v)
+    # 同步更新用户冗余字段 college，保证学生/教师端展示与院系管理一致
+    if old_name != new_name:
+        db.query(User).filter(User.college == old_name).update({"college": new_name}, synchronize_session=False)
     db.commit()
     db.refresh(obj)
     return obj
@@ -51,6 +57,9 @@ def delete_college(college_id: int, db: Session = Depends(get_db), _: User = Dep
     obj = db.query(College).get(college_id)
     if not obj:
         raise HTTPException(404, "学院不存在")
+    used = db.query(User).filter(User.college == obj.name).count()
+    if used:
+        raise HTTPException(400, f"该学院下仍有 {used} 名用户，无法删除。请先移除或调整相关用户所属学院")
     db.delete(obj)
     db.commit()
     return {"ok": True}
@@ -108,6 +117,9 @@ def delete_major(major_id: int, db: Session = Depends(get_db), _: User = Depends
     obj = db.query(Major).get(major_id)
     if not obj:
         raise HTTPException(404, "专业不存在")
+    cg_count = db.query(ClassGroup).filter(ClassGroup.major_id == major_id).count()
+    if cg_count:
+        raise HTTPException(400, f"该专业下仍有 {cg_count} 个班级，无法删除。请先删除或调整班级")
     db.delete(obj)
     db.commit()
     return {"ok": True}
@@ -129,9 +141,19 @@ def list_class_groups(
         major_ids = [m.id for m in db.query(Major).filter(Major.college_id == college_id).all()]
         q = q.filter(ClassGroup.major_id.in_(major_ids))
     rows = q.order_by(ClassGroup.grade.desc(), ClassGroup.id).all()
+    # student_count 是冗余字段可能过期，统一按学生真实归属（role=STUDENT）重新统计
+    cg_ids = [cg.id for cg in rows]
+    real_counts: dict[int, int] = {}
+    if cg_ids:
+        count_rows = db.query(User.class_group_id, func.count(User.id)).filter(
+            User.role == UserRole.STUDENT,
+            User.class_group_id.in_(cg_ids),
+        ).group_by(User.class_group_id).all()
+        real_counts = {cid: n for cid, n in count_rows}
     result = []
     for cg in rows:
         out = ClassGroupOut.model_validate(cg)
+        out.student_count = real_counts.get(cg.id, 0)
         out.major_name = cg.major.name if cg.major else None
         out.college_name = cg.major.college.name if cg.major and cg.major.college else None
         result.append(out)
@@ -157,8 +179,13 @@ def update_class_group(cg_id: int, data: ClassGroupCreate, db: Session = Depends
     obj = db.query(ClassGroup).get(cg_id)
     if not obj:
         raise HTTPException(404, "班级不存在")
+    old_name = obj.name
+    new_name = data.name if data.name else old_name
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(obj, k, v)
+    # 同步更新所属学生的冗余字段 class_name，保证学生端展示与院系管理一致
+    if old_name != new_name:
+        db.query(User).filter(User.class_group_id == cg_id).update({"class_name": new_name}, synchronize_session=False)
     db.commit()
     db.refresh(obj)
     out = ClassGroupOut.model_validate(obj)
@@ -172,6 +199,10 @@ def delete_class_group(cg_id: int, db: Session = Depends(get_db), _: User = Depe
     obj = db.query(ClassGroup).get(cg_id)
     if not obj:
         raise HTTPException(404, "班级不存在")
+    # 先解除学生关联，避免外键残留与数据不一致
+    db.query(User).filter(User.class_group_id == cg_id).update(
+        {"class_group_id": None, "class_name": None}, synchronize_session=False
+    )
     db.delete(obj)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "message": "班级已删除，关联学生已同步解除"}
