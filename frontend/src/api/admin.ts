@@ -30,7 +30,19 @@ export interface DocumentInfo {
   file_type: string
   status: string
   chunk_count: number
+  embedded_count?: number
   created_at: string | null
+}
+
+export interface KnowledgeIndexStatus {
+  segmenter: string
+  embedding_model: string | null
+  embedding_configured: boolean
+  qa_count: number
+  document_count: number
+  total_chunks: number
+  indexed_chunks: number
+  index_coverage: number
 }
 
 export function getKnowledgeList(params?: { category?: string; search?: string } & PaginationParams) {
@@ -61,6 +73,30 @@ export function getDocumentList() {
 
 export function deleteDocument(id: number) {
   return request.delete(`/admin/knowledge/documents/${id}`)
+}
+
+export function reindexKnowledge() {
+  return request.post<{ message: string; model: string | null; indexed: number; skipped: number; error: string }>('/admin/knowledge/reindex')
+}
+
+export function getKnowledgeIndexStatus() {
+  return request.get<KnowledgeIndexStatus>('/admin/knowledge/index-status')
+}
+
+// 向量模型（embedding）配置
+export interface EmbeddingConfig {
+  model: string
+  base_url: string
+  api_key_set: boolean
+  configured: boolean
+  using_env_fallback: boolean
+  hint: string
+}
+export function getEmbeddingConfig() {
+  return request.get<EmbeddingConfig>('/admin/knowledge/embedding-config')
+}
+export function saveEmbeddingConfig(data: { model?: string; base_url?: string; api_key?: string }) {
+  return request.post<EmbeddingConfig>('/admin/knowledge/embedding-config', data)
 }
 
 // 教师管理

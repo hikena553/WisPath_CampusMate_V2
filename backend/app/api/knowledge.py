@@ -4,6 +4,7 @@
 教师/管理端的检索能力复用。新增接口遵循统一约定：
 - 携带 trace_id 便于链路追踪
 - 参数显式校验（Query min_length/max_length）
+- 返回检索元信息 meta（分词模型/向量模型/检索方式），供页面展示
 """
 import uuid
 
@@ -25,10 +26,11 @@ def search_items(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """RAG 知识库混合检索：问答对优先，文档分块兜底"""
-    hits = search_knowledge(db, q.strip(), limit)
+    """RAG 知识库混合检索：问答对优先，文档分块兜底（jieba 分词 + 向量语义）"""
+    hits, meta = search_knowledge(db, q.strip(), limit)
     return {
         "results": hits,
         "count": len(hits),
         "trace_id": f"kb-{uuid.uuid4().hex[:12]}",
+        "meta": meta,
     }
