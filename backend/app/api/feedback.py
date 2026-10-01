@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.schemas.feedback import FeedbackCreate, FeedbackOut, FeedbackReply
+from app.schemas.feedback import FeedbackCreate, FeedbackOut, FeedbackReply, FeedbackWordOut
 from app.services import feedback_service
 
 router = APIRouter(prefix="/api/feedbacks", tags=["反馈管理"])
@@ -34,6 +34,16 @@ def get_feedbacks(
 ):
     """获取反馈列表"""
     return feedback_service.list_feedbacks(db, current_user, status, type, page, page_size)
+
+
+@router.get("/word-cloud", response_model=List[FeedbackWordOut])
+def get_feedback_word_cloud(
+    top_n: int = Query(60, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """反馈关键词词云统计（管理员可见全部，普通用户仅自己）"""
+    return feedback_service.get_feedback_word_cloud(db, current_user, top_n)
 
 
 @router.get("/{feedback_id}", response_model=FeedbackOut)

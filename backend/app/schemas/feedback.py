@@ -16,6 +16,12 @@ class FeedbackReply(BaseModel):
     status: str = "resolved"
 
 
+class FeedbackWordOut(BaseModel):
+    """词云统计项：关键词 + 出现次数"""
+    word: str
+    count: int
+
+
 class FeedbackOut(BaseModel):
     id: int
     user_id: int

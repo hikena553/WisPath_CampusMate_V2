@@ -28,6 +28,11 @@ export interface FeedbackReply {
   status?: string
 }
 
+export interface FeedbackWord {
+  word: string
+  count: number
+}
+
 // 提交反馈
 export function createFeedback(data: FeedbackCreate) {
   return request.post<Feedback>('/feedbacks', data)
@@ -51,4 +56,9 @@ export function getFeedback(id: number) {
 // 回复反馈（管理员）
 export function replyFeedback(id: number, data: FeedbackReply) {
   return request.put<Feedback>(`/feedbacks/${id}/reply`, data)
+}
+
+// 获取反馈关键词词云（管理员）
+export function getFeedbackWordCloud() {
+  return request.get<FeedbackWord[]>('/feedbacks/word-cloud')
 }
