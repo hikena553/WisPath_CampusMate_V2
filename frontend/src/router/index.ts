@@ -5,6 +5,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     role?: string
     keepAlive?: boolean
+    title?: string
   }
 }
 
@@ -60,14 +61,15 @@ const router = createRouter({
       component: () => import('@/components/layout/AdminLayout.vue'),
       meta: { role: 'admin' },
       children: [
-        { path: '', component: () => import('@/views/admin/HomePage.vue') },
-        { path: 'knowledge', component: () => import('@/views/admin/KnowledgePage.vue') },
-        { path: 'teachers', component: () => import('@/views/admin/TeachersPage.vue') },
-        { path: 'students', component: () => import('@/views/admin/StudentsPage.vue') },
-        { path: 'organizations', component: () => import('@/views/admin/OrganizationsPage.vue') },
-        { path: 'courses', component: () => import('@/views/admin/CourseSchedulePage.vue') },
-        { path: 'feedbacks', component: () => import('@/views/admin/FeedbackPage.vue') },
-        { path: 'settings', component: () => import('@/views/admin/SettingPage.vue') },
+        { path: '', meta: { title: '首页' }, component: () => import('@/views/admin/HomePage.vue') },
+        { path: 'knowledge', meta: { title: '知识库' }, component: () => import('@/views/admin/KnowledgePage.vue') },
+        { path: 'teachers', meta: { title: '教师管理' }, component: () => import('@/views/admin/TeachersPage.vue') },
+        { path: 'students', meta: { title: '学生管理' }, component: () => import('@/views/admin/StudentsPage.vue') },
+        { path: 'organizations', meta: { title: '院系班级' }, component: () => import('@/views/admin/OrganizationsPage.vue') },
+        { path: 'courses', meta: { title: '课程表管理' }, component: () => import('@/views/admin/CourseSchedulePage.vue') },
+        { path: 'crisis', name: 'admin-crisis', meta: { title: '危机预警' }, component: () => import('@/views/admin/CrisisMonitorPage.vue') },
+        { path: 'feedbacks', meta: { title: '反馈管理' }, component: () => import('@/views/admin/FeedbackPage.vue') },
+        { path: 'settings', meta: { title: '系统设置' }, component: () => import('@/views/admin/SettingPage.vue') },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },

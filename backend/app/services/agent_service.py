@@ -83,7 +83,7 @@ def build_context(message: str, user: User, db: Session | None = None) -> str:
         close_db = True
     try:
         from app.services.knowledge_service import search_knowledge
-        results = search_knowledge(db, message, limit=5)
+        results, _meta = search_knowledge(db, message, limit=5)
         if results:
             context = "相关校园知识：\n"
             for r in results:
@@ -191,7 +191,7 @@ async def generate_reply(prompt: str, user: User):
     """简单流式回复，不涉及会话、工具或保存。"""
     config = _get_llm_config()
     msgs = [
-        {"role": "system", "content": f"你是绵阳城市学院的智慧校园AI助手绵小城。请用中文简洁回答，控制在500字以内。"},
+        {"role": "system", "content": build_system_prompt(user)},
         {"role": "user", "content": prompt},
     ]
     try:
@@ -367,15 +367,15 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
         if suggestions:
             yield f"\n__SUGGESTIONS__:{json.dumps(suggestions, ensure_ascii=False)}"
 
-        keywords = detect_crisis_keywords(message)
-        if keywords:
-            crisis_db = SessionLocal()
-            try:
+        crisis_db = SessionLocal()
+        try:
+            keywords = detect_crisis_keywords(message, crisis_db)
+            if keywords:
                 await save_crisis_summary(crisis_db, user.id, message, full_reply, keywords)
-            except Exception:
-                logger.exception("保存危机预警失败")
-            finally:
-                crisis_db.close()
+        except Exception:
+            logger.exception("保存危机预警失败")
+        finally:
+            crisis_db.close()
 
         await _try_extract_skills(message, user)
 

@@ -19,17 +19,23 @@ _client_instance: AsyncOpenAI | None = None
 _client_config_hash: str = ""
 
 
+# 系统设置中可被 AI 服务读取的配置键
+_DB_SETTING_KEYS = (
+    'llm_api_key', 'llm_base_url', 'llm_model',
+    'llm_agent_model', 'llm_vision_model',
+    'llm_agent_temperature', 'llm_agent_max_tokens',
+    # AI 助手配置：自我称谓 / 语音音色 / 自定义系统提示词
+    'agent_name', 'llm_tts_voice', 'system_prompt',
+)
+
+
 def _get_db_settings() -> dict:
     """从数据库获取AI相关设置"""
     from app.core.database import SessionLocal
     db = SessionLocal()
     try:
         db_settings = db.query(SystemSetting).filter(
-            SystemSetting.key.in_([
-                'llm_api_key', 'llm_base_url', 'llm_model',
-                'llm_agent_model', 'llm_vision_model',
-                'llm_agent_temperature', 'llm_agent_max_tokens'
-            ])
+            SystemSetting.key.in_(_DB_SETTING_KEYS)
         ).all()
         return {s.key: s.value for s in db_settings}
     except Exception:
@@ -79,15 +85,33 @@ def _get_client() -> AsyncOpenAI:
 
 
 def build_system_prompt(user: User | None = None) -> str:
+    db_settings = _get_db_settings()
+    agent_name = (db_settings.get('agent_name') or "").strip() or settings.AGENT_NAME
+
     role_name = {"student": "同学", "teacher": "老师", "admin": "管理员"}
     greeting = role_name.get(user.role.value, "同学") if user else "同学"
     college = f"，来自{user.college}" if user and user.college else ""
+    weekday_names = ["一", "二", "三", "四", "五", "六", "日"]
+    today = date.today()
+    today_str = f"{today.isoformat()}（星期{weekday_names[today.weekday()]}）"
+
+    # 自定义系统提示词：管理员在系统设置中配置后直接采用
+    # 支持占位符：{agent_name} / {greeting} / {college} / {today}
+    custom_prompt = (db_settings.get('system_prompt') or "").strip()
+    if custom_prompt:
+        try:
+            return custom_prompt.format(
+                agent_name=agent_name,
+                greeting=greeting,
+                college=college,
+                today=today_str,
+                today_date=today.isoformat(),
+            )
+        except (KeyError, IndexError):
+            return custom_prompt
 
     if user and user.role == UserRole.STUDENT:
-        weekday_names = ["一", "二", "三", "四", "五", "六", "日"]
-        today = date.today()
-        today_str = f"{today.isoformat()}（星期{weekday_names[today.weekday()]}）"
-        return f"""你是绵阳城市学院的智慧校园AI助手"绵小城"，{greeting}{college}的校园智能管家。
+        return f"""你是绵阳城市学院的智慧校园AI助手"{agent_name}"，{greeting}{college}的校园智能管家。
 
 今天是 {today_str}。计算相对日期（如"下周二"、"明天"、"下周"）时以此为准。
 
@@ -128,7 +152,7 @@ def build_system_prompt(user: User | None = None) -> str:
 - 回答使用纯文本，避免 Markdown 标记（#、列表、代码块等），需要强调重点时可用 **加粗**
 - 不知道的说"我需要向老师确认后回答你" """
     else:
-        return f"""你是绵阳城市学院的智慧校园AI助手"绵小城"，{greeting}{college}的教学管理助手。
+        return f"""你是绵阳城市学院的智慧校园AI助手"{agent_name}"，{greeting}{college}的教学管理助手。
 
 ## 能力
 1. 请假审批 → query_pending_leaves / approve_leave

@@ -14,10 +14,33 @@ CRISIS_KEYWORDS = [
     "不想上学", "害怕", "心慌", "难受", "想哭",
 ]
 
+# 设置表中的配置键名
+SETTING_CRISIS_KEYWORDS = "crisis_keywords"
+SETTING_NOTIFY_COUNSELOR = "auto_notify_counselor"
 
-def detect_crisis_keywords(text: str) -> list[str]:
+
+def get_crisis_keywords(db: Session | None = None) -> list[str]:
+    """获取生效的危机预警敏感词：优先读取设置表中的管理员配置，未配置时回退内置默认词库。"""
+    if db is not None:
+        try:
+            from app.models.setting import SystemSetting
+            row = (
+                db.query(SystemSetting)
+                .filter(SystemSetting.key == SETTING_CRISIS_KEYWORDS)
+                .first()
+            )
+            if row and row.value:
+                custom = [k.strip() for k in str(row.value).split(",") if k.strip()]
+                if custom:
+                    return custom
+        except Exception:
+            pass
+    return list(CRISIS_KEYWORDS)
+
+
+def detect_crisis_keywords(text: str, db: Session | None = None) -> list[str]:
     matched = []
-    for kw in CRISIS_KEYWORDS:
+    for kw in get_crisis_keywords(db):
         if kw in text:
             matched.append(kw)
     return matched

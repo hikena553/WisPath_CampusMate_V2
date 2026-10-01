@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -12,6 +13,11 @@ from app.utils.enum_helpers import safe_enum_val
 router = APIRouter(prefix="/api/crisis", tags=["crisis"])
 
 
+class CrisisConfigIn(BaseModel):
+    keywords: list[str]
+    notify_counselor: bool
+
+
 def _filter_by_tutor(query, user, db):
     if user.role == UserRole.ADMIN:
         return query
@@ -19,6 +25,62 @@ def _filter_by_tutor(query, user, db):
     if student_ids:
         return query.filter(AIDialogSummary.student_id.in_(student_ids))
     return query.filter(False)
+
+
+@router.get("/config")
+def get_crisis_config(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """危机预警算法配置：回显当前生效的敏感词与通知开关（仅管理员）"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="仅管理员可查看")
+    from app.services.crisis_service import (
+        CRISIS_KEYWORDS,
+        SETTING_NOTIFY_COUNSELOR,
+        get_crisis_keywords,
+    )
+    from app.models.setting import SystemSetting
+    notify_row = (
+        db.query(SystemSetting)
+        .filter(SystemSetting.key == SETTING_NOTIFY_COUNSELOR)
+        .first()
+    )
+    notify = bool(notify_row and notify_row.value == "true")
+    return {
+        "keywords": get_crisis_keywords(db),
+        "notify_counselor": notify,
+        "default_keywords": CRISIS_KEYWORDS,
+    }
+
+
+@router.put("/config")
+def update_crisis_config(
+    req: CrisisConfigIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """保存危机预警算法配置：敏感词 + 自动通知开关（仅管理员）"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="仅管理员可设置")
+    from app.services.crisis_service import (
+        SETTING_CRISIS_KEYWORDS,
+        SETTING_NOTIFY_COUNSELOR,
+    )
+    from app.models.setting import SystemSetting
+
+    custom = [k.strip() for k in req.keywords if k and k.strip()]
+    if not custom:
+        raise HTTPException(status_code=400, detail="预警敏感词不能为空")
+    updates = {
+        SETTING_CRISIS_KEYWORDS: ",".join(custom),
+        SETTING_NOTIFY_COUNSELOR: "true" if req.notify_counselor else "false",
+    }
+    for key, value in updates.items():
+        row = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+        if row:
+            row.value = value
+        else:
+            db.add(SystemSetting(key=key, value=value))
+    db.commit()
+    return {"message": "算法配置已保存", "keywords": custom, "notify_counselor": req.notify_counselor}
 
 
 @router.get("/alerts", response_model=list[AIDialogSummaryOut])
