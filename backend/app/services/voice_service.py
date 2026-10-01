@@ -37,6 +37,40 @@ VOICE_TTS_MODEL = "qwen-audio-3.0-tts-flash"
 VOICE_TTS_VOICE = "longanhuan_v3.6"
 
 
+def _get_tts_voice() -> str:
+    """获取语音合成音色：优先系统设置 llm_tts_voice，其次 .env LLM_TTS_VOICE，最后内置默认"""
+    try:
+        db = SessionLocal()
+        try:
+            row = db.query(SystemSetting).filter(SystemSetting.key == "llm_tts_voice").first()
+            if row and row.value and row.value.strip():
+                return row.value.strip()
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("读取语音音色设置失败")
+    return settings.LLM_TTS_VOICE or VOICE_TTS_VOICE
+
+
+def _get_tts_prompt() -> str:
+    """获取语音播报风格提示词：优先系统设置 llm_tts_prompt，其次 .env LLM_TTS_PROMPT
+
+    作用于语音通话链路中的大模型回复风格（让回答更口语化、简短、适合语音播报），
+    而非 TTS 合成参数（qwen-audio-3.0-tts-flash 不支持 instructions 指令）。
+    """
+    try:
+        db = SessionLocal()
+        try:
+            row = db.query(SystemSetting).filter(SystemSetting.key == "llm_tts_prompt").first()
+            if row and row.value and row.value.strip():
+                return row.value.strip()
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("读取语音提示词设置失败")
+    return (settings.LLM_TTS_PROMPT or "").strip()
+
+
 def _get_voice_api_key() -> str:
     """获取语音 API Key：优先数据库 llm_api_key（Token Plan，加密存储），
     兼容旧键 dashscope_api_key，最后回退到 .env"""
@@ -133,9 +167,10 @@ async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = N
             return await _do(owned_client)
 
 
-async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None):
+async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None, voice: str | None = None):
     """调用 Token Plan 语音合成（qwen-audio-3.0-tts-flash 快模型），
-    流式下载音频文件，yield PCM 16kHz 16bit mono 分块（边下载边产出，首块尽早送达）"""
+    流式下载音频文件，yield PCM 16kHz 16bit mono 分块（边下载边产出，首块尽早送达）。
+    voice 参数可临时覆盖当前生效音色（如管理端试听）。"""
     api_key = _get_voice_api_key()
     if not api_key:
         raise RuntimeError("语音合成未配置 API Key")
@@ -144,7 +179,7 @@ async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None):
         "model": VOICE_TTS_MODEL,
         "input": {
             "text": text,
-            "voice": VOICE_TTS_VOICE,
+            "voice": voice or _get_tts_voice(),
             "format": "pcm",
             "sample_rate": 16000,
         },
@@ -308,6 +343,14 @@ async def handle_voice_connection(
 
         system_prompt = build_system_prompt(user)
 
+        # 语音播报风格提示词：叠加到系统提示词，使回复适合语音合成播报
+        voice_prompt = _get_tts_prompt()
+        if voice_prompt:
+            system_prompt = (
+                f"{system_prompt}\n\n【语音播报风格要求】{voice_prompt}\n"
+                "请遵循以上风格要求回复，并在表达时尽量口语化、简短，便于语音合成朗读。"
+            )
+
         # ============================================================
         # 单轮对话处理：STT -> LLM 流式 -> 句子级 TTS 链（边说边出）
         # ============================================================
@@ -340,7 +383,7 @@ async def handle_voice_connection(
 
                 # 2. 情绪 + 心理关注上报
                 dominant_emotion = _dominant_emotion(emotion_timeline)
-                keywords = detect_crisis_keywords(text)
+                keywords = detect_crisis_keywords(text, db)
                 negative_burst = len([
                     e for e in emotion_timeline if e["emotion"] in NEGATIVE_EMOTIONS
                 ]) >= 3

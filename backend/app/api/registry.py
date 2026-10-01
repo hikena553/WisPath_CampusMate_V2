@@ -33,6 +33,7 @@ from app.api.feeds import router as feeds_router
 from app.api.emotions import router as emotions_router
 from app.api.approval import router as approval_router
 from app.api.material import router as material_router
+from app.api.branding import router as branding_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -68,6 +69,7 @@ ROUTERS = [
     emotions_router,
     approval_router,
     material_router,
+    branding_router,
 ]
 
 

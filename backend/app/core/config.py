@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     LLM_AGENT_TEMPERATURE: float = 0.7
     LLM_AGENT_MAX_TOKENS: int = 10000
     LLM_MAX_INPUT_CHARS: int = 8000
+    # AI 助手自我称谓（可在系统设置中覆盖）
+    AGENT_NAME: str = "绵小城"
+    # 语音合成音色（可在系统设置中覆盖）
+    LLM_TTS_VOICE: str = "longanhuan_v3.6"
+    # 语音播报风格提示词（可在系统设置中覆盖，作用于语音通话中大模型的回复风格）
+    LLM_TTS_PROMPT: str = ""
     # 外部资讯源令牌（可选，不配置则按匿名限流抓取）
     GITHUB_TOKEN: str = ""
     GITEE_TOKEN: str = ""

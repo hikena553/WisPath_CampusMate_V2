@@ -4,15 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.conversation import Conversation, ConversationMessage, ConversationType, ProjectTemplate, PROJECT_STAGES
+from app.models.setting import SystemSetting
 from app.utils.enum_helpers import safe_enum_val
 
 router = APIRouter(prefix="/api/agent", tags=["conversations"])
 
 PROJECT_GREETINGS = {
-    "competition": "你好！欢迎开始「{title}」学科竞赛项目 🏆\n\n我是绵小城，会全程协助你从赛前准备到答辩展示。请告诉我你现在处于哪个阶段，或者需要我帮你做些什么？",
+    "competition": "你好！欢迎开始「{title}」学科竞赛项目 🏆\n\n我是{agent_name}，会全程协助你从赛前准备到答辩展示。请告诉我你现在处于哪个阶段，或者需要我帮你做些什么？",
     "thesis": "你好！欢迎开始「{title}」毕业论文项目 📖\n\n我会协助你从选题开题到答辩的全流程。目前你有什么初步想法吗？",
     "practice": "你好！欢迎开始「{title}」社会实践项目 🌟\n\n我会协助你完成方案申报到总结评优的全过程。请告诉我你的计划？",
     "certificate": "你好！欢迎开始「{title}」证书考取项目 📚\n\n我会陪你一起备考，从考情分析到考前冲刺。你打算报考哪个考试？",
@@ -71,7 +73,13 @@ def create_conversation(body: dict, user: User = Depends(get_current_user), db: 
 
     # 为项目对话自动添加欢迎语
     if ctype == "project" and template:
-        greeting = PROJECT_GREETINGS.get(template, PROJECT_GREETINGS["custom"]).format(title=title)
+        agent_name = (
+            db.query(SystemSetting).filter(SystemSetting.key == "agent_name").first()
+        )
+        agent_name = (agent_name.value if agent_name else "") or settings.AGENT_NAME
+        greeting = PROJECT_GREETINGS.get(template, PROJECT_GREETINGS["custom"]).format(
+            title=title, agent_name=agent_name
+        )
         msg = ConversationMessage(conversation_id=conv.id, role="assistant", content=greeting)
         db.add(msg)
         db.commit()
