@@ -839,7 +839,7 @@ onMounted(async () => {
 .toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   background: #fff; border: 1px solid #eef2f7; border-radius: 10px;
-  padding: 10px 16px; margin-bottom: 10px;
+  padding: 6px 16px; margin-bottom: 0;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .toolbar-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
@@ -850,7 +850,7 @@ onMounted(async () => {
 .search-input { width: 170px; }
 
 /* ══════════ 学期分页 ══════════ */
-.semester-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.semester-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .sem-tab {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 14px; border-radius: 999px;

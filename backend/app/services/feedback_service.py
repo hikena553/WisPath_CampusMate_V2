@@ -1,10 +1,17 @@
 """反馈模块业务逻辑：列表/详情/提交/回复，屏蔽 ORM 细节，供 API 层调用。"""
 import re
+import sys
 from collections import Counter
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
-import jieba
+try:
+    import jieba
+except ModuleNotFoundError:  # pragma: no cover
+    # 环境未安装 jieba 时，回退加载项目 vendor_packages 目录内置的同版本副本
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "vendor_packages"))
+    import jieba
 from fastapi import HTTPException
 from sqlalchemy import desc
 from sqlalchemy.orm import Session

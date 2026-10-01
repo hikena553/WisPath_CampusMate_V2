@@ -32,8 +32,9 @@ TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com"
 VOICE_STT_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/aigc/multimodal-generation/generation"
 VOICE_STT_MODEL = "qwen-audio-3.0-asr-flash"
 VOICE_TTS_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/audio/tts/SpeechSynthesizer"
-# flash 快模型：相比 plus 版首包延迟显著更低，音色兼容（longanhuan_v3.6）
-VOICE_TTS_MODEL = "qwen-audio-3.0-tts-flash"
+# Token Plan 套餐白名单的语音合成模型仅 plus 版；flash 不在套餐支持列表，
+# 调用会返回 404 Model not exist（此前曾因延迟切到 flash，受套餐限制切回 plus）
+VOICE_TTS_MODEL = "qwen-audio-3.0-tts-plus"
 VOICE_TTS_VOICE = "longanhuan_v3.6"
 
 
@@ -56,7 +57,7 @@ def _get_tts_prompt() -> str:
     """获取语音播报风格提示词：优先系统设置 llm_tts_prompt，其次 .env LLM_TTS_PROMPT
 
     作用于语音通话链路中的大模型回复风格（让回答更口语化、简短、适合语音播报），
-    而非 TTS 合成参数（qwen-audio-3.0-tts-flash 不支持 instructions 指令）。
+    而非 TTS 合成参数（qwen-audio-3.0-tts-plus 作为 TTS 参数时的 instructions 不在此设置）。
     """
     try:
         db = SessionLocal()
@@ -168,7 +169,7 @@ async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = N
 
 
 async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None, voice: str | None = None):
-    """调用 Token Plan 语音合成（qwen-audio-3.0-tts-flash 快模型），
+    """调用 Token Plan 语音合成（qwen-audio-3.0-tts-plus），
     流式下载音频文件，yield PCM 16kHz 16bit mono 分块（边下载边产出，首块尽早送达）。
     voice 参数可临时覆盖当前生效音色（如管理端试听）。"""
     api_key = _get_voice_api_key()
