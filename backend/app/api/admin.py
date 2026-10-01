@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from urllib.parse import quote
 from typing import Any
+from collections import defaultdict
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -11,10 +12,12 @@ from app.core.deps import require_role
 from app.core.security import hash_password
 from app.models.user import User, UserRole
 from app.models.crisis import AIDialogSummary
-from app.models.academic import Course, ClassGroup, Major, College
+from app.models.academic import Course, ClassGroup, Major, College, Semester
 from app.models.knowledge import KnowledgeItem
 from app.models.document import Document
+from app.models.setting import SystemSetting
 from app.models.conversation import Conversation, ConversationMessage
+from app.core.crypto import encrypt_value, decrypt_value, is_encrypted
 from app.schemas.admin import (
     KnowledgeItemCreate, KnowledgeItemUpdate, KnowledgeItemOut,
     DocumentOut, TeacherCreate, TeacherOut, StudentBriefOut, StudentUpdate, ImportResult,
@@ -153,14 +156,108 @@ def list_documents(
     db: Session = Depends(get_db),
 ):
     docs = knowledge_service.get_all_documents(db)
+    embedded_counts = knowledge_service.get_embedded_counts(db, [d.id for d in docs])
     return [DocumentOut(
         id=d.id,
         filename=d.filename,
         file_type=d.file_type,
         status=d.status,
         chunk_count=d.chunk_count,
+        embedded_count=embedded_counts.get(d.id, 0),
         created_at=d.created_at.isoformat() if d.created_at else None,
     ) for d in docs]
+
+
+@router.post("/knowledge/reindex")
+def reindex_knowledge(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """为知识库文档分块重建向量索引（幂等：仅处理缺少向量的分块）"""
+    result = knowledge_service.build_embeddings_for_missing(db)
+    model = knowledge_service.get_embedding_model(db)
+    return {
+        "message": "向量索引重建完成" if not result["error"] else "向量索引重建失败",
+        "model": model,
+        **{k: v for k, v in result.items()},
+    }
+
+
+@router.get("/knowledge/index-status")
+def knowledge_index_status(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """知识库检索模型与向量索引状态（分词模型/向量模型/索引覆盖率）"""
+    return knowledge_service.get_index_status(db)
+
+
+class EmbeddingConfigOut(BaseModel):
+    model: str = ""
+    base_url: str = ""
+    api_key_set: bool = False
+    configured: bool = False
+    using_env_fallback: bool = False
+    hint: str = ""
+
+
+class EmbeddingConfigBody(BaseModel):
+    model: str = ""          # 空串 = 使用默认 text-embedding-v3
+    base_url: str = ""       # 空串 = 沿用环境变量 LLM_BASE_URL
+    api_key: str = ""        # 明文，非空时加密存储
+
+
+@router.get("/knowledge/embedding-config", response_model=EmbeddingConfigOut)
+def embedding_get_config(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """读取向量模型配置（密钥仅返回是否已设置；显示是否回退环境变量）"""
+    from app.core.config import settings
+
+    model = _xqe_get(db, "embedding_model", "") or ""
+    base = _xqe_get(db, "embedding_base_url", "") or ""
+    api_key = _xqe_get(db, "embedding_api_key", "") or ""
+    env_key = (settings.DASHSCOPE_API_KEY or settings.LLM_API_KEY or "").strip()
+    env_base = (settings.LLM_BASE_URL or "").strip().rstrip("/")
+
+    using_fallback = (not base or not api_key) and bool(env_key and env_base)
+    effective_base = base or env_base
+    effective_model = model or "text-embedding-v3"
+    return EmbeddingConfigOut(
+        model=effective_model,
+        base_url=effective_base or "",
+        api_key_set=bool(api_key or env_key),
+        configured=bool((api_key or env_key) and (base or env_base)),
+        using_env_fallback=using_fallback,
+        hint=(
+            "当前使用环境变量配置（DASHSCOPE_API_KEY / LLM_BASE_URL）"
+            if using_fallback
+            else ("请在下方填写模型名、接口地址与密钥" if not api_key else "配置已保存")
+        ),
+    )
+
+
+@router.post("/knowledge/embedding-config", response_model=EmbeddingConfigOut)
+def embedding_save_config(
+    data: EmbeddingConfigBody,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """保存向量模型配置（模型名/接口地址/API 密钥，密钥加密存储）"""
+    model = data.model.strip()
+    if model:
+        _xqe_set(db, "embedding_model", model)
+    base = data.base_url.strip().rstrip("/")
+    if base:
+        if not base.startswith(("http://", "https://")):
+            raise HTTPException(400, "接口地址需以 http:// 或 https:// 开头")
+        _xqe_set(db, "embedding_base_url", base)
+    if data.api_key.strip():
+        _xqe_set(db, "embedding_api_key", encrypt_value(data.api_key.strip()))
+
+    db.commit()
+    return embedding_get_config(user=user, db=db)
 
 
 @router.delete("/knowledge/documents/{doc_id}")
@@ -294,6 +391,29 @@ def get_teacher_students(
     return result
 
 
+@router.delete("/teachers/batch")
+def batch_delete_teachers(
+    ids: list[int] = Body(..., embed=True),
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """批量删除教师（注意：必须注册在 /teachers/{teacher_id} 之前，避免路由被吞）"""
+    teachers = db.query(User).filter(User.id.in_(ids), User.role == UserRole.TEACHER).all()
+    if not teachers:
+        raise HTTPException(status_code=404, detail="未找到指定教师")
+
+    deleted_names = []
+    for t in teachers:
+        db.query(User).filter(User.role == UserRole.STUDENT, User.tutor_id == t.id).update(
+            {"tutor_id": None}
+        )
+        deleted_names.append(t.name)
+        db.delete(t)
+
+    db.commit()
+    return {"message": f"已删除 {len(deleted_names)} 名教师：{', '.join(deleted_names)}"}
+
+
 @router.delete("/teachers/{teacher_id}")
 def delete_teacher(
     teacher_id: int,
@@ -310,28 +430,6 @@ def delete_teacher(
     db.delete(teacher)
     db.commit()
     return {"message": f"已删除教师 {teacher.name}，其名下学生的辅导员已清空"}
-
-
-@router.delete("/teachers/batch")
-def batch_delete_teachers(
-    ids: list[int] = Body(..., embed=True),
-    user: User = Depends(require_role(UserRole.ADMIN)),
-    db: Session = Depends(get_db),
-):
-    teachers = db.query(User).filter(User.id.in_(ids), User.role == UserRole.TEACHER).all()
-    if not teachers:
-        raise HTTPException(status_code=404, detail="未找到指定教师")
-
-    deleted_names = []
-    for t in teachers:
-        db.query(User).filter(User.role == UserRole.STUDENT, User.tutor_id == t.id).update(
-            {"tutor_id": None}
-        )
-        deleted_names.append(t.name)
-        db.delete(t)
-
-    db.commit()
-    return {"message": f"已删除 {len(deleted_names)} 名教师：{', '.join(deleted_names)}"}
 
 
 # ========== 学生管理 ==========
@@ -559,6 +657,127 @@ def admin_list_courses(
     return q.order_by(Course.day_of_week, Course.start_period).all()
 
 
+@router.get("/courses/summary", summary="课程表总览统计", description="统计各学期课程表数量；以及指定学期范围内每个班级的课程编排情况（含未编排班级）")
+def admin_courses_summary(
+    semester: str | None = Query(None, description="学期，不传则返回全部学期的统计；班级维度的编排情况按该学期统计"),
+    college_id: int | None = Query(None),
+    major_id: int | None = Query(None),
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """课程表总览：学期维度数量 + 班级维度编排情况（未编排班级也返回 course_count=0）"""
+    # 1) 班级范围（outerjoin 专业/学院，便于前端直接展示名称）
+    cg_q = (
+        db.query(
+            ClassGroup.id,
+            ClassGroup.name,
+            ClassGroup.grade,
+            ClassGroup.student_count,
+            Major.name.label("major_name"),
+            College.name.label("college_name"),
+        )
+        .outerjoin(Major, ClassGroup.major_id == Major.id)
+        .outerjoin(College, Major.college_id == College.id)
+    )
+    if college_id:
+        cg_q = cg_q.filter(Major.college_id == college_id)
+    elif major_id:
+        cg_q = cg_q.filter(ClassGroup.major_id == major_id)
+
+    schedules: list[dict] = []
+    for row in cg_q.order_by(ClassGroup.grade.desc(), ClassGroup.name.asc()).all():
+        schedules.append({
+            "class_group_id": row.id,
+            "class_name": row.name,
+            "grade": row.grade,
+            "student_count": row.student_count,
+            "major_name": row.major_name or "",
+            "college_name": row.college_name or "",
+            "course_count": 0,
+            "filled_slots": 0,
+            "total_slots": 35,
+        })
+    scope_cg_ids = [s["class_group_id"] for s in schedules]
+
+    # 2) 学期维度统计（受学院/专业筛选影响）
+    semesters: list[dict] = []
+    if scope_cg_ids:
+        sem_rows = (
+            db.query(
+                Course.semester,
+                func.count(Course.id),
+                func.count(func.distinct(Course.class_group_id)),
+            )
+            .filter(Course.class_group_id.in_(scope_cg_ids))
+            .group_by(Course.semester)
+            .all()
+        )
+        for value, course_count, schedule_count in sem_rows:
+            if not value:
+                continue
+            label = str(value)
+            try:
+                parts = label.split("-")
+                if len(parts) == 3:
+                    label = f"{parts[0]}-{parts[1]} 第{'一' if parts[2] == '1' else '二'}学期"
+            except (IndexError, ValueError):
+                pass
+            semesters.append({
+                "value": str(value),
+                "label": label,
+                "schedule_count": schedule_count,
+                "course_count": course_count,
+            })
+        def _sem_sort_key(s: dict) -> tuple:
+            try:
+                parts = s["value"].split("-")
+                return (-int(parts[0]), -int(parts[2]))
+            except (IndexError, ValueError):
+                return (0, 0)
+
+        # 合并手工配置的学期（无课程数据也在课程表中展示，自定义名称优先）
+        sem_by_value = {s["value"]: s for s in semesters}
+        for sem in db.query(Semester).all():
+            if sem.value in sem_by_value:
+                sem_by_value[sem.value]["label"] = sem.label
+            else:
+                sem_by_value[sem.value] = {
+                    "value": sem.value,
+                    "label": sem.label,
+                    "schedule_count": 0,
+                    "course_count": 0,
+                }
+        semesters = sorted(sem_by_value.values(), key=_sem_sort_key)
+
+    # 3) 班级维度：指定学期内的课程数与占用节次（7天 × 5个课次行 = 35 槽位）
+    total_courses = 0
+    if semester and scope_cg_ids:
+        cg_map = {s["class_group_id"]: s for s in schedules}
+        occupied: dict[int, set] = defaultdict(set)
+        for c in db.query(Course).filter(
+            Course.class_group_id.in_(scope_cg_ids),
+            Course.semester == semester,
+        ).all():
+            cg = cg_map.get(c.class_group_id)
+            if cg is None:
+                continue
+            cg["course_count"] += 1
+            total_courses += 1
+            for p in (1, 3, 5, 7, 9):
+                if c.start_period <= p <= c.end_period:
+                    occupied[c.class_group_id].add((c.day_of_week, p))
+        for cg_id, rows in occupied.items():
+            cg_map[cg_id]["filled_slots"] = len(rows)
+    else:
+        total_courses = sum(s["course_count"] for s in semesters)
+
+    return {
+        "semesters": semesters,
+        "schedules": schedules,
+        "total_courses": total_courses,
+    }
+
+
 @router.post("/courses", response_model=CourseOut)
 def admin_create_course(
     data: CourseCreate,
@@ -604,6 +823,18 @@ def admin_update_course(
     return obj
 
 
+@router.delete("/courses/batch")
+def admin_batch_delete_courses(
+    ids: list[int] = Body(..., embed=True),
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """管理员批量删除课程（注意：必须注册在 /courses/{course_id} 之前，避免路由被吞）"""
+    count = db.query(Course).filter(Course.id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True, "deleted": count}
+
+
 @router.delete("/courses/{course_id}")
 def admin_delete_course(
     course_id: int,
@@ -617,18 +848,6 @@ def admin_delete_course(
     db.delete(obj)
     db.commit()
     return {"ok": True}
-
-
-@router.delete("/courses/batch")
-def admin_batch_delete_courses(
-    ids: list[int] = Body(..., embed=True),
-    user: User = Depends(require_role(UserRole.ADMIN)),
-    db: Session = Depends(get_db),
-):
-    """管理员批量删除课程"""
-    count = db.query(Course).filter(Course.id.in_(ids)).delete(synchronize_session=False)
-    db.commit()
-    return {"ok": True, "deleted": count}
 
 
 @router.get("/semesters")
@@ -688,6 +907,135 @@ def admin_list_semesters(
                 s["label"] = f"{parts[0]}-{parts[1]} 第{'一' if parts[2] == '1' else '二'}学期"
 
     return semesters
+
+
+class SemesterCreate(BaseModel):
+    """新增学期配置"""
+    year: str = Body(..., description="学年，如 2026-2027")
+    term: int = Body(..., description="学期：1 第一学期，2 第二学期")
+    label: str | None = Body(None, description="自定义显示名称，不传则按学年学期自动生成")
+
+
+class SemesterUpdate(BaseModel):
+    """编辑学期配置（仅允许修改显示名称，value 与课程数据强关联不可改）"""
+    label: str = Body(...)
+
+
+@router.get("/semesters/managed", summary="学期配置列表", description="返回手工配置的学期 + 数据库中已有课程的学期，附课程数量")
+def admin_list_managed_semesters(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """学期管理列表：配置表学期 ∪ 课程表学期（去重），带各自课程数量"""
+    import re
+    from collections import defaultdict as _dd
+
+    # 1) 配置表学期
+    rows: list[dict] = []
+    for sem in db.query(Semester).order_by(Semester.id.asc()).all():
+        rows.append({
+            "id": sem.id,
+            "value": sem.value,
+            "label": sem.label,
+            "managed": True,
+        })
+
+    # 2) 课程表已有学期（补全 label、去重）
+    def _fmt_label(v: str) -> str:
+        parts = v.split("-")
+        if len(parts) == 3 and re.fullmatch(r"\d{4}-\d{4}-\d", v):
+            return f"{parts[0]}-{parts[1]} 第{'一' if parts[2] == '1' else '二'}学期"
+        return v
+
+    existing_values = {r["value"] for r in rows}
+    for (v,) in db.query(Course.semester).distinct().all():
+        if v and v not in existing_values:
+            rows.append({"id": None, "value": v, "label": _fmt_label(v), "managed": False})
+            existing_values.add(v)
+
+    # 3) 课程数量统计
+    counts: dict[str, int] = _dd(int)
+    for (v, c) in db.query(Course.semester, func.count(Course.id)).group_by(Course.semester).all():
+        if v:
+            counts[v] = c
+    for r in rows:
+        r["course_count"] = counts.get(r["value"], 0)
+
+    # 4) 排序：学年倒序、学期倒序
+    def _k(r: dict) -> tuple:
+        m = re.fullmatch(r"(\d{4})-(\d{4})-(\d)", r["value"] or "")
+        return (-int(m.group(1)), -int(m.group(3))) if m else (0, 0)
+
+    rows.sort(key=_k)
+    return rows
+
+
+@router.post("/semesters", summary="新增学期配置", description="新增一个学期（无课程数据时也会在课程表总览中展示）")
+def admin_create_semester(
+    data: SemesterCreate,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    import re
+    if not re.fullmatch(r"\d{4}-\d{4}", data.year.strip()):
+        raise HTTPException(400, detail="学年格式不正确，示例：2026-2027")
+    if data.term not in (1, 2):
+        raise HTTPException(400, detail="学期只能选择第一学期或第二学期")
+
+    value = f"{data.year.strip()}-{data.term}"
+
+    # 与配置表 / 课程表学期均不能重复
+    existed = db.query(Semester).filter(Semester.value == value).first()
+    if existed:
+        raise HTTPException(400, detail=f"学期 {value} 已存在")
+    if value in {r[0] for r in db.query(Course.semester).distinct().all() if r[0]}:
+        raise HTTPException(400, detail=f"学期 {value} 已存在于课程数据中")
+
+    label = (data.label or "").strip()
+    if not label:
+        label = f"{data.year.strip()} 第{'一' if data.term == 1 else '二'}学期"
+
+    sem = Semester(value=value, label=label)
+    db.add(sem)
+    db.commit()
+    db.refresh(sem)
+    return {"id": sem.id, "value": sem.value, "label": sem.label, "course_count": 0}
+
+
+@router.put("/semesters/{semester_id}", summary="编辑学期配置", description="仅允许修改显示名称（label），value 与课程数据强关联不可改")
+def admin_update_semester(
+    semester_id: int,
+    data: SemesterUpdate,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    sem = db.get(Semester, semester_id)
+    if not sem:
+        raise HTTPException(404, detail="学期配置不存在")
+    label = data.label.strip()
+    if not label:
+        raise HTTPException(400, detail="显示名称不能为空")
+    sem.label = label
+    db.commit()
+    db.refresh(sem)
+    return {"id": sem.id, "value": sem.value, "label": sem.label}
+
+
+@router.delete("/semesters/{semester_id}", summary="删除学期配置", description="删除手工配置的学期；若该学期已有课程数据则拒绝删除")
+def admin_delete_semester(
+    semester_id: int,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    sem = db.get(Semester, semester_id)
+    if not sem:
+        raise HTTPException(404, detail="学期配置不存在")
+    course_count = db.query(func.count(Course.id)).filter(Course.semester == sem.value).scalar() or 0
+    if course_count > 0:
+        raise HTTPException(400, detail=f"该学期已有 {course_count} 门课程，请先删除课程后再删除学期")
+    db.delete(sem)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/courses/import", response_model=CourseImportResult)
@@ -837,6 +1185,199 @@ async def admin_import_courses(
         raise HTTPException(400, f"解析 Excel 失败：{str(e)}")
 
     return result
+
+
+# ========== 喜鹊儿（青果教务）课表同步 ==========
+
+class XiqueConfigOut(BaseModel):
+    configured: bool = False
+    root_url: str = ""
+    username: str = ""
+    password_set: bool = False
+    school_year: int = 0
+    term: int = 0
+    semester: str = ""
+    hint: str = ""
+
+
+class XiqueConfigBody(BaseModel):
+    root_url: str = ""
+    username: str = ""
+    password: str = ""  # 明文，非空时保存 md5 后加密存储
+    school_year: int = 0
+    term: int = 0
+
+
+class XiqueSyncBody(BaseModel):
+    root_url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    school_year: int | None = None
+    term: int | None = None
+
+
+def _xqe_get(db: Session, key: str, default=None):
+    s = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+    return s.value if s and s.value not in (None, "") else default
+
+
+def _xqe_set(db: Session, key: str, value: str) -> None:
+    s = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+    if s:
+        s.value = value
+    else:
+        db.add(SystemSetting(key=key, value=value))
+
+
+@router.get("/courses/xique/config", response_model=XiqueConfigOut)
+def xique_get_config(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """读取喜鹊儿同步配置状态（密码仅返回是否已设置）"""
+    root_url = _xqe_get(db, "xqe_root_url", "")
+    username = _xqe_get(db, "xqe_username", "")
+    password = _xqe_get(db, "xqe_password", "")
+    try:
+        school_year = int(_xqe_get(db, "xqe_school_year", "0") or 0)
+    except ValueError:
+        school_year = 0
+    try:
+        term = int(_xqe_get(db, "xqe_term", "0") or 0)
+    except ValueError:
+        term = 0
+
+    semester = ""
+    if school_year:
+        try:
+            from app.services.xqe_sync import xq_to_semester
+            semester = xq_to_semester(school_year, term)
+        except Exception:
+            semester = ""
+
+    return XiqueConfigOut(
+        configured=bool(root_url and username and password),
+        root_url=root_url,
+        username=username,
+        password_set=bool(password),
+        school_year=school_year,
+        term=term,
+        semester=semester,
+        hint="" if root_url else "请填写教务系统根地址，如 https://jwgl.mycc.edu.cn",
+    )
+
+
+@router.post("/courses/xique/config", response_model=XiqueConfigOut)
+def xique_save_config(
+    data: XiqueConfigBody,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """保存喜鹊儿同步配置（密码保存为 md5 后加密，不落库明文）"""
+    from app.services.xqe_sync import md5_hex
+
+    root_url = data.root_url.strip().rstrip("/")
+    if not root_url.startswith(("http://", "https://")):
+        raise HTTPException(400, "教务地址需以 http:// 或 https:// 开头")
+    _xqe_set(db, "xqe_root_url", root_url)
+
+    username = data.username.strip()
+    if username:
+        _xqe_set(db, "xqe_username", username)
+    else:
+        raise HTTPException(400, "学号不能为空")
+
+    if data.password:
+        # 只保存 md5(明文) 的密文，用于青果二次 MD5 登录协议
+        _xqe_set(db, "xqe_password", encrypt_value(md5_hex(data.password)))
+
+    if data.school_year >= 2000:
+        _xqe_set(db, "xqe_school_year", str(data.school_year))
+    if data.term in (0, 1):
+        _xqe_set(db, "xqe_term", str(data.term))
+
+    db.commit()
+    # 返回最新配置状态
+    return xique_get_config(user=user, db=db)
+
+
+@router.post("/courses/sync/xique")
+def xique_sync_courses(
+    data: XiqueSyncBody,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """一键同步喜鹊儿课表到本地课程表（同步请求，约 3-10 秒）"""
+    from app.services.xqe_sync import (
+        sync_timetable, md5_hex,
+        XqeLoginError, XqeNetworkError, XqeParseError,
+    )
+
+    root_url = (data.root_url or "").strip().rstrip("/") or _xqe_get(db, "xqe_root_url", "")
+    username = (data.username or "").strip() or _xqe_get(db, "xqe_username", "")
+    term = data.term if data.term in (0, 1) else None
+    if term is None:
+        try:
+            term = int(_xqe_get(db, "xqe_term", "0") or 0)
+        except ValueError:
+            term = 0
+    school_year = data.school_year or 0
+    if not school_year:
+        try:
+            school_year = int(_xqe_get(db, "xqe_school_year", "0") or 0)
+        except ValueError:
+            school_year = 0
+
+    if not root_url:
+        raise HTTPException(400, "尚未配置教务地址，请先在「喜鹊儿同步」中保存配置")
+    if not username:
+        raise HTTPException(400, "尚未配置学号，请先在「喜鹊儿同步」中保存配置")
+    if school_year < 2000:
+        raise HTTPException(400, "学年（起始年份）未配置或无效，请先保存配置")
+
+    # 密码优先级：请求体明文 -> 存储的 md5 密文
+    if data.password:
+        once_md5 = md5_hex(data.password)
+    else:
+        stored = _xqe_get(db, "xqe_password", "")
+        if not stored:
+            raise HTTPException(400, "尚未配置密码，请先在「喜鹊儿同步」中保存配置")
+        decrypted = decrypt_value(stored) if is_encrypted(stored) else stored
+        if "****" in decrypted:
+            raise HTTPException(400, "密码已脱敏未保存，请重新输入密码")
+        once_md5 = decrypted
+
+    try:
+        result = sync_timetable(
+            db,
+            root_url=root_url,
+            username=username,
+            once_md5_password=once_md5,
+            school_year=school_year,
+            term=term,
+        )
+    except XqeLoginError as e:
+        raise HTTPException(400, f"喜鹊儿登录失败：{e}")
+    except XqeNetworkError as e:
+        raise HTTPException(502, f"教务网络异常：{e}")
+    except XqeParseError as e:
+        raise HTTPException(502, f"课表解析失败：{e}")
+
+    db.commit()
+    return {
+        "success": True,
+        "message": (
+            f"同步完成：学生 {result.student_name}（{result.class_name}），"
+            f"学期 {result.semester}，共 {result.total} 条课程，"
+            f"新增 {result.created} 条，更新 {result.updated} 条，跳过 {result.skipped} 条"
+        ),
+        "semester": result.semester,
+        "class_name": result.class_name,
+        "total": result.total,
+        "created": result.created,
+        "updated": result.updated,
+        "skipped": result.skipped,
+    }
 
 
 # ========== 仪表盘统计 ==========

@@ -36,7 +36,7 @@
 
     <el-table
       :data="paginatedTeachers"
-      style="width: 100%" border
+      style="width: 100%"
       @selection-change="onSelectionChange"
       @row-click="handleRowClick"
     >
@@ -58,9 +58,9 @@
           <el-tag type="primary">{{ row.student_count }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="110" fixed="right">
         <template #default="{ row }">
-          <div class="action-cell">
+          <div class="table-actions">
             <ActionButtons
               :user-id="row.id"
               :user-name="row.name"
@@ -87,15 +87,15 @@
 
     <ViewStudentsDrawer v-model="drawerVisible" :teacher="selectedTeacher" />
 
-    <el-dialog v-model="createVisible" title="新增教师" width="480px" :close-on-click-modal="false">
-      <el-form ref="formRef" :model="createForm" label-width="80px" size="small">
+    <el-dialog v-model="createVisible" title="新增教师" width="620px" :close-on-click-modal="false">
+      <el-form ref="formRef" :model="createForm" label-width="100px">
         <el-form-item label="工号" prop="username" :rules="[{ required: true, message: '请输入工号' }]">
           <el-input v-model="createForm.username" placeholder="教师工号" />
         </el-form-item>
         <el-form-item label="姓名" prop="name" :rules="[{ required: true, message: '请输入姓名' }]">
           <el-input v-model="createForm.name" placeholder="教师姓名" />
         </el-form-item>
-        <el-row :gutter="12">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="学院" prop="college">
               <el-input v-model="createForm.college" placeholder="所属学院" />
@@ -107,7 +107,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="12">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="所属单位" prop="department">
               <el-input v-model="createForm.department" placeholder="所属单位" />

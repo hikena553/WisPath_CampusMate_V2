@@ -74,6 +74,16 @@ class Course(Base):
     class_group = relationship("ClassGroup", back_populates="courses")
 
 
+class Semester(Base):
+    """学期配置（手工管理，无课程数据时也能在课程表中展示）"""
+    __tablename__ = "semesters"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    value: Mapped[str] = mapped_column(String(20), unique=True, comment="学期值，如 2025-2026-2")
+    label: Mapped[str] = mapped_column(String(50), comment="显示名称，如 2025-2026 第二学期")
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+
 class Grade(Base):
     __tablename__ = "grades"
 

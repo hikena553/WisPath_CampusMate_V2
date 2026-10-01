@@ -14,6 +14,8 @@ from app.core.config import settings
 _SENSITIVE_KEYS = {
     "llm_api_key",
     "dashscope_api_key",
+    "embedding_api_key",
+    "xqe_password",
 }
 
 # 加密值前缀
