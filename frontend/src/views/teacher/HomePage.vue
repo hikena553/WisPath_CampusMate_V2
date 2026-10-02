@@ -42,27 +42,8 @@
 
     <!-- 危机预警子页面 -->
     <!-- transition removed -->
-      <div v-if="isMobile && showCrisisSubPage" class="sub-page">
-        <div class="sub-page-header">
-          <el-button text circle @click="showCrisisSubPage = false"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
-          <span class="sub-page-title">危机预警</span>
-          <div style="width:36px"></div>
-        </div>
-        <div class="sub-page-body">
-          <div v-if="alerts.length === 0" class="empty-tip-small" style="padding:40px 0;text-align:center">暂无危机预警</div>
-          <div v-for="a in alerts" :key="a.id" class="mobile-section-card" style="margin-bottom:8px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <el-tag :type="a.level === 'severe' ? 'danger' : a.level === 'moderate' ? 'warning' : 'info'" size="small">
-                {{ a.level === 'severe' ? '高危' : a.level === 'moderate' ? '中危' : '低危' }}
-              </el-tag>
-              <small style="color:#999">{{ a.created_at?.slice(0, 10) }}</small>
-            </div>
-            <div style="font-size:14px;font-weight:500;color:#333;margin-bottom:4px">{{ a.student_name || '未知学生' }}</div>
-            <div style="font-size:13px;color:#666;line-height:1.5">{{ a.summary }}</div>
-            <div v-if="a.keywords_matched" style="margin-top:6px;font-size:12px;color:#999">关键词：{{ a.keywords_matched }}</div>
-          </div>
-        </div>
-      </div>
+    <HomeMobileCrisis v-if="isMobile && showCrisisSubPage" :alerts="alerts"
+      @close="showCrisisSubPage = false" />
     <!-- /transition removed -->
 
     <!-- 待办任务子页面 -->
@@ -387,6 +368,7 @@ import HomeMobileToday from './HomeMobileToday.vue'
 import HomeDesktopSchedule from './HomeDesktopSchedule.vue'
 import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
 import HomeMobileSchedule from './HomeMobileSchedule.vue'
+import HomeMobileCrisis from './HomeMobileCrisis.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
