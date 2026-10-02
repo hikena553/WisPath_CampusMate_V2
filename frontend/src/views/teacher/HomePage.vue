@@ -26,58 +26,10 @@
       </div>
     </div>
 
-    <!-- 移动端首页：逾期未处理提醒条 -->
-    <div v-if="isMobile && overdueSchedules.length > 0" class="overdue-home-bar" @click="showTodaySubPage = true">
-      <el-icon><WarningFilled /></el-icon>
-      <span>{{ overdueSchedules.length }} 个任务已逾期未处理，点击查看</span>
-      <el-icon class="overdue-home-arrow"><DArrowRight /></el-icon>
-    </div>
-
-    <!-- 移动端：今日任务 + 公告 -->
-    <div v-if="isMobile" class="mobile-today-section">
-      <div class="mobile-section-card" @click="showTodaySubPage = true" style="cursor:pointer">
-        <div class="mobile-section-header">
-          <div class="section-title"><el-icon><Calendar /></el-icon><span>今日任务</span></div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span v-if="todayLeaves.length + todaySchedules.length > 0" style="font-size:12px;color:#9ca3af">{{ todayLeaves.length + todaySchedules.length }}项</span>
-            <el-icon color="#ccc"><DArrowRight /></el-icon>
-          </div>
-        </div>
-        <div v-if="todayLeaves.length === 0 && todaySchedules.length === 0" class="empty-tip-small">今日暂无待办事项</div>
-        <div v-else class="task-preview">
-          <div v-for="l in todayLeaves.slice(0, 2)" :key="'l-'+l.id" class="today-item" style="padding:6px 0">
-            <div class="today-dot dot-leave"></div>
-            <div class="today-info">
-              <div class="today-title">{{ l.student_name }} 的请假申请</div>
-            </div>
-          </div>
-          <div v-for="s in todaySchedules.slice(0, 2)" :key="'s-'+s.id" class="today-item" style="padding:6px 0">
-            <div class="today-dot" :style="{ background: s.completed ? '#10b981' : s.urgency === 'urgent' ? '#ef4444' : '#3b82f6' }"></div>
-            <div class="today-info">
-              <div class="today-title" :class="{ 'today-done': s.completed }">{{ s.content }}</div>
-            </div>
-          </div>
-          <div v-if="todayLeaves.length + todaySchedules.length > 4" style="font-size:11px;color:#9ca3af;text-align:center;padding-top:4px">
-            还有 {{ todayLeaves.length + todaySchedules.length - 4 }} 项...
-          </div>
-        </div>
-      </div>
-
-      <div class="mobile-section-card">
-        <div class="mobile-section-header">
-          <div class="section-title"><el-icon><Bell /></el-icon><span>校园公告</span></div>
-        </div>
-        <div v-if="campusAnnouncements.length === 0" class="empty-tip-small">暂无校园公告</div>
-        <a v-for="(item, index) in campusAnnouncements.slice(0, 5)" :key="'ca-'+index"
-          :href="item.url || '#'" target="_blank" class="today-item today-link">
-          <div class="today-dot dot-campus"></div>
-          <div class="today-info">
-            <div class="today-title">{{ item.title }}</div>
-            <div class="today-meta">{{ item.date }}</div>
-          </div>
-        </a>
-      </div>
-    </div>
+    <!-- 移动端：逾期提醒 + 今日任务 + 公告 -->
+    <HomeMobileToday v-if="isMobile" :today-leaves="todayLeaves" :today-schedules="todaySchedules"
+      :campus-announcements="campusAnnouncements" :overdue-count="overdueSchedules.length"
+      @open-today="showTodaySubPage = true" />
 
     <!-- 添加日程子页面 -->
     <!-- transition removed -->
@@ -791,7 +743,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   DataAnalysis, Calendar, UserFilled,
   WarningFilled as WarnIcon, EditPen, DArrowRight,
-  ArrowLeft, Plus, Bell, MagicStick, Refresh, Check, Delete, Clock, List, Loading, Close, Flag
+  ArrowLeft, Plus, MagicStick, Refresh, Check, Delete, Clock, List, Loading, Close, Flag
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
@@ -813,6 +765,7 @@ import HomeTopBanner from './HomeTopBanner.vue'
 import HomeAiPanel from './HomeAiPanel.vue'
 import HomeAnalyticsCharts from './HomeAnalyticsCharts.vue'
 import HomeMobileCharts from './HomeMobileCharts.vue'
+import HomeMobileToday from './HomeMobileToday.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -2120,61 +2073,8 @@ onUnmounted(() => {
   margin-bottom: 10px;
 }
 
-.mobile-today-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.today-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.today-item:last-child {
-  border-bottom: none;
-}
-
-.today-link {
-  text-decoration: none;
-  color: inherit;
-}
-
-.today-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
 .dot-leave { background: #e6a23c; }
 .dot-schedule { background: #409eff; }
-.dot-announcement { background: #67c23a; }
-.dot-campus { background: #909399; }
-
-.today-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.today-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.today-meta {
-  font-size: 11px;
-  color: #999;
-  margin-top: 2px;
-}
 
 .schedule-add-card {
   background: #fff;
@@ -2989,27 +2889,6 @@ onUnmounted(() => {
   /* 任务列表区域 */
   .task-body {
     padding: 0 12px 80px;
-  }
-  /* 移动端首页顶部逾期提醒条 */
-  .overdue-home-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 10px;
-    padding: 9px 12px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(220, 38, 38, 0.35);
-  }
-  .overdue-home-bar span {
-    flex: 1;
-  }
-  .overdue-home-arrow {
-    opacity: 0.8;
   }
   .task-section {
     margin-bottom: 14px;
