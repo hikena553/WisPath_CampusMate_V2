@@ -98,41 +98,9 @@
     <HomeAddScheduleDialog v-model:visible="scheduleDialogVisible" :date="selectedDateStr"
       v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="loadSchedules" />
     <!-- 桌宠弹窗：班级情况分析 -->
-    <el-dialog
-      v-model="showAnalysisDialog"
-      class="mascot-analysis-dialog"
-      :append-to-body="true"
-      destroy-on-close
-    >
-      <template #header>
-        <div class="dialog-header">
-          <img src="/images/mascot.png" alt="绵小城" class="dialog-header-mascot" />
-          <div class="dialog-header-text">
-            <div class="dialog-title">班级情况分析</div>
-            <div class="dialog-sub">绵小城基于班级图表与学生成长数据智能生成</div>
-          </div>
-        </div>
-      </template>
-      <div class="dialog-content">
-        <div v-if="analysisLoading" class="dialog-loading">
-          <img src="/images/mascot.png" alt="绵小城" class="dialog-loading-mascot" />
-          <p class="dialog-loading-text">{{ analysisLoadingText }}</p>
-        </div>
-        <div v-else-if="analysisResult" class="analysis-report markdown-body" v-html="renderedAnalysisHtml"></div>
-        <div v-else class="dialog-empty">
-          <el-icon class="dialog-empty-icon"><MagicStick /></el-icon>
-          <p>点击下方按钮，绵小城将为您生成班级分析报告</p>
-        </div>
-      </div>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button round @click="showAnalysisDialog = false">关闭</el-button>
-          <el-button round type="primary" :loading="analysisLoading" @click="startMascotAnalysis">
-            <el-icon><Refresh /></el-icon> 重新分析
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <HomeMascotAnalysisDialog v-model:visible="showAnalysisDialog" :analysis-result="analysisResult"
+      :analysis-loading="analysisLoading" :analyze="runAnalysis" :load-profiles="loadStudentProfiles"
+      :build-prompt="buildAnalysisPrompt" />
   </div>
 </template>
 
@@ -143,7 +111,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   DataAnalysis, UserFilled,
   WarningFilled as WarnIcon, EditPen, DArrowRight,
-  MagicStick, Refresh, List
+  List
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
@@ -158,7 +126,6 @@ import type { CrisisAlert, LeaveRequestOut, Announcement } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
-import { renderMarkdown } from '@/utils/markdown'
 import HomeKpiCards from './HomeKpiCards.vue'
 import HomeTopBanner from './HomeTopBanner.vue'
 import HomeAiPanel from './HomeAiPanel.vue'
@@ -174,6 +141,7 @@ import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import HomeQuickAddTask from './HomeQuickAddTask.vue'
 import HomeAddScheduleDialog from './HomeAddScheduleDialog.vue'
+import HomeMascotAnalysisDialog from './HomeMascotAnalysisDialog.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -289,11 +257,7 @@ const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAn
 
 // 桌宠与弹窗状态
 const showAnalysisDialog = ref(false)
-const analysisLoadingText = ref('绵小城正在深度分析班级情况...')
 const studentProfiles = ref<StudentSummary[]>([])
-
-const renderedAnalysisHtml = computed(() => renderMarkdown(analysisResult.value))
-
 
 function crisisLevelLabel(level?: string | null) {
   const map: Record<string, string> = { severe: '高危预警', moderate: '中危预警', mild: '低危预警', resolved: '已解决' }
@@ -357,21 +321,9 @@ ${profileText}
 请用简洁专业的语言，控制在600字以内。`
 }
 
-/** 桌宠：打开分析弹窗（首次自动触发分析） */
-async function openMascotAnalysis() {
+/** 桌宠：打开分析弹窗（首次自动分析由子组件负责） */
+function openMascotAnalysis() {
   showAnalysisDialog.value = true
-  if (!analysisResult.value && !analysisLoading.value) {
-    await startMascotAnalysis()
-  }
-}
-
-/** 桌宠弹窗：重新/开始分析 */
-async function startMascotAnalysis() {
-  if (analysisLoading.value) return
-  analysisLoadingText.value = '绵小城正在收集班级数据与学生成长记录...'
-  await loadStudentProfiles()
-  analysisLoadingText.value = '绵小城正在深度分析班级情况...'
-  await runAnalysis(buildAnalysisPrompt(), { skipCache: true })
 }
 
 async function handleClassAnalysis() {
@@ -985,94 +937,6 @@ onUnmounted(() => {
     border-color: #ef4444;
     background: #fef2f2;
     color: #dc2626;
-  }
-
-  @keyframes mascot-pet-bounce {
-    0%, 100% { transform: translateY(0) scale(1); }
-    30% { transform: translateY(-8px) scale(1.04); }
-    55% { transform: translateY(0) scale(1); }
-    75% { transform: translateY(-4px) scale(1.02); }
-  }
-
-  /* 桌宠分析弹窗 */
-  .dialog-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .dialog-header-mascot {
-    width: 40px; height: 40px;
-    object-fit: contain;
-    filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.35));
-  }
-  .dialog-header-text { display: flex; flex-direction: column; }
-  .dialog-title { font-size: 16px; font-weight: 700; color: #4c1d95; }
-  .dialog-sub { font-size: 11px; color: #7c3aed; margin-top: 2px; }
-  .dialog-content { min-height: 200px; }
-  .dialog-loading {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; padding: 36px 12px; gap: 14px;
-  }
-  .dialog-loading-mascot {
-    width: 72px; height: 72px; object-fit: contain;
-    animation: mascot-pet-bounce 1.4s ease-in-out infinite !important;
-  }
-  .dialog-loading-text { font-size: 13px; color: #7c3aed; margin: 0; }
-  .dialog-empty {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; padding: 36px 12px; gap: 10px;
-    color: #9ca3af; font-size: 13px; margin: 0;
-  }
-  .dialog-empty-icon { font-size: 32px; color: #c4b5fd; }
-  .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; }
-
-  :deep(.mascot-analysis-dialog) {
-    border-radius: 16px !important;
-    background: linear-gradient(180deg, #faf7ff 0%, #ffffff 42%) !important;
-  }
-  :deep(.mascot-analysis-dialog .el-dialog__header) {
-    padding-bottom: 6px;
-    margin-right: 0;
-  }
-  :deep(.mascot-analysis-dialog .el-dialog__body) {
-    padding-top: 4px;
-  }
-  :deep(.markdown-body) {
-    font-size: 13px;
-    line-height: 1.75;
-    color: #374151;
-  }
-  :deep(.markdown-body .md-h2),
-  :deep(.markdown-body .md-h3) {
-    font-size: 14px;
-    color: #4c1d95;
-    margin: 14px 0 6px;
-    padding-left: 8px;
-    border-left: 3px solid #8b5cf6;
-  }
-  :deep(.markdown-body .md-ul) {
-    padding-left: 18px;
-    margin: 6px 0;
-  }
-  :deep(.markdown-body .md-li) { margin: 3px 0; }
-  :deep(.markdown-body strong) { color: #4c1d95; }
-
-
-  :deep(.el-dialog) {
-    width: 92vw !important;
-    max-height: 80vh;
-    margin: 0 auto !important;
-    border-radius: 16px 16px 0 0 !important;
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    top: auto !important;
-  }
-
-  :deep(.el-dialog__body) {
-    max-height: 60vh;
-    overflow-y: auto;
   }
 }
 
