@@ -91,53 +91,9 @@
     <!-- 待批请假弹窗 -->
     <HomeLeaveDetailDialog v-model:visible="leaveDetailVisible" :leaves="selectedDayLeaves" @navigate="navigateTo('/teacher/approval')" />
 
-    <!-- 快捷添加任务弹窗（居中自定义）
-        <el-dialog v-model="quickAddDialogVisible" title="添加任务" width="88%" :close-on-click-modal="false">
-          <p style="margin-bottom:12px;color:#666">任务日期：<strong>{{ selectedTaskDate }}</strong></p>
-          <el-form @submit.prevent>
-            <el-form-item>
-              <el-input
-                ref="quickAddInputRef"
-                v-model="quickTaskContent"
-                placeholder="输入任务内容..."
-                maxlength="100"
-                @keyup.enter="handleQuickAddTask"
-              />
-            </el-form-item>
-          </el-form>
-          <template #footer>
-            <el-button @click="quickAddDialogVisible = false">取消</el-button>
-            <el-button type="primary" :disabled="!quickTaskContent.trim()" @click="handleQuickAddTask">添加</el-button>
-          </template>
-        </el-dialog>
-        -->
-    <div v-if="quickAddDialogVisible" class="quick-add-overlay" @click.self="quickAddDialogVisible = false">
-      <div class="quick-add-popup">
-        <div class="quick-add-title">添加任务</div>
-        <div class="quick-add-date">{{ selectedTaskDate }}</div>
-        <input
-          ref="quickAddInputRef"
-          v-model="quickTaskContent"
-          class="quick-add-input"
-          placeholder="输入任务内容..."
-          maxlength="100"
-          @keyup.enter="handleQuickAddTask"
-        />
-        <div class="quick-add-urgency">
-          <button
-            v-for="u in urgencyOptions" :key="u.value"
-            class="urgency-opt"
-            :class="{ active: quickTaskUrgency === u.value, [u.value]: true }"
-            @click="quickTaskUrgency = u.value"
-          >{{ u.label }}</button>
-        </div>
-        <div class="quick-add-actions">
-          <button class="quick-add-cancel" @click="quickAddDialogVisible = false">取消</button>
-          <button class="quick-add-submit" :disabled="!quickTaskContent.trim()" @click="handleQuickAddTask">添加</button>
-        </div>
-      </div>
-    </div>
-
+    <!-- 快捷添加任务弹窗 -->
+    <HomeQuickAddTask v-model:visible="quickAddDialogVisible" :selected-task-date="selectedTaskDate"
+      :urgency-options="urgencyOptions" @added="handleQuickTaskAdded" />
     <!-- 添加日程弹窗 -->
     <el-dialog v-model="scheduleDialogVisible" title="添加日程" width="400px">
       <p style="margin-bottom:12px;color:#666">日期：<strong>{{ selectedDateStr }}</strong></p>
@@ -199,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -234,6 +190,7 @@ import HomeMobileCrisis from './HomeMobileCrisis.vue'
 import HomeMobileApproval from './HomeMobileApproval.vue'
 import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
+import HomeQuickAddTask from './HomeQuickAddTask.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -491,10 +448,10 @@ watch(showTodaySubPage, (open) => {
 
 // 任务日期选择
 const selectedTaskDate = ref(new Date().toISOString().slice(0, 10))
-const quickTaskContent = ref('')
-const quickTaskUrgency = ref<ScheduleUrgency>('normal')
+
+// 快捷添加任务弹窗开关（表单状态在 HomeQuickAddTask 内部维护）
 const quickAddDialogVisible = ref(false)
-const quickAddInputRef = ref<HTMLInputElement>()
+
 // 任务等级选项（普通/重要/紧急）
 const urgencyOptions: { value: ScheduleUrgency; label: string }[] = [
   { value: 'normal', label: '普通' },
@@ -507,32 +464,17 @@ const overdueSchedules = ref<ScheduleItem[]>([])
 // 逾期列表请求序号：仅写入最新请求的响应，避免轮询旧数据覆盖刚勾选完成的状态
 let overdueReqSeq = 0
 
-// 打开快捷添加弹窗并聚焦输入框
+// 打开快捷添加弹窗（表单重置与聚焦由子组件负责）
 function openQuickAddDialog() {
   quickAddDialogVisible.value = true
-  quickTaskUrgency.value = 'normal'
-  nextTick(() => {
-    quickAddInputRef.value?.focus()
-  })
 }
 
-// 快速添加任务（弹窗）
-async function handleQuickAddTask() {
-  if (!quickTaskContent.value.trim()) return
-  try {
-    await createTeacherSchedule(selectedTaskDate.value, quickTaskContent.value.trim(), quickTaskUrgency.value)
-    ElMessage.success('任务已添加')
-    quickTaskContent.value = ''
-    quickTaskUrgency.value = 'normal'
-    quickAddDialogVisible.value = false
-    // 更新日历年月以加载对应月份数据
-    const d = new Date(selectedTaskDate.value)
-    calYear.value = d.getFullYear()
-    calMonth.value = d.getMonth() + 1
-    loadSchedules()
-  } catch {
-    ElMessage.error('添加失败')
-  }
+// 快捷添加任务成功回调：同步日历年月并重载当月数据
+function handleQuickTaskAdded(date: string) {
+  const d = new Date(date)
+  calYear.value = d.getFullYear()
+  calMonth.value = d.getMonth() + 1
+  loadSchedules()
 }
 
 // 任务子页弹窗选择日期：同步共享状态并重载对应月份数据
