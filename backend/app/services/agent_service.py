@@ -353,6 +353,7 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
                     fn_args = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
                     fn_args = {}
+                # execute_tool 已内置 S5 脱敏（学号移除/摘要截断/列表限条），结果仅进入 LLM 上下文，不落库
                 result = await execute_tool(fn_name, fn_args, user, conv_id=conv_id)
                 messages.append({
                     "role": "tool",
