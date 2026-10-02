@@ -129,8 +129,9 @@ tmp/
 .trae-html-share-packages/
 CLAUDE.md
 
-# ---------- Local probe scripts / ML model binaries ----------
-backend/_probe_cn.py
+# ---------- Local probe / one-off scripts / ML model binaries ----------
+backend/_probe*.py
+backend/probe_*.py
 backend/models/
 
 # ---------- Database dumps ----------
