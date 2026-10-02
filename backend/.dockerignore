@@ -1,0 +1,20 @@
+# 构建上下文排除（backend/）
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+tests/
+vendor_packages/
+models/
+uploads/
+logs/
+*.db
+*.sqlite
+*.log
+.git/
+.gitignore
+Dockerfile
+.dockerignore
+README*

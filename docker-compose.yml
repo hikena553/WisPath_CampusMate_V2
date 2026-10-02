@@ -1,0 +1,69 @@
+name: smart-campus
+
+# 部署编排：db(MySQL) + backend(API) + frontend(nginx)
+# 机密/连接串全部经 .env 注入（.env 不入库，模板见 .env.example）
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-smart_campus}
+      MYSQL_USER: ${MYSQL_USER:-campus}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENV: production
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-smart_campus}?charset=utf8mb4
+      SECRET_KEY: ${SECRET_KEY:?请在 .env 中设置 SECRET_KEY（至少 32 位随机串）}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-flash-0731}
+      LLM_AGENT_MODEL: ${LLM_AGENT_MODEL:-deepseek-v4-flash-0731}
+      LLM_AGENT_TEMPERATURE: ${LLM_AGENT_TEMPERATURE:-0.7}
+      LLM_AGENT_MAX_TOKENS: ${LLM_AGENT_MAX_TOKENS:-10000}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITEE_TOKEN: ${GITEE_TOKEN:-}
+      # 默认 1：周期任务由应用进程内调度，多 worker 会导致任务重复执行
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+    volumes:
+      - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  db_data:
+  uploads_data:

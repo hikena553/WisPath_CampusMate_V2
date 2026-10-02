@@ -5,6 +5,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+  schedule:
+    # 每日 02:00 UTC（10:00 北京时间）部署冒烟：真实验证 docker compose 全链路
+    - cron: "0 2 * * *"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -50,3 +54,43 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+
+  deploy-smoke:
+    name: Deploy smoke (docker compose)
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare .env
+        run: |
+          cat > .env <<'EOF'
+          MYSQL_ROOT_PASSWORD=ci-root-pass-2026
+          MYSQL_DATABASE=smart_campus
+          MYSQL_USER=campus
+          MYSQL_PASSWORD=ci-db-pass-2026
+          SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+          NGINX_PORT=8080
+          EOF
+      - name: Build & start stack
+        run: docker compose up -d --build
+      - name: Wait for backend health (max 300s)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
+              echo "backend healthy after $((i * 5))s"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "backend not healthy within 300s"
+          docker compose ps
+          docker compose logs backend | tail -100
+          exit 1
+      - name: Verify nginx frontend page (HTTP 200)
+        run: curl -fsS -o /dev/null -w "frontend HTTP %{http_code}\n" http://127.0.0.1:8080/
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+      - name: Remove temp .env
+        if: always()
+        run: rm -f .env
