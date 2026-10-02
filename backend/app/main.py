@@ -21,14 +21,12 @@ except ModuleNotFoundError:  # pragma: no cover
         import jieba  # noqa: F401
 
 from app.api.registry import include_all_routers
+from app.core.logging_setup import setup_logging
 from app.core.middleware import CsrfProtectionMiddleware, EnforcePasswordChangeMiddleware
 from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# 结构化 JSON 日志（可观测性 p4_1）：级别由 LOG_LEVEL 环境变量控制（默认 INFO）
+setup_logging()
 logger = logging.getLogger(__name__)
 
 

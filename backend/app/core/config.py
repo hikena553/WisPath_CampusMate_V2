@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # 外部资讯源令牌（可选，不配置则按匿名限流抓取）
     GITHUB_TOKEN: str = ""
     GITEE_TOKEN: str = ""
+    # 可观测性：日志级别（DEBUG/INFO/WARNING/ERROR）与 Sentry DSN（可选，未装 SDK 时自动跳过）
+    LOG_LEVEL: str = "INFO"
+    SENTRY_DSN: str = ""
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),
