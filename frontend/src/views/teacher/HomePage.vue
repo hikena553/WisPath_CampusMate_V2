@@ -95,26 +95,8 @@
     <HomeQuickAddTask v-model:visible="quickAddDialogVisible" :selected-task-date="selectedTaskDate"
       :urgency-options="urgencyOptions" @added="handleQuickTaskAdded" />
     <!-- 添加日程弹窗 -->
-    <el-dialog v-model="scheduleDialogVisible" title="添加日程" width="400px">
-      <p style="margin-bottom:12px;color:#666">日期：<strong>{{ selectedDateStr }}</strong></p>
-      <el-form ref="scheduleFormRef" :model="{ content: scheduleContent }" :rules="scheduleRules">
-        <el-form-item prop="content">
-          <el-input v-model="scheduleContent" type="textarea" :rows="3" placeholder="请输入日程内容，如：期中考试监考" />
-        </el-form-item>
-        <el-form-item label="等级">
-          <el-radio-group v-model="scheduleUrgency">
-            <el-radio value="normal">普通</el-radio>
-            <el-radio value="important">重要</el-radio>
-            <el-radio value="urgent">紧急</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="scheduleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleAddSchedule">保存</el-button>
-      </template>
-    </el-dialog>
-
+    <HomeAddScheduleDialog v-model:visible="scheduleDialogVisible" :date="selectedDateStr"
+      v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="loadSchedules" />
     <!-- 桌宠弹窗：班级情况分析 -->
     <el-dialog
       v-model="showAnalysisDialog"
@@ -191,6 +173,7 @@ import HomeMobileApproval from './HomeMobileApproval.vue'
 import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import HomeQuickAddTask from './HomeQuickAddTask.vue'
+import HomeAddScheduleDialog from './HomeAddScheduleDialog.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -522,10 +505,7 @@ const schedules = ref<ScheduleItem[]>([])
 const scheduleDialogVisible = ref(false)
 const scheduleContent = ref('')
 const scheduleUrgency = ref<ScheduleUrgency>('normal')
-const scheduleFormRef = ref<any>()
-const scheduleRules = {
-  content: [{ required: true, message: '请输入日程内容', trigger: 'blur' }],
-}
+
 const selectedDateStr = ref('')
 const leaveDetailVisible = ref(false)
 const selectedDayLeaves = ref<LeaveRequestOut[]>([])
@@ -569,19 +549,6 @@ function onDayClick(day: CalDay) {
     scheduleUrgency.value = 'normal'
     scheduleDialogVisible.value = true
   }
-}
-
-async function handleAddSchedule() {
-  if (scheduleFormRef.value) {
-    try { await scheduleFormRef.value.validate() } catch { return }
-  }
-  try {
-    await createTeacherSchedule(selectedDateStr.value, scheduleContent.value, scheduleUrgency.value)
-    ElMessage.success('日程已添加')
-    scheduleDialogVisible.value = false
-    scheduleUrgency.value = 'normal'
-    loadSchedules()
-  } catch { ElMessage.error('添加失败') }
 }
 
 async function handleAddScheduleFromSubPage(date: string) {
