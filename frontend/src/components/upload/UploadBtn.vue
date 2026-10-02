@@ -53,7 +53,7 @@ async function handleUpload({ file }: { file: File }) {
   try {
     const resp = await fetch('/api/upload', {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: { 'X-Requested-With': 'XMLHttpRequest', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: formData,
     })
     if (!resp.ok) { ElMessage.error('上传失败'); return }

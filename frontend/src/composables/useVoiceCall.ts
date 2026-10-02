@@ -68,9 +68,11 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     const token = getToken()
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    let url = `${protocol}//${host}/api/voice/ws?token=${encodeURIComponent(token || '')}`
+    // F3：内存 token 存在时显式传入；刷新后为空则后端从 httpOnly Cookie 兜底认证
+    let url = `${protocol}//${host}/api/voice/ws`
+    if (token) url += `?token=${encodeURIComponent(token)}`
     if (options.conversationId) {
-      url += `&conversation_id=${options.conversationId}`
+      url += `${url.includes('?') ? '&' : '?'}conversation_id=${options.conversationId}`
     }
     return url
   }

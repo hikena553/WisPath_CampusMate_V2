@@ -1,21 +1,45 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, is_token_revoked
 from app.models.user import User, UserRole
 
-security = HTTPBearer()
+# auto_error=False：允许同时支持 Authorization 头与 httpOnly Cookie 两种凭据通道
+bearer_scheme = HTTPBearer(auto_error=False)
+
+# httpOnly Cookie 名（登录时由 /api/auth/login 写入）
+AUTH_COOKIE_NAME = "campus_token"
+
+
+def _read_token(request: Request) -> str | None:
+    """从 Authorization 头（优先）或 httpOnly Cookie 中提取 token。"""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[len("Bearer "):]
+    return request.cookies.get(AUTH_COOKIE_NAME)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    payload = decode_access_token(credentials.credentials)
+    token = None
+    if credentials is not None:
+        token = credentials.credentials
+    if not token:
+        token = _read_token(request)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录或登录已失效")
+
+    payload = decode_access_token(token)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效 token")
+    if is_token_revoked(token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效，请重新登录")
+
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效 token")
@@ -25,6 +49,8 @@ def get_current_user(
     # 校验密码是否已变更（密码修改后旧 Token 失效）
     if payload.get("ph") and not user.password_hash.startswith(payload["ph"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="密码已修改，请重新登录")
+    # 附带原始 token，供登出等接口撤销使用
+    request.state.auth_token = token
     return user
 
 

@@ -22,7 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover
         import jieba  # noqa: F401
 
 from app.api.registry import include_all_routers
-from app.core.middleware import EnforcePasswordChangeMiddleware
+from app.core.middleware import CsrfProtectionMiddleware, EnforcePasswordChangeMiddleware
 from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
 
 logging.basicConfig(
@@ -55,6 +55,10 @@ app.add_middleware(
 
 # 强制首登改密：未修改初始密码的用户仅可访问认证/改密白名单接口
 app.add_middleware(EnforcePasswordChangeMiddleware)
+
+# CSRF 纵深防护：携带认证 Cookie 的写请求必须带 X-Requested-With 头
+# （后注册先执行，置于最外层，先于改密拦截与业务逻辑）
+app.add_middleware(CsrfProtectionMiddleware)
 
 uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
 uploads_dir.mkdir(exist_ok=True)

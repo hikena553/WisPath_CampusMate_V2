@@ -50,7 +50,7 @@ export function useMediaRecorder() {
     try {
       const resp = await fetch('/api/agent/speech-to-text', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { 'X-Requested-With': 'XMLHttpRequest', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
         body: formData,
       })
       if (!resp.ok) { error.value = '转写失败'; return }

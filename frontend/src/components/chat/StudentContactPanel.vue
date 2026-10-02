@@ -992,9 +992,10 @@ async function onDrop(e: DragEvent) {
 let ws: WebSocket | null = null
 function connectWs() {
   const token = getToken()
-  if (!token) return
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  ws = new WebSocket(`${proto}//${location.host}/api/messages/ws?token=${token}`)
+  // F3：刷新后内存 token 为空时省略 token 参数，由 httpOnly Cookie 兜底认证
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : ''
+  ws = new WebSocket(`${proto}//${location.host}/api/messages/ws${tokenParam}`)
   ws.onmessage = async (e) => {
     try {
       const data = JSON.parse(e.data)

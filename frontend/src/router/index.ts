@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getToken, getUser } from '@/utils/token'
+import { getUser, setUser, removeToken } from '@/utils/token'
+import { getCurrentIdentity } from '@/api/auth'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -76,33 +77,62 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  const token = getToken()
-  const user = getUser()
-  
-  // 未登录跳转登录页
-  if (!token && !publicPaths.includes(to.path)) return '/login'
-  
-  // 已登录但访问登录页，根据角色重定向
-  if (token && to.path === '/login') {
-    const roleMap: Record<string, string> = { teacher: '/teacher', admin: '/admin' }
-    return roleMap[(user?.role as string) || ''] || '/student'
+/**
+ * 确保拿到完整的当前用户信息。
+ * - 本地缓存命中（含 id）直接返回，避免每次导航都请求；
+ * - 缓存缺失（localStorage 被清理/篡改）时调 /api/auth/me 拉取并回填；
+ * - 拉取失败（token 失效/网络）返回 null，由守卫统一拒绝。
+ */
+async function ensureUser(): Promise<Record<string, unknown> | null> {
+  const cached = getUser()
+  if (cached && cached.id) return cached
+  try {
+    const identity = await getCurrentIdentity()
+    const user = identity as unknown as Record<string, unknown>
+    setUser(user)
+    return user
+  } catch {
+    return null
   }
-  
-  // 角色检查
-  if (token && user && to.meta.role) {
+}
+
+router.beforeEach(async (to) => {
+  // 会话权威探测：本地缓存命中直接返回；否则调 /api/auth/me 探活并回填。
+  // F3 后刷新页面内存态 token 为空，但 httpOnly Cookie 会自动随 /api/auth/me 携带，
+  // 因此以「能否拿到 user」为准判断登录态，而非内存 token。
+  const user = await ensureUser()
+
+  // 登录页：已登录按角色重定向，未登录放行
+  if (publicPaths.includes(to.path)) {
+    if (!user) return
+    const roleMap: Record<string, string> = { teacher: '/teacher', admin: '/admin' }
+    return roleMap[user.role as string] || '/student'
+  }
+
+  // 其余路由一律要求已登录
+  if (!user) {
+    removeToken()
+    return '/login'
+  }
+
+  // 角色检查：目标路由声明了角色时，必须持有完整 user 信息且角色匹配，
+  // 否则一律拒绝（修复 user 缺失时跳过角色检查的旁路）。
+  if (to.meta.role) {
     // 管理员可访问所有路由
     if (user.role === 'admin') return
-    
+
     // 学生不能访问教师端
     if (user.role === 'student' && to.meta.role === 'teacher') return '/student'
     // 学生不能访问管理端
     if (user.role === 'student' && to.meta.role === 'admin') return '/student'
-    
+
     // 教师不能访问学生端
     if (user.role === 'teacher' && to.meta.role === 'student') return '/teacher'
     // 教师不能访问管理端
     if (user.role === 'teacher' && to.meta.role === 'admin') return '/teacher'
+
+    // 其它角色不匹配情况一律回登录
+    if (user.role !== to.meta.role) return '/login'
   }
 })
 

@@ -12,7 +12,7 @@ export async function sendChatMessage(
   deepThink?: boolean,
   skipConv?: boolean,
 ) {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
 

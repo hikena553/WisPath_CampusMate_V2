@@ -1,28 +1,61 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.security import hash_password, verify_password
+from app.core.security import hash_password, verify_password, revoke_token
 from app.models.user import User, UserRole
 from app.schemas.user import ChangePasswordRequest, LoginRequest, LoginResponse, ProfileUpdate
 from app.services.auth_service import login_user
 from app.utils.rate_limiter import check_login_rate_limit
+
+# 与 core/deps.py 保持一致
+AUTH_COOKIE_NAME = "campus_token"
+
+
+def _extract_token(request: Request) -> str | None:
+    """从 Authorization 头或 httpOnly Cookie 中提取 token（用于幂等登出撤销）。"""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[len("Bearer "):]
+    return request.cookies.get(AUTH_COOKIE_NAME)
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     client_ip = request.client.host if request.client else "unknown"
     check_login_rate_limit(client_ip)
     result = login_user(db, req.username, req.password)
     if not result:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    # 附加 httpOnly Cookie 通道（F3）：JS 不可读，降低 XSS 窃取面；
+    # 与 Bearer 双轨并存，原有前端契约不变。
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=result["access_token"],
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        samesite="lax",
+        secure=(settings.ENV == "production"),
+        path="/",
+    )
     return result
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response):
+    """登出：撤销当前 token（幂等），并清除 httpOnly Cookie。"""
+    token = _extract_token(request)
+    if token:
+        revoke_token(token)
+    response.delete_cookie(AUTH_COOKIE_NAME, path="/")
+    return {"message": "已退出登录"}
 
 
 @router.get("/teachers")

@@ -1,12 +1,13 @@
 import logging
+from urllib.parse import unquote
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
-from app.core.deps import get_current_user
-from app.core.security import decode_access_token
+from app.core.deps import get_current_user, AUTH_COOKIE_NAME
+from app.core.security import decode_access_token, is_token_revoked
 from app.models.user import User
 from app.models.message import Message
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
@@ -15,10 +16,27 @@ from app.services.ws_manager import manager
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 
 
+def _ws_cookie_token(ws: WebSocket) -> str | None:
+    """WebSocket 升级请求 Cookie 中提取认证 token（httpOnly Cookie 通道）。"""
+    headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in (ws.headers.raw or [])}
+    cookie = headers.get("cookie", "")
+    for part in cookie.split(";"):
+        part = part.strip()
+        if part.startswith(f"{AUTH_COOKIE_NAME}="):
+            return unquote(part[len(AUTH_COOKIE_NAME) + 1:])
+    return None
+
+
 @router.websocket("/ws")
-async def websocket_chat(ws: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
-    payload = decode_access_token(token)
+async def websocket_chat(ws: WebSocket, token: str | None = Query(None), db: Session = Depends(get_db)):
+    # 认证：Query 参数优先，其次 httpOnly Cookie（刷新后内存 token 为空时靠 Cookie 保持会话）
+    if not token:
+        token = _ws_cookie_token(ws)
+    payload = decode_access_token(token) if token else None
     if not payload:
+        await ws.close(code=4001)
+        return
+    if token and is_token_revoked(token):
         await ws.close(code=4001)
         return
     user_id = int(payload.get("sub", 0))

@@ -1,7 +1,10 @@
 import logging
+from urllib.parse import unquote
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, is_token_revoked
 from app.core.database import SessionLocal
+from app.core.deps import AUTH_COOKIE_NAME
 from app.models.user import User
 from app.services.voice_service import handle_voice_connection
 from app.utils.rate_limiter import check_rate_limit
@@ -15,17 +18,33 @@ RATE_VOICE_PER_MIN = 5
 RATE_VOICE_IP_PER_MIN = 15
 
 
+def _ws_cookie_token(ws: WebSocket) -> str | None:
+    """WebSocket 升级请求 Cookie 中提取认证 token（httpOnly Cookie 通道）。"""
+    headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in (ws.headers.raw or [])}
+    cookie = headers.get("cookie", "")
+    for part in cookie.split(";"):
+        part = part.strip()
+        if part.startswith(f"{AUTH_COOKIE_NAME}="):
+            return unquote(part[len(AUTH_COOKIE_NAME) + 1:])
+    return None
+
+
 @router.websocket("/ws")
 async def voice_websocket(
     ws: WebSocket,
-    token: str = Query(...),
+    token: str | None = Query(None),
     conversation_id: int | None = Query(None),
 ):
-    """语音通话 WebSocket 端点"""
-    # 认证
-    payload = decode_access_token(token)
+    """语音通话 WebSocket 端点（token 支持 Query 参数或 httpOnly Cookie 双通道）"""
+    # 认证：Query 参数优先，其次 Cookie
+    if not token:
+        token = _ws_cookie_token(ws)
+    payload = decode_access_token(token) if token else None
     if not payload:
         await ws.close(code=4001, reason="认证失败")
+        return
+    if token and is_token_revoked(token):
+        await ws.close(code=4001, reason="登录已失效")
         return
 
     user_id = int(payload.get("sub", 0))

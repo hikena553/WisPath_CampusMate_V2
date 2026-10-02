@@ -2,9 +2,13 @@ import axios, { type AxiosRequestConfig } from 'axios'
 import { getToken, removeToken } from './token'
 import { ElMessage } from 'element-plus'
 
-const instance = axios.create({ baseURL: '/api' })
+const instance = axios.create({ baseURL: '/api', withCredentials: true })
 
 instance.interceptors.request.use((config) => {
+  // CSRF 纵深防护：所有请求带自定义头（后端对携带认证 Cookie 的写请求校验）
+  config.headers['X-Requested-With'] = 'XMLHttpRequest'
+  // Bearer 双通道：内存态 token 存在时注入（WebSocket 等显式场景）；
+  // 刷新后内存态为空则依赖 httpOnly Cookie 自动认证
   const token = getToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config

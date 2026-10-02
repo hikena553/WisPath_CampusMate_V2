@@ -17,3 +17,8 @@ export interface CurrentIdentity extends Record<string, any> {
 export function getCurrentIdentity() {
   return request.get<CurrentIdentity>('/auth/me')
 }
+
+/** 退出登录：服务端撤销当前 token（Bearer 或 httpOnly Cookie）并清除 Cookie */
+export function logoutApi() {
+  return request.post<{ message: string }>('/auth/logout')
+}

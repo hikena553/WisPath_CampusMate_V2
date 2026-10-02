@@ -594,7 +594,7 @@ async function send() {
       try {
         const resp = await fetch('/api/upload', {
           method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: { 'X-Requested-With': 'XMLHttpRequest', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: formData,
         })
         if (resp.ok) {
@@ -704,7 +704,7 @@ async function send() {
       try {
         await fetch(`/api/agent/conversations/${cid}/messages`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
           body: JSON.stringify({ role: 'assistant', content: lastAssistantContent, user_message: text }),
         })
       } catch { /* silent */ }
