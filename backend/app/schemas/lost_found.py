@@ -37,6 +37,11 @@ class LostFoundItemOut(BaseModel):
     contact: str
     image_url: str | None = None
     status: str
+    claimant_name: str | None = None
+    claimant_contact: str | None = None
+    claim_note: str | None = None
+    claimed_by: int | None = None
+    claimed_at: datetime | None = None
     created_at: datetime
     comments: list[LostFoundCommentOut] | None = None
 
@@ -45,3 +50,6 @@ class LostFoundItemOut(BaseModel):
 
 class LostFoundStatusUpdate(BaseModel):
     status: str
+    claimant_name: str | None = None
+    claimant_contact: str | None = None
+    claim_note: str | None = None

@@ -29,6 +29,11 @@ class LostFoundItem(Base):
     contact: Mapped[str] = mapped_column(String(200), default="")
     image_url: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[ItemStatus] = mapped_column(Text, default=ItemStatus.OPEN)
+    claimant_name: Mapped[str | None] = mapped_column(String(50), default=None)
+    claimant_contact: Mapped[str | None] = mapped_column(String(200), default=None)
+    claim_note: Mapped[str | None] = mapped_column(String(500), default=None)
+    claimed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), default=None)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 

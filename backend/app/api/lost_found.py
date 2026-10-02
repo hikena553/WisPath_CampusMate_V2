@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -43,6 +44,11 @@ def _item_out(db: Session, item: LostFoundItem, with_comments: bool = False) -> 
         contact=item.contact or "",
         image_url=item.image_url,
         status=item.status.value if isinstance(item.status, ItemStatus) else str(item.status),
+        claimant_name=item.claimant_name,
+        claimant_contact=item.claimant_contact,
+        claim_note=item.claim_note,
+        claimed_by=item.claimed_by,
+        claimed_at=item.claimed_at,
         created_at=item.created_at,
         comments=comments,
     )
@@ -131,7 +137,31 @@ def update_status(
         raise HTTPException(status_code=403, detail="无权操作")
     if req.status not in [s.value for s in ItemStatus]:
         raise HTTPException(status_code=400, detail="状态不合法")
-    item.status = ItemStatus(req.status)
+    target = ItemStatus(req.status)
+    current = item.status if isinstance(item.status, ItemStatus) else ItemStatus(str(item.status))
+
+    # CLOSED 为终态：关闭后不可再流转
+    if current == ItemStatus.CLOSED:
+        raise HTTPException(status_code=400, detail="物品已关闭，状态不可再变更")
+    # 认领核验：进入 CLAIMED 必须填写认领人姓名与联系方式
+    if target == ItemStatus.CLAIMED:
+        if not (req.claimant_name and req.claimant_name.strip()):
+            raise HTTPException(status_code=400, detail="认领人姓名必填")
+        if not (req.claimant_contact and req.claimant_contact.strip()):
+            raise HTTPException(status_code=400, detail="认领人联系方式必填")
+        item.claimant_name = req.claimant_name.strip()
+        item.claimant_contact = req.claimant_contact.strip()
+        item.claim_note = (req.claim_note or "").strip() or None
+        item.claimed_by = user.id
+        item.claimed_at = datetime.now(timezone.utc)
+    elif current == ItemStatus.CLAIMED:
+        # 离开认领态：清空认领快照，保持数据一致性
+        item.claimant_name = None
+        item.claimant_contact = None
+        item.claim_note = None
+        item.claimed_by = None
+        item.claimed_at = None
+    item.status = target
     db.commit()
     db.refresh(item)
     return _item_out(db, item, with_comments=True)
