@@ -89,17 +89,7 @@
     <HomeAnnouncementDialog v-model:visible="createDialogVisible" @created="loadMyAnnouncements" />
 
     <!-- 待批请假弹窗 -->
-    <el-dialog v-model="leaveDetailVisible" title="待处理事项" width="420px">
-      <div v-if="selectedDayLeaves.length === 0" class="empty-tip">今日无待处理事项</div>
-      <div v-for="l in selectedDayLeaves" :key="l.id" class="schedule-item" @click="navigateTo('/teacher/approval')">
-        <div class="schedule-dot dot-warning"></div>
-        <div class="schedule-content">
-          <div class="schedule-title">{{ l.student_name }} 的请假申请</div>
-          <div class="schedule-meta">{{ l.start_date }} ~ {{ l.end_date }} · {{ typeLabel(l.leave_type) }}</div>
-        </div>
-        <el-button text size="small" type="primary" @click.stop="navigateTo('/teacher/approval')">详情</el-button>
-      </div>
-    </el-dialog>
+    <HomeLeaveDetailDialog v-model:visible="leaveDetailVisible" :leaves="selectedDayLeaves" @navigate="navigateTo('/teacher/approval')" />
 
     <!-- 快捷添加任务弹窗（居中自定义）
         <el-dialog v-model="quickAddDialogVisible" title="添加任务" width="88%" :close-on-click-modal="false">
@@ -243,6 +233,7 @@ import HomeMobileSchedule from './HomeMobileSchedule.vue'
 import HomeMobileCrisis from './HomeMobileCrisis.vue'
 import HomeMobileApproval from './HomeMobileApproval.vue'
 import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
+import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -491,11 +482,6 @@ const evalData = ref<ClassEvaluation>({
   total_students: 0, avg_gpa: 0, avg_score: 0,
   growth: {}, crisis: {}, pending_leaves: 0,
 })
-
-function typeLabel(t: string) {
-  const map: Record<string, string> = { competition: '比赛', sick: '病假', personal: '事假', other: '其他' }
-  return map[t] || t
-}
 
 const showCrisisSubPage = ref(false)
 const showTodaySubPage = ref(false)
