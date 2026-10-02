@@ -4,74 +4,12 @@
     <HomeTopBanner :is-mobile="isMobile" :user-name="authStore.userName || '教师'" :greeting="greeting"
       :pending-count="pendingCount" :severe-alert-count="stats.severe_alert_count" :today-str="todayStr" />
 
-    <!-- ===== AI 绵小城悬浮按钮 ===== -->
-    <div class="ai-float" @click="goAgent">
-      <img src="/images/mascot.png" alt="绵小城" class="ai-mascot" />
-      <span class="ai-label">绵小城</span>
-    </div>
-
     <!-- ===== 第一层：KPI统计卡片 ===== -->
     <HomeKpiCards :cards="statCards" @navigate="navigateTo" />
 
-    <!-- ===== AI 决策支持层（v3.0 实施文档 §4）：主动发现 + 推荐联系 ===== -->
-    <div class="ai-decision-row">
-      <div class="ai-decision-card">
-        <div class="ai-card-header">
-          <div class="ai-card-title">
-            <el-icon class="ai-card-icon"><MagicStick /></el-icon>
-            <span>AI 主动发现</span>
-          </div>
-          <div class="ai-card-actions">
-            <el-button size="small" text circle :loading="aiLoading" @click="loadAiDecisions">
-              <el-icon><Refresh /></el-icon>
-            </el-button>
-            <el-button size="small" type="primary" plain round @click="router.push('/teacher/crisis')">
-              预警工作台
-              <el-icon class="el-icon--right"><DArrowRight /></el-icon>
-            </el-button>
-          </div>
-        </div>
-        <div v-loading="aiLoading" class="ai-card-body">
-          <el-empty v-if="!aiLoading && proactiveActions.length === 0" description="暂无新发现，班级状态平稳" :image-size="48" />
-          <div v-for="act in proactiveActions" :key="act.trigger + '-' + act.student_id" class="ai-action-item">
-            <el-tag :type="priorityTagType(act.priority)" size="small" effect="dark" class="ai-action-tag">
-              {{ priorityText(act.priority) }}
-            </el-tag>
-            <div class="ai-action-main">
-              <div class="ai-action-title">{{ act.title }}</div>
-              <div class="ai-action-content">{{ act.content }}</div>
-            </div>
-            <el-button size="small" round type="primary" plain @click="router.push('/teacher/crisis')">处置</el-button>
-          </div>
-        </div>
-      </div>
-
-      <div class="ai-decision-card">
-        <div class="ai-card-header">
-          <div class="ai-card-title">
-            <el-icon class="ai-card-icon ai-card-icon-orange"><Cpu /></el-icon>
-            <span>AI 推荐联系学生</span>
-          </div>
-          <el-tag size="small" effect="plain" type="success">TOP {{ contactSuggestions.length }}</el-tag>
-        </div>
-        <div v-loading="aiLoading" class="ai-card-body">
-          <el-empty v-if="!aiLoading && contactSuggestions.length === 0" description="暂无推荐联系对象" :image-size="48" />
-          <div v-for="c in contactSuggestions" :key="c.student_id" class="ai-contact-item">
-            <div class="ai-contact-avatar">{{ c.student_name.slice(0, 1) }}</div>
-            <div class="ai-contact-main">
-              <div class="ai-contact-name">
-                {{ c.student_name }}
-                <el-tag :type="contactTagType(c.priority)" size="small" effect="light">
-                  {{ c.priority === 'high' ? '建议尽快' : c.priority === 'medium' ? '建议关注' : '保持联系' }}
-                </el-tag>
-              </div>
-              <div class="ai-contact-reason">{{ c.reason }}</div>
-            </div>
-            <el-button size="small" round @click="router.push('/teacher/students')">查看档案</el-button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- ===== AI 悬浮按钮 + 决策支持层 ===== -->
+    <HomeAiPanel :proactive-actions="proactiveActions" :contact-suggestions="contactSuggestions"
+      :ai-loading="aiLoading" @refresh="loadAiDecisions" />
 
     <!-- ===== 第二层：数据分析区（左2:右1） ===== -->
     <div v-if="!isMobile" class="analytics-row">
@@ -1023,7 +961,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   DataAnalysis, Calendar, UserFilled,
   WarningFilled as WarnIcon, EditPen, DArrowRight, Histogram, Location,
-  ArrowLeft, Plus, Bell, MagicStick, Refresh, Check, Delete, Clock, List, Loading, Close, Flag, Cpu
+  ArrowLeft, Plus, Bell, MagicStick, Refresh, Check, Delete, Clock, List, Loading, Close, Flag
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
@@ -1042,6 +980,7 @@ import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache
 import { renderMarkdown } from '@/utils/markdown'
 import HomeKpiCards from './HomeKpiCards.vue'
 import HomeTopBanner from './HomeTopBanner.vue'
+import HomeAiPanel from './HomeAiPanel.vue'
 
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -1068,22 +1007,6 @@ const alerts = ref<CrisisAlert[]>([])
 const proactiveActions = ref<ProactiveAction[]>([])
 const contactSuggestions = ref<ContactSuggestion[]>([])
 const aiLoading = ref(false)
-
-function priorityText(p: number) {
-  if (p >= 80) return '高危'
-  if (p >= 60) return '关注'
-  return '提醒'
-}
-function priorityTagType(p: number): 'danger' | 'warning' | 'info' {
-  if (p >= 80) return 'danger'
-  if (p >= 60) return 'warning'
-  return 'info'
-}
-function contactTagType(p: string): 'danger' | 'warning' | 'info' {
-  if (p === 'high') return 'danger'
-  if (p === 'medium') return 'warning'
-  return 'info'
-}
 
 /** 拉取 AI 决策支持数据（主动发现 + 推荐联系），低频调用不参与 30s 轮询 */
 async function loadAiDecisions() {
@@ -1976,10 +1899,6 @@ function navigateTo(path: string) {
   }
 }
 
-function goAgent() {
-  router.push('/teacher/agent')
-}
-
 // ===== Calendar State =====
 interface CalDay {
   num: number
@@ -2743,43 +2662,6 @@ onUnmounted(() => {
   margin-top: 1px;
 }
 
-/* ===== AI Floating Button ===== */
-.ai-float {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-}
-
-.ai-float:hover { transform: scale(1.1); }
-
-.ai-mascot {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-  animation: mascot-float 2s ease-in-out infinite;
-}
-
-@keyframes mascot-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-
-.ai-label {
-  margin-top: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #5b8def;
-  background: rgba(255,255,255,0.9);
-  padding: 1px 8px;
-  border-radius: 8px;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
-}
-
 /* 移动端图表卡片 */
 .mobile-charts {
   display: flex; flex-direction: column; gap: 10px;
@@ -2940,10 +2822,6 @@ onUnmounted(() => {
 
   .section-title {
     font-size: 13px;
-  }
-
-  .ai-float {
-    display: none;
   }
 
   /* ---- 添加日程子页面 ---- */
@@ -4097,137 +3975,4 @@ onUnmounted(() => {
   }
 }
 
-/* ===== AI 决策支持层（v3.0 实施文档 §4） ===== */
-.ai-decision-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin: 16px 0;
-}
-
-.ai-decision-card {
-  background: #fff;
-  border: 1px solid #eef0f4;
-  border-radius: 14px;
-  padding: 16px;
-  box-shadow: 0 4px 16px rgba(31, 41, 55, 0.04);
-}
-
-.ai-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.ai-card-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  font-size: 15px;
-  color: #1f2937;
-}
-
-.ai-card-icon {
-  color: #5b8def;
-  font-size: 18px;
-}
-
-.ai-card-icon-orange {
-  color: #f59e0b;
-}
-
-.ai-card-body {
-  min-height: 110px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ai-action-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #f7f9fc;
-  border-radius: 10px;
-}
-
-.ai-action-tag {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.ai-action-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.ai-action-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: #1f2937;
-}
-
-.ai-action-content {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 2px;
-  line-height: 1.5;
-}
-
-.ai-contact-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #f7f9fc;
-  border-radius: 10px;
-}
-
-.ai-contact-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 600;
-  font-size: 15px;
-  background: linear-gradient(135deg, #5b8def, #8ab4ff);
-}
-
-.ai-contact-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.ai-contact-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  font-size: 13px;
-  color: #1f2937;
-}
-
-.ai-contact-reason {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-@media (max-width: 768px) {
-  .ai-decision-row {
-    grid-template-columns: 1fr;
-  }
-}
 </style>
