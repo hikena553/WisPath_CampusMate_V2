@@ -136,10 +136,10 @@
               <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip />
               <el-table-column label="操作" width="180" fixed="right">
                 <template #default="{ row }">
-                  <el-button type="success" size="small" @click="handleTicketApprove(row.id)">
+                  <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">
                     <el-icon><Check /></el-icon> 通过
                   </el-button>
-                  <el-button type="danger" size="small" plain @click="handleTicketReject(row.id)">
+                  <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">
                     <el-icon><Close /></el-icon> 拒绝
                   </el-button>
                 </template>
@@ -160,10 +160,10 @@
                 </div>
               </div>
               <div class="mobile-card-actions">
-                <el-button type="success" size="small" @click="handleTicketApprove(row.id)">
+                <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">
                   <el-icon><Check /></el-icon> 通过
                 </el-button>
-                <el-button type="danger" size="small" plain @click="handleTicketReject(row.id)">
+                <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">
                   <el-icon><Close /></el-icon> 拒绝
                 </el-button>
               </div>
@@ -393,6 +393,20 @@
         <el-button type="danger" @click="confirmMaterialReject">确认驳回</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog :title="ticketReviewAction === 'approve' ? '通过申请' : '拒绝申请'" v-model="ticketReviewVisible" width="420px" :close-on-click-modal="false">
+      <el-form label-position="top">
+        <el-form-item :label="ticketReviewAction === 'approve' ? '审批意见（选填）' : '拒绝意见（必填）'" :required="ticketReviewAction === 'reject'">
+          <el-input v-model="ticketReviewComment" type="textarea" :rows="3" :placeholder="ticketReviewAction === 'approve' ? '可填写审批意见，如：同意，注意返校日期' : '请填写拒绝意见，如：材料不全，请补充后重新提交'" maxlength="500" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="ticketReviewVisible = false">取消</el-button>
+        <el-button :type="ticketReviewAction === 'approve' ? 'success' : 'danger'" @click="confirmTicketReview">
+          {{ ticketReviewAction === 'approve' ? '确认通过' : '确认拒绝' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -428,6 +442,11 @@ const rejectForm = reactive({ reason: '' })
 const rejectMaterialTarget = ref<number | null>(null)
 const rejectMaterialReason = ref('')
 const rejectMaterialVisible = ref(false)
+// 工单审批弹窗状态
+const ticketReviewVisible = ref(false)
+const ticketReviewTarget = ref<ServiceTicket | null>(null)
+const ticketReviewAction = ref<'approve' | 'reject'>('approve')
+const ticketReviewComment = ref('')
 const rejectRules = {
   reason: [{ required: true, message: '请填写拒绝理由', trigger: 'blur' }],
 }
@@ -517,7 +536,7 @@ async function loadData() {
       pendingLeaves.value = await getPendingLeaves()
       loadAnalysis()
     } catch {}
-    try { pendingTickets.value = (await getTickets()).filter((t: ServiceTicket) => t.status === 'pending') } catch {}
+    try { pendingTickets.value = (await getTickets()).filter((t: ServiceTicket) => t.status === 'pending' || t.status === 'processing') } catch {}
     try { pendingMaterials.value = await getApprovalPending({ kind: 'material', status: 'pending' }) } catch { pendingMaterials.value = [] }
   } else if (activeTab.value === 'approved') {
     try { approvedLeaves.value = await getAllLeaves('approved') } catch {}
@@ -619,18 +638,23 @@ async function confirmReject() {
   } catch { ElMessage.error('操作失败') }
 }
 
-async function handleTicketApprove(id: number) {
-  try {
-    await approveTicketApi(id, 'approve')
-    ElMessage.success('已通过')
-    loadData()
-  } catch { ElMessage.error('操作失败') }
+function showTicketReview(row: ServiceTicket, action: 'approve' | 'reject') {
+  ticketReviewTarget.value = row
+  ticketReviewAction.value = action
+  ticketReviewComment.value = ''
+  ticketReviewVisible.value = true
 }
 
-async function handleTicketReject(id: number) {
+async function confirmTicketReview() {
+  if (!ticketReviewTarget.value) return
+  if (ticketReviewAction.value === 'reject' && !ticketReviewComment.value.trim()) {
+    ElMessage.warning('请填写拒绝意见')
+    return
+  }
   try {
-    await approveTicketApi(id, 'reject')
-    ElMessage.success('已拒绝')
+    await approveTicketApi(ticketReviewTarget.value.id, ticketReviewAction.value, ticketReviewComment.value.trim() || undefined)
+    ElMessage.success(ticketReviewAction.value === 'approve' ? '已通过' : '已拒绝')
+    ticketReviewVisible.value = false
     loadData()
   } catch { ElMessage.error('操作失败') }
 }

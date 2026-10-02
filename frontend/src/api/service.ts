@@ -13,8 +13,11 @@ export function createTicket(data: {
   return request.post<ServiceTicket>('/service/tickets', data)
 }
 
-export function approveTicket(id: number, action: string) {
-  return request.put(`/service/tickets/${id}/approve`, { action })
+export function approveTicket(id: number, action: string, comment?: string) {
+  return request.put(`/service/tickets/${id}/approve`, {
+    action,
+    ...(comment !== undefined && comment !== '' ? { comment } : {}),
+  })
 }
 
 export function cancelTicket(id: number) {

@@ -196,11 +196,14 @@ export interface ServiceTicket {
   content: string
   status: string
   created_at: string
+  updated_at: string
   applicant_name: string
   applicant_no: string
   applicant_college: string
   form_data: Record<string, any> | null
   attachments: string[] | null
+  review_comment: string | null
+  approver_name: string | null
 }
 
 export interface Material {

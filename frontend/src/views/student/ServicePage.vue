@@ -196,6 +196,8 @@
             <el-descriptions-item label="标题" :span="2">{{ detail.title }}</el-descriptions-item>
             <el-descriptions-item label="内容" :span="2"><div style="white-space:pre-wrap">{{ detail.content }}</div></el-descriptions-item>
             <el-descriptions-item label="提交时间" :span="2">{{ detail.created_at }}</el-descriptions-item>
+            <el-descriptions-item v-if="detail.review_comment" label="审批意见" :span="2"><div style="white-space:pre-wrap">{{ detail.review_comment }}</div></el-descriptions-item>
+            <el-descriptions-item v-if="detail.approver_name" label="审批人" :span="2">{{ detail.approver_name }}</el-descriptions-item>
           </el-descriptions>
           <div v-if="detail.form_data && Object.keys(detail.form_data).length" style="margin-top:16px">
             <h4 style="margin-bottom:8px">表单数据</h4>
@@ -409,12 +411,12 @@ function mapLeaveType(label: string): string {
 }
 
 function statusLabel(s: string) {
-  const m: Record<string, string> = { pending: '待审批', approved: '已通过', rejected: '已拒绝' }
+  const m: Record<string, string> = { pending: '待审批', processing: '处理中', approved: '已通过', rejected: '已拒绝' }
   return m[s] || s
 }
 
 function statusTagType(s: string) {
-  const m: Record<string, string> = { pending: 'warning', approved: 'success', rejected: 'danger' }
+  const m: Record<string, string> = { pending: 'warning', processing: 'primary', approved: 'success', rejected: 'danger' }
   return m[s] || 'info'
 }
 

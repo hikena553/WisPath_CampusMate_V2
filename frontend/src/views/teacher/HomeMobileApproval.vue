@@ -59,8 +59,8 @@
               </div>
               <div v-if="row.content" style="font-size:13px;color:#999;margin-bottom:8px;line-height:1.4">{{ row.content }}</div>
               <div style="display:flex;gap:8px">
-                <el-button type="success" size="small" @click="approvalHandleTicketApprove(row.id)"><el-icon><Check /></el-icon> 通过</el-button>
-                <el-button type="danger" size="small" plain @click="approvalHandleTicketReject(row.id)"><el-icon><Close /></el-icon> 拒绝</el-button>
+                <el-button type="success" size="small" @click="approvalHandleTicketApprove(row)"><el-icon><Check /></el-icon> 通过</el-button>
+                <el-button type="danger" size="small" plain @click="approvalHandleTicketReject(row)"><el-icon><Close /></el-icon> 拒绝</el-button>
               </div>
             </div>
           </div>
@@ -105,6 +105,17 @@
         <el-button type="danger" @click="approvalConfirmReject">确认拒绝</el-button>
       </template>
     </el-dialog>
+
+    <!-- 工单审批对话框 -->
+    <el-dialog :title="approvalTicketAction === 'approve' ? '通过申请' : '拒绝申请'" v-model="approvalTicketVisible" width="90%" :close-on-click-modal="false">
+      <el-input v-model="approvalTicketComment" type="textarea" :rows="3" :placeholder="approvalTicketAction === 'approve' ? '审批意见（选填）' : '拒绝意见（必填），如：材料不全，请补充后重新提交'" maxlength="500" show-word-limit />
+      <template #footer>
+        <el-button @click="approvalTicketVisible = false">取消</el-button>
+        <el-button :type="approvalTicketAction === 'approve' ? 'success' : 'danger'" @click="approvalConfirmTicketReview">
+          {{ approvalTicketAction === 'approve' ? '确认通过' : '确认拒绝' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
   <!-- /transition removed -->
 </template>
@@ -129,6 +140,11 @@ const approvalAnalysisMap = ref<Record<number, { suggestion: string; reason: str
 const approvalRejectVisible = ref(false)
 const approvalRejectTarget = ref<LeaveRequestOut | null>(null)
 const approvalRejectReason = ref('')
+// 工单审批弹窗状态
+const approvalTicketVisible = ref(false)
+const approvalTicketTarget = ref<ServiceTicket | null>(null)
+const approvalTicketAction = ref<'approve' | 'reject'>('approve')
+const approvalTicketComment = ref('')
 const approvalCurrentPageLeaves = ref(1)
 const approvalCurrentPageTickets = ref(1)
 const approvalCurrentPageApprovedLeaves = ref(1)
@@ -214,18 +230,30 @@ async function approvalConfirmReject() {
   } catch { ElMessage.error('操作失败') }
 }
 
-async function approvalHandleTicketApprove(id: number) {
-  try {
-    await approveTicketApi(id, 'approve')
-    ElMessage.success('已通过')
-    loadApprovalData()
-  } catch { ElMessage.error('操作失败') }
+async function approvalHandleTicketApprove(row: ServiceTicket) {
+  approvalTicketTarget.value = row
+  approvalTicketAction.value = 'approve'
+  approvalTicketComment.value = ''
+  approvalTicketVisible.value = true
 }
 
-async function approvalHandleTicketReject(id: number) {
+async function approvalHandleTicketReject(row: ServiceTicket) {
+  approvalTicketTarget.value = row
+  approvalTicketAction.value = 'reject'
+  approvalTicketComment.value = ''
+  approvalTicketVisible.value = true
+}
+
+async function approvalConfirmTicketReview() {
+  if (!approvalTicketTarget.value) return
+  if (approvalTicketAction.value === 'reject' && !approvalTicketComment.value.trim()) {
+    ElMessage.warning('请填写拒绝意见')
+    return
+  }
   try {
-    await approveTicketApi(id, 'reject')
-    ElMessage.success('已拒绝')
+    await approveTicketApi(approvalTicketTarget.value.id, approvalTicketAction.value, approvalTicketComment.value.trim() || undefined)
+    ElMessage.success(approvalTicketAction.value === 'approve' ? '已通过' : '已拒绝')
+    approvalTicketVisible.value = false
     loadApprovalData()
   } catch { ElMessage.error('操作失败') }
 }
