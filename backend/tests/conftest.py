@@ -47,6 +47,7 @@ from app.core.database import SessionLocal  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
+from app.models.feedback import Feedback  # noqa: E402
 from app.models.conversation import Conversation, ConversationMessage  # noqa: E402
 from app.models.crisis import AIDialogSummary  # noqa: E402
 from app.models.profile import StudentProfileSnapshot  # noqa: E402
@@ -120,6 +121,7 @@ def make_user(db):
         u = db.get(User, u.id)
         if u:
             db.query(Notification).filter(Notification.user_id == u.id).delete()
+            db.query(Feedback).filter(Feedback.user_id == u.id).delete()
             db.query(ConversationMessage).filter(
                 ConversationMessage.conversation_id.in_(
                     db.query(Conversation.id).filter(Conversation.user_id == u.id)

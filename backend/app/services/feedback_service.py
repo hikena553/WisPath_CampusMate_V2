@@ -118,6 +118,10 @@ def get_feedback_detail(db: Session, current_user: User, feedback_id: int) -> Fe
     return _to_out(feedback, user_name, replier_name)
 
 
+# 反馈回复目标状态：仅允许收敛到终态 RESOLVED/REJECTED
+_FEEDBACK_REPLY_TARGETS = {FeedbackStatus.RESOLVED, FeedbackStatus.REJECTED}
+
+
 def reply_feedback(db: Session, current_user: User, feedback_id: int, data: FeedbackReply) -> FeedbackOut:
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="仅管理员可回复")
@@ -126,10 +130,14 @@ def reply_feedback(db: Session, current_user: User, feedback_id: int, data: Feed
     if not feedback:
         raise HTTPException(status_code=404, detail="反馈不存在")
 
+    # 状态机校验：仅 PENDING/PROCESSING 可回复；终态（RESOLVED/REJECTED）不可回复、不可再改
+    if feedback.status in _FEEDBACK_REPLY_TARGETS:
+        raise HTTPException(status_code=400, detail="反馈已办结，不可再回复")
+
     feedback.reply = data.reply
     feedback.status = (
         FeedbackStatus(data.status)
-        if data.status in [s.value for s in FeedbackStatus]
+        if data.status in [s.value for s in _FEEDBACK_REPLY_TARGETS]
         else FeedbackStatus.RESOLVED
     )
     feedback.replied_by = current_user.id
