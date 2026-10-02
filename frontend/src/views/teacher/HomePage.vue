@@ -526,66 +526,8 @@
     </div>
 
     <!-- 移动端图表子页面 -->
-    <!-- transition removed -->
-      <div v-if="isMobile && showChartSubPage" class="sub-page">
-        <div class="sub-page-header">
-          <el-button text circle @click="showChartSubPage = false"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
-          <span class="sub-page-title">数据分析</span>
-          <div style="width:36px"></div>
-        </div>
-        <div class="sub-page-body">
-          <!-- 核心数据图表 -->
-          <div class="charts-grid">
-            <!-- 班级综合评估 -->
-            <div class="mobile-section-card chart-card">
-              <div class="chart-card-header">
-                <el-icon color="#5b8def"><DataAnalysis /></el-icon>
-                <span>班级综合评估</span>
-              </div>
-              <div class="chart-container" style="height:200px">
-                <VChart v-if="evaluationRadarOptions" :option="evaluationRadarOptions" autoresize />
-                <el-empty v-else description="暂无数据" :image-size="48" />
-              </div>
-            </div>
-
-            <!-- 成绩分布 -->
-            <div class="mobile-section-card chart-card">
-              <div class="chart-card-header">
-                <el-icon color="#67c23a"><Histogram /></el-icon>
-                <span>成绩分布</span>
-              </div>
-              <div class="chart-container" style="height:200px">
-                <VChart v-if="gradeBarOptions" :option="gradeBarOptions" autoresize />
-                <el-empty v-else description="暂无数据" :image-size="48" />
-              </div>
-            </div>
-
-            <!-- 预警趋势 -->
-            <div class="mobile-section-card chart-card">
-              <div class="chart-card-header">
-                <el-icon color="#f56c6c"><WarningFilled /></el-icon>
-                <span>预警趋势</span>
-              </div>
-              <div class="chart-container" style="height:200px">
-                <VChart v-if="crisisTrendOptions" :option="crisisTrendOptions" autoresize />
-                <el-empty v-else description="暂无数据" :image-size="48" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 悬浮桌宠：点击查看班级情况分析 -->
-        <div class="mascot-pet" @click="openMascotAnalysis">
-          <transition name="tip-pop">
-            <div v-if="showMascotTip" class="mascot-tip-bubble">
-              <span class="mascot-tip-close" @click.stop="showMascotTip = false"><el-icon><Close /></el-icon></span>
-              <span class="mascot-tip-text">点我查看班级情况分析~</span>
-            </div>
-          </transition>
-          <img src="/images/mascot.png" alt="绵小城" class="mascot-pet-img" />
-        </div>
-      </div>
-    <!-- /transition removed -->
+    <HomeMobileCharts v-if="isMobile && showChartSubPage" :class-stats="classStats" :eval-data="evalData"
+      @close="showChartSubPage = false" @open-analysis="openMascotAnalysis" />
 
     <!-- 审批管理子页面 -->
     <!-- transition removed -->
@@ -848,7 +790,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   DataAnalysis, Calendar, UserFilled,
-  WarningFilled as WarnIcon, EditPen, DArrowRight, Histogram,
+  WarningFilled as WarnIcon, EditPen, DArrowRight,
   ArrowLeft, Plus, Bell, MagicStick, Refresh, Check, Delete, Clock, List, Loading, Close, Flag
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
@@ -864,15 +806,13 @@ import { getTeacherAnnouncements, createAnnouncement, deleteAnnouncement, type A
 import type { CrisisAlert, LeaveRequestOut, Announcement, ServiceTicket } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
-import { useClassCharts } from '@/composables/useClassCharts'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
 import { renderMarkdown } from '@/utils/markdown'
 import HomeKpiCards from './HomeKpiCards.vue'
 import HomeTopBanner from './HomeTopBanner.vue'
 import HomeAiPanel from './HomeAiPanel.vue'
 import HomeAnalyticsCharts from './HomeAnalyticsCharts.vue'
-
-import VChart from 'vue-echarts'
+import HomeMobileCharts from './HomeMobileCharts.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -1132,24 +1072,12 @@ const taskDateDisplay = computed(() => {
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 
 // 桌宠与弹窗状态
-const showMascotTip = ref(false)
 const showAnalysisDialog = ref(false)
 const analysisLoadingText = ref('绵小城正在深度分析班级情况...')
 const studentProfiles = ref<StudentSummary[]>([])
-let mascotTipTimer: ReturnType<typeof setTimeout> | null = null
 
 const renderedAnalysisHtml = computed(() => renderMarkdown(analysisResult.value))
 
-// 进入/退出数据分析子页面时控制桌宠提示气泡
-watch(showChartSubPage, (open) => {
-  if (mascotTipTimer) { clearTimeout(mascotTipTimer); mascotTipTimer = null }
-  if (open) {
-    showMascotTip.value = true
-    mascotTipTimer = setTimeout(() => { showMascotTip.value = false }, 6000)
-  } else {
-    showMascotTip.value = false
-  }
-})
 
 function crisisLevelLabel(level?: string | null) {
   const map: Record<string, string> = { severe: '高危预警', moderate: '中危预警', mild: '低危预警', resolved: '已解决' }
@@ -1215,7 +1143,6 @@ ${profileText}
 
 /** 桌宠：打开分析弹窗（首次自动触发分析） */
 async function openMascotAnalysis() {
-  showMascotTip.value = false
   showAnalysisDialog.value = true
   if (!analysisResult.value && !analysisLoading.value) {
     await startMascotAnalysis()
@@ -1283,9 +1210,6 @@ const evalData = ref<ClassEvaluation>({
   total_students: 0, avg_gpa: 0, avg_score: 0,
   growth: {}, crisis: {}, pending_leaves: 0,
 })
-
-// 图表 options：桌面数据分析区由 HomeAnalyticsCharts 内部计算（useClassCharts），此处仅供移动端图表子页复用其中 3 个
-const { evaluationRadarOptions, gradeBarOptions, crisisTrendOptions } = useClassCharts(classStats, evalData)
 
 function typeLabel(t: string) {
   const map: Record<string, string> = { competition: '比赛', sick: '病假', personal: '事假', other: '其他' }
@@ -1803,10 +1727,6 @@ onUnmounted(() => {
     clearInterval(pollTimer)
     pollTimer = null
   }
-  if (mascotTipTimer !== null) {
-    clearTimeout(mascotTipTimer)
-    mascotTipTimer = null
-  }
 })
 </script>
 
@@ -1843,11 +1763,6 @@ onUnmounted(() => {
 
 .section-title:hover {
   opacity: 0.7;
-}
-
-.chart-container {
-  width: 100%;
-  height: 160px;
 }
 
 
@@ -2285,9 +2200,6 @@ onUnmounted(() => {
 
 
 
-  .chart-container {
-    height: 200px;
-  }
 
   .schedule-row {
     grid-template-columns: 1fr;
@@ -3278,78 +3190,11 @@ onUnmounted(() => {
     color: #9ca3af;
   }
 
-  /* ---- 数据分析子页面：悬浮桌宠 + 分析弹窗 ---- */
-  .mascot-pet {
-    position: fixed;
-    right: 16px;
-    bottom: 84px;
-    z-index: 130;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .mascot-pet-img {
-    width: 76px;
-    height: 76px;
-    object-fit: contain;
-    filter: drop-shadow(0 6px 14px rgba(91, 141, 239, 0.45));
-  }
-  .mascot-pet:active .mascot-pet-img { transform: scale(0.92); }
   @keyframes mascot-pet-bounce {
     0%, 100% { transform: translateY(0) scale(1); }
     30% { transform: translateY(-8px) scale(1.04); }
     55% { transform: translateY(0) scale(1); }
     75% { transform: translateY(-4px) scale(1.02); }
-  }
-  .mascot-tip-bubble {
-    position: relative;
-    background: #fff;
-    border: 1px solid #e9d5ff;
-    border-radius: 12px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-    padding: 8px 10px 8px 12px;
-    margin-bottom: 10px;
-    margin-right: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: #4c1d95;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .mascot-tip-bubble::after {
-    content: '';
-    position: absolute;
-    right: 22px;
-    bottom: -6px;
-    width: 12px;
-    height: 12px;
-    background: #fff;
-    border-right: 1px solid #e9d5ff;
-    border-bottom: 1px solid #e9d5ff;
-    transform: rotate(45deg);
-  }
-  .mascot-tip-text { white-space: nowrap; }
-  .mascot-tip-close {
-    display: inline-flex;
-    width: 16px; height: 16px;
-    align-items: center; justify-content: center;
-    border-radius: 50%;
-    background: #f3e8ff;
-    color: #7c3aed;
-    font-size: 10px;
-    flex-shrink: 0;
-  }
-  .tip-pop-enter-active,
-  .tip-pop-leave-active {
-    transition: all 0.25s ease !important;
-  }
-  .tip-pop-enter-from,
-  .tip-pop-leave-to {
-    opacity: 0;
-    transform: translateY(8px) scale(0.92);
   }
 
   /* 桌宠分析弹窗 */
@@ -3415,21 +3260,6 @@ onUnmounted(() => {
   :deep(.markdown-body .md-li) { margin: 3px 0; }
   :deep(.markdown-body strong) { color: #4c1d95; }
 
-  .charts-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .chart-card { border-radius: 14px; }
-  .chart-card-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 8px;
-  }
 
   :deep(.el-dialog) {
     width: 92vw !important;
