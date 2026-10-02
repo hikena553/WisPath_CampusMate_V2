@@ -14,8 +14,13 @@ class TicketType(str, enum.Enum):
 
 class TicketStatus(str, enum.Enum):
     PENDING = "pending"
+    PROCESSING = "processing"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+# 终态：审批结果落定后不可再流转
+TERMINAL_TICKET_STATUSES = {TicketStatus.APPROVED, TicketStatus.REJECTED}
 
 
 class ServiceTicket(Base):
@@ -34,5 +39,7 @@ class ServiceTicket(Base):
     attachments: Mapped[list | None] = mapped_column(JSON, default=None)
     status: Mapped[TicketStatus] = mapped_column(SAEnum(TicketStatus), default=TicketStatus.PENDING)
     approver_id: Mapped[int | None] = mapped_column(default=None)
+    approver_name: Mapped[str | None] = mapped_column(String(50), default=None)
+    review_comment: Mapped[str | None] = mapped_column(String(500), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

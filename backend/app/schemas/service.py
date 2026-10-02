@@ -26,7 +26,10 @@ class TicketOut(BaseModel):
     form_data: dict[str, Any] | None = None
     attachments: list[str] | None = None
     status: str
+    review_comment: str | None = None
+    approver_name: str | None = None
     created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
