@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from datetime import date, timedelta
-from app.core.database import SessionLocal, engine, Base
+from app.core.database import SessionLocal, engine
 from app.core.security import hash_password
 from app.core.crypto import is_encrypted, encrypt_value, is_sensitive_key, _SENSITIVE_KEYS
 from app.models.user import User, UserRole
@@ -21,42 +21,20 @@ from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, PlanSt
 
 logger = logging.getLogger(__name__)
 
-# 确保数据库表存在
-Base.metadata.create_all(bind=engine)
+# ─── schema 守卫 ─────────────────────────────────────────
+# 表结构由 Alembic 迁移统一管理（alembic upgrade head），seed 只负责幂等数据。
+# 若表不存在说明未执行迁移，直接报错给出明确指引，避免静默建表掩盖迁移缺失。
+def _ensure_schema():
+    from sqlalchemy import inspect
+    tables = set(inspect(engine).get_table_names())
+    if "users" not in tables:
+        raise RuntimeError(
+            "数据库 schema 缺失：请先执行 `alembic upgrade head` 初始化表结构"
+            "（若通过应用启动，lifespan 会自动执行迁移）。"
+        )
 
 
-# ─── 增量迁移：为旧表补充新增列（兼容已初始化的数据库） ───
-def _migrate_legacy_columns():
-    """create_all 不会给已存在的表加列，这里对旧表做轻量 ALTER 补齐"""
-    from sqlalchemy import inspect, text as sa_text
-    inspector = inspect(engine)
-    existing_tables = set(inspector.get_table_names())
-
-    # student_projects：作品集扩展字段
-    if "student_projects" in existing_tables:
-        cols = {c["name"] for c in inspector.get_columns("student_projects")}
-        additions = {
-            "tech_stack": "VARCHAR(500) NULL",
-            "my_role": "VARCHAR(200) NULL",
-            "project_link": "VARCHAR(500) NULL",
-            "description": "TEXT NULL",
-        }
-        with engine.begin() as conn:
-            for col, ddl in additions.items():
-                if col not in cols:
-                    conn.execute(sa_text(f"ALTER TABLE student_projects ADD COLUMN {col} {ddl}"))
-                    logging.getLogger(__name__).info(f"迁移：student_projects 新增列 {col}")
-
-    # plan_tasks：阶段任务流（所属阶段）
-    if "plan_tasks" in existing_tables:
-        cols = {c["name"] for c in inspector.get_columns("plan_tasks")}
-        if "stage_id" not in cols:
-            with engine.begin() as conn:
-                conn.execute(sa_text("ALTER TABLE plan_tasks ADD COLUMN stage_id INT NULL"))
-                logging.getLogger(__name__).info("迁移：plan_tasks 新增列 stage_id")
-
-
-_migrate_legacy_columns()
+_ensure_schema()
 
 db = SessionLocal()
 seeded = False

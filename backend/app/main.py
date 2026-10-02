@@ -32,8 +32,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def run_migrations() -> None:
+    """启动时执行数据库迁移（alembic upgrade head），保证 schema 与代码版本一致。
+
+    schema 的唯一事实源是 alembic/versions 下的迁移脚本；应用不再调用 create_all。
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    backend_dir = Path(__file__).resolve().parent.parent
+    cfg = Config(str(backend_dir / "alembic.ini"))
+    command.upgrade(cfg, "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 迁移：先保证表结构就绪
+    run_migrations()
     # 初始化种子数据（幂等）
     importlib.import_module("app.seed")
     # 启动后台周期任务，退出时统一回收

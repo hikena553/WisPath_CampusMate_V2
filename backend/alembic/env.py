@@ -9,6 +9,12 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
+# 数据库 URL 统一由应用配置（DATABASE_URL 环境变量 / .env）注入，
+# 避免在 alembic.ini 中硬编码连接凭据。优先于 ini 中的 sqlalchemy.url。
+from app.core.config import settings
+
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
