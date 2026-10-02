@@ -155,7 +155,8 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
 
     返回 True 表示本次实际产生通知；commit 由调用方统一控制（学生级事务）。
     """
-    if action.action_type == "notification":
+    if action.action_type in ("notification", "escalation"):
+        # 通知/高危升级：均触达目标教师（升级类必须真实下发，不能只评估不落库）
         if action.target_role == "teacher":
             tutors = db.query(User).filter(
                 User.role == UserRole.TEACHER,

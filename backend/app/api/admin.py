@@ -20,7 +20,8 @@ from app.models.conversation import Conversation, ConversationMessage
 from app.core.crypto import encrypt_value, decrypt_value, is_encrypted
 from app.schemas.admin import (
     KnowledgeItemCreate, KnowledgeItemUpdate, KnowledgeItemOut,
-    DocumentOut, TeacherCreate, TeacherOut, StudentBriefOut, StudentUpdate, ImportResult,
+    DocumentOut, TeacherCreate, TeacherOut, TeacherCreatedOut,
+    StudentBriefOut, StudentUpdate, ImportResult,
 )
 from app.schemas.academic import CourseOut, CourseCreate, CourseImportResult
 from app.services import knowledge_service
@@ -273,7 +274,7 @@ def delete_document(
 
 # ========== 教师管理 ==========
 
-@router.post("/teachers", response_model=TeacherOut)
+@router.post("/teachers", response_model=TeacherCreatedOut)
 def create_teacher(
     data: TeacherCreate,
     user: User = Depends(require_role(UserRole.ADMIN)),
@@ -298,7 +299,7 @@ def create_teacher(
     db.add(teacher)
     db.commit()
     db.refresh(teacher)
-    return TeacherOut(
+    return TeacherCreatedOut(
         id=teacher.id, username=teacher.username, name=teacher.name,
         college=teacher.college, avatar=teacher.avatar,
         title=teacher.title, department=teacher.department,

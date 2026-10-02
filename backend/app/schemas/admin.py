@@ -56,10 +56,14 @@ class TeacherOut(BaseModel):
     title: str | None = None
     department: str | None = None
     student_count: int = 0
-    # 仅创建教师时一次性返回初始密码，其余场景为 None
-    initial_password: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TeacherCreatedOut(TeacherOut):
+    """创建教师响应：仅此场景一次性返回初始密码（首登强制改密）。"""
+
+    initial_password: str
 
 
 class StudentBriefOut(BaseModel):
