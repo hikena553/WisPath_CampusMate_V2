@@ -3,10 +3,12 @@ import importlib
 import logging
 import sys
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 # ---------- 第三方包兜底 ----------
 # 若当前 Python 环境未安装 jieba（依赖缺失导致启动即报错），
@@ -21,8 +23,14 @@ except ModuleNotFoundError:  # pragma: no cover
         import jieba  # noqa: F401
 
 from app.api.registry import include_all_routers
+from app.core.config import settings
+from app.core.database import engine
 from app.core.logging_setup import setup_logging
-from app.core.middleware import CsrfProtectionMiddleware, EnforcePasswordChangeMiddleware
+from app.core.middleware import (
+    CsrfProtectionMiddleware,
+    EnforcePasswordChangeMiddleware,
+    RequestLogMiddleware,
+)
 from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
 
 # 结构化 JSON 日志（可观测性 p4_1）：级别由 LOG_LEVEL 环境变量控制（默认 INFO）
@@ -43,8 +51,27 @@ def run_migrations() -> None:
     command.upgrade(cfg, "head")
 
 
+def init_sentry_if_configured() -> None:
+    """Sentry 预留口子（可观测性 p4_1）：配置了 SENTRY_DSN 且已安装 sentry-sdk 才启用。
+
+    未配置 DSN 或未安装 SDK 时静默跳过，不引入强依赖、不影响启动。
+    """
+    dsn = (settings.SENTRY_DSN or "").strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(dsn=dsn, traces_sample_rate=1.0)
+        logger.info("Sentry 已启用（SENTRY_DSN 已配置）")
+    except ImportError:  # pragma: no cover - 依赖缺失兜底
+        logger.warning("SENTRY_DSN 已配置但未安装 sentry-sdk，跳过 Sentry 初始化")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 可观测性：Sentry 初始化（如有配置）
+    init_sentry_if_configured()
     # 迁移：先保证表结构就绪
     run_migrations()
     # 初始化种子数据（幂等）
@@ -72,6 +99,9 @@ app.add_middleware(EnforcePasswordChangeMiddleware)
 # （后注册先执行，置于最外层，先于改密拦截与业务逻辑）
 app.add_middleware(CsrfProtectionMiddleware)
 
+# 请求访问日志：置于最外层，耗时统计覆盖全部下游中间件与业务处理
+app.add_middleware(RequestLogMiddleware)
+
 # 上传文件不再静态挂载（S4）：统一走 /api/files 鉴权下载接口，
 # 旧 /uploads 路径由 files 路由中的兼容路由（同样鉴权）承接。
 uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
@@ -83,4 +113,20 @@ include_all_routers(app)
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok"}
+    """健康检查探活（可观测性 p4_1）：返回服务状态/版本/数据库连通性/时间戳。
+
+    - 数据库探活执行 SELECT 1，失败不抛异常：status 降级为 degraded，
+      database 字段标记 error，便于容器探针与外部监控区分处理。
+    """
+    db_ok = True
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "version": app.version,
+        "database": "ok" if db_ok else "error",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
