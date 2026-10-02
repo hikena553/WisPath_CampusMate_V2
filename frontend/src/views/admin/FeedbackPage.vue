@@ -11,37 +11,37 @@
     <!-- 统计概览卡片 -->
     <div class="stats-grid">
       <div class="stat-card total">
-        <div class="stat-icon"><el-icon><ChatDotRound /></el-icon></div>
+        <div class="stat-icon"><el-icon><MessageSquare /></el-icon></div>
         <div class="stat-info">
-          <span class="stat-value">{{ stats.total }}</span>
+          <span class="stat-value">{{ statsLoading ? '—' : stats.total }}</span>
           <span class="stat-label">全部反馈</span>
         </div>
       </div>
       <div class="stat-card pending">
         <div class="stat-icon"><el-icon><Clock /></el-icon></div>
         <div class="stat-info">
-          <span class="stat-value">{{ stats.pending }}</span>
+          <span class="stat-value">{{ statsLoading ? '—' : stats.pending }}</span>
           <span class="stat-label">待处理</span>
         </div>
       </div>
       <div class="stat-card processing">
-        <div class="stat-icon"><el-icon><Loading /></el-icon></div>
+        <div class="stat-icon"><el-icon><Loader2 /></el-icon></div>
         <div class="stat-info">
-          <span class="stat-value">{{ stats.processing }}</span>
+          <span class="stat-value">{{ statsLoading ? '—' : stats.processing }}</span>
           <span class="stat-label">处理中</span>
         </div>
       </div>
       <div class="stat-card resolved">
         <div class="stat-icon"><el-icon><CircleCheck /></el-icon></div>
         <div class="stat-info">
-          <span class="stat-value">{{ stats.resolved }}</span>
+          <span class="stat-value">{{ statsLoading ? '—' : stats.resolved }}</span>
           <span class="stat-label">已解决</span>
         </div>
       </div>
       <div class="stat-card rejected">
-        <div class="stat-icon"><el-icon><CircleClose /></el-icon></div>
+        <div class="stat-icon"><el-icon><CircleX /></el-icon></div>
         <div class="stat-info">
-          <span class="stat-value">{{ stats.rejected }}</span>
+          <span class="stat-value">{{ statsLoading ? '—' : stats.rejected }}</span>
           <span class="stat-label">已拒绝</span>
         </div>
       </div>
@@ -71,7 +71,7 @@
         <el-icon><Search /></el-icon> 查询
       </el-button>
       <el-button @click="handleReset">
-        <el-icon><Refresh /></el-icon> 重置
+        <el-icon><RefreshCw /></el-icon> 重置
       </el-button>
     </div>
 
@@ -109,17 +109,17 @@
           <div class="table-actions">
             <el-tooltip content="查看详情" placement="top">
               <el-button class="action-btn info" circle @click="openDetail(row)">
-                <el-icon><View /></el-icon>
+                <el-icon><Eye /></el-icon>
               </el-button>
             </el-tooltip>
             <el-tooltip v-if="row.status === 'pending' || row.status === 'processing'" content="回复" placement="top">
               <el-button class="action-btn primary" circle @click="openReplyDialog(row)">
-                <el-icon><ChatDotRound /></el-icon>
+                <el-icon><MessageSquare /></el-icon>
               </el-button>
             </el-tooltip>
             <el-tooltip v-if="row.status === 'pending' || row.status === 'processing'" content="拒绝" placement="top">
               <el-button class="action-btn delete" circle @click="handleReject(row)">
-                <el-icon><Close /></el-icon>
+                <el-icon><X /></el-icon>
               </el-button>
             </el-tooltip>
           </div>
@@ -185,13 +185,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Search, Refresh, ChatDotRound, View, Close, Clock, Loading, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import { Search, RefreshCw, MessageSquare, Eye, X, Clock, Loader2, CircleCheck, CircleX } from 'lucide-vue-next'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getFeedbacks, getFeedbackWordCloud, replyFeedback, type Feedback, type FeedbackWord } from '@/api/feedback'
 import FeedbackWordCloud from '@/components/feedback/FeedbackWordCloud.vue'
 
 const loading = ref(false)
 const submitting = ref(false)
+const statsLoading = ref(true)
 const feedbacks = ref<Feedback[]>([])
 const replyDialogVisible = ref(false)
 const detailVisible = ref(false)
@@ -369,6 +370,7 @@ async function loadWordCloud() {
 
 async function loadFeedbacks() {
   loading.value = true
+  statsLoading.value = true
   try {
     const data = await getFeedbacks(filters)
     feedbacks.value = data
@@ -376,6 +378,7 @@ async function loadFeedbacks() {
   } catch (error) {
     console.error('加载反馈失败:', error)
   } finally {
+    statsLoading.value = false
     loading.value = false
   }
 }
@@ -456,11 +459,11 @@ onMounted(() => {
   color: #fff;
 }
 
-.stat-card.total .stat-icon { background: linear-gradient(135deg, #409eff, #3377ff); }
-.stat-card.pending .stat-icon { background: linear-gradient(135deg, #e6a23c, #d98a2b); }
-.stat-card.processing .stat-icon { background: linear-gradient(135deg, #409eff, #2f6fed); }
-.stat-card.resolved .stat-icon { background: linear-gradient(135deg, #67c23a, #4fa832); }
-.stat-card.rejected .stat-icon { background: linear-gradient(135deg, #f56c6c, #e04e4e); }
+.stat-card.total .stat-icon { background: #409eff; }
+.stat-card.pending .stat-icon { background: #e6a23c; }
+.stat-card.processing .stat-icon { background: #409eff; }
+.stat-card.resolved .stat-icon { background: #67c23a; }
+.stat-card.rejected .stat-icon { background: #f56c6c; }
 
 .stat-info {
   display: flex;

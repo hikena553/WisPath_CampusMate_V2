@@ -8,7 +8,7 @@
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-button @click="expandAll"><el-icon><Expand /></el-icon>展开全部</el-button>
-        <el-button @click="collapseAll"><el-icon><Fold /></el-icon>收起全部</el-button>
+        <el-button @click="collapseAll"><el-icon><Minimize /></el-icon>收起全部</el-button>
         <el-button type="primary" @click="openCreateDialog('college')">
           <el-icon><Plus /></el-icon>新增节点
         </el-button>
@@ -62,7 +62,7 @@
       </aside>
 
       <div class="canvas-panel">
-        <div v-if="!loaded" v-loading="true" class="canvas-placeholder" />
+        <div v-if="!loaded" class="canvas-placeholder">正在加载院系数据…</div>
         <OrgFlowCanvas
           v-else-if="colleges.length"
           :tree="tree"
@@ -96,7 +96,7 @@
           <span class="odm-head-glow" />
           <div class="odm-head-inner">
             <button class="odm-close" title="关闭" @click="drawerVisible = false">
-              <el-icon><Close /></el-icon>
+              <el-icon><X /></el-icon>
             </button>
             <div class="odm-head-main">
               <span class="odm-head-icon"><el-icon><component :is="iconOf(detailNode.type)" /></el-icon></span>
@@ -210,10 +210,10 @@
               <el-icon><Plus /></el-icon>新增下级
             </el-button>
             <el-button v-if="detailNode && detailNode.type !== 'root'" type="danger" plain @click="confirmDelete(detailNode)">
-              <el-icon><Delete /></el-icon>删除
+              <el-icon><Trash2 /></el-icon>删除
             </el-button>
             <el-button v-if="detailNode" type="primary" @click="openEditDialog(detailNode)">
-              <el-icon><EditPen /></el-icon>编辑内容
+              <el-icon><PenLine /></el-icon>编辑内容
             </el-button>
           </div>
         </div>
@@ -238,7 +238,7 @@
             <p>{{ dialogMode === 'create' ? '选择节点类型并填写信息，保存后即出现在画布中' : '修改该节点的基本信息与归属关系' }}</p>
           </div>
           <button class="odg-close" title="关闭" @click="dialogVisible = false">
-            <el-icon><Close /></el-icon>
+            <el-icon><X /></el-icon>
           </button>
         </div>
       </template>
@@ -328,9 +328,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, Expand, Fold, Plus, Delete, EditPen, Close, ArrowRight, Check,
-  School, Collection, Reading, UserFilled,
-} from '@element-plus/icons-vue'
+  Search, Expand, Minimize, Plus, Trash2, PenLine, X, ArrowRight, Check,
+  School, Library, BookOpen, Users,
+} from 'lucide-vue-next'
 import OrgFlowCanvas from './components/OrgFlowCanvas.vue'
 import {
   collectKeys, emptyStats, findFlowNode, findFlowPath,
@@ -367,7 +367,7 @@ const accentMap: Record<FlowNodeType, string> = {
   major: '#e6a23c',
   class: '#67c23a',
 }
-const iconMap = { root: School, college: School, major: Collection, class: Reading } as const
+const iconMap = { root: School, college: School, major: Library, class: BookOpen } as const
 
 const accentOf = (t: FlowNodeType) => accentMap[t]
 const iconOf = (t: FlowNodeType) => iconMap[t]
@@ -381,28 +381,28 @@ function hexA(hex: string, alpha: number) {
 
 const kpis = computed(() => [
   { label: '学院总数', value: colleges.value.length, unit: '个', tag: '一级组织', color: '#409eff', icon: School },
-  { label: '专业总数', value: majors.value.length, unit: '个', tag: '二级组织', color: '#e6a23c', icon: Collection },
-  { label: '班级总数', value: classGroups.value.length, unit: '个', tag: '三级组织', color: '#67c23a', icon: Reading },
+  { label: '专业总数', value: majors.value.length, unit: '个', tag: '二级组织', color: '#e6a23c', icon: Library },
+  { label: '班级总数', value: classGroups.value.length, unit: '个', tag: '三级组织', color: '#67c23a', icon: BookOpen },
   {
     label: '学生总数',
     value: studentTotal.value,
     unit: '人',
     tag: unassignedStudents.value > 0 ? `其中 ${unassignedStudents.value} 人未分配班级` : '在册学生',
     color: '#667eea',
-    icon: UserFilled,
+    icon: Users,
   },
 ])
 
 const palette = [
   { type: 'college' as FlowNodeType, label: '学院', hint: '一级组织节点', color: '#409eff', icon: School },
-  { type: 'major' as FlowNodeType, label: '专业', hint: '挂在学院之下', color: '#e6a23c', icon: Collection },
-  { type: 'class' as FlowNodeType, label: '班级', hint: '挂在专业之下', color: '#67c23a', icon: Reading },
+  { type: 'major' as FlowNodeType, label: '专业', hint: '挂在学院之下', color: '#e6a23c', icon: Library },
+  { type: 'class' as FlowNodeType, label: '班级', hint: '挂在专业之下', color: '#67c23a', icon: BookOpen },
 ]
 
 const typeCards = [
   { type: 'college' as FlowNodeType, label: '学院', hint: '一级组织', color: '#409eff', icon: School },
-  { type: 'major' as FlowNodeType, label: '专业', hint: '隶属学院', color: '#e6a23c', icon: Collection },
-  { type: 'class' as FlowNodeType, label: '班级', hint: '隶属专业', color: '#67c23a', icon: Reading },
+  { type: 'major' as FlowNodeType, label: '专业', hint: '隶属学院', color: '#e6a23c', icon: Library },
+  { type: 'class' as FlowNodeType, label: '班级', hint: '隶属专业', color: '#67c23a', icon: BookOpen },
 ]
 
 /** 构建 总部 → 学院 → 专业 → 班级 层级树 */
@@ -870,7 +870,7 @@ onMounted(async () => {
   width: 3px;
   height: 13px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #667eea, #764ba2);
+  background: #667eea;
 }
 .panel-body {
   padding: 12px;

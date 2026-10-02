@@ -1,7 +1,7 @@
 <template>
   <el-drawer v-model="visible" :title="`${teacher?.name} - 学生列表`" size="600px">
     <div v-if="loading" class="loading-wrap">
-      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+      <el-icon class="is-loading" :size="32"><Loader2 /></el-icon>
     </div>
     <template v-else>
       <div v-if="students.length === 0" class="empty-tip">暂无学生</div>
@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loader2 } from 'lucide-vue-next'
 import { getTeacherStudents, updateStudent, type TeacherInfo, type StudentBrief } from '@/api/admin'
 import { getTeachers } from '@/api/user'
 

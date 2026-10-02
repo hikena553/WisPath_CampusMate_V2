@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>AI知识库管理</h2>
       <div class="header-actions">
-        <el-button :icon="Refresh" :loading="reindexing" @click="doReindex">重建向量索引</el-button>
+        <el-button :icon="RefreshCw" :loading="reindexing" @click="doReindex">重建向量索引</el-button>
         <el-button type="primary" @click="showAddDialog">添加问答对</el-button>
         <el-upload
           :show-file-list="false"
@@ -16,7 +16,9 @@
     </div>
 
     <!-- 检索与向量分词模型状态卡片 -->
-    <div class="index-cards" v-loading="statusLoading">
+    <div class="index-cards">
+      <div v-if="statusLoading" class="cards-loading">正在加载索引状态…</div>
+      <template v-else>
       <div class="index-card">
         <div class="card-label">分词模型</div>
         <div class="card-value">{{ indexStatus?.segmenter || '—' }}</div>
@@ -53,6 +55,7 @@
           问答对 {{ indexStatus?.qa_count ?? 0 }} 条 · 文档 {{ indexStatus?.document_count ?? 0 }} 份
         </div>
       </div>
+      </template>
     </div>
 
     <!-- 向量模型（embedding）配置 -->
@@ -60,7 +63,7 @@
       <template #header>
         <div class="embed-config-header">
           <div class="embed-config-title">
-            <el-icon class="embed-config-icon"><MagicStick /></el-icon>
+            <el-icon class="embed-config-icon"><Sparkles /></el-icon>
             <span>向量模型配置</span>
             <el-tag size="small" :type="embedConfig?.configured ? 'success' : 'danger'" effect="light">
               {{ embedConfig?.configured ? '已就绪' : '未配置' }}
@@ -95,7 +98,7 @@
       </el-form>
 
       <div class="embed-config-tip" v-if="embedConfig">
-        <el-icon class="tip-icon"><InfoFilled /></el-icon>
+        <el-icon class="tip-icon"><Info /></el-icon>
         <span class="tip-text">
           {{ embedConfig.hint }}
           <template v-if="embedConfig.model">｜当前模型：<b>{{ embedConfig.model }}</b></template>
@@ -133,14 +136,14 @@
               <div class="table-actions">
                 <el-tooltip content="编辑" placement="top">
                   <el-button class="action-btn edit" circle @click="editItem(row)">
-                    <el-icon><EditPen /></el-icon>
+                    <el-icon><PenLine /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-popconfirm title="确定删除吗？" @confirm="deleteItem(row.id)">
                   <template #reference>
                     <el-tooltip content="删除" placement="top">
                       <el-button class="action-btn delete" circle>
-                        <el-icon><Delete /></el-icon>
+                        <el-icon><Trash2 /></el-icon>
                       </el-button>
                     </el-tooltip>
                   </template>
@@ -201,7 +204,7 @@
                   <template #reference>
                     <el-tooltip content="删除" placement="top">
                       <el-button class="action-btn delete" circle>
-                        <el-icon><Delete /></el-icon>
+                        <el-icon><Trash2 /></el-icon>
                       </el-button>
                     </el-tooltip>
                   </template>
@@ -331,7 +334,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh, MagicStick, InfoFilled, EditPen, Delete } from '@element-plus/icons-vue'
+import { Search, RefreshCw, Sparkles, Info, PenLine, Trash2 } from 'lucide-vue-next'
 import {
   getKnowledgeList, createKnowledgeItem, updateKnowledgeItem, deleteKnowledgeItem,
   uploadDocument, getDocumentList, deleteDocument,
@@ -352,7 +355,7 @@ const submitting = ref(false)
 
 // 检索/向量索引状态
 const indexStatus = ref<KnowledgeIndexStatus | null>(null)
-const statusLoading = ref(false)
+const statusLoading = ref(true)
 const reindexing = ref(false)
 
 // 向量模型配置
@@ -658,9 +661,16 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 16px;
 }
+.cards-loading {
+  grid-column: 1 / -1;
+  padding: 24px;
+  text-align: center;
+  color: #8a93a6;
+  font-size: 13px;
+}
 
 .index-card {
-  background: linear-gradient(135deg, #f8faff 0%, #eef2ff 100%);
+  background: #f8faff;
   border: 1px solid #e3e8f7;
   border-radius: 12px;
   padding: 14px 16px;

@@ -2,12 +2,12 @@
   <div class="table-actions">
     <el-tooltip v-if="showViewStudents" content="查看学生" placement="top">
       <el-button class="action-btn primary" circle @click.stop="$emit('viewStudents')">
-        <el-icon><View /></el-icon>
+        <el-icon><Eye /></el-icon>
       </el-button>
     </el-tooltip>
     <el-tooltip content="重置密码" placement="top">
       <el-button class="action-btn warn" circle @click.stop="showDialog = true">
-        <el-icon><Key /></el-icon>
+        <el-icon><KeyRound /></el-icon>
       </el-button>
     </el-tooltip>
   </div>
@@ -30,7 +30,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { View, Key } from '@element-plus/icons-vue'
+import { Eye, KeyRound } from 'lucide-vue-next'
 import { resetPassword } from '@/api/admin'
 
 const props = defineProps<{

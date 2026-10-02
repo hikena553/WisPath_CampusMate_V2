@@ -37,6 +37,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let lastSpeechActivityAt = 0   // 最近一次发音活动时刻
   let isSpeaking = false
   let nextPlayTime = 0
+  // 播放串行队列：所有音频块按到达顺序排队处理，避免并发执行时
+  // await resume() 交错，导致多个块调度到同一时刻造成重叠/乱序
+  let playbackQueue: Promise<void> = Promise.resolve()
   // 播放代际：每次打断自增。后端在收到 interrupt 前已发出的"在途"ai_audio 块
   // 到达前端时若代际已变，则整体丢弃，杜绝旧语音与新一轮回答重叠
   let playbackGeneration = 0
@@ -176,13 +179,36 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     return bytes.buffer
   }
 
-  async function playAudioChunk(buffer: ArrayBuffer) {
-    // 捕获当前代际：若播放期间发生过打断（代际已变），该"在途"块整体作废
+  function playAudioChunk(buffer: ArrayBuffer) {
+    // 串行化：所有音频块按到达顺序排队处理。playAudioChunkInner 内含
+    // await resume()，若并发执行，多个块可能在 resume 挂起时读到同一个
+    // nextPlayTime，调度到同一时刻造成重叠/乱音（弱网下更易触发）
     const gen = playbackGeneration
+    const p = playbackQueue.then(() => playAudioChunkInner(buffer, gen))
+    // 队列不因单块失败而中断；错误已在内部兜底
+    playbackQueue = p.then(
+      () => undefined,
+      () => undefined,
+    )
+    return p
+  }
 
+  async function playAudioChunkInner(buffer: ArrayBuffer, gen: number) {
     if (!playbackAudioCtx) {
       playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
       nextPlayTime = playbackAudioCtx.currentTime
+    }
+
+    // 浏览器自动播放策略会把 AudioContext 挂起（suspended），
+    // 此时音频调度静默失效（症状：文字/状态正常，但扬声器完全无声），
+    // 每次播放前兜底恢复，确保语音播报始终有声音
+    if (playbackAudioCtx.state === 'suspended') {
+      try {
+        await playbackAudioCtx.resume()
+      } catch {
+        // 恢复失败：本次播放放弃，等下一次触发再次尝试
+        return
+      }
     }
 
     // PCM 16bit mono → AudioBuffer
@@ -211,7 +237,14 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
     // 计算播放时间：确保在上一个块结束后开始
     const startTime = Math.max(nextPlayTime, playbackAudioCtx.currentTime)
-    source.start(startTime)
+    try {
+      source.start(startTime)
+    } catch (e) {
+      // 调度失败（如 ctx 刚被清理）：移除登记，避免影响后续块
+      activeSources.delete(source)
+      console.warn('语音播放调度失败:', e)
+      return
+    }
 
     // 更新下一块的开始时间
     nextPlayTime = startTime + audioBuffer.duration
@@ -453,6 +486,17 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     error.value = ''
 
     try {
+      // 用户手势窗口内预热播放上下文：自动播放策略只信任手势中创建/恢复的
+      // AudioContext，放在这里提前解锁，避免首个 ai_audio 到达时（异步回调，
+      // 已不在手势栈中）新建的上下文被挂起导致播报无声
+      if (!playbackAudioCtx) {
+        playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
+        nextPlayTime = playbackAudioCtx.currentTime
+      }
+      if (playbackAudioCtx.state === 'suspended') {
+        await playbackAudioCtx.resume()
+      }
+
       await connectWs()
       const source = await startCapture()
       startPing()

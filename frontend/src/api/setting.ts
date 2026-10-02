@@ -48,12 +48,22 @@ export function uploadBrandingImage(file: File) {
 
 // ===== 语音与 TTS =====
 
+export interface VoiceOption {
+  voice: string
+  label: string
+  gender?: string
+  tag?: string
+  provider: 'edge' | 'tokenplan'
+}
+
 export interface VoicePipelineInfo {
   stt: { model: string; url: string }
   tts: { model: string; url: string }
   voice: string
   voice_prompt: string
   llm_model: string
+  voices?: VoiceOption[]
+  providers?: string[]
 }
 
 // 获取语音链路信息（STT/TTS 模型、当前生效音色与播报提示词）

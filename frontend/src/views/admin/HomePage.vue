@@ -226,9 +226,9 @@
       <div class="footer-item"><span class="footer-label">学院覆盖</span><b>{{ dashboard?.college_count ?? 0 }} 个</b></div>
       <div class="footer-item"><span class="footer-label">刷新时间</span><b>{{ refreshAt || '加载中…' }}</b></div>
       <div class="footer-actions">
-        <button type="button" class="action" @click="loadDashboard"><el-icon><Refresh /></el-icon>刷新数据</button>
-        <button type="button" class="action" @click="router.push('/admin/knowledge')"><el-icon><Collection /></el-icon>知识库</button>
-        <button type="button" class="action action-primary" @click="dataDialogVisible = true"><el-icon><Operation /></el-icon>数据导入 / 导出</button>
+        <button type="button" class="action" @click="loadDashboard"><el-icon><RefreshCw /></el-icon>刷新数据</button>
+        <button type="button" class="action" @click="router.push('/admin/knowledge')"><el-icon><Library /></el-icon>知识库</button>
+        <button type="button" class="action action-primary" @click="dataDialogVisible = true"><el-icon><Database /></el-icon>数据导入 / 导出</button>
       </div>
     </footer>
 
@@ -245,7 +245,7 @@
                   导出学生数据
                 </el-button>
                 <el-button type="success" :loading="exporting" class="hover-lift export-btn" @click="handleExport('teacher')">
-                  <el-icon style="margin-right:6px"><UserFilled /></el-icon>
+                  <el-icon style="margin-right:6px"><Users /></el-icon>
                   导出教师数据
                 </el-button>
               </div>
@@ -316,9 +316,9 @@ import { useRouter } from 'vue-router'
 import { getDashboardStats, exportData, importData, type DashboardStats, type ImportResult } from '@/api/admin'
 import { getFeeds, type FeedItem } from '@/api/resources'
 import {
-  User, UserFilled, Document, School, ChatDotRound,
-  Files, Timer, Monitor, Collection, Operation, Upload, Refresh
-} from '@element-plus/icons-vue'
+  User, Users, FileText, School, MessageSquare,
+  Files, Timer, Monitor, Library, Database, Upload, RefreshCw
+} from 'lucide-vue-next'
 
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -388,12 +388,12 @@ const crisisTracked = computed(() =>
 const kpiCards = computed(() => {
   const d = dashboard.value
   return [
-    { label: '学生总数', value: d?.student_count ?? 0, unit: '人', tag: '在册学籍', icon: UserFilled, color: '#409eff', to: '/admin/students' },
+    { label: '学生总数', value: d?.student_count ?? 0, unit: '人', tag: '在册学籍', icon: Users, color: '#409eff', to: '/admin/students' },
     { label: '教师总数', value: d?.teacher_count ?? 0, unit: '人', tag: '在职教职工', icon: User, color: '#67c23a', to: '/admin/teachers' },
     { label: '学院总数', value: d?.college_count ?? 0, unit: '个', tag: '组织架构', icon: School, color: '#e6a23c', to: '/admin/organizations' },
-    { label: '知识库条目', value: d?.knowledge_count ?? 0, unit: '条', tag: '问答语料', icon: Document, color: '#764ba2', to: '/admin/knowledge' },
+    { label: '知识库条目', value: d?.knowledge_count ?? 0, unit: '条', tag: '问答语料', icon: FileText, color: '#764ba2', to: '/admin/knowledge' },
     { label: '文档资料', value: d?.document_count ?? 0, unit: '份', tag: '向量索引', icon: Files, color: '#17becf', to: '/admin/knowledge' },
-    { label: 'AI 会话数', value: d?.conversation_count ?? 0, unit: '次', tag: '累计交互', icon: ChatDotRound, color: '#667eea', to: '' },
+    { label: 'AI 会话数', value: d?.conversation_count ?? 0, unit: '次', tag: '累计交互', icon: MessageSquare, color: '#667eea', to: '' },
     { label: '消息总量', value: d?.message_count ?? 0, unit: '条', tag: '师生提问', icon: Monitor, color: '#f78989', to: '' },
     { label: '危机关注', value: crisisFocus.value, unit: '人', tag: '需重点跟进', icon: Timer, color: '#f56c6c', to: '/admin/crisis' },
   ]
@@ -888,7 +888,7 @@ onMounted(() => {
   width: 3px;
   height: 13px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #667eea, #764ba2);
+  background: #667eea;
 }
 .panel-note { font-size: 11.5px; color: #b0b8c4; white-space: nowrap; }
 .panel-more {
@@ -1113,9 +1113,9 @@ onMounted(() => {
   background: #f0f3f8;
   color: #8a94a6;
 }
-.rank-no.rk-0 { background: linear-gradient(135deg, #f6c453, #e6a23c); color: #fff; }
-.rank-no.rk-1 { background: linear-gradient(135deg, #cbd5e1, #94a3b8); color: #fff; }
-.rank-no.rk-2 { background: linear-gradient(135deg, #e8a87c, #c98a5e); color: #fff; }
+.rank-no.rk-0 { background: #f6c453; color: #fff; }
+.rank-no.rk-1 { background: #cbd5e1; color: #fff; }
+.rank-no.rk-2 { background: #e8a87c; color: #fff; }
 .rank-name {
   color: #4b5563;
   overflow: hidden;
@@ -1127,7 +1127,7 @@ onMounted(() => {
   display: block;
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
+  background: #667eea;
 }
 .rank-val { text-align: right; color: #1f2d3d; font-weight: 700; font-variant-numeric: tabular-nums; }
 
@@ -1216,13 +1216,13 @@ onMounted(() => {
 .action-primary {
   color: #fff;
   font-weight: 600;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: #667eea;
   border-color: transparent;
 }
 .action-primary:hover,
 .action-primary:focus-visible {
   color: #fff;
-  background: linear-gradient(135deg, #7b90ef, #8a5fb2);
+  background: #7b90ef;
   box-shadow: 0 6px 18px rgba(102, 126, 234, 0.35);
 }
 

@@ -78,7 +78,7 @@
           <div class="table-actions">
             <el-tooltip content="编辑" placement="top">
               <el-button class="action-btn edit" circle @click.stop="openEdit(row)">
-                <el-icon><EditPen /></el-icon>
+                <el-icon><PenLine /></el-icon>
               </el-button>
             </el-tooltip>
             <ActionButtons :user-id="row.id" :user-name="row.name" @reset-success="loadStudents" />
@@ -157,7 +157,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, EditPen } from '@element-plus/icons-vue'
+import { Search, PenLine } from 'lucide-vue-next'
 import { getStudentList, getStudentStats, updateStudent, importData, type StudentBrief, type StudentStats } from '@/api/admin'
 import { getTeachers } from '@/api/user'
 import { use } from 'echarts/core'
@@ -347,7 +347,7 @@ onMounted(async () => {
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(0,0,0,0.08);
 }
-.stat-card.total { background: linear-gradient(135deg, #2563eb, #60a5fa); color: #fff; }
+.stat-card.total { background: #2563eb; color: #fff; }
 .stat-card.college { background: #eff6ff; color: #334155; border: 1px solid #dbeafe; }
 .stat-card.college:hover {
   background: #e2efff;

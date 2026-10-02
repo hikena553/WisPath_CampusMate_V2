@@ -17,8 +17,9 @@ from app.models.setting import SystemSetting
 from app.services.voice_service import (
     VOICE_STT_MODEL, VOICE_STT_URL,
     VOICE_TTS_MODEL, VOICE_TTS_URL,
-    tokenplan_tts, pcm_to_wav,
+    synthesize_speech, pcm_to_wav,
     _get_tts_voice, _get_tts_prompt,
+    get_edge_voices, is_edge_voice,
 )
 
 router = APIRouter(prefix="/api/settings", tags=["系统设置"])
@@ -76,6 +77,17 @@ class VoicePipelineInfo(BaseModel):
     voice: str
     voice_prompt: str
     llm_model: str
+    # 可选用音色：Edge 组（免费多音色）+ Token Plan 组（精品音色），前端按 provider 分组展示
+    voices: List[dict] = []
+    providers: List[str] = ["edge", "tokenplan"]
+
+
+def _tokenplan_voice_options() -> list[dict]:
+    """Token Plan 可选用音色（套餐白名单内已验证可用）"""
+    return [
+        {"voice": "longanhuan_v3.6", "label": "龙安欢", "gender": "女", "tag": "精品中文·默认", "provider": "tokenplan"},
+        {"voice": "longanlingxi", "label": "龙安灵希", "gender": "女", "tag": "精品中文·可爱甜美", "provider": "tokenplan"},
+    ]
 
 
 # ===== Endpoints =====
@@ -205,18 +217,27 @@ def _read_setting(db: Session, key: str) -> str:
 
 
 @router.get("/voice/info", response_model=VoicePipelineInfo)
-def get_voice_pipeline_info(
+async def get_voice_pipeline_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    """获取语音 TTS 链路信息：识别/合成模型、当前生效音色与播报提示词（仅管理员）"""
+    """获取语音 TTS 链路信息：识别/合成模型、当前生效音色、可选用音色列表与播报提示词（仅管理员）"""
     llm_model = _read_setting(db, "llm_agent_model") or _read_setting(db, "llm_model")
+
+    # Edge 中文音色（在线获取，失败回退内置列表）
+    edge_voices = await get_edge_voices()
+    voices = [
+        {**v, "provider": "edge"} for v in edge_voices
+    ] + _tokenplan_voice_options()
+
+    current_voice = _get_tts_voice()
     return VoicePipelineInfo(
         stt={"model": VOICE_STT_MODEL, "url": VOICE_STT_URL},
         tts={"model": VOICE_TTS_MODEL, "url": VOICE_TTS_URL},
-        voice=_get_tts_voice(),
+        voice=current_voice,
         voice_prompt=_get_tts_prompt(),
         llm_model=llm_model,
+        voices=voices,
     )
 
 
@@ -234,12 +255,15 @@ async def test_tts_synthesis(
 
     chunks: list[bytes] = []
     total = 0
+    tts_model = VOICE_TTS_MODEL
     try:
-        async for chunk in tokenplan_tts(text, voice=voice):
+        async for chunk in synthesize_speech(text, voice=voice):
             chunks.append(chunk)
             total += len(chunk)
             if total > 8 * 1024 * 1024:  # 单次试听最多 8MB 音频，防止异常响应撑爆内存
                 raise HTTPException(status_code=413, detail="合成音频过大，请缩短试听文本")
+        if is_edge_voice(voice):
+            tts_model = "edge-tts（微软免费）"
     except HTTPException:
         raise
     except Exception as exc:
@@ -252,6 +276,6 @@ async def test_tts_synthesis(
     return {
         "audio_base64": base64.b64encode(wav_bytes).decode(),
         "voice": voice,
-        "model": VOICE_TTS_MODEL,
+        "model": tts_model,
         "chars": len(text),
     }

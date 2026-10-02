@@ -1,10 +1,14 @@
 import asyncio
 import io
 import json
+import re
+import sys
+import time
 import wave
 import base64
 import logging
 import httpx
+from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
@@ -37,9 +41,110 @@ VOICE_TTS_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/audio/tts/SpeechSynthesizer"
 VOICE_TTS_MODEL = "qwen-audio-3.0-tts-plus"
 VOICE_TTS_VOICE = "longanhuan_v3.6"
 
+# ===================== TTS 引擎（开源豆包方案：Edge TTS 多音色 + Token Plan 备选） =====================
+# Edge TTS（微软免费服务，无需 API Key，400+ 音色，其中中文普通话/粤语/
+# 台湾国语/东北、陕西口音共 14 个），作为默认语音合成引擎，解决多音色与
+# “语音播报没有声音”（Token Plan 受限/不稳定）两大问题；管理端仍可切换到
+# Token Plan（qwen-audio-3.0-tts-plus，精品中文音色）。
+EDGE_TTS_DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
+
+# 中文音色静态兜底列表（在线 list_voices 获取失败时使用，与在线列表同源）
+EDGE_TTS_ZH_VOICES = [
+    {"voice": "zh-CN-XiaoxiaoNeural", "label": "晓晓", "gender": "女", "tag": "普通话·温暖亲切"},
+    {"voice": "zh-CN-XiaoyiNeural", "label": "晓伊", "gender": "女", "tag": "普通话·活泼友善"},
+    {"voice": "zh-CN-YunjianNeural", "label": "云健", "gender": "男", "tag": "普通话·沉稳有力"},
+    {"voice": "zh-CN-YunxiNeural", "label": "云希", "gender": "男", "tag": "普通话·阳光少年"},
+    {"voice": "zh-CN-YunxiaNeural", "label": "云夏", "gender": "男", "tag": "普通话·明朗大方"},
+    {"voice": "zh-CN-YunyangNeural", "label": "云扬", "gender": "男", "tag": "普通话·专业新闻"},
+    {"voice": "zh-CN-liaoning-XiaobeiNeural", "label": "晓贝", "gender": "女", "tag": "东北话·爽朗有趣"},
+    {"voice": "zh-CN-shaanxi-XiaoniNeural", "label": "晓妮", "gender": "女", "tag": "陕西话·质朴幽默"},
+    {"voice": "zh-HK-HiuGaaiNeural", "label": "曉佳", "gender": "女", "tag": "粤语·亲切"},
+    {"voice": "zh-HK-HiuMaanNeural", "label": "曉曼", "gender": "女", "tag": "粤语·温柔"},
+    {"voice": "zh-HK-WanLungNeural", "label": "雲龍", "gender": "男", "tag": "粤语·沉稳"},
+    {"voice": "zh-TW-HsiaoChenNeural", "label": "曉臻", "gender": "女", "tag": "台湾国语·自然"},
+    {"voice": "zh-TW-HsiaoYuNeural", "label": "曉雨", "gender": "女", "tag": "台湾国语·活泼"},
+    {"voice": "zh-TW-YunJheNeural", "label": "雲哲", "gender": "男", "tag": "台湾国语·沉稳"},
+]
+
+_EDGE_VOICES_CACHE: list[dict] | None = None
+_EDGE_VOICES_FETCH_AT = 0.0
+_EDGE_VOICES_TTL = 3600.0
+_EDGE_VOICES_LOCK = asyncio.Lock()
+
+
+def _ensure_vendor_on_path() -> None:
+    """确保 vendor_packages（内置 edge_tts/sherpa_onnx 等）位于导入路径。
+
+    main.py 仅在 jieba 缺失时才注入 vendor 目录；本机若已装 jieba，
+    edge_tts 将不可见，因此这里显式兜底注入（幂等，重复插入无害）。
+    """
+    vendor = Path(__file__).resolve().parent.parent.parent / "vendor_packages"
+    if str(vendor) not in sys.path and vendor.is_dir():
+        sys.path.insert(0, str(vendor))
+
+
+def is_edge_voice(voice: str) -> bool:
+    """判断音色是否属于 Edge TTS：edge 音色以 Neural 结尾（如 zh-CN-XiaoxiaoNeural）；
+    Token Plan 音色形如 longanhuan_v3.6 / longanlingxi"""
+    return bool(voice and voice.strip().lower().endswith("neural"))
+
+
+def _fmt_edge_locale(locale: str) -> str:
+    """地区代码 -> 中文语言标签"""
+    loc = (locale or "").lower()
+    if loc.startswith("zh-hk"):
+        return "粤语"
+    if loc.startswith("zh-tw"):
+        return "台湾国语"
+    if "liaoning" in loc:
+        return "东北话"
+    if "shaanxi" in loc:
+        return "陕西话"
+    if loc.startswith("zh"):
+        return "普通话"
+    return locale or "中文"
+
+
+async def get_edge_voices(force_refresh: bool = False) -> list[dict]:
+    """获取 Edge TTS 可用中文音色：优先在线实时列表（缓存 1 小时），失败回退内置兜底列表"""
+    global _EDGE_VOICES_CACHE, _EDGE_VOICES_FETCH_AT
+    now = time.time()
+    if (not force_refresh and _EDGE_VOICES_CACHE is not None
+            and now - _EDGE_VOICES_FETCH_AT < _EDGE_VOICES_TTL):
+        return _EDGE_VOICES_CACHE
+
+    async with _EDGE_VOICES_LOCK:
+        if (not force_refresh and _EDGE_VOICES_CACHE is not None
+                and time.time() - _EDGE_VOICES_FETCH_AT < _EDGE_VOICES_TTL):
+            return _EDGE_VOICES_CACHE
+        try:
+            _ensure_vendor_on_path()
+            from edge_tts import list_voices
+            raw = await list_voices()
+            builtin = {v["voice"]: v for v in EDGE_TTS_ZH_VOICES}
+            result: list[dict] = []
+            for v in raw:
+                short = v.get("ShortName") or ""
+                if not short.lower().startswith("zh"):
+                    continue
+                gender = (v.get("Gender") or "?").lower()
+                gender_cn = "女" if gender == "female" else ("男" if gender == "male" else gender)
+                old = builtin.get(short)
+                label = old["label"] if old else (v.get("FriendlyName") or short)
+                tag = old["tag"] if old else _fmt_edge_locale(v.get("Locale") or "")
+                result.append({"voice": short, "label": label, "gender": gender_cn, "tag": tag})
+            if result:
+                _EDGE_VOICES_CACHE = result
+                _EDGE_VOICES_FETCH_AT = time.time()
+                return result
+        except Exception:
+            logger.exception("Edge TTS 音色列表在线获取失败，回退内置兜底列表")
+    return list(EDGE_TTS_ZH_VOICES)
+
 
 def _get_tts_voice() -> str:
-    """获取语音合成音色：优先系统设置 llm_tts_voice，其次 .env LLM_TTS_VOICE，最后内置默认"""
+    """获取语音合成音色：优先系统设置 llm_tts_voice，其次 .env LLM_TTS_VOICE，
+    最后默认 Edge 音色晓晓（免费多音色引擎，无需 API Key）"""
     try:
         db = SessionLocal()
         try:
@@ -50,7 +155,7 @@ def _get_tts_voice() -> str:
             db.close()
     except Exception:
         logger.exception("读取语音音色设置失败")
-    return settings.LLM_TTS_VOICE or VOICE_TTS_VOICE
+    return settings.LLM_TTS_VOICE or EDGE_TTS_DEFAULT_VOICE
 
 
 def _get_tts_prompt() -> str:
@@ -105,26 +210,44 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sa
 
 
 def _take_tts_phrases(buffer: str, first_early: bool = False) -> tuple[list[str], str]:
-    """从流式文本缓冲中切出可立即合成的短语，返回 (短语列表, 剩余缓冲)。
+    """从流式文本缓冲中切出可立即合成的自然语句，返回 (语句列表, 剩余缓冲)。
 
-    借鉴豆包/流式语音合成的"早出音"设计：不必等完整句子，
-    - 句末标点（。！？!?；;\n…）处必切；
-    - 首段（first_early=True）满 4 字即切，把首音前合成等待压到最小；
-    - 后续每 6 字一切：粒度比 8 字更细，短语间首包空窗更小、播报更连贯，
-      请求次数仍在可控范围。
+    语音播报按"完整语句"一段一段地合成，杜绝按字数硬切成 4~6 字碎块——
+    碎块每段都要独立发起一次 TTS 请求，段间合成耗时+网络往返叠加成
+    不可控的随机停顿（移动端弱网尤其明显）。句子级切分规则：
+
+    - 句末标点（。！？!?；;\n…）处必切：一句一合成，句尾标点自带
+      自然停顿，听感连贯；
+    - 逗号/顿号是软切分点，仅在两种情况下使用：
+        * 首段（first_early=True）累积满 EARLY_LEN：首音不必等整句，
+          尽早送达（约 3 秒语音，不会碎）；
+        * 任意段累积超过 MAX_SENT_LEN：长句降级分段，避免单次合成
+          时间过长拖慢整段播报；
+    - 无任何标点可依的超长串，按 MAX_SENT_LEN 硬切兜底。
     """
+    EARLY_LEN = 14     # 首段早出音阈值（约 3 秒语音）
+    MAX_SENT_LEN = 36  # 长句阈值（约 8 秒语音），超过后找逗号/兜底切分
     phrases: list[str] = []
     start = 0
-    min_len = 4 if first_early else 6
     for i, ch in enumerate(buffer):
         if ch in "。！？!?；;\n…":
+            if i == start and phrases:
+                # 连续标点（如省略号"……"、叠加"？！"）：并入上一块末尾并跳过，
+                # 避免切出孤立标点块，也避免残留缓冲中出现重复标点
+                phrases[-1] += ch
+                start = i + 1
+            else:
+                phrases.append(buffer[start:i + 1])
+                start = i + 1
+        elif ch in "，、,":
+            length = i - start
+            if (first_early and length >= EARLY_LEN) or (not first_early and length >= MAX_SENT_LEN):
+                phrases.append(buffer[start:i + 1])
+                start = i + 1
+        elif i - start >= MAX_SENT_LEN:
+            # 兜底：极长无标点串按上限硬切，宁可切也不无限等待
             phrases.append(buffer[start:i + 1])
             start = i + 1
-            min_len = 6
-        elif i - start >= min_len:
-            phrases.append(buffer[start:i + 1])
-            start = i + 1
-            min_len = 6
     return phrases, buffer[start:]
 
 
@@ -209,6 +332,94 @@ async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None, voic
         async with httpx.AsyncClient(timeout=tts_timeout) as owned_client:
             async for chunk in _stream(owned_client):
                 yield chunk
+
+
+async def edge_tts_tts(
+    text: str,
+    voice: str | None = None,
+    rate: str = "+0%",
+    pitch: str = "+0Hz",
+    volume: str = "+0%",
+):
+    """Edge TTS（微软免费）语音合成：MP3(24kHz) -> 解码 -> 重采样 16kHz -> PCM16 分块
+
+    与 tokenplan_tts 输出格式一致（16kHz 16bit 单声道裸 PCM），供流式播报链路直接使用；
+    无需 API Key，支持 400+ 音色，是“开源豆包”方案的主合成引擎。
+    """
+    import numpy as np
+    import soundfile as sf
+    _ensure_vendor_on_path()
+    from edge_tts import Communicate
+
+    voice = voice or _get_tts_voice()
+    max_retries = 4
+    last_exc: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        mp3_buf = io.BytesIO()
+        communicate = Communicate(text, voice, rate=rate, pitch=pitch, volume=volume)
+        try:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    mp3_buf.write(chunk["data"])
+            if mp3_buf.getbuffer().nbytes > 0:
+                break  # 合成成功
+            last_exc = RuntimeError("微软未返回音频（疑似瞬时限流）")
+        except Exception as exc:
+            last_exc = exc
+        if attempt < max_retries:
+            # 微软对高频新连接有限流窗口，快速重试会撞在同一窗口内；
+            # 按 1s/2s/4s 退避，等待限流窗口过期
+            backoff = float(2 ** (attempt - 1))
+            logger.warning(
+                "Edge TTS 第 %s/%s 次合成失败 voice=%s: %s；%.0fs 后重试",
+                attempt, max_retries, voice, last_exc, backoff,
+            )
+            await asyncio.sleep(backoff)
+    else:
+        raise RuntimeError(
+            f"Edge TTS 合成失败 voice={voice}（已自动重试 {max_retries} 次）: {last_exc}"
+        ) from last_exc
+
+    mp3_buf.seek(0)
+
+    data, sr = sf.read(mp3_buf, dtype="int16")
+    if data.ndim > 1:
+        data = data[:, 0] if data.shape[1] <= 1 else data.mean(axis=1)
+    data = np.ascontiguousarray(data.ravel(), dtype=np.int16)
+    if sr != 16000:
+        # 线性插值重采样（24k -> 16k：每 3 点取 2 点）
+        ratio = sr / 16000
+        x_old = np.arange(len(data), dtype=np.float64)
+        x_new = np.arange(int(len(data) / ratio), dtype=np.float64) * ratio
+        data = np.interp(x_new, x_old, data.astype(np.float64)).astype(np.int16)
+    yield data.tobytes()
+
+
+async def synthesize_speech(text: str, voice: str | None = None):
+    """统一语音合成入口（开源豆包方案）：
+
+    - 音色为 Edge 风格（以 Neural 结尾）→ Edge TTS（免费多音色，默认引擎）
+      内部自动重试 4 次（1/2/4s 退避），仍失败则自动降级 Token Plan 保证有声音
+    - 其余音色（longan 系列等）→ Token Plan（qwen-audio-3.0-tts-plus）
+    yield：16kHz 16bit 单声道 PCM 分块
+    """
+    chosen = (voice or _get_tts_voice() or "").strip()
+    if is_edge_voice(chosen):
+        try:
+            async for chunk in edge_tts_tts(text, voice=chosen):
+                yield chunk
+            return
+        except Exception as exc:
+            logger.error("Edge TTS 连续失败，自动降级 Token Plan（voice=%s）: %s", chosen, exc)
+            fallback = _get_tts_voice()
+            if is_edge_voice(fallback):
+                fallback = ""  # 兜底音色本身也是 edge 时置空，交给 tokenplan 默认
+        # 降级：走 Token Plan 精品音色，保证播报/试听始终有声音
+        async for chunk in tokenplan_tts(text, voice=fallback or None):
+            yield chunk
+    else:
+        async for chunk in tokenplan_tts(text, voice=chosen or None):
+            yield chunk
 
 
 async def safe_send_json(websocket: WebSocket, data: dict) -> bool:
@@ -413,7 +624,7 @@ async def handle_voice_connection(
                 async def _synth_to_queue(phrase: str, q: asyncio.Queue) -> None:
                     """独立合成一段短语：边产出边放入队列；结束/异常/被打断时放入 None 信号"""
                     try:
-                        async for chunk in tokenplan_tts(phrase, client=http_client):
+                        async for chunk in synthesize_speech(phrase):
                             if cancel_event.is_set():
                                 break
                             await q.put(chunk)
@@ -484,8 +695,8 @@ async def handle_voice_connection(
                         sentence_buf += delta.content
                         if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
                             break
-                        # 短语级切分：产出即合成，实现"早开场"（不等完整句子）；
-                        # 首段满 4 字即切，尽快合出第一段语音（其余段 8 字巡航）
+                        # 语句级切分：产出即合成，实现"早开场"（不等完整回答）；
+                        # 整句归段、首段 14 字早出音，杜绝碎块化造成的随机停顿
                         phrases, sentence_buf = _take_tts_phrases(
                             sentence_buf, first_early=(tts_chain is None)
                         )

@@ -6,7 +6,7 @@
         <h2>危机预警监控</h2>
         <p class="page-sub">全校学生 AI 心理预警闭环监控：发现 → 干预 → 随访 → 闭环（与教师端数据同源实时同步）</p>
       </div>
-      <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadAlerts">刷新</el-button>
+      <el-button type="primary" :icon="RefreshCw" :loading="loading" @click="loadAlerts">刷新</el-button>
     </div>
 
     <!-- 危机预警算法：回显算法设计 + 管理员调控 -->
@@ -14,13 +14,13 @@
       <div class="algo-head">
         <div class="algo-title">
           <span class="algo-name">
-            <el-icon class="algo-ic"><Setting /></el-icon>
+            <el-icon class="algo-ic"><Settings /></el-icon>
             心理危机预警算法
           </span>
           <span class="algo-badge"><i></i>运行中</span>
           <span class="algo-desc">关键词规则匹配 · LLM 语义分级 · 脱敏摘要生成 · 干预闭环</span>
         </div>
-        <el-button text size="small" :icon="Setting" @click="configOpen = !configOpen">
+        <el-button text size="small" :icon="Settings" @click="configOpen = !configOpen">
           {{ configOpen ? '收起调控' : '调控设置' }}
         </el-button>
       </div>
@@ -192,7 +192,7 @@
           <div class="table-actions">
             <el-tooltip content="干预处置" placement="top">
               <el-button class="action-btn primary" circle :disabled="row.resolved" @click="openIntervene(row)">
-                <el-icon><FirstAidKit /></el-icon>
+                <el-icon><BriefcaseMedical /></el-icon>
               </el-button>
             </el-tooltip>
             <el-tooltip :content="row.resolved ? '已闭环' : '标记闭环'" placement="top">
@@ -265,7 +265,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Refresh, Search, FirstAidKit, Check, Setting } from '@element-plus/icons-vue'
+import { RefreshCw, Search, BriefcaseMedical, Check, Settings } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import { getAlerts, interveneAlert, getCrisisConfig, updateCrisisConfig, type CrisisConfig } from '@/api/crisis'
 import type { CrisisAlert } from '@/types'

@@ -42,7 +42,7 @@
           </div>
           <template #dropdown>
             <el-dropdown-item @click="logout">
-              <el-icon style="margin-right:6px"><SwitchButton /></el-icon>退出登录
+              <el-icon style="margin-right:6px"><LogOut /></el-icon>退出登录
             </el-dropdown-item>
           </template>
         </el-dropdown>
@@ -61,8 +61,8 @@
           <el-tooltip :content="toggleState ? '展开侧边栏' : '折叠侧边栏'" placement="bottom">
             <el-button text circle @click="toggleSidebar" class="sidebar-toggle-btn">
               <span class="toggle-icon" :class="{ collapsed: toggleState }">
-                <el-icon :size="18" class="toggle-ic fold-ic"><Fold /></el-icon>
-                <el-icon :size="18" class="toggle-ic expand-ic"><Expand /></el-icon>
+                <el-icon :size="18" class="toggle-ic fold-ic"><PanelLeftClose /></el-icon>
+                <el-icon :size="18" class="toggle-ic expand-ic"><PanelLeftOpen /></el-icon>
               </span>
             </el-button>
           </el-tooltip>
@@ -89,7 +89,7 @@
             <span class="tab-dot"></span>
             <span class="tab-label">{{ tab.label }}</span>
             <el-icon v-if="tabs.length > 1" class="tab-close" :size="12" @click.stop="closeTab(tab.path)">
-              <Close />
+              <X />
             </el-icon>
           </div>
         </div>
@@ -98,9 +98,7 @@
       <main class="main-area">
         <div class="page-container">
           <router-view v-slot="{ Component }">
-            <transition name="fade-slide" mode="out-in">
-              <component :is="Component" />
-            </transition>
+            <component :is="Component" />
           </router-view>
         </div>
       </main>
@@ -114,11 +112,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getSettings } from '@/api/setting'
 import {
-  HomeFilled, Collection, WarningFilled,
-  User, UserFilled, OfficeBuilding,
-  Calendar, ChatDotRound, Setting,
-  SwitchButton, Fold, Expand, Close
-} from '@element-plus/icons-vue'
+  House, Library, TriangleAlert,
+  User, Users, Building2,
+  CalendarDays, MessageSquare, Settings,
+  LogOut, PanelLeftClose, PanelLeftOpen, X
+} from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -219,25 +217,25 @@ const navGroups: NavGroup[] = [
   {
     label: '概览',
     items: [
-      { path: '/admin', label: '首页', icon: HomeFilled },
-      { path: '/admin/knowledge', label: '知识库', icon: Collection },
-      { path: '/admin/crisis', label: '危机预警', icon: WarningFilled },
+      { path: '/admin', label: '首页', icon: House },
+      { path: '/admin/knowledge', label: '知识库', icon: Library },
+      { path: '/admin/crisis', label: '危机预警', icon: TriangleAlert },
     ],
   },
   {
     label: '人员管理',
     items: [
       { path: '/admin/teachers', label: '教师管理', icon: User },
-      { path: '/admin/students', label: '学生管理', icon: UserFilled },
-      { path: '/admin/organizations', label: '院系班级', icon: OfficeBuilding },
+      { path: '/admin/students', label: '学生管理', icon: Users },
+      { path: '/admin/organizations', label: '院系班级', icon: Building2 },
     ],
   },
   {
     label: '系统管理',
     items: [
-      { path: '/admin/courses', label: '课程表管理', icon: Calendar },
-      { path: '/admin/feedbacks', label: '反馈管理', icon: ChatDotRound },
-      { path: '/admin/settings', label: '系统设置', icon: Setting },
+      { path: '/admin/courses', label: '课程表管理', icon: CalendarDays },
+      { path: '/admin/feedbacks', label: '反馈管理', icon: MessageSquare },
+      { path: '/admin/settings', label: '系统设置', icon: Settings },
     ],
   },
 ]
@@ -391,7 +389,7 @@ body { overflow: hidden; margin: 0; }
 }
 .nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
 .nav-item.active {
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.22), rgba(59, 130, 246, 0.08));
+  background: rgba(59, 130, 246, 0.2);
   color: #ffffff; font-weight: 600;
 }
 .nav-item.active::before {
@@ -508,11 +506,7 @@ body { overflow: hidden; margin: 0; }
   min-height: 100%;
 }
 
-/* ===== 页面切换过渡 ===== */
-.fade-slide-enter-active,
-.fade-slide-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }
-.fade-slide-enter-from { opacity: 0; transform: translateX(10px); }
-.fade-slide-leave-to { opacity: 0; transform: translateX(-10px); }
+/* ===== 页面切换过渡：已按需求取消入场动画（保留词云、图表动画） ===== */
 
 /* ===== 响应式断点：布局自适应，不改变内容样式 ===== */
 @media (max-width: 1200px) {

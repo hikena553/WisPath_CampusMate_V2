@@ -7,7 +7,7 @@
           <el-icon><Plus /></el-icon> 新增教师
         </el-button>
         <el-button v-if="!deleteMode" type="danger" plain @click="enterDeleteMode">
-          <el-icon><Delete /></el-icon> 删除
+          <el-icon><Trash2 /></el-icon> 删除
         </el-button>
         <el-input v-model="searchText" placeholder="搜索教师" clearable style="width: 200px">
           <template #prefix>
@@ -138,7 +138,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { Search, Delete, Plus } from '@element-plus/icons-vue'
+import { Search, Trash2, Plus } from 'lucide-vue-next'
 import { getTeacherList, batchDeleteTeachers, createTeacher, type TeacherInfo } from '@/api/admin'
 import ViewStudentsDrawer from './components/ViewStudentsDrawer.vue'
 import ActionButtons from './components/ActionButtons.vue'

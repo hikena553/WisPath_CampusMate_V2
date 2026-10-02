@@ -256,4 +256,15 @@ html.dark .el-table tbody tr:hover > td {
   border-radius: 0 0 24px 24px;
 }
 
+/* ===== Lucide Icon Size Adaptation ===== */
+/* lucide 图标是 24px viewBox 的 stroke 型 SVG，放入 el-icon 时跟随 1em 缩放 */
+.el-icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+[class*='el-icon'] svg {
+  vertical-align: -0.125em;
+}
+
 

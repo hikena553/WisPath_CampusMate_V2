@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
-    <!-- ══════════ 顶级工具栏：单行，标题 + 统计 + 操作 ══════════ -->
-    <div class="toolbar">
+    <!-- ══════════ 顶级工具栏：单行，标题 + 统计 + 操作（仅总览模式显示） ══════════ -->
+    <div v-if="!activeClassId" class="toolbar">
       <div class="toolbar-left">
         <h2>课程表管理</h2>
         <span v-if="!loadingSummary" class="toolbar-summary">
@@ -23,8 +23,8 @@
           <el-option v-for="m in filteredMajors" :key="m.id" :label="m.name" :value="m.id" />
         </el-select>
         <el-button type="primary" plain @click="showImportDialog">导入课程表</el-button>
-        <el-button type="success" plain :icon="Connection" @click="showXiqueDialog">喜鹊儿同步</el-button>
-        <el-button type="warning" plain :icon="Setting" @click="showSemesterDialog">学期管理</el-button>
+        <el-button type="success" plain :icon="Plug" @click="showXiqueDialog">喜鹊儿同步</el-button>
+        <el-button type="warning" plain :icon="Settings" @click="showSemesterDialog">学期管理</el-button>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
       </div>
 
       <div v-if="loadingSummary && !schedules.length" class="card-skeleton">
-        <el-skeleton :rows="6" animated />
+        <el-skeleton :rows="6" />
       </div>
 
       <template v-else>
@@ -148,7 +148,7 @@
                 <div class="course-name">{{ getCourseAt(d, p)!.name }}</div>
                 <div class="course-info">{{ getCourseAt(d, p)!.teacher }} | {{ getCourseAt(d, p)!.location }}</div>
                 <div class="course-weeks">第{{ getCourseAt(d, p)!.week_start }}-{{ getCourseAt(d, p)!.week_end }}周</div>
-                <el-icon class="delete-icon" @click.stop="handleDelete(getCourseAt(d, p)!.id)"><Delete /></el-icon>
+                <el-icon class="delete-icon" @click.stop="handleDelete(getCourseAt(d, p)!.id)"><Trash2 /></el-icon>
               </div>
               <div v-else class="empty-cell">+</div>
             </div>
@@ -158,8 +158,7 @@
     </template>
 
     <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="editingCourse ? '编辑课程' : '新增课程'" width="620px">
-      <div class="form-scroll-x">
+    <el-dialog v-model="dialogVisible" :title="editingCourse ? '编辑课程' : '新增课程'" width="600px" top="6vh">
       <el-form :model="courseForm" label-width="100px">
         <el-form-item label="课程名称" required><el-input v-model="courseForm.name" placeholder="如：高等数学" /></el-form-item>
         <el-form-item label="授课教师" required><el-input v-model="courseForm.teacher" placeholder="如：张老师" /></el-form-item>
@@ -170,22 +169,21 @@
           </el-select>
         </el-form-item>
         <el-form-item label="节次">
-          <el-select v-model="courseForm.start_period" placeholder="开始节次" style="width: 45%; margin-right: 5%">
+          <el-select v-model="courseForm.start_period" placeholder="开始节次" style="width: 45% !important; margin-right: 5%">
             <el-option v-for="p in 10" :key="p" :label="`第${p}节`" :value="p" />
           </el-select>
           <span style="line-height: 32px">~</span>
-          <el-select v-model="courseForm.end_period" placeholder="结束节次" style="width: 45%">
+          <el-select v-model="courseForm.end_period" placeholder="结束节次" style="width: 45% !important">
             <el-option v-for="p in 10" :key="p" :label="`第${p}节`" :value="p" />
           </el-select>
         </el-form-item>
         <el-form-item label="周数范围">
-          <el-input-number v-model="courseForm.week_start" :min="1" :max="20" style="width: 45%; margin-right: 5%" />
+          <el-input-number v-model="courseForm.week_start" :min="1" :max="20" style="width: 45% !important; margin-right: 5%" />
           <span style="line-height: 32px">~</span>
-          <el-input-number v-model="courseForm.week_end" :min="1" :max="20" style="width: 45%" />
+          <el-input-number v-model="courseForm.week_end" :min="1" :max="20" style="width: 45% !important" />
         </el-form-item>
         <el-form-item label="学分"><el-input-number v-model="courseForm.credit" :min="0" :max="10" :step="0.5" /></el-form-item>
       </el-form>
-      </div>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSave">保存</el-button>
@@ -215,7 +213,7 @@
             :on-remove="onFileRemove"
             drag
           >
-            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <el-icon class="el-icon--upload"><Upload /></el-icon>
             <div class="el-upload__text">拖拽 Excel 文件到此处 或 <em>点击上传</em></div>
             <template #tip>
               <div class="el-upload__tip" style="margin-top: 8px">
@@ -385,7 +383,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, UploadFilled, Connection, Search, ArrowLeft, Plus, Setting } from '@element-plus/icons-vue'
+import { Trash2, Upload, Plug, Search, ArrowLeft, Plus, Settings } from 'lucide-vue-next'
 import type { College, Major, Course } from '@/types'
 import type { UploadFile, UploadInstance } from 'element-plus'
 import { getColleges, getMajors } from '@/api/organization'
@@ -902,7 +900,7 @@ onMounted(async () => {
 }
 .card-progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .progress-track { flex: 1; height: 6px; border-radius: 3px; background: #eef2f7; overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.3s ease; }
+.progress-fill { height: 100%; border-radius: 3px; background: #3b82f6; transition: width 0.3s ease; }
 .progress-text { font-size: 11px; color: #94a3b8; flex-shrink: 0; }
 .card-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #94a3b8; }
 
@@ -966,7 +964,7 @@ onMounted(async () => {
 .day-cell:hover { background: #f0f9ff; }
 .empty-cell { color: #cbd5e1; font-size: 16px; width: 100%; text-align: center; padding-top: 14px; }
 .course-card {
-  background: linear-gradient(135deg, #3b82f6, #60a5fa);
+  background: #3b82f6;
   color: #fff; border-radius: 4px; padding: 4px 6px;
   width: 100%; cursor: pointer; position: relative;
 }

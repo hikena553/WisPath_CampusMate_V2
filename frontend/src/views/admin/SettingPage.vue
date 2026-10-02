@@ -3,7 +3,7 @@
     <!-- 页头 -->
     <div class="page-title-row">
       <div class="page-title-left">
-        <div class="page-title-icon"><el-icon :size="20"><Setting /></el-icon></div>
+        <div class="page-title-icon"><el-icon :size="20"><Settings /></el-icon></div>
         <div>
           <h2 class="page-title">系统设置</h2>
           <p class="page-sub">管理系统配置参数，保存后全站即时生效</p>
@@ -14,7 +14,7 @@
           <el-icon><Check /></el-icon> 保存所有设置
         </el-button>
         <el-button :loading="loading" @click="loadAll">
-          <el-icon><Refresh /></el-icon> 重新加载
+          <el-icon><RefreshCw /></el-icon> 重新加载
         </el-button>
       </div>
     </div>
@@ -55,11 +55,13 @@
       </aside>
 
       <!-- 右侧设置内容 -->
-      <div class="setting-content" v-loading="loading">
+      <div class="setting-content">
+        <div v-if="loading" class="setting-loading">正在加载设置…</div>
+        <template v-else>
         <!-- ============ 通用 / 基础设置 ============ -->
         <section id="sec-basic" class="setting-section">
           <div class="section-header">
-            <div class="section-header-icon blue"><el-icon><Setting /></el-icon></div>
+            <div class="section-header-icon blue"><el-icon><Settings /></el-icon></div>
             <div class="section-header-info">
               <div class="section-title">基础设置</div>
               <div class="section-desc">站点名称与公告信息</div>
@@ -86,7 +88,7 @@
         <!-- ============ AI 助手 ============ -->
         <section id="sec-ai" class="setting-section ai-section">
           <div class="section-header">
-            <div class="section-header-icon violet"><el-icon><ChatDotRound /></el-icon></div>
+            <div class="section-header-icon violet"><el-icon><MessageSquare /></el-icon></div>
             <div class="section-header-info">
               <div class="section-title">
                 AI 助手设置
@@ -191,7 +193,7 @@
               <el-icon><Check /></el-icon> 保存AI配置
             </el-button>
             <el-button @click="testAIConnection" :loading="testing">
-              <el-icon><Connection /></el-icon> 测试连接
+              <el-icon><Plug /></el-icon> 测试连接
             </el-button>
           </div>
         </section>
@@ -199,7 +201,7 @@
         <!-- ============ 危机预警 ============ -->
         <section id="sec-alert" class="setting-section">
           <div class="section-header">
-            <div class="section-header-icon orange"><el-icon><Warning /></el-icon></div>
+            <div class="section-header-icon orange"><el-icon><TriangleAlert /></el-icon></div>
             <div class="section-header-info">
               <div class="section-title">危机预警设置</div>
               <div class="section-desc">敏感词识别与辅导员自动通知配置</div>
@@ -226,7 +228,7 @@
         <!-- ============ 品牌设计 ============ -->
         <section id="sec-brand" class="setting-section brand-section">
           <div class="section-header">
-            <div class="section-header-icon green"><el-icon><Picture /></el-icon></div>
+            <div class="section-header-icon green"><el-icon><Image /></el-icon></div>
             <div class="section-header-info">
               <div class="section-title">
                 Logo / 吉祥物设计
@@ -238,30 +240,32 @@
           <div class="brand-grid">
             <!-- Logo 卡片 -->
             <div class="brand-card">
-              <div class="brand-card-title">系统 Logo</div>
-              <div class="brand-preview">
-                <el-image v-if="logoDisplay" :src="logoDisplay" fit="contain" class="brand-preview-img" />
-                <div v-else class="brand-placeholder">
-                  <el-icon :size="28"><Picture /></el-icon>
-                  <span>尚未设置 Logo</span>
-                </div>
-              </div>
-              <div class="brand-tabs">
+              <div class="brand-card-head">
+                <div class="brand-card-title">系统 Logo</div>
                 <el-radio-group v-model="logoSection.mode" size="small">
                   <el-radio-button value="ai">AI 生成</el-radio-button>
                   <el-radio-button value="upload">本地上传</el-radio-button>
                 </el-radio-group>
               </div>
+
+              <div class="brand-preview">
+                <el-image v-if="logoDisplay" :src="logoDisplay" fit="contain" class="brand-preview-img" />
+                <div class="brand-preview-badge" :class="brandStatus(logoSection).kind">
+                  <el-icon :size="12"><component :is="brandStatusIcon(logoSection)" /></el-icon>
+                  {{ brandStatus(logoSection).text }}
+                </div>
+              </div>
+
               <template v-if="logoSection.mode === 'ai'">
-                <el-input
-                  v-model="logoSection.prompt"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="描述 Logo 风格，如：圆角盾形校徽，蓝金配色，中央书本与灯塔，扁平化设计，纯白背景"
-                />
-                <div class="brand-actions">
-                  <el-button type="primary" size="small" :loading="logoSection.generating" @click="handleGenerate(logoSection)">
-                    <el-icon><MagicStick /></el-icon> 生成候选图
+                <div class="brand-composer">
+                  <el-input
+                    v-model="logoSection.prompt"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="描述 Logo 风格，如：圆角盾形校徽，蓝金配色，中央书本与灯塔，扁平化设计，纯白背景"
+                  />
+                  <el-button type="primary" class="composer-btn" :loading="logoSection.generating" @click="handleGenerate(logoSection)">
+                    <el-icon><Sparkles /></el-icon> 生成候选图
                   </el-button>
                 </div>
                 <div v-if="logoSection.candidates.length" class="brand-candidates">
@@ -277,50 +281,62 @@
                     <div v-if="logoSection.selected === img" class="candidate-check"><el-icon><Check /></el-icon></div>
                   </div>
                 </div>
+                <div v-else class="brand-idle-tip">
+                  <el-icon :size="12"><Info /></el-icon>
+                  输入描述后点击「生成候选图」，或切换「本地上传」直接选择图片
+                </div>
               </template>
               <template v-else>
-                <el-upload drag :show-file-list="false" :before-upload="(f: File) => handleUpload(logoSection, f)" accept=".png,.jpg,.jpeg,.webp,.gif">
-                  <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                  <div class="el-upload__text">拖拽图片到此处，或 <em>点击上传</em></div>
-                  <template #tip>
-                    <div class="el-upload__tip">支持 png / jpg / webp / gif，不超过 15MB</div>
-                  </template>
-                </el-upload>
+                <div class="brand-composer upload">
+                  <el-upload drag :show-file-list="false" :before-upload="(f: File) => handleUpload(logoSection, f)" accept=".png,.jpg,.jpeg,.webp,.gif">
+                    <el-icon class="upload-icon"><Upload /></el-icon>
+                    <div class="el-upload__text">拖拽图片到此处，或 <em>点击上传</em></div>
+                    <template #tip>
+                      <div class="el-upload__tip">支持 png / jpg / webp / gif，不超过 15MB</div>
+                    </template>
+                  </el-upload>
+                </div>
               </template>
+
               <div class="brand-save">
-                <el-button type="primary" size="small" :loading="savingBrand" :disabled="!logoSection.selected" @click="handleApply(logoSection)">
-                  <el-icon><Check /></el-icon> 应用此图片为 Logo
-                </el-button>
-                <el-button size="small" @click="handleReset(logoSection)">恢复默认</el-button>
+                <div class="brand-save-hint"><el-icon :size="12"><Info /></el-icon> {{ brandHint(logoSection) }}</div>
+                <div class="brand-save-actions">
+                  <el-button type="primary" size="small" :loading="savingBrand" :disabled="!logoSection.selected" @click="handleApply(logoSection)">
+                    <el-icon><Check /></el-icon> 应用此图片为 Logo
+                  </el-button>
+                  <el-button size="small" @click="handleReset(logoSection)">恢复默认</el-button>
+                </div>
               </div>
             </div>
 
             <!-- 吉祥物卡片 -->
             <div class="brand-card">
-              <div class="brand-card-title">校园吉祥物</div>
-              <div class="brand-preview">
-                <el-image v-if="mascotDisplay" :src="mascotDisplay" fit="contain" class="brand-preview-img" />
-                <div v-else class="brand-placeholder">
-                  <el-icon :size="28"><Picture /></el-icon>
-                  <span>尚未设置吉祥物</span>
-                </div>
-              </div>
-              <div class="brand-tabs">
+              <div class="brand-card-head">
+                <div class="brand-card-title">校园吉祥物</div>
                 <el-radio-group v-model="mascotSection.mode" size="small">
                   <el-radio-button value="ai">AI 生成</el-radio-button>
                   <el-radio-button value="upload">本地上传</el-radio-button>
                 </el-radio-group>
               </div>
+
+              <div class="brand-preview">
+                <el-image v-if="mascotDisplay" :src="mascotDisplay" fit="contain" class="brand-preview-img" />
+                <div class="brand-preview-badge" :class="brandStatus(mascotSection).kind">
+                  <el-icon :size="12"><component :is="brandStatusIcon(mascotSection)" /></el-icon>
+                  {{ brandStatus(mascotSection).text }}
+                </div>
+              </div>
+
               <template v-if="mascotSection.mode === 'ai'">
-                <el-input
-                  v-model="mascotSection.prompt"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="描述吉祥物，如：圆润可爱的科技小机器人，蓝色主色调，胸前有校徽，手比爱心，3D 渲染，纯白背景"
-                />
-                <div class="brand-actions">
-                  <el-button type="primary" size="small" :loading="mascotSection.generating" @click="handleGenerate(mascotSection)">
-                    <el-icon><MagicStick /></el-icon> 生成候选图
+                <div class="brand-composer">
+                  <el-input
+                    v-model="mascotSection.prompt"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="描述吉祥物，如：圆润可爱的科技小机器人，蓝色主色调，胸前有校徽，手比爱心，3D 渲染，纯白背景"
+                  />
+                  <el-button type="primary" class="composer-btn" :loading="mascotSection.generating" @click="handleGenerate(mascotSection)">
+                    <el-icon><Sparkles /></el-icon> 生成候选图
                   </el-button>
                 </div>
                 <div v-if="mascotSection.candidates.length" class="brand-candidates">
@@ -336,21 +352,31 @@
                     <div v-if="mascotSection.selected === img" class="candidate-check"><el-icon><Check /></el-icon></div>
                   </div>
                 </div>
+                <div v-else class="brand-idle-tip">
+                  <el-icon :size="12"><Info /></el-icon>
+                  输入描述后点击「生成候选图」，或切换「本地上传」直接选择图片
+                </div>
               </template>
               <template v-else>
-                <el-upload drag :show-file-list="false" :before-upload="(f: File) => handleUpload(mascotSection, f)" accept=".png,.jpg,.jpeg,.webp,.gif">
-                  <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                  <div class="el-upload__text">拖拽图片到此处，或 <em>点击上传</em></div>
-                  <template #tip>
-                    <div class="el-upload__tip">支持 png / jpg / webp / gif，不超过 15MB</div>
-                  </template>
-                </el-upload>
+                <div class="brand-composer upload">
+                  <el-upload drag :show-file-list="false" :before-upload="(f: File) => handleUpload(mascotSection, f)" accept=".png,.jpg,.jpeg,.webp,.gif">
+                    <el-icon class="upload-icon"><Upload /></el-icon>
+                    <div class="el-upload__text">拖拽图片到此处，或 <em>点击上传</em></div>
+                    <template #tip>
+                      <div class="el-upload__tip">支持 png / jpg / webp / gif，不超过 15MB</div>
+                    </template>
+                  </el-upload>
+                </div>
               </template>
+
               <div class="brand-save">
-                <el-button type="primary" size="small" :loading="savingBrand" :disabled="!mascotSection.selected" @click="handleApply(mascotSection)">
-                  <el-icon><Check /></el-icon> 应用此图片为吉祥物
-                </el-button>
-                <el-button size="small" @click="handleReset(mascotSection)">清除</el-button>
+                <div class="brand-save-hint"><el-icon :size="12"><Info /></el-icon> {{ brandHint(mascotSection) }}</div>
+                <div class="brand-save-actions">
+                  <el-button type="primary" size="small" :loading="savingBrand" :disabled="!mascotSection.selected" @click="handleApply(mascotSection)">
+                    <el-icon><Check /></el-icon> 应用此图片为吉祥物
+                  </el-button>
+                  <el-button size="small" @click="handleReset(mascotSection)">恢复默认</el-button>
+                </div>
               </div>
             </div>
           </div>
@@ -359,7 +385,7 @@
         <!-- ============ 语音与 TTS ============ -->
         <section id="sec-voice" class="setting-section voice-section">
           <div class="section-header">
-            <div class="section-header-icon cyan"><el-icon><Microphone /></el-icon></div>
+            <div class="section-header-icon cyan"><el-icon><Mic /></el-icon></div>
             <div class="section-header-info">
               <div class="section-title">
                 语音与 TTS
@@ -373,7 +399,7 @@
           <!-- ① 链路展示 -->
           <div class="pipe-wrap">
             <div class="pipe-head">
-              <div class="pipe-head-title"><el-icon><Connection /></el-icon> 语音通话链路</div>
+              <div class="pipe-head-title"><el-icon><Plug /></el-icon> 语音通话链路</div>
               <div class="pipe-head-tip">用户按住说话 → 识别为文本 → 大模型理解 → 边合成边播放（流式短语合成，首音 < 1s，支持随时打断）</div>
             </div>
             <div class="pipe-track">
@@ -406,7 +432,10 @@
             <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-name">合成音色</div>
-                <div class="setting-desc">当前生效：<span class="mono-text">{{ effectiveVoice }}</span>，来自系统设置 &gt; .env LLM_TTS_VOICE &gt; 内置默认；音色必须属于 qwen-audio-3.0-tts-flash 模型</div>
+                <div class="setting-desc">
+                  当前生效：<span class="mono-text">{{ effectiveVoice }}</span>。
+                  Edge TTS 音色（{{ edgeVoicesCount }} 个）免费、无需 API Key；Token Plan 精品音色需 DashScope Key，Edge 故障时自动降级兜底
+                </div>
               </div>
               <el-select
                 v-model="settingsMap['llm_tts_voice']"
@@ -415,15 +444,37 @@
                 default-first-option
                 clearable
                 placeholder="选择或输入音色 ID"
-                style="width: 340px"
+                style="width: 380px"
               >
-                <el-option v-for="v in TTS_VOICE_PRESETS" :key="v.value" :label="`${v.label}（${v.value}）`" :value="v.value">
-                  <div class="voice-option">
-                    <span class="voice-option-name">{{ v.label }}</span>
-                    <el-tag size="small" effect="plain" type="info">{{ v.tag }}</el-tag>
-                  </div>
-                  <div class="voice-option-value">{{ v.value }}</div>
-                </el-option>
+                <el-option-group v-if="edgeVoiceOptions.length" label="免费多音色 · Edge TTS（微软，无需 Key）">
+                  <el-option
+                    v-for="v in edgeVoiceOptions"
+                    :key="v.voice"
+                    :label="`${v.label}（${v.voice}）`"
+                    :value="v.voice"
+                  >
+                    <div class="voice-option">
+                      <span class="voice-option-name">{{ v.label }}</span>
+                      <el-tag size="small" effect="plain" :type="v.gender === '男' ? 'primary' : 'danger'">{{ v.gender || '女' }}</el-tag>
+                      <el-tag size="small" effect="plain" type="info">{{ v.tag }}</el-tag>
+                    </div>
+                    <div class="voice-option-value">{{ v.voice }}</div>
+                  </el-option>
+                </el-option-group>
+                <el-option-group v-if="tokenplanVoiceOptions.length" label="精品中文 · Token Plan（qwen-plus，需 Key）">
+                  <el-option
+                    v-for="v in tokenplanVoiceOptions"
+                    :key="v.voice"
+                    :label="`${v.label}（${v.voice}）`"
+                    :value="v.voice"
+                  >
+                    <div class="voice-option">
+                      <span class="voice-option-name">{{ v.label }}</span>
+                      <el-tag size="small" effect="plain" type="warning">{{ v.tag }}</el-tag>
+                    </div>
+                    <div class="voice-option-value">{{ v.voice }}</div>
+                  </el-option>
+                </el-option-group>
               </el-select>
             </div>
 
@@ -444,9 +495,17 @@
                   style="width: 340px"
                 />
                 <el-button type="primary" :loading="voiceTestLoading" @click="handleVoicePreview">
-                  <el-icon><VideoPlay /></el-icon> 试听音色
+                  <el-icon><Play /></el-icon> 试听音色
                 </el-button>
-                <audio v-if="audioSrc && !voiceTestLoading" :src="audioSrc" controls class="voice-audio" />
+                <audio
+                  v-if="audioSrc && !voiceTestLoading"
+                  ref="voiceAudioRef"
+                  :src="audioSrc"
+                  controls
+                  autoplay
+                  class="voice-audio"
+                  @error="handleVoiceAudioError"
+                />
                 <div v-if="voiceTestResult" class="voice-test-result"><el-icon><CircleCheck /></el-icon> {{ voiceTestResult }}</div>
               </div>
             </div>
@@ -490,28 +549,30 @@
               <el-icon><Check /></el-icon> 保存语音设置
             </el-button>
             <el-button :loading="voiceInfoLoading" @click="loadVoiceInfo">
-              <el-icon><Refresh /></el-icon> 刷新链路状态
+              <el-icon><RefreshCw /></el-icon> 刷新链路状态
             </el-button>
           </div>
         </section>
+        </template>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import {
-  Setting, ChatDotRound, Warning, Check, Refresh, Connection, Picture,
-  MagicStick, UploadFilled, Microphone, Monitor, Headset, VideoPlay, CircleCheck,
-} from '@element-plus/icons-vue'
+  Settings, MessageSquare, TriangleAlert, Check, RefreshCw, Plug, Image,
+  Sparkles, Upload, Mic, Monitor, Headphones, Play, CircleCheck,
+  Clock, Info,
+} from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import {
   getSettings, batchUpdateSettings, generateBrandingImages, uploadBrandingImage,
   getVoicePipelineInfo, testTtsPreview, type Setting as SettingType, type VoicePipelineInfo,
 } from '@/api/setting'
 
-const loading = ref(false)
+const loading = ref(true)
 const saving = ref(false)
 const savingAI = ref(false)
 const testing = ref(false)
@@ -524,11 +585,11 @@ const aiMaxTokens = ref(10000)
 const activeSection = ref('basic')
 const pageRef = ref<HTMLElement | null>(null)
 const groups = [
-  { key: 'basic', icon: Setting, label: '基础设置', desc: '站点名称与公告' },
-  { key: 'ai', icon: ChatDotRound, label: 'AI 助手', desc: '大模型与智能体' },
-  { key: 'alert', icon: Warning, label: '危机预警', desc: '敏感词与通知' },
-  { key: 'brand', icon: Picture, label: '品牌设计', desc: 'Logo 与吉祥物' },
-  { key: 'voice', icon: Microphone, label: '语音与 TTS', desc: '通话链路与音色' },
+  { key: 'basic', icon: Settings, label: '基础设置', desc: '站点名称与公告' },
+  { key: 'ai', icon: MessageSquare, label: 'AI 助手', desc: '大模型与智能体' },
+  { key: 'alert', icon: TriangleAlert, label: '危机预警', desc: '敏感词与通知' },
+  { key: 'brand', icon: Image, label: '品牌设计', desc: 'Logo 与吉祥物' },
+  { key: 'voice', icon: Mic, label: '语音与 TTS', desc: '通话链路与音色' },
 ]
 const sectionKeys = groups.map(g => g.key)
 
@@ -587,6 +648,7 @@ const mascotSection = reactive<BrandSection>(createBrandSection('mascot'))
 const savingBrand = ref(false)
 
 const DEFAULT_LOGO = '/images/校徽_圆形.png'
+const DEFAULT_MASCOT = '/images/mascot.png'
 const logoDisplay = computed(() => {
   const stored = settingsMap['site_logo'] || ''
   if (!stored && logoSection.selected) return logoSection.selected
@@ -595,8 +657,28 @@ const logoDisplay = computed(() => {
 const mascotDisplay = computed(() => {
   const stored = settingsMap['site_mascot'] || ''
   if (!stored && mascotSection.selected) return mascotSection.selected
-  return stored || ''
+  return stored || DEFAULT_MASCOT
 })
+
+// 品牌状态：当前生效 / 待应用 / 使用默认，用于预览图左上角徽章回显
+function brandStatus(section: BrandSection): { text: string; kind: 'live' | 'pending' | 'default' } {
+  const stored = settingsMap[section.settingKey] || ''
+  if (section.selected && section.selected === stored) return { text: '当前生效', kind: 'live' }
+  if (section.selected) return { text: '待应用', kind: 'pending' }
+  return { text: '使用默认', kind: 'default' }
+}
+function brandStatusIcon(section: BrandSection) {
+  return brandStatus(section).kind === 'live' ? Check : brandStatus(section).kind === 'pending' ? Clock : Image
+}
+
+// 底部操作栏提示语：根据「已应用 / 已选新图 / 未选择」区分
+function brandHint(section: BrandSection): string {
+  const stored = settingsMap[section.settingKey] || ''
+  if (section.selected && section.selected === stored) return '已应用，顶栏与全站即刻生效'
+  if (section.selected) return '已选择新图片，点击「应用」立即生效'
+  if (section.mode === 'ai') return '输入提示词生成候选图，或切换「本地上传」'
+  return '上传图片后可点击「应用」'
+}
 
 // AI 生成候选图
 async function handleGenerate(section: BrandSection) {
@@ -660,7 +742,7 @@ async function handleReset(section: BrandSection) {
     settingsMap[section.settingKey] = ''
     section.selected = ''
     section.candidates = []
-    ElMessage.success(section.key === 'logo' ? '已恢复默认 Logo' : '已清除吉祥物')
+    ElMessage.success(section.key === 'logo' ? '已恢复默认 Logo' : '已恢复默认吉祥物')
   } catch (error) {
     ElMessage.error('操作失败')
   } finally {
@@ -718,23 +800,38 @@ const savingVoice = ref(false)
 const voiceTestLoading = ref(false)
 const previewText = ref('你好，我是绵小城，很高兴为你服务。今天天气不错，记得保持好心情哦！')
 const audioSrc = ref('')
+const voiceAudioRef = ref<HTMLAudioElement | null>(null)
 const voiceTestResult = ref('')
 
-// qwen-audio-3.0-tts-flash 官方系统音色（百炼音色列表）
-const TTS_VOICE_PRESETS = [
-  { label: '龙安欢（默认 · 女 · 25岁）', value: 'longanhuan_v3.6', tag: '精品中文' },
-  { label: '龙安风悦（女 · 30岁 · 自然亲切）', value: 'longanfengyue', tag: '精品中文' },
-  { label: '龙安灵希（女 · 25岁 · 可爱甜美）', value: 'longanlingxi', tag: '精品中文' },
-  { label: '龙安小昕（女 · 22岁 · 亲切活泼）', value: 'longanxiaoxin', tag: '精品中文' },
-  { label: '龙安元妃（女 · 30岁 · 高傲妃子）', value: 'longanyuanfei', tag: '角色音' },
-  { label: '龙杰力豆（男 · 5岁 · 天真男童）', value: 'longjielidou_v3.6', tag: '儿童' },
-  { label: '龙泡泡（女 · 5岁 · 软糯可爱）', value: 'longpaopao_v3.6', tag: '儿童' },
-  { label: '龙火火（男 · 8岁 · 顽皮少年）', value: 'longhuohuo_v3.6', tag: '角色音' },
-  { label: '龙川叔（男 · 40岁 · 川普大叔）', value: 'longchuanshu_v3.6', tag: '角色音' },
-  { label: 'loongmary（女 · 温暖英音）', value: 'loongmary', tag: '英文' },
-  { label: 'loongeva（女 · 高智美音）', value: 'loongeva_v3.6', tag: '英文' },
-  { label: 'loongJohn（男 · 沉稳美音）', value: 'loongjohn', tag: '英文' },
+// 音色静态兜底列表（与后端 voice/info 一致；页面加载后优先使用接口动态列表）
+// Edge TTS：14 个中文音色，免费无需 Key；Token Plan：qwen-plus 精品音色
+const STATIC_VOICE_PRESETS = [
+  { voice: 'zh-CN-XiaoxiaoNeural', label: '晓晓', gender: '女', tag: '普通话·温暖亲切', provider: 'edge' },
+  { voice: 'zh-CN-XiaoyiNeural', label: '晓伊', gender: '女', tag: '普通话·活泼友善', provider: 'edge' },
+  { voice: 'zh-CN-YunjianNeural', label: '云健', gender: '男', tag: '普通话·沉稳有力', provider: 'edge' },
+  { voice: 'zh-CN-YunxiNeural', label: '云希', gender: '男', tag: '普通话·阳光少年', provider: 'edge' },
+  { voice: 'zh-CN-YunxiaNeural', label: '云夏', gender: '男', tag: '普通话·明朗大方', provider: 'edge' },
+  { voice: 'zh-CN-YunyangNeural', label: '云扬', gender: '男', tag: '普通话·专业新闻', provider: 'edge' },
+  { voice: 'zh-CN-liaoning-XiaobeiNeural', label: '晓贝', gender: '女', tag: '东北话·爽朗有趣', provider: 'edge' },
+  { voice: 'zh-CN-shaanxi-XiaoniNeural', label: '晓妮', gender: '女', tag: '陕西话·质朴幽默', provider: 'edge' },
+  { voice: 'zh-HK-HiuGaaiNeural', label: '曉佳', gender: '女', tag: '粤语·亲切', provider: 'edge' },
+  { voice: 'zh-HK-HiuMaanNeural', label: '曉曼', gender: '女', tag: '粤语·温柔', provider: 'edge' },
+  { voice: 'zh-HK-WanLungNeural', label: '雲龍', gender: '男', tag: '粤语·沉稳', provider: 'edge' },
+  { voice: 'zh-TW-HsiaoChenNeural', label: '曉臻', gender: '女', tag: '台湾国语·自然', provider: 'edge' },
+  { voice: 'zh-TW-HsiaoYuNeural', label: '曉雨', gender: '女', tag: '台湾国语·活泼', provider: 'edge' },
+  { voice: 'zh-TW-YunJheNeural', label: '雲哲', gender: '男', tag: '台湾国语·沉稳', provider: 'edge' },
+  { voice: 'longanhuan_v3.6', label: '龙安欢（默认）', gender: '女', tag: '精品中文·默认', provider: 'tokenplan' },
+  { voice: 'longanlingxi', label: '龙安灵希', gender: '女', tag: '精品中文·可爱甜美', provider: 'tokenplan' },
 ]
+
+// 音色选项：优先接口动态列表，接口未返回时用静态兜底
+const voiceOptions = computed<typeof STATIC_VOICE_PRESETS>(() => {
+  const dyn = voiceInfo.value?.voices
+  return (dyn && dyn.length ? dyn : STATIC_VOICE_PRESETS) as typeof STATIC_VOICE_PRESETS
+})
+const edgeVoiceOptions = computed(() => voiceOptions.value.filter(v => v.provider === 'edge'))
+const tokenplanVoiceOptions = computed(() => voiceOptions.value.filter(v => v.provider === 'tokenplan'))
+const edgeVoicesCount = computed(() => edgeVoiceOptions.value.length)
 
 const VOICE_PROMPT_EXAMPLES = [
   { label: '温柔亲切', text: '语气温柔亲切、自然有耐心，多用安抚性表达，像知心姐姐一样陪伴学生；句子简短，口语化。' },
@@ -746,20 +843,23 @@ const effectiveVoice = computed(() => {
   return settingsMap['llm_tts_voice']?.trim() || voiceInfo.value?.voice || 'longanhuan_v3.6'
 })
 
-const voiceKeyConfigured = computed(() => !!(settingsMap['llm_api_key'] || settingsMap['dashscope_api_key']))
+const voiceKeyConfigured = computed(
+  () => !!(settingsMap['llm_api_key'] || settingsMap['dashscope_api_key']) || edgeVoiceOptions.value.length > 0,
+)
 
 const voicePipeline = computed(() => {
   const llm = voiceInfo.value?.llm_model || settingsMap['llm_agent_model'] || settingsMap['llm_model'] || '未配置'
   const voice = effectiveVoice.value
   const sttModel = voiceInfo.value?.stt?.model || 'qwen-audio-3.0-asr-flash'
-  const ttsModel = voiceInfo.value?.tts?.model || 'qwen-audio-3.0-tts-flash'
+  const isEdge = /neural$/i.test(voice)
+  const ttsModel = isEdge ? 'edge-tts（微软免费）' : (voiceInfo.value?.tts?.model || 'qwen-audio-3.0-tts-plus')
   return [
-    { key: 'mic', icon: Microphone, title: '麦克风采集', zone: '客户端', color: 'green', desc: '采集 16kHz PCM 音频流', chips: ['噪音抵消', '端点检测'] },
+    { key: 'mic', icon: Mic, title: '麦克风采集', zone: '客户端', color: 'green', desc: '采集 16kHz PCM 音频流', chips: ['噪音抵消', '端点检测'] },
     { key: 'stt', icon: Monitor, title: 'ASR 语音识别', zone: '服务端', color: 'blue', desc: '语音 → 文本转写', chips: [sttModel] },
-    { key: 'emotion', icon: Warning, title: '情绪 / 危机检测', zone: '服务端', color: 'orange', desc: '视觉情绪 + 敏感词联动', chips: ['心理关注上报'] },
-    { key: 'llm', icon: ChatDotRound, title: '大模型理解', zone: '服务端', color: 'violet', desc: '上下文 → 流式回复文本', chips: [llm] },
-    { key: 'tts', icon: MagicStick, title: 'TTS 语音合成', zone: '服务端', color: 'cyan', desc: '短语级流式合成（边说边出）', chips: [ttsModel, voice] },
-    { key: 'play', icon: Headset, title: '扬声器播放', zone: '客户端', color: 'green', desc: '播放即达，开口即打断', chips: ['低延迟', '可打断'] },
+    { key: 'emotion', icon: TriangleAlert, title: '情绪 / 危机检测', zone: '服务端', color: 'orange', desc: '视觉情绪 + 敏感词联动', chips: ['心理关注上报'] },
+    { key: 'llm', icon: MessageSquare, title: '大模型理解', zone: '服务端', color: 'violet', desc: '上下文 → 流式回复文本', chips: [llm] },
+    { key: 'tts', icon: Sparkles, title: 'TTS 语音合成', zone: '服务端', color: 'cyan', desc: isEdge ? 'Edge TTS 免费合成 · 故障自动降级 Token Plan' : '短语级流式合成（边说边出）', chips: [ttsModel, voice] },
+    { key: 'play', icon: Headphones, title: '扬声器播放', zone: '客户端', color: 'green', desc: '播放即达，开口即打断', chips: ['低延迟', '可打断'] },
   ]
 })
 
@@ -791,14 +891,61 @@ async function handleVoicePreview() {
       text: previewText.value.trim(),
       voice: settingsMap['llm_tts_voice']?.trim() || undefined,
     })
+    // 先解除 loading：audio 的 v-if 依赖「audioSrc && !voiceTestLoading」，
+    // 若在 nextTick 后才解开 loading，元素会晚于手势链路渲染，el.play() 取不到元素且自动播放被策略拦截 → 无声
+    voiceTestLoading.value = false
     audioSrc.value = `data:audio/wav;base64,${res.audio_base64}`
     voiceTestResult.value = `已合成 ${res.chars} 字 · 音色 ${res.voice} · 模型 ${res.model}`
-    ElMessage.success('试听合成成功，可播放试听')
+    console.info('[voice-test] 合成成功 audio=', res.audio_base64 ? res.audio_base64.length + 'B(base64)' : 'EMPTY', 'model=', res.model)
+    // 合成成功后立即自动播放（仍在用户点击手势链路上，autoplay 策略允许）
+    await nextTick()
+    const el = voiceAudioRef.value
+    if (el) {
+      console.info('[voice-test] audio 元素 readyState=', el.readyState, 'duration=', el.duration ?? -1, 'paused=', el.paused)
+      el.play()
+        .then(() => {
+          console.info('[voice-test] play() 已接受（浏览器开始播放）')
+          setTimeout(async () => {
+            if (el) {
+              console.info('[voice-test] 播放1s后 currentTime=', el.currentTime.toFixed(2), 'paused=', el.paused, 'ended=', el.ended,
+                'volume=', el.volume, 'muted=', el.muted)
+              // 输出链路诊断：设备列表 + AudioContext 状态（排查系统静音/无输出设备）
+              try {
+                const devs = await navigator.mediaDevices.enumerateDevices()
+                const outs = devs.filter((d) => d.kind === 'audiooutput')
+                console.info('[voice-test] 音频输出设备=', outs.length ? outs.map((d) => d.label || '(未授权名称)').join(' | ') : '无（系统无可用输出设备，请检查音量合成器/默认设备）')
+              } catch (e: unknown) {
+                console.info('[voice-test] enumerateDevices 不可用:', e)
+              }
+              try {
+                const ctx = new AudioContext()
+                console.info('[voice-test] AudioContext.state=', ctx.state, '（running=正常，suspended=被自动播放策略挂起）')
+                void ctx.close()
+              } catch { /* ignore */ }
+            }
+          }, 1000)
+        })
+        .catch((e: unknown) => {
+          console.error('[voice-test] play() 被拒绝:', e)
+          // 个别浏览器拦截自动播放：提示用户手动点击播放条
+          ElMessage.info('已合成，若未自动播放请点击播放条试听')
+        })
+    } else {
+      console.error('[voice-test] audio 元素未渲染，无法播放')
+    }
+    ElMessage.success('试听合成成功')
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.detail || '合成失败，请检查语音 API Key 与网络')
   } finally {
     voiceTestLoading.value = false
   }
+}
+
+// 浏览器无法解析返回的音频（如 WAV 头异常）时给出明确提示，避免"无声失败"
+function handleVoiceAudioError() {
+  audioSrc.value = ''
+  voiceTestResult.value = ''
+  ElMessage.error('音频解码失败：浏览器无法播放返回的语音，请稍后重试')
 }
 
 async function handleSaveVoice() {
@@ -839,6 +986,9 @@ async function loadSettings() {
     if (!previewText.value.includes(settingsMap['agent_name'] || '绵小城')) {
       previewText.value = previewText.value.replace('绵小城', settingsMap['agent_name'] || '绵小城')
     }
+    // 品牌设计回显：已保存的 Logo / 吉祥物同步为当前选中
+    if (settingsMap['site_logo']) logoSection.selected = settingsMap['site_logo']
+    if (settingsMap['site_mascot']) mascotSection.selected = settingsMap['site_mascot']
   } catch (error) {
     console.error('加载设置失败:', error)
   } finally {
@@ -1002,7 +1152,7 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #409eff, #67c23a);
+  background: #409eff;
   color: #fff;
   display: flex;
   align-items: center;
@@ -1062,7 +1212,7 @@ onMounted(() => {
   background: #f3f6fc;
 }
 .nav-item.active {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.12), rgba(103, 194, 58, 0.08));
+  background: rgba(64, 158, 255, 0.12);
   box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.35);
 }
 .nav-item.active::before {
@@ -1074,7 +1224,7 @@ onMounted(() => {
   width: 3px;
   height: 20px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #409eff, #67c23a);
+  background: #3b82f6;
 }
 .nav-icon {
   width: 30px;
@@ -1120,6 +1270,12 @@ onMounted(() => {
   flex-direction: column;
   gap: 16px;
 }
+.setting-loading {
+  padding: 24px;
+  text-align: center;
+  color: #8a93a6;
+  font-size: 13px;
+}
 
 /* ===== 设置区块 ===== */
 .setting-section {
@@ -1147,11 +1303,11 @@ onMounted(() => {
   color: #fff;
   flex-shrink: 0;
 }
-.section-header-icon.blue { background: linear-gradient(135deg, #409eff, #79bbff); }
-.section-header-icon.violet { background: linear-gradient(135deg, #7c4dff, #b388ff); }
-.section-header-icon.orange { background: linear-gradient(135deg, #ff9800, #ffc069); }
-.section-header-icon.green { background: linear-gradient(135deg, #67c23a, #b3e19d); }
-.section-header-icon.cyan { background: linear-gradient(135deg, #00bcd4, #80deea); }
+.section-header-icon.blue { background: #409eff; }
+.section-header-icon.violet { background: #7c4dff; }
+.section-header-icon.orange { background: #ff9800; }
+.section-header-icon.green { background: #67c23a; }
+.section-header-icon.cyan { background: #00bcd4; }
 .section-header-info {
   flex: 1;
   min-width: 0;
@@ -1233,14 +1389,24 @@ onMounted(() => {
   border-radius: 12px;
   padding: 16px;
   background: #fafbfd;
+  display: flex;
+  flex-direction: column;
+}
+.brand-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 .brand-card-title {
   font-size: 13px;
   font-weight: 700;
   color: #2b3445;
-  margin-bottom: 12px;
+  margin: 0;
 }
 .brand-preview {
+  position: relative;
   height: 150px;
   border-radius: 10px;
   background: #fff;
@@ -1255,34 +1421,76 @@ onMounted(() => {
   width: 100%;
   height: 100%;
 }
-.brand-placeholder {
+.brand-preview-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(30, 41, 59, 0.16);
+  pointer-events: none;
+}
+.brand-preview-badge.live { background: rgba(103, 194, 58, 0.92); }
+.brand-preview-badge.pending { background: rgba(230, 162, 60, 0.92); }
+.brand-preview-badge.default { background: rgba(144, 147, 153, 0.85); }
+.brand-composer {
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.brand-composer .el-textarea {
+  flex: 1;
+  min-width: 0;
+}
+.composer-btn {
+  flex-shrink: 0;
+}
+.brand-composer.upload {
+  align-items: stretch;
+}
+.brand-composer.upload .el-upload,
+.brand-composer.upload .el-upload-dragger {
+  width: 100%;
+}
+.brand-idle-tip {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #f6f8fb;
+  border: 1px dashed #e0e5ee;
+  font-size: 11px;
+  color: #8a93a6;
+  display: flex;
   align-items: center;
   gap: 6px;
-  color: #b6bdc9;
-  font-size: 12px;
-}
-.brand-tabs {
-  margin-bottom: 10px;
-}
-.brand-actions {
-  margin: 10px 0;
+  line-height: 1.5;
 }
 .brand-candidates {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 4px;
+  margin-top: 12px;
 }
 .candidate {
   position: relative;
-  width: 84px;
-  height: 84px;
+  width: 92px;
+  height: 92px;
   border-radius: 8px;
   overflow: hidden;
   border: 2px solid transparent;
   cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.candidate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(30, 41, 59, 0.12);
 }
 .candidate.active {
   border-color: #409eff;
@@ -1324,8 +1532,26 @@ onMounted(() => {
 }
 .brand-save {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f2f5;
+}
+.brand-save-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #99a1b3;
+  min-width: 0;
+  line-height: 1.4;
+}
+.brand-save-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* ===== 语音与 TTS 区块 ===== */
@@ -1346,7 +1572,7 @@ onMounted(() => {
   width: 3px;
   height: 14px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #00bcd4, #4dd0e1);
+  background: #00bcd4;
 }
 .pipe-wrap {
   border: 1px solid #eef0f4;
@@ -1571,6 +1797,21 @@ onMounted(() => {
   .brand-grid {
     grid-template-columns: 1fr;
   }
+  .brand-composer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .brand-composer .composer-btn {
+    width: 100%;
+  }
+  .brand-save {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .brand-save-actions {
+    justify-content: flex-end;
+  }
   .setting-item {
     flex-direction: column;
     align-items: stretch;
@@ -1633,6 +1874,20 @@ html.dark .brand-card {
 html.dark .brand-preview {
   background: #14161f;
   border-color: #33384a;
+}
+html.dark .brand-preview-badge {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+html.dark .brand-idle-tip {
+  background: #1a1d28;
+  border-color: #33384a;
+  color: #7a8296;
+}
+html.dark .brand-save {
+  border-top-color: #2a2e3d;
+}
+html.dark .brand-save-hint {
+  color: #6d7588;
 }
 html.dark .pipe-wrap {
   background: linear-gradient(180deg, #191c26, #1c1f2b);

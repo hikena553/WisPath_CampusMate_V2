@@ -27,7 +27,7 @@ _STOPWORDS = {
     "的", "了", "和", "是", "在", "我", "你", "他", "她", "它", "我们", "你们", "他们",
     "有", "就", "不", "都", "也", "很", "吗", "啊", "呢", "吧", "个", "这", "那",
     "等", "与", "及", "或", "从", "去", "为", "之", "对", "到", "中", "上", "下",
-    "一个", "没有", "可以", "希望", "觉得", "感觉", "问题", "反馈", "建议",
+    "一个", "没有", "可以", "希望", "觉得", "感觉",
 }
 
 
@@ -163,10 +163,15 @@ def get_feedback_word_cloud(db: Session, current_user: User, top_n: int = 60) ->
     if not full_text.strip():
         return []
 
-    counter: Counter = Counter()
+    # 分词过滤：允许单字中文（如"好/快/慢"），丢弃纯英文单字符、纯数字、纯标点、停用词
+    tokens: list[str] = []
     for word in jieba.lcut(full_text):
         w = word.strip()
-        if not w or len(w) < 2:
+        if not w:
+            continue
+        if re.fullmatch(r"[\dA-Za-z]", w):
+            continue
+        if len(w) < 2 and not re.fullmatch(r"[\u4e00-\u9fa5]", w):
             continue
         if w in _STOPWORDS:
             continue
@@ -175,7 +180,14 @@ def get_feedback_word_cloud(db: Session, current_user: User, top_n: int = 60) ->
             continue
         if re.fullmatch(r"[\d\W_]+", w):
             continue
-        counter[w] += 1
+        tokens.append(w)
+
+    # 词频统计：单个词 + 相邻双词组合（如"成绩分析""网络稳定"），提升词云丰富度与可读性
+    counter: Counter = Counter(tokens)
+    for i in range(len(tokens) - 1):
+        a, b = tokens[i], tokens[i + 1]
+        if len(a) >= 2 and len(b) >= 2:
+            counter[a + b] += 1
 
     return [
         FeedbackWordOut(word=w, count=c)

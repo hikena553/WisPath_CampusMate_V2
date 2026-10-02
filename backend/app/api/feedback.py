@@ -38,7 +38,7 @@ def get_feedbacks(
 
 @router.get("/word-cloud", response_model=List[FeedbackWordOut])
 def get_feedback_word_cloud(
-    top_n: int = Query(60, ge=1, le=200),
+    top_n: int = Query(200, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

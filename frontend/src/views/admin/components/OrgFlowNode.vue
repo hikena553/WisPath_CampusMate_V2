@@ -45,7 +45,7 @@
 
 <script setup lang="ts">
 import { computed, defineOptions } from 'vue'
-import { Plus, Minus, OfficeBuilding, School, Collection, Reading } from '@element-plus/icons-vue'
+import { Plus, Minus, Building2, School, Library, BookOpen } from 'lucide-vue-next'
 import { NODE_W, NODE_H, TYPE_LABEL, CHILD_UNIT, type FlowNode } from './orgFlow'
 
 defineOptions({ name: 'OrgFlowNode' })
@@ -62,7 +62,7 @@ const emit = defineEmits<{
   (e: 'portClick', node: FlowNode): void
 }>()
 
-const iconMap = { root: OfficeBuilding, college: School, major: Collection, class: Reading } as const
+const iconMap = { root: Building2, college: School, major: Library, class: BookOpen } as const
 const icon = computed(() => iconMap[props.node.type])
 const typeLabel = computed(() => TYPE_LABEL[props.node.type])
 

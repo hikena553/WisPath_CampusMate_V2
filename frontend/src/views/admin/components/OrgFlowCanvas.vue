@@ -52,15 +52,15 @@
       <button class="flow-ctrl-value" title="恢复 100%" @click="resetView">{{ zoomPercent }}%</button>
       <button class="flow-ctrl-btn" title="放大" @click="zoomIn"><el-icon><ZoomIn /></el-icon></button>
       <span class="flow-ctrl-split" />
-      <button class="flow-ctrl-btn" title="适应画布" @click="fitView"><el-icon><FullScreen /></el-icon></button>
-      <button class="flow-ctrl-btn" title="重置视图" @click="resetView"><el-icon><Refresh /></el-icon></button>
+      <button class="flow-ctrl-btn" title="适应画布" @click="fitView"><el-icon><Maximize /></el-icon></button>
+      <button class="flow-ctrl-btn" title="重置视图" @click="resetView"><el-icon><RefreshCw /></el-icon></button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ZoomIn, ZoomOut, FullScreen, Refresh } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Maximize, RefreshCw } from 'lucide-vue-next'
 import OrgFlowNode from './OrgFlowNode.vue'
 import { buildFlowLayout, type FlowNode } from './orgFlow'
 

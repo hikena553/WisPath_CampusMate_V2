@@ -4,12 +4,18 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   plugins: [vue()],
+  optimizeDeps: {
+    include: ['d3-cloud', 'd3-dispatch']
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
   server: {
+    host: true,
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true, ws: true },
       '/uploads': { target: 'http://127.0.0.1:8000', changeOrigin: true }
