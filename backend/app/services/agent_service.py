@@ -13,7 +13,7 @@ from app.models.user import User, UserRole
 from app.models.knowledge import KnowledgeItem
 from app.models.conversation import Conversation, ConversationMessage
 from app.services.llm_service import build_system_prompt
-from app.services.tool_registry import TOOL_DEFINITIONS, TEACHER_TOOL_DEFINITIONS, execute_tool
+from app.services.tools import TOOL_DEFINITIONS, TEACHER_TOOL_DEFINITIONS, execute_tool
 from app.services.crisis_service import detect_crisis_keywords, save_crisis_summary
 from app.services.llm_service import _get_client, _get_llm_config
 

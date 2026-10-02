@@ -8,7 +8,7 @@ import time
 import pytest
 
 from app.models.user import UserRole
-from app.services.tool_registry import (
+from app.services.tools import (
     _tool_call_counters,
     execute_tool,
 )
