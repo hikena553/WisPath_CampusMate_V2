@@ -60,7 +60,7 @@ async def create_announcement(
         content_bytes = await file.read()
         with open(save_path, "wb") as f:
             f.write(content_bytes)
-        attachment_url = f"/uploads/announcements/{save_name}"
+        attachment_url = f"/api/files/announcements/{save_name}"
     item = TeacherAnnouncement(
         teacher_id=user.id, title=title, content=content,
         urgency=UrgencyLevel(urgency), attachment_url=attachment_url,

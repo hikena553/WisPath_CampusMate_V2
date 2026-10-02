@@ -26,7 +26,8 @@ router = APIRouter(prefix="/api/settings", tags=["系统设置"])
 
 # 品牌图片类设置键：替换时自动清理 uploads/branding 下不再引用的旧文件
 BRANDING_KEYS = {"site_logo", "site_mascot"}
-BRANDING_URL_PREFIX = "/uploads/branding/"
+BRANDING_URL_PREFIX = "/api/files/branding/"
+BRANDING_URL_PREFIX_LEGACY = "/uploads/branding/"
 BRANDING_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "branding"
 
 
@@ -36,7 +37,9 @@ def _cleanup_branding_old_file(db: Session, key: str, new_value: str) -> None:
         return
     setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
     old = setting.value if setting else None
-    if not old or old == new_value or not old.startswith(BRANDING_URL_PREFIX):
+    if not old or old == new_value or not (
+        old.startswith(BRANDING_URL_PREFIX) or old.startswith(BRANDING_URL_PREFIX_LEGACY)
+    ):
         return
     try:
         target = BRANDING_DIR / Path(old).name

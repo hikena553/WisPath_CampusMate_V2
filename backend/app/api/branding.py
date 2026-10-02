@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings/branding", tags=["品牌设计"])
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "branding"
-BRANDING_URL_PREFIX = "/uploads/branding/"
+BRANDING_URL_PREFIX = "/api/files/branding/"
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15MB
 ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 

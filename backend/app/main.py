@@ -7,7 +7,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 # ---------- 第三方包兜底 ----------
 # 若当前 Python 环境未安装 jieba（依赖缺失导致启动即报错），
@@ -60,10 +59,10 @@ app.add_middleware(EnforcePasswordChangeMiddleware)
 # （后注册先执行，置于最外层，先于改密拦截与业务逻辑）
 app.add_middleware(CsrfProtectionMiddleware)
 
+# 上传文件不再静态挂载（S4）：统一走 /api/files 鉴权下载接口，
+# 旧 /uploads 路径由 files 路由中的兼容路由（同样鉴权）承接。
 uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
 uploads_dir.mkdir(exist_ok=True)
-
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # 统一注册业务路由
 include_all_routers(app)

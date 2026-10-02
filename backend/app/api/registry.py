@@ -11,6 +11,7 @@ from app.api.leave import router as leave_router
 from app.api.crisis import router as crisis_router
 from app.api.teacher import router as teacher_router
 from app.api.upload import router as upload_router
+from app.api.files import router as files_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
 from app.api.groups import router as groups_router
@@ -48,6 +49,7 @@ ROUTERS = [
     teacher_router,
     conversations_router,
     upload_router,
+    files_router,
     messages_router,
     groups_router,
     announcement_router,

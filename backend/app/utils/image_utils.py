@@ -29,9 +29,14 @@ def is_image_file(url_or_name: str | None) -> bool:
     return Path(name).suffix.lower() in IMAGE_EXTS
 
 
-def resolve_upload_path(url: str) -> Path | None:
-    """把 /uploads/x.jpg、http://host/uploads/x.jpg 解析为本地真实路径。
+# 允许映射到子目录的分类（与 api/files.py 白名单一致），其余一律按根目录文件处理
+SAFE_SUBDIRS = {"announcements", "branding", "documents"}
 
+
+def resolve_upload_path(url: str) -> Path | None:
+    """把 /api/files/{category}/x.jpg、/uploads/x.jpg、http://host/... 解析为本地真实路径。
+
+    两种 URL 风格均支持（S4 后新数据为 /api/files，存量数据为 /uploads），
     只取文件名部分拼接上传目录，避免目录穿越。文件不存在返回 None。
     """
     if not url or url.startswith("data:"):
@@ -39,13 +44,32 @@ def resolve_upload_path(url: str) -> Path | None:
     candidate = url
     if "://" in candidate:
         candidate = urlparse(candidate).path
-    marker = "/uploads/"
-    if marker in candidate:
-        candidate = candidate.split(marker, 1)[1]
+    sub = ""
+    # 新式：/api/files/{category}/{filename}
+    new_marker = "/api/files/"
+    if new_marker in candidate:
+        rest = candidate.split(new_marker, 1)[1].strip("/")
+        parts = rest.split("/")
+        if len(parts) >= 2:
+            cat = parts[0]
+            sub = "" if cat == "root" else (cat if cat in SAFE_SUBDIRS else "")
+            candidate = parts[-1]
+        else:
+            candidate = rest
+    # 旧式：/uploads/{filename}、/uploads/{category}/{filename}
+    old_marker = "/uploads/"
+    if old_marker in candidate:
+        rest = candidate.split(old_marker, 1)[1].strip("/")
+        parts = rest.split("/")
+        if len(parts) >= 2:
+            sub = parts[0] if parts[0] in SAFE_SUBDIRS else ""
+            candidate = parts[-1]
+        else:
+            candidate = rest
     safe_name = Path(candidate.lstrip("/\\")).name
     if not safe_name:
         return None
-    path = UPLOAD_DIR / safe_name
+    path = (UPLOAD_DIR / sub / safe_name) if sub else (UPLOAD_DIR / safe_name)
     return path if path.is_file() else None
 
 

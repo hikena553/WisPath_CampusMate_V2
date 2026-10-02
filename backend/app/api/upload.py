@@ -90,4 +90,4 @@ async def upload_file(
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     with open(save_path, "wb") as f:
         f.write(content)
-    return JSONResponse({"url": f"/uploads/{save_name}", "filename": filename})
+    return JSONResponse({"url": f"/api/files/root/{save_name}", "filename": filename})
