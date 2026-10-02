@@ -12,121 +12,9 @@
       :ai-loading="aiLoading" @refresh="loadAiDecisions" />
 
     <!-- ===== 第二层：数据分析区（左2:右1） ===== -->
-    <div v-if="!isMobile" class="analytics-row">
-      <!-- 左侧：雷达图 + 成绩分布 + 政治面貌 + 预警趋势 + 生源地 -->
-      <div class="analytics-left">
-        <!-- 第一行：雷达图 + 成绩分布 -->
-        <div class="chart-row">
-          <div class="chart-half">
-            <div class="section-title" @click="navigateTo('/teacher/students')">
-              <el-icon><DataAnalysis /></el-icon>
-              <span>班级综合评估</span>
-              <el-link type="primary" :underline="false" class="section-link">
-                学生档案 <el-icon><DArrowRight /></el-icon>
-              </el-link>
-            </div>
-            <div class="chart-container">
-              <VChart v-if="evaluationRadarOptions" :option="evaluationRadarOptions" autoresize />
-              <el-empty v-else description="暂无评估数据" :image-size="60" />
-            </div>
-          </div>
-          <div class="chart-half">
-            <div class="section-title">
-              <el-icon><Histogram /></el-icon>
-              <span>成绩分布</span>
-            </div>
-            <div class="chart-container">
-              <VChart v-if="gradeBarOptions" :option="gradeBarOptions" autoresize />
-              <el-empty v-else description="暂无数据" :image-size="60" />
-            </div>
-          </div>
-        </div>
-
-        <!-- 第二行：政治面貌 + 预警趋势 -->
-        <div class="chart-row">
-          <div class="chart-half">
-            <div class="section-title">
-              <el-icon><UserFilled /></el-icon>
-              <span>政治面貌分布</span>
-            </div>
-            <div class="chart-container">
-              <VChart v-if="politicalPieOptions" :option="politicalPieOptions" autoresize />
-              <el-empty v-else description="暂无数据" :image-size="60" />
-            </div>
-          </div>
-          <div class="chart-half">
-            <div class="section-title">
-              <el-icon><WarningFilled /></el-icon>
-              <span>预警趋势</span>
-            </div>
-            <div class="chart-container">
-              <VChart v-if="crisisTrendOptions" :option="crisisTrendOptions" autoresize />
-              <el-empty v-else description="暂无数据" :image-size="60" />
-            </div>
-          </div>
-        </div>
-
-        <!-- 第三行：生源地分布（全宽） -->
-        <div class="chart-full">
-          <div class="section-title">
-            <el-icon><Location /></el-icon>
-            <span>生源地分布</span>
-          </div>
-          <div class="chart-container">
-            <VChart v-if="hometownBarOptions" :option="hometownBarOptions" autoresize />
-            <el-empty v-else description="暂无数据" :image-size="60" />
-          </div>
-        </div>
-      </div>
-
-      <!-- 右侧：两个饼图 -->
-      <div class="analytics-right">
-        <div class="chart-section half">
-          <div class="section-title">
-            <el-icon><UserFilled /></el-icon>
-            <span>性别比例</span>
-          </div>
-          <div class="chart-container pie-chart">
-            <VChart v-if="genderPieOptions" :option="genderPieOptions" autoresize />
-            <el-empty v-else description="暂无数据" :image-size="60" />
-          </div>
-        </div>
-        <div class="chart-divider"></div>
-        <div class="chart-section half">
-          <div class="section-title">
-            <el-icon><WarningFilled /></el-icon>
-            <span>心理危机分布</span>
-          </div>
-          <div class="chart-container pie-chart">
-            <VChart v-if="crisisPieOptions" :option="crisisPieOptions" autoresize />
-            <el-empty v-else description="暂无数据" :image-size="60" />
-          </div>
-        </div>
-        <div class="chart-divider"></div>
-        <div class="ai-analysis-section">
-          <div class="section-title">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>AI 班级分析</span>
-          </div>
-          <div v-if="!analysisResult && !analysisLoading" class="analysis-placeholder">
-            <p>点击按钮，AI 将为您分析班级数据</p>
-            <el-button type="primary" @click="handleClassAnalysis" :loading="analysisLoading" size="small">
-              开始分析
-            </el-button>
-          </div>
-          <div v-else-if="analysisLoading" class="analysis-loading">
-            <el-icon class="loading-icon"><DataAnalysis /></el-icon>
-            <p>AI 正在分析班级数据...</p>
-          </div>
-          <div v-else class="analysis-content">
-            <div class="analysis-text">{{ analysisResult }}</div>
-            <el-button text type="primary" size="small" @click="handleClassAnalysis">
-              重新分析
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <HomeAnalyticsCharts v-if="!isMobile" :class-stats="classStats" :eval-data="evalData"
+      :analysis-result="analysisResult" :analysis-loading="analysisLoading" @navigate="navigateTo"
+      @analyze="handleClassAnalysis" />
 
     <!-- 移动端：数据分析入口 -->
     <div v-if="isMobile" class="mobile-charts">
@@ -960,7 +848,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   DataAnalysis, Calendar, UserFilled,
-  WarningFilled as WarnIcon, EditPen, DArrowRight, Histogram, Location,
+  WarningFilled as WarnIcon, EditPen, DArrowRight, Histogram,
   ArrowLeft, Plus, Bell, MagicStick, Refresh, Check, Delete, Clock, List, Loading, Close, Flag
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
@@ -976,22 +864,15 @@ import { getTeacherAnnouncements, createAnnouncement, deleteAnnouncement, type A
 import type { CrisisAlert, LeaveRequestOut, Announcement, ServiceTicket } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
+import { useClassCharts } from '@/composables/useClassCharts'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
 import { renderMarkdown } from '@/utils/markdown'
 import HomeKpiCards from './HomeKpiCards.vue'
 import HomeTopBanner from './HomeTopBanner.vue'
 import HomeAiPanel from './HomeAiPanel.vue'
+import HomeAnalyticsCharts from './HomeAnalyticsCharts.vue'
 
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { RadarChart, PieChart, BarChart, LineChart } from 'echarts/charts'
-import {
-  TooltipComponent, LegendComponent,
-  RadarComponent, GridComponent
-} from 'echarts/components'
 import VChart from 'vue-echarts'
-
-use([CanvasRenderer, RadarChart, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, RadarComponent, GridComponent])
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -1403,314 +1284,13 @@ const evalData = ref<ClassEvaluation>({
   growth: {}, crisis: {}, pending_leaves: 0,
 })
 
-const evaluationRadarOptions = computed(() => {
-  const g = evalData.value.growth
-  if (!g || Object.keys(g).length === 0) return null
-  const vals = [g.honor || 0, g.competition || 0, g.practice || 0, g.paper || 0, g.achievement || 0]
-  const max = Math.max(...vals, 1)
-  return {
-    animation: false,
-    tooltip: { trigger: 'item' },
-    radar: {
-      indicator: [
-        { name: '荣誉', max: Math.max(max, 1) },
-        { name: '竞赛', max: Math.max(max, 1) },
-        { name: '实践', max: Math.max(max, 1) },
-        { name: '论文', max: Math.max(max, 1) },
-        { name: '成果', max: Math.max(max, 1) },
-      ],
-      axisName: { color: '#666', fontSize: 12 },
-      splitArea: {
-        areaStyle: {
-          color: ['rgba(91,141,239,0.02)', 'rgba(91,141,239,0.06)'],
-        },
-      },
-      splitLine: { lineStyle: { color: 'rgba(0,0,0,0.06)' } },
-      axisLine: { lineStyle: { color: 'rgba(0,0,0,0.08)' } },
-    },
-    series: [{
-      type: 'radar',
-      data: [{
-        value: vals,
-        name: '班级综合',
-        areaStyle: { color: 'rgba(91,141,239,0.25)' },
-        lineStyle: { color: '#5b8def', width: 2 },
-        itemStyle: { color: '#5b8def' },
-      }],
-    }],
-  }
-})
+// 图表 options：桌面数据分析区由 HomeAnalyticsCharts 内部计算（useClassCharts），此处仅供移动端图表子页复用其中 3 个
+const { evaluationRadarOptions, gradeBarOptions, crisisTrendOptions } = useClassCharts(classStats, evalData)
 
 function typeLabel(t: string) {
   const map: Record<string, string> = { competition: '比赛', sick: '病假', personal: '事假', other: '其他' }
   return map[t] || t
 }
-
-// ===== 性别比例饼图 =====
-const genderPieOptions = computed(() => {
-  const data = classStats.value.gender_stats
-  if (!data || Object.keys(data).length === 0) return null
-  
-  const colors = ['#5b8def', '#f56c6c', '#67c23a', '#e6a23c', '#909399']
-  const pieData = Object.entries(data).map(([name, value], index) => ({
-    name,
-    value,
-    itemStyle: { color: colors[index % colors.length] }
-  }))
-  
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}人 ({d}%)'
-    },
-    legend: {
-      orient: 'horizontal',
-      bottom: 5,
-      textStyle: { color: '#666', fontSize: 11 }
-    },
-    animation: false,
-    series: [{
-      name: '性别分布',
-      type: 'pie',
-      radius: ['35%', '65%'],
-      center: ['50%', '42%'],
-      avoidLabelOverlap: false,
-      itemStyle: {
-        borderRadius: 4,
-        borderColor: '#fff',
-        borderWidth: 2
-      },
-      label: { show: false },
-      emphasis: {
-        label: { show: true, fontSize: 13, fontWeight: 'bold' }
-      },
-      data: pieData,
-    }]
-  }
-})
-
-// ===== 心理危机比例饼图 =====
-const crisisPieOptions = computed(() => {
-  const data = classStats.value.crisis_stats
-  if (!data) return null
-  
-  const colors = ['#f56c6c', '#e6a23c', '#67c23a', '#909399']
-  const names = ['高危', '中危', '低危', '已解决']
-  const values = [data.severe || 0, data.moderate || 0, data.mild || 0, data.resolved || 0]
-  
-  const total = values.reduce((sum, v) => sum + v, 0)
-  if (total === 0) return null
-  
-  const pieData = names.map((name, index) => ({
-    name,
-    value: values[index],
-    itemStyle: { color: colors[index] }
-  }))
-  
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}人 ({d}%)'
-    },
-    legend: {
-      orient: 'horizontal',
-      bottom: 5,
-      textStyle: { color: '#666', fontSize: 11 }
-    },
-    animation: false,
-    series: [{
-      name: '危机分布',
-      type: 'pie',
-      radius: ['35%', '65%'],
-      center: ['50%', '42%'],
-      avoidLabelOverlap: false,
-      itemStyle: {
-        borderRadius: 4,
-        borderColor: '#fff',
-        borderWidth: 2
-      },
-      label: { show: false },
-      emphasis: {
-        label: { show: true, fontSize: 13, fontWeight: 'bold' }
-      },
-      data: pieData,
-    }]
-  }
-})
-
-// ===== 成绩分布柱状图 =====
-const gradeBarOptions = computed(() => {
-  const data = classStats.value.grade_stats
-  if (!data) return null
-  
-  const categories = ['优秀', '良好', '中等', '及格', '不及格']
-  const values = [data.excellent || 0, data.good || 0, data.medium || 0, data.pass || 0, data.fail || 0]
-  
-  const total = values.reduce((sum, v) => sum + v, 0)
-  if (total === 0) return null
-  
-  const colors = ['#67c23a', '#5b8def', '#e6a23c', '#f56c6c', '#909399']
-  
-  return {
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' }
-    },
-    grid: {
-      left: '3%', right: '4%', bottom: '8%', top: '8%', containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: categories,
-      axisLabel: { color: '#666', fontSize: 11 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: '#666' }
-    },
-    animation: false,
-    series: [{
-      name: '人数',
-      type: 'bar',
-      barWidth: '50%',
-      data: values.map((value, index) => ({
-        value,
-        itemStyle: { color: colors[index], borderRadius: [3, 3, 0, 0] }
-      })),
-    }],
-  }
-})
-
-// ===== 政治面貌饼图 =====
-const politicalPieOptions = computed(() => {
-  const data = classStats.value.political_stats
-  if (!data || Object.keys(data).length === 0) return null
-  
-  const total = Object.values(data).reduce((sum, v) => sum + v, 0)
-  if (total === 0) return null
-  
-  const colors = ['#5b8def', '#67c23a', '#e6a23c', '#f56c6c', '#909399']
-  const pieData = Object.entries(data).map(([name, value], index) => ({
-    name,
-    value,
-    itemStyle: { color: colors[index % colors.length] }
-  }))
-  
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}人 ({d}%)'
-    },
-    legend: {
-      orient: 'horizontal',
-      bottom: 5,
-      textStyle: { color: '#666', fontSize: 11 }
-    },
-    animation: false,
-    series: [{
-      name: '政治面貌',
-      type: 'pie',
-      radius: ['35%', '65%'],
-      center: ['50%', '42%'],
-      avoidLabelOverlap: false,
-      itemStyle: {
-        borderRadius: 4,
-        borderColor: '#fff',
-        borderWidth: 2
-      },
-      label: { show: false },
-      emphasis: {
-        label: { show: true, fontSize: 13, fontWeight: 'bold' }
-      },
-      data: pieData,
-    }]
-  }
-})
-
-// ===== 预警趋势折线图 =====
-const crisisTrendOptions = computed(() => {
-  const data = classStats.value.crisis_trend
-  if (!data || data.length === 0) return null
-  
-  return {
-    tooltip: {
-      trigger: 'axis',
-      formatter: '{b}<br/>预警数量: {c}'
-    },
-    grid: {
-      left: '3%', right: '4%', bottom: '8%', top: '8%', containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: data.map(d => d.month),
-      axisLabel: { color: '#666', fontSize: 11 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: '#666' }
-    },
-    animation: false,
-    series: [{
-      name: '预警数量',
-      type: 'line',
-      data: data.map(d => d.count),
-      smooth: true,
-      lineStyle: { color: '#f56c6c', width: 2 },
-      itemStyle: { color: '#f56c6c' },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(245,108,108,0.3)' },
-            { offset: 1, color: 'rgba(245,108,108,0.05)' }
-          ]
-        }
-      }
-    }]
-  }
-})
-
-// ===== 生源地柱状图 =====
-const hometownBarOptions = computed(() => {
-  const data = classStats.value.hometown_stats
-  if (!data || Object.keys(data).length === 0) return null
-  
-  const categories = Object.keys(data)
-  const values = Object.values(data)
-  
-  const total = values.reduce((sum, v) => sum + v, 0)
-  if (total === 0) return null
-  
-  return {
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' }
-    },
-    grid: {
-      left: '3%', right: '4%', bottom: '10%', top: '8%', containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: categories,
-      axisLabel: { color: '#666', fontSize: 11, rotate: categories.length > 5 ? 30 : 0 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: '#666' }
-    },
-    animation: false,
-    series: [{
-      name: '人数',
-      type: 'bar',
-      data: values,
-      itemStyle: {
-        color: '#5b8def',
-        borderRadius: [3, 3, 0, 0]
-      }
-    }]
-  }
-})
 
 const showCrisisSubPage = ref(false)
 const showTodaySubPage = ref(false)
@@ -2250,42 +1830,6 @@ onUnmounted(() => {
   padding: 12px 16px;
 }
 
-/* ===== Analytics Row ===== */
-.analytics-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.analytics-left, .analytics-right {
-  background: #fff;
-  border-radius: 10px;
-  padding: 14px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-}
-
-.analytics-left {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.chart-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.chart-half {
-  min-width: 0;
-}
-
-.chart-full {
-  width: 100%;
-}
-
 .section-title {
   font-size: 13px;
   font-weight: 600;
@@ -2301,67 +1845,11 @@ onUnmounted(() => {
   opacity: 0.7;
 }
 
-.section-link {
-  margin-left: auto;
-  font-size: 11px;
-}
-
 .chart-container {
   width: 100%;
   height: 160px;
 }
 
-.chart-divider {
-  height: 1px;
-  background: #f0f0f0;
-  margin: 6px 0;
-}
-
-/* ===== AI Analysis ===== */
-.ai-analysis-section {
-  margin-top: 6px;
-  padding-top: 6px;
-}
-
-.analysis-placeholder {
-  text-align: center;
-  padding: 12px 8px;
-  color: #888;
-}
-
-.analysis-placeholder p {
-  margin: 0 0 8px 0;
-  font-size: 12px;
-}
-
-.analysis-loading {
-  text-align: center;
-  padding: 12px 8px;
-}
-
-.loading-icon {
-  font-size: 20px;
-  color: #5b8def;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.analysis-content {
-  font-size: 12px;
-  line-height: 1.5;
-  color: #555;
-}
-
-.analysis-text {
-  white-space: pre-wrap;
-  margin-bottom: 10px;
-  max-height: 160px;
-  overflow-y: auto;
-}
 
 /* ===== Schedule Row ===== */
 .schedule-row {
@@ -2783,9 +2271,6 @@ onUnmounted(() => {
 
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
-  .analytics-row {
-    grid-template-columns: 1fr;
-  }
   
   .schedule-row {
     grid-template-columns: 1fr;
@@ -2797,19 +2282,8 @@ onUnmounted(() => {
     padding: 0 8px 12px;
   }
 
-  .analytics-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
 
-  .analytics-left, .analytics-right {
-    padding: 10px;
-  }
 
-  .chart-row {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
 
   .chart-container {
     height: 200px;
@@ -3194,7 +2668,7 @@ onUnmounted(() => {
   @keyframes cal-pop-in {
     from { transform: scale(0.95); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
-  }
+}
   .cal-popup-nav {
     display: flex;
     align-items: center;
