@@ -1,9 +1,22 @@
+import secrets
+import string
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 from jose import jwt
 
 from app.core.config import settings
+
+
+def generate_random_password(length: int = 10) -> str:
+    """生成一次性随机强密码：至少 8 位且同时包含字母与数字（满足 change_password 强度校验）。"""
+    if length < 8:
+        length = 8
+    alphabet = string.ascii_letters + string.digits
+    while True:
+        pwd = "".join(secrets.choice(alphabet) for _ in range(length))
+        if any(c.isalpha() for c in pwd) and any(c.isdigit() for c in pwd):
+            return pwd
 
 
 def hash_password(password: str) -> str:

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.deps import require_role
-from app.core.security import hash_password
+from app.core.security import hash_password, generate_random_password
 from app.models.user import User, UserRole
 from app.models.crisis import AIDialogSummary
 from app.models.academic import Course, ClassGroup, Major, College, Semester
@@ -283,11 +283,12 @@ def create_teacher(
     if existing:
         raise HTTPException(status_code=400, detail="工号已存在")
 
+    initial_password = generate_random_password()
     teacher = User(
         username=data.username,
         name=data.name,
         role=UserRole.TEACHER,
-        password_hash=hash_password("123456"),
+        password_hash=hash_password(initial_password),
         college=data.college,
         title=data.title,
         department=data.department,
@@ -302,6 +303,7 @@ def create_teacher(
         college=teacher.college, avatar=teacher.avatar,
         title=teacher.title, department=teacher.department,
         student_count=0,
+        initial_password=initial_password,
     )
 
 
@@ -578,10 +580,15 @@ def reset_password(
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    target.password_hash = hash_password("123456")
+    new_password = generate_random_password()
+    target.password_hash = hash_password(new_password)
     target.password_changed = False
     db.commit()
-    return {"message": f"已将 {target.name} 的密码重置为 123456"}
+    return {
+        "message": f"已重置 {target.name} 的密码",
+        "initial_password": new_password,
+        "hint": "初始密码仅在本次响应中返回，请管理员线下转交，用户首次登录后强制修改",
+    }
 
 
 # ========== 数据导入导出 ==========

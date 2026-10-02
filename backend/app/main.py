@@ -22,6 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover
         import jieba  # noqa: F401
 
 from app.api.registry import include_all_routers
+from app.core.middleware import EnforcePasswordChangeMiddleware
 from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
 
 logging.basicConfig(
@@ -51,6 +52,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 强制首登改密：未修改初始密码的用户仅可访问认证/改密白名单接口
+app.add_middleware(EnforcePasswordChangeMiddleware)
 
 uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
 uploads_dir.mkdir(exist_ok=True)

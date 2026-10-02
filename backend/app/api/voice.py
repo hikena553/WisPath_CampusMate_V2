@@ -1,13 +1,18 @@
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
 from app.core.security import decode_access_token
 from app.core.database import SessionLocal
 from app.models.user import User
 from app.services.voice_service import handle_voice_connection
+from app.utils.rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
+
+# 语音连接限流：用户级 5 次/分钟，IP 兜底 15 次/分钟
+RATE_VOICE_PER_MIN = 5
+RATE_VOICE_IP_PER_MIN = 15
 
 
 @router.websocket("/ws")
@@ -35,8 +40,20 @@ async def voice_websocket(
         if not user:
             await ws.close(code=4001, reason="用户不存在")
             return
+        if not user.password_changed:
+            await ws.close(code=4003, reason="请先修改初始密码")
+            return
     finally:
         db.close()
+
+    # 限流：用户级 5 次/分钟 + IP 兜底 15 次/分钟
+    client_ip = ws.client.host if ws.client else "unknown"
+    try:
+        check_rate_limit(f"voice:user:{user_id}", RATE_VOICE_PER_MIN, 60, "操作过于频繁")
+        check_rate_limit(f"voice:ip:{client_ip}", RATE_VOICE_IP_PER_MIN, 60, "操作过于频繁")
+    except HTTPException:
+        await ws.close(code=4002, reason="连接过于频繁，请稍后再试")
+        return
 
     # 验证 conversation_id 归属
     if conversation_id:

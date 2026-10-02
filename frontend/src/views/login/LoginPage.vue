@@ -273,7 +273,7 @@ async function handleLogin() {
     if (!res?.access_token) throw new Error('响应异常')
     auth.login(res.access_token, res.user)
     const target = roleMap[res.user.role] || '/student'
-    const needsPwd = !!res.user && !res.user.password_changed && res.user.role !== 'admin'
+    const needsPwd = !!res.user && !res.user.password_changed
     router.push(target)
     if (needsPwd) {
       ElMessage({ type: 'warning', message: '登录成功，请修改初始密码', duration: 3000 })

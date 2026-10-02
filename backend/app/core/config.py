@@ -6,6 +6,8 @@ from pydantic import field_validator
 
 
 class Settings(BaseSettings):
+    # 运行环境：development / production（限流 TESTING 旁路等仅开发环境生效）
+    ENV: str = "development"
     DATABASE_URL: str = ""
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
@@ -43,6 +45,13 @@ class Settings(BaseSettings):
                 "SECRET_KEY 未配置！请在 .env 文件中设置 JWT 签名密钥，"
                 "生产环境请使用足够长且随机的字符串。"
             )
+        if len(v) < 32:
+            raise ValueError(
+                "SECRET_KEY 强度不足：长度必须不少于 32 位。"
+                "生成方式：python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        if "your-secret-key" in v or v in {"changeme", "secret", "123456"}:
+            raise ValueError("SECRET_KEY 疑似占位符/弱值，请更换为随机密钥后再启动。")
         return v
 
     @field_validator("DATABASE_URL")

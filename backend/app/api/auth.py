@@ -1,19 +1,16 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.security import hash_password, verify_password
 from app.models.user import User, UserRole
-from app.schemas.user import LoginRequest, LoginResponse, ProfileUpdate
+from app.schemas.user import ChangePasswordRequest, LoginRequest, LoginResponse, ProfileUpdate
 from app.services.auth_service import login_user
 from app.utils.rate_limiter import check_login_rate_limit
 
-
-class ChangePasswordRequest(BaseModel):
-    old_password: str
-    new_password: str
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -64,9 +61,14 @@ def change_password(
 ):
     if not verify_password(data.old_password, user.password_hash):
         raise HTTPException(status_code=400, detail="旧密码错误")
-    
-    if len(data.new_password) < 6:
-        raise HTTPException(status_code=400, detail="新密码至少6位")
+
+    import re
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="新密码至少 8 位")
+    if not re.search(r"[A-Za-z]", data.new_password) or not re.search(r"\d", data.new_password):
+        raise HTTPException(status_code=400, detail="新密码必须同时包含字母和数字")
+    if data.new_password == data.old_password:
+        raise HTTPException(status_code=400, detail="新密码不能与旧密码相同")
     
     user.password_hash = hash_password(data.new_password)
     user.password_changed = True
