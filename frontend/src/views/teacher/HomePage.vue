@@ -86,30 +86,7 @@
     <!-- /transition removed -->
 
     <!-- 发布公告 Dialog -->
-    <el-dialog v-model="createDialogVisible" title="发布公告" width="520px">
-      <el-form ref="announcementFormRef" :model="createForm" label-position="top" :rules="announcementRules">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="createForm.title" placeholder="请输入公告标题，如：关于五一放假安排的通知" maxlength="200" />
-        </el-form-item>
-        <el-form-item label="内容" prop="content">
-          <el-input v-model="createForm.content" type="textarea" :rows="4" placeholder="请输入公告内容，建议包含时间、地点、注意事项等" />
-        </el-form-item>
-        <el-form-item label="紧急程度">
-          <el-radio-group v-model="createForm.urgency">
-            <el-radio value="normal">普通</el-radio>
-            <el-radio value="important">重要</el-radio>
-            <el-radio value="urgent">紧急</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="附件（可选）">
-          <input type="file" @change="(e: any) => { if (e.target?.files?.[0]) createFile = e.target.files[0] }" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">发布</el-button>
-      </template>
-    </el-dialog>
+    <HomeAnnouncementDialog v-model:visible="createDialogVisible" @created="loadMyAnnouncements" />
 
     <!-- 待批请假弹窗 -->
     <el-dialog v-model="leaveDetailVisible" title="待处理事项" width="420px">
@@ -232,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -248,7 +225,7 @@ import { getPendingLeaves } from '@/api/leave'
 import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getClassStats, getOverdueSchedules, updateTeacherSchedule, getStudents, suggestContacts } from '@/api/teacher'
 import type { DashboardStats, ClassEvaluation, ClassStats, ScheduleItem, ScheduleUrgency, StudentSummary, ContactSuggestion } from '@/api/teacher'
 import { getAnnouncements } from '@/api/campus'
-import { getTeacherAnnouncements, createAnnouncement, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
+import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import type { CrisisAlert, LeaveRequestOut, Announcement } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
@@ -265,6 +242,7 @@ import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
 import HomeMobileSchedule from './HomeMobileSchedule.vue'
 import HomeMobileCrisis from './HomeMobileCrisis.vue'
 import HomeMobileApproval from './HomeMobileApproval.vue'
+import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -299,13 +277,6 @@ const pendingLeaves = ref<LeaveRequestOut[]>([])
 const announcements = ref<Announcement[]>([])
 const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
-const createForm = reactive({ title: '', content: '', urgency: 'normal' })
-const createFile = ref<File | null>(null)
-const announcementFormRef = ref<any>()
-const announcementRules = {
-  title: [{ required: true, message: '请输入公告标题', trigger: 'blur' }],
-  content: [{ required: true, message: '请输入公告内容', trigger: 'blur' }],
-}
 const classStats = ref<ClassStats>({
   total_students: 0,
   gender_stats: {},
@@ -735,28 +706,7 @@ async function loadMyAnnouncements() {
 }
 
 function openCreateDialog() {
-  createForm.title = ''
-  createForm.content = ''
-  createForm.urgency = 'normal'
-  createFile.value = null
   createDialogVisible.value = true
-}
-
-async function handleCreate() {
-  if (announcementFormRef.value) {
-    try { await announcementFormRef.value.validate() } catch { return }
-  }
-  const fd = new FormData()
-  fd.append('title', createForm.title)
-  fd.append('content', createForm.content)
-  fd.append('urgency', createForm.urgency)
-  if (createFile.value) fd.append('file', createFile.value)
-  try {
-    await createAnnouncement(fd)
-    ElMessage.success('发布成功')
-    createDialogVisible.value = false
-    loadMyAnnouncements()
-  } catch { ElMessage.error('发布失败') }
 }
 
 async function handleDelete(id: number) {
