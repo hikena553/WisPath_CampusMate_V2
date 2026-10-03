@@ -39,7 +39,14 @@ class Conversation(Base):
     type: Mapped[ConversationType] = mapped_column(SAEnum(ConversationType), default=ConversationType.NORMAL)
     project_template: Mapped[str | None] = mapped_column(String(50))
     project_stage: Mapped[str | None] = mapped_column(String(50))
+    # 历史遗留字段：业务上已不再使用（置顶/归档分别用 pinned_at / archived_at 表达）
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 置顶：非空即置顶，值用于同批置顶内的排序
+    pinned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 归档：归档会话默认不出现在列表
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 软删除：非空即已删除，用户可在提示条里撤销（"恢复"即置空）
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

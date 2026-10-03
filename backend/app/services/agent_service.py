@@ -381,7 +381,14 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
         await _try_extract_skills(message, user)
 
         # #16 持久化 AI 回复
-        _save_assistant_response(conv_id, full_reply, message, user, full_thinking)
+        saved_title = _save_assistant_response(conv_id, full_reply, message, user, full_thinking)
+        # 回传会话元信息：前端据此同步标题，并确认本次回复已落库
+        yield {
+            "type": "meta",
+            "conversation_id": conv_id,
+            "title": saved_title,
+            "saved": saved_title is not None,
+        }
 
     except Exception:
         logger.exception("AI对话处理异常")
@@ -461,14 +468,19 @@ async def _safe_summarize(db, conv_id: int):
         db.close()
 
 
-def _save_assistant_response(conv_id: int | None, reply: str, user_message: str, user: User, thinking: str = ""):
+def _save_assistant_response(conv_id: int | None, reply: str, user_message: str, user: User, thinking: str = "") -> str | None:
+    """保存 AI 回复；返回保存后的会话标题（失败或未关联会话时返回 None）。
+
+    返回值用于在 SSE 末尾回传 meta 事件，前端据此即时刷新会话标题，
+    无需整表重拉；同时它也是「本次回复已落库」的凭据。
+    """
     if not conv_id:
-        return
+        return None
     db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
-            return
+            return None
         db.add(ConversationMessage(
             conversation_id=conv_id,
             role="assistant",
@@ -481,6 +493,7 @@ def _save_assistant_response(conv_id: int | None, reply: str, user_message: str,
             conv.title = title
         conv.updated_at = datetime.now(timezone.utc)
         db.commit()
+        title = conv.title
 
         msg_count = db.query(ConversationMessage).filter(
             ConversationMessage.conversation_id == conv_id
@@ -495,7 +508,9 @@ def _save_assistant_response(conv_id: int | None, reply: str, user_message: str,
                 asyncio.ensure_future(_safe_summarize(summary_db, conv_id))
             except RuntimeError:
                 pass
+        return title
     except Exception:
         logger.exception("保存助手回复失败")
+        return None
     finally:
         db.close()

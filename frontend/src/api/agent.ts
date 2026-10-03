@@ -1,5 +1,13 @@
 import { getToken } from '@/utils/token'
 
+/** SSE 末尾回传的会话元信息（见后端 agent_service.chat 的 meta 事件） */
+export interface ChatMeta {
+  conversation_id: number | null
+  title: string | null
+  /** 服务端是否已把本轮回复落库；false/缺失时前端可兜底写入 */
+  saved: boolean
+}
+
 export async function sendChatMessage(
   message: string,
   history: { role: string; content: string }[],
@@ -11,6 +19,7 @@ export async function sendChatMessage(
   conversationId?: number,
   deepThink?: boolean,
   skipConv?: boolean,
+  onMeta?: (meta: ChatMeta) => void,
 ) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
   const token = getToken()
@@ -68,6 +77,9 @@ export async function sendChatMessage(
           case 'suggestions':
             onSuggestions(parsed)
             break
+          case 'meta':
+            onMeta?.(parsed as ChatMeta)
+            break
           default:  // 'content' 或 'message'
             onChunk(parsed)
             full += parsed
@@ -109,6 +121,9 @@ export async function sendChatMessage(
             break
           case 'suggestions':
             onSuggestions(parsed)
+            break
+          case 'meta':
+            onMeta?.(parsed as ChatMeta)
             break
           default:
             onChunk(parsed)

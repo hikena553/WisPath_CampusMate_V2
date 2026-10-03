@@ -7,7 +7,7 @@
     <template v-if="isMobile">
       <div v-if="mobileSidebarVisible" class="mobile-sidebar-mask" @click="mobileSidebarVisible = false"></div>
       <div class="mobile-sidebar-drawer" :class="{ open: mobileSidebarVisible }">
-        <Sidebar :role="role" @select="onSelect" @new="onNew" />
+        <Sidebar :role="role" @select="onSelect" @new="onNew" @close="mobileSidebarVisible = false" />
       </div>
     </template>
     <div class="chat-panel-wrap">
@@ -19,6 +19,7 @@
           :fetching="fetching"
           :show-menu-button="isMobile"
           @toggle-sidebar="mobileSidebarVisible = !mobileSidebarVisible"
+          @conversation-removed="onConversationRemoved"
         />
       </Transition>
     </div>
@@ -74,6 +75,13 @@ function onNew() {
   }
 }
 
+/** 当前对话被删除/归档（移动端操作面板触发）：切到下一个对话，没有则回到新对话 */
+function onConversationRemoved() {
+  const next = store.list[0]
+  if (next) onSelect(next)
+  else onNew()
+}
+
 watch(() => store.activeId, () => {
   if (!selecting) chatKey.value++
 })
@@ -100,21 +108,27 @@ onMounted(() => {
   width: 48px;
 }
 
-/* 移动端侧边栏遮罩 */
+/* 移动端侧边栏遮罩
+   z-index 需高于 MobileTabBar(1000)：否则遮罩不会压暗底部导航，
+   底部 tab 会以"亮着且可点"的状态浮在抽屉之上，看起来像层级穿帮 */
 .mobile-sidebar-mask {
-  position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0, 0, 0, 0.35);
-  animation: fadeIn 0.15s ease;
+  position: fixed; inset: 0; z-index: 1400;
+  background: rgba(15, 23, 42, 0.42);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: fadeIn 0.18s ease;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* 移动端侧边栏抽屉 */
+/* 移动端侧边栏抽屉：占满大部分屏宽，给会话标题/阶段胶囊留出空间 */
 .mobile-sidebar-drawer {
   position: fixed; top: 0; left: 0; bottom: 0;
-  width: 280px; z-index: 1001;
+  width: 86vw; max-width: 340px; z-index: 1401;
   transform: translateX(-100%);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.1);
+  transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 2px 0 24px rgba(15, 23, 42, 0.18);
+  border-radius: 0 16px 16px 0;
+  overflow: hidden;
 }
 .mobile-sidebar-drawer.open {
   transform: translateX(0);

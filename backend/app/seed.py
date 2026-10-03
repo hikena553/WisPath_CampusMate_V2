@@ -54,6 +54,20 @@ def get_or_create(cls, **kwargs):
         db.flush()
     return obj
 
+    # conversations：对话管理（置顶 / 归档 / 软删除）
+    if "conversations" in existing_tables:
+        cols = {c["name"] for c in inspector.get_columns("conversations")}
+        additions = {
+            "pinned_at": "DATETIME NULL",
+            "archived_at": "DATETIME NULL",
+            "deleted_at": "DATETIME NULL",
+        }
+        with engine.begin() as conn:
+            for col, ddl in additions.items():
+                if col not in cols:
+                    conn.execute(sa_text(f"ALTER TABLE conversations ADD COLUMN {col} {ddl}"))
+                    logging.getLogger(__name__).info(f"迁移：conversations 新增列 {col}")
+
 
 # ═══════════════════════════════════════════════════════════
 # 1. 组织架构（学院 → 专业 → 班级）

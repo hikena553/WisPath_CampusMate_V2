@@ -215,7 +215,8 @@ WisPath_CampusMate_v2.0/
 | 前缀 | 模块 | 说明 |
 |------|------|------|
 | `/api/auth` | auth | 登录注册 |
-| `/api/agent/chat` | agent | AI 助手 SSE 流式聊天 |
+| `/api/agent/chat` | agent | AI 助手 SSE 流式聊天（结束时回传 `meta` 事件：会话 id / 标题 / 是否已落库） |
+| `/api/agent/conversations` | conversations | 对话管理：分页列表（`offset`/`limit`/`q`/`archived`）、重命名与项目阶段、置顶、归档、软删除与撤销、批量操作 |
 | `/api/campus` | campus | 校园服务 |
 | `/api/growth` | growth | 成长档案 CRUD |
 | `/api/academic` | academic | 学业管理 |
