@@ -29,7 +29,7 @@ instance.interceptors.response.use(
       return Promise.reject(err)
     }
     
-    // 403错误 - 优先展示后端返回的具体拦截原因（如强制改密），否则显示通用提示
+    // 403错误 - 优先展示后端返回的具体拦截原因，否则显示通用提示
     if (err.response?.status === 403) {
       const detail = err.response?.data?.detail
       const message = typeof detail === 'string' && detail ? detail : '权限不足'

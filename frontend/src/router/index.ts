@@ -17,6 +17,13 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/login' },
     { path: '/login', name: 'Login', component: () => import('@/views/login/LoginPage.vue') },
+    // 改密页：可独立访问的改密入口（站内提醒横幅走弹窗，本页供直接跳转/分享链接使用）
+    {
+      path: '/change-password',
+      name: 'ChangePassword',
+      component: () => import('@/views/login/ChangePasswordPage.vue'),
+      meta: { title: '修改密码' },
+    },
 
     {
       path: '/student',
@@ -101,12 +108,18 @@ router.beforeEach(async (to) => {
   // F3 后刷新页面内存态 token 为空，但 httpOnly Cookie 会自动随 /api/auth/me 携带，
   // 因此以「能否拿到 user」为准判断登录态，而非内存 token。
   const user = await ensureUser()
+  const roleHome = (u: Record<string, unknown>) =>
+    ({ teacher: '/teacher', admin: '/admin' } as Record<string, string>)[u.role as string] || '/student'
+
+  // 改密页：登录后可随时进入（未改密用户不再被强制跳转，仅由提醒横幅引导）
+  if (to.path === '/change-password') {
+    return user ? true : '/login'
+  }
 
   // 登录页：已登录按角色重定向，未登录放行
   if (publicPaths.includes(to.path)) {
     if (!user) return
-    const roleMap: Record<string, string> = { teacher: '/teacher', admin: '/admin' }
-    return roleMap[user.role as string] || '/student'
+    return roleHome(user)
   }
 
   // 其余路由一律要求已登录

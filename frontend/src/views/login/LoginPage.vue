@@ -276,7 +276,8 @@ async function handleLogin() {
     const needsPwd = !!res.user && !res.user.password_changed
     router.push(target)
     if (needsPwd) {
-      ElMessage({ type: 'warning', message: '登录成功，请修改初始密码', duration: 3000 })
+      // 只提醒不强制：不再跳转改密页，站内横幅会持续提示并提供改密入口
+      ElMessage({ type: 'warning', message: '登录成功，建议尽快修改初始密码', duration: 3000 })
     } else {
       ElMessage.success('登录成功')
     }

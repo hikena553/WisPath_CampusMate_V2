@@ -135,13 +135,7 @@
       </div>
       <template #footer>
         <div style="display: flex; justify-content: space-between; width: 100%">
-          <el-button
-            type="warning"
-            @click="showChangePassword = true"
-            :disabled="auth.user?.password_changed"
-          >
-            {{ auth.user?.password_changed ? '密码已修改过' : '修改密码' }}
-          </el-button>
+          <el-button type="warning" @click="showChangePassword = true">修改密码</el-button>
           <div>
             <el-button @click="showProfile = false">取消</el-button>
             <el-button type="primary" @click="handleSaveProfile" :loading="saving">保存</el-button>
@@ -160,23 +154,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showChangePassword" title="修改密码" width="400px" :close-on-click-modal="false">
-      <el-form :model="passwordForm" label-width="100px">
-        <el-form-item label="旧密码" required>
-          <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
-        </el-form-item>
-        <el-form-item label="新密码" required>
-          <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20位，建议包含字母和数字" />
-        </el-form-item>
-        <el-form-item label="确认新密码" required>
-          <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入新密码" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showChangePassword = false">取消</el-button>
-        <el-button type="primary" @click="handleChangePassword" :loading="changingPassword">确定</el-button>
-      </template>
-    </el-dialog>
+    <!-- 改密对话框统一走公共组件（管理端同款），避免校验规则各处漂移 -->
+    <ChangePasswordDialog v-model="showChangePassword" />
   </div>
 </template>
 
@@ -184,7 +163,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { updateProfile, changePassword } from '@/api/user'
+import { updateProfile } from '@/api/user'
+import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import { uploadFile } from '@/api/upload'
 import { getConversations, type ConversationOut } from '@/api/messages'
 import { ElMessage } from 'element-plus'
@@ -281,12 +261,6 @@ function logout() {
 }
 
 const showChangePassword = ref(false)
-const changingPassword = ref(false)
-const passwordForm = reactive({
-  old_password: '',
-  new_password: '',
-  confirm_password: '',
-})
 
 const profileForm = reactive({
   username: '', name: '', college: '',
@@ -359,38 +333,6 @@ async function handleCropConfirm() {
     ElMessage.success('头像已上传')
   } catch {
     ElMessage.error('头像上传失败')
-  }
-}
-
-async function handleChangePassword() {
-  if (!passwordForm.old_password || !passwordForm.new_password || !passwordForm.confirm_password) {
-    ElMessage.warning('请填写所有字段')
-    return
-  }
-  if (passwordForm.new_password !== passwordForm.confirm_password) {
-    ElMessage.error('两次输入的新密码不一致')
-    return
-  }
-  if (passwordForm.new_password.length < 6) {
-    ElMessage.error('新密码至少6位')
-    return
-  }
-
-  changingPassword.value = true
-  try {
-    await changePassword(passwordForm.old_password, passwordForm.new_password)
-    ElMessage.success('密码修改成功')
-    showChangePassword.value = false
-    if (auth.user) {
-      auth.updateUser({ ...auth.user, password_changed: true })
-    }
-    passwordForm.old_password = ''
-    passwordForm.new_password = ''
-    passwordForm.confirm_password = ''
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '修改失败')
-  } finally {
-    changingPassword.value = false
   }
 }
 
