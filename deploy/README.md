@@ -33,7 +33,7 @@ docker compose ps
 | backend | 入口脚本先执行 `alembic upgrade head`（建表/迁移，幂等），再启动 uvicorn；应用 lifespan 内部也会再跑一次 `run_migrations()` 双保险；随后自动执行幂等种子数据初始化 |
 | frontend | nginx 托管构建产物，反向代理 `/api`、`/uploads`、`/ws` |
 
-首次启动后自动生成初始账号（**首次登录强制改密**，见《开发规范.md》）：
+首次启动后自动生成初始账号（**首次登录会提醒修改初始密码，不阻断使用**，见《开发规范.md》）：
 
 | 账号 | 初始密码 | 角色 |
 |---|---|---|
