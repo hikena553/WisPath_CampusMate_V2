@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, select
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.security import decode_access_token
@@ -53,9 +53,9 @@ async def create_group(data: GroupCreate, user: User = Depends(get_current_user)
 
 @router.get("", response_model=list[GroupOut])
 def get_groups(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    member_group_ids = db.query(GroupMember.group_id).filter(GroupMember.user_id == user.id).subquery()
+    member_group_ids = select(GroupMember.group_id).where(GroupMember.user_id == user.id)
     groups = db.query(Group).filter(
-        Group.id.in_(db.query(member_group_ids)),
+        Group.id.in_(member_group_ids),
         Group.is_dismissed == False
     ).all()
 

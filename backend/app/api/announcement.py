@@ -5,7 +5,7 @@ from datetime import datetime, date, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func as safunc
+from sqlalchemy import func as safunc, select
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -112,9 +112,9 @@ def list_student_announcements(
         TeacherAnnouncement.teacher_id == user.tutor_id
     )
     if unread_only:
-        read_ids = db.query(AnnouncementRead.announcement_id).filter(
+        read_ids = select(AnnouncementRead.announcement_id).where(
             AnnouncementRead.student_id == user.id
-        ).subquery()
+        )
         query = query.filter(~TeacherAnnouncement.id.in_(read_ids))
     items = query.order_by(TeacherAnnouncement.created_at.desc()).all()
     result = []
@@ -137,9 +137,9 @@ def unread_count(
         raise HTTPException(403)
     if not user.tutor_id:
         return UnreadCountOut(count=0)
-    read_ids = db.query(AnnouncementRead.announcement_id).filter(
+    read_ids = select(AnnouncementRead.announcement_id).where(
         AnnouncementRead.student_id == user.id
-    ).subquery()
+    )
     count = db.query(TeacherAnnouncement).filter(
         TeacherAnnouncement.teacher_id == user.tutor_id,
         ~TeacherAnnouncement.id.in_(read_ids),
