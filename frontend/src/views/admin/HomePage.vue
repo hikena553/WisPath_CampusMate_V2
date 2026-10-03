@@ -110,19 +110,21 @@
         <div class="panel panel-grow panel-scene">
           <div class="panel-head">
             <span class="panel-title"><i></i>校园数字孪生场景</span>
-            <span class="panel-note">CAMPUS DIGITAL TWIN</span>
+            <span class="panel-note">产品宣传 · 37s 循环</span>
           </div>
           <div class="panel-body scene">
-            <img class="scene-img" src="/images/campus/游仙校区夜景.jpg" alt="校园夜景数字孪生场景" />
-            <div class="scene-veil"></div>
+            <CampusPromoAnimation
+              :student-count="dashboard?.student_count ?? 0"
+              :teacher-count="dashboard?.teacher_count ?? 0"
+              :college-count="dashboard?.college_count ?? 0"
+              :conversation-count="dashboard?.conversation_count ?? 0"
+              :knowledge-count="dashboard?.knowledge_count ?? 0"
+              :avg-response-time="dashboard?.avg_response_time ?? 0"
+            />
             <span class="corner tl"></span><span class="corner tr"></span>
             <span class="corner bl"></span><span class="corner br"></span>
-            <div class="scene-tag t1"><i></i><b>学生总数</b><em>{{ fmt(dashboard?.student_count ?? 0) }}</em></div>
-            <div class="scene-tag t2"><i></i><b>AI 会话</b><em>{{ fmt(dashboard?.conversation_count ?? 0) }}</em></div>
-            <div class="scene-tag t3"><i></i><b>知识库</b><em>{{ fmt(dashboard?.knowledge_count ?? 0) }}</em></div>
-            <div class="scene-tag t4"><i></i><b>危机关注</b><em>{{ fmt(crisisFocus) }}</em></div>
             <div class="scene-bar">
-              <span>平均响应 <b>{{ dashboard?.avg_response_time ?? '0.0' }}s</b></span>
+              <span>平均响应 <b>{{ fmtLatency(dashboard?.avg_response_time) }}s</b></span>
               <span>教师总数 <b>{{ fmt(dashboard?.teacher_count ?? 0) }}</b></span>
               <span>消息总量 <b>{{ fmt(dashboard?.message_count ?? 0) }}</b></span>
             </div>
@@ -226,7 +228,9 @@
       <div class="footer-item"><span class="footer-label">学院覆盖</span><b>{{ dashboard?.college_count ?? 0 }} 个</b></div>
       <div class="footer-item"><span class="footer-label">刷新时间</span><b>{{ refreshAt || '加载中…' }}</b></div>
       <div class="footer-actions">
-        <button type="button" class="action" @click="loadDashboard"><el-icon><RefreshCw /></el-icon>刷新数据</button>
+        <button type="button" class="action" :disabled="refreshing" @click="handleRefresh">
+          <el-icon :class="{ 'refresh-spin': refreshing }"><RefreshCw /></el-icon>{{ refreshing ? '刷新中…' : '刷新数据' }}
+        </button>
         <button type="button" class="action" @click="router.push('/admin/knowledge')"><el-icon><Library /></el-icon>知识库</button>
         <button type="button" class="action action-primary" @click="dataDialogVisible = true"><el-icon><Database /></el-icon>数据导入 / 导出</button>
       </div>
@@ -310,11 +314,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { getDashboardStats, exportData, importData, type DashboardStats, type ImportResult } from '@/api/admin'
 import { getFeeds, type FeedItem } from '@/api/resources'
+import { usePolling } from '@/composables/usePolling'
+import CampusPromoAnimation from '@/components/home/CampusPromoAnimation.vue'
 import {
   User, Users, FileText, School, MessageSquare,
   Files, Timer, Monitor, Library, Database, Upload, RefreshCw
@@ -341,6 +347,9 @@ const reducedMotion = typeof window !== 'undefined'
 /* ===== 工具函数 ===== */
 function fmt(v: number | null | undefined) {
   return (v ?? 0).toLocaleString('zh-CN')
+}
+function fmtLatency(v: number | null | undefined) {
+  return Number(v ?? 0).toFixed(1)
 }
 function pad2(n: number) {
   return String(n).padStart(2, '0')
@@ -768,18 +777,62 @@ async function handleImport(file: File) {
 }
 
 /* ===== 数据加载 ===== */
-async function loadDashboard() {
+// 刷新中标记：用于「刷新数据」按钮的加载态（旋转图标 + 禁用重复点击）
+const refreshing = ref(false)
+
+// 统计数据的自动刷新周期：只轮询后端聚合统计；
+// 外部资讯由后台每 30 分钟抓取一次，无需高频轮询。
+const STATS_POLL_INTERVAL = 30000
+
+// 手动刷新：给出加载态与成功提示，
+// 避免数据未变化时看起来"点击没有反应"（首次挂载加载不弹提示）。
+async function loadDashboard(notify = false) {
+  if (refreshing.value) return
+  refreshing.value = true
   try {
     dashboard.value = await getDashboardStats()
     refreshAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    if (notify) ElMessage.success('数据已刷新')
   } catch {
     ElMessage.error('数据加载失败')
+  } finally {
+    refreshing.value = false
   }
   loadFeeds()
 }
 
+// 定时刷新（静默）：失败不打扰用户，下个周期自动重试；
+// 仅当尚无任何数据时才提示，保证首屏异常可见。
+async function pollStats() {
+  if (refreshing.value) return
+  try {
+    dashboard.value = await getDashboardStats()
+    refreshAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+  } catch {
+    if (!dashboard.value) ElMessage.error('数据加载失败')
+  }
+}
+
+const { start: startPolling, stop: stopPolling } = usePolling(pollStats, STATS_POLL_INTERVAL)
+
+// 页面切到后台时暂停轮询，回到前台立即刷新一次，减少无谓请求
+function handleVisibility() {
+  if (document.hidden) stopPolling()
+  else startPolling()
+}
+
+function handleRefresh() {
+  loadDashboard(true)
+}
+
 onMounted(() => {
-  loadDashboard()
+  startPolling()          // 立即拉取一次统计，并每 30 秒自动刷新
+  loadFeeds()             // 首页「每日资讯速览」单独加载
+  document.addEventListener('visibilitychange', handleVisibility)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibility)
 })
 </script>
 
@@ -962,20 +1015,6 @@ onMounted(() => {
   overflow: hidden;
   border-radius: 0 0 11px 11px;
 }
-.scene-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.scene-veil {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 62% 58% at 50% 46%, transparent 0%, rgba(15, 23, 42, 0.35) 78%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.42) 0%, transparent 30%, transparent 60%, rgba(15, 23, 42, 0.72) 100%);
-}
 .corner {
   position: absolute;
   width: 18px;
@@ -987,32 +1026,6 @@ onMounted(() => {
 .corner.tr { top: 10px; right: 10px; border-left: none; border-bottom: none; border-radius: 0 3px 0 0; }
 .corner.bl { bottom: 10px; left: 10px; border-right: none; border-top: none; border-radius: 0 0 0 3px; }
 .corner.br { bottom: 10px; right: 10px; border-left: none; border-top: none; border-radius: 0 0 3px 0; }
-.scene-tag {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
-  border-radius: 6px;
-  background: rgba(15, 23, 42, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(4px);
-  font-size: 11px;
-  color: #dbe7f5;
-}
-.scene-tag i { width: 6px; height: 6px; border-radius: 50%; background: #7dd3fc; }
-.scene-tag b { font-weight: 500; }
-.scene-tag em {
-  font-style: normal;
-  font-weight: 700;
-  font-size: 14px;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-}
-.scene-tag.t1 { left: 5%; top: 15%; }
-.scene-tag.t2 { right: 5%; top: 26%; }
-.scene-tag.t3 { left: 9%; bottom: 30%; }
-.scene-tag.t4 { right: 8%; bottom: 22%; }
 .scene-bar {
   position: absolute;
   left: 0;
@@ -1213,6 +1226,12 @@ onMounted(() => {
 }
 .action:hover,
 .action:focus-visible { color: #1f2d3d; border-color: #d6e4ff; background: #eef4ff; outline: none; }
+.action:disabled { cursor: default; opacity: 0.75; }
+.refresh-spin { animation: refresh-spin 0.8s linear infinite; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .refresh-spin { animation: none; }
+}
 .action-primary {
   color: #fff;
   font-weight: 600;
