@@ -211,14 +211,14 @@
             <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-name">预警敏感词</div>
-                <div class="setting-desc">触发预警的关键词，用逗号分隔</div>
+                <div class="setting-desc">命中任一词语即进入语义分级，保存后实时生效；未配置时使用默认词库（与「危机预警」页保持一致）</div>
               </div>
               <el-input v-model="settingsMap['crisis_keywords']" type="textarea" :rows="2" placeholder="关键词1,关键词2,..." style="width: 360px" />
             </div>
             <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-name">自动通知辅导员</div>
-                <div class="setting-desc">发现高危预警时自动通知辅导员</div>
+                <div class="setting-desc">产生严重 / 中度预警时自动推送通知辅导员</div>
               </div>
               <el-switch v-model="settingsMap['auto_notify_counselor']" active-value="true" inactive-value="false" />
             </div>
@@ -571,6 +571,7 @@ import {
   getSettings, batchUpdateSettings, generateBrandingImages, uploadBrandingImage,
   getVoicePipelineInfo, testTtsPreview, type Setting as SettingType, type VoicePipelineInfo,
 } from '@/api/setting'
+import { getCrisisConfig } from '@/api/crisis'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -989,6 +990,18 @@ async function loadSettings() {
     // 品牌设计回显：已保存的 Logo / 吉祥物同步为当前选中
     if (settingsMap['site_logo']) logoSection.selected = settingsMap['site_logo']
     if (settingsMap['site_mascot']) mascotSection.selected = settingsMap['site_mascot']
+    // 危机预警配置回显：数据库未配置时回退默认词库，与「危机预警」页展示保持一致
+    if (!settingsMap['crisis_keywords'] || !String(settingsMap['crisis_keywords']).trim()) {
+      try {
+        const cfg = await getCrisisConfig()
+        settingsMap['crisis_keywords'] = (cfg.keywords || []).join('，')
+        if (settingsMap['auto_notify_counselor'] === undefined) {
+          settingsMap['auto_notify_counselor'] = String(cfg.notify_counselor)
+        }
+      } catch (error) {
+        console.error('加载危机预警配置失败:', error)
+      }
+    }
   } catch (error) {
     console.error('加载设置失败:', error)
   } finally {
@@ -1022,10 +1035,25 @@ function validateAISettings(): boolean {
 
 async function handleSave() {
   if (!validateBasicSettings()) return
+  // 与「危机预警」页规则一致：预警敏感词不能为空，避免保存空值导致两处展示不一致
+  if (!settingsMap['crisis_keywords'] || !String(settingsMap['crisis_keywords']).trim()) {
+    ElMessage.warning('预警敏感词不能为空')
+    return
+  }
   saving.value = true
   try {
+    // 敏感词规范化：兼容中英文逗号 / 顿号 / 空白分隔，与「危机预警」页标签规则保持一致
+    const keywords = Array.from(new Set(
+      String(settingsMap['crisis_keywords'] || '')
+        .split(/[,，、;；\s]+/)
+        .map(k => k.trim())
+        .filter(Boolean)
+    ))
+    const payload = stripMaskedKeys({ ...settingsMap })
+    payload['crisis_keywords'] = keywords.join(',')
     // 仅提交通用基础字段：敏感 Key 由"保存AI配置"管理，避免脱敏/空值覆盖数据库
-    await batchUpdateSettings(stripMaskedKeys({ ...settingsMap }))
+    await batchUpdateSettings(payload)
+    settingsMap['crisis_keywords'] = keywords.join('，')
     ElMessage.success('设置已保存')
   } catch (error) {
     ElMessage.error('保存失败')
