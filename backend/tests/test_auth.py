@@ -122,28 +122,31 @@ def test_change_password_success_invalidates_old_token(client, make_user, api):
     assert bad.status_code == 401
 
 
-# ── 首登强改密（S2 核心）：中间件白名单拦截 ───────────────────────────────
+# ── 首登改密：只提醒不阻断（S2 调整） ─────────────────────────────────
 
-def test_force_password_change_middleware_blocks_business_api(client, seed_login, api):
-    """未修改初始密码的用户访问业务接口被 403，改密后恢复。"""
+def test_initial_password_only_reminds_without_blocking(client, seed_login, api):
+    """未修改初始密码不再拦截业务接口，仅由 /me 返回提醒标记。"""
     auth = seed_login("2024004")
-    resp = client.get("/api/auth/teachers", headers=auth["headers"])
-    assert resp.status_code == 403
-    assert resp.json()["detail"] == "请先修改初始密码后再使用该功能"
 
-    # 白名单接口不受影响
+    # 业务接口正常放行（调整前此处是一律 403）
+    resp = client.get("/api/auth/teachers", headers=auth["headers"])
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+    # 提醒标记仍在，供前端做非阻断提示（横幅 / 改密入口）
     me = client.get("/api/auth/me", headers=auth["headers"])
     assert me.status_code == 200
+    assert me.json()["password_needs_change"] is True
 
-    # 改密后同身份可访问业务接口
+    # 改密后标记消失
     r = api.put("/api/auth/change-password",
                 json={"old_password": "123456", "new_password": "Renewed123"},
                 headers=auth["headers"])
     assert r.status_code == 200
     auth2 = seed_login("2024004", "Renewed123")
-    resp2 = client.get("/api/auth/teachers", headers=auth2["headers"])
-    assert resp2.status_code == 200
-    assert isinstance(resp2.json(), list)
+    me2 = client.get("/api/auth/me", headers=auth2["headers"])
+    assert me2.status_code == 200
+    assert me2.json()["password_needs_change"] is False
 
 
 # ── 登出撤销（F3） ──────────────────────────────────────────────────────
@@ -167,10 +170,7 @@ def test_logout_revokes_token_and_is_idempotent(client, login_token, api):
 # ── CSRF 双通道（F3 纵深防护） ──────────────────────────────────────────
 
 def test_csrf_blocks_cookie_write_without_custom_header(client, login_token, api):
-    """携带认证 Cookie 的写请求缺少 X-Requested-With 头 → 403。
-
-    必须用已改密用户：seed 用户会被强改密中间件先行 403，无法验证 CSRF。
-    """
+    """携带认证 Cookie 的写请求缺少 X-Requested-With 头 → 403。"""
     login_token()  # 登录成功 → client jar 持有 campus_token Cookie
     assert client.cookies.get("campus_token")
 

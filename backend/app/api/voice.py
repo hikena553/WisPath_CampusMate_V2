@@ -59,9 +59,7 @@ async def voice_websocket(
         if not user:
             await ws.close(code=4001, reason="用户不存在")
             return
-        if not user.password_changed:
-            await ws.close(code=4003, reason="请先修改初始密码")
-            return
+        # 未修改初始密码不再阻断语音通话：仅在 /api/auth/me 打标记由前端提醒
     finally:
         db.close()
 

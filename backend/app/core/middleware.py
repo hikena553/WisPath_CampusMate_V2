@@ -1,12 +1,12 @@
 """安全中间件
 
-1. EnforcePasswordChangeMiddleware：拦截携带有效令牌但未修改初始密码（password_changed=False）的
-   用户，仅放行白名单接口，其余 /api/* 一律 403，确保弱默认口令无法进入业务功能。
-   WebSocket（原样透传）由各 ws 端点自行校验 password_changed。
-2. CsrfProtectionMiddleware：对携带认证 Cookie 的「写请求」强制要求自定义头
+1. CsrfProtectionMiddleware：对携带认证 Cookie 的「写请求」强制要求自定义头
    X-Requested-With（axios 侧自动注入），与 SameSite=Lax 一起构成纵深 CSRF 防护。
-3. RequestLogMiddleware：全量 HTTP 请求访问日志（方法/路径/状态/耗时/来源 IP/用户），
+2. RequestLogMiddleware：全量 HTTP 请求访问日志（方法/路径/状态/耗时/来源 IP/用户），
    与 JsonFormatter 配合输出单行 JSON；慢请求（>1s）与 5xx 自动升级 WARNING。
+
+未修改初始密码（password_changed=False）不再拦截任何业务接口：仅由 /api/auth/me
+返回 password_needs_change 标记，前端据此做非阻断提醒（横幅 + 改密入口）。
 """
 import logging
 import time
@@ -15,22 +15,11 @@ from urllib.parse import unquote
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.core.database import SessionLocal
 from app.core.security import decode_access_token
-from app.models.user import User
-
-# 未改密用户可访问的接口白名单
-PASSWORD_CHANGE_WHITELIST = (
-    "/api/auth/login",
-    "/api/auth/me",
-    "/api/auth/change-password",
-    "/api/health",
-)
 
 # 与 core/deps.py 保持一致
 AUTH_COOKIE_NAME = "campus_token"
 
-_PASSWD_REQUIRED_HINT = "请先修改初始密码后再使用该功能"
 _CSRF_REQUIRED_HINT = "请求头校验失败"
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
@@ -125,46 +114,6 @@ class RequestLogMiddleware:
                     "client_ip": client_ip,
                 },
             )
-
-
-class EnforcePasswordChangeMiddleware:
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            # websocket 等协议原样透传，由端点自校验
-            await self.app(scope, receive, send)
-            return
-
-        path = scope.get("path", "")
-        if path.startswith("/api") and not path.startswith(PASSWORD_CHANGE_WHITELIST):
-            headers = {
-                k.decode("latin-1").lower(): v.decode("latin-1")
-                for k, v in (scope.get("headers") or [])
-            }
-            auth = headers.get("authorization", "")
-            token = auth[7:] if auth.startswith("Bearer ") else None
-            if not token:
-                # httpOnly Cookie 通道（F3）
-                cookie = headers.get("cookie", "")
-                token = _read_cookie(cookie, AUTH_COOKIE_NAME)
-            if token:
-                payload = decode_access_token(token)
-                if payload:
-                    user_id = payload.get("sub")
-                    if user_id:
-                        db = SessionLocal()
-                        try:
-                            user = db.get(User, int(user_id))
-                            if user is not None and not user.password_changed:
-                                response = JSONResponse(status_code=403, content={"detail": _PASSWD_REQUIRED_HINT})
-                                await response(scope, receive, send)
-                                return
-                        finally:
-                            db.close()
-
-        await self.app(scope, receive, send)
 
 
 class CsrfProtectionMiddleware:

@@ -28,7 +28,6 @@ from app.core.database import engine
 from app.core.logging_setup import setup_logging
 from app.core.middleware import (
     CsrfProtectionMiddleware,
-    EnforcePasswordChangeMiddleware,
     RequestLogMiddleware,
 )
 from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
@@ -100,11 +99,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 强制首登改密：未修改初始密码的用户仅可访问认证/改密白名单接口
-app.add_middleware(EnforcePasswordChangeMiddleware)
-
 # CSRF 纵深防护：携带认证 Cookie 的写请求必须带 X-Requested-With 头
-# （后注册先执行，置于最外层，先于改密拦截与业务逻辑）
+# （后注册先执行，置于最外层，先于业务逻辑）
 app.add_middleware(CsrfProtectionMiddleware)
 
 # 请求访问日志：置于最外层，耗时统计覆盖全部下游中间件与业务处理
