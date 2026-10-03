@@ -46,8 +46,8 @@
                     <table class="schedule-table">
                       <thead>
                         <tr>
-                          <th style="width:76px">节次</th>
-                          <th v-for="d in days" :key="d" :class="{ 'th-today': isTodayCol(d) }">{{ d }}</th>
+                          <th>节次</th>
+                          <th v-for="d in visibleDays" :key="d" :class="{ 'th-today': isTodayCol(d) }">{{ d }}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -57,8 +57,8 @@
                             <div class="period-time">{{ periodTimeLabel(row.period) }}</div>
                           </td>
                           <template v-for="(cell, ci) in row.cells" :key="ci">
-                            <td v-if="cell.empty" :class="{ 'td-today': isTodayCol(cell.day) }" style="padding:0"></td>
-                            <td v-else :rowspan="cell.rowspan" :class="{ 'td-today': isTodayCol(cell.day) }" style="padding:4px;vertical-align:middle">
+                            <td v-if="cell.empty" :class="{ 'td-today': isTodayCol(cell.day) }"></td>
+                            <td v-else :rowspan="cell.rowspan" :class="['cell-filled', { 'td-today': isTodayCol(cell.day) }]">
                               <div class="schedule-course" :class="{ 'course-today': isTodayCol(cell.day) }" :style="{ borderLeftColor: courseColor(cell.course.name).slice(0,7), background: courseCellBg(cell.course.name, cell.day) }"
                                 @mouseenter="onCourseEnter(cell.course, $event)" @mouseleave="onCourseLeave" @click="onCourseClick(cell.course, $event)">
                                 <div class="course-name">{{ cell.course.name }}</div>
@@ -98,6 +98,12 @@
 
         <!-- ===== 成绩分析 ===== -->
         <div v-else-if="activeTab === 'grades'" key="grades" class="grades-view">
+          <!-- 成绩数据按需加载：首次进入本页签时才请求，先给一次加载态，避免闪出「暂无数据」 -->
+          <div v-if="!gradesReady" class="loading-box">
+            <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+            <span>加载中...</span>
+          </div>
+          <template v-else>
           <!-- 核心指标 -->
           <div class="grade-stats-row">
             <div class="grade-stat-card">
@@ -401,11 +407,18 @@
               <el-button @click="mascotDialogVisible = false">关闭</el-button>
             </template>
           </el-dialog>
+          </template>
 
         </div>
 
         <!-- ===== 成长轨迹 ===== -->
         <div v-else-if="activeTab === 'growth'" key="growth" class="growth-view">
+          <!-- 成长数据按需加载：首次进入本页签时才请求 -->
+          <div v-if="!growthLoaded" class="loading-box">
+            <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+            <span>加载中...</span>
+          </div>
+          <template v-else>
           <!-- 分数头部 -->
           <div class="score-header">
             <div class="score-ring-group">
@@ -770,6 +783,7 @@
               <el-button @click="recordDetailVisible = false">关闭</el-button>
             </template>
           </el-dialog>
+          </template>
 
         </div>
         </Transition>
@@ -929,15 +943,20 @@ function toggleCourseProfile() { if (isMobile.value) courseProfileOpen.value = !
 // ===== 页签 =====
 
 // ===== 成绩分析 =====
-const gradeAnalysisLoading = ref(false)
+/** 成绩分析页签的数据是否已就绪（按需加载：首次进入该页签才请求；加载态由它统一承载） */
+const gradesReady = ref(false)
 const gradeAnalysis = ref<GradeAnalysis>({
   stats: { total_courses: 0, total_credits: 0, avg_score: 0, avg_gpa: 0, highest_gpa: 0, lowest_gpa: 0, pass_rate: 0, gpa_rank: 0, total_students: 0 },
   semester_gpa: [], course_type_stats: [], score_distribution: [], top_courses: [], weak_courses: []
 })
 
 async function loadGradeAnalysis() {
-  gradeAnalysisLoading.value = true
-  try { const data = await getGradeAnalysis(auth.user?.id || 0); gradeAnalysis.value = data } catch (error) { console.error('加载成绩分析失败:', error) } finally { gradeAnalysisLoading.value = false }
+  try {
+    const data = await getGradeAnalysis(auth.user?.id || 0)
+    gradeAnalysis.value = data
+  } catch (error) {
+    console.error('加载成绩分析失败:', error)
+  }
 }
 
 // ===== 成绩分析图表 =====
@@ -1023,11 +1042,26 @@ const currentWeek = computed(() => Math.max(1, baseWeek.value + weekOffset.value
 const maxPeriod = 12
 const dayMap: Record<string, number> = { '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 7 }
 
+/**
+ * 本周实际要显示的星期列。桌面端固定周一~周日（信息密度低，7 列更利于横向对照）；
+ * 移动端 375px 下 7 列会把每列压到 ~41px，课程名和教室读不出来，
+ * 因此无课的周末列不占位：只要周六或周日任一有课就两天一起显示，避免出现"周五 + 周日"这种断列。
+ */
+const visibleDays = computed(() => {
+  if (!isMobile.value) return days
+  const wk = currentWeek.value
+  const hasWeekend = courses.value.some(c =>
+    (c.day_of_week === 6 || c.day_of_week === 7) && wk >= c.week_start && wk <= c.week_end,
+  )
+  return hasWeekend ? days : days.slice(0, 5)
+})
+
 const courseGrid = computed(() => {
   const wk = currentWeek.value
+  const shownDays = visibleDays.value
   const segEnd = (p: number) => (p <= 4 ? 4 : p <= 8 ? 8 : 12)
   const dayBlocks: Record<number, { start: number; end: number; course: Course }[]> = {}
-  for (const day of days) {
+  for (const day of shownDays) {
     const dayN = dayMap[day]
     const list = courses.value.filter(c => c.day_of_week === dayN && wk >= c.week_start && wk <= c.week_end)
     const blocks: { start: number; end: number; course: Course }[] = []
@@ -1045,7 +1079,7 @@ const courseGrid = computed(() => {
   const rows = []
   for (let p = 1; p <= maxPeriod; p++) {
     const cells: any[] = []
-    for (const day of days) {
+    for (const day of shownDays) {
       const blocks = dayBlocks[dayMap[day]]
       const starts = blocks.filter(b => b.start === p)
       if (starts.length) {
@@ -1192,9 +1226,11 @@ function showCourseTip(course: Course, e: Event) {
   hoverCourse.value = course
   const el = e.currentTarget as HTMLElement
   const r = el.getBoundingClientRect()
+  // 气泡高约 200px：纵向也要夹取，否则下方第 8-12 节的课程信息会溢出视口、点不到也看不到
+  const tipHeight = 210
   tooltipPos.value = {
     x: Math.min(r.right + 8, window.innerWidth - 236),
-    y: Math.max(8, r.top)
+    y: Math.min(Math.max(8, r.top), Math.max(8, window.innerHeight - tipHeight))
   }
   const col = courseColor(course.name).slice(0, 7)
   tipColor.value = col
@@ -1493,18 +1529,22 @@ const growthLineOption = computed(() => {
   }
 })
 
-onMounted(async () => {
+onMounted(() => {
   loadGoals()
-  const coursePromise = (async () => {
-    const all = (await fetchCourses().catch(() => [])) as any[]
-    allCourses.value = all as Course[]
-  })()
-  const gradesPromise = getGrades().then(d => { grades.value = d as any }).catch(() => {})
-  const examsPromise = getExams().then(d => { exams.value = d as any }).catch(() => {})
-  const growthProfilePromise = getGrowthProfile().catch(() => null)
-  const growthRecordsPromise = getGrowthRecords().catch(() => [])
-  const projectsPromise = getProjects().catch(() => [])
-  await Promise.all([coursePromise, gradesPromise, examsPromise])
+  // 只拉当前页签需要的数据；移动端首页由 GrowthDashboard 自己取数，父组件不发任何请求
+  void ensureTabData(activeTab.value)
+})
+
+/** 页签切换时补拉该页签的数据（每个页签只请求一次） */
+watch(activeTab, (tab) => {
+  void ensureTabData(tab)
+})
+
+/** 课程表页签：只需要课程数据 */
+async function loadScheduleData() {
+  if (scheduleReady.value) return
+  const all = (await fetchCourses().catch(() => [])) as Course[]
+  allCourses.value = all
   const realWeek = calcCurrentRealWeek()
   if (courses.value.length) {
     baseWeek.value = Math.min(...courses.value.map(c => c.week_start))
@@ -1514,15 +1554,53 @@ onMounted(async () => {
     weekOffset.value = realWeek - 1
   }
   scheduleReady.value = true
+}
+
+/** 成绩分析页签：成绩 + 考试 + 成绩分析指标；进入后才发起 AI 学情分析 */
+async function loadGradesData() {
+  if (gradesReady.value) return
+  const [gradeList, examList] = await Promise.all([
+    getGrades().catch(() => [] as any),
+    getExams().catch(() => [] as any),
+    loadGradeAnalysis(),
+  ])
+  grades.value = gradeList as Grade[]
+  exams.value = examList as Exam[]
   if (semesters.value.length) selectedSem.value = semesters.value[0]
-  for (const sem of semesters.value) { if (goalInputs.value[sem] == null) { goalInputs.value[sem] = goals.value[sem] ?? 3.5 } }
-  loadGradeAnalysis()
-  if (grades.value.length) { startAiAnalysis() }
-  growthProfilePromise.then(p => { if (p) { profile.value = p; localSkills.value = [...(p.skills || [])]; localInterests.value = [...(p.interests || [])]; syncTagEmpty() } })
-  growthRecordsPromise.then(list => { growthRecords.value = list as any })
-  projectsPromise.then(list => { projects.value = list as any; loaded.value = true })
-  Promise.all([growthProfilePromise, growthRecordsPromise, projectsPromise]).then(() => { growthLoaded.value = true })
-})
+  for (const sem of semesters.value) {
+    if (goalInputs.value[sem] == null) goalInputs.value[sem] = goals.value[sem] ?? 3.5
+  }
+  gradesReady.value = true
+  // 流式 AI 分析只在这里触发（不再一进页面就打一次 LLM），不阻塞页签渲染
+  if (grades.value.length) startAiAnalysis()
+}
+
+/** 成长轨迹页签：成长画像 + 成长记录 + 项目 */
+async function loadGrowthData() {
+  if (growthLoaded.value) return
+  const [p, recordList, projectList] = await Promise.all([
+    getGrowthProfile().catch(() => null),
+    getGrowthRecords().catch(() => [] as any),
+    getProjects().catch(() => [] as any),
+  ])
+  if (p) {
+    profile.value = p
+    localSkills.value = [...(p.skills || [])]
+    localInterests.value = [...(p.interests || [])]
+    syncTagEmpty()
+  }
+  growthRecords.value = recordList as any
+  projects.value = projectList as any
+  loaded.value = true
+  growthLoaded.value = true
+}
+
+function ensureTabData(tab: string): Promise<void> {
+  if (tab === 'schedule') return loadScheduleData()
+  if (tab === 'grades') return loadGradesData()
+  if (tab === 'growth') return loadGrowthData()
+  return Promise.resolve()
+}
 
 watch(semesters, (list) => {
   if (list.length && !list.includes(selectedSem.value)) { selectedSem.value = list[0] }
@@ -1543,6 +1621,7 @@ watch(() => route.query.tab, (val) => {
 .schedule-page::-webkit-scrollbar { display: none; }
 
 /* AI 成长驾驶舱区块（学业中心移动端顶部） */
+/* ===== 移动端：驾驶舱主页 ===== */
 /* ===== 移动端：驾驶舱主页 ===== */
 .dashboard-home { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
 
@@ -1577,8 +1656,6 @@ watch(() => route.query.tab, (val) => {
 
 /* ===== 通用卡片 ===== */
 .content-card { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); padding: 12px 16px 16px; }
-.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-light, #f0f0f0); }
-.card-header span { font-size: 15px; font-weight: 600; color: var(--text-primary); }
 
 /* ===== 课表工具栏 ===== */
 .schedule-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -1614,8 +1691,6 @@ watch(() => route.query.tab, (val) => {
 .week-nav-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
 .week-nav-btn:hover { background: var(--accent-blue, #409eff); color: #fff; border-color: var(--accent-blue, #409eff); }
 .week-label { font-size: 14px; font-weight: 600; color: #1a1a2e; min-width: 50px; text-align: center; }
-.semester-link { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: linear-gradient(135deg, #67c23a, #5daf34); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 500; text-decoration: none; cursor: pointer; transition: all 0.2s; margin-left: auto; }
-.semester-link:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(103,194,58,.4); }
 
 /* ===== 课表表格 ===== */
 .schedule-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
@@ -1623,11 +1698,15 @@ watch(() => route.query.tab, (val) => {
 .holiday-box .holiday-icon { font-size: 56px; margin-bottom: 12px; }
 .holiday-box .holiday-title { font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px; }
 .holiday-box .holiday-sub { font-size: 14px; color: #c0c4cc; }
-.schedule-table th, .schedule-table td { border: 1px solid #ebeef5; text-align: center; vertical-align: middle; padding: 0; width: calc((100% - 80px) / 7); }
+.schedule-table th, .schedule-table td { border: 1px solid #ebeef5; text-align: center; vertical-align: middle; padding: 0; }
 .schedule-table td { height: 60px; }
-.schedule-table .period-cell { width: 80px; }
+/* 课程格四周留白（原先是内联 padding：内联优先级高于媒体查询，移动端改不动它） */
+.schedule-table td.cell-filled { padding: 4px; }
+/* 节次列固定 76px（与表头内联宽度口径统一），星期列均分剩余宽度：
+   周末无课时只渲染周一~周五，宽度自动分给这几列，不会留下空白 */
+.schedule-table thead th:first-child, .schedule-table .period-cell { width: 76px; min-width: 76px; }
 .schedule-table thead th { background: #f5f7fa; font-size: 14px; font-weight: 600; padding: 12px 8px; color: #303133; position: sticky; top: -12px; z-index: 2; }
-.schedule-table .period-cell { background: #fafafa; padding: 12px 8px; font-size: 13px; min-width: 80px; }
+.schedule-table .period-cell { background: #fafafa; padding: 12px 8px; font-size: 13px; }
 .schedule-table .period-cell .period-name { font-weight: 700; font-size: 13px; color: #303133; }
 .schedule-table .period-cell .period-time { font-size: 11px; color: #c0c4cc; margin-top: 2px; }
 .schedule-course { height: 100%; box-sizing: border-box; border-radius: 6px; padding: 8px; margin: 0; border-left: 3px solid; text-align: left; display: flex; flex-direction: column; justify-content: center; }
@@ -1655,6 +1734,8 @@ watch(() => route.query.tab, (val) => {
 .ai-result-card :deep(.md-h3),
 .ai-result-content :deep(.md-h3) { font-size: 16px; font-weight: 700; color: #1a1a2e; margin: 14px 0 8px; }
 .ai-result-card :deep(.md-h4),
+.ai-result-content :deep(.md-h4) { font-size: 15px; font-weight: 700; color: #1a1a2e; margin: 14px 0 8px; }
+/* 成绩页右栏：考试 + AI 分析 */
 .grades-side-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .side-exam-card { margin-bottom: 0 !important; }
 .side-ai-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -1699,21 +1780,7 @@ watch(() => route.query.tab, (val) => {
 .grade-stat-card.stat-clickable { cursor: pointer; transition: all .2s; }
 .grade-stat-card.stat-clickable:hover { border-color: var(--accent-blue); box-shadow: 0 4px 14px rgba(64,158,255,.12); transform: translateY(-2px); }
 .grade-stat-card.stat-clickable:hover .stat-help { color: var(--accent-blue); }
-.semester-action-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: linear-gradient(135deg, #ecf5ff, #f0f9eb); border: 1px solid rgba(64,158,255,.18); text-decoration: none; color: inherit; cursor: pointer; transition: all .2s; box-shadow: 0 2px 8px rgba(64,158,255,.08); }
-.semester-action-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(64,158,255,.22); border-color: #409eff; }
-.semester-action-card .sac-icon { width: 44px; height: 44px; border-radius: 12px; background: #fff; color: #409eff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
-.semester-action-card .sac-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.semester-action-card .sac-title { font-size: 14px; font-weight: 700; color: #1a1a2e; }
-.semester-action-card .sac-sub { font-size: 12px; color: #909399; margin-top: 2px; }
-.semester-action-card .sac-arrow { color: #409eff; flex-shrink: 0; }
 .grades-detail-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 16px; margin-bottom: 16px; align-items: stretch; }
-.grades-side-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.side-exam-card { margin-bottom: 0 !important; }
-.side-ai-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.side-ai-card .ai-result-card { max-height: 340px; }
-.ai-side-body { padding: 14px 16px 16px !important; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.ai-side-body .ai-placeholder { flex: 1; height: auto; }
-.exam-list { display: flex; flex-direction: column; gap: 8px; padding-top: 14px !important; }
 .course-rank-scroll { display: flex; flex-direction: column; gap: 8px; max-height: 264px; overflow-y: auto; scrollbar-width: thin; }
 .course-rank-scroll::-webkit-scrollbar { width: 4px; }
 .course-rank-scroll::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
@@ -1739,14 +1806,8 @@ watch(() => route.query.tab, (val) => {
 .goal-item-body { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .goal-item-left { display: flex; align-items: center; gap: 10px; }
 .goal-item-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #666; }
-.stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.score-mascot { position: relative; flex-shrink: 0; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; }
-.score-mascot img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 /* 移动端专属：右下角绵小城（桌面隐藏） */
 .grades-mascot { display: none; }
-.growth-two-col { display: flex; gap: 16px; }
-.growth-left-col { flex: 1; min-width: 0; }
-.growth-right-col { width: 360px; flex-shrink: 0; }
 /* ===== 学期成绩明细：学期选择行（选择器 + 统计胶囊 + 查询链接） ===== */
 .sem-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
 /* 宽度必须写死：el-select 默认 width:100% 会撑满整行，而 width:auto 在 flex 里会塌缩
@@ -1841,11 +1902,6 @@ watch(() => route.query.tab, (val) => {
   margin-left: 2px;
 }
 .head-save { margin-left: auto; }
-/* 卡片头右侧的操作入口（如：查询学期信息/下载证明） */
-.semester-action-card.head-action { margin-left: auto; padding: 8px 12px; border-radius: 10px; gap: 10px; }
-.semester-action-card.head-action .sac-icon { width: 32px; height: 32px; border-radius: 8px; }
-.semester-action-card.head-action .sac-title { font-size: 13px; }
-.semester-action-card.head-action .sac-sub { font-size: 11px; }
 /* 学期选择行右侧的轻量链接 */
 .sem-link-action { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; color: var(--accent-blue, #409eff); background: var(--hover-bg, rgba(64,158,255,.06)); text-decoration: none; white-space: nowrap; transition: all .2s ease; flex-shrink: 0; }
 .sem-link-action:hover { background: rgba(64,158,255,.12); color: #337ecc; transform: translateY(-1px); }
@@ -1884,24 +1940,12 @@ watch(() => route.query.tab, (val) => {
 .line-chart { height: 230px; }
 .pie-chart { height: 230px; }
 .chart { width: 100%; height: 220px; }
-.cloud-block { margin-bottom: 16px; }
-.cloud-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
-.tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; }
-.cloud-empty { font-size: 12px; color: var(--text-placeholder); line-height: 24px; }
-.skill-tag { font-size: 12px; padding: 3px 12px; border-radius: 16px; }
 /* 标签删除动画 */
 .tag-fade-leave-active { transition: all .25s ease; }
 .tag-fade-leave-to { opacity: 0; transform: scale(.85); }
 /* 空状态文字淡入 */
 .empty-fade-enter-active { transition: all .3s ease; }
 .empty-fade-enter-from { opacity: 0; transform: translateY(-6px); }
-.preset-block { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; margin-bottom: 16px; border-radius: 12px; background: var(--hover-bg); border: 1px solid var(--border-light); }
-.preset-row { display: flex; align-items: flex-start; gap: 12px; }
-.preset-label { flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--text-muted); line-height: 24px; width: 32px; }
-.preset-tags { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
-.preset-tag { cursor: pointer; font-size: 12px; }
-.tag-input-row { display: flex; gap: 8px; align-items: center; }
-.tag-input-row .el-input { flex: 1; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .section-header-title { display: flex; align-items: center; line-height: 1; }
 /* 技能与兴趣（重设计） */
@@ -2026,86 +2070,7 @@ watch(() => route.query.tab, (val) => {
 .formula-line { background: #fff; border: 1px dashed #d0d7e2; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #303133; line-height: 1.6; word-break: break-all; }
 .formula-sub { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .formula-sub b { color: #409eff; }
-
-/* ===== 移动端适配 ===== */
-@media (max-width: 767px) {
-  .schedule-page { padding: 8px 12px 0; }
-  .page-tab .el-icon { font-size: 16px; }
-  .page-tab.active::before { display: none; }
-  .content-row { flex-direction: column; }
-  .schedule-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; row-gap: 8px; }
-  .schedule-toolbar .schedule-toolbar-title { flex: 1 0 100%; }
-  /* 标题独占一行；学期选择器紧贴周次导航右侧。
-     wrap 容器是否换行只看 flex-basis：basis 用小值(100px)保证通过换行判定，
-     grow:1 拉伸填满剩余空间——标签已缩短，拉伸后宽度 ≈ 内容宽，无明显空白；空间不足时收缩省略 */
-  .schedule-toolbar .semester-tag.semester-select { width: auto; min-width: 0; margin-left: 0; flex: 1 1 100px; }
-  .schedule-toolbar .semester-tag.semester-select :deep(.el-select__selected-item) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* 「回到本周」浮到卡片右上角（标题行右侧空位），脱流不占行宽、不撑行高，周次 + 学期独占一行 */
-  .schedule-toolbar .reset-week-btn { position: absolute; top: 12px; right: 16px; margin: 0; height: 24px; line-height: 24px; padding: 0 8px; }
-  .semester-link { margin-left: 0; margin-top: 8px; }
-  .grade-stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .grade-stat-card { padding: 12px; }
-  .grade-stat-card .stat-value { font-size: 16px; }
-  .grade-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .grade-card { padding: 10px 12px; }
-  .gc-score { font-size: 18px; }
-  .sem-selector { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .sem-selector .semester-tag { margin-left: 0; }
-  /* 移动端：选择器占满一行便于点选，统计胶囊收紧字号，查询链接回到左侧与胶囊对齐 */
-  .sem-selector .semester-tag.semester-select { width: 100%; flex: 1 1 auto; min-width: 0; }
-  .sem-stats-inline > span { padding: 2px 9px; font-size: 11px; }
-  .sem-link-action { margin-left: 0; }
-  /* 移动端：成绩分析页统一纵向流式布局，便于末尾 el-empty 排序 */
-  .grades-view { display: flex; flex-direction: column; }
-  /* 子项禁止收缩：容器高度受视口约束，卡片又带 overflow:hidden（min-height:auto → 0），
-     展开「课程画像」撑高时空间不足会把上方卡片压扁，而不是交给页面滚动。
-     固定为自然高度后，多出的高度由 .schedule-page 的 overflow-y 接管 */
-  .grades-view > * { flex-shrink: 0; }
-  .grades-view .grades-detail-row,
-  .score-stats .stat-item { flex: 0 0 calc((100% - 36px) / 4); min-width: 0; }
-  .score-stats .stat-num { font-size: 18px !important; }
-  .score-mascot { width: 72px; height: 72px; }
-  /* 移动端：AI 学情分析改由右下角绵小城入口承载，隐藏侧栏卡片（桌面端保留） */
-  .side-ai-card { display: none; }
-  /* 移动端：课程画像折叠（点击标题行展开/收起，箭头旋转提示状态） */
-  .course-profile-card .analytics-head { cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .2s ease, border-color .3s ease; }
-  .course-profile-card .analytics-head:active { background: rgba(64,158,255,.08); }
-  /* 收起时抹掉标题行下边框，否则卡片底部会多出一条悬空的线 */
-  .course-profile-card:not(.is-open) .analytics-head { border-bottom-color: transparent; }
-  .course-profile-card .head-toggle { display: inline-flex; margin-left: auto; font-size: 15px; color: var(--text-muted, #909399); transition: transform .3s ease; }
-  .course-profile-card.is-open .head-toggle { transform: rotate(180deg); }
-  /* 过渡期间裁剪内容：组件只在下一帧才写 overflow，补这条避免首帧溢出一闪 */
-  .course-profile-card .el-collapse-transition-enter-active,
-  .course-profile-card .el-collapse-transition-leave-active { overflow: hidden; }
-  /* 移动端成绩分析：右下角绵小城（点击弹出 AI 学情分析） */
-  .grades-mascot { display: block; position: fixed; right: 12px; bottom: 68px; width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
-  .grades-mascot:active { transform: scale(.92); }
-  .grades-mascot img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.12)); pointer-events: none; }
-  @keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-  .stat-num { font-size: 20px; }
-  .growth-two-col { flex-direction: column; }
-  .growth-right-col { width: 100%; }
-  .grades-view > .el-empty { order: 6; }
-  .sem-stats-inline { flex-wrap: wrap; gap: 8px; }
-  .goal-item-body { flex-direction: column; align-items: flex-start; }
-  .record-card { padding: 12px; }
-  .record-title { font-size: 13px; }
-
-  /* 移动端课表：压缩列宽与内容，保证周一~周日全部列一屏展示 */
-  .schedule-table { min-width: 0; }
-  .schedule-table th, .schedule-table td { width: auto; }
-  .schedule-table thead th { padding: 8px 0; font-size: 11px; }
-  .schedule-table td { height: 52px; }
-  .schedule-table .period-cell, .schedule-table thead th:first-child { width: 34px !important; min-width: 34px; padding: 6px 0; }
-  .schedule-table .period-cell .period-name { font-size: 10px; white-space: nowrap; }
-  .schedule-table .period-cell .period-time { display: none; }
-  .schedule-page .card-body { overflow-x: visible; }
-  .schedule-course { padding: 2px; border-left-width: 2px; border-radius: 4px; justify-content: flex-start; }
-  .schedule-course .course-name { font-size: 10px; line-height: 1.25; margin-bottom: 0; white-space: normal; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-  .schedule-course .course-teacher { display: none; }
-  .schedule-course .course-loc { font-size: 9px; line-height: 1.2; }
-}
-
+/* 计算规则弹窗：课程明细表 + 维度卡（原本夹在两个媒体块之间被误删，这里按原样补回） */
 .formula-table-wrap { max-height: 150px; overflow-y: auto; scrollbar-width: thin; }
 .formula-table-wrap::-webkit-scrollbar { width: 4px; }
 .formula-table-wrap::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
@@ -2127,16 +2092,43 @@ watch(() => route.query.tab, (val) => {
 .all-records-scroll::-webkit-scrollbar { width: 4px; }
 .all-records-scroll::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
 
-/* ===== 移动端适配（续） ===== */
+/* ===== 移动端适配 =====
+   原先被拆成两个 @media (max-width: 767px) 块且有 22 条完全重复的声明，
+   这里合并为一块：只在该媒体块生效的规则（v-if="!isMobile" 的 .page-tabs、
+   已废弃的 .semester-link / .semester-action-card 等）已删除。 */
 @media (max-width: 767px) {
+  .schedule-page { padding: 8px 12px 0; }
   .content-main { max-width: 100%; }
-  .page-tabs { flex-direction: row; order: -1; width: 100%; align-self: auto; position: static; overflow-x: auto; border-radius: 12px; }
-  .page-tab { flex: 1; flex-shrink: 0; flex-direction: row; gap: 6px; padding: 10px 16px; justify-content: center; letter-spacing: 0; }
-  .page-tab .el-icon { font-size: 16px; }
-  .page-tab.active::before { display: none; }
   .content-row { flex-direction: column; }
+
+  /* ── 教学安排工具栏 ── */
+  .schedule-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; row-gap: 8px; }
   .schedule-toolbar .schedule-toolbar-title { flex: 1 0 100%; }
-  .semester-link { margin-left: 0; margin-top: 8px; }
+  /* 标题独占一行；学期选择器紧贴周次导航右侧。
+     wrap 容器是否换行只看 flex-basis：basis 用小值(100px)保证通过换行判定，
+     grow:1 拉伸填满剩余空间——标签已缩短，拉伸后宽度 ≈ 内容宽，无明显空白；空间不足时收缩省略 */
+  .schedule-toolbar .semester-tag.semester-select { width: auto; min-width: 0; margin-left: 0; flex: 1 1 100px; }
+  .schedule-toolbar .semester-tag.semester-select :deep(.el-select__selected-item) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 「回到本周」浮到卡片右上角（标题行右侧空位），脱流不占行宽、不撑行高，周次 + 学期独占一行 */
+  .schedule-toolbar .reset-week-btn { position: absolute; top: 12px; right: 16px; margin: 0; height: 24px; line-height: 24px; padding: 0 8px; }
+  /* 30px 的周次按钮在触屏上太小，放大到 40px */
+  .week-nav-btn { width: 40px; height: 40px; }
+
+  /* ── 移动端课表 ──
+     周末无课时不渲染周六/周日两列（见 visibleDays，仅移动端生效），宽度全部给周一~周五：
+     375px 下每列从 ~41px 提升到 ~57px，课程名与教室才读得出来 */
+  .schedule-table thead th { padding: 8px 0; font-size: 11px; }
+  .schedule-table td { height: 56px; }
+  .schedule-table td.cell-filled { padding: 2px; }
+  .schedule-table .period-cell, .schedule-table thead th:first-child { width: 34px !important; min-width: 34px; padding: 6px 0; }
+  .schedule-table .period-cell .period-name { font-size: 10px; white-space: nowrap; }
+  .schedule-table .period-cell .period-time { display: none; }
+  .schedule-course { padding: 2px; border-left-width: 2px; border-radius: 4px; justify-content: flex-start; }
+  .schedule-course .course-name { font-size: 11px; line-height: 1.2; margin-bottom: 0; white-space: normal; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  .schedule-course .course-teacher { display: none; }
+  .schedule-course .course-loc { font-size: 10px; line-height: 1.15; }
+
+  /* ── 成绩分析 ── */
   .grade-stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .grade-stat-card { padding: 12px; }
   .grade-stat-card .stat-value { font-size: 16px; }
@@ -2145,26 +2137,57 @@ watch(() => route.query.tab, (val) => {
   .grade-card { padding: 10px 12px; }
   .gc-score { font-size: 18px; }
   .sem-selector { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .sem-selector .semester-tag { margin-left: 0; }
+  /* 选择器占满一行便于点选，统计胶囊收紧字号，查询链接回到左侧与胶囊对齐 */
+  .sem-selector .semester-tag.semester-select { width: 100%; flex: 1 1 auto; min-width: 0; }
   .sem-stats-inline { flex-wrap: wrap; gap: 8px; }
-  .goal-item-body { flex-direction: column; align-items: flex-start; }
-  .goal-input-wrap { flex-wrap: wrap; }
-  .score-header { flex-direction: column; align-items: center; gap: 16px; padding: 16px; }
+  .sem-stats-inline > span { padding: 2px 9px; font-size: 11px; }
+  .sem-link-action { margin-left: 0; }
+  /* 成绩分析页统一纵向流式布局，便于末尾 el-empty 排序 */
+  .grades-view { display: flex; flex-direction: column; }
+  /* 子项禁止收缩：容器高度受视口约束，卡片又带 overflow:hidden（min-height:auto → 0），
+     展开「课程画像」撑高时空间不足会把上方卡片压扁，而不是交给页面滚动。
+     固定为自然高度后，多出的高度由 .schedule-page 的 overflow-y 接管 */
+  .grades-view > * { flex-shrink: 0; }
+  /* 一项一行四等分只针对环形图下方的统计项；.grades-detail-row 是 grid 行，不参与该 flex 分配 */
   .score-stats { display: flex; flex-wrap: wrap; gap: 16px 12px; justify-content: center; }
   .score-stats .stat-item { flex: 0 0 calc((100% - 36px) / 4); min-width: 0; }
   .score-stats .stat-num { font-size: 18px !important; }
-  .score-mascot { width: 72px; height: 72px; }
   .stat-num { font-size: 20px; }
-  .growth-two-col { flex-direction: column; }
-  .growth-right-col { width: 100%; }
+  .score-mascot { width: 72px; height: 72px; }
+  .score-header { flex-direction: column; align-items: center; gap: 16px; padding: 16px; }
+  .grades-view > .el-empty { order: 6; }
+  /* AI 学情分析改由右下角绵小城入口承载，隐藏侧栏卡片（桌面端保留） */
+  .side-ai-card { display: none; }
+  /* 课程画像折叠（点击标题行展开/收起，箭头旋转提示状态） */
+  .course-profile-card .analytics-head { cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .2s ease, border-color .3s ease; }
+  .course-profile-card .analytics-head:active { background: rgba(64,158,255,.08); }
+  /* 收起时抹掉标题行下边框，否则卡片底部会多出一条悬空的线 */
+  .course-profile-card:not(.is-open) .analytics-head { border-bottom-color: transparent; }
+  .course-profile-card .head-toggle { display: inline-flex; margin-left: auto; font-size: 15px; color: var(--text-muted, #909399); transition: transform .3s ease; }
+  .course-profile-card.is-open .head-toggle { transform: rotate(180deg); }
+  /* 过渡期间裁剪内容：组件只在下一帧才写 overflow，补这条避免首帧溢出一闪 */
+  .course-profile-card .el-collapse-transition-enter-active,
+  .course-profile-card .el-collapse-transition-leave-active { overflow: hidden; }
+  .analytics-head { flex-wrap: wrap; row-gap: 6px; padding: 12px 16px; }
+  .head-sub { display: none; }
   .chart { height: 200px; }
+  .radar-chart { height: 240px; }
+  .line-chart { height: 200px; }
   .analytics-body.duo { flex-direction: column; }
   .panel { flex: none; }
   .panel-divider { width: 100%; height: 1px; margin: 14px 12px; }
-  .analytics-head { flex-wrap: wrap; row-gap: 6px; padding: 12px 16px; }
-  .head-sub { display: none; }
-  .semester-action-card.head-action { margin-left: 0; flex: 1 0 100%; }
-  .radar-chart { height: 240px; }
-  .line-chart { height: 200px; }
+  /* 右下角绵小城（点击弹出 AI 学情分析） */
+  .grades-mascot { display: block; position: fixed; right: 12px; bottom: 68px; width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
+  .grades-mascot:active { transform: scale(.92); }
+  .grades-mascot img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.12)); pointer-events: none; }
+  @keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+  /* ── 成长轨迹 ── */
+  .growth-two-col { flex-direction: column; }
+  .growth-right-col { width: 100%; }
+  .goal-item-body { flex-direction: column; align-items: flex-start; }
+  .goal-input-wrap { flex-wrap: wrap; }
   .record-card { padding: 12px; }
   .record-title { font-size: 13px; }
 }
