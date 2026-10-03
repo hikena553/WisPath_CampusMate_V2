@@ -67,6 +67,14 @@ def init_sentry_if_configured() -> None:
     except ImportError:  # pragma: no cover - 依赖缺失兜底
         logger.warning("SENTRY_DSN 已配置但未安装 sentry-sdk，跳过 Sentry 初始化")
 
+# 第三方 HTTP 客户端降噪：httpx/openai 每发一次请求都会在 INFO 打一条
+#   httpx: HTTP Request: GET https://... "HTTP/1.1 200 OK"
+# 首页/教务/arXiv/RSS 抓取一轮就会刷几十行，把业务日志淹没。这里只对这些
+# 依赖库压到 WARNING（真实错误仍会打印），项目自身 logger 保持 INFO 不变。
+# 需要排查 HTTP 细节时，临时改为 logging.INFO 即可。
+for _noisy_logger in ("httpx", "httpcore", "hpack", "openai", "urllib3"):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
