@@ -7,6 +7,19 @@
     <!-- ===== 第一层：KPI统计卡片 ===== -->
     <HomeKpiCards :cards="statCards" @navigate="navigateTo" />
 
+    <!-- ===== 我的工作台（模块 7）：今日待办 / 本周计划 / 工作量 ===== -->
+    <section class="workbench-section">
+      <div class="workbench-head">
+        <span class="workbench-title">我的工作台</span>
+        <span class="workbench-sub">以「我」为主语，一眼看清今天该做什么</span>
+      </div>
+      <div class="workbench-grid">
+        <TodayTasksCard @open-tasks="openTasksPanel" />
+        <WeekPlanCard @open-schedule="openSchedulePanel" />
+        <WorkloadCard @open-records="router.push('/teacher/students')" />
+      </div>
+    </section>
+
     <!-- ===== AI 悬浮按钮 + 决策支持层 ===== -->
     <HomeAiPanel :proactive-actions="proactiveActions" :contact-suggestions="contactSuggestions"
       :ai-loading="aiLoading" @refresh="loadAiDecisions" />
@@ -100,6 +113,16 @@
     <!-- 添加日程弹窗 -->
     <HomeAddScheduleDialog v-model:visible="scheduleDialogVisible" :date="selectedDateStr"
       v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="loadSchedules" />
+    <!-- 桌面端：全部待办任务弹窗（模块 7 工作台入口） -->
+    <el-dialog v-model="showTasksDialog" title="我的待办任务"
+      :width="isMobile ? '92%' : '640px'" align-center destroy-on-close class="wb-task-dialog">
+      <TeacherTaskList initial-filter="all" @record-care="openQuickCare" />
+    </el-dialog>
+
+    <!-- 记录关怀（来自任务卡） -->
+    <CareRecordDialog v-model="showCareDialog" :student-id="careStudentId"
+      :student-name="careStudentName" :task-id="careTaskId" :task-title="careTaskTitle" />
+
     <!-- 桌宠弹窗：班级情况分析 -->
     <HomeMascotAnalysisDialog v-model:visible="showAnalysisDialog" :analysis-result="analysisResult"
       :analysis-loading="analysisLoading" :analyze="runAnalysis" :load-profiles="loadStudentProfiles"
@@ -122,7 +145,7 @@ import { getAlerts } from '@/api/crisis'
 import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'
 import { getPendingLeaves } from '@/api/leave'
 import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getClassStats, getOverdueSchedules, updateTeacherSchedule, getStudents, suggestContacts } from '@/api/teacher'
-import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
+import { getTeacherTaskSummary, type TeacherTask, type TeacherTaskSummary } from '@/api/teacherTask'
 import type { DashboardStats, ClassEvaluation, ClassStats, ScheduleItem, ScheduleUrgency, StudentSummary, ContactSuggestion } from '@/api/teacher'
 import { getAnnouncements } from '@/api/campus'
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
@@ -147,6 +170,11 @@ import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import HomeQuickAddTask from './HomeQuickAddTask.vue'
 import HomeAddScheduleDialog from './HomeAddScheduleDialog.vue'
 import HomeMascotAnalysisDialog from './HomeMascotAnalysisDialog.vue'
+import TodayTasksCard from '@/components/teacher/workbench/TodayTasksCard.vue'
+import WeekPlanCard from '@/components/teacher/workbench/WeekPlanCard.vue'
+import WorkloadCard from '@/components/teacher/workbench/WorkloadCard.vue'
+import TeacherTaskList from '@/components/teacher/task/TeacherTaskList.vue'
+import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
 
 // keep-alive include 按组件名匹配，必须与 TeacherLayout 的 cachedNames 一致，否则切换时组件被销毁重建导致数据闪变
 defineOptions({ name: 'teacher-home' })
@@ -400,6 +428,14 @@ const evalData = ref<ClassEvaluation>({
 const showCrisisSubPage = ref(false)
 const showTodaySubPage = ref(false)
 const showTasksSubPage = ref(false)
+// 桌面端全部待办弹窗（工作台入口）
+const showTasksDialog = ref(false)
+// 工作台：来自任务卡的记录关怀
+const showCareDialog = ref(false)
+const careStudentId = ref(0)
+const careStudentName = ref('')
+const careTaskId = ref<number>()
+const careTaskTitle = ref('')
 watch(showTodaySubPage, (open) => {
   if (open) selectedTaskDate.value = new Date().toISOString().slice(0, 10)
 })
@@ -458,10 +494,35 @@ function navigateTo(path: string) {
   } else if (path === '__today__') {
     showTodaySubPage.value = true
   } else if (path === '__tasks__') {
-    showTasksSubPage.value = true
+    openTasksPanel()
   } else {
     router.push(path)
   }
+}
+
+/** 工作台：全部待办——移动端进子页，桌面端开弹窗 */
+function openTasksPanel() {
+  if (isMobile.value) showTasksSubPage.value = true
+  else showTasksDialog.value = true
+}
+
+/** 工作台：周计划去安排——移动端进日程子页，桌面端开新增日程 */
+function openSchedulePanel() {
+  if (isMobile.value) showScheduleSubPage.value = true
+  else openCreateDialog()
+}
+
+/** 工作台：任务卡一键记录关怀 */
+function openQuickCare(task: TeacherTask) {
+  if (!task.student_id) {
+    navigateTo('/teacher/students')
+    return
+  }
+  careStudentId.value = task.student_id
+  careStudentName.value = task.student_name
+  careTaskId.value = task.id
+  careTaskTitle.value = task.title
+  showCareDialog.value = true
 }
 
 // ===== Calendar State =====
@@ -963,6 +1024,46 @@ onUnmounted(() => {
     border-color: #ef4444;
     background: #fef2f2;
     color: #dc2626;
+  }
+}
+
+/* ===== 我的工作台（模块 7）：今日待办 / 本周计划 / 工作量 ===== */
+.workbench-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 14px;
+}
+.workbench-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 4px;
+}
+.workbench-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #101828;
+}
+.workbench-sub {
+  font-size: 12px;
+  color: #98a2b3;
+}
+.workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 767px) {
+  .workbench-head {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .workbench-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }
 

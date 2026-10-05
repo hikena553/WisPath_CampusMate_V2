@@ -357,3 +357,114 @@ def _query_care_records(db: Session, args: dict, user: User) -> dict:
             for r in records
         ],
     }
+
+
+# ============ P1 模块工具：成长档案 / 问卷互评 / 关怀中心 / 家校沟通 ============
+
+
+def _query_my_portfolio(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_portfolio_service as svc
+    report = svc.report(db, user.id)
+    if not report["total"]:
+        return {"message": "你的成长档案还是空的，可以在「成长档案」页沉淀第一条", "by_type": report["by_type"]}
+    return {
+        "message": f"你共有 {report['total']} 条成长档案",
+        "by_type": [t for t in report["by_type"] if t["count"]],
+        "recent": [
+            {"title": it["title"], "type": it["item_type"], "occurred_on": it["occurred_on"]}
+            for it in report["items"][:8]
+        ],
+    }
+
+
+def _create_portfolio_item(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_portfolio_service as svc
+    title = (args.get("title") or "").strip()
+    if not title:
+        return {"success": False, "message": "缺少档案标题"}
+    item_type = args.get("item_type") or "case"
+    if item_type not in ("case", "honor", "training", "research"):
+        return {"success": False, "message": "类型仅支持 case/honor/training/research"}
+    occurred_on = None
+    if args.get("occurred_on"):
+        try:
+            occurred_on = date.fromisoformat(args["occurred_on"])
+        except ValueError:
+            return {"success": False, "message": "日期格式应为 YYYY-MM-DD"}
+    item = svc.create_item(
+        db,
+        teacher_id=user.id,
+        title=title,
+        item_type=item_type,
+        reflection=args.get("reflection"),
+        occurred_on=occurred_on,
+    )
+    label = svc.TYPE_LABELS.get(item_type, item_type)
+    return {"success": True, "item_id": item.id, "message": f"已添加一条{label}成长档案：{title}"}
+
+
+def _query_my_survey_results(db: Session, args: dict, user: User) -> dict:
+    from app.services import peer_survey_service as svc
+    results = svc.my_results(db, user.id)
+    if not results:
+        return {"message": "暂无针对你的问卷评价"}
+    out = []
+    for r in results:
+        out.append(
+            {
+                "title": r["title"],
+                "response_count": r["response_count"],
+                "enough_sample": r["enough_sample"],
+                "overall_average": r["overall_average"],
+                "note": "样本不足，暂不展示分布" if not r["enough_sample"] else "",
+            }
+        )
+    return {"message": f"共{len(results)}份问卷有你被评的记录", "results": out}
+
+
+def _query_care_calendar(db: Session, args: dict, user: User) -> dict:
+    from app.services import care_center_service as svc
+    events = svc.list_events(db, user.id, args.get("month"))
+    if not events:
+        return {"message": "本月的关怀日历还是空的，可用自动生成或手动添加", "events": []}
+    return {
+        "message": f"本月共{len(events)}条关怀事项",
+        "events": [
+            {
+                "event_id": e["id"],
+                "event_type": svc.EVENT_TYPE_LABELS.get(e["event_type"], e["event_type"]),
+                "date": str(e["event_date"]),
+                "title": e["title"],
+                "student_name": e["student_name"],
+            }
+            for e in events
+        ],
+    }
+
+
+def _query_guardian_logs(db: Session, args: dict, user: User) -> dict:
+    from app.services import guardian_service as svc
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    logs = svc.list_logs(db, user.id, student_id=student.id, limit=10)
+    guardians = svc.list_guardians(db, student.id)
+    if not logs and not guardians:
+        return {"message": f"{student.name}暂无家长联系人与沟通记录"}
+    return {
+        "message": f"{student.name}：联系人 {len(guardians)} 位，沟通记录 {len(logs)} 条",
+        "guardians": [
+            {"name": g["name"], "relation": g["relation"], "phone": g["phone_masked"], "is_primary": g["is_primary"]}
+            for g in guardians
+        ],
+        "logs": [
+            {
+                "scene": svc.SCENE_LABELS.get(l["scene"], l["scene"]),
+                "channel": l["channel"],
+                "status": l["status"],
+                "content": l["content_summary"][:120],
+                "created_at": l["created_at"][:10],
+            }
+            for l in logs
+        ],
+    }

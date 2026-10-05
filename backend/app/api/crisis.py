@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -8,7 +9,10 @@ from app.core.deps import get_current_user
 from app.models.user import User, UserRole
 from app.models.crisis import AIDialogSummary, InterventionType
 from app.schemas.crisis import AIDialogSummaryOut, CrisisResolve, CrisisInterveneIn
+from app.services import guardian_service
 from app.utils.enum_helpers import safe_enum_val
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/crisis", tags=["crisis"])
 
@@ -206,4 +210,17 @@ def intervene_alert(alert_id: int, req: CrisisInterveneIn, user: User = Depends(
     alert.resolved_by = user.id
     alert.resolved_at = datetime.now(timezone.utc)
     db.commit()
+    # 家校沟通挂接点（A9）：干预类型为「约谈家长」时同步生成沟通台账
+    if req.intervention_type == InterventionType.PARENT_MEETING.value:
+        try:
+            guardian_service.create_log(
+                db,
+                teacher_id=user.id,
+                student_id=alert.student_id,
+                content_summary=(req.intervention_note or "危机干预约谈家长"),
+                scene="crisis",
+                channel="note",
+            )
+        except Exception:  # 台账失败不影响干预主流程
+            logger.warning("危机约谈台账生成失败 alert=%s", alert_id, exc_info=True)
     return {"message": "干预记录已保存"}

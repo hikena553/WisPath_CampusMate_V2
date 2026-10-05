@@ -174,7 +174,7 @@ import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, ChatDotRound, User, Message, Notebook, Stamp, WarningFilled,
-  SwitchButton, CameraFilled, Fold, Expand
+  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -203,6 +203,10 @@ const navItems = [
   { path: '/teacher/students', label: '学生档案', icon: Notebook },
   { path: '/teacher/approval', label: '审批管理', icon: Stamp },
   { path: '/teacher/crisis', label: '预警工作台', icon: WarningFilled },
+  { path: '/teacher/portfolio', label: '成长档案', icon: Collection },
+  { path: '/teacher/survey', label: '问卷互评', icon: EditPen },
+  { path: '/teacher/care-center', label: '关怀中心', icon: Sunny },
+  { path: '/teacher/guardian', label: '家校沟通', icon: Connection },
   { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
 ]
 

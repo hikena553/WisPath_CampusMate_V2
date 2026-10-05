@@ -27,3 +27,30 @@ from app.models.sms import SmsLog
 from app.models.feed import FeedSource, ExternalFeedItem
 from app.models.teacher_task import TeacherTask, TaskSourceType, TaskStatus
 from app.models.care_record import CareRecord, CareRecordType
+from app.models.teacher_portfolio import (
+    PortfolioItemType,
+    PortfolioVisibility,
+    TeacherPortfolioItem,
+)
+from app.models.peer_survey import (
+    PeerSurvey,
+    PeerSurveyResponse,
+    PeerSurveyStatus,
+    PeerSurveyTargetType,
+)
+from app.models.care_center import (
+    CareEvent,
+    CareEventType,
+    HomeVisitMethod,
+    HomeVisitRecord,
+    PraiseRecord,
+    PraiseType,
+)
+from app.models.guardian import (
+    Guardian,
+    GuardianChannel,
+    GuardianContactLog,
+    GuardianContactStatus,
+    GuardianScene,
+    GuardianShareLink,
+)

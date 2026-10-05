@@ -54,6 +54,14 @@ from app.models.profile import StudentProfileSnapshot  # noqa: E402
 from app.models.leave import LeaveRequest  # noqa: E402
 from app.models.teacher_task import TeacherTask  # noqa: E402
 from app.models.care_record import CareRecord  # noqa: E402
+from app.models.teacher_portfolio import TeacherPortfolioItem  # noqa: E402
+from app.models.peer_survey import PeerSurvey, PeerSurveyResponse  # noqa: E402
+from app.models.care_center import CareEvent, HomeVisitRecord, PraiseRecord  # noqa: E402
+from app.models.guardian import (  # noqa: E402
+    Guardian,
+    GuardianContactLog,
+    GuardianShareLink,
+)
 from app.models.user import User, UserRole  # noqa: E402
 from app.utils.rate_limiter import reset_rate_limiter  # noqa: E402
 
@@ -140,6 +148,23 @@ def make_user(db):
             db.query(TeacherTask).filter(TeacherTask.student_id == u.id).delete()
             db.query(CareRecord).filter(CareRecord.teacher_id == u.id).delete()
             db.query(CareRecord).filter(CareRecord.student_id == u.id).delete()
+            db.query(TeacherPortfolioItem).filter(TeacherPortfolioItem.teacher_id == u.id).delete()
+            db.query(PeerSurveyResponse).filter(PeerSurveyResponse.target_teacher_id == u.id).delete()
+            db.query(PeerSurvey).filter(PeerSurvey.created_by == u.id).delete()
+            db.query(CareEvent).filter(CareEvent.teacher_id == u.id).delete()
+            db.query(CareEvent).filter(CareEvent.student_id == u.id).delete()
+            db.query(HomeVisitRecord).filter(HomeVisitRecord.teacher_id == u.id).delete()
+            db.query(HomeVisitRecord).filter(HomeVisitRecord.student_id == u.id).delete()
+            db.query(PraiseRecord).filter(PraiseRecord.teacher_id == u.id).delete()
+            db.query(PraiseRecord).filter(PraiseRecord.student_id == u.id).delete()
+            db.query(GuardianShareLink).filter(
+                GuardianShareLink.log_id.in_(
+                    db.query(GuardianContactLog.id).filter(GuardianContactLog.teacher_id == u.id)
+                )
+            ).delete(synchronize_session=False)
+            db.query(GuardianContactLog).filter(GuardianContactLog.teacher_id == u.id).delete()
+            db.query(GuardianContactLog).filter(GuardianContactLog.student_id == u.id).delete()
+            db.query(Guardian).filter(Guardian.student_id == u.id).delete()
             db.query(LeaveRequest).filter(LeaveRequest.student_id == u.id).delete()
             db.delete(u)
     db.commit()

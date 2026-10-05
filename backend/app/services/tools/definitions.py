@@ -504,4 +504,64 @@ TEACHER_TOOL_DEFINITIONS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_portfolio",
+            "description": "查看自己的教师成长档案汇总（工作案例/荣誉/培训研修/研究成果）。教师说'我的成长档案'、'我有哪些成果'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_portfolio_item",
+            "description": "为自己新增一条成长档案。教师说'记一条成长档案/工作案例/荣誉'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "档案标题"},
+                    "item_type": {"type": "string", "enum": ["case", "honor", "training", "research"], "description": "case工作案例/honor荣誉/training培训研修/research研究成果，默认case"},
+                    "reflection": {"type": "string", "description": "反思（可选）"},
+                    "occurred_on": {"type": "string", "description": "发生日期 YYYY-MM-DD（可选）"}
+                },
+                "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_survey_results",
+            "description": "查看自己的匿名问卷被评结果（仅聚合，样本不足时不展示分布）。教师说'我的互评结果'、'问卷评分'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_care_calendar",
+            "description": "查看人文关怀日历事项（生日/困难学生/学业预警等）。教师说'这个月要关怀谁'、'关怀日历'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "month": {"type": "string", "description": "月份 YYYY-MM，不传为当月"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_guardian_logs",
+            "description": "查看某学生的家长联系人与家校沟通台账。教师说'某某的家长沟通记录'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
 ]

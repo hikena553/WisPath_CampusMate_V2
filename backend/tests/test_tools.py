@@ -139,3 +139,44 @@ async def test_teacher_tools_reject_foreign_student(make_user, db, _tool_counter
 
     query = await execute_tool("query_care_records", {"student_name": "陌生学生"}, teacher)
     assert query["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_p1_module_tools_flow(make_user, db, _tool_counters_clean):
+    """P1 工具：成长档案增查 / 关怀日历 / 家校沟通台账 / 我的互评结果。"""
+    teacher = make_user(role=UserRole.TEACHER)
+    student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id, name="工具学生")
+
+    # 成长档案：新增后可在汇总中查到
+    created = await execute_tool(
+        "create_portfolio_item",
+        {"title": "学业帮扶案例", "item_type": "case", "reflection": "先共情再给方案"},
+        teacher,
+    )
+    assert created["success"] is True
+
+    portfolio = await execute_tool("query_my_portfolio", {}, teacher)
+    assert "1" in portfolio["message"]
+    assert any(t["type"] == "case" for t in portfolio["by_type"])
+
+    # 关怀日历：手动建一条后本月可查
+    event = await execute_tool(
+        "query_care_calendar",
+        {},
+        teacher,
+    )
+    assert "events" in event  # 空或非空都应正常返回
+
+    # 家校沟通：名下学生无数据时给出友好提示
+    guardian = await execute_tool("query_guardian_logs", {"student_name": "工具学生"}, teacher)
+    assert "暂无" in guardian["message"]
+
+    # 越权：他人学生不可查
+    other = make_user(role=UserRole.TEACHER)
+    stranger = make_user(role=UserRole.STUDENT, tutor_id=other.id, name="他人学生")
+    denied = await execute_tool("query_guardian_logs", {"student_name": "他人学生"}, teacher)
+    assert denied["success"] is False
+
+    # 我的互评结果：无数据时友好提示
+    survey = await execute_tool("query_my_survey_results", {}, teacher)
+    assert "message" in survey

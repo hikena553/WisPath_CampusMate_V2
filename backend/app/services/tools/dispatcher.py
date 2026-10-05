@@ -37,10 +37,15 @@ from .teacher import (
     _analyze_leave,
     _approve_leave,
     _create_care_record,
+    _create_portfolio_item,
     _create_teacher_task,
+    _query_care_calendar,
     _query_care_records,
     _query_crisis_alerts,
+    _query_guardian_logs,
     _query_growth_stats,
+    _query_my_portfolio,
+    _query_my_survey_results,
     _query_pending_leaves,
     _query_student_detail,
     _query_students,
@@ -96,6 +101,12 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "create_teacher_task": _create_teacher_task,
             "create_care_record": _create_care_record,
             "query_care_records": _query_care_records,
+            # 成长档案 / 问卷互评 / 关怀中心 / 家校沟通
+            "query_my_portfolio": _query_my_portfolio,
+            "create_portfolio_item": _create_portfolio_item,
+            "query_my_survey_results": _query_my_survey_results,
+            "query_care_calendar": _query_care_calendar,
+            "query_guardian_logs": _query_guardian_logs,
         }
         fn = handler.get(name)
         if not fn:
