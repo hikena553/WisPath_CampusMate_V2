@@ -1,10 +1,18 @@
 <template>
   <div class="tui-page">
-    <!-- 移动端吸顶栏（「更多」为底部页签页，无返回键） -->
-    <header v-if="isMobile" class="tui-appbar">
+    <!-- 移动端吸顶品牌栏（「更多」为底部页签页，无返回键） -->
+    <header v-if="isMobile" class="tui-appbar tui-appbar-brand">
+      <button
+        class="tui-mascot tui-mascot-md tui-mascot-float tui-mascot-action"
+        type="button"
+        aria-label="去找绵小城"
+        @click="router.push('/teacher/agent')"
+      >
+        <img src="/images/mascot.png" alt="绵小城吉祥物" />
+      </button>
       <div class="tui-appbar-title">
         全部功能
-        <span class="tui-appbar-sub">按职能分区，点击图标直达</span>
+        <span class="tui-appbar-sub">绵小城 · 按职能分区，点击直达</span>
       </div>
       <div class="tui-appbar-actions">
         <el-button text circle aria-label="搜索" @click="focusSearch">
@@ -14,10 +22,20 @@
     </header>
 
     <div class="tui-content">
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">全部功能</h2>
-          <p class="tui-header-sub">按职能分区，每个模块只做一件事，点击图标直达</p>
+      <header v-if="!isMobile" class="tui-header tui-header-brand">
+        <div class="tui-header-lead">
+          <button
+            class="tui-mascot tui-mascot-lg tui-mascot-float tui-mascot-action"
+            type="button"
+            aria-label="去找绵小城"
+            @click="router.push('/teacher/agent')"
+          >
+            <img src="/images/mascot.png" alt="绵小城吉祥物" />
+          </button>
+          <div>
+            <h2 class="tui-header-title">全部功能</h2>
+            <p class="tui-header-sub">绵小城 · 按职能分区，每个模块只做一件事</p>
+          </div>
         </div>
       </header>
 

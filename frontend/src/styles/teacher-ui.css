@@ -147,6 +147,90 @@
   flex-shrink: 0;
 }
 
+/* 品牌栏：吉祥物 + 标题 + 右侧操作（比普通 AppBar 略高，给吉祥物留呼吸） */
+.tui-appbar-brand {
+  min-height: 64px;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+}
+
+/* ============================ 吉祥物 ============================ */
+/* 以「圆形柔光底座」承载：吉祥物完整不裁切（它本身是举牌全身像），
+   底座用品牌色径向渐变 + 极淡描边，避免贴纸感，与宫格图标同一视觉语言 */
+.tui-mascot {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, #ffffff 0%, #eff4ff 58%, #dbeafe 100%);
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.1),
+    0 2px 8px rgba(37, 99, 235, 0.14);
+}
+.tui-mascot > img {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.tui-mascot-sm { width: 38px; height: 38px; }
+.tui-mascot-md { width: 46px; height: 46px; }
+.tui-mascot-lg { width: 56px; height: 56px; }
+
+/* 可点击的吉祥物（点击去找绵小城）；键盘可达 */
+.tui-mascot-action {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.2s var(--tui-ease), box-shadow 0.2s var(--tui-ease);
+}
+.tui-mascot-action:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.14),
+    0 6px 16px rgba(37, 99, 235, 0.2);
+}
+.tui-mascot-action:active { transform: translateY(0) scale(0.96); }
+.tui-mascot-action:focus-visible { outline: 2px solid var(--tui-brand); outline-offset: 2px; }
+
+/* 极缓上浮：让吉祥物"活着"，但绝不喧宾夺主 */
+.tui-mascot-float > img { animation: tui-mascot-float 4.5s ease-in-out infinite; }
+@keyframes tui-mascot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* 头部品牌文本 */
+.tui-header-lead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.tui-brand-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--tui-text);
+}
+.tui-brand-sub {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+}
+
+/* 尊重系统「减弱动效」设置 */
+@media (prefers-reduced-motion: reduce) {
+  .tui-mascot-float > img { animation: none; }
+  .tui-mascot-action { transition: none; }
+  .tui-mascot-action:hover { transform: none; }
+}
+
 /* ============================ 桌面端页头 ============================ */
 .tui-header {
   display: flex;
@@ -156,6 +240,8 @@
   flex-wrap: wrap;
   margin-bottom: 18px;
 }
+/* 含吉祥物时改为居中对齐，避免吉祥物与文字基线错位 */
+.tui-header-brand { align-items: center; }
 .tui-header-title {
   margin: 0;
   font-size: 22px;
