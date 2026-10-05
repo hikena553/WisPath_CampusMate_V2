@@ -71,6 +71,7 @@ const router = createRouter({
         { path: 'survey', name: 'teacher-survey', component: () => import('@/views/teacher/SurveyPage.vue'), meta: { keepAlive: false } },
         { path: 'care-center', name: 'teacher-care-center', component: () => import('@/views/teacher/CareCenterPage.vue'), meta: { keepAlive: false } },
         { path: 'guardian', name: 'teacher-guardian', component: () => import('@/views/teacher/GuardianPage.vue'), meta: { keepAlive: false } },
+        { path: 'more', name: 'teacher-more', component: () => import('@/views/teacher/MorePage.vue'), meta: { keepAlive: false } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
         { path: 'profile', name: 'teacher-profile', component: () => import('@/views/teacher/ProfilePage.vue'), meta: { keepAlive: false } },
       ],

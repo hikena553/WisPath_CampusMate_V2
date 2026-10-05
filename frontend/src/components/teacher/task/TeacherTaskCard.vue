@@ -9,6 +9,9 @@
         <span class="tt-source" :class="`src-${task.source_type}`">
           {{ TASK_SOURCE_LABEL[task.source_type] }}
         </span>
+        <span v-if="task.rule_code" class="tt-rule">
+          <el-icon :size="11"><MagicStick /></el-icon>{{ taskRuleLabel(task.rule_code) }}
+        </span>
         <span v-if="task.overdue" class="tt-overdue-tag">
           <el-icon :size="11"><WarningFilled /></el-icon>已逾期
         </span>
@@ -60,10 +63,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Calendar, CircleCheckFilled, User, WarningFilled } from '@element-plus/icons-vue'
+import { Calendar, CircleCheckFilled, MagicStick, User, WarningFilled } from '@element-plus/icons-vue'
 import {
   TASK_SOURCE_LABEL,
   TASK_STATUS_LABEL,
+  taskRuleLabel,
   type TaskStatus,
   type TeacherTask,
 } from '@/api/teacherTask'
@@ -151,6 +155,20 @@ const doneText = computed(() => {
 .src-alert { background: #fef3f2; color: #d92d20; }
 .src-care_plan { background: #fdf2fa; color: #c11574; }
 .src-manual { background: #f2f4f7; color: #475467; }
+
+/* 预警规则标签（learning_alert pipeline 生成的任务） */
+.tt-rule {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fdf2fa;
+  color: #c11574;
+  white-space: nowrap;
+}
 
 .tt-overdue-tag {
   display: inline-flex;

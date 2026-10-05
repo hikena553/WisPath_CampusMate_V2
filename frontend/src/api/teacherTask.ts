@@ -93,3 +93,14 @@ export const TASK_SOURCE_LABEL: Record<TaskSourceType, string> = {
   alert: '预警',
   manual: '手动',
 }
+
+/** 预警 pipeline 规则中文标签（learning_alert 生成的任务带 rule_code） */
+export const TASK_RULE_LABEL: Record<string, string> = {
+  leave_frequent: '频繁请假',
+  low_activity: '近期学情沉默',
+}
+
+export function taskRuleLabel(ruleCode?: string | null): string {
+  if (!ruleCode) return ''
+  return TASK_RULE_LABEL[ruleCode] || ruleCode
+}

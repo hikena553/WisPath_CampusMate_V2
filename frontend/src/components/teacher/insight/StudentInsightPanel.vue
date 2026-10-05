@@ -56,6 +56,12 @@
         </div>
       </div>
 
+      <!-- 关键指标可视化（ECharts，复用项目既有图表栈） -->
+      <div class="si-chart">
+        <div class="si-evidence-title">关键指标</div>
+        <VChart class="si-chart-canvas" :option="chartOption" autoresize />
+      </div>
+
       <!-- 行为分布 -->
       <div v-if="insight.profile.by_verb.length" class="si-verbs">
         <div class="si-evidence-title">行为分布</div>
@@ -70,14 +76,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { MagicStick } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { BarChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import VChart from 'vue-echarts'
 import {
   convertInsightToTask,
   getStudentInsight,
   type StudentInsight,
 } from '@/api/teacher'
+
+use([CanvasRenderer, BarChart, GridComponent, TooltipComponent])
 
 const props = defineProps<{ studentId: number; studentName?: string }>()
 const emit = defineEmits<{ converted: [] }>()
@@ -86,6 +99,46 @@ const loading = ref(false)
 const converting = ref(false)
 const converted = ref(false)
 const insight = ref<StudentInsight | null>(null)
+
+/** 关键指标柱状图：全部取自画像 metrics，与证据清单同源 */
+const chartOption = computed(() => {
+  const m = (insight.value?.profile.metrics || {}) as Record<string, string | number>
+  const labels = ['学情事件', '请假', '关怀侧写', '成长记录', '未办结任务']
+  const values = [
+    m.learning_total,
+    m.leave_total,
+    m.care_total,
+    m.growth_total,
+    m.open_tasks,
+  ].map((v) => Number(v ?? 0))
+
+  return {
+    grid: { left: 4, right: 8, top: 16, bottom: 2, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: '#eaecf0' } },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 10, color: '#98a2b3' },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      splitLine: { lineStyle: { color: '#f2f4f7' } },
+      axisLabel: { fontSize: 10, color: '#98a2b3' },
+    },
+    series: [
+      {
+        type: 'bar',
+        data: values,
+        barWidth: 16,
+        itemStyle: { borderRadius: [6, 6, 0, 0], color: '#5b8def' },
+      },
+    ],
+    textStyle: { fontFamily: 'Noto Sans CJK SC, WenQuanYi Micro Hei, sans-serif' },
+  }
+})
 
 async function load() {
   if (!props.studentId) return
@@ -238,6 +291,17 @@ onMounted(load)
   font-size: 13px;
   font-weight: 600;
   color: #101828;
+}
+
+.si-chart {
+  border: 1px solid #f0f1f3;
+  border-radius: 12px;
+  padding: 12px 12px 6px;
+  background: #fff;
+}
+.si-chart-canvas {
+  width: 100%;
+  height: 150px;
 }
 
 .si-verb-list {

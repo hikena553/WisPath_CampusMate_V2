@@ -174,7 +174,7 @@ import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, ChatDotRound, User, Message, Notebook, Stamp, WarningFilled,
-  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection
+  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection, Grid
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -215,6 +215,7 @@ const mobileNavItems = [
   { key: 'students', label: '学生档案', icon: Notebook, route: '/teacher/students' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/teacher/agent' },
   { key: 'messages', label: '消息', icon: Message, route: '/teacher/messages', badge: true },
+  { key: 'more', label: '更多', icon: Grid, route: '/teacher/more' },
   { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
 ]
 
@@ -224,6 +225,15 @@ const activeNavKey = computed(() => {
   if (p.startsWith('/teacher/agent')) return 'agent'
   if (p.startsWith('/teacher/students') || p.startsWith('/teacher/approval') || p.startsWith('/teacher/crisis')) return 'students'
   if (p.startsWith('/teacher/messages')) return 'messages'
+  if (p.startsWith('/teacher/more')) return 'more'
+  if (
+    p.startsWith('/teacher/portfolio') ||
+    p.startsWith('/teacher/survey') ||
+    p.startsWith('/teacher/care-center') ||
+    p.startsWith('/teacher/guardian')
+  ) {
+    return 'more'
+  }
   if (p.startsWith('/teacher/profile')) return 'profile'
   return 'home'
 })
