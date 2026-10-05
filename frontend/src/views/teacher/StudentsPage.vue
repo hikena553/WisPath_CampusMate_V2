@@ -1366,16 +1366,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.students-page { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 8px 4px; }
+.students-page { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 12px 16px 24px; background: #f5f6f8; }
 
-/* ===== 桌面端样式（保留原样） ===== */
+/* ===== 桌面端样式（对齐教师端 UI 规范） ===== */
 .page-header {
   display: flex; justify-content: space-between; align-items: flex-end;
-  margin-bottom: 12px; padding: 0 4px;
+  margin-bottom: 16px; padding: 0 4px;
 }
-.header-left h2 { font-size: 18px; font-weight:700; color:#1a1a2e; margin:0; }
-.page-sub { font-size: 12px; color: #888; margin: 3px 0 0; }
-.page-sub strong { color: #5b8def; }
+.header-left h2 { font-size: 20px; font-weight:700; color:#101828; margin:0; letter-spacing:-0.2px; }
+.page-sub { font-size: 12px; color: #98a2b3; margin: 4px 0 0; }
+.page-sub strong { color: #2563eb; }
 .header-actions { display: flex; gap: 8px; align-items: center; }
 
 .filter-bar {

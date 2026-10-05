@@ -7,26 +7,28 @@
       </div>
     </header>
 
-    <section v-for="g in groups" :key="g.title">
-      <div class="tui-group-title">
-        <el-icon :size="14"><component :is="g.icon" /></el-icon>
-        <span>{{ g.title }}</span>
-        <span class="tui-group-count">{{ g.items.length }} 项</span>
-      </div>
+    <div class="tui-groups">
+      <section v-for="g in groups" :key="g.title">
+        <div class="tui-group-title">
+          <el-icon :size="14"><component :is="g.icon" /></el-icon>
+          <span>{{ g.title }}</span>
+          <span class="tui-group-count">{{ g.items.length }} 项</span>
+        </div>
 
-      <div class="tui-list">
-        <button v-for="it in g.items" :key="it.path + it.label" class="tui-row" @click="router.push(it.path)">
-          <span class="tui-row-icon" :style="{ background: it.tint, color: it.color }">
-            <el-icon :size="18"><component :is="it.icon" /></el-icon>
-          </span>
-          <span class="tui-row-main">
-            <span class="tui-row-label">{{ it.label }}</span>
-            <span class="tui-row-desc">{{ it.desc }}</span>
-          </span>
-          <el-icon class="tui-row-arrow" :size="14"><ArrowRight /></el-icon>
-        </button>
-      </div>
-    </section>
+        <div class="tui-list">
+          <button v-for="it in g.items" :key="it.path + it.label" class="tui-row" @click="router.push(it.path)">
+            <span class="tui-row-icon" :style="{ background: it.tint, color: it.color }">
+              <el-icon :size="18"><component :is="it.icon" /></el-icon>
+            </span>
+            <span class="tui-row-main">
+              <span class="tui-row-label">{{ it.label }}</span>
+              <span class="tui-row-desc">{{ it.desc }}</span>
+            </span>
+            <el-icon class="tui-row-arrow" :size="14"><ArrowRight /></el-icon>
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 

@@ -1,11 +1,11 @@
 <template>
-  <div class="cc-page">
-    <header class="cc-header">
-      <div class="cc-header-left">
-        <h2>人文关怀中心</h2>
-        <p class="cc-sub">关怀日历 · 家访台账 · 正向激励，让关心有迹可循</p>
+  <div class="tui-page">
+    <header class="tui-header">
+      <div>
+        <h2 class="tui-header-title">人文关怀中心</h2>
+        <p class="tui-header-sub">关怀日历 · 家访台账 · 正向激励，让关心有迹可循</p>
       </div>
-      <div class="cc-header-actions">
+      <div class="tui-header-actions">
         <el-button round :icon="Refresh" :loading="genLoading" @click="handleGenerate">自动生成</el-button>
         <el-button round :icon="ChatDotRound" @click="helpVisible = true">匿名求助</el-button>
         <el-button type="primary" round :icon="Plus" @click="eventVisible = true">新增事项</el-button>

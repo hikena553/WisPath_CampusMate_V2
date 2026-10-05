@@ -1,9 +1,9 @@
 <template>
-  <div class="gp-page">
-    <header class="gp-header">
-      <div class="gp-header-left">
-        <h2>家校沟通</h2>
-        <p class="gp-sub">家长零账号可完整留痕：短信提示 · 报告导出 · 只读链接</p>
+  <div class="tui-page">
+    <header class="tui-header">
+      <div>
+        <h2 class="tui-header-title">家校沟通</h2>
+        <p class="tui-header-sub">家长零账号可完整留痕：短信提示 · 报告导出 · 只读链接</p>
       </div>
       <el-select v-model="studentId" filterable placeholder="选择学生" style="width: 200px" @change="onStudentChange">
         <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />

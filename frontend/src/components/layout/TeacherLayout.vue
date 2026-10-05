@@ -18,21 +18,24 @@
     <div class="body-area">
       <aside v-if="!isMobile" class="sidebar" :class="{ collapsed: sidebarCollapsed }">
         <nav class="sidebar-nav">
-          <router-link
-            v-for="item in navItems"
-            :key="item.path"
-            :to="item.path"
-            class="nav-item"
-            :class="{ active: isActive(item.path) }"
-          >
-            <el-icon :size="20"><component :is="item.icon" /></el-icon>
-            <span v-if="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
-            <el-badge
-              v-if="item.badge && unreadCount > 0"
-              :value="unreadCount"
-              class="nav-badge"
-            />
-          </router-link>
+          <template v-for="g in navGroups" :key="g.title">
+            <div v-if="!sidebarCollapsed" class="nav-group-title">{{ g.title }}</div>
+            <router-link
+              v-for="item in g.items"
+              :key="item.path"
+              :to="item.path"
+              class="nav-item"
+              :class="{ active: isActive(item.path) }"
+            >
+              <el-icon :size="18"><component :is="item.icon" /></el-icon>
+              <span v-if="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
+              <el-badge
+                v-if="item.badge && unreadCount > 0"
+                :value="unreadCount"
+                class="nav-badge"
+              />
+            </router-link>
+          </template>
         </nav>
         <div class="sidebar-footer">
           <el-dropdown trigger="click" placement="top-start">
@@ -197,18 +200,40 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const { isMobile } = useResponsive()
 
-const navItems = [
-  { path: '/teacher', label: '首页', icon: HomeFilled },
-  { path: '/teacher/agent', label: '智能助手', icon: ChatDotRound },
-  { path: '/teacher/students', label: '学生档案', icon: Notebook },
-  { path: '/teacher/approval', label: '审批管理', icon: Stamp },
-  { path: '/teacher/crisis', label: '预警工作台', icon: WarningFilled },
-  { path: '/teacher/portfolio', label: '成长档案', icon: Collection },
-  { path: '/teacher/survey', label: '问卷互评', icon: EditPen },
-  { path: '/teacher/care-center', label: '关怀中心', icon: Sunny },
-  { path: '/teacher/guardian', label: '家校沟通', icon: Connection },
-  { path: '/teacher/announcement', label: '班级公告', icon: Bell },
-  { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
+/**
+ * 桌面端侧边栏导航：按职能分组（概览 / 学生 / 我的 / 其他），
+ * 与移动端「首页 / 学生 / 更多」的分区口径一致，保证同一功能不重复出现。
+ */
+const navGroups = [
+  {
+    title: '概览',
+    items: [{ path: '/teacher', label: '首页', icon: HomeFilled }],
+  },
+  {
+    title: '学生',
+    items: [
+      { path: '/teacher/students', label: '学生档案', icon: Notebook },
+      { path: '/teacher/approval', label: '审批管理', icon: Stamp },
+      { path: '/teacher/crisis', label: '预警工作台', icon: WarningFilled },
+      { path: '/teacher/announcement', label: '班级公告', icon: Bell },
+    ],
+  },
+  {
+    title: '我的',
+    items: [
+      { path: '/teacher/portfolio', label: '成长档案', icon: Collection },
+      { path: '/teacher/survey', label: '问卷互评', icon: EditPen },
+      { path: '/teacher/care-center', label: '关怀中心', icon: Sunny },
+      { path: '/teacher/guardian', label: '家校沟通', icon: Connection },
+    ],
+  },
+  {
+    title: '其他',
+    items: [
+      { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
+      { path: '/teacher/agent', label: '智能助手', icon: ChatDotRound },
+    ],
+  },
 ]
 
 /**
@@ -374,7 +399,7 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(135deg, #f5faff 0%, #f0f8ff 50%, #f8fbff 100%);
+  background: #f5f6f8;
 }
 
 /* 移动(App)模式：宽屏下模拟手机容器，居中限宽，交互限制在窄屏内 */
@@ -393,59 +418,75 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
   right: 0;
 }
 
-/* ===== Topbar ===== */
+/* ===== Topbar：白底 + 细分割线（克制、主流的企业后台观感） ===== */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; height: 56px;
-  background: linear-gradient(135deg, #1d4ed8, #2563eb, #3b82f6);
+  background: #ffffff;
+  border-bottom: 1px solid #eaecf0;
   flex-shrink: 0; z-index: 100;
-  box-shadow: 0 2px 12px rgba(29,78,216,0.35);
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; position: relative; z-index: 101; }
-.topbar-badge { height: 36px; width: 36px; border-radius: 50%; object-fit: cover; filter: brightness(0.85) saturate(1.3); }
-.logo { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: 1px; }
-.logo-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.3); margin: 0 6px; }
+.topbar-badge { height: 28px; width: 28px; border-radius: 8px; object-fit: contain; }
+.logo { font-size: 16px; font-weight: 700; color: #101828; letter-spacing: 0.2px; }
+.logo-divider { width: 1px; height: 18px; background: #eaecf0; margin: 0 6px; }
 .motto {
-  font-size: 14px; font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  letter-spacing: 4px;
+  font-size: 13px; font-weight: 500;
+  color: #667085;
+  letter-spacing: 1px;
 }
 .topbar-right { display: flex; align-items: center; gap: 4px; }
 
 /* ===== Body ===== */
 .body-area { display: flex; flex: 1; min-height: 0; }
 
-/* ===== Sidebar ===== */
+/* ===== Sidebar：白底 + 职能分组 + 浅底选中态（对齐主流后台侧边栏） ===== */
 .sidebar {
-  width: 200px; flex-shrink: 0; display: flex; flex-direction: column;
-  background: var(--sidebar-bg); backdrop-filter: blur(20px);
-  border-right: 1px solid var(--border-color); box-shadow: var(--shadow-sm);
+  width: 216px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: #ffffff;
+  border-right: 1px solid #eaecf0;
   transition: width 0.2s ease;
   overflow: hidden;
 }
 .sidebar.collapsed { width: 64px; }
 
-.sidebar-nav { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px; }
+.sidebar-nav {
+  flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px;
+  overflow-y: auto; overflow-x: hidden;
+}
+
+.nav-group-title {
+  padding: 12px 10px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #98a2b3;
+  letter-spacing: 0.4px;
+}
+.nav-group-title:first-child { padding-top: 6px; }
 
 .nav-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px; border-radius: 8px;
-  text-decoration: none; color: var(--text-secondary); font-size: 14px; font-weight: 500;
-  transition: all 0.15s ease; position: relative; white-space: nowrap;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 8px;
+  text-decoration: none; color: #475467; font-size: 13.5px; font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+  position: relative; white-space: nowrap;
 }
-.sidebar.collapsed .nav-item { justify-content: center; padding: 10px; }
-.nav-item:hover { background: var(--hover-bg); color: var(--accent-blue); }
-.nav-item.active {
-  background: linear-gradient(135deg, #409eff, #337ecc);
-  color: #fff; font-weight: 600;
+.sidebar.collapsed .nav-item { justify-content: center; padding: 9px; }
+.nav-item:hover { background: #f9fafb; color: #101828; }
+.nav-item.active { background: #eff4ff; color: #1d4ed8; font-weight: 600; }
+.nav-item.active::before {
+  content: '';
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px; border-radius: 0 3px 3px 0;
+  background: #2563eb;
 }
-.nav-item.active .el-icon { color: #fff; }
+.nav-item.active .el-icon { color: #1d4ed8; }
 .nav-label { flex: 1; }
-.nav-badge { position: absolute; top: 6px; right: 8px; }
+.nav-badge { position: absolute; top: 4px; right: 6px; }
 
 /* ===== Sidebar Footer ===== */
 .sidebar-footer {
-  padding: 16px 12px; border-top: 1px solid var(--border-color);
+  padding: 12px; border-top: 1px solid #eaecf0;
 }
 .teacher-info {
   display: flex; align-items: center; gap: 14px;
@@ -475,8 +516,8 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 }
 .avatar-upload-wrap:hover .avatar-overlay { opacity: 1; }
 .crop-container { max-height: 360px; overflow: hidden; }
-:deep(.topbar-right .el-button) { color: rgba(255,255,255,0.85); }
-:deep(.topbar-right .el-button:hover) { color: #ffffff; background: rgba(255,255,255,0.2); }
+:deep(.topbar-right .el-button) { color: #667085; }
+:deep(.topbar-right .el-button:hover) { color: #101828; background: #f2f4f7; }
 
 /* 移动端三页签：居中等宽，避免拉伸过长（对齐主流移动端底部栏观感） */
 :deep(.mobile-tab-bar) { justify-content: center; }

@@ -1,11 +1,11 @@
 <template>
-  <div class="portfolio-page">
-    <header class="pf-header">
-      <div class="pf-header-left">
-        <h2>成长档案</h2>
-        <p class="pf-sub">把日常育人经验沉淀成看得见的成长轨迹</p>
+  <div class="tui-page">
+    <header class="tui-header">
+      <div>
+        <h2 class="tui-header-title">成长档案</h2>
+        <p class="tui-header-sub">把日常育人经验沉淀成看得见的成长轨迹</p>
       </div>
-      <div class="pf-header-actions">
+      <div class="tui-header-actions">
         <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
         <el-button type="primary" round :icon="Plus" @click="openCreate">新增档案</el-button>
       </div>

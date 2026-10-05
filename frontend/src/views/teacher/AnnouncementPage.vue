@@ -17,7 +17,7 @@
       <el-button size="small" round type="primary" @click="dialogVisible = true">发布第一条</el-button>
     </div>
 
-    <div v-else class="tui-stack">
+    <div v-else class="tui-groups">
       <article v-for="a in items" :key="a.id" class="tui-card">
         <div class="an-item">
           <div class="an-head">

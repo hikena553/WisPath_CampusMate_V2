@@ -1,11 +1,13 @@
 <template>
-  <div class="survey-page">
-    <header class="sv-header">
-      <div class="sv-header-left">
-        <h2>问卷互评</h2>
-        <p class="sv-sub">匿名收集反馈，只出聚合结果，不回溯个人</p>
+  <div class="tui-page">
+    <header class="tui-header">
+      <div>
+        <h2 class="tui-header-title">问卷互评</h2>
+        <p class="tui-header-sub">匿名收集反馈，只出聚合结果，不回溯个人</p>
       </div>
-      <el-button type="primary" round :icon="Plus" @click="createVisible = true">发起问卷</el-button>
+      <div class="tui-header-actions">
+        <el-button type="primary" round :icon="Plus" @click="createVisible = true">发起问卷</el-button>
+      </div>
     </header>
 
     <el-tabs v-model="tab" class="sv-tabs">

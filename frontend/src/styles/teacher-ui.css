@@ -163,6 +163,14 @@
 }
 .tui-chip-brand { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
 
+/* ---------- 分组网格：移动端单列堆叠，桌面端两列（紧凑、不拖长） ---------- */
+.tui-groups {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--tui-gap-16);
+  align-items: start;
+}
+
 /* ---------- 移动端：单列紧凑；桌面端：自适应多列 ---------- */
 .tui-stack {
   display: flex;
@@ -172,4 +180,7 @@
 @media (min-width: 768px) {
   .tui-header-title { font-size: 20px; }
   .tui-row { padding: 14px 16px; }
+}
+@media (min-width: 900px) {
+  .tui-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
