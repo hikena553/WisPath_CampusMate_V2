@@ -8,19 +8,29 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.config import settings
 from app.models.user import User, UserRole
 from app.models.conversation import Conversation, ConversationMessage
 from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
 from app.services.llm_service import speech_to_text, _get_client, _get_llm_config, build_system_prompt
 from app.services.proactive_engine import evaluate_student
+from app.utils.rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
+# 对话 / 智能分析限流（每分钟）
+MAX_CHAT_PER_MINUTE = 30
+MAX_ANALYZE_PER_MINUTE = 20
+_RATE_MSG = "请求过于频繁，请稍后再试"
+
 
 @router.post("/chat")
 async def chat_api(req: ChatRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    check_rate_limit(f"chat:user:{user.id}", MAX_CHAT_PER_MINUTE, 60, _RATE_MSG)
+    if len(req.message) > settings.LLM_MAX_INPUT_CHARS:
+        raise HTTPException(400, f"消息过长，请控制在{settings.LLM_MAX_INPUT_CHARS}字以内")
     conv_id = req.conversation_id
     if req.skip_conversation:
         conv_id = None
@@ -65,6 +75,7 @@ class AnalyzeRequest(BaseModel):
 
 @router.post("/analyze")
 async def analyze_api(req: AnalyzeRequest, user: User = Depends(get_current_user)):
+    check_rate_limit(f"analyze:user:{user.id}", MAX_ANALYZE_PER_MINUTE, 60, _RATE_MSG)
     return StreamingResponse(
         generate_reply(req.prompt, user),
         media_type="text/event-stream",

@@ -18,6 +18,10 @@ jobs:
   backend:
     name: Backend tests (Python 3.11)
     runs-on: ubuntu-latest
+    env:
+      # 导入时 Settings() 会校验 SECRET_KEY/DATABASE_URL 非空，CI 必须提供测试用值
+      SECRET_KEY: ci-test-secret-key-32chars-minimum-0123456789
+      DATABASE_URL: sqlite:///./ci_test.db
     defaults:
       run:
         working-directory: backend
