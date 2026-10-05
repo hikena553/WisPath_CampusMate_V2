@@ -15,8 +15,8 @@
         <span class="tui-appbar-sub">绵小城 · 按职能分区，点击直达</span>
       </div>
       <div class="tui-appbar-actions">
-        <el-button text circle aria-label="搜索" @click="focusSearch">
-          <el-icon :size="19"><Search /></el-icon>
+        <el-button text circle :aria-label="searchOpen ? '收起搜索' : '搜索'" @click="toggleSearch">
+          <el-icon :size="19"><component :is="searchOpen ? Close : Search" /></el-icon>
         </el-button>
       </div>
     </header>
@@ -37,18 +37,26 @@
             <p class="tui-header-sub">绵小城 · 按职能分区，每个模块只做一件事</p>
           </div>
         </div>
+        <div class="tui-header-actions">
+          <el-button text circle :aria-label="searchOpen ? '收起搜索' : '搜索'" @click="toggleSearch">
+            <el-icon :size="19"><component :is="searchOpen ? Close : Search" /></el-icon>
+          </el-button>
+        </div>
       </header>
 
-      <!-- 搜索 -->
-      <div class="more-search">
-        <el-input
-          ref="searchRef"
-          v-model="keyword"
-          placeholder="搜索功能，如「预警」「家访」"
-          clearable
-          :prefix-icon="Search"
-        />
-      </div>
+      <!-- 搜索框默认收起，只保留头部的小搜索按钮，需要时展开 -->
+      <Transition name="more-search-fade">
+        <div v-if="searchOpen" class="more-search">
+          <el-input
+            ref="searchRef"
+            v-model="keyword"
+            placeholder="搜索功能，如「预警」「家访」"
+            clearable
+            :prefix-icon="Search"
+            @keyup.esc="closeSearch"
+          />
+        </div>
+      </Transition>
 
       <!-- 常用操作 -->
       <section v-if="!keyword" class="tui-card more-quick">
@@ -121,11 +129,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
 import {
-  ArrowRight, Bell, ChatDotRound, Collection, Connection, EditPen, FolderOpened,
+  ArrowRight, Bell, ChatDotRound, Close, Collection, Connection, EditPen, FolderOpened,
   Search, Star, Stamp, Sunny, WarningFilled,
 } from '@element-plus/icons-vue'
 
@@ -135,10 +143,22 @@ const router = useRouter()
 const { isMobile } = useResponsive()
 
 const keyword = ref('')
+/** 搜索框默认收起：头部只留一个小搜索按钮，不与内容区重复占位 */
+const searchOpen = ref(false)
 const searchRef = ref<{ focus: () => void } | null>(null)
 
-function focusSearch() {
-  searchRef.value?.focus?.()
+function toggleSearch() {
+  searchOpen.value = !searchOpen.value
+  if (searchOpen.value) {
+    nextTick(() => searchRef.value?.focus?.())
+  } else {
+    keyword.value = ''
+  }
+}
+
+function closeSearch() {
+  searchOpen.value = false
+  keyword.value = ''
 }
 
 /** 常用操作：跨分组的最高频三项，避免在宫格里来回找 */
@@ -213,6 +233,21 @@ const visibleGroups = computed(() => {
 }
 .more-search :deep(.el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1px #2563eb inset;
+}
+
+/* 展开/收起：轻微下滑淡入，避免突兀 */
+.more-search-fade-enter-active,
+.more-search-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.more-search-fade-enter-from,
+.more-search-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-search-fade-enter-active,
+  .more-search-fade-leave-active { transition: none; }
 }
 
 /* 常用操作：三行大热区，图标 + 标题 + 副标题 + 箭头 */
