@@ -2,12 +2,13 @@ import json
 import logging
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User, UserRole
@@ -20,13 +21,33 @@ from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
 from app.services.llm_service import speech_to_text, _get_client, _get_llm_config, build_system_prompt
 from app.services.proactive_engine import evaluate_student
+from app.utils.rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
+# 各高成本接口限流阈值（用户级，另叠加 IP 兜底）
+RATE_CHAT_PER_MIN = 30
+RATE_ANALYZE_PER_MIN = 20
+RATE_RECOMMENDATIONS_PER_MIN = 10
+RATE_STT_PER_MIN = 10
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
 
 @router.post("/chat")
-async def chat_api(req: ChatRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def chat_api(
+    req: ChatRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    check_rate_limit(f"agent:chat:user:{user.id}", RATE_CHAT_PER_MIN, 60, "请求过于频繁，请稍候再试")
+    check_rate_limit(f"agent:chat:ip:{_client_ip(request)}", RATE_CHAT_PER_MIN * 3, 60, "当前网络请求过于频繁，请稍候再试")
+    if len(req.message) > settings.LLM_MAX_INPUT_CHARS:
+        raise HTTPException(400, f"消息过长，最多允许 {settings.LLM_MAX_INPUT_CHARS} 字")
     conv_id = req.conversation_id
     if req.skip_conversation:
         conv_id = None
@@ -73,7 +94,13 @@ class AnalyzeRequest(BaseModel):
 
 
 @router.post("/analyze")
-async def analyze_api(req: AnalyzeRequest, user: User = Depends(get_current_user)):
+async def analyze_api(
+    req: AnalyzeRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    check_rate_limit(f"agent:analyze:user:{user.id}", RATE_ANALYZE_PER_MIN, 60, "请求过于频繁，请稍候再试")
+    check_rate_limit(f"agent:analyze:ip:{_client_ip(request)}", RATE_ANALYZE_PER_MIN * 3, 60, "当前网络请求过于频繁，请稍候再试")
     return StreamingResponse(
         generate_reply(req.prompt, user),
         media_type="text/event-stream",
@@ -82,7 +109,13 @@ async def analyze_api(req: AnalyzeRequest, user: User = Depends(get_current_user
 
 
 @router.post("/speech-to-text")
-async def speech_to_text_api(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+async def speech_to_text_api(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    check_rate_limit(f"agent:stt:user:{user.id}", RATE_STT_PER_MIN, 60, "语音识别请求过于频繁，请稍候再试")
+    check_rate_limit(f"agent:stt:ip:{_client_ip(request)}", RATE_STT_PER_MIN * 3, 60, "当前网络请求过于频繁，请稍候再试")
     if not file.filename:
         raise HTTPException(400, "文件名为空")
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
@@ -337,12 +370,17 @@ async def _generate_recommendations_by_llm(
 
 
 @router.get("/recommendations")
-async def get_recommendations(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_recommendations(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """根据用户角色、画像与真实待办生成推荐问题（统一返回 5 条）。
 
     无历史对话时直接用信号+默认兜底，不再等一次 LLM（首屏秒开）；
     有历史对话时由 LLM 生成，并用信号/默认补齐到 5 条。
     """
+    check_rate_limit(f"agent:rec:user:{user.id}", RATE_RECOMMENDATIONS_PER_MIN, 60, "请求过于频繁，请稍候再试")
     default_recommendations = DEFAULT_RECOMMENDATIONS.get(
         user.role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT]
     )[:RECOMMEND_COUNT]
