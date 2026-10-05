@@ -174,7 +174,7 @@ import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, ChatDotRound, User, Message, Notebook, Stamp, WarningFilled,
-  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection, Grid
+  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection, Grid, Bell
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -207,35 +207,27 @@ const navItems = [
   { path: '/teacher/survey', label: '问卷互评', icon: EditPen },
   { path: '/teacher/care-center', label: '关怀中心', icon: Sunny },
   { path: '/teacher/guardian', label: '家校沟通', icon: Connection },
+  { path: '/teacher/announcement', label: '班级公告', icon: Bell },
   { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
 ]
 
+/**
+ * 移动端底部导航：只保留三个功能页签，按「我的 / 学生 / 全部功能」分类。
+ * 消息、智能助手、个人中心统一收敛到「更多」中枢，避免同一功能在两处重复出现。
+ */
 const mobileNavItems = [
   { key: 'home', label: '首页', icon: HomeFilled, route: '/teacher' },
-  { key: 'students', label: '学生档案', icon: Notebook, route: '/teacher/students' },
-  { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/teacher/agent' },
-  { key: 'messages', label: '消息', icon: Message, route: '/teacher/messages', badge: true },
+  { key: 'students', label: '学生', icon: Notebook, route: '/teacher/students' },
   { key: 'more', label: '更多', icon: Grid, route: '/teacher/more' },
-  { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
 ]
 
 const activeNavKey = computed(() => {
   const p = route.path
   if (p === '/teacher') return 'home'
-  if (p.startsWith('/teacher/agent')) return 'agent'
-  if (p.startsWith('/teacher/students') || p.startsWith('/teacher/approval') || p.startsWith('/teacher/crisis')) return 'students'
-  if (p.startsWith('/teacher/messages')) return 'messages'
-  if (p.startsWith('/teacher/more')) return 'more'
-  if (
-    p.startsWith('/teacher/portfolio') ||
-    p.startsWith('/teacher/survey') ||
-    p.startsWith('/teacher/care-center') ||
-    p.startsWith('/teacher/guardian')
-  ) {
-    return 'more'
-  }
-  if (p.startsWith('/teacher/profile')) return 'profile'
-  return 'home'
+  if (p.startsWith('/teacher/students')) return 'students'
+  // 其余模块（审批 / 预警 / 消息 / 智能助手 / 成长档案 / 问卷互评 / 关怀 / 家校 / 个人中心）
+  // 统一高亮「更多」中枢，避免同一功能出现两处入口
+  return 'more'
 })
 
 function handleNavSelect(item: any) {
@@ -485,4 +477,8 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 .crop-container { max-height: 360px; overflow: hidden; }
 :deep(.topbar-right .el-button) { color: rgba(255,255,255,0.85); }
 :deep(.topbar-right .el-button:hover) { color: #ffffff; background: rgba(255,255,255,0.2); }
+
+/* 移动端三页签：居中等宽，避免拉伸过长（对齐主流移动端底部栏观感） */
+:deep(.mobile-tab-bar) { justify-content: center; }
+:deep(.mobile-tab-bar .tab-item) { flex: 0 1 132px; max-width: 132px; }
 </style>

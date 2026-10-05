@@ -10,6 +10,7 @@ import './styles/theme.css'
 import './styles/animations.css'
 import './styles/responsive.css'
 import './styles/admin-components.css'
+import './styles/teacher-ui.css'
 import { permissionDirective, roleDirective } from './directives/permission'
 
 const app = createApp(App)

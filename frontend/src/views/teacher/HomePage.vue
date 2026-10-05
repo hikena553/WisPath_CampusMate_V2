@@ -56,11 +56,7 @@
       @delete="handleDeleteSchedule" />
     <!-- /transition removed -->
 
-    <!-- 危机预警子页面 -->
-    <!-- transition removed -->
-    <HomeMobileCrisis v-if="isMobile && showCrisisSubPage" :alerts="alerts"
-      @close="showCrisisSubPage = false" />
-    <!-- /transition removed -->
+    <!-- 危机预警：归属「预警工作台」模块页，首页不再内嵌（功能不交叉） -->
 
     <!-- 待办任务子页面 -->
     <!-- transition removed -->
@@ -96,10 +92,7 @@
     <HomeMobileCharts v-if="isMobile && showChartSubPage" :class-stats="classStats" :eval-data="evalData"
       @close="showChartSubPage = false" @open-analysis="openMascotAnalysis" />
 
-    <!-- 审批管理子页面 -->
-    <!-- transition removed -->
-    <HomeMobileApproval v-if="isMobile && showApprovalSubPage" @close="showApprovalSubPage = false" />
-    <!-- /transition removed -->
+    <!-- 审批管理：归属「审批管理」模块页，首页不再内嵌（功能不交叉） -->
 
     <!-- 发布公告 Dialog -->
     <HomeAnnouncementDialog v-model:visible="createDialogVisible" @created="loadMyAnnouncements" />
@@ -163,8 +156,6 @@ import HomeDesktopSchedule from './HomeDesktopSchedule.vue'
 import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
 import HomeMobileTasks from './HomeMobileTasks.vue'
 import HomeMobileSchedule from './HomeMobileSchedule.vue'
-import HomeMobileCrisis from './HomeMobileCrisis.vue'
-import HomeMobileApproval from './HomeMobileApproval.vue'
 import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import HomeQuickAddTask from './HomeQuickAddTask.vue'
@@ -221,7 +212,6 @@ const classStats = ref<ClassStats>({
 const campusAnnouncements = ref<Announcement[]>([])
 const showChartSubPage = ref(false)
 const showScheduleSubPage = ref(false)
-const showApprovalSubPage = ref(false)
 const dataReady = ref(false) // 标记数据是否已加载完成，防止空状态闪烁
 
 // 同步读取预加载缓存：setup 阶段直接填充数据，避免首次渲染时空状态闪现
@@ -403,7 +393,7 @@ const statCards = computed(() => [
   },
   {
     label: '危机预警', value: stats.value.alert_count,
-    color: '#f56c6c', icon: WarnIcon, link: '__crisis__',
+    color: '#f56c6c', icon: WarnIcon, link: '/teacher/crisis',
   },
   {
     label: '今日待跟进', value: taskSummary.value.pending,
@@ -425,7 +415,6 @@ const evalData = ref<ClassEvaluation>({
   growth: {}, crisis: {}, pending_leaves: 0,
 })
 
-const showCrisisSubPage = ref(false)
 const showTodaySubPage = ref(false)
 const showTasksSubPage = ref(false)
 // 桌面端全部待办弹窗（工作台入口）
@@ -489,9 +478,7 @@ function handleTaskAdded() {
 }
 
 function navigateTo(path: string) {
-  if (path === '__crisis__') {
-    showCrisisSubPage.value = true
-  } else if (path === '__today__') {
+  if (path === '__today__') {
     showTodaySubPage.value = true
   } else if (path === '__tasks__') {
     openTasksPanel()

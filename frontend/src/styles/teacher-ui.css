@@ -1,0 +1,175 @@
+/* =========================================================================
+   教师端 UI 规范（Teacher UI Spec）
+   -------------------------------------------------------------------------
+   借鉴对象（均为公开、成熟、高star的开源设计体系）：
+   - Element Plus（Vue 3 后台类最主流，本项目基础组件库）
+   - Ant Design / Semi Design（字节 · 抖音同源）的克制层级与留白
+   - Vant / NutUI 的移动端列表密度与点击热区
+   落地原则：移动优先、单一视觉语言、卡片化分区、每个模块只做一件事。
+
+   使用方式：类名统一以 tui- 前缀，仅新增类，不覆盖既有样式，避免影响存量页面。
+   ========================================================================= */
+
+.tui-page {
+  --tui-bg: #f5f6f8;
+  --tui-surface: #ffffff;
+  --tui-surface-muted: #f9fafb;
+  --tui-text: #101828;
+  --tui-text-secondary: #475467;
+  --tui-text-tertiary: #667085;
+  --tui-text-quiet: #98a2b3;
+  --tui-border: #f0f1f3;
+  --tui-border-strong: #e4e7ec;
+  --tui-brand: #2563eb;
+  --tui-brand-strong: #1d4ed8;
+  --tui-brand-soft: #eff4ff;
+  --tui-radius-sm: 10px;
+  --tui-radius: 14px;
+  --tui-gap-4: 4px;
+  --tui-gap-8: 8px;
+  --tui-gap-12: 12px;
+  --tui-gap-16: 16px;
+  --tui-gap-20: 20px;
+  --tui-gap-24: 24px;
+
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--tui-gap-8) 4px var(--tui-gap-24);
+  background: var(--tui-bg);
+}
+
+/* ---------- 页头 ---------- */
+.tui-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--tui-gap-12);
+  padding: 0 4px;
+  margin-bottom: var(--tui-gap-16);
+}
+.tui-header-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--tui-text);
+}
+.tui-header-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--tui-text-quiet);
+}
+.tui-header-actions {
+  display: flex;
+  gap: var(--tui-gap-8);
+  flex-shrink: 0;
+}
+
+/* ---------- 分组标题 ---------- */
+.tui-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  margin: var(--tui-gap-16) 0 var(--tui-gap-8);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tui-text-tertiary);
+  letter-spacing: 0.2px;
+}
+.tui-group-count {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--tui-text-quiet);
+}
+
+/* ---------- 卡片 ---------- */
+.tui-card {
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  overflow: hidden;
+}
+.tui-card-pad { padding: var(--tui-gap-16); }
+
+/* ---------- 列表行（图标 + 标题 + 描述 + 箭头） ---------- */
+.tui-list {
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  overflow: hidden;
+}
+.tui-row {
+  display: flex;
+  align-items: center;
+  gap: var(--tui-gap-12);
+  width: 100%;
+  padding: 13px 14px;
+  border: none;
+  border-bottom: 1px solid var(--tui-border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+.tui-row:last-child { border-bottom: none; }
+.tui-row:hover { background: var(--tui-surface-muted); }
+.tui-row:active { background: #f2f4f7; }
+
+.tui-row-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--tui-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tui-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.tui-row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tui-text);
+}
+.tui-row-desc {
+  font-size: 12px;
+  color: var(--tui-text-quiet);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tui-row-arrow { color: #d0d5dd; flex-shrink: 0; }
+
+/* ---------- 标签 ---------- */
+.tui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-tertiary);
+}
+.tui-chip-brand { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
+
+/* ---------- 移动端：单列紧凑；桌面端：自适应多列 ---------- */
+.tui-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tui-gap-16);
+}
+@media (min-width: 768px) {
+  .tui-header-title { font-size: 20px; }
+  .tui-row { padding: 14px 16px; }
+}

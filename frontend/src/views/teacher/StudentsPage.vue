@@ -257,7 +257,7 @@
             <div class="ms-stat-label">总学生</div>
           </div>
           <div class="ms-stat-divider"></div>
-          <div class="ms-stat-item" @click="openSubPage('lease')">
+          <div class="ms-stat-item" @click="router.push('/teacher/approval')">
             <div class="ms-stat-num" style="color:#ff9500">{{ stats.pending_leave_count }}</div>
             <div class="ms-stat-label">请假待批</div>
           </div>
@@ -280,11 +280,11 @@
             <div class="ms-module-icon" style="background:#8f7bff"><el-icon :size="20"><DataAnalysis /></el-icon></div>
             <span class="ms-module-name">学生分析</span>
           </div>
-          <div class="ms-module-cell" @click="openSubPage('lease')">
+          <div class="ms-module-cell" @click="router.push('/teacher/approval')">
             <div class="ms-module-icon" style="background:#ffb02e"><el-icon :size="20"><Calendar /></el-icon></div>
             <span class="ms-module-name">请假情况</span>
           </div>
-          <div class="ms-module-cell" @click="openSubPage('announcement')">
+          <div class="ms-module-cell" @click="router.push('/teacher/announcement')">
             <div class="ms-module-icon" style="background:#2ed3a1"><el-icon :size="20"><Bell /></el-icon></div>
             <span class="ms-module-name">班级公告</span>
           </div>
@@ -434,82 +434,8 @@
             </div>
           </template>
 
-          <!-- 请假情况 -->
-          <template v-else-if="activeSubPage === 'lease'">
-            <el-tabs v-model="leaveTab" @tab-change="loadLeaveData">
-              <el-tab-pane label="待审批" name="pending">
-                <div v-if="pendingLeaves.length === 0" class="ms-empty">暂无待批请假</div>
-                <div v-for="row in pendingLeaves" :key="row.id" class="ms-lease-card">
-                  <div class="ms-lease-head">
-                    <span class="ms-lease-name">{{ row.student_name }}</span>
-                    <el-tag size="small" effect="plain">{{ leaveTypeLabel(row.leave_type) }}</el-tag>
-                  </div>
-                  <div class="ms-lease-date">{{ row.start_date }} ~ {{ row.end_date }}</div>
-                  <div v-if="row.reason" class="ms-lease-reason">{{ row.reason }}</div>
-                  <div class="ms-lease-actions">
-                    <el-button type="success" size="small" @click="handleApprove(row)"><el-icon><Check /></el-icon> 通过</el-button>
-                    <el-button type="danger" size="small" plain @click="showReject(row)"><el-icon><Close /></el-icon> 拒绝</el-button>
-                  </div>
-                </div>
-              </el-tab-pane>
-              <el-tab-pane label="已通过" name="approved">
-                <div v-if="approvedLeaves.length === 0" class="ms-empty">暂无已通过请假</div>
-                <div v-for="row in approvedLeaves" :key="row.id" class="ms-lease-card">
-                  <div class="ms-lease-head">
-                    <span class="ms-lease-name">{{ row.student_name }}</span>
-                    <el-tag size="small" effect="plain">{{ leaveTypeLabel(row.leave_type) }}</el-tag>
-                  </div>
-                  <div class="ms-lease-date">{{ row.start_date }} ~ {{ row.end_date }}</div>
-                  <div style="margin-top:6px"><el-tag type="success" size="small" effect="dark">已通过</el-tag></div>
-                </div>
-              </el-tab-pane>
-              <el-tab-pane label="已拒绝" name="rejected">
-                <div v-if="rejectedLeaves.length === 0" class="ms-empty">暂无已拒绝请假</div>
-                <div v-for="row in rejectedLeaves" :key="row.id" class="ms-lease-card">
-                  <div class="ms-lease-head">
-                    <span class="ms-lease-name">{{ row.student_name }}</span>
-                    <el-tag size="small" effect="plain">{{ leaveTypeLabel(row.leave_type) }}</el-tag>
-                  </div>
-                  <div class="ms-lease-date">{{ row.start_date }} ~ {{ row.end_date }}</div>
-                  <div v-if="row.reject_reason" class="ms-lease-reason">拒绝理由：{{ row.reject_reason }}</div>
-                  <div style="margin-top:6px"><el-tag type="danger" size="small" effect="dark">已拒绝</el-tag></div>
-                </div>
-              </el-tab-pane>
-            </el-tabs>
-          </template>
-
-          <!-- 班级公告 -->
-          <template v-else-if="activeSubPage === 'announcement'">
-            <button type="button" class="ms-announce-publish" @click="openCreateDialog">
-              <el-icon :size="16"><Plus /></el-icon>
-              <span>发布班级公告</span>
-            </button>
-
-            <div v-if="myAnnouncements.length === 0" class="ms-announce-empty">
-              <div class="ms-announce-empty-icon"><el-icon :size="28"><Bell /></el-icon></div>
-              <p>暂无班级公告</p>
-              <span>点击上方按钮，向你的学生发布第一条公告</span>
-            </div>
-
-            <div v-else class="ms-announce-list">
-              <div v-for="a in myAnnouncements" :key="a.id" class="ms-announce-card" :class="'announce-' + a.urgency">
-                <div class="ms-announce-icon" :class="'announce-icon-' + a.urgency">
-                  <el-icon :size="18"><Bell /></el-icon>
-                </div>
-                <div class="ms-announce-main">
-                  <div class="ms-announce-top">
-                    <span class="ms-announce-title">{{ a.title }}</span>
-                    <el-tag :type="urgencyType(a.urgency)" size="small" effect="light" round>{{ urgencyLabel(a.urgency) }}</el-tag>
-                  </div>
-                  <div class="ms-announce-content">{{ a.content }}</div>
-                  <div class="ms-announce-footer">
-                    <span>{{ formatDate(a.created_at) }}</span>
-                    <el-button text type="danger" size="small" @click="handleDeleteAnnouncement(a.id)">删除</el-button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
+          <!-- 请假审批 → 归属「审批管理」模块页 -->
+          <!-- 班级公告 → 归属「班级公告」模块页 -->
 
           <!-- 更多 -->
           <template v-else-if="activeSubPage === 'more'">
@@ -792,7 +718,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Search, User, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
   WarningFilled, DataAnalysis, Calendar, Bell, MoreFilled,
-  Histogram, Message, Plus, Check, Filter, Download, Upload,
+  Histogram, Message, Filter, Download, Upload,
   Refresh, MagicStick,
 } from '@element-plus/icons-vue'
 import {
@@ -800,7 +726,7 @@ import {
   type StudentSummary, type StudentDetail, type DashboardStats, type ClassEvaluation, type ClassStats, type StudentImportItem,
 } from '@/api/teacher'
 import { getPendingLeaves, getAllLeaves, reviewLeave } from '@/api/leave'
-import { getTeacherAnnouncements, createAnnouncement, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
+import { getTeacherAnnouncements, createAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import { getConversations, type ConversationOut } from '@/api/messages'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
@@ -844,7 +770,7 @@ const currentPage = ref(1)
 const pageSize = ref(12)
 
 const showFilterSheet = ref(false)
-const activeSubPage = ref<'students' | 'analysis' | 'lease' | 'announcement' | 'more' | null>(null)
+const activeSubPage = ref<'students' | 'analysis' | 'more' | null>(null)
 
 const teacherName = computed(() => authStore.userName || '教师')
 
@@ -1136,11 +1062,9 @@ const crisisTrendOptions = computed(() => {
 })
 
 // ===== 业务函数 =====
-function openSubPage(page: 'students' | 'analysis' | 'lease' | 'announcement' | 'more') {
+function openSubPage(page: 'students' | 'analysis' | 'more') {
   activeSubPage.value = page
   if (page === 'analysis') loadAnalysisData()
-  if (page === 'lease') loadLeaveData()
-  if (page === 'announcement') loadMyAnnouncements()
 }
 
 function openStudentsCrisis() {
@@ -1190,20 +1114,6 @@ async function loadLeaveData() {
   } catch {}
 }
 
-async function handleApprove(row: LeaveRequestOut) {
-  try {
-    await reviewLeave(row.id, 'approve')
-    ElMessage.success('已通过')
-    loadLeaveData()
-  } catch { ElMessage.error('操作失败') }
-}
-
-function showReject(row: LeaveRequestOut) {
-  rejectTarget.value = row
-  rejectReason.value = ''
-  rejectVisible.value = true
-}
-
 async function confirmReject() {
   if (!rejectReason.value.trim()) { ElMessage.warning('请填写拒绝理由'); return }
   if (!rejectTarget.value) return
@@ -1221,11 +1131,6 @@ async function loadMyAnnouncements() {
   } catch {}
 }
 
-function openCreateDialog() {
-  createForm.value = { title: '', content: '', urgency: 'normal' }
-  createDialogVisible.value = true
-}
-
 async function handleCreateAnnouncement() {
   if (!createForm.value.title.trim() || !createForm.value.content.trim()) {
     ElMessage.warning('请填写标题和内容')
@@ -1241,14 +1146,6 @@ async function handleCreateAnnouncement() {
     createDialogVisible.value = false
     loadMyAnnouncements()
   } catch { ElMessage.error('发布失败') }
-}
-
-async function handleDeleteAnnouncement(id: number) {
-  try {
-    await deleteAnnouncement(id)
-    ElMessage.success('已删除')
-    loadMyAnnouncements()
-  } catch { ElMessage.error('删除失败') }
 }
 
 // ===== 数据导入导出 =====
@@ -1431,20 +1328,6 @@ function leaveTypeLabel(t: string) {
 
 function formatTime(t: string) {
   try { return new Date(t).toLocaleString('zh-CN') } catch { return t }
-}
-
-function formatDate(dateStr: string) {
-  try { return new Date(dateStr).toLocaleDateString('zh-CN') } catch { return dateStr }
-}
-
-function urgencyType(u: string) {
-  const map: Record<string, string> = { urgent: 'danger', important: 'warning', normal: 'info' }
-  return map[u] || 'info'
-}
-
-function urgencyLabel(u: string) {
-  const map: Record<string, string> = { urgent: '紧急', important: '重要', normal: '普通' }
-  return map[u] || '普通'
 }
 
 function scoreClass(score: number) {
