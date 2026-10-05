@@ -237,21 +237,24 @@ const navGroups = [
 ]
 
 /**
- * 移动端底部导航：只保留三个功能页签，按「我的 / 学生 / 全部功能」分类。
- * 消息、智能助手、个人中心统一收敛到「更多」中枢，避免同一功能在两处重复出现。
+ * 移动端底部导航（5 项）：中间为「绵小城」智能体，最右为「个人中心」。
+ * 首页 / 学生 / 更多 为功能页签；消息、审批、预警等模块统一收敛到「更多」宫格，避免重复入口。
  */
 const mobileNavItems = [
   { key: 'home', label: '首页', icon: HomeFilled, route: '/teacher' },
   { key: 'students', label: '学生', icon: Notebook, route: '/teacher/students' },
+  { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/teacher/agent' },
   { key: 'more', label: '更多', icon: Grid, route: '/teacher/more' },
+  { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
 ]
 
 const activeNavKey = computed(() => {
   const p = route.path
   if (p === '/teacher') return 'home'
   if (p.startsWith('/teacher/students')) return 'students'
-  // 其余模块（审批 / 预警 / 消息 / 智能助手 / 成长档案 / 问卷互评 / 关怀 / 家校 / 个人中心）
-  // 统一高亮「更多」中枢，避免同一功能出现两处入口
+  if (p.startsWith('/teacher/agent')) return 'agent'
+  if (p.startsWith('/teacher/profile')) return 'profile'
+  // 其余模块（审批 / 预警 / 公告 / 成长档案 / 问卷互评 / 关怀 / 家校 / 消息）统一高亮「更多」
   return 'more'
 })
 
@@ -519,7 +522,6 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 :deep(.topbar-right .el-button) { color: #667085; }
 :deep(.topbar-right .el-button:hover) { color: #101828; background: #f2f4f7; }
 
-/* 移动端三页签：居中等宽，避免拉伸过长（对齐主流移动端底部栏观感） */
-:deep(.mobile-tab-bar) { justify-content: center; }
-:deep(.mobile-tab-bar .tab-item) { flex: 0 1 132px; max-width: 132px; }
+/* 移动端五页签：中间绵小城凸起，其余等分（主流移动端底部栏布局） */
+:deep(.mobile-tab-bar .tab-item) { flex: 1; }
 </style>
