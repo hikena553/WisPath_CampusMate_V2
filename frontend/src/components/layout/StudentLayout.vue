@@ -54,7 +54,11 @@
       </div>
     </header>
     <main class="main-area" :class="{ 'has-bottom-bar': isMobile }">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <Transition :name="pageTransition">
+          <component :is="Component" />
+        </Transition>
+      </router-view>
     </main>
 
     <!-- 移动端底部导航栏 -->
@@ -63,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getConversations } from '@/api/messages'
@@ -76,6 +80,19 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
+
+// 快捷空间子页面：整屏推入/推出过渡（进入子页面=前进，离开子页面=返回）；其余路由不参与
+const quickPagePaths = ['/student/plan', '/student/portfolio', '/student/growth', '/student/emotion']
+const pageTransition = ref('')
+watch(
+  () => route.path,
+  (to, from) => {
+    if (quickPagePaths.includes(to)) pageTransition.value = 'page-slide'
+    else if (quickPagePaths.includes(from)) pageTransition.value = 'page-slide-back'
+    else pageTransition.value = ''
+  },
+  { flush: 'pre' }
+)
 
 // 移动端底部导航
 const mobileNavItems = [
@@ -191,7 +208,7 @@ function logout() {
 .user-btn { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 8px; border-radius: 8px; color: #ffffff; }
 .user-btn:hover { background: rgba(255,255,255,0.2); }
 .user-name { font-size: 14px; color: #ffffff; }
-.main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; -ms-overflow-style: none; scrollbar-width: none; }
+.main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; -ms-overflow-style: none; scrollbar-width: none; }
 .main-area::-webkit-scrollbar { display: none; }
 .main-area.has-bottom-bar { padding-bottom: 56px; }
 

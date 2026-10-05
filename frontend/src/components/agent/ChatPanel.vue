@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-modern">
+  <div class="chat-modern" ref="rootRef">
     <!-- 移动端顶栏 -->
     <div v-if="showMenuButton" class="mobile-header">
       <el-button text circle class="menu-toggle" @click="emit('toggleSidebar')">
@@ -9,11 +9,30 @@
           <span></span>
         </div>
       </el-button>
-      <div class="mobile-header-title">{{ currentTitle }}</div>
+      <div
+        class="mobile-header-title"
+        :class="{ 'is-actionable': !!currentConv }"
+        @click="openConvActions"
+      >
+        <span class="title-text">{{ currentTitle }}</span>
+        <el-icon v-if="currentConv" class="title-caret" :size="12"><ArrowDown /></el-icon>
+      </div>
       <el-button text circle class="menu-toggle" :disabled="loading" @click="handlePhoneCall">
         <el-icon :size="20"><Phone /></el-icon>
       </el-button>
+      <!-- 无进行中的对话时不渲染，避免出现按了没反应的禁用按钮 -->
+      <el-button v-if="currentConv" text circle class="menu-toggle" aria-label="对话操作" @click="openConvActions">
+        <el-icon :size="20"><MoreFilled /></el-icon>
+      </el-button>
     </div>
+
+    <!-- 移动端会话操作面板：与侧边栏列表共用同一个豆包式底部动作表 -->
+    <ConversationActionsSheet
+      v-model:visible="showConvActions"
+      :conv="currentConv"
+      @command="onSheetCommand"
+      @stage="sheetSetStage"
+    />
     <!-- Pending Files Preview (top-right) -->
     <div v-if="pendingFiles.length > 0" class="pending-files-corner">
       <el-tooltip content="清空全部" placement="bottom">
@@ -169,25 +188,30 @@
       @close="handleVoiceClose"
     />
 
-    <!-- 推荐对话 -->
-    <div v-if="store.messages.length === 0" class="recommend-bar">
-      <div class="recommend-title">为你推荐</div>
-      <div class="recommend-list">
-        <button
-          v-for="item in recommendItems"
-          :key="item"
-          class="recommend-item"
-          @click="input = item; send()"
-        >
-          <el-icon><Promotion /></el-icon>
-          <span>{{ item }}</span>
-        </button>
+    <!-- 推荐对话（固定在输入栏上方；一旦被输入框碰到就整条动画退场） -->
+    <Transition name="recommend-out">
+      <div
+        v-if="store.messages.length === 0 && !recommendHidden && recommendItems.length > 0"
+        class="recommend-bar"
+      >
+        <div class="recommend-title">为你推荐</div>
+        <div class="recommend-list">
+          <button
+            v-for="item in recommendItems"
+            :key="item"
+            class="recommend-item"
+            @click="input = item; send()"
+          >
+            <el-icon><Promotion /></el-icon>
+            <span>{{ item }}</span>
+          </button>
+        </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Input Bar -->
     <div class="input-bar">
-      <div class="input-container">
+      <div class="input-container" ref="inputContainerRef">
         <!-- Text Input -->
         <div class="input-field-wrap">
           <textarea
@@ -207,6 +231,46 @@
 
         <!-- Bottom Actions -->
         <div class="input-actions">
+          <!-- Deep Think Toggle（胶囊按钮，位于上传按钮左侧） -->
+          <el-tooltip content="深度思考" placement="top" :disabled="isMobile">
+            <button
+              type="button"
+              :class="['toggle-btn', { active: deepThinkEnabled }]"
+              :disabled="loading"
+              @click="deepThinkEnabled = !deepThinkEnabled"
+            >
+              <svg class="deep-think-icon toggle-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <g
+                  transform="matrix(0.9907486438751221,0,0,0.9907486438751221,0.07401084899902344,0.07401084899902344)"
+                >
+                  <path
+                    fill="currentColor"
+                    d=" M8,6.769999980926514 C8.678836822509766,6.769999980926514 9.229999542236328,7.321163177490234 9.229999542236328,8 C9.229999542236328,8.678836822509766 8.678836822509766,9.229999542236328 8,9.229999542236328 C7.321163177490234,9.229999542236328 6.769999980926514,8.678836822509766 6.769999980926514,8 C6.769999980926514,7.321163177490234 7.321163177490234,6.769999980926514 8,6.769999980926514z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    fill-opacity="0"
+                    stroke="currentColor"
+                    stroke-opacity="1"
+                    stroke-width="1.4"
+                    d=" M10.506570816040039,10.506570816040039 C7.301570892333984,13.711570739746094 3.5820748805999756,15.186075210571289 2.197999954223633,13.802000045776367 C0.81392502784729,12.417924880981445 2.289379835128784,8.698396682739258 5.494379997253418,5.493396282196045 C8.699379920959473,2.2883963584899902 12.417924880981445,0.81392502784729 13.802000045776367,2.197999954223633 C15.186075210571289,3.5820748805999756 13.711570739746094,7.301570892333984 10.506570816040039,10.506570816040039z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    fill-opacity="0"
+                    stroke="currentColor"
+                    stroke-opacity="1"
+                    stroke-width="1.4"
+                    d=" M10.730999946594238,5.269000053405762 C13.935999870300293,8.473999977111816 15.3100004196167,12.293999671936035 13.802000045776367,13.802000045776367 C12.293999671936035,15.3100004196167 8.475000381469727,13.935999870300293 5.269999980926514,10.730999946594238 C2.065000057220459,7.526000022888184 0.6899999976158142,3.7060000896453857 2.197999954223633,2.197999954223633 C3.7060000896453857,0.6899999976158142 7.526000022888184,2.063999891281128 10.730999946594238,5.269000053405762z"
+                  />
+                </g>
+              </svg>
+              <span>深度思考</span>
+            </button>
+          </el-tooltip>
+
           <!-- Upload buttons -->
           <el-dropdown trigger="click" @command="handleUploadCommand" :disabled="loading">
             <button type="button" class="action-icon-btn" :disabled="loading">
@@ -261,18 +325,6 @@
             <el-icon v-if="!loading" :size="18"><Promotion /></el-icon>
             <span v-else class="send-spinner"></span>
           </button>
-
-          <!-- Deep Think Toggle -->
-          <el-tooltip content="深度思考" placement="top">
-            <button
-              type="button"
-              :class="['action-icon-btn', { active: deepThinkEnabled }]"
-              :disabled="loading"
-              @click="deepThinkEnabled = !deepThinkEnabled"
-            >
-              <el-icon :size="18"><MagicStick /></el-icon>
-            </button>
-          </el-tooltip>
         </div>
       </div>
 
@@ -283,10 +335,9 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { useAgentStore } from '@/stores/agent'
 import { useTeacherAgentStore } from '@/stores/teacherAgent'
-import { useConversationStore } from '@/stores/conversation'
+import { useConversationStore, type Conversation } from '@/stores/conversation'
 import { useTeacherConversationStore } from '@/stores/teacherConversation'
 import { sendChatMessage, fetchRecommendations } from '@/api/agent'
 import { getToken } from '@/utils/token'
@@ -294,12 +345,15 @@ import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, MagicStick, ArrowDown, Close, Delete,
+  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, Close, Delete,
+  MoreFilled,
 } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import MianCharacter from './MianCharacter.vue'
 import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
+import ConversationActionsSheet from './ConversationActionsSheet.vue'
 
 const { isMobile } = useResponsive()
 
@@ -310,7 +364,7 @@ const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false })
-const emit = defineEmits<{ toggleSidebar: []; phoneCall: [] }>()
+const emit = defineEmits<{ toggleSidebar: []; phoneCall: []; 'conversation-removed': [] }>()
 const showVoiceCall = ref(false)
 const voiceConvId = ref<number | null>(null)
 
@@ -355,7 +409,115 @@ const currentTitle = computed(() => {
   const conv = convStore.list.find(c => c.id === convStore.activeId)
   return conv?.title || '新对话'
 })
+
+/** 当前对话对象与可选阶段：供移动端操作面板使用 */
+const activeConvSnapshot = ref<Conversation | null>(null)
+// 搜索/归档视图下，当前对话可能不在已加载列表里；缓存一份快照，保证操作面板仍可用
+watch(
+  () => convStore.list.find(c => c.id === convStore.activeId) || null,
+  (found) => { if (found) activeConvSnapshot.value = { ...found } },
+  { immediate: true },
+)
+const currentConv = computed(() => {
+  if (!convStore.activeId) return null
+  const live = convStore.list.find(c => c.id === convStore.activeId)
+  if (live) return live
+  return activeConvSnapshot.value?.id === convStore.activeId ? activeConvSnapshot.value : null
+})
+const showConvActions = ref(false)
+
+function openConvActions() {
+  if (!currentConv.value) return
+  showConvActions.value = true
+}
+
+function convErrorText(e: unknown, fallback: string): string {
+  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  return typeof detail === 'string' && detail ? detail : fallback
+}
+
+/** 移动端底部面板的动作分发（面板本身只管展示，动作仍由这里处理） */
+function onSheetCommand(cmd: string) {
+  switch (cmd) {
+    case 'rename': return sheetRename()
+    case 'pin':
+    case 'unpin': return sheetTogglePinned()
+    case 'delete': return sheetDelete()
+  }
+}
+
+async function sheetRename() {
+  const c = currentConv.value
+  if (!c) return
+  try {
+    const { value } = await ElMessageBox.prompt(' ', '重命名对话', {
+      inputValue: c.title,
+      inputPlaceholder: '请输入对话标题',
+      customClass: 'sidebar-msgbox',
+      inputValidator: (v: string) => {
+        const t = (v || '').trim()
+        if (!t) return '标题不能为空'
+        if (t.length > 200) return '标题不能超过 200 个字符'
+        return true
+      },
+    })
+    const title = (value || '').trim()
+    if (!title || title === c.title) return
+    await convStore.updateConversation(c.id, { title })
+    ElMessage.success('已重命名')
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(convErrorText(e, '重命名失败'))
+  }
+}
+
+async function sheetTogglePinned() {
+  const c = currentConv.value
+  if (!c) return
+  try {
+    await convStore.updateConversation(c.id, { pinned: !c.pinned })
+    ElMessage.success(c.pinned ? '已取消置顶' : '已置顶')
+  } catch (e) {
+    ElMessage.error(convErrorText(e, '操作失败'))
+  }
+}
+
+/** 阶段切换由底部面板的 @stage 触发；面板展开前已在内部收起 */
+async function sheetSetStage(stage: string) {
+  const c = currentConv.value
+  if (!c || stage === c.project_stage) return
+  try {
+    await convStore.updateConversation(c.id, { project_stage: stage })
+    ElMessage.success(`阶段已更新为「${stage}」`)
+  } catch (e) {
+    ElMessage.error(convErrorText(e, '阶段更新失败'))
+  }
+}
+
+async function sheetDelete() {
+  const c = currentConv.value
+  if (!c) return
+  try {
+    await ElMessageBox.confirm(`确定删除「${c.title}」？`, '删除对话', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      customClass: 'sidebar-msgbox',
+    })
+  } catch {
+    return
+  }
+  try {
+    await convStore.deleteConversation(c.id)
+    ElMessage.success('已删除')
+    emit('conversation-removed')
+  } catch (e) {
+    ElMessage.error(convErrorText(e, '删除失败'))
+  }
+}
+
 const msgRef = ref<HTMLElement>()
+const rootRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
 const previewImage = ref('')
@@ -368,8 +530,88 @@ function autoResize() {
   if (!el) return
   // 先设置为 auto 让浏览器重新计算 scrollHeight
   el.style.height = 'auto'
+  const contentHeight = el.scrollHeight
   // 然后设置为实际高度（最小16px，最大160px）
-  el.style.height = Math.max(16, Math.min(el.scrollHeight, 160)) + 'px'
+  el.style.height = Math.max(16, Math.min(contentHeight, 160)) + 'px'
+  updateRecommendHidden()
+}
+
+/**
+ * 输入框是否已经“碰到”推荐区。
+ * 推荐区固定在输入栏正上方（bottom = 单行输入栏高度），所以它的底边就是
+ * 「容器底边 - 单行输入栏高度」；用真实几何判断：输入框容器上沿越过这条线即视为被盖住。
+ * 不读推荐区自身的 rect —— 它可能正处于退场动画中，也可能已被 v-if 移除。
+ */
+function updateRecommendHidden() {
+  const box = inputContainerRef.value
+  const root = rootRef.value
+  if (!box || !root || inputBarBaseHeight <= 0) return
+  // 推荐区固定在输入栏正上方，底边 = 容器底边 - 单行输入栏高度
+  const barBottom = root.getBoundingClientRect().bottom - inputBarBaseHeight
+  // 0.5px 容差：静止状态刚好贴住不算被盖住
+  recommendHidden.value = box.getBoundingClientRect().top < barBottom - 0.5
+}
+
+/** 单行基准高度（挂载时测量一次，之后不再变化） */
+function ensureBaseMetrics() {
+  const box = inputContainerRef.value
+  if (!box || boxBaseHeight > 0) return
+  boxBaseHeight = box.getBoundingClientRect().height
+  if (textareaRef.value) singleLineContentHeight = textareaRef.value.scrollHeight
+  const bar = box.closest('.input-bar') as HTMLElement | null
+  if (bar) inputBarBaseHeight = bar.getBoundingClientRect().height
+}
+
+/**
+ * 记录「输入框仍是单行时」的基准高度，写进两个 CSS 变量：
+ * - --chat-welcome-h   消息区高度，供移动端欢迎语固定高度居中（输入框被撑高时欢迎语不会被往上顶）
+ * - --chat-input-bar-h 输入栏高度，供「为你推荐」贴在输入栏正上方
+ * 输入框已被撑高时不记录（此时量到的不是基准高度）；
+ * 布局变化（横竖屏、公告条出现等）后会重新校准。
+ */
+function syncBaseHeights() {
+  const root = rootRef.value
+  const msg = msgRef.value
+  const box = inputContainerRef.value
+  if (!root || !msg || !box) return
+  const ta = textareaRef.value
+  // textarea 高于单行时说明输入框已被撑开，跳过，避免记下被压缩的高度
+  if (ta && singleLineContentHeight > 0 && ta.getBoundingClientRect().height > singleLineContentHeight + 1) return
+  const h = msg.getBoundingClientRect().height
+  if (h > 0) root.style.setProperty('--chat-welcome-h', `${h}px`)
+  const bar = box.closest('.input-bar') as HTMLElement | null
+  const barH = bar ? bar.getBoundingClientRect().height : 0
+  if (barH > 0) {
+    inputBarBaseHeight = barH
+    root.style.setProperty('--chat-input-bar-h', `${barH}px`)
+  }
+  syncRecommendListLimit()
+}
+
+/**
+ * 屏幕不够高时（例如 iPhone SE 667pt），欢迎语 + 5 条推荐会挤在一起，
+ * 推荐区会盖住欢迎语副标题。这里按「推荐区顶边不高于欢迎语底边 + 8px」反推出
+ * 推荐列表的最大高度，超出部分在列表内滚动；屏幕够高时上限等于自然高度，不出现滚动条。
+ */
+function syncRecommendListLimit() {
+  const root = rootRef.value
+  if (!root) return
+  const content = root.querySelector('.welcome-content') as HTMLElement | null
+  const barEl = root.querySelector('.recommend-bar') as HTMLElement | null
+  const list = root.querySelector('.recommend-list') as HTMLElement | null
+  if (!content || !barEl || !list) return
+  // 先还原上限再量一次，避免把上一次的压缩结果当成自然高度
+  root.style.removeProperty('--chat-recommend-list-max-h')
+  const overlap = content.getBoundingClientRect().bottom + 8 - barEl.getBoundingClientRect().top
+  const limit = Math.max(80, Math.round(list.getBoundingClientRect().height - Math.max(0, overlap)))
+  root.style.setProperty('--chat-recommend-list-max-h', `${limit}px`)
+}
+
+function handleViewportResize() {
+  nextTick(() => {
+    syncBaseHeights()
+    updateRecommendHidden()
+  })
 }
 
 watch(input, () => {
@@ -397,16 +639,74 @@ const inputCharCount = computed(() => input.value.length)
 const isOverLimit = computed(() => inputCharCount.value > MAX_INPUT_CHARS)
 const charRatio = computed(() => Math.min(inputCharCount.value / MAX_INPUT_CHARS, 1))
 
-// 模块级缓存，跨挂载保持
-const _recommendCache: string[] = []
+/** 推荐条数：与推荐区排版一致 */
+const RECOMMEND_COUNT = 5
+/** 推荐缓存有效期：期内直接复用，避免每次进页面都等一次生成（1~3s） */
+const RECOMMEND_CACHE_TTL = 5 * 60 * 1000
+const RECOMMEND_CACHE_KEY = 'campus_agent_recommend_cache'
 
-const recommendItems = ref<string[]>(
-  _recommendCache.length ? [..._recommendCache] : [
+interface RecommendCacheEntry { items: string[]; at: number }
+
+/** 推荐缓存：按角色分开存，落 sessionStorage 以便刷新页面也能秒开 */
+const _recommendCache: Record<string, RecommendCacheEntry> = (() => {
+  try {
+    const raw = sessionStorage.getItem(RECOMMEND_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, RecommendCacheEntry>) : {}
+  } catch {
+    return {}
+  }
+})()
+
+function saveRecommendCache() {
+  try {
+    sessionStorage.setItem(RECOMMEND_CACHE_KEY, JSON.stringify(_recommendCache))
+  } catch { /* 隐私模式等场景下忽略 */ }
+}
+
+/** 拉取推荐：缓存还新鲜就直接复用，否则后台刷新（界面先显示缓存内容） */
+function loadRecommendations() {
+  const cached = _recommendCache[props.role]
+  if (cached?.items?.length && Date.now() - cached.at < RECOMMEND_CACHE_TTL) return
+  fetchRecommendations().then(items => {
+    const top = items.slice(0, RECOMMEND_COUNT)
+    // 接口失败/返回空时才用兜底文案，避免推荐区整个消失
+    recommendItems.value = top.length > 0 ? top : [...FALLBACK_RECOMMENDATIONS[props.role]]
+    if (top.length === 0) return
+    _recommendCache[props.role] = { items: top, at: Date.now() }
+    saveRecommendCache()
+    // 条目变化会改变推荐区高度，重新算一次矮屏上限
+    nextTick(() => {
+      syncBaseHeights()
+      updateRecommendHidden()
+    })
+  })
+}
+
+/**
+ * 接口不可用时的兜底推荐（与后端 DEFAULT_RECOMMENDATIONS 一致）。
+ * 只在“请求失败或返回空”时使用：正常路径下推荐文字必须来自后端，
+ * 不再先摆一份写死的文案在界面上（那看起来就是“死文字”）。
+ */
+const FALLBACK_RECOMMENDATIONS: Record<string, string[]> = {
+  student: [
     '帮我查一下下周的课程安排',
-    '我丢了保温杯，帮我找找',
-    '最近有什么校园活动通知',
-    '帮我记录一下获奖信息',
-  ]
+    '我今天的计划任务有哪些',
+    '查一下我的作品集',
+    '社区最近有什么热门帖子',
+    '有什么好的学习资源推荐',
+  ],
+  teacher: [
+    '帮我查看今天的待办任务',
+    '查一下班级学生的考勤情况',
+    '帮我看看最近的校园公告',
+    '查询学生的成长记录',
+    '帮我看一下学生的心理预警',
+  ],
+}
+
+// 有缓存就直接用它（也是后端上次给的真实结果）；否则先留空，等接口回来再出现
+const recommendItems = ref<string[]>(
+  _recommendCache[props.role]?.items?.length ? [..._recommendCache[props.role].items] : []
 )
 
 const fileInputRef = ref<HTMLInputElement>()
@@ -414,6 +714,22 @@ const imageInputRef = ref<HTMLInputElement>()
 const pendingFiles = ref<File[]>([])
 const pendingImagePreview = ref('')
 let uploadedFileUrl = ''
+
+/**
+ * “为你推荐”是否已被输入框盖住。
+ * 用真实几何判定而非行数阈值：输入框容器被撑高时上沿上移，
+ * 一旦越过推荐区底边（= 输入栏上沿）就判定为被盖住，整条动画退场。
+ */
+const recommendHidden = ref(false)
+const inputContainerRef = ref<HTMLElement | null>(null)
+/** 单行状态下的输入框容器高度 */
+let boxBaseHeight = 0
+/** 空输入（单行）时 textarea 的 scrollHeight */
+let singleLineContentHeight = 0
+/** 单行状态下的输入栏高度（推荐区就贴在它正上方） */
+let inputBarBaseHeight = 0
+/** 监听消息区尺寸变化的观察者：布局变化时重新校准欢迎语基准高度 */
+let msgObserver: ResizeObserver | null = null
 
 function getFileTypeTag(name: string) {
   const n = name.toLowerCase()
@@ -567,6 +883,9 @@ async function send() {
     return
   }
   loading.value = true
+  // 对话内容要变了，下次新对话的推荐需要重新生成
+  delete _recommendCache[props.role]
+  saveRecommendCache()
 
   // 获取或创建会话
   let cid = props.conversationId
@@ -640,6 +959,8 @@ async function send() {
 
   let lastAssistantContent = ''
   let deepThinkingActive = deepThinkEnabled.value
+  /** 是否已收到服务端 meta（= 本轮回复已落库） */
+  let metaReceived = false
   thinkingState.value = 'idle'
 
   try {
@@ -698,16 +1019,29 @@ async function send() {
       cid || undefined,
       deepThinkEnabled.value,
       skipConv,
+      (meta) => {
+        // 服务端已把本轮回复落库：同步标题并标记已保存，避免前端重复写入
+        metaReceived = true
+        if (meta?.title && cid) {
+          convStore.patchConversation(cid, { title: meta.title, updated_at: new Date().toISOString() })
+        }
+      },
     )
 
-    if (lastAssistantContent && cid) {
+    // 兜底：正常路径由后端落库（meta.saved=true）；只有服务端明确未保存时才补写一次，
+    // 避免旧实现里"后端存一次 + 前端再存一次"造成的重复消息
+    if (!metaReceived && lastAssistantContent && cid) {
       try {
-        await fetch(`/api/agent/conversations/${cid}/messages`, {
+        const token = getToken()
+        const resp = await fetch(`/api/agent/conversations/${cid}/messages`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: JSON.stringify({ role: 'assistant', content: lastAssistantContent, user_message: text }),
         })
-      } catch { /* silent */ }
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      } catch {
+        ElMessage.warning('本条回复可能未保存到历史记录')
+      }
     }
   } catch {
     const placeholder = store.messages.find(m => m.id === assistantId)
@@ -770,18 +1104,30 @@ watch(() => store.messages.length, () => {
 
 onMounted(() => {
   scrollToBottom()
-  // 动态获取推荐（有缓存则静默刷新）
-  fetchRecommendations().then(items => {
-    if (items.length > 0) {
-      recommendItems.value = items
-      _recommendCache.length = 0
-      _recommendCache.push(...items)
-    }
+  // 记录单行状态下的基准几何（此时输入框尚未被内容撑高）
+  nextTick(() => {
+    ensureBaseMetrics()
+    syncBaseHeights()
+    updateRecommendHidden()
   })
+  // 消息区尺寸变化（横竖屏、公告条出现等）时重新校准基准高度与推荐区显隐
+  if (msgRef.value && typeof ResizeObserver !== 'undefined') {
+    msgObserver = new ResizeObserver(() => {
+      syncBaseHeights()
+      updateRecommendHidden()
+    })
+    msgObserver.observe(msgRef.value)
+  }
+  window.addEventListener('resize', handleViewportResize)
+  // 动态获取推荐（缓存新鲜则直接复用，否则后台静默刷新）
+  loadRecommendations()
 })
 
 onUnmounted(() => {
   closePreview()
+  msgObserver?.disconnect()
+  msgObserver = null
+  window.removeEventListener('resize', handleViewportResize)
 })
 </script>
 
@@ -796,7 +1142,9 @@ onUnmounted(() => {
 }
 
 /* ── Messages Area ── */
-.messages { flex: 1; overflow: hidden; padding: 0; }
+/* flex-basis:0 + grow:1 占满剩余空间；shrink:0 让输入框长高时不压缩消息区。
+   否则消息区被压缩、其内容锚在顶部，欢迎语就会被顶上去。 */
+.messages { flex: 1 0 0%; overflow: hidden; padding: 0; min-height: 0; }
 .messages.scrolling { overflow-y: auto; padding: 12px 0; scroll-behavior: auto; }
 .messages.scrolling::-webkit-scrollbar { width: 4px; }
 .messages.scrolling::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
@@ -940,11 +1288,15 @@ onUnmounted(() => {
 
 /* 推荐对话 */
 .recommend-bar {
-  flex-shrink: 0;
+  /* 脱离文档流：固定在输入栏正上方（bottom = 单行输入栏高度，由 syncBaseHeights() 量得）。
+     不参与布局计算，因此它的出现/消失不会改变消息区高度、不会把欢迎语推着上下移动。 */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--chat-input-bar-h, 112px);
   padding: 0 16px 8px;
-  margin-top: -112px;
   background: #fff;
-  position: relative;
+  /* 覆盖在消息区之上（与原先同等层级） */
   z-index: 10;
 }
 .recommend-title {
@@ -964,6 +1316,9 @@ onUnmounted(() => {
   max-width: 820px;
   margin: 0 auto;
   padding-left: 14px;
+  /* 矮屏上限由 syncRecommendListLimit() 量出，超出部分列表内滚动，避免盖住欢迎语 */
+  max-height: var(--chat-recommend-list-max-h, none);
+  overflow-y: auto;
 }
 .recommend-item {
   display: inline-flex;
@@ -986,6 +1341,35 @@ onUnmounted(() => {
 .recommend-item .el-icon {
   font-size: 14px;
   color: #409eff;
+}
+
+/* ── “为你推荐”退场动画 ──
+   推荐区已绝对定位、不占布局高度，所以可以安全地过渡自身高度与透明度：
+   被输入框碰到时整条收起淡出，不会推动输入栏或欢迎语。
+   max-height 取足够大的值（内容约 90px），确保过渡期间不被截断。 */
+.recommend-out-enter-active,
+.recommend-out-leave-active {
+  overflow: hidden;
+  transition:
+    max-height .28s cubic-bezier(.4, 0, .2, 1),
+    opacity .28s cubic-bezier(.4, 0, .2, 1),
+    transform .28s cubic-bezier(.4, 0, .2, 1);
+}
+.recommend-out-enter-from,
+.recommend-out-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.recommend-out-enter-to,
+.recommend-out-leave-from {
+  max-height: 400px;
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .recommend-out-enter-active,
+  .recommend-out-leave-active { transition: none; }
 }
 
 /* ── Message Bubbles ── */
@@ -1201,6 +1585,10 @@ onUnmounted(() => {
   flex-shrink: 0;
   padding: 8px 16px;
   background: #fff;
+  /* 画在推荐区之上：输入框被撑高时向上“盖住”推荐，
+     推荐区（z-index 10）不再是靠推动让位，而是被逐条遮掉 */
+  position: relative;
+  z-index: 20;
 }
 .input-container {
   max-width: 820px;
@@ -1228,24 +1616,37 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 12px;
-  border-radius: 20px;
+  padding: 6px 12px;
+  border-radius: 999px;
   border: 1px solid #e5e7eb;
   background: #fff;
   color: #6b7280;
   font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
-  transition: all .2s;
   line-height: 1;
+  white-space: nowrap;
+  /* 平滑过渡：颜色/背景/边框/阴影同时缓动，不做尺寸或缩放动画 */
+  transition:
+    background-color .26s cubic-bezier(.4, 0, .2, 1),
+    border-color .26s cubic-bezier(.4, 0, .2, 1),
+    color .26s cubic-bezier(.4, 0, .2, 1),
+    box-shadow .26s cubic-bezier(.4, 0, .2, 1);
 }
-.toggle-btn:hover {
-  border-color: #d1d5db;
-  background: #f9fafb;
+.toggle-btn:hover:not(:disabled) {
+  border-color: #c7d9f5;
+  background: #f7faff;
+  color: #4b6b96;
 }
 .toggle-btn.active {
-  border-color: #409eff;
-  background: rgba(64,158,255,.06);
-  color: #409eff;
+  border-color: #a9c6f0;
+  background: #eef4ff;
+  color: #3b6ea8;
+}
+.toggle-btn.active:hover:not(:disabled) {
+  border-color: #8fb4e8;
+  background: #e4eeff;
+  color: #34618f;
 }
 .toggle-btn:disabled {
   opacity: .5;
@@ -1317,6 +1718,16 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+/* 深度思考胶囊按钮：图标取自 chat.deepseek.com 官方图形（四瓣回环 + 中心圆点）。
+   静态度量分离 —— 颜色/边框/背景过渡平滑，不缩放、不改变文字宽度。 */
+.deep-think-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transition: color .26s cubic-bezier(.4, 0, .2, 1);
+}
+
 /* 发送按钮 */
 .send-btn {
   display: inline-flex;
@@ -1358,19 +1769,59 @@ onUnmounted(() => {
 
 /* ── Mobile Menu Button ── */
 .mobile-header {
+  /* 毛玻璃：悬浮在内容之上，滚动内容从下方模糊透出 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  padding: 6px 8px;
+  padding-top: calc(6px + env(safe-area-inset-top, 0px));
   flex-shrink: 0;
+  background: rgba(255, 255, 255, .62);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, .55);
+  box-shadow: 0 1px 0 rgba(17, 24, 39, .04), 0 6px 18px -8px rgba(17, 24, 39, .12);
+}
+/* 顶栏下沿的柔化渐隐，避免与消息内容出现硬边 */
+.mobile-header::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 14px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, 0));
+}
+/* 不支持 backdrop-filter 的浏览器降级为更实的底色，保证标题可读 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mobile-header { background: rgba(255, 255, 255, .94); }
 }
 .mobile-header-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   font-size: 16px;
   font-weight: 600;
   color: #333;
-  text-align: center;
   flex: 1;
+  min-width: 0;
+  padding: 0 4px;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
 }
+.mobile-header-title.is-actionable { cursor: pointer; }
+.mobile-header-title .title-text {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-header-title .title-caret { flex-shrink: 0; color: #9aa0a6; transition: color .15s ease; }
+.mobile-header-title.is-actionable:active .title-caret { color: #6366f1; }
 .mobile-header-placeholder {
   width: 36px;
   flex-shrink: 0;
@@ -1399,8 +1850,26 @@ onUnmounted(() => {
 /* ── Mobile Responsive ── */
 @media (max-width: 767px) {
   .chat-modern { border-radius: 0; }
-  .welcome { padding-top: 0; }
-  .welcome-content { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 140px); }
+  /* 顶栏改为悬浮毛玻璃后，内容需让出顶栏高度 */
+  .messages.scrolling {
+    padding-top: calc(58px + env(safe-area-inset-top, 0px)) !important;
+    scroll-padding-top: calc(58px + env(safe-area-inset-top, 0px));
+  }
+  /* 悬浮顶栏存在时，右上角的待发送文件预览下移，避免遮挡 */
+  .chat-modern:has(.mobile-header) .pending-files-corner {
+    top: calc(54px + env(safe-area-inset-top, 0px));
+  }
+  /* 顶栏四个控件在 375px 下也要放得下：缩小按钮与间距，标题可点开会话面板 */
+  .mobile-header { padding: 6px 6px; gap: 2px; }
+  .mobile-header-title { font-size: 15px; padding: 0 2px; }
+  .menu-toggle { width: 32px; height: 32px; }
+  .menu-toggle :deep(.el-icon) { font-size: 18px; }
+  /* 欢迎语改用固定高度居中：高度取「输入框仍是单行时」的消息区高度
+     （--chat-welcome-h 由 syncBaseHeights() 量得，兜底值 ≈ 单行输入栏 + 底部导航）。
+     输入框被撑高时 .messages 会被压缩，但 .welcome 高度不变、内容在固定高度里居中，
+     所以欢迎语不会被往上顶。 */
+  .welcome { min-height: 0; height: var(--chat-welcome-h, calc(100vh - 178px)); }
+  .welcome-content { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; }
   .ai-character { transform: scale(1.15); margin-bottom: 16px; }
   .welcome-greeting h1 { font-size: 22px; margin-bottom: 6px; }
   .welcome-greeting p { font-size: 13px; margin-bottom: 20px; }
@@ -1408,11 +1877,19 @@ onUnmounted(() => {
   .msg-row.user { flex-direction: row-reverse; margin-left: 0; margin-right: 0; }
   .bubble { padding: 8px 12px; font-size: 13px; }
   .input-bar { padding: 8px 10px; }
+  /* 移动端输入栏比桌面端高（输入框一行 + 按钮一行），兜底值同步放大 */
+  .recommend-bar { bottom: var(--chat-input-bar-h, 122px); }
   .input-container { border-radius: 20px; padding: 10px; }
+  /* 移动端输入区改为「输入框一行 + 按钮一行」：
+     左侧深度思考胶囊，右侧附件/麦克风/发送 */
+  .input-field-wrap { flex: 1 0 100%; }
+  .char-counter { padding-right: 0; }
+  .input-actions { justify-content: space-between; gap: 8px; margin-top: 6px; padding: 0; flex-wrap: wrap; }
+  .toggle-btn { padding: 5px 11px; font-size: 12px; }
   .feature-toggles { margin-bottom: 6px; }
-  .toggle-btn { padding: 4px 10px; font-size: 12px; }
   .chat-textarea { font-size: 14px; }
   .action-icon-btn { width: 28px; height: 28px; }
+  .deep-think-icon { width: 14px; height: 14px; }
   .send-btn { width: 30px; height: 30px; }
   .msg-actions { opacity: 1; }
 }

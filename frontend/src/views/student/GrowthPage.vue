@@ -762,7 +762,6 @@ async function handleAdd() {
   box-sizing: border-box; 
   scrollbar-width: none; 
   -ms-overflow-style: none;
-  animation: fadeInUp 0.35s ease-out;
 }
 .growth-page::-webkit-scrollbar { display: none; }
 
