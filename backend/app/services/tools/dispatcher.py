@@ -44,10 +44,13 @@ from .teacher import (
     _query_crisis_alerts,
     _query_guardian_logs,
     _query_growth_stats,
+    _query_learning_events,
     _query_my_portfolio,
     _query_my_survey_results,
+    _query_my_workflows,
     _query_pending_leaves,
     _query_student_detail,
+    _query_student_insight,
     _query_students,
     _query_teacher_tasks,
 )
@@ -107,6 +110,10 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "query_my_survey_results": _query_my_survey_results,
             "query_care_calendar": _query_care_calendar,
             "query_guardian_logs": _query_guardian_logs,
+            # P2 底座：学情事件 / AI 学情诊断 / 审批流程
+            "query_learning_events": _query_learning_events,
+            "query_student_insight": _query_student_insight,
+            "query_my_workflows": _query_my_workflows,
         }
         fn = handler.get(name)
         if not fn:

@@ -29,6 +29,7 @@ class TeacherTaskOut(BaseModel):
     student_name: str = ""
     title: str
     detail: str | None = None
+    rule_code: str | None = None
     status: str
     due_at: date | None = None
     overdue: bool = False

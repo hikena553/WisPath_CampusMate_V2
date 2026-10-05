@@ -54,6 +54,8 @@ class TeacherTask(Base):
     student_id: Mapped[int | None] = mapped_column(index=True, default=None)
     title: Mapped[str] = mapped_column(String(200))
     detail: Mapped[str | None] = mapped_column(Text, default=None)
+    # 来源规则编码（预警 pipeline 使用，便于按「规则 + 学生 + 当日」幂等去重）
+    rule_code: Mapped[str | None] = mapped_column(String(50), default=None, index=True)
     status: Mapped[TaskStatus] = mapped_column(
         SAEnum(TaskStatus), default=TaskStatus.PENDING, index=True
     )

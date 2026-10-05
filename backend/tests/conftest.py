@@ -62,6 +62,8 @@ from app.models.guardian import (  # noqa: E402
     GuardianContactLog,
     GuardianShareLink,
 )
+from app.models.learning_event import LearningEvent  # noqa: E402
+from app.models.workflow import WorkflowDef, WorkflowInstance  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
 from app.utils.rate_limiter import reset_rate_limiter  # noqa: E402
 
@@ -165,6 +167,9 @@ def make_user(db):
             db.query(GuardianContactLog).filter(GuardianContactLog.teacher_id == u.id).delete()
             db.query(GuardianContactLog).filter(GuardianContactLog.student_id == u.id).delete()
             db.query(Guardian).filter(Guardian.student_id == u.id).delete()
+            db.query(LearningEvent).filter(LearningEvent.actor_id == u.id).delete()
+            db.query(WorkflowInstance).filter(WorkflowInstance.initiator_id == u.id).delete()
+            db.query(WorkflowDef).filter(WorkflowDef.created_by == u.id).delete()
             db.query(LeaveRequest).filter(LeaveRequest.student_id == u.id).delete()
             db.delete(u)
     db.commit()

@@ -176,3 +176,44 @@ export function persistContactSuggestions(items: ContactSuggestion[]) {
     })),
   })
 }
+
+/** ===== 学情诊断（模块 13）：可溯源画像 + AI 建议 ===== */
+
+export interface InsightEvidence {
+  source: string
+  label: string
+  value: string | number
+}
+
+export interface StudentInsightProfile {
+  student_id: number
+  days: number
+  risk_level: 'low' | 'medium' | 'high'
+  risk_reasons: string[]
+  metrics: Record<string, string | number>
+  by_verb: { verb: string; count: number }[]
+  by_object: { object_type: string; count: number }[]
+  evidence: InsightEvidence[]
+  generated_at: string
+}
+
+export interface StudentInsight {
+  student_id: number
+  student_name: string
+  profile: StudentInsightProfile
+  advice: string
+  degraded: boolean
+  degrade_reason: string
+}
+
+export function getStudentInsight(studentId: number, days = 30) {
+  return request.get<StudentInsight>(`/teacher/students/${studentId}/insight`, { params: { days } })
+}
+
+/** 学情建议一键转跟进任务 */
+export function convertInsightToTask(studentId: number, advice: string, riskLevel: string) {
+  return request.post(`/teacher/students/${studentId}/insight/task`, {
+    advice,
+    risk_level: riskLevel,
+  })
+}

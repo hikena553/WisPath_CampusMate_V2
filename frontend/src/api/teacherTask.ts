@@ -21,6 +21,8 @@ export interface TeacherTask {
   student_name: string
   title: string
   detail: string | null
+  /** 来源规则编码（学习预警 pipeline 生成的任务带该字段） */
+  rule_code?: string | null
   status: TaskStatus
   due_at: string | null
   overdue: boolean

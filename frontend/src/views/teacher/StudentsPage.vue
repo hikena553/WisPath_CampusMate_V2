@@ -209,6 +209,11 @@
                     <CareRecordPanel :student-id="detail.id" :student-name="detail.name" />
                   </div>
                 </el-tab-pane>
+                <el-tab-pane label="学情诊断" name="insight">
+                  <div class="tab-content">
+                    <StudentInsightPanel :student-id="detail.id" :student-name="detail.name" />
+                  </div>
+                </el-tab-pane>
               </el-tabs>
             </div>
           </div>
@@ -667,6 +672,11 @@
                 <CareRecordPanel :student-id="detail.id" :student-name="detail.name" />
               </div>
             </el-tab-pane>
+            <el-tab-pane label="诊断" name="insight">
+              <div class="mobile-tab-content">
+                <StudentInsightPanel :student-id="detail.id" :student-name="detail.name" />
+              </div>
+            </el-tab-pane>
           </el-tabs>
         </div>
       </div>
@@ -797,6 +807,7 @@ import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import CareRecordPanel from '@/components/teacher/care/CareRecordPanel.vue'
+import StudentInsightPanel from '@/components/teacher/insight/StudentInsightPanel.vue'
 import { renderMarkdown } from '@/utils/markdown'
 import type { LeaveRequestOut } from '@/types'
 

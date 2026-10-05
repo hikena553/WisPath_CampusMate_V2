@@ -564,4 +564,48 @@ TEACHER_TOOL_DEFINITIONS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_learning_events",
+            "description": "查看某学生的学情事件底座数据（请假/关怀/成果等行为分布）。教师说'某某的学情数据'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"},
+                    "days": {"type": "integer", "description": "统计窗口天数，默认30"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_student_insight",
+            "description": "AI 学情诊断：给出可溯源的风险画像与辅导建议。教师说'帮我诊断一下某某'、'某某最近怎么样'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"},
+                    "days": {"type": "integer", "description": "统计窗口天数，默认30"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_workflows",
+            "description": "查看审批流程实例及当前待办节点。教师说'我的审批流程'、'流程到哪一步了'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["running", "approved", "rejected", "cancelled"], "description": "按状态筛选"},
+                    "all": {"type": "boolean", "description": "true 表示查看全部（不限于我发起的）"}
+                }
+            }
+        }
+    },
 ]

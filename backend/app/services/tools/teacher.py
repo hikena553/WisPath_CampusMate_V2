@@ -468,3 +468,68 @@ def _query_guardian_logs(db: Session, args: dict, user: User) -> dict:
             for l in logs
         ],
     }
+
+
+# ============ P2 底座工具：学情事件 / AI 学情诊断 / 审批流程 ============
+
+
+def _query_learning_events(db: Session, args: dict, user: User) -> dict:
+    """学情数据底座：按学生聚合学情事件（谓语分布 + 最近时间线）。"""
+    from app.services import learning_event_service
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    days = int(args.get("days") or 30)
+    agg = learning_event_service.aggregate(db, student.id, days=days)
+    if not agg["total"]:
+        return {"message": f"{student.name}近{days}天没有学情事件记录", "by_verb": []}
+    return {
+        "message": f"{student.name}近{days}天共 {agg['total']} 条学情事件",
+        "by_verb": agg["by_verb"][:8],
+        "recent": [
+            {"verb": e["verb"], "object_type": e["object_type"], "occurred_at": e["occurred_at"][:10]}
+            for e in agg["recent"][:8]
+        ],
+    }
+
+
+async def _query_student_insight(db: Session, args: dict, user: User) -> dict:
+    """AI 学情诊断：可溯源画像 + 辅导建议（LLM 不可用时自动降级为规则建议）。"""
+    from app.services import student_insight_service
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    days = int(args.get("days") or 30)
+    insight = await student_insight_service.get_insight(db, student.id, days=days)
+    return {
+        "message": insight["advice"],
+        "risk_level": insight["profile"]["risk_level"],
+        "risk_reasons": insight["profile"]["risk_reasons"],
+        "evidence": insight["profile"]["evidence"],
+        "degraded": insight["degraded"],
+    }
+
+
+def _query_my_workflows(db: Session, args: dict, user: User) -> dict:
+    """查看我发起 / 参与的审批流程实例及当前待办节点。"""
+    from app.services import workflow_engine
+    status = args.get("status")
+    instances = workflow_engine.list_instances(
+        db, initiator_id=None if args.get("all") else user.id, status=status, limit=20
+    )
+    if not instances:
+        return {"message": "暂无流程实例", "instances": []}
+    return {
+        "message": f"共{len(instances)}个流程实例",
+        "instances": [
+            {
+                "instance_id": i["id"],
+                "def_name": i["def_name"],
+                "status": i["status"],
+                "current_node": (i.get("current_node") or {}).get("name", ""),
+                "biz_type": i["biz_type"],
+                "biz_id": i["biz_id"],
+            }
+            for i in instances
+        ],
+    }

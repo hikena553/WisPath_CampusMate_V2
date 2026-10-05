@@ -13,7 +13,7 @@ from app.schemas.care_record import (
     CareRecordUpdate,
     WorkloadStats,
 )
-from app.services import care_record_service, teacher_task_service
+from app.services import care_record_service, teacher_task_service, learning_event_service
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,16 @@ def create_record(
                 teacher_task_service.update_task(db, task, {"status": "cared"})
             except ValueError:
                 logger.warning("任务 %s 状态推进失败", payload.task_id)
+    # 学情数据底座：单点写入（旁路，失败不影响主流程）
+    learning_event_service.emit(
+        db,
+        actor_id=user.id,
+        verb="care.record",
+        object_type="care_record",
+        object_id=record.id,
+        context={"record_type": payload.record_type, "student_id": payload.student_id},
+    )
+    db.commit()  # 落库学情事件（旁路写入随本请求事务提交）
     return care_record_service.serialize_full(db, record)
 
 

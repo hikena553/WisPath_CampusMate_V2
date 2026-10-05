@@ -13,7 +13,7 @@ from app.schemas.teacher_portfolio import (
     PortfolioItemUpdate,
     PortfolioReport,
 )
-from app.services import teacher_portfolio_service
+from app.services import teacher_portfolio_service, learning_event_service
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,16 @@ def create_item(
         occurred_on=payload.occurred_on,
         visibility=payload.visibility,
     )
+    # 学情数据底座：单点写入（旁路，失败不影响主流程）
+    learning_event_service.emit(
+        db,
+        actor_id=user.id,
+        verb="portfolio.create",
+        object_type="portfolio_item",
+        object_id=item.id,
+        context={"item_type": payload.item_type},
+    )
+    db.commit()
     return teacher_portfolio_service.serialize(item)
 
 

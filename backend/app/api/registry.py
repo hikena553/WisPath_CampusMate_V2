@@ -41,6 +41,8 @@ from app.api.teacher_portfolio import router as teacher_portfolio_router
 from app.api.peer_survey import router as peer_survey_router
 from app.api.care_center import router as care_center_router
 from app.api.guardian import router as guardian_router
+from app.api.learning_event import router as learning_event_router
+from app.api.workflow import router as workflow_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -84,6 +86,8 @@ ROUTERS = [
     peer_survey_router,
     care_center_router,
     guardian_router,
+    learning_event_router,
+    workflow_router,
 ]
 
 

@@ -58,6 +58,7 @@ def _serialize(task: TeacherTask, student_name: str = "") -> dict:
         "student_name": student_name,
         "title": task.title,
         "detail": task.detail,
+        "rule_code": task.rule_code,
         "status": task.status.value if task.status else "pending",
         "due_at": task.due_at,
         "overdue": overdue,
@@ -76,6 +77,7 @@ def create_task(
     due_at: date | None = None,
     source_type: str | TaskSourceType = TaskSourceType.MANUAL,
     source_id: int | None = None,
+    rule_code: str | None = None,
 ) -> TeacherTask:
     """建任务（幂等）：同一 (source_type, source_id, teacher_id) 已存在时直接返回旧任务。"""
     stype = _source_type(source_type)
@@ -95,6 +97,8 @@ def create_task(
             if existing.status in _OPEN_STATUSES:
                 existing.title = title
                 existing.detail = detail
+                if rule_code is not None:
+                    existing.rule_code = rule_code
                 if due_at is not None:
                     existing.due_at = due_at
                 db.commit()
@@ -109,6 +113,7 @@ def create_task(
         due_at=due_at,
         source_type=stype,
         source_id=source_id,
+        rule_code=rule_code,
     )
     db.add(task)
     try:

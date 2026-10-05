@@ -180,3 +180,43 @@ async def test_p1_module_tools_flow(make_user, db, _tool_counters_clean):
     # 我的互评结果：无数据时友好提示
     survey = await execute_tool("query_my_survey_results", {}, teacher)
     assert "message" in survey
+
+
+@pytest.mark.asyncio
+async def test_p2_platform_tools(make_user, db, _tool_counters_clean, monkeypatch):
+    """P2 工具：学情事件 / AI 学情诊断（降级）/ 审批流程。"""
+    from app.services import learning_event_service, workflow_engine
+
+    teacher = make_user(role=UserRole.TEACHER)
+    student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id, name="底座学生")
+
+    learning_event_service.emit(db, actor_id=student.id, verb="leave.apply")
+    learning_event_service.emit(db, actor_id=student.id, verb="care.record")
+    db.commit()
+
+    events = await execute_tool("query_learning_events", {"student_name": "底座学生"}, teacher)
+    assert "学情事件" in events["message"]
+    assert events["by_verb"]
+
+    # LLM 不可用 → 诊断仍可用（降级）
+    def _boom():
+        raise RuntimeError("LLM 不可用")
+
+    monkeypatch.setattr("app.services.llm_service._get_client", _boom)
+    insight = await execute_tool("query_student_insight", {"student_name": "底座学生"}, teacher)
+    assert insight["message"]
+    assert insight["degraded"] is True
+    assert insight["evidence"]
+
+    # 审批流程：无实例时友好提示
+    workflow_engine.create_def(
+        db,
+        code="tool_wf",
+        name="工具流程",
+        nodes=[{"key": "a", "name": "节点A"}],
+        created_by=teacher.id,
+    )
+    workflow_engine.start(db, def_code="tool_wf", initiator_id=teacher.id, biz_id=1)
+    flows = await execute_tool("query_my_workflows", {}, teacher)
+    assert flows["instances"]
+    assert flows["instances"][0]["current_node"] == "节点A"

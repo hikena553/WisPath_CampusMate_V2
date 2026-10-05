@@ -18,6 +18,7 @@ from app.schemas.leave import (
     LeaveStatsItem,
 )
 from app.services import teacher_task_service
+from app.services import learning_event_service
 from app.services.llm_service import _get_client, _get_llm_config
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
 
@@ -103,6 +104,21 @@ def create_leave(req: LeaveRequestCreate, user: User = Depends(get_current_user)
         leave_type=req.leave_type,
     )
     db.add(leave)
+    db.flush()
+    # 学情数据底座：单点写入（旁路，失败不影响主流程）
+    learning_event_service.emit(
+        db,
+        actor_id=user.id,
+        verb="leave.apply",
+        object_type="leave",
+        object_id=leave.id,
+        context={
+            "leave_type": safe_enum_val(leave.leave_type),
+            "start_date": str(leave.start_date),
+            "end_date": str(leave.end_date),
+            "days": (req.end_date - req.start_date).days + 1,
+        },
+    )
     db.commit()
     db.refresh(leave)
     return _to_out(leave, user.name)
