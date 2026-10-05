@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -83,6 +83,44 @@ def update_crisis_config(
     return {"message": "算法配置已保存", "keywords": custom, "notify_counselor": req.notify_counselor}
 
 
+def _alert_out(db: Session, a: AIDialogSummary) -> AIDialogSummaryOut:
+    student = db.query(User).filter(User.id == a.student_id).first()
+    return AIDialogSummaryOut(
+        id=a.id,
+        student_id=a.student_id,
+        student_name=student.name if student else "",
+        summary=a.summary,
+        level=safe_enum_val(a.level),
+        keywords_matched=a.keywords_matched,
+        resolved=a.resolved,
+        created_at=a.created_at.isoformat() if a.created_at else "",
+        intervention_type=a.intervention_type.value if a.intervention_type else None,
+        intervention_note=a.intervention_note,
+        resolved_by=a.resolved_by,
+        resolved_at=a.resolved_at.isoformat() if a.resolved_at else None,
+        follow_up_date=str(a.follow_up_date) if a.follow_up_date else None,
+    )
+
+
+@router.get("/follow-up-due", response_model=list[AIDialogSummaryOut])
+def list_follow_up_due(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """待随访列表：随访日期已到期且未办结的预警，供"待随访"视图与首页提醒使用。"""
+    if user.role != UserRole.TEACHER and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="仅教师可查看")
+    today = date.today()
+    query = (
+        db.query(AIDialogSummary)
+        .filter(
+            AIDialogSummary.resolved.is_(False),
+            AIDialogSummary.follow_up_date.isnot(None),
+            AIDialogSummary.follow_up_date <= today,
+        )
+        .order_by(AIDialogSummary.follow_up_date.asc())
+    )
+    query = _filter_by_tutor(query, user, db)
+    return [_alert_out(db, a) for a in query.all()]
+
+
 @router.get("/alerts", response_model=list[AIDialogSummaryOut])
 def list_alerts(resolved: bool | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role != UserRole.TEACHER and user.role != UserRole.ADMIN:
@@ -91,26 +129,7 @@ def list_alerts(resolved: bool | None = None, user: User = Depends(get_current_u
     query = _filter_by_tutor(query, user, db)
     if resolved is not None:
         query = query.filter(AIDialogSummary.resolved == resolved)
-    alerts = query.all()
-    result = []
-    for a in alerts:
-        student = db.query(User).filter(User.id == a.student_id).first()
-        result.append(AIDialogSummaryOut(
-            id=a.id,
-            student_id=a.student_id,
-            student_name=student.name if student else "",
-            summary=a.summary,
-            level=safe_enum_val(a.level),
-            keywords_matched=a.keywords_matched,
-            resolved=a.resolved,
-            created_at=a.created_at.isoformat() if a.created_at else "",
-            intervention_type=a.intervention_type.value if a.intervention_type else None,
-            intervention_note=a.intervention_note,
-            resolved_by=a.resolved_by,
-            resolved_at=a.resolved_at.isoformat() if a.resolved_at else None,
-            follow_up_date=str(a.follow_up_date) if a.follow_up_date else None,
-        ))
-    return result
+    return [_alert_out(db, a) for a in query.all()]
 
 
 @router.get("/students/{student_id}/alerts", response_model=list[AIDialogSummaryOut])

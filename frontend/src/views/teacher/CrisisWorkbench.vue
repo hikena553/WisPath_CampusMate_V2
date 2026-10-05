@@ -28,6 +28,10 @@
         <div class="wb-stat-value success">{{ intervenedCount }}</div>
         <div class="wb-stat-label">已干预</div>
       </div>
+      <div class="wb-stat">
+        <div class="wb-stat-value purple">{{ followUpDue.length }}</div>
+        <div class="wb-stat-label">待随访</div>
+      </div>
     </div>
 
     <!-- 筛选 -->
@@ -35,6 +39,7 @@
       <el-radio-group v-model="filter" size="small">
         <el-radio-button value="all">全部</el-radio-button>
         <el-radio-button value="unresolved">待处置</el-radio-button>
+        <el-radio-button value="follow_up">待随访</el-radio-button>
         <el-radio-button value="resolved">已闭环</el-radio-button>
       </el-radio-group>
     </div>
@@ -74,6 +79,16 @@
           <el-tag :type="row.resolved ? 'success' : 'warning'" size="small" effect="plain">
             {{ row.resolved ? '已闭环' : '待处置' }}
           </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="随访" width="130">
+        <template #default="{ row }">
+          <template v-if="row.follow_up_date">
+            <span :class="{ 'fu-due': isFollowUpDue(row) }">
+              {{ row.follow_up_date }}{{ isFollowUpDue(row) ? ' · 已到期' : '' }}
+            </span>
+          </template>
+          <span v-else class="note-text muted">未设置</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="160" fixed="right">
@@ -134,7 +149,7 @@ import type { CrisisAlert } from '@/types'
 
 const alerts = ref<CrisisAlert[]>([])
 const loading = ref(false)
-const filter = ref<'all' | 'unresolved' | 'resolved'>('all')
+const filter = ref<'all' | 'unresolved' | 'follow_up' | 'resolved'>('all')
 
 const dialogVisible = ref(false)
 const current = ref<CrisisAlert | null>(null)
@@ -150,8 +165,16 @@ const unresolved = computed(() => alerts.value.filter(a => !a.resolved))
 const highRisk = computed(() => alerts.value.filter(a => !a.resolved && a.level === 'severe'))
 const intervenedCount = computed(() => alerts.value.filter(a => a.intervention_type).length)
 
+/** 随访日期已到期且未闭环 */
+function isFollowUpDue(row: CrisisAlert) {
+  if (row.resolved || !row.follow_up_date) return false
+  return row.follow_up_date <= new Date().toISOString().slice(0, 10)
+}
+const followUpDue = computed(() => alerts.value.filter(isFollowUpDue))
+
 const filtered = computed(() => {
   if (filter.value === 'unresolved') return unresolved.value
+  if (filter.value === 'follow_up') return followUpDue.value
   if (filter.value === 'resolved') return alerts.value.filter(a => a.resolved)
   return alerts.value
 })
@@ -265,7 +288,7 @@ onMounted(loadAlerts)
 
 .wb-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 14px;
   margin-bottom: 16px;
 }
@@ -288,6 +311,9 @@ onMounted(loadAlerts)
 .wb-stat-value.warn { color: #e6a23c; }
 .wb-stat-value.danger { color: #f56c6c; }
 .wb-stat-value.success { color: #67c23a; }
+.wb-stat-value.purple { color: #7c3aed; }
+
+.fu-due { color: #e6a23c; font-weight: 600; }
 
 .wb-stat-label {
   margin-top: 4px;

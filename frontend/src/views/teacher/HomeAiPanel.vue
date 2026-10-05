@@ -44,7 +44,18 @@
           <el-icon class="ai-card-icon ai-card-icon-orange"><Cpu /></el-icon>
           <span>AI 推荐联系学生</span>
         </div>
-        <el-tag size="small" effect="plain" type="success">TOP {{ contactSuggestions.length }}</el-tag>
+        <div class="ai-card-actions">
+          <el-button
+            v-if="contactSuggestions.length"
+            size="small"
+            type="primary"
+            plain
+            round
+            :loading="batchLoading"
+            @click="convertAll"
+          >全部转为跟进</el-button>
+          <el-tag size="small" effect="plain" type="success">TOP {{ contactSuggestions.length }}</el-tag>
+        </div>
       </div>
       <div v-loading="aiLoading" class="ai-card-body">
         <el-empty v-if="!aiLoading && contactSuggestions.length === 0" description="暂无推荐联系对象" :image-size="48" />
@@ -59,7 +70,18 @@
             </div>
             <div class="ai-contact-reason">{{ c.reason }}</div>
           </div>
-          <el-button size="small" round @click="router.push('/teacher/students')">查看档案</el-button>
+          <div class="ai-contact-ops">
+            <el-button size="small" round @click="router.push('/teacher/students')">查看档案</el-button>
+            <el-button
+              size="small"
+              round
+              type="primary"
+              :plain="!convertedIds.has(c.student_id)"
+              :loading="loadingIds.has(c.student_id)"
+              :disabled="convertedIds.has(c.student_id)"
+              @click="convert(c)"
+            >{{ convertedIds.has(c.student_id) ? '已跟进' : '转为跟进' }}</el-button>
+          </div>
         </div>
       </div>
     </div>
@@ -67,20 +89,56 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { MagicStick, Refresh, DArrowRight, Cpu } from '@element-plus/icons-vue'
 import type { ProactiveAction } from '@/api/agent'
-import type { ContactSuggestion } from '@/api/teacher'
+import { persistContactSuggestions, type ContactSuggestion } from '@/api/teacher'
 
-defineProps<{
+const props = defineProps<{
   proactiveActions: ProactiveAction[]
   contactSuggestions: ContactSuggestion[]
   aiLoading: boolean
 }>()
 
-const emit = defineEmits<{ refresh: [] }>()
+const emit = defineEmits<{ refresh: []; converted: [count: number] }>()
 
 const router = useRouter()
+
+/** 已转为跟进的学生 id（本地即时反馈，避免重复点击） */
+const convertedIds = ref<Set<number>>(new Set())
+const loadingIds = ref<Set<number>>(new Set())
+const batchLoading = ref(false)
+
+async function convert(c: ContactSuggestion) {
+  if (convertedIds.value.has(c.student_id)) return
+  loadingIds.value.add(c.student_id)
+  try {
+    const res = await persistContactSuggestions([c])
+    convertedIds.value.add(c.student_id)
+    ElMessage.success(res.created > 0 ? '已转为跟进任务' : '该学生已在跟进中')
+    emit('converted', res.created)
+  } catch {
+    ElMessage.error('转为跟进失败')
+  } finally {
+    loadingIds.value.delete(c.student_id)
+  }
+}
+
+async function convertAll() {
+  batchLoading.value = true
+  try {
+    const res = await persistContactSuggestions(props.contactSuggestions)
+    props.contactSuggestions.forEach((c) => convertedIds.value.add(c.student_id))
+    ElMessage.success(res.created > 0 ? `已转为跟进任务 ${res.created} 条` : '推荐学生均已在跟进中')
+    emit('converted', res.created)
+  } catch {
+    ElMessage.error('批量转为跟进失败')
+  } finally {
+    batchLoading.value = false
+  }
+}
 
 function priorityText(p: number) {
   if (p >= 80) return '高危'
@@ -263,6 +321,19 @@ function contactTagType(p: string): 'danger' | 'warning' | 'info' {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.ai-contact-ops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ai-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 @media (max-width: 768px) {

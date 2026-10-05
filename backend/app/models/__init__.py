@@ -25,3 +25,5 @@ from app.models.emotion import EmotionRecord
 from app.models.material import MaterialArchive
 from app.models.sms import SmsLog
 from app.models.feed import FeedSource, ExternalFeedItem
+from app.models.teacher_task import TeacherTask, TaskSourceType, TaskStatus
+from app.models.care_record import CareRecord, CareRecordType

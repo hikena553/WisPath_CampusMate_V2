@@ -31,6 +31,9 @@
       :campus-announcements="campusAnnouncements" :overdue-count="overdueSchedules.length"
       @open-today="showTodaySubPage = true" />
 
+    <!-- 移动端：待办任务子页（统一任务层） -->
+    <HomeMobileTasks v-if="isMobile && showTasksSubPage" @close="showTasksSubPage = false" />
+
     <!-- 添加日程子页面 -->
     <!-- transition removed -->
     <HomeMobileSchedule v-if="isMobile && showScheduleSubPage" :content="scheduleContent"
@@ -111,7 +114,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   DataAnalysis, UserFilled,
   WarningFilled as WarnIcon, EditPen, DArrowRight,
-  List
+  List, Tickets
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
@@ -119,6 +122,7 @@ import { getAlerts } from '@/api/crisis'
 import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'
 import { getPendingLeaves } from '@/api/leave'
 import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getClassStats, getOverdueSchedules, updateTeacherSchedule, getStudents, suggestContacts } from '@/api/teacher'
+import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
 import type { DashboardStats, ClassEvaluation, ClassStats, ScheduleItem, ScheduleUrgency, StudentSummary, ContactSuggestion } from '@/api/teacher'
 import { getAnnouncements } from '@/api/campus'
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
@@ -134,6 +138,7 @@ import HomeMobileCharts from './HomeMobileCharts.vue'
 import HomeMobileToday from './HomeMobileToday.vue'
 import HomeDesktopSchedule from './HomeDesktopSchedule.vue'
 import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
+import HomeMobileTasks from './HomeMobileTasks.vue'
 import HomeMobileSchedule from './HomeMobileSchedule.vue'
 import HomeMobileCrisis from './HomeMobileCrisis.vue'
 import HomeMobileApproval from './HomeMobileApproval.vue'
@@ -350,6 +355,19 @@ const todayStr = computed(() => {
 
 const pendingTaskCount = computed(() => todayLeaves.value.length + todaySchedules.value.length)
 
+/** 统一待办任务层概览（今日待跟进 / 逾期） */
+const taskSummary = ref<TeacherTaskSummary>({
+  pending: 0, overdue: 0, today: 0, done_this_week: 0, total: 0,
+})
+
+async function loadTaskSummary() {
+  try {
+    taskSummary.value = await getTeacherTaskSummary()
+  } catch {
+    /* 概览失败不影响首页其它数据 */
+  }
+}
+
 const statCards = computed(() => [
   {
     label: '我的学生', value: stats.value.total_students,
@@ -358,6 +376,10 @@ const statCards = computed(() => [
   {
     label: '危机预警', value: stats.value.alert_count,
     color: '#f56c6c', icon: WarnIcon, link: '__crisis__',
+  },
+  {
+    label: '今日待跟进', value: taskSummary.value.pending,
+    color: '#7c3aed', icon: Tickets, link: '__tasks__',
   },
   {
     label: '待办任务', value: pendingTaskCount.value,
@@ -377,6 +399,7 @@ const evalData = ref<ClassEvaluation>({
 
 const showCrisisSubPage = ref(false)
 const showTodaySubPage = ref(false)
+const showTasksSubPage = ref(false)
 watch(showTodaySubPage, (open) => {
   if (open) selectedTaskDate.value = new Date().toISOString().slice(0, 10)
 })
@@ -434,6 +457,8 @@ function navigateTo(path: string) {
     showCrisisSubPage.value = true
   } else if (path === '__today__') {
     showTodaySubPage.value = true
+  } else if (path === '__tasks__') {
+    showTasksSubPage.value = true
   } else {
     router.push(path)
   }
@@ -619,6 +644,7 @@ async function silentRefresh() {
     loadSchedules(),
     loadMyAnnouncements(),
     loadOverdueSchedules(),
+    loadTaskSummary(),
   ]).catch(() => {})
   lastRefreshAt = Date.now()
   dataReady.value = true // 数据加载完成，允许显示空状态

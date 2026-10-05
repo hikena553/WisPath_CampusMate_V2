@@ -36,11 +36,15 @@ from .student import (
 from .teacher import (
     _analyze_leave,
     _approve_leave,
+    _create_care_record,
+    _create_teacher_task,
+    _query_care_records,
     _query_crisis_alerts,
     _query_growth_stats,
     _query_pending_leaves,
     _query_student_detail,
     _query_students,
+    _query_teacher_tasks,
 )
 
 
@@ -87,6 +91,11 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "approve_leave": _approve_leave,
             "query_student_detail": _query_student_detail,
             "query_growth_stats": _query_growth_stats,
+            # 待办任务 / 侧写记录
+            "query_teacher_tasks": _query_teacher_tasks,
+            "create_teacher_task": _create_teacher_task,
+            "create_care_record": _create_care_record,
+            "query_care_records": _query_care_records,
         }
         fn = handler.get(name)
         if not fn:

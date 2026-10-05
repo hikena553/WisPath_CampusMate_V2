@@ -152,6 +152,22 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            <!-- 单聊且对方为名下学生：档案 / 关怀快捷操作 -->
+            <el-dropdown v-if="activeType === 'single' && isMyStudent" trigger="click" @command="onStudentMenuCommand">
+              <el-button text circle class="header-more">
+                <el-icon :size="isMobile ? 20 : 18"><Menu v-if="isMobile" /><MoreFilled v-else /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">
+                    <el-icon><User /></el-icon> 查看档案
+                  </el-dropdown-item>
+                  <el-dropdown-item command="care">
+                    <el-icon><ChatDotRound /></el-icon> 记录关怀
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
 
@@ -619,6 +635,13 @@
         <img :src="previewUrl" @click.stop />
       </div>
     </Transition>
+
+    <!-- ============= 记录关怀（单聊学生） ============= -->
+    <CareRecordDialog
+      v-model="showCareDialog"
+      :student-id="careStudentId"
+      :student-name="careStudentName"
+    />
   </div>
 </template>
 
@@ -635,6 +658,8 @@ import {
   type GroupOut, type GroupMemberOut, type UserSearchResult
 } from '@/api/groups'
 import { uploadFile } from '@/api/upload'
+import { getStudents } from '@/api/teacher'
+import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
 import { getToken } from '@/utils/token'
 import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
@@ -660,6 +685,35 @@ const activeType = ref<'single' | 'group'>('single')
 const messages = ref<any[]>([])
 const newMsg = ref('')
 const msgListRef = ref<HTMLDivElement>()
+
+// 单聊对方是否为名下学生（用于展示档案 / 关怀快捷操作）
+const myStudentIds = ref<Set<number>>(new Set())
+const isMyStudent = computed(
+  () => activeType.value === 'single' && !!activeId.value && myStudentIds.value.has(activeId.value)
+)
+const showCareDialog = ref(false)
+const careStudentId = ref(0)
+const careStudentName = ref('')
+
+async function loadMyStudents() {
+  try {
+    const list = await getStudents()
+    myStudentIds.value = new Set(list.map((s) => s.id))
+  } catch {
+    // 非教师账号或接口异常时不展示学生操作入口
+  }
+}
+
+function onStudentMenuCommand(command: string) {
+  if (!activeId.value) return
+  if (command === 'profile') {
+    router.push({ path: '/teacher/students', query: { student: String(activeId.value) } })
+  } else if (command === 'care') {
+    careStudentId.value = activeId.value
+    careStudentName.value = activeName.value
+    showCareDialog.value = true
+  }
+}
 
 // 侧边栏 — 筛选已有会话
 const search = ref('')
@@ -1327,7 +1381,7 @@ onMounted(async () => {
   document.addEventListener('click', onGlobalClick)
   loadPins()
   connectWs()
-  await Promise.all([loadConversations(), loadGroups()])
+  await Promise.all([loadConversations(), loadGroups(), loadMyStudents()])
   if (route.query.groupId) {
     openChat(Number(route.query.groupId), (route.query.groupName as string) || '', 'group')
     router.replace({ query: {} })

@@ -30,7 +30,7 @@ def get_crisis_keywords(db: Session | None = None) -> list[str]:
                 .first()
             )
             if row and row.value:
-                custom = [k.strip() for k in str(row.value).split(",") if k.strip()]
+                custom = [k.strip() for k in re.split(r"[,，、;；\s]+", str(row.value)) if k.strip()]
                 if custom:
                     return custom
         except Exception:

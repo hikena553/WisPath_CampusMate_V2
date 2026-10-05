@@ -204,6 +204,11 @@
                     <el-empty v-if="!detail.leave_requests.length" description="无请假记录" />
                   </div>
                 </el-tab-pane>
+                <el-tab-pane label="工作记录" name="work">
+                  <div class="tab-content">
+                    <CareRecordPanel :student-id="detail.id" :student-name="detail.name" />
+                  </div>
+                </el-tab-pane>
               </el-tabs>
             </div>
           </div>
@@ -657,6 +662,11 @@
                 <el-empty v-if="!detail.leave_requests?.length" description="无请假记录" :image-size="48" />
               </div>
             </el-tab-pane>
+            <el-tab-pane label="工作" name="work">
+              <div class="mobile-tab-content">
+                <CareRecordPanel :student-id="detail.id" :student-name="detail.name" />
+              </div>
+            </el-tab-pane>
           </el-tabs>
         </div>
       </div>
@@ -768,7 +778,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Search, User, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
   WarningFilled, DataAnalysis, Calendar, Bell, MoreFilled,
@@ -786,6 +796,7 @@ import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
+import CareRecordPanel from '@/components/teacher/care/CareRecordPanel.vue'
 import { renderMarkdown } from '@/utils/markdown'
 import type { LeaveRequestOut } from '@/types'
 
@@ -802,6 +813,7 @@ use([CanvasRenderer, RadarChart, PieChart, LineChart, TooltipComponent, LegendCo
 defineOptions({ name: 'teacher-students' })
 
 const { isMobile } = useResponsive()
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -1443,9 +1455,15 @@ function openContact(s: StudentSummary) {
   router.push({ path: '/teacher/messages', query: { studentId: String(s.id), studentName: s.name } })
 }
 
-onMounted(() => {
-  loadStudents()
+onMounted(async () => {
+  await loadStudents()
   loadDashboard()
+  // 从消息页等入口深链：?student=<id> 直接打开该学生详情
+  const deepId = Number(route.query.student)
+  if (deepId) {
+    const target = students.value.find((s) => s.id === deepId)
+    if (target) openDetail(target)
+  }
 })
 
 onUnmounted(() => {

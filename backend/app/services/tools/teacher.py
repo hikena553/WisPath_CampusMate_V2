@@ -1,4 +1,6 @@
-"""教师端工具 handlers：名下学生请假审批、学生查询、危机预警、成长统计、请假分析。"""
+"""教师端工具 handlers：名下学生请假审批、学生查询、危机预警、成长统计、请假分析、待办任务与侧写记录。"""
+
+from datetime import date
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.crisis import AIDialogSummary
 from app.models.growth import GrowthRecord
 from app.models.leave import LeaveRequest, LeaveStatus
+from app.models.teacher_task import TaskSourceType
 from app.models.user import User, UserRole
 from app.utils.enum_helpers import safe_enum_str, safe_enum_val
 
@@ -212,4 +215,145 @@ def _analyze_leave(db: Session, args: dict, user: User) -> dict:
             "reason": leave.reason,
         },
         "message": f"学生{student.name if student else '未知'}的请假申请：{leave.start_date}至{leave.end_date}，原因：{leave.reason}，请分析是否批准"
+    }
+
+
+# ============ 待办任务 / 侧写记录工具 ============
+
+_TASK_STATUS_TEXT = {
+    "pending": "待处理",
+    "contacted": "已联系",
+    "cared": "已关怀",
+    "done": "已完成",
+    "expired": "已过期",
+}
+_RECORD_TYPE_TEXT = {"care": "关怀", "talk": "谈心谈话", "comment": "评语"}
+
+
+def _find_my_student(
+    db: Session,
+    user: User,
+    student_name: str | None = None,
+    student_id: int | None = None,
+) -> User | None:
+    """按姓名或ID在教师名下学生中定位，避免跨教师越权操作。"""
+    base = db.query(User).filter(User.role == UserRole.STUDENT, User.tutor_id == user.id)
+    if student_id is not None:
+        return base.filter(User.id == student_id).first()
+    if student_name:
+        from app.services.knowledge_service import _escape_like
+        safe = _escape_like(student_name)
+        exact = base.filter(User.name == student_name).first()
+        if exact:
+            return exact
+        return base.filter(User.name.like(f"%{safe}%", escape="\\")).first()
+    return None
+
+
+def _query_teacher_tasks(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_task_service as svc
+    tasks, total = svc.list_tasks(
+        db,
+        user.id,
+        status=args.get("status"),
+        due=args.get("due"),
+        limit=20,
+    )
+    if not tasks:
+        return {"message": "暂无待办任务", "tasks": []}
+    return {
+        "message": f"共{total}条任务，展示前{len(tasks)}条",
+        "tasks": [
+            {
+                "task_id": t["id"],
+                "title": t["title"],
+                "student_name": t["student_name"],
+                "status": _TASK_STATUS_TEXT.get(t["status"], t["status"]),
+                "due_at": str(t["due_at"]) if t["due_at"] else None,
+                "overdue": t["overdue"],
+            }
+            for t in tasks
+        ],
+    }
+
+
+def _create_teacher_task(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_task_service as svc
+    title = (args.get("title") or "").strip()
+    if not title:
+        return {"success": False, "message": "缺少任务标题"}
+    wants_student = args.get("student_name") or args.get("student_id")
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if wants_student and not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+
+    due_at = None
+    if args.get("due_at"):
+        try:
+            due_at = date.fromisoformat(args["due_at"])
+        except ValueError:
+            return {"success": False, "message": "截止日期格式应为 YYYY-MM-DD"}
+
+    task = svc.create_task(
+        db,
+        teacher_id=user.id,
+        title=title,
+        detail=args.get("detail"),
+        student_id=student.id if student else None,
+        due_at=due_at,
+        source_type=TaskSourceType.MANUAL,
+    )
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": f"已创建跟进任务：{title}" + (f"（{student.name}）" if student else ""),
+    }
+
+
+def _create_care_record(db: Session, args: dict, user: User) -> dict:
+    from app.services import care_record_service as svc
+    content = (args.get("content") or "").strip()
+    if not content:
+        return {"success": False, "message": "缺少记录内容"}
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+
+    record_type = args.get("record_type") or "care"
+    if record_type not in _RECORD_TYPE_TEXT:
+        return {"success": False, "message": "记录类型仅支持 care/talk/comment"}
+    record = svc.create_record(
+        db,
+        teacher_id=user.id,
+        student_id=student.id,
+        content=content,
+        record_type=record_type,
+        is_private=bool(args.get("is_private", True)),
+    )
+    return {
+        "success": True,
+        "record_id": record.id,
+        "message": f"已为{student.name}记录一条{_RECORD_TYPE_TEXT[record_type]}",
+    }
+
+
+def _query_care_records(db: Session, args: dict, user: User) -> dict:
+    from app.services import care_record_service as svc
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    records, total = svc.list_records(db, student_id=student.id, limit=10)
+    if not records:
+        return {"message": f"{student.name}暂无侧写记录", "records": []}
+    return {
+        "message": f"{student.name}共{total}条记录，展示最近{len(records)}条",
+        "records": [
+            {
+                "record_id": r["id"],
+                "record_type": _RECORD_TYPE_TEXT.get(r["record_type"], r["record_type"]),
+                "content": r["content"][:120],
+                "created_at": r["created_at"][:10],
+            }
+            for r in records
+        ],
     }

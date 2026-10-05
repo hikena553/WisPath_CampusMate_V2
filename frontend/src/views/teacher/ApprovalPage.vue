@@ -258,9 +258,18 @@
               <el-table-column prop="start_date" label="开始日期" width="110" />
               <el-table-column prop="end_date" label="结束日期" width="110" />
               <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
-              <el-table-column label="状态" width="90">
-                <template #default>
-                  <el-tag type="success" size="small" effect="dark">已通过</el-tag>
+              <el-table-column label="销假" width="90">
+                <template #default="{ row }">
+                  <el-tag v-if="row.return_confirmed" type="success" size="small" effect="plain">已销假</el-tag>
+                  <el-tag v-else type="warning" size="small" effect="plain">待销假</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120" fixed="right">
+                <template #default="{ row }">
+                  <el-button v-if="!row.return_confirmed" type="primary" size="small" @click="handleConfirmReturn(row)">
+                    确认返校
+                  </el-button>
+                  <span v-else class="closed-hint">已闭环</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -283,7 +292,11 @@
                 </div>
               </div>
               <div class="mobile-card-footer">
-                <el-tag type="success" size="small" effect="dark">已通过</el-tag>
+                <el-tag v-if="row.return_confirmed" type="success" size="small" effect="plain">已销假</el-tag>
+                <el-tag v-else type="warning" size="small" effect="plain">待销假</el-tag>
+                <el-button v-if="!row.return_confirmed" type="primary" size="small" @click="handleConfirmReturn(row)">
+                  确认返校
+                </el-button>
               </div>
             </div>
           </div>
@@ -368,6 +381,81 @@
           <el-empty v-else description="暂无已拒绝请假" :image-size="80" />
         </div>
       </el-tab-pane>
+
+      <el-tab-pane label="统计" name="stats">
+        <div class="stat-summary">
+          <div class="stat-box">
+            <span class="stat-num">{{ leaveStats.total }}</span>
+            <span class="stat-label">总申请</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num ok">{{ leaveStats.approved }}</span>
+            <span class="stat-label">已通过</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num warn">{{ leaveStats.pending }}</span>
+            <span class="stat-label">待审批</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num danger">{{ leaveStats.rejected }}</span>
+            <span class="stat-label">已拒绝</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num purple">{{ leaveStats.awaiting_return }}</span>
+            <span class="stat-label">待销假</span>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-header">
+            <h3><el-icon><PieChart /></el-icon> 按请假类型</h3>
+          </div>
+          <div v-if="leaveStats.by_type.length" class="stat-rows">
+            <div v-for="item in leaveStats.by_type" :key="item.key" class="stat-row">
+              <div class="stat-row-head">
+                <span class="stat-row-label">{{ item.label }}</span>
+                <span class="stat-row-total">{{ item.total }} 条</span>
+              </div>
+              <div class="stat-bar">
+                <div class="stat-bar-seg seg-approved" :style="{ width: pct(item.approved, item.total) }"></div>
+                <div class="stat-bar-seg seg-pending" :style="{ width: pct(item.pending, item.total) }"></div>
+                <div class="stat-bar-seg seg-rejected" :style="{ width: pct(item.rejected, item.total) }"></div>
+              </div>
+              <div class="stat-legend">
+                <span><i class="dot dot-approved"></i>通过 {{ item.approved }}</span>
+                <span><i class="dot dot-pending"></i>待批 {{ item.pending }}</span>
+                <span><i class="dot dot-rejected"></i>拒绝 {{ item.rejected }}</span>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无数据" :image-size="60" />
+        </div>
+
+        <div class="section-card">
+          <div class="section-header">
+            <h3><el-icon><Histogram /></el-icon> 按班级分布</h3>
+          </div>
+          <div v-if="leaveStats.by_class.length" class="stat-rows">
+            <div v-for="item in leaveStats.by_class" :key="item.key" class="stat-row">
+              <div class="stat-row-head">
+                <span class="stat-row-label">{{ item.label }}</span>
+                <span class="stat-row-total">{{ item.total }} 条</span>
+              </div>
+              <div class="stat-bar">
+                <div class="stat-bar-seg seg-approved" :style="{ width: pct(item.approved, item.total) }"></div>
+                <div class="stat-bar-seg seg-pending" :style="{ width: pct(item.pending, item.total) }"></div>
+                <div class="stat-bar-seg seg-rejected" :style="{ width: pct(item.rejected, item.total) }"></div>
+              </div>
+              <div class="stat-legend">
+                <span><i class="dot dot-approved"></i>通过 {{ item.approved }}</span>
+                <span><i class="dot dot-pending"></i>待批 {{ item.pending }}</span>
+                <span><i class="dot dot-rejected"></i>拒绝 {{ item.rejected }}</span>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无数据" :image-size="60" />
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <el-dialog v-model="rejectVisible" title="拒绝理由" width="420px" :close-on-click-modal="false">
@@ -416,9 +504,9 @@ import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose,
-  InfoFilled, Loading, Check, Close, FolderOpened
+  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram
 } from '@element-plus/icons-vue'
-import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave } from '@/api/leave'
+import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
 import { getApprovalPending, reviewApproval, getApprovalStats, type ApprovalItem, type ApprovalStats } from '@/api/approval'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
@@ -433,6 +521,10 @@ const pendingMaterials = ref<ApprovalItem[]>([])
 const stats = ref<ApprovalStats | null>(null)
 const approvedLeaves = ref<LeaveRequestOut[]>([])
 const rejectedLeaves = ref<LeaveRequestOut[]>([])
+const leaveStats = ref<LeaveStats>({
+  total: 0, approved: 0, rejected: 0, pending: 0, awaiting_return: 0,
+  by_type: [], by_class: [],
+})
 const analysisMap = ref<Record<number, { suggestion: string; reason: string }>>({})
 const rejectVisible = ref(false)
 const rejectTarget = ref<LeaveRequestOut | null>(null)
@@ -542,7 +634,27 @@ async function loadData() {
     try { approvedLeaves.value = await getAllLeaves('approved') } catch {}
   } else if (activeTab.value === 'rejected') {
     try { rejectedLeaves.value = await getAllLeaves('rejected') } catch {}
+  } else if (activeTab.value === 'stats') {
+    await loadLeaveStats()
   }
+}
+
+async function loadLeaveStats() {
+  try { leaveStats.value = await getLeaveStats() } catch { /* 统计失败不影响其它 Tab */ }
+}
+
+/** 统计条形图分段宽度百分比 */
+function pct(part: number, total: number) {
+  if (!total) return '0%'
+  return `${Math.round((part / total) * 100)}%`
+}
+
+async function handleConfirmReturn(row: LeaveRequestOut) {
+  try {
+    await confirmLeaveReturn(row.id)
+    ElMessage.success('已确认返校')
+    loadData()
+  } catch { ElMessage.error('操作失败') }
 }
 
 async function loadStats() {
@@ -710,6 +822,70 @@ onMounted(loadData)
   padding: 8px 0;
 }
 
+/* ========== 统计 Tab ========== */
+.stat-summary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.stat-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+.stat-num { font-size: 20px; font-weight: 700; color: #1a1a2e; line-height: 1.2; }
+.stat-num.ok { color: #10b981; }
+.stat-num.warn { color: #e6a23c; }
+.stat-num.danger { color: #ef4444; }
+.stat-num.purple { color: #7c3aed; }
+.stat-label { font-size: 11.5px; color: #909399; }
+
+.stat-rows { display: flex; flex-direction: column; gap: 16px; }
+.stat-row-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.stat-row-label { font-size: 13px; font-weight: 600; color: #344054; }
+.stat-row-total { font-size: 12px; color: #98a2b3; }
+
+.stat-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f2f4f7;
+}
+.stat-bar-seg { height: 100%; }
+.seg-approved { background: #10b981; }
+.seg-pending { background: #f59e0b; }
+.seg-rejected { background: #ef4444; }
+
+.stat-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: #667085;
+}
+.stat-legend .dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+.dot-approved { background: #10b981; }
+.dot-pending { background: #f59e0b; }
+.dot-rejected { background: #ef4444; }
+
+.closed-hint { font-size: 12px; color: #98a2b3; }
+
 /* ========== 移动端卡片（默认隐藏） ========== */
 .mobile-cards { display: none; }
 
@@ -813,10 +989,19 @@ onMounted(loadData)
 
   .mobile-card-footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
     padding-top: 10px;
     border-top: 1px solid rgba(0,0,0,0.05);
   }
+
+  .stat-summary {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .stat-box { padding: 10px 6px; }
+  .stat-num { font-size: 17px; }
 
   /* 分页居中 */
   .pagination-wrapper {

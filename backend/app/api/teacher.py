@@ -14,6 +14,7 @@ from app.models.academic import Grade
 from app.models.message import Message
 from app.services.llm_service import _get_client, _get_llm_config
 from app.services.scoring import calc_radar_score
+from app.services import teacher_task_service
 from app.core.security import hash_password
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
 from pydantic import BaseModel, ConfigDict
@@ -611,6 +612,34 @@ async def suggest_contacts(user: User = Depends(require_role(UserRole.TEACHER, U
             {"student_id": s["id"], "student_name": s["name"], "reason": "AI分析暂不可用，建议手动查看", "priority": "medium"}
             for s in student_infos[:3]
         ]
+
+
+class ContactSuggestionPersistItem(BaseModel):
+    student_id: int
+    student_name: str = ""
+    reason: str | None = None
+
+
+class ContactSuggestionPersistRequest(BaseModel):
+    items: list[ContactSuggestionPersistItem]
+
+
+class ContactSuggestionPersistResult(BaseModel):
+    created: int = 0
+    total: int = 0
+
+
+@router.post("/suggest-contacts/persist", response_model=ContactSuggestionPersistResult)
+def persist_contact_suggestions(
+    body: ContactSuggestionPersistRequest,
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """把 AI 推荐联系的学生落为跟进任务（幂等，重复调用不重复建）。"""
+    created = teacher_task_service.bulk_upsert_from_suggestions(
+        db, user.id, [item.model_dump() for item in body.items]
+    )
+    return ContactSuggestionPersistResult(created=created, total=len(body.items))
 
 
 class StudentImportItem(BaseModel):

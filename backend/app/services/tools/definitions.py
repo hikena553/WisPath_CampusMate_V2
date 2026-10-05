@@ -442,4 +442,66 @@ TEACHER_TOOL_DEFINITIONS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_teacher_tasks",
+            "description": "查询教师自己的待办 / 跟进任务。教师说'我的待办'、'今天要跟进谁'、'有哪些逾期任务'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "contacted", "cared", "done", "expired"], "description": "按状态筛选，不传则全部"},
+                    "due": {"type": "string", "enum": ["today", "overdue"], "description": "today只看今天到期 / overdue只看逾期未完成"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_teacher_task",
+            "description": "为教师创建一条跟进任务（可关联学生）。教师说'帮我记一下要联系某某'、'给他建个跟进'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "任务标题"},
+                    "detail": {"type": "string", "description": "任务说明 / 跟进要点"},
+                    "student_name": {"type": "string", "description": "关联学生姓名（可选）"},
+                    "due_at": {"type": "string", "description": "截止日期，格式 YYYY-MM-DD（可选）"}
+                },
+                "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_care_record",
+            "description": "为名下学生记录一条侧写（关怀记录 / 谈心谈话 / 评语）。教师说'记录一下和某某的谈话'、'给他写条评语'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"},
+                    "content": {"type": "string", "description": "记录内容"},
+                    "record_type": {"type": "string", "enum": ["care", "talk", "comment"], "description": "care关怀 / talk谈心谈话 / comment评语，默认care"},
+                    "is_private": {"type": "boolean", "description": "是否仅教师可见，默认true"}
+                },
+                "required": ["student_name", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_care_records",
+            "description": "查看某个学生的侧写记录（关怀 / 谈心谈话 / 评语）。教师说'看看某某的记录'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
 ]

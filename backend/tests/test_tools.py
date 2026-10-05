@@ -4,9 +4,12 @@
 超限测试需手动清空/回填计数，避免跨用例污染。
 """
 import time
+from datetime import date
 
 import pytest
 
+from app.models.care_record import CareRecord
+from app.models.teacher_task import TeacherTask
 from app.models.user import UserRole
 from app.services.tools import (
     _tool_call_counters,
@@ -80,3 +83,59 @@ async def test_tool_rate_limit_recovers_after_reset(make_user, _tool_counters_cl
     user = make_user()
     result = await execute_tool("query_knowledge", {"query": "请假"}, user)
     assert "error" not in result or "频繁" not in result.get("error", "")
+
+
+@pytest.mark.asyncio
+async def test_teacher_task_and_care_record_tools_flow(make_user, db, _tool_counters_clean):
+    """教师工具闭环：建跟进任务 → 查待办 → 写侧写 → 查侧写。"""
+    teacher = make_user(role=UserRole.TEACHER)
+    student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id, name="李四")
+
+    created = await execute_tool(
+        "create_teacher_task",
+        {
+            "title": "跟进联系李四",
+            "detail": "近两周缺勤较多",
+            "student_name": "李四",
+            "due_at": date.today().isoformat(),
+        },
+        teacher,
+    )
+    assert created["success"] is True
+    task_id = created["task_id"]
+    assert db.query(TeacherTask).filter(TeacherTask.id == task_id).count() == 1
+
+    listing = await execute_tool("query_teacher_tasks", {"due": "today"}, teacher)
+    assert any(t["task_id"] == task_id for t in listing["tasks"])
+
+    record = await execute_tool(
+        "create_care_record",
+        {"student_name": "李四", "content": "已电话联系家长，学生情绪稳定", "record_type": "talk"},
+        teacher,
+    )
+    assert record["success"] is True
+    assert db.query(CareRecord).filter(CareRecord.student_id == student.id).count() == 1
+
+    records = await execute_tool("query_care_records", {"student_name": "李四"}, teacher)
+    assert records["records"]
+    assert records["records"][0]["record_type"] == "谈心谈话"
+
+
+@pytest.mark.asyncio
+async def test_teacher_tools_reject_foreign_student(make_user, db, _tool_counters_clean):
+    """教师工具不得读写他人名下学生的侧写记录。"""
+    teacher = make_user(role=UserRole.TEACHER)
+    other = make_user(role=UserRole.TEACHER)
+    stranger = make_user(role=UserRole.STUDENT, tutor_id=other.id, name="陌生学生")
+
+    record = await execute_tool(
+        "create_care_record",
+        {"student_name": "陌生学生", "content": "越权写入"},
+        teacher,
+    )
+    assert record["success"] is False
+    assert "未找到" in record["message"]
+    assert db.query(CareRecord).filter(CareRecord.student_id == stranger.id).count() == 0
+
+    query = await execute_tool("query_care_records", {"student_name": "陌生学生"}, teacher)
+    assert query["success"] is False

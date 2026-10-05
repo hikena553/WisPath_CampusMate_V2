@@ -36,3 +36,8 @@ export function interveneAlert(id: number, data: {
 }) {
   return request.post(`/crisis/${id}/intervene`, data)
 }
+
+/** 待随访列表：随访日期已到期且未闭环的预警 */
+export function getFollowUpDue() {
+  return request.get<CrisisAlert[]>('/crisis/follow-up-due')
+}

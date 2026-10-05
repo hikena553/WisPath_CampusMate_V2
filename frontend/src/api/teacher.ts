@@ -160,3 +160,19 @@ export interface ContactSuggestion {
 export function suggestContacts() {
   return request.get<ContactSuggestion[]>('/teacher/suggest-contacts')
 }
+
+export interface ContactSuggestionPersistResult {
+  created: number
+  total: number
+}
+
+/** 把 AI 推荐联系的学生落为待办任务（幂等，重复调用不重复建） */
+export function persistContactSuggestions(items: ContactSuggestion[]) {
+  return request.post<ContactSuggestionPersistResult>('/teacher/suggest-contacts/persist', {
+    items: items.map((i) => ({
+      student_id: i.student_id,
+      student_name: i.student_name,
+      reason: i.reason,
+    })),
+  })
+}
