@@ -21,6 +21,12 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # 仓库不含 .env（已被 gitignore），CI 需显式注入 app 启动所需的必填配置，
+      # 否则 app.main 导入即因 Settings 校验失败而中断冒烟检查（测试步骤随之被跳过）。
+      SECRET_KEY: ci-secret-key-0123456789abcdef0123456789abcdef
+      DATABASE_URL: sqlite:///./ci_smoke.db
+      TESTING: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
