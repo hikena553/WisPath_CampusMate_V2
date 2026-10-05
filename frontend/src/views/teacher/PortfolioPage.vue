@@ -1,95 +1,119 @@
 <template>
   <div class="tui-page">
-    <header class="tui-header">
-      <div>
-        <h2 class="tui-header-title">成长档案</h2>
-        <p class="tui-header-sub">把日常育人经验沉淀成看得见的成长轨迹</p>
-      </div>
-      <div class="tui-header-actions">
+    <SubPageHeader
+      title="成长档案"
+      sub="把日常育人经验沉淀成看得见的成长轨迹"
+      fallback="/teacher/more"
+    />
+
+    <div class="tui-content">
+      <header v-if="!isMobile" class="tui-header">
+        <div>
+          <h2 class="tui-header-title">成长档案</h2>
+          <p class="tui-header-sub">把日常育人经验沉淀成看得见的成长轨迹</p>
+        </div>
+        <div class="tui-header-actions">
+          <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
+          <el-button type="primary" round :icon="Plus" @click="openCreate">新增档案</el-button>
+        </div>
+      </header>
+
+      <!-- 移动端高频操作 -->
+      <div v-if="isMobile" class="tui-actions pf-topbar">
         <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
         <el-button type="primary" round :icon="Plus" @click="openCreate">新增档案</el-button>
       </div>
-    </header>
 
-    <!-- 类型统计兼筛选 -->
-    <div class="pf-stats">
-      <button class="pf-stat" :class="{ active: filter === '' }" @click="setFilter('')">
-        <span class="pf-stat-num">{{ items.length }}</span>
-        <span class="pf-stat-lb">全部</span>
-      </button>
-      <button
-        v-for="t in typeOrder"
-        :key="t"
-        class="pf-stat"
-        :class="{ active: filter === t }"
-        @click="setFilter(t)"
-      >
-        <span class="pf-stat-num" :style="{ color: PORTFOLIO_TYPE_COLOR[t] }">{{ countOf(t) }}</span>
-        <span class="pf-stat-lb">{{ PORTFOLIO_TYPE_LABEL[t] }}</span>
-      </button>
-    </div>
-
-    <div v-if="loading" class="pf-empty">加载中…</div>
-    <div v-else-if="!grouped.length" class="pf-empty">
-      <el-icon :size="40" color="#d0d5dd"><Collection /></el-icon>
-      <p>{{ filter ? '该类型暂无档案' : '还没有成长档案，点击「新增档案」沉淀第一条' }}</p>
-    </div>
-
-    <!-- 时间线：按年份分组 -->
-    <div v-else class="pf-timeline">
-      <section v-for="g in grouped" :key="g.year" class="pf-year">
-        <div class="pf-year-lb">
-          <span class="pf-year-dot"></span>{{ g.year }}
-        </div>
-        <div class="pf-year-items">
-          <PortfolioItemCard
-            v-for="it in g.items"
-            :key="it.id"
-            :item="it"
-            @edit="openEdit"
-            @delete="handleDelete"
-          />
-        </div>
-      </section>
-    </div>
-
-    <PortfolioItemDialog v-model="dialogVisible" :item="editing" @saved="load" />
-
-    <!-- 成长报告 -->
-    <el-dialog
-      v-model="reportVisible"
-      title="成长报告"
-      :width="isMobile ? '94%' : '720px'"
-      align-center
-      destroy-on-close
-    >
-      <div v-if="report" class="pf-report">
-        <div class="rpt-head">
-          <h3>{{ report.teacher_name }} · 教师成长报告</h3>
-          <span>{{ (report.generated_at || '').slice(0, 10) }}</span>
-        </div>
-        <div class="rpt-total">共 {{ report.total }} 条成长档案</div>
-        <div class="rpt-types">
-          <div v-for="t in report.by_type" :key="t.type" class="rpt-type">
-            <span class="rpt-num" :style="{ color: PORTFOLIO_TYPE_COLOR[t.type] }">{{ t.count }}</span>
-            <span class="rpt-lb">{{ t.label }}</span>
-          </div>
-        </div>
-        <div class="rpt-list">
-          <div v-for="(it, i) in report.items" :key="it.id" class="rpt-item">
-            <span class="rpt-idx">{{ i + 1 }}</span>
-            <span class="rpt-title">{{ it.title }}</span>
-            <span class="rpt-meta">
-              {{ PORTFOLIO_TYPE_LABEL[it.item_type] }}<template v-if="it.occurred_on"> · {{ it.occurred_on }}</template>
-            </span>
-          </div>
-        </div>
+      <!-- 类型统计兼筛选 -->
+      <div class="tui-stat-row">
+        <button
+          type="button"
+          class="tui-stat"
+          :class="{ 'is-active': filter === '' }"
+          @click="setFilter('')"
+        >
+          <span class="tui-stat-num">{{ items.length }}</span>
+          <span class="tui-stat-label">全部</span>
+        </button>
+        <button
+          v-for="t in typeOrder"
+          :key="t"
+          type="button"
+          class="tui-stat"
+          :class="{ 'is-active': filter === t }"
+          @click="setFilter(t)"
+        >
+          <span class="tui-stat-num" :style="{ color: PORTFOLIO_TYPE_COLOR[t] }">{{ countOf(t) }}</span>
+          <span class="tui-stat-label">{{ PORTFOLIO_TYPE_LABEL[t] }}</span>
+        </button>
       </div>
-      <template #footer>
-        <el-button @click="reportVisible = false">关闭</el-button>
-        <el-button type="primary" :icon="Printer" @click="printReport">打印 / 导出 PDF</el-button>
-      </template>
-    </el-dialog>
+
+      <div v-if="loading" class="tui-empty">
+        <span class="tui-empty-title">加载中…</span>
+      </div>
+      <div v-else-if="!grouped.length" class="tui-empty">
+        <span class="tui-empty-icon"><el-icon :size="28"><Collection /></el-icon></span>
+        <span class="tui-empty-title">{{ filter ? '该类型暂无档案' : '还没有成长档案' }}</span>
+        <span class="tui-empty-desc">{{ filter ? '换个类型看看，或点击「新增档案」' : '点击「新增档案」沉淀第一条' }}</span>
+      </div>
+
+      <!-- 时间线：按年份分组 -->
+      <div v-else class="tui-groups">
+        <section v-for="g in grouped" :key="g.year">
+          <div class="tui-group-title">
+            {{ g.year }}
+            <span class="tui-group-count">{{ g.items.length }} 条</span>
+          </div>
+          <div class="tui-stack">
+            <PortfolioItemCard
+              v-for="it in g.items"
+              :key="it.id"
+              :item="it"
+              @edit="openEdit"
+              @delete="handleDelete"
+            />
+          </div>
+        </section>
+      </div>
+
+      <PortfolioItemDialog v-model="dialogVisible" :item="editing" @saved="load" />
+
+      <!-- 成长报告 -->
+      <el-dialog
+        v-model="reportVisible"
+        title="成长报告"
+        :width="isMobile ? '94%' : '720px'"
+        align-center
+        destroy-on-close
+      >
+        <div v-if="report" class="pf-report">
+          <div class="rpt-head">
+            <h3>{{ report.teacher_name }} · 教师成长报告</h3>
+            <span>{{ (report.generated_at || '').slice(0, 10) }}</span>
+          </div>
+          <div class="rpt-total">共 {{ report.total }} 条成长档案</div>
+          <div class="rpt-types">
+            <div v-for="t in report.by_type" :key="t.type" class="rpt-type">
+              <span class="rpt-num" :style="{ color: PORTFOLIO_TYPE_COLOR[t.type] }">{{ t.count }}</span>
+              <span class="rpt-lb">{{ t.label }}</span>
+            </div>
+          </div>
+          <div class="rpt-list">
+            <div v-for="(it, i) in report.items" :key="it.id" class="rpt-item">
+              <span class="rpt-idx">{{ i + 1 }}</span>
+              <span class="rpt-title">{{ it.title }}</span>
+              <span class="rpt-meta">
+                {{ PORTFOLIO_TYPE_LABEL[it.item_type] }}<template v-if="it.occurred_on"> · {{ it.occurred_on }}</template>
+              </span>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="reportVisible = false">关闭</el-button>
+          <el-button type="primary" :icon="Printer" @click="printReport">打印 / 导出 PDF</el-button>
+        </template>
+      </el-dialog>
+    </div>
   </div>
 </template>
 
@@ -108,6 +132,7 @@ import {
   type PortfolioItemType,
   type PortfolioReport,
 } from '@/api/teacherPortfolio'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import PortfolioItemCard from '@/components/teacher/portfolio/PortfolioItemCard.vue'
 import PortfolioItemDialog from '@/components/teacher/portfolio/PortfolioItemDialog.vue'
 
@@ -250,112 +275,16 @@ onMounted(load)
 </script>
 
 <style scoped>
-.portfolio-page {
-  height: 100%;
-  overflow-y: auto;
-  padding: 8px 4px 24px;
+/* 移动端高频操作条 */
+.pf-topbar {
+  margin-bottom: 12px;
+}
+.pf-topbar .el-button {
+  flex: 1;
+  margin-left: 0;
 }
 
-.pf-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 4px;
-  margin-bottom: 14px;
-}
-.pf-header-left h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-.pf-sub {
-  margin: 3px 0 0;
-  font-size: 12px;
-  color: #888;
-}
-.pf-header-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.pf-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.pf-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 92px;
-  padding: 9px 12px;
-  border: 1px solid #f0f1f3;
-  border-radius: 12px;
-  background: #fff;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-}
-.pf-stat.active {
-  border-color: #5b8def;
-  box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.12);
-}
-.pf-stat-num {
-  font-size: 19px;
-  font-weight: 700;
-  color: #101828;
-  line-height: 1.15;
-}
-.pf-stat-lb {
-  font-size: 11.5px;
-  color: #98a2b3;
-}
-
-.pf-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 56px 0;
-  color: #98a2b3;
-  font-size: 13px;
-}
-.pf-empty p { margin: 0; }
-
-.pf-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.pf-year-lb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #475467;
-  margin-bottom: 10px;
-  padding-left: 4px;
-}
-.pf-year-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #5b8def;
-}
-.pf-year-items {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding-left: 12px;
-  border-left: 1px solid #eaecf0;
-}
-
-/* 报告 */
+/* 成长报告弹窗内容 */
 .pf-report {
   display: flex;
   flex-direction: column;
@@ -431,15 +360,6 @@ onMounted(load)
 }
 
 @media (max-width: 767px) {
-  .pf-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .pf-year-items {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding-left: 10px;
-  }
   .rpt-types {
     grid-template-columns: repeat(2, 1fr);
   }

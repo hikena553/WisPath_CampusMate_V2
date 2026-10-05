@@ -1,83 +1,199 @@
 /* =========================================================================
-   教师端 UI 规范（Teacher UI Spec）
+   教师端 UI 规范 v2（Teacher UI Spec）
    -------------------------------------------------------------------------
-   借鉴对象（均为公开、成熟、高star的开源设计体系）：
-   - Element Plus（Vue 3 后台类最主流，本项目基础组件库）
-   - Ant Design / Semi Design（字节 · 抖音同源）的克制层级与留白
-   - Vant / NutUI 的移动端列表密度与点击热区
-   落地原则：移动优先、单一视觉语言、卡片化分区、每个模块只做一件事。
+   借鉴对象（均为公开、成熟、高 star 的开源设计体系 / 主流产品页面范式）：
+   - Element Plus（element-plus/element-plus，Vue 3 后台类事实标准，本项目基础组件库）
+   - Vant（youzan/vant）：Cell / Grid / Tag / Empty / Skeleton / Sticky 的移动端密度与热区
+   - Ant Design Mobile（ant-design/ant-design-mobile）：List、Card、Segmented、Tabs 的层级与留白
+   - NutUI（jdf2e/nutui）：移动端卡片圆角、点击反馈、空态表达
+   - Semi Design（DouyinFE/semi-design）：克制的字阶与灰阶，避免装饰性渐变
+   - 页面范式：微信「服务」/ 支付宝「全部应用」的分组宫格；iOS 分组内嵌列表（Inset Grouped List）
 
-   使用方式：类名统一以 tui- 前缀，仅新增类，不覆盖既有样式，避免影响存量页面。
+   落地原则：
+   1) 移动优先：16px 页边距、44px 最小点击热区、卡片化分区、单页只做一件事
+   2) 视觉克制：白卡 + #f2f3f5 底、发丝分割线、弱阴影，靠层级与留白而非装饰取胜
+   3) 单一语言：所有教师端页面统一使用 tui- 前缀类，新增类不覆盖存量样式
+
+   结构约定（所有「更多」子页面统一遵循）：
+     <div class="tui-page">
+       <SubPageHeader title="xxx" fallback="/teacher/more" />   <- 移动端吸顶 AppBar
+       <div class="tui-content">
+         <header v-if="!isMobile" class="tui-header">…</header> <- 桌面端页头
+         …分组卡片…
+       </div>
+     </div>
    ========================================================================= */
 
-.tui-page {
-  --tui-bg: #f5f6f8;
+/* ============================ 令牌 ============================ */
+/* 定义在 :root，使 SubPageHeader 等共享组件在教师端 / 学生端都能正确取色 */
+:root {
+  --tui-bg: #f2f3f5;
   --tui-surface: #ffffff;
-  --tui-surface-muted: #f9fafb;
-  --tui-text: #101828;
-  --tui-text-secondary: #475467;
-  --tui-text-tertiary: #667085;
-  --tui-text-quiet: #98a2b3;
+  --tui-surface-muted: #f7f8fa;
+  --tui-surface-sunken: #eceef1;
+
+  --tui-text: #0f1115;
+  --tui-text-secondary: #4b5563;
+  --tui-text-tertiary: #6b7280;
+  --tui-text-quiet: #9ca3af;
+
   --tui-border: #f0f1f3;
-  --tui-border-strong: #e4e7ec;
+  --tui-border-strong: #e5e7eb;
+  --tui-hairline: rgba(15, 17, 21, 0.06);
+
   --tui-brand: #2563eb;
   --tui-brand-strong: #1d4ed8;
   --tui-brand-soft: #eff4ff;
+  --tui-success: #079455;
+  --tui-success-soft: #ecfdf3;
+  --tui-warn: #b54708;
+  --tui-warn-soft: #fffaeb;
+  --tui-danger: #d92d20;
+  --tui-danger-soft: #fef3f2;
+
+  --tui-radius-xs: 8px;
   --tui-radius-sm: 10px;
   --tui-radius: 14px;
-  --tui-gap-4: 4px;
-  --tui-gap-8: 8px;
-  --tui-gap-12: 12px;
-  --tui-gap-16: 16px;
-  --tui-gap-20: 20px;
-  --tui-gap-24: 24px;
+  --tui-radius-lg: 18px;
 
+  --tui-shadow-1: 0 1px 2px rgba(15, 17, 21, 0.04);
+  --tui-shadow-2: 0 2px 10px rgba(15, 17, 21, 0.06);
+  --tui-shadow-3: 0 8px 28px rgba(15, 17, 21, 0.12);
+
+  --tui-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.tui-page {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--tui-gap-8) 4px var(--tui-gap-24);
   background: var(--tui-bg);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.tui-page::-webkit-scrollbar { width: 8px; }
+.tui-page::-webkit-scrollbar-thumb { background: #d8dbe0; border-radius: 999px; }
+
+/* 内容区：移动端 14~16px 页边距，桌面端限宽居中 */
+.tui-content {
+  padding: 12px 14px 28px;
+}
+@media (min-width: 768px) {
+  .tui-content {
+    padding: 20px 24px 40px;
+    max-width: 1160px;
+    margin: 0 auto;
+  }
 }
 
-/* ---------- 页头 ---------- */
+/* ============================ 移动端吸顶 AppBar ============================ */
+/* 默认静态流：学生端沿用原有「顶部标题条」行为，零回归；
+   仅在教师端 .tui-page 内才吸顶（避免影响其它端已有布局） */
+.tui-appbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--tui-hairline);
+}
+.tui-page > .tui-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.tui-appbar-back {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tui-text);
+  cursor: pointer;
+  transition: background 0.18s var(--tui-ease);
+}
+.tui-appbar-back:hover { background: rgba(15, 17, 21, 0.05); }
+.tui-appbar-back:active { background: rgba(15, 17, 21, 0.09); }
+.tui-appbar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--tui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tui-appbar-sub {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--tui-text-quiet);
+  margin-top: 1px;
+}
+.tui-appbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ============================ 桌面端页头 ============================ */
 .tui-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--tui-gap-12);
-  padding: 0 4px;
-  margin-bottom: var(--tui-gap-16);
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
 }
 .tui-header-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.4px;
   color: var(--tui-text);
 }
 .tui-header-sub {
-  margin: 3px 0 0;
-  font-size: 12px;
+  margin: 5px 0 0;
+  font-size: 13px;
   color: var(--tui-text-quiet);
 }
 .tui-header-actions {
   display: flex;
-  gap: var(--tui-gap-8);
+  gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
-/* ---------- 分组标题 ---------- */
+/* ============================ 分组 / 卡片 ============================ */
+.tui-groups,
+.tui-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .tui-group-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 6px;
-  margin: var(--tui-gap-16) 0 var(--tui-gap-8);
+  margin: 18px 2px 9px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--tui-text-tertiary);
-  letter-spacing: 0.2px;
+  color: var(--tui-text-quiet);
+  letter-spacing: 0.3px;
 }
+.tui-group-title:first-child { margin-top: 4px; }
 .tui-group-count {
   margin-left: auto;
   font-size: 11.5px;
@@ -85,39 +201,133 @@
   color: var(--tui-text-quiet);
 }
 
-/* ---------- 卡片 ---------- */
 .tui-card {
   background: var(--tui-surface);
   border: 1px solid var(--tui-border);
   border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
   overflow: hidden;
 }
-.tui-card-pad { padding: var(--tui-gap-16); }
+.tui-card-pad { padding: 16px; }
+.tui-card-body { padding: 14px 16px; }
 
-/* ---------- 列表行（图标 + 标题 + 描述 + 箭头） ---------- */
+/* 卡片标题行（宫格卡片 / 分区卡片通用） */
+.tui-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tui-text);
+}
+.tui-card-head .tui-group-count { margin-left: auto; }
+.tui-card-head-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tui-card-desc {
+  padding: 5px 16px 0;
+  font-size: 12px;
+  color: var(--tui-text-quiet);
+  line-height: 1.5;
+}
+
+/* ============================ 宫格功能导航 ============================ */
+.tui-grid-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 12px 8px 14px;
+}
+.tui-nav-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px 8px;
+  border: none;
+  border-radius: var(--tui-radius-xs);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.18s var(--tui-ease), transform 0.18s var(--tui-ease);
+}
+.tui-nav-cell:hover { background: var(--tui-surface-muted); }
+.tui-nav-cell:active { background: var(--tui-surface-sunken); transform: scale(0.94); }
+
+.tui-nav-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(15, 17, 21, 0.03);
+}
+.tui-nav-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tui-text-secondary);
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tui-nav-cell .tui-count {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 30px);
+}
+.tui-count {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--tui-danger);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.tui-count-soft { background: var(--tui-surface-sunken); color: var(--tui-text-tertiary); }
+
+/* ============================ 列表行 ============================ */
 .tui-list {
   background: var(--tui-surface);
   border: 1px solid var(--tui-border);
   border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
   overflow: hidden;
 }
 .tui-row {
   display: flex;
   align-items: center;
-  gap: var(--tui-gap-12);
+  gap: 12px;
   width: 100%;
-  padding: 13px 14px;
+  padding: 13px 16px;
   border: none;
   border-bottom: 1px solid var(--tui-border);
   background: transparent;
   text-align: left;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.15s ease;
+  transition: background 0.15s var(--tui-ease);
 }
 .tui-row:last-child { border-bottom: none; }
 .tui-row:hover { background: var(--tui-surface-muted); }
-.tui-row:active { background: #f2f4f7; }
+.tui-row:active { background: var(--tui-surface-sunken); }
 
 .tui-row-icon {
   flex-shrink: 0;
@@ -147,98 +357,238 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tui-row-arrow { color: #d0d5dd; flex-shrink: 0; }
-
-/* ---------- 标签 ---------- */
-.tui-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  background: var(--tui-surface-muted);
+.tui-row-value {
+  font-size: 13px;
   color: var(--tui-text-tertiary);
+  flex-shrink: 0;
 }
-.tui-chip-brand { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
+.tui-row-arrow { color: #cbd0d8; flex-shrink: 0; }
 
-/* ---------- 宫格功能导航（主流移动端「全部功能」样式：图标 + 名称，紧凑不拖长） ---------- */
-.tui-card-head {
+/* ============================ 分段控件（替代裸 el-tabs 的移动端形态） ============================ */
+.tui-seg {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 13px 14px 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tui-text);
+  gap: 3px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--tui-surface-sunken);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.tui-card-head .tui-group-count {
+.tui-seg::-webkit-scrollbar { display: none; }
+.tui-seg-item {
+  flex: 1;
+  min-width: fit-content;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--tui-text-tertiary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s var(--tui-ease);
+}
+.tui-seg-item.active {
+  background: var(--tui-surface);
+  color: var(--tui-text);
+  font-weight: 600;
+  box-shadow: var(--tui-shadow-2);
+}
+.tui-seg-wrap { margin-bottom: 12px; }
+
+/* ============================ 指标卡 ============================ */
+.tui-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.tui-stat-row.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tui-stat-row.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 768px) {
+  .tui-stat-row.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.tui-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 14px;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  background: var(--tui-surface);
+  box-shadow: var(--tui-shadow-1);
+  text-align: left;
+  font-family: inherit;
+}
+button.tui-stat { cursor: pointer; transition: all 0.18s var(--tui-ease); }
+button.tui-stat:active { transform: scale(0.98); }
+.tui-stat.is-active { border-color: var(--tui-brand); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12); }
+.tui-stat-num {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--tui-text);
+  font-variant-numeric: tabular-nums;
+}
+.tui-stat-label {
   font-size: 11.5px;
-  font-weight: 400;
   color: var(--tui-text-quiet);
 }
 
-.tui-grid-nav {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
-  gap: var(--tui-gap-4);
-  padding: var(--tui-gap-12) var(--tui-gap-8) var(--tui-gap-16);
+/* ============================ 标签 ============================ */
+.tui-chip,
+.tui-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-tertiary);
+  white-space: nowrap;
 }
+.tui-chip-brand { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
+.tui-tag-brand { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
+.tui-tag-success { background: var(--tui-success-soft); color: var(--tui-success); }
+.tui-tag-warn { background: var(--tui-warn-soft); color: var(--tui-warn); }
+.tui-tag-danger { background: var(--tui-danger-soft); color: var(--tui-danger); }
 
-.tui-nav-cell {
+/* ============================ 空态 ============================ */
+.tui-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
-  padding: 10px 2px;
-  border: none;
-  border-radius: var(--tui-radius-sm);
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s ease;
+  gap: 12px;
+  padding: 52px 24px;
+  text-align: center;
 }
-.tui-nav-cell:hover { background: var(--tui-surface-muted); }
-.tui-nav-cell:active { background: #f2f4f7; }
-
-.tui-nav-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+.tui-empty-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--tui-surface-sunken);
+  color: #b6bcc5;
 }
-.tui-nav-label {
+.tui-empty-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--tui-text-tertiary);
+}
+.tui-empty-desc {
   font-size: 12px;
-  color: var(--tui-text-secondary);
-  text-align: center;
-  line-height: 1.2;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--tui-text-quiet);
+  margin-top: -6px;
 }
 
-/* ---------- 分组网格：移动端单列堆叠，桌面端两列（紧凑、不拖长） ---------- */
-.tui-groups {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--tui-gap-16);
-  align-items: start;
-}
-
-/* ---------- 移动端：单列紧凑；桌面端：自适应多列 ---------- */
-.tui-stack {
+/* ============================ 提示条 ============================ */
+.tui-notice {
   display: flex;
-  flex-direction: column;
-  gap: var(--tui-gap-16);
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--tui-radius-sm);
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
 }
-@media (min-width: 768px) {
-  .tui-header-title { font-size: 20px; }
-  .tui-row { padding: 14px 16px; }
+.tui-notice-success { background: var(--tui-success-soft); color: var(--tui-success); }
+.tui-notice-warn { background: var(--tui-warn-soft); color: var(--tui-warn); }
+.tui-notice-danger { background: var(--tui-danger-soft); color: var(--tui-danger); }
+
+/* ============================ 元信息 / 文本工具 ============================ */
+.tui-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
 }
-@media (min-width: 900px) {
-  .tui-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tui-meta-sep { color: #d0d5dd; }
+.tui-text { color: var(--tui-text); }
+.tui-text-2 { color: var(--tui-text-secondary); }
+.tui-text-quiet { color: var(--tui-text-quiet); }
+.tui-ellipsis-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ============================ 骨架屏 ============================ */
+.tui-skeleton {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef0f3 25%, #f6f7f9 37%, #eef0f3 63%);
+  background-size: 400% 100%;
+  animation: tui-shimmer 1.4s ease infinite;
+}
+@keyframes tui-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* ============================ 按钮 / 操作条 ============================ */
+.tui-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.tui-actions-bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  margin: 16px -14px -28px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--tui-hairline);
+}
+
+/* ============================ Element Plus 局部归一 ============================ */
+/* 仅作用于 tui-page 内的组件，避免影响存量页面 */
+.tui-page .el-button {
+  font-weight: 500;
+}
+.tui-page .el-button.is-round { border-radius: 999px; }
+.tui-page .el-tag { border-radius: 999px; }
+.tui-page .el-input__wrapper,
+.tui-page .el-textarea__inner,
+.tui-page .el-select__wrapper {
+  border-radius: 10px;
+}
+.tui-page .el-card { border-radius: var(--tui-radius); }
+
+/* 移动端：压缩页头按钮，避免一行挤三个按钮 */
+@media (max-width: 767px) {
+  .tui-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .tui-header-title { font-size: 19px; }
+  .tui-header-actions .el-button {
+    flex: 1;
+    margin-left: 0 !important;
+  }
+  .tui-header-actions { display: flex; gap: 8px; }
+  .tui-grid-nav { gap: 4px; padding: 12px 6px 14px; }
+  .tui-stat-row { gap: 8px; }
+  .tui-stat { padding: 11px 11px; }
+  .tui-stat-num { font-size: 19px; }
 }

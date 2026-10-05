@@ -1,64 +1,89 @@
 <template>
   <div class="tui-page">
-    <header class="tui-header">
-      <div>
-        <h2 class="tui-header-title">班级公告</h2>
-        <p class="tui-header-sub">面向名下学生发布通知，支持紧急程度标记</p>
-      </div>
-      <div class="tui-header-actions">
-        <el-button type="primary" round :icon="Plus" @click="dialogVisible = true">发布公告</el-button>
-      </div>
-    </header>
-
-    <div v-if="loading" class="an-state">加载中…</div>
-    <div v-else-if="!items.length" class="an-state">
-      <el-icon :size="34" color="#d0d5dd"><Bell /></el-icon>
-      <p>还没有发布过公告</p>
-      <el-button size="small" round type="primary" @click="dialogVisible = true">发布第一条</el-button>
-    </div>
-
-    <div v-else class="tui-groups">
-      <article v-for="a in items" :key="a.id" class="tui-card">
-        <div class="an-item">
-          <div class="an-head">
-            <span class="tui-chip" :class="urgencyClass(a.urgency)">{{ urgencyLabel(a.urgency) }}</span>
-            <span class="an-date">{{ (a.created_at || '').slice(0, 10) }}</span>
-          </div>
-          <h3 class="an-title">{{ a.title }}</h3>
-          <p class="an-content">{{ a.content }}</p>
-          <div class="an-ops">
-            <a v-if="a.attachment_url" class="an-link" :href="a.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
-            <button class="an-link an-link-danger" @click="remove(a)">删除</button>
-          </div>
-        </div>
-      </article>
-    </div>
-
-    <el-dialog v-model="dialogVisible" title="发布公告" :width="isMobile ? '94%' : '520px'" align-center destroy-on-close>
-      <div class="an-form">
-        <div class="an-field">
-          <label class="an-label">标题</label>
-          <el-input v-model="form.title" maxlength="100" placeholder="一句话说明通知主题" />
-        </div>
-        <div class="an-field">
-          <label class="an-label">紧急程度</label>
-          <el-radio-group v-model="form.urgency">
-            <el-radio-button value="normal">普通</el-radio-button>
-            <el-radio-button value="important">重要</el-radio-button>
-            <el-radio-button value="urgent">紧急</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="an-field">
-          <label class="an-label">内容</label>
-          <el-input v-model="form.content" type="textarea" :rows="5" maxlength="1000" show-word-limit
-            placeholder="写清时间、地点、需要学生做什么" />
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" :disabled="!valid" @click="submit">发布</el-button>
+    <SubPageHeader title="班级公告" sub="面向名下学生发布通知" fallback="/teacher/more">
+      <template #right>
+        <el-button text circle aria-label="发布公告" @click="dialogVisible = true">
+          <el-icon :size="19"><Plus /></el-icon>
+        </el-button>
       </template>
-    </el-dialog>
+    </SubPageHeader>
+
+    <div class="tui-content">
+      <header v-if="!isMobile" class="tui-header">
+        <div>
+          <h2 class="tui-header-title">班级公告</h2>
+          <p class="tui-header-sub">面向名下学生发布通知，支持紧急程度标记</p>
+        </div>
+        <div class="tui-header-actions">
+          <el-button type="primary" round :icon="Plus" @click="dialogVisible = true">发布公告</el-button>
+        </div>
+      </header>
+
+      <el-button
+        v-if="isMobile"
+        class="an-publish"
+        type="primary"
+        round
+        :icon="Plus"
+        @click="dialogVisible = true"
+      >
+        发布公告
+      </el-button>
+
+      <div v-if="loading" class="tui-empty">
+        <span class="tui-empty-title">加载中…</span>
+      </div>
+
+      <div v-else-if="!items.length" class="tui-empty">
+        <span class="tui-empty-icon"><el-icon :size="26"><Bell /></el-icon></span>
+        <span class="tui-empty-title">还没有发布过公告</span>
+        <span class="tui-empty-desc">发布第一条通知，让学生第一时间知晓</span>
+        <el-button size="small" round type="primary" @click="dialogVisible = true">发布第一条</el-button>
+      </div>
+
+      <div v-else class="tui-groups">
+        <article v-for="a in items" :key="a.id" class="tui-card">
+          <div class="tui-card-body">
+            <div class="an-head">
+              <span class="tui-chip" :class="urgencyClass(a.urgency)">{{ urgencyLabel(a.urgency) }}</span>
+              <span class="tui-text-quiet">{{ (a.created_at || '').slice(0, 10) }}</span>
+            </div>
+            <h3 class="an-title">{{ a.title }}</h3>
+            <p class="an-content">{{ a.content }}</p>
+            <div class="an-ops">
+              <a v-if="a.attachment_url" class="an-link" :href="a.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
+              <button class="an-link an-link-danger" @click="remove(a)">删除</button>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <el-dialog v-model="dialogVisible" title="发布公告" :width="isMobile ? '94%' : '520px'" align-center destroy-on-close>
+        <div class="an-form">
+          <div class="an-field">
+            <label class="an-label">标题</label>
+            <el-input v-model="form.title" maxlength="100" placeholder="一句话说明通知主题" />
+          </div>
+          <div class="an-field">
+            <label class="an-label">紧急程度</label>
+            <el-radio-group v-model="form.urgency">
+              <el-radio-button value="normal">普通</el-radio-button>
+              <el-radio-button value="important">重要</el-radio-button>
+              <el-radio-button value="urgent">紧急</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="an-field">
+            <label class="an-label">内容</label>
+            <el-input v-model="form.content" type="textarea" :rows="5" maxlength="1000" show-word-limit
+              placeholder="写清时间、地点、需要学生做什么" />
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" :disabled="!valid" @click="submit">发布</el-button>
+        </template>
+      </el-dialog>
+    </div>
   </div>
 </template>
 
@@ -66,6 +91,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Bell, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { useResponsive } from '@/composables/useResponsive'
 import {
   createAnnouncement,
@@ -90,7 +116,7 @@ function urgencyLabel(u: AnnouncementItem['urgency']) {
   return u === 'urgent' ? '紧急' : u === 'important' ? '重要' : '普通'
 }
 function urgencyClass(u: AnnouncementItem['urgency']) {
-  return u === 'urgent' ? 'chip-danger' : u === 'important' ? 'chip-warn' : ''
+  return u === 'urgent' ? 'tui-tag-danger' : u === 'important' ? 'tui-tag-warn' : ''
 }
 
 async function load() {
@@ -145,27 +171,17 @@ onMounted(load)
 </script>
 
 <style scoped>
-.an-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 52px 0;
-  color: #98a2b3;
-  font-size: 13px;
+.an-publish {
+  width: 100%;
+  margin-bottom: 12px;
 }
-.an-state p { margin: 0; }
 
-.an-item { padding: 15px 16px; }
 .an-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 7px;
 }
-.an-date { font-size: 12px; color: #98a2b3; }
-.tui-chip.chip-warn { background: #fffaeb; color: #b54708; }
-.tui-chip.chip-danger { background: #fef3f2; color: #d92d20; }
 
 .an-title {
   margin: 0 0 6px;

@@ -1,123 +1,154 @@
 <template>
   <div class="tui-page">
-    <header class="tui-header">
-      <div>
-        <h2 class="tui-header-title">问卷互评</h2>
-        <p class="tui-header-sub">匿名收集反馈，只出聚合结果，不回溯个人</p>
-      </div>
-      <div class="tui-header-actions">
+    <SubPageHeader
+      title="问卷互评"
+      sub="匿名收集反馈，只出聚合结果，不回溯个人"
+      fallback="/teacher/more"
+    />
+
+    <div class="tui-content">
+      <header v-if="!isMobile" class="tui-header">
+        <div>
+          <h2 class="tui-header-title">问卷互评</h2>
+          <p class="tui-header-sub">匿名收集反馈，只出聚合结果，不回溯个人</p>
+        </div>
+        <div class="tui-header-actions">
+          <el-button type="primary" round :icon="Plus" @click="createVisible = true">发起问卷</el-button>
+        </div>
+      </header>
+
+      <!-- 移动端高频操作 -->
+      <div v-if="isMobile" class="tui-actions sv-topbar">
         <el-button type="primary" round :icon="Plus" @click="createVisible = true">发起问卷</el-button>
       </div>
-    </header>
 
-    <el-tabs v-model="tab" class="sv-tabs">
+      <TuiSegmented
+        v-model="tab"
+        class="tui-seg-wrap"
+        :options="[
+          { value: 'join', label: '待参与', count: openSurveys.length },
+          { value: 'created', label: '我创建的', count: mySurveys.length },
+          { value: 'mine', label: '我的被评', count: mineResults.length },
+        ]"
+      />
+
       <!-- 待参与 -->
-      <el-tab-pane label="待参与" name="join">
-        <div v-if="loading" class="sv-empty">加载中…</div>
-        <div v-else-if="!openSurveys.length" class="sv-empty">
-          <el-icon :size="38" color="#d0d5dd"><EditPen /></el-icon>
-          <p>当前没有开放中的问卷</p>
+      <template v-if="tab === 'join'">
+        <div v-if="loading" class="tui-empty">
+          <span class="tui-empty-title">加载中…</span>
         </div>
-        <div v-else class="sv-list">
-          <div v-for="s in openSurveys" :key="s.id" class="sv-card">
-            <div class="sv-card-main">
-              <div class="sv-card-title">
-                {{ s.title }}
-                <el-tag size="small" effect="plain" round>{{ SURVEY_TARGET_LABEL[s.target_type] }}</el-tag>
+        <div v-else-if="!openSurveys.length" class="tui-empty">
+          <span class="tui-empty-icon"><el-icon :size="28"><EditPen /></el-icon></span>
+          <span class="tui-empty-title">当前没有开放中的问卷</span>
+        </div>
+        <div v-else class="tui-stack">
+          <article v-for="s in openSurveys" :key="s.id" class="tui-card">
+            <div class="tui-card-body sv-item">
+              <div class="tui-row-main">
+                <div class="sv-title">
+                  <span class="tui-ellipsis-2">{{ s.title }}</span>
+                  <el-tag size="small" effect="plain" round>{{ SURVEY_TARGET_LABEL[s.target_type] }}</el-tag>
+                </div>
+                <div class="tui-meta">
+                  <span v-if="s.period">{{ s.period }}</span>
+                  <span>{{ s.questions.length }} 个维度</span>
+                  <span>已收集 {{ s.response_count }} 份</span>
+                </div>
               </div>
-              <div class="sv-card-meta">
-                <span v-if="s.period">{{ s.period }}</span>
-                <span>{{ s.questions.length }} 个维度</span>
-                <span>已收集 {{ s.response_count }} 份</span>
-              </div>
+              <el-button
+                type="primary"
+                round
+                size="small"
+                :disabled="s.my_submitted"
+                @click="openFill(s)"
+              >{{ s.my_submitted ? '已提交' : '参与评价' }}</el-button>
             </div>
-            <el-button
-              type="primary"
-              round
-              size="small"
-              :disabled="s.my_submitted"
-              @click="openFill(s)"
-            >{{ s.my_submitted ? '已提交' : '参与评价' }}</el-button>
-          </div>
+          </article>
         </div>
-      </el-tab-pane>
+      </template>
 
       <!-- 我创建的 -->
-      <el-tab-pane label="我创建的" name="created">
-        <div v-if="!mySurveys.length" class="sv-empty">
-          <el-icon :size="38" color="#d0d5dd"><Tickets /></el-icon>
-          <p>你还没有发起过问卷</p>
+      <template v-else-if="tab === 'created'">
+        <div v-if="!mySurveys.length" class="tui-empty">
+          <span class="tui-empty-icon"><el-icon :size="28"><Tickets /></el-icon></span>
+          <span class="tui-empty-title">你还没有发起过问卷</span>
         </div>
-        <div v-else class="sv-list">
-          <div v-for="s in mySurveys" :key="s.id" class="sv-card">
-            <div class="sv-card-main">
-              <div class="sv-card-title">
-                {{ s.title }}
-                <el-tag :type="statusTag(s.status)" size="small" effect="light" round>
-                  {{ SURVEY_STATUS_LABEL[s.status] }}
-                </el-tag>
+        <div v-else class="tui-stack">
+          <article v-for="s in mySurveys" :key="s.id" class="tui-card">
+            <div class="tui-card-body sv-item">
+              <div class="tui-row-main">
+                <div class="sv-title">
+                  <span class="tui-ellipsis-2">{{ s.title }}</span>
+                  <el-tag :type="statusTag(s.status)" size="small" effect="light" round>
+                    {{ SURVEY_STATUS_LABEL[s.status] }}
+                  </el-tag>
+                </div>
+                <div class="tui-meta">
+                  <span>{{ SURVEY_TARGET_LABEL[s.target_type] }}</span>
+                  <span v-if="s.period">{{ s.period }}</span>
+                  <span>已收集 {{ s.response_count }} 份</span>
+                </div>
               </div>
-              <div class="sv-card-meta">
-                <span>{{ SURVEY_TARGET_LABEL[s.target_type] }}</span>
-                <span v-if="s.period">{{ s.period }}</span>
-                <span>已收集 {{ s.response_count }} 份</span>
+              <div class="tui-actions">
+                <el-button size="small" round @click="viewResult(s)">查看结果</el-button>
+                <el-button
+                  v-if="s.status === 'open'"
+                  size="small"
+                  round
+                  type="warning"
+                  plain
+                  @click="toggleStatus(s, 'closed')"
+                >结束</el-button>
+                <el-button
+                  v-else-if="s.status === 'draft'"
+                  size="small"
+                  round
+                  type="success"
+                  plain
+                  @click="toggleStatus(s, 'open')"
+                >开放</el-button>
               </div>
             </div>
-            <div class="sv-card-ops">
-              <el-button size="small" round @click="viewResult(s)">查看结果</el-button>
-              <el-button
-                v-if="s.status === 'open'"
-                size="small"
-                round
-                type="warning"
-                plain
-                @click="toggleStatus(s, 'closed')"
-              >结束</el-button>
-              <el-button
-                v-else-if="s.status === 'draft'"
-                size="small"
-                round
-                type="success"
-                plain
-                @click="toggleStatus(s, 'open')"
-              >开放</el-button>
-            </div>
-          </div>
+          </article>
         </div>
-      </el-tab-pane>
+      </template>
 
       <!-- 我的被评结果 -->
-      <el-tab-pane label="我的被评" name="mine">
-        <div v-if="!mineResults.length" class="sv-empty">
-          <el-icon :size="38" color="#d0d5dd"><TrendCharts /></el-icon>
-          <p>暂未收到针对你的评价</p>
+      <template v-else-if="tab === 'mine'">
+        <div v-if="!mineResults.length" class="tui-empty">
+          <span class="tui-empty-icon"><el-icon :size="28"><TrendCharts /></el-icon></span>
+          <span class="tui-empty-title">暂未收到针对你的评价</span>
         </div>
-        <div v-else class="sv-list">
-          <div v-for="r in mineResults" :key="r.survey_id" class="sv-card sv-card-block">
-            <div class="sv-card-title">
-              {{ r.title }}
-              <el-tag size="small" effect="plain" round>{{ SURVEY_TARGET_LABEL[r.target_type] }}</el-tag>
+        <div v-else class="tui-stack">
+          <article v-for="r in mineResults" :key="r.survey_id" class="tui-card">
+            <div class="tui-card-body sv-block">
+              <div class="sv-title">
+                <span class="tui-ellipsis-2">{{ r.title }}</span>
+                <el-tag size="small" effect="plain" round>{{ SURVEY_TARGET_LABEL[r.target_type] }}</el-tag>
+              </div>
+              <SurveyResultPanel :result="r" />
             </div>
-            <SurveyResultPanel :result="r" />
-          </div>
+          </article>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </template>
 
-    <SurveyCreateDialog v-model="createVisible" @created="loadAll" />
+      <SurveyCreateDialog v-model="createVisible" @created="loadAll" />
 
-    <SurveyFillDialog v-model="fillVisible" :survey="filling" @saved="loadAll" />
+      <SurveyFillDialog v-model="fillVisible" :survey="filling" @saved="loadAll" />
 
-    <el-dialog
-      v-model="resultVisible"
-      :title="resultTitle"
-      :width="isMobile ? '94%' : '640px'"
-      align-center
-      destroy-on-close
-    >
-      <div v-if="resultLoading" class="sv-empty">统计中…</div>
-      <SurveyResultPanel v-else-if="result" :result="result" />
-    </el-dialog>
+      <el-dialog
+        v-model="resultVisible"
+        :title="resultTitle"
+        :width="isMobile ? '94%' : '640px'"
+        align-center
+        destroy-on-close
+      >
+        <div v-if="resultLoading" class="tui-empty">
+          <span class="tui-empty-title">统计中…</span>
+        </div>
+        <SurveyResultPanel v-else-if="result" :result="result" />
+      </el-dialog>
+    </div>
   </div>
 </template>
 
@@ -139,6 +170,8 @@ import {
   type PeerSurveyResult,
   type SurveyStatus,
 } from '@/api/peerSurvey'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import SurveyCreateDialog from '@/components/teacher/survey/SurveyCreateDialog.vue'
 import SurveyFillDialog from '@/components/teacher/survey/SurveyFillDialog.vue'
 import SurveyResultPanel from '@/components/teacher/survey/SurveyResultPanel.vue'
@@ -218,99 +251,46 @@ onMounted(loadAll)
 </script>
 
 <style scoped>
-.survey-page {
-  height: 100%;
-  overflow-y: auto;
-  padding: 8px 4px 24px;
-}
-
-.sv-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 4px;
+/* 移动端高频操作条 */
+.sv-topbar {
   margin-bottom: 12px;
 }
-.sv-header-left h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-.sv-sub {
-  margin: 3px 0 0;
-  font-size: 12px;
-  color: #888;
-}
-
-.sv-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 52px 0;
-  color: #98a2b3;
-  font-size: 13px;
-}
-.sv-empty p { margin: 0; }
-
-.sv-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.sv-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: #fff;
-  border: 1px solid #f0f1f3;
-  border-radius: 12px;
-  padding: 13px 15px;
-}
-.sv-card-block {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-}
-.sv-card-main {
+.sv-topbar .el-button {
   flex: 1;
-  min-width: 0;
+  margin-left: 0;
 }
-.sv-card-title {
+
+/* 问卷卡片 */
+.sv-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sv-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sv-title {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #101828;
-  margin-bottom: 5px;
+  color: var(--tui-text);
 }
-.sv-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 12px;
-  color: #98a2b3;
-}
-.sv-card-ops {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+.sv-title > span:first-child {
+  flex: 1;
+  min-width: 0;
 }
 
 @media (max-width: 767px) {
-  .sv-card {
+  .sv-item {
     flex-direction: column;
     align-items: stretch;
   }
-  .sv-card-ops {
+  .sv-item .tui-actions {
     justify-content: flex-end;
-  }
-  .sv-header {
-    flex-direction: column;
-    align-items: stretch;
   }
 }
 </style>

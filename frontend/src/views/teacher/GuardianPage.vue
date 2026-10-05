@@ -1,89 +1,131 @@
 <template>
   <div class="tui-page">
-    <header class="tui-header">
-      <div>
-        <h2 class="tui-header-title">家校沟通</h2>
-        <p class="tui-header-sub">家长零账号可完整留痕：短信提示 · 报告导出 · 只读链接</p>
+    <SubPageHeader title="家校沟通" sub="家长零账号可完整留痕" fallback="/teacher/more" />
+
+    <div class="tui-content">
+      <header v-if="!isMobile" class="tui-header">
+        <div>
+          <h2 class="tui-header-title">家校沟通</h2>
+          <p class="tui-header-sub">家长零账号可完整留痕：短信提示 · 报告导出 · 只读链接</p>
+        </div>
+        <div class="tui-header-actions">
+          <el-select v-model="studentId" filterable placeholder="选择学生" style="width: 220px" @change="onStudentChange">
+            <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </div>
+      </header>
+
+      <!-- 移动端整行学生选择 -->
+      <div v-if="isMobile" class="tui-card gp-picker">
+        <div class="tui-card-body">
+          <el-select v-model="studentId" filterable placeholder="选择学生" style="width: 100%" @change="onStudentChange">
+            <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </div>
       </div>
-      <el-select v-model="studentId" filterable placeholder="选择学生" style="width: 200px" @change="onStudentChange">
-        <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />
-      </el-select>
-    </header>
 
-    <div v-if="!studentId" class="gp-empty">
-      <el-icon :size="40" color="#d0d5dd"><User /></el-icon>
-      <p>请先选择一名学生</p>
-    </div>
+      <div v-if="!studentId" class="tui-card">
+        <div class="tui-empty">
+          <span class="tui-empty-icon"><el-icon :size="26"><User /></el-icon></span>
+          <span class="tui-empty-title">请先选择一名学生</span>
+          <span class="tui-empty-desc">选择学生后可建档家长联系人并记录沟通台账</span>
+        </div>
+      </div>
 
-    <template v-else>
-      <!-- 联系人 -->
-      <section class="gp-section">
-        <div class="gp-section-head">
-          <span class="gp-section-title">家长联系人</span>
-          <el-button size="small" round type="primary" :icon="Plus" @click="openGuardianCreate">新增联系人</el-button>
-        </div>
-        <div v-if="!guardians.length" class="gp-empty-small">暂无联系人，先建档才能发短信 / 留痕</div>
-        <div class="gp-guardians">
-          <div v-for="g in guardians" :key="g.id" class="gp-guardian">
-            <div class="gp-guardian-main">
-              <span class="gp-guardian-name">{{ g.name }}</span>
-              <el-tag size="small" effect="plain" round>{{ g.relation }}</el-tag>
-              <el-tag v-if="g.is_primary" size="small" type="success" effect="plain" round>主要</el-tag>
-              <span class="gp-guardian-phone">{{ g.phone_masked || '未填手机号' }}</span>
-            </div>
-            <div class="gp-guardian-ops">
-              <button class="gp-link" @click="openGuardianEdit(g)">编辑</button>
-              <button class="gp-link gp-link-danger" @click="removeGuardian(g)">删除</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 沟通台账 -->
-      <section class="gp-section">
-        <div class="gp-section-head">
-          <span class="gp-section-title">沟通台账（{{ logs.length }}）</span>
-          <el-button size="small" round type="primary" :icon="Plus" @click="logVisible = true">记录沟通</el-button>
-        </div>
-        <div v-if="!logs.length" class="gp-empty-small">暂无沟通记录</div>
-        <div v-for="l in logs" :key="l.id" class="gp-log">
-          <div class="gp-log-head">
-            <el-tag size="small" effect="light" round>{{ GUARDIAN_SCENE_LABEL[l.scene] }}</el-tag>
-            <el-tag size="small" effect="plain" round>{{ GUARDIAN_CHANNEL_LABEL[l.channel] }}</el-tag>
-            <el-tag size="small" :type="statusTag(l.status)" effect="plain" round>
-              {{ GUARDIAN_STATUS_LABEL[l.status] }}
-            </el-tag>
-            <span v-if="l.guardian_name" class="gp-log-who">对象：{{ l.guardian_name }}</span>
-            <span class="gp-log-date">{{ (l.created_at || '').slice(0, 10) }}</span>
-          </div>
-          <div class="gp-log-body">{{ l.content_summary }}</div>
-          <div class="gp-log-ops">
-            <template v-if="links[l.id] && !links[l.id].revoked">
-              <span class="gp-link-valid">链接有效至 {{ (links[l.id].expires_at || '').slice(0, 10) }} · 访问 {{ links[l.id].view_count }} 次</span>
-              <button class="gp-link" @click="copyLink(links[l.id])">复制链接</button>
-              <button class="gp-link gp-link-danger" @click="revoke(links[l.id])">撤销链接</button>
-            </template>
-            <template v-else-if="l.scene !== 'crisis'">
-              <button class="gp-link" @click="makeLink(l)">生成只读链接</button>
-            </template>
-            <span v-else class="gp-link-locked">
-              <el-icon :size="11"><Lock /></el-icon>危机记录不生成链接
+      <div v-else class="tui-stack">
+        <!-- 家长联系人 -->
+        <section class="tui-card">
+          <div class="tui-card-head">
+            <span class="tui-card-head-icon" :style="{ background: '#eff4ff', color: '#1d4ed8' }">
+              <el-icon :size="13"><User /></el-icon>
             </span>
-            <button class="gp-link gp-link-danger" @click="removeLog(l)">删除</button>
+            家长联系人
+            <span class="tui-group-count">{{ guardians.length }} 人</span>
+            <el-button size="small" round type="primary" :icon="Plus" @click="openGuardianCreate">新增</el-button>
           </div>
-        </div>
-      </section>
-    </template>
+          <div class="tui-card-body">
+            <div v-if="!guardians.length" class="tui-empty">
+              <span class="tui-empty-icon"><el-icon :size="26"><User /></el-icon></span>
+              <span class="tui-empty-title">暂无联系人</span>
+              <span class="tui-empty-desc">先建档家长联系人，才能发短信 / 留痕</span>
+            </div>
+            <div v-else class="gp-guardians">
+              <div v-for="g in guardians" :key="g.id" class="gp-guardian">
+                <div class="gp-guardian-main">
+                  <span class="gp-guardian-name">{{ g.name }}</span>
+                  <el-tag size="small" effect="plain" round>{{ g.relation }}</el-tag>
+                  <el-tag v-if="g.is_primary" size="small" type="success" effect="plain" round>主要</el-tag>
+                  <span class="gp-guardian-phone">{{ g.phone_masked || '未填手机号' }}</span>
+                </div>
+                <div class="gp-guardian-ops">
+                  <button class="gp-link" @click="openGuardianEdit(g)">编辑</button>
+                  <button class="gp-link gp-link-danger" @click="removeGuardian(g)">删除</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-    <GuardianDialog v-model="guardianVisible" :student-id="studentId || 0" :guardian="editingGuardian" @saved="loadAll" />
-    <ContactLogDialog v-model="logVisible" :student-id="studentId || 0" :guardians="guardians" @saved="loadAll" />
+        <!-- 沟通台账 -->
+        <section class="tui-card">
+          <div class="tui-card-head">
+            <span class="tui-card-head-icon" :style="{ background: '#ecfdf3', color: '#079455' }">
+              <el-icon :size="13"><ChatDotRound /></el-icon>
+            </span>
+            沟通台账
+            <span class="tui-group-count">{{ logs.length }} 条</span>
+            <el-button size="small" round :icon="Plus" @click="logVisible = true">记录沟通</el-button>
+          </div>
+          <div class="tui-card-body">
+            <div v-if="!logs.length" class="tui-empty">
+              <span class="tui-empty-icon"><el-icon :size="26"><ChatDotRound /></el-icon></span>
+              <span class="tui-empty-title">暂无沟通记录</span>
+              <span class="tui-empty-desc">每次沟通都留痕，家长零账号也能查看</span>
+            </div>
+            <div v-else class="tui-stack">
+              <div v-for="l in logs" :key="l.id" class="gp-log">
+                <div class="gp-log-head">
+                  <el-tag size="small" effect="light" round>{{ GUARDIAN_SCENE_LABEL[l.scene] }}</el-tag>
+                  <el-tag size="small" effect="plain" round>{{ GUARDIAN_CHANNEL_LABEL[l.channel] }}</el-tag>
+                  <el-tag size="small" :type="statusTag(l.status)" effect="plain" round>
+                    {{ GUARDIAN_STATUS_LABEL[l.status] }}
+                  </el-tag>
+                  <span v-if="l.guardian_name" class="gp-log-who">对象：{{ l.guardian_name }}</span>
+                  <span class="gp-log-date">{{ (l.created_at || '').slice(0, 10) }}</span>
+                </div>
+                <div class="gp-log-body">{{ l.content_summary }}</div>
+                <div class="gp-log-ops">
+                  <template v-if="links[l.id] && !links[l.id].revoked">
+                    <span class="gp-link-valid">链接有效至 {{ (links[l.id].expires_at || '').slice(0, 10) }} · 访问 {{ links[l.id].view_count }} 次</span>
+                    <button class="gp-link" @click="copyLink(links[l.id])">复制链接</button>
+                    <button class="gp-link gp-link-danger" @click="revoke(links[l.id])">撤销链接</button>
+                  </template>
+                  <template v-else-if="l.scene !== 'crisis'">
+                    <button class="gp-link" @click="makeLink(l)">生成只读链接</button>
+                  </template>
+                  <span v-else class="gp-link-locked">
+                    <el-icon :size="11"><Lock /></el-icon>危机记录不生成链接
+                  </span>
+                  <button class="gp-link gp-link-danger" @click="removeLog(l)">删除</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <GuardianDialog v-model="guardianVisible" :student-id="studentId || 0" :guardian="editingGuardian" @saved="loadAll" />
+      <ContactLogDialog v-model="logVisible" :student-id="studentId || 0" :guardians="guardians" @saved="loadAll" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Lock, Plus, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Lock, Plus, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useResponsive } from '@/composables/useResponsive'
+import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 import {
   createShareLink, deleteContactLog, deleteGuardian, getContactLogs, getGuardians,
@@ -95,6 +137,8 @@ import GuardianDialog from '@/components/teacher/guardian/GuardianDialog.vue'
 import ContactLogDialog from '@/components/teacher/guardian/ContactLogDialog.vue'
 
 defineOptions({ name: 'teacher-guardian' })
+
+const { isMobile } = useResponsive()
 
 const students = ref<StudentSummary[]>([])
 const studentId = ref<number | undefined>(undefined)
@@ -220,40 +264,23 @@ onMounted(loadStudents)
 </script>
 
 <style scoped>
-.gp-page { height: 100%; overflow-y: auto; padding: 8px 4px 24px; }
-
-.gp-header {
-  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
-  padding: 0 4px; margin-bottom: 14px;
-}
-.gp-header-left h2 { margin: 0; font-size: 18px; font-weight: 700; color: #1a1a2e; }
-.gp-sub { margin: 3px 0 0; font-size: 12px; color: #888; }
-
-.gp-empty, .gp-empty-small {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 40px 0; color: #98a2b3; font-size: 13px;
-}
-.gp-empty-small { padding: 16px 0; align-items: flex-start; }
-.gp-empty p { margin: 0; }
-
-.gp-section { margin-bottom: 20px; }
-.gp-section-head {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px; padding: 0 4px;
-}
-.gp-section-title { font-size: 14px; font-weight: 600; color: #101828; }
+.gp-picker { margin-bottom: 12px; }
 
 .gp-guardians { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .gp-guardian {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  border: 1px solid #f0f1f3; border-radius: 12px; padding: 11px 13px; background: #fff;
+  border: 1px solid var(--tui-border); border-radius: var(--tui-radius-sm);
+  padding: 11px 13px; background: var(--tui-surface-muted);
 }
 .gp-guardian-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .gp-guardian-name { font-size: 13.5px; font-weight: 600; color: #101828; }
 .gp-guardian-phone { font-size: 12px; color: #98a2b3; }
 .gp-guardian-ops { display: flex; gap: 12px; flex-shrink: 0; }
 
-.gp-log { border: 1px solid #f0f1f3; border-radius: 12px; padding: 12px 14px; background: #fff; margin-bottom: 10px; }
+.gp-log {
+  border: 1px solid var(--tui-border); border-radius: var(--tui-radius-sm);
+  padding: 12px 14px; background: var(--tui-surface-muted);
+}
 .gp-log-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
 .gp-log-who { font-size: 11.5px; color: #98a2b3; }
 .gp-log-date { margin-left: auto; font-size: 11.5px; color: #98a2b3; }
@@ -266,7 +293,6 @@ onMounted(loadStudents)
 .gp-link-locked { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: #98a2b3; }
 
 @media (max-width: 767px) {
-  .gp-header { flex-direction: column; align-items: stretch; }
   .gp-guardians { grid-template-columns: 1fr; }
 }
 </style>
