@@ -126,3 +126,33 @@
 .stagger-8 { animation-delay: 0.24s; animation-fill-mode: both; }
 .stagger-9 { animation-delay: 0.27s; animation-fill-mode: both; }
 .stagger-10 { animation-delay: 0.3s; animation-fill-mode: both; }
+
+/* Page Transition - 快捷空间子页面「整屏推入/推出」（覆盖式 Push）
+   前进(page-slide)：新页从屏幕右侧滑入并覆盖，旧页向左让位
+   返回(page-slide-back)：新页从左侧滑入，旧页向右退出
+   进入页留在文档流中（relative + z-index 覆盖旧页），旧页绝对定位脱离文档流避免撑开布局 */
+.page-slide-enter-active,
+.page-slide-back-enter-active {
+  position: relative !important;
+  z-index: 2 !important;
+  background: #f5faff;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  will-change: transform;
+}
+.page-slide-leave-active,
+.page-slide-back-leave-active {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important, opacity 0.45s ease !important;
+  will-change: transform, opacity;
+}
+.page-slide-enter-from { transform: translateX(100%) !important; }
+.page-slide-leave-to { transform: translateX(-28%) !important; opacity: 0.7 !important; }
+.page-slide-back-enter-from { transform: translateX(-100%) !important; }
+.page-slide-back-leave-to { transform: translateX(28%) !important; opacity: 0.7 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-slide-enter-active, .page-slide-leave-active,
+  .page-slide-back-enter-active, .page-slide-back-leave-active { transition: none !important; }
+}

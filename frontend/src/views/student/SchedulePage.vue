@@ -1,11 +1,18 @@
-﻿<template>
+<template>
   <div class="schedule-page">
     <!-- ===== 移动端：驾驶舱主页（成长总览 + 内置学业功能区，子页面入口） ===== -->
-    <div v-if="isMobile && activeTab === 'home'" class="dashboard-home">
-      <GrowthDashboard @open="tab => activeTab = tab" />
+    <Transition name="subpage-slide" mode="out-in">
+    <div v-if="isMobile && activeTab === 'home'" key="home" class="dashboard-home">
+      <GrowthDashboard
+        :courses="courses"
+        :current-week="currentWeek"
+        :period-times="periodTimes"
+        :is-holiday="isHoliday"
+        @open="tab => activeTab = tab"
+      />
     </div>
     <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 ===== -->
-    <div v-else class="content-row">
+    <div v-else key="content" class="content-row">
       <div class="content-main">
         <!-- 移动端子页面返回栏 -->
         <div v-if="isMobile" class="subpage-bar" @click="activeTab = 'home'">
@@ -885,6 +892,7 @@
       </div>
     </div>
     </div>
+    </Transition>
   </div>
 </template>
 
@@ -1617,7 +1625,7 @@ watch(() => route.query.tab, (val) => {
 </script>
 
 <style scoped>
-.schedule-page { height: 100%; width: 100%; padding: 12px 16px 0; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.schedule-page { height: 100%; width: 100%; padding: 12px 16px 0; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; }
 .schedule-page::-webkit-scrollbar { display: none; }
 
 /* AI 成长驾驶舱区块（学业中心移动端顶部） */
@@ -1640,6 +1648,15 @@ watch(() => route.query.tab, (val) => {
 .tab-fade-leave-active { transition: opacity .2s ease, transform .2s ease; }
 .tab-fade-enter-from { opacity: 0; transform: translateY(14px) scale(.995); }
 .tab-fade-leave-to { opacity: 0; transform: translateY(-8px) scale(.995); }
+
+/* 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：整屏左右推入 / 退出 */
+.subpage-slide-enter-active { transition: opacity .34s cubic-bezier(.16,1,.3,1), transform .34s cubic-bezier(.16,1,.3,1); }
+.subpage-slide-leave-active { transition: opacity .24s cubic-bezier(.4,0,.6,1), transform .24s cubic-bezier(.4,0,.6,1); }
+.subpage-slide-enter-from { opacity: 0; transform: translateX(100%); }
+.subpage-slide-leave-to { opacity: 0; transform: translateX(-100%); }
+@media (prefers-reduced-motion: reduce) {
+  .subpage-slide-enter-active, .subpage-slide-leave-active { transition: none; }
+}
 
 /* ===== 右侧垂直标签栏 ===== */
 .page-tabs { display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); padding: 8px; width: 96px; flex-shrink: 0; align-self: flex-start; position: sticky; top: 12px; }
