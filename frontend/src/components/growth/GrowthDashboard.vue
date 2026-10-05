@@ -5,10 +5,6 @@
       <div class="gd-hero-top">
         <div class="gd-hero-hello">
           <div class="gd-greet">{{ greeting }}，同学</div>
-          <div class="gd-sub">
-            {{ weekdayLabel }} · 第 {{ currentWeek }} 周
-            <span class="gd-ai-chip"><span class="gd-ai-dot"></span>AI 在线</span>
-          </div>
         </div>
         <div class="gd-hero-actions">
           <button v-if="editMode" type="button" class="gd-mini-btn" @click="resetCards">恢复默认</button>
@@ -287,7 +283,6 @@ const greeting = computed(() => {
   if (h < 18) return '下午好'
   return '晚上好'
 })
-const weekdayLabel = computed(() => ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()])
 
 const pendingTodos = computed(() => todayTasks.value.filter(t => !t.checked_today && t.status !== 'done').length)
 
@@ -457,15 +452,6 @@ onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() 
   margin-bottom: 12px;
 }
 .gd-greet { font-size: 18px; font-weight: 800; color: var(--gd-ink); letter-spacing: -0.02em; }
-.gd-sub { margin-top: 3px; font-size: 12px; color: var(--gd-ink-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.gd-ai-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 1px 8px; border-radius: 999px;
-  background: #ffffff; color: var(--gd-primary);
-  font-size: 10.5px; font-weight: 600; white-space: nowrap;
-}
-.gd-ai-dot { width: 6px; height: 6px; border-radius: 999px; background: #10b981; animation: gdPulse 1.6s infinite; }
-@keyframes gdPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 .gd-hero-actions { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 .gd-mini-btn {
@@ -638,7 +624,6 @@ onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() 
 .gd-insight-strong { font-weight: 600; color: var(--gd-ink); }
 
 @media (prefers-reduced-motion: reduce) {
-  .gd-ai-dot { animation: none; }
   .gd-ring-progress, .gd-dim-fill, .gd-collapse-ico { transition: none; }
   .gd-link-row, .gd-space-item, .gd-icon-btn, .gd-mini-btn { transition: none; }
 }
