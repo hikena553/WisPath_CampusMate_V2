@@ -14,6 +14,7 @@ from app.models.academic import Grade
 from app.models.message import Message
 from app.services.llm_service import _get_client, _get_llm_config
 from app.services.scoring import calc_radar_score
+from app.services import teacher_task_service
 from app.core.security import hash_password
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
 from pydantic import BaseModel, ConfigDict
@@ -613,6 +614,34 @@ async def suggest_contacts(user: User = Depends(require_role(UserRole.TEACHER, U
         ]
 
 
+class ContactSuggestionPersistItem(BaseModel):
+    student_id: int
+    student_name: str = ""
+    reason: str | None = None
+
+
+class ContactSuggestionPersistRequest(BaseModel):
+    items: list[ContactSuggestionPersistItem]
+
+
+class ContactSuggestionPersistResult(BaseModel):
+    created: int = 0
+    total: int = 0
+
+
+@router.post("/suggest-contacts/persist", response_model=ContactSuggestionPersistResult)
+def persist_contact_suggestions(
+    body: ContactSuggestionPersistRequest,
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """把 AI 推荐联系的学生落为跟进任务（幂等，重复调用不重复建）。"""
+    created = teacher_task_service.bulk_upsert_from_suggestions(
+        db, user.id, [item.model_dump() for item in body.items]
+    )
+    return ContactSuggestionPersistResult(created=created, total=len(body.items))
+
+
 class StudentImportItem(BaseModel):
     username: str
     name: str
@@ -663,3 +692,55 @@ def import_students(
         created += 1
     db.commit()
     return StudentImportResult(created=created, skipped=skipped)
+
+
+# ===== 模块 13 · AI 学情助手 =====
+
+
+class InsightToTaskIn(BaseModel):
+    advice: str
+    risk_level: str = "low"
+
+
+def _assert_my_student(db: Session, user: User, student_id: int) -> User:
+    student = db.query(User).filter(User.id == student_id, User.role == UserRole.STUDENT).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    if user.role != UserRole.ADMIN and student.tutor_id != user.id:
+        raise HTTPException(status_code=403, detail="无权查看该学生")
+    return student
+
+
+@router.get("/students/{student_id}/insight")
+async def student_insight(
+    student_id: int,
+    days: int = Query(default=30, ge=1, le=180),
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """学情诊断：可溯源画像（证据清单）+ AI 辅导建议（失败自动降级）。"""
+    from app.services import student_insight_service
+
+    _assert_my_student(db, user, student_id)
+    return await student_insight_service.get_insight(db, student_id, days=days)
+
+
+@router.post("/students/{student_id}/insight/task")
+def student_insight_to_task(
+    student_id: int,
+    payload: InsightToTaskIn,
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """把学情建议一键转为跟进任务（画像 → 执行 闭环）。"""
+    from app.services import student_insight_service
+
+    _assert_my_student(db, user, student_id)
+    task = student_insight_service.to_task(
+        db,
+        teacher_id=user.id,
+        student_id=student_id,
+        advice=payload.advice,
+        risk_level=payload.risk_level,
+    )
+    return teacher_task_service.serialize_one(db, task)

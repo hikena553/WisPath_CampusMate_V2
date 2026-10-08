@@ -24,6 +24,13 @@ const router = createRouter({
       component: () => import('@/views/login/ChangePasswordPage.vue'),
       meta: { title: '修改密码' },
     },
+    // 家长只读分享页：免登录，凭 token 校验有效性（家校沟通 · 家长观察者）
+    {
+      path: '/share/guardian/:token',
+      name: 'guardian-share',
+      component: () => import('@/views/share/GuardianSharePage.vue'),
+      meta: { title: '家校沟通' },
+    },
 
     {
       path: '/student',
@@ -60,6 +67,12 @@ const router = createRouter({
         { path: 'students', name: 'teacher-students', component: () => import('@/views/teacher/StudentsPage.vue'), meta: { keepAlive: true } },
         { path: 'approval', name: 'teacher-approval', component: () => import('@/views/teacher/ApprovalPage.vue'), meta: { keepAlive: false } },
         { path: 'crisis', name: 'teacher-crisis', component: () => import('@/views/teacher/CrisisWorkbench.vue'), meta: { keepAlive: false } },
+        { path: 'portfolio', name: 'teacher-portfolio', component: () => import('@/views/teacher/PortfolioPage.vue'), meta: { keepAlive: false } },
+        { path: 'survey', name: 'teacher-survey', component: () => import('@/views/teacher/SurveyPage.vue'), meta: { keepAlive: false } },
+        { path: 'care-center', name: 'teacher-care-center', component: () => import('@/views/teacher/CareCenterPage.vue'), meta: { keepAlive: false } },
+        { path: 'guardian', name: 'teacher-guardian', component: () => import('@/views/teacher/GuardianPage.vue'), meta: { keepAlive: false } },
+        { path: 'more', name: 'teacher-more', component: () => import('@/views/teacher/MorePage.vue'), meta: { keepAlive: false } },
+        { path: 'announcement', name: 'teacher-announcement', component: () => import('@/views/teacher/AnnouncementPage.vue'), meta: { keepAlive: false } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
         { path: 'profile', name: 'teacher-profile', component: () => import('@/views/teacher/ProfilePage.vue'), meta: { keepAlive: false } },
       ],
@@ -114,6 +127,11 @@ router.beforeEach(async (to) => {
   // 改密页：登录后可随时进入（未改密用户不再被强制跳转，仅由提醒横幅引导）
   if (to.path === '/change-password') {
     return user ? true : '/login'
+  }
+
+  // 家长只读分享页：公开访问，无需登录（凭 token 校验）
+  if (to.path.startsWith('/share/')) {
+    return true
   }
 
   // 登录页：已登录按角色重定向，未登录放行

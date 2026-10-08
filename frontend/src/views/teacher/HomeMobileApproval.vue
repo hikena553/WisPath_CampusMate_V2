@@ -75,7 +75,12 @@
                 <el-tag size="small" effect="plain">{{ approvalTypeLabel(row.leave_type) }}</el-tag>
               </div>
               <div style="font-size:13px;color:#666">{{ row.start_date }} ~ {{ row.end_date }}</div>
-              <div style="margin-top:6px"><el-tag type="success" size="small" effect="dark">已通过</el-tag></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                <el-tag v-if="row.return_confirmed" type="success" size="small" effect="plain">已销假</el-tag>
+                <el-tag v-else type="warning" size="small" effect="plain">待销假</el-tag>
+                <el-button v-if="!row.return_confirmed" type="primary" size="small" @click="approvalConfirmReturn(row)">确认返校</el-button>
+                <span v-else style="font-size:12px;color:#98a2b3">已闭环</span>
+              </div>
             </div>
           </div>
         </el-tab-pane>
@@ -91,6 +96,42 @@
               <div style="font-size:13px;color:#666">{{ row.start_date }} ~ {{ row.end_date }}</div>
               <div v-if="row.reject_reason" style="font-size:13px;color:#f56c6c;margin-top:4px">拒绝理由：{{ row.reject_reason }}</div>
               <div style="margin-top:6px"><el-tag type="danger" size="small" effect="dark">已拒绝</el-tag></div>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="统计" name="stats">
+          <div class="ms-stat-summary">
+            <div class="ms-stat-box"><span class="ms-stat-num">{{ approvalLeaveStats.total }}</span><span class="ms-stat-label">总申请</span></div>
+            <div class="ms-stat-box"><span class="ms-stat-num ok">{{ approvalLeaveStats.approved }}</span><span class="ms-stat-label">已通过</span></div>
+            <div class="ms-stat-box"><span class="ms-stat-num warn">{{ approvalLeaveStats.pending }}</span><span class="ms-stat-label">待审批</span></div>
+            <div class="ms-stat-box"><span class="ms-stat-num danger">{{ approvalLeaveStats.rejected }}</span><span class="ms-stat-label">已拒绝</span></div>
+            <div class="ms-stat-box"><span class="ms-stat-num purple">{{ approvalLeaveStats.awaiting_return }}</span><span class="ms-stat-label">待销假</span></div>
+          </div>
+
+          <div class="mobile-section-card" style="margin-bottom:12px">
+            <div style="font-weight:600;font-size:14px;margin-bottom:10px">按请假类型</div>
+            <div v-if="approvalLeaveStats.by_type.length === 0" class="empty-tip-small">暂无数据</div>
+            <div v-for="item in approvalLeaveStats.by_type" :key="item.key" class="ms-stat-row">
+              <div class="ms-stat-row-head"><span>{{ item.label }}</span><span>{{ item.total }} 条</span></div>
+              <div class="ms-stat-bar">
+                <div class="ms-seg seg-approved" :style="{ width: approvalPct(item.approved, item.total) }"></div>
+                <div class="ms-seg seg-pending" :style="{ width: approvalPct(item.pending, item.total) }"></div>
+                <div class="ms-seg seg-rejected" :style="{ width: approvalPct(item.rejected, item.total) }"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mobile-section-card">
+            <div style="font-weight:600;font-size:14px;margin-bottom:10px">按班级分布</div>
+            <div v-if="approvalLeaveStats.by_class.length === 0" class="empty-tip-small">暂无数据</div>
+            <div v-for="item in approvalLeaveStats.by_class" :key="item.key" class="ms-stat-row">
+              <div class="ms-stat-row-head"><span>{{ item.label }}</span><span>{{ item.total }} 条</span></div>
+              <div class="ms-stat-bar">
+                <div class="ms-seg seg-approved" :style="{ width: approvalPct(item.approved, item.total) }"></div>
+                <div class="ms-seg seg-pending" :style="{ width: approvalPct(item.pending, item.total) }"></div>
+                <div class="ms-seg seg-rejected" :style="{ width: approvalPct(item.rejected, item.total) }"></div>
+              </div>
             </div>
           </div>
         </el-tab-pane>
@@ -123,7 +164,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ArrowLeft, Loading, Check, Close } from '@element-plus/icons-vue'
-import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave } from '@/api/leave'
+import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
 import { ElMessage } from 'element-plus'
@@ -136,6 +177,10 @@ const approvalPendingLeaves = ref<LeaveRequestOut[]>([])
 const approvalPendingTickets = ref<ServiceTicket[]>([])
 const approvalApprovedLeaves = ref<LeaveRequestOut[]>([])
 const approvalRejectedLeaves = ref<LeaveRequestOut[]>([])
+const approvalLeaveStats = ref<LeaveStats>({
+  total: 0, approved: 0, rejected: 0, pending: 0, awaiting_return: 0,
+  by_type: [], by_class: [],
+})
 const approvalAnalysisMap = ref<Record<number, { suggestion: string; reason: string }>>({})
 const approvalRejectVisible = ref(false)
 const approvalRejectTarget = ref<LeaveRequestOut | null>(null)
@@ -183,7 +228,23 @@ async function loadApprovalData() {
     try { approvalApprovedLeaves.value = await getAllLeaves('approved') } catch {}
   } else if (approvalActiveTab.value === 'rejected') {
     try { approvalRejectedLeaves.value = await getAllLeaves('rejected') } catch {}
+  } else if (approvalActiveTab.value === 'stats') {
+    try { approvalLeaveStats.value = await getLeaveStats() } catch { /* 统计失败不影响其它 Tab */ }
   }
+}
+
+/** 统计条形图分段宽度百分比 */
+function approvalPct(part: number, total: number) {
+  if (!total) return '0%'
+  return `${Math.round((part / total) * 100)}%`
+}
+
+async function approvalConfirmReturn(row: LeaveRequestOut) {
+  try {
+    await confirmLeaveReturn(row.id)
+    ElMessage.success('已确认返校')
+    loadApprovalData()
+  } catch { ElMessage.error('操作失败') }
 }
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
@@ -296,4 +357,44 @@ onMounted(() => loadApprovalData())
   border: 1px solid rgba(0,0,0,0.04);
   box-shadow: 0 1px 6px rgba(0,0,0,0.03);
 }
+
+/* 统计 Tab */
+.ms-stat-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ms-stat-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+.ms-stat-num { font-size: 17px; font-weight: 700; color: #1a1a2e; line-height: 1.2; }
+.ms-stat-num.ok { color: #10b981; }
+.ms-stat-num.warn { color: #e6a23c; }
+.ms-stat-num.danger { color: #ef4444; }
+.ms-stat-num.purple { color: #7c3aed; }
+.ms-stat-label { font-size: 11px; color: #909399; }
+
+.ms-stat-row { margin-bottom: 14px; }
+.ms-stat-row:last-child { margin-bottom: 0; }
+.ms-stat-row-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #344054;
+}
+.ms-stat-row-head span:last-child { font-size: 12px; font-weight: 400; color: #98a2b3; }
+.ms-stat-bar {
+  display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #f2f4f7;
+}
+.ms-seg { height: 100%; }
+.ms-seg.seg-approved { background: #10b981; }
+.ms-seg.seg-pending { background: #f59e0b; }
+.ms-seg.seg-rejected { background: #ef4444; }
 </style>

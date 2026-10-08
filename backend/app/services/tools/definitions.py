@@ -442,4 +442,170 @@ TEACHER_TOOL_DEFINITIONS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_teacher_tasks",
+            "description": "查询教师自己的待办 / 跟进任务。教师说'我的待办'、'今天要跟进谁'、'有哪些逾期任务'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "contacted", "cared", "done", "expired"], "description": "按状态筛选，不传则全部"},
+                    "due": {"type": "string", "enum": ["today", "overdue"], "description": "today只看今天到期 / overdue只看逾期未完成"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_teacher_task",
+            "description": "为教师创建一条跟进任务（可关联学生）。教师说'帮我记一下要联系某某'、'给他建个跟进'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "任务标题"},
+                    "detail": {"type": "string", "description": "任务说明 / 跟进要点"},
+                    "student_name": {"type": "string", "description": "关联学生姓名（可选）"},
+                    "due_at": {"type": "string", "description": "截止日期，格式 YYYY-MM-DD（可选）"}
+                },
+                "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_care_record",
+            "description": "为名下学生记录一条侧写（关怀记录 / 谈心谈话 / 评语）。教师说'记录一下和某某的谈话'、'给他写条评语'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"},
+                    "content": {"type": "string", "description": "记录内容"},
+                    "record_type": {"type": "string", "enum": ["care", "talk", "comment"], "description": "care关怀 / talk谈心谈话 / comment评语，默认care"},
+                    "is_private": {"type": "boolean", "description": "是否仅教师可见，默认true"}
+                },
+                "required": ["student_name", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_care_records",
+            "description": "查看某个学生的侧写记录（关怀 / 谈心谈话 / 评语）。教师说'看看某某的记录'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_portfolio",
+            "description": "查看自己的教师成长档案汇总（工作案例/荣誉/培训研修/研究成果）。教师说'我的成长档案'、'我有哪些成果'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_portfolio_item",
+            "description": "为自己新增一条成长档案。教师说'记一条成长档案/工作案例/荣誉'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "档案标题"},
+                    "item_type": {"type": "string", "enum": ["case", "honor", "training", "research"], "description": "case工作案例/honor荣誉/training培训研修/research研究成果，默认case"},
+                    "reflection": {"type": "string", "description": "反思（可选）"},
+                    "occurred_on": {"type": "string", "description": "发生日期 YYYY-MM-DD（可选）"}
+                },
+                "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_survey_results",
+            "description": "查看自己的匿名问卷被评结果（仅聚合，样本不足时不展示分布）。教师说'我的互评结果'、'问卷评分'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_care_calendar",
+            "description": "查看人文关怀日历事项（生日/困难学生/学业预警等）。教师说'这个月要关怀谁'、'关怀日历'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "month": {"type": "string", "description": "月份 YYYY-MM，不传为当月"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_guardian_logs",
+            "description": "查看某学生的家长联系人与家校沟通台账。教师说'某某的家长沟通记录'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_learning_events",
+            "description": "查看某学生的学情事件底座数据（请假/关怀/成果等行为分布）。教师说'某某的学情数据'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"},
+                    "days": {"type": "integer", "description": "统计窗口天数，默认30"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_student_insight",
+            "description": "AI 学情诊断：给出可溯源的风险画像与辅导建议。教师说'帮我诊断一下某某'、'某某最近怎么样'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名"},
+                    "days": {"type": "integer", "description": "统计窗口天数，默认30"}
+                },
+                "required": ["student_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_workflows",
+            "description": "查看审批流程实例及当前待办节点。教师说'我的审批流程'、'流程到哪一步了'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["running", "approved", "rejected", "cancelled"], "description": "按状态筛选"},
+                    "all": {"type": "boolean", "description": "true 表示查看全部（不限于我发起的）"}
+                }
+            }
+        }
+    },
 ]

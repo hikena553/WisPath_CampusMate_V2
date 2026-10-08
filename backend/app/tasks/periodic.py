@@ -34,9 +34,13 @@ async def _periodic_feed_refresh() -> None:
 
 def start_periodic_tasks() -> list[asyncio.Task]:
     """创建全部周期任务，返回任务句柄供应用生命周期管理。"""
+    from app.tasks.learning_alert import _periodic_learning_alert
+
     return [
         asyncio.create_task(_periodic_impression_refresh()),
         asyncio.create_task(_periodic_feed_refresh()),
+        # 学习预警 pipeline：每小时检查，内部按「每日一次」标记真正执行
+        asyncio.create_task(_periodic_learning_alert()),
     ]
 
 

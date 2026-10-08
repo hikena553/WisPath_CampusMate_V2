@@ -51,6 +51,19 @@ from app.models.feedback import Feedback  # noqa: E402
 from app.models.conversation import Conversation, ConversationMessage  # noqa: E402
 from app.models.crisis import AIDialogSummary  # noqa: E402
 from app.models.profile import StudentProfileSnapshot  # noqa: E402
+from app.models.leave import LeaveRequest  # noqa: E402
+from app.models.teacher_task import TeacherTask  # noqa: E402
+from app.models.care_record import CareRecord  # noqa: E402
+from app.models.teacher_portfolio import TeacherPortfolioItem  # noqa: E402
+from app.models.peer_survey import PeerSurvey, PeerSurveyResponse  # noqa: E402
+from app.models.care_center import CareEvent, HomeVisitRecord, PraiseRecord  # noqa: E402
+from app.models.guardian import (  # noqa: E402
+    Guardian,
+    GuardianContactLog,
+    GuardianShareLink,
+)
+from app.models.learning_event import LearningEvent  # noqa: E402
+from app.models.workflow import WorkflowDef, WorkflowInstance  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
 from app.utils.rate_limiter import reset_rate_limiter  # noqa: E402
 
@@ -132,6 +145,32 @@ def make_user(db):
             db.query(StudentProfileSnapshot).filter(
                 StudentProfileSnapshot.student_id == u.id
             ).delete()
+            # 教师端 P0 表：无 FK 约束但同样会因 sqlite 主键复用污染后续用例
+            db.query(TeacherTask).filter(TeacherTask.teacher_id == u.id).delete()
+            db.query(TeacherTask).filter(TeacherTask.student_id == u.id).delete()
+            db.query(CareRecord).filter(CareRecord.teacher_id == u.id).delete()
+            db.query(CareRecord).filter(CareRecord.student_id == u.id).delete()
+            db.query(TeacherPortfolioItem).filter(TeacherPortfolioItem.teacher_id == u.id).delete()
+            db.query(PeerSurveyResponse).filter(PeerSurveyResponse.target_teacher_id == u.id).delete()
+            db.query(PeerSurvey).filter(PeerSurvey.created_by == u.id).delete()
+            db.query(CareEvent).filter(CareEvent.teacher_id == u.id).delete()
+            db.query(CareEvent).filter(CareEvent.student_id == u.id).delete()
+            db.query(HomeVisitRecord).filter(HomeVisitRecord.teacher_id == u.id).delete()
+            db.query(HomeVisitRecord).filter(HomeVisitRecord.student_id == u.id).delete()
+            db.query(PraiseRecord).filter(PraiseRecord.teacher_id == u.id).delete()
+            db.query(PraiseRecord).filter(PraiseRecord.student_id == u.id).delete()
+            db.query(GuardianShareLink).filter(
+                GuardianShareLink.log_id.in_(
+                    db.query(GuardianContactLog.id).filter(GuardianContactLog.teacher_id == u.id)
+                )
+            ).delete(synchronize_session=False)
+            db.query(GuardianContactLog).filter(GuardianContactLog.teacher_id == u.id).delete()
+            db.query(GuardianContactLog).filter(GuardianContactLog.student_id == u.id).delete()
+            db.query(Guardian).filter(Guardian.student_id == u.id).delete()
+            db.query(LearningEvent).filter(LearningEvent.actor_id == u.id).delete()
+            db.query(WorkflowInstance).filter(WorkflowInstance.initiator_id == u.id).delete()
+            db.query(WorkflowDef).filter(WorkflowDef.created_by == u.id).delete()
+            db.query(LeaveRequest).filter(LeaveRequest.student_id == u.id).delete()
             db.delete(u)
     db.commit()
 
@@ -197,11 +236,14 @@ def api(client):
                 path, json=json, headers=self._merge(headers), files=files, data=data
             )
 
+        def patch(self, path, json=None, headers=None):
+            return client.patch(path, json=json, headers=self._merge(headers))
+
         def delete(self, path, headers=None):
             return client.delete(path, headers=self._merge(headers))
 
-        def get(self, path, headers=None):
-            return client.get(path, headers=headers)
+        def get(self, path, headers=None, params=None):
+            return client.get(path, headers=headers, params=params)
 
     return Api()
 

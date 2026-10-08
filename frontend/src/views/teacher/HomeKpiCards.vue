@@ -34,7 +34,8 @@ const emit = defineEmits<{ navigate: [link: string] }>()
 /* ===== KPI Cards ===== */
 .kpi-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* auto-fit：卡片数量变化时自动均分列数，避免落单 */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -89,6 +90,10 @@ const emit = defineEmits<{ navigate: [link: string] }>()
   .kpi-cards {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .kpi-card:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 767px) {
@@ -97,6 +102,11 @@ const emit = defineEmits<{ navigate: [link: string] }>()
     gap: 8px;
     position: relative;
     z-index: 1;
+  }
+
+  /* 卡片数为奇数时，最后一张通栏，避免落单 */
+  .kpi-card:last-child:nth-child(odd) {
+    grid-column: span 2;
   }
 
   .kpi-card {

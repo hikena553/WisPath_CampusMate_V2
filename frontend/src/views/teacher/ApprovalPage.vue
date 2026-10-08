@@ -1,13 +1,52 @@
 <template>
-  <div class="approval-page">
-    <SubPageHeader title="审批管理" fallback="/teacher" />
-    <div class="page-header">
-      <h2>审批管理</h2>
-      <p class="page-sub">共 <strong>{{ totalPending }}</strong> 条待审批事项</p>
-    </div>
+  <div class="tui-page">
+    <SubPageHeader title="审批管理" :sub="totalPending + ' 条待处理'" fallback="/teacher/more">
+      <template #right>
+        <el-button text circle aria-label="刷新" @click="loadData()">
+          <el-icon :size="19"><Refresh /></el-icon>
+        </el-button>
+      </template>
+    </SubPageHeader>
 
-    <el-tabs v-model="activeTab" @tab-change="loadData" class="approval-tabs">
-      <el-tab-pane label="待审批" name="pending">
+    <div class="tui-content">
+      <header v-if="!isMobile" class="tui-header">
+        <div>
+          <h2 class="tui-header-title">审批管理</h2>
+          <p class="tui-header-sub">共 {{ totalPending }} 条待审批事项 · 请假、办事、材料一站式处理</p>
+        </div>
+        <div class="tui-header-actions">
+          <el-button round :icon="Refresh" @click="loadData()">刷新</el-button>
+        </div>
+      </header>
+
+      <!-- 待处理总览 -->
+      <div class="tui-stat-row cols-4 ap-overview">
+        <div class="tui-stat">
+          <span class="tui-stat-num">{{ totalPending }}</span>
+          <span class="tui-stat-label">待处理合计</span>
+        </div>
+        <div class="tui-stat">
+          <span class="tui-stat-num ap-warn">{{ pendingLeaves.length }}</span>
+          <span class="tui-stat-label">请假待批</span>
+        </div>
+        <div class="tui-stat">
+          <span class="tui-stat-num ap-warn">{{ pendingTickets.length }}</span>
+          <span class="tui-stat-label">办事待批</span>
+        </div>
+        <div class="tui-stat">
+          <span class="tui-stat-num ap-warn">{{ pendingMaterials.length }}</span>
+          <span class="tui-stat-label">材料待归档</span>
+        </div>
+      </div>
+
+      <TuiSegmented
+        v-model="activeTab"
+        class="tui-seg-wrap"
+        :options="tabOptions"
+        @update:model-value="() => loadData()"
+      />
+
+      <template v-if="activeTab === 'pending'">
         <div class="section-card">
           <div class="section-header">
             <h3><el-icon><Document /></el-icon> 请假申请</h3>
@@ -113,7 +152,10 @@
               @current-change="handleLeaveCurrentChange"
             />
           </div>
-          <el-empty v-else description="暂无待批请假" :image-size="80" />
+          <div v-else class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><Document /></el-icon></span>
+            <span class="tui-empty-title">暂无待批请假</span>
+          </div>
         </div>
 
         <div class="section-card">
@@ -180,7 +222,10 @@
               @current-change="handleTicketCurrentChange"
             />
           </div>
-          <el-empty v-else description="暂无待办申请" :image-size="80" />
+          <div v-else class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><Tickets /></el-icon></span>
+            <span class="tui-empty-title">暂无待办申请</span>
+          </div>
         </div>
 
         <!-- 材料档案审批 -->
@@ -236,11 +281,14 @@
               </div>
             </div>
           </div>
-          <el-empty v-else description="暂无待归档材料" :image-size="80" />
+          <div v-else class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><FolderOpened /></el-icon></span>
+            <span class="tui-empty-title">暂无待归档材料</span>
+          </div>
         </div>
-      </el-tab-pane>
+      </template>
 
-      <el-tab-pane label="已通过" name="approved">
+      <template v-else-if="activeTab === 'approved'">
         <div class="section-card">
           <div class="section-header">
             <h3><el-icon><CircleCheck /></el-icon> 已通过请假</h3>
@@ -258,9 +306,18 @@
               <el-table-column prop="start_date" label="开始日期" width="110" />
               <el-table-column prop="end_date" label="结束日期" width="110" />
               <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
-              <el-table-column label="状态" width="90">
-                <template #default>
-                  <el-tag type="success" size="small" effect="dark">已通过</el-tag>
+              <el-table-column label="销假" width="90">
+                <template #default="{ row }">
+                  <el-tag v-if="row.return_confirmed" type="success" size="small" effect="plain">已销假</el-tag>
+                  <el-tag v-else type="warning" size="small" effect="plain">待销假</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120" fixed="right">
+                <template #default="{ row }">
+                  <el-button v-if="!row.return_confirmed" type="primary" size="small" @click="handleConfirmReturn(row)">
+                    确认返校
+                  </el-button>
+                  <span v-else class="closed-hint">已闭环</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -283,7 +340,11 @@
                 </div>
               </div>
               <div class="mobile-card-footer">
-                <el-tag type="success" size="small" effect="dark">已通过</el-tag>
+                <el-tag v-if="row.return_confirmed" type="success" size="small" effect="plain">已销假</el-tag>
+                <el-tag v-else type="warning" size="small" effect="plain">待销假</el-tag>
+                <el-button v-if="!row.return_confirmed" type="primary" size="small" @click="handleConfirmReturn(row)">
+                  确认返校
+                </el-button>
               </div>
             </div>
           </div>
@@ -298,11 +359,14 @@
               @current-change="handleApprovedLeaveCurrentChange"
             />
           </div>
-          <el-empty v-else description="暂无已通过请假" :image-size="80" />
+          <div v-else class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><CircleCheck /></el-icon></span>
+            <span class="tui-empty-title">暂无已通过请假</span>
+          </div>
         </div>
-      </el-tab-pane>
+      </template>
 
-      <el-tab-pane label="已拒绝" name="rejected">
+      <template v-else-if="activeTab === 'rejected'">
         <div class="section-card">
           <div class="section-header">
             <h3><el-icon><CircleClose /></el-icon> 已拒绝请假</h3>
@@ -365,10 +429,94 @@
               @current-change="handleRejectedLeaveCurrentChange"
             />
           </div>
-          <el-empty v-else description="暂无已拒绝请假" :image-size="80" />
+          <div v-else class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><CircleClose /></el-icon></span>
+            <span class="tui-empty-title">暂无已拒绝请假</span>
+          </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </template>
+
+      <template v-else-if="activeTab === 'stats'">
+        <div class="tui-stat-row ap-overview">
+          <div class="stat-box">
+            <span class="stat-num">{{ leaveStats.total }}</span>
+            <span class="stat-label">总申请</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num ok">{{ leaveStats.approved }}</span>
+            <span class="stat-label">已通过</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num warn">{{ leaveStats.pending }}</span>
+            <span class="stat-label">待审批</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num danger">{{ leaveStats.rejected }}</span>
+            <span class="stat-label">已拒绝</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num purple">{{ leaveStats.awaiting_return }}</span>
+            <span class="stat-label">待销假</span>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-header">
+            <h3><el-icon><PieChart /></el-icon> 按请假类型</h3>
+          </div>
+          <div v-if="leaveStats.by_type.length" class="stat-rows">
+            <div v-for="item in leaveStats.by_type" :key="item.key" class="stat-row">
+              <div class="stat-row-head">
+                <span class="stat-row-label">{{ item.label }}</span>
+                <span class="stat-row-total">{{ item.total }} 条</span>
+              </div>
+              <div class="stat-bar">
+                <div class="stat-bar-seg seg-approved" :style="{ width: pct(item.approved, item.total) }"></div>
+                <div class="stat-bar-seg seg-pending" :style="{ width: pct(item.pending, item.total) }"></div>
+                <div class="stat-bar-seg seg-rejected" :style="{ width: pct(item.rejected, item.total) }"></div>
+              </div>
+              <div class="stat-legend">
+                <span><i class="dot dot-approved"></i>通过 {{ item.approved }}</span>
+                <span><i class="dot dot-pending"></i>待批 {{ item.pending }}</span>
+                <span><i class="dot dot-rejected"></i>拒绝 {{ item.rejected }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><PieChart /></el-icon></span>
+            <span class="tui-empty-title">暂无类型统计数据</span>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-header">
+            <h3><el-icon><Histogram /></el-icon> 按班级分布</h3>
+          </div>
+          <div v-if="leaveStats.by_class.length" class="stat-rows">
+            <div v-for="item in leaveStats.by_class" :key="item.key" class="stat-row">
+              <div class="stat-row-head">
+                <span class="stat-row-label">{{ item.label }}</span>
+                <span class="stat-row-total">{{ item.total }} 条</span>
+              </div>
+              <div class="stat-bar">
+                <div class="stat-bar-seg seg-approved" :style="{ width: pct(item.approved, item.total) }"></div>
+                <div class="stat-bar-seg seg-pending" :style="{ width: pct(item.pending, item.total) }"></div>
+                <div class="stat-bar-seg seg-rejected" :style="{ width: pct(item.rejected, item.total) }"></div>
+              </div>
+              <div class="stat-legend">
+                <span><i class="dot dot-approved"></i>通过 {{ item.approved }}</span>
+                <span><i class="dot dot-pending"></i>待批 {{ item.pending }}</span>
+                <span><i class="dot dot-rejected"></i>拒绝 {{ item.rejected }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><Histogram /></el-icon></span>
+            <span class="tui-empty-title">暂无班级分布数据</span>
+          </div>
+        </div>
+      </template>
+    </div>
 
     <el-dialog v-model="rejectVisible" title="拒绝理由" width="420px" :close-on-click-modal="false">
       <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules">
@@ -413,12 +561,13 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose,
-  InfoFilled, Loading, Check, Close, FolderOpened
+  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, Refresh
 } from '@element-plus/icons-vue'
-import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave } from '@/api/leave'
+import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
 import { getApprovalPending, reviewApproval, getApprovalStats, type ApprovalItem, type ApprovalStats } from '@/api/approval'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
@@ -433,6 +582,10 @@ const pendingMaterials = ref<ApprovalItem[]>([])
 const stats = ref<ApprovalStats | null>(null)
 const approvedLeaves = ref<LeaveRequestOut[]>([])
 const rejectedLeaves = ref<LeaveRequestOut[]>([])
+const leaveStats = ref<LeaveStats>({
+  total: 0, approved: 0, rejected: 0, pending: 0, awaiting_return: 0,
+  by_type: [], by_class: [],
+})
 const analysisMap = ref<Record<number, { suggestion: string; reason: string }>>({})
 const rejectVisible = ref(false)
 const rejectTarget = ref<LeaveRequestOut | null>(null)
@@ -467,6 +620,14 @@ const currentPageRejectedLeaves = ref(1)
 const pageSizeRejectedLeaves = ref(50)
 
 const totalPending = computed(() => pendingLeaves.value.length + pendingTickets.value.length + pendingMaterials.value.length)
+
+/** 分段控件选项：与 activeTab 取值一一对应，count 为对应待处理数量 */
+const tabOptions = computed(() => [
+  { value: 'pending', label: '待审批', count: totalPending.value },
+  { value: 'approved', label: '已通过', count: approvedLeaves.value.length || undefined },
+  { value: 'rejected', label: '已拒绝', count: rejectedLeaves.value.length || undefined },
+  { value: 'stats', label: '统计' },
+])
 
 const paginatedPendingLeaves = computed(() => {
   const start = (currentPageLeaves.value - 1) * pageSizeLeaves.value
@@ -542,7 +703,27 @@ async function loadData() {
     try { approvedLeaves.value = await getAllLeaves('approved') } catch {}
   } else if (activeTab.value === 'rejected') {
     try { rejectedLeaves.value = await getAllLeaves('rejected') } catch {}
+  } else if (activeTab.value === 'stats') {
+    await loadLeaveStats()
   }
+}
+
+async function loadLeaveStats() {
+  try { leaveStats.value = await getLeaveStats() } catch { /* 统计失败不影响其它 Tab */ }
+}
+
+/** 统计条形图分段宽度百分比 */
+function pct(part: number, total: number) {
+  if (!total) return '0%'
+  return `${Math.round((part / total) * 100)}%`
+}
+
+async function handleConfirmReturn(row: LeaveRequestOut) {
+  try {
+    await confirmLeaveReturn(row.id)
+    ElMessage.success('已确认返校')
+    loadData()
+  } catch { ElMessage.error('操作失败') }
 }
 
 async function loadStats() {
@@ -663,40 +844,32 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.approval-page { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 8px 4px; }
-
-.page-header {
-  display: flex; align-items: baseline; gap: 10px;
-  margin-bottom: 12px; padding: 0 4px;
-}
-.page-header h2 {
-  font-size: 18px; font-weight: 700; color: #1a1a2e; margin: 0;
-}
-.page-sub { font-size: 12px; color: #888; margin: 0; }
-.page-sub strong { color: #e6a23c; }
-
-.approval-tabs { --el-tabs-header-height: 40px; }
-.approval-tabs :deep(.el-tabs__header) { margin-bottom: 14px; }
-.approval-tabs :deep(.el-tabs__item) { font-size: 13px; font-weight: 500; }
-.approval-tabs :deep(.el-tabs__item.is-active) { font-weight: 600; }
-
+/* ========== 卡片（对齐 tui 规范：白卡 + 发丝边 + 弱阴影） ========== */
 .section-card {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
   padding: 14px 16px;
   margin-bottom: 12px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
 }
 
+/* 待处理总览数字语义色（用双类名提高优先级，避免被 .tui-stat-num 覆盖） */
+.tui-stat-num.ap-warn { color: var(--tui-warn); }
+
 .section-header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
 }
 .section-header h3 {
-  font-size: 14px; font-weight: 600; color: #1a1a2e; margin: 0;
+  font-size: 14.5px; font-weight: 600; color: var(--tui-text); margin: 0;
   display: flex; align-items: center; gap: 6px;
 }
+.section-header > :deep(.el-tag) { margin-left: auto; }
+
+/* 桌面表格：轻量表头 + 圆角 */
+.section-card :deep(.el-table) { border-radius: var(--tui-radius-sm); }
+.section-card :deep(.el-table th.el-table__cell) { background: #f8f9fb !important; }
 
 .ai-analyze { display: flex; align-items: center; gap: 6px; }
 .analyze-tip { cursor: pointer; color: #909399; font-size: 14px; }
@@ -710,54 +883,103 @@ onMounted(loadData)
   padding: 8px 0;
 }
 
-/* ========== 移动端卡片（默认隐藏） ========== */
-.mobile-cards { display: none; }
+/* ========== 统计 Tab ========== */
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 14px;
+  border-radius: var(--tui-radius);
+  background: var(--tui-surface-muted);
+  border: 1px solid var(--tui-border);
+}
+.stat-num {
+  font-size: 20px; font-weight: 700; color: var(--tui-text);
+  line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.stat-num.ok { color: var(--tui-success); }
+.stat-num.warn { color: #f79009; }
+.stat-num.danger { color: var(--tui-danger); }
+.stat-num.purple { color: #6941c6; }
+.stat-label { font-size: 11.5px; color: var(--tui-text-quiet); }
+
+.stat-rows { display: flex; flex-direction: column; gap: 16px; }
+.stat-row-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.stat-row-label { font-size: 13px; font-weight: 600; color: #344054; }
+.stat-row-total { font-size: 12px; color: #98a2b3; }
+
+.stat-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f2f4f7;
+}
+.stat-bar-seg { height: 100%; }
+.seg-approved { background: #10b981; }
+.seg-pending { background: #f59e0b; }
+.seg-rejected { background: #ef4444; }
+
+.stat-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: #667085;
+}
+.stat-legend .dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+.dot-approved { background: #10b981; }
+.dot-pending { background: #f59e0b; }
+.dot-rejected { background: #ef4444; }
+
+.closed-hint { font-size: 12px; color: #98a2b3; }
+
+/* ========== 移动端卡片列表（对齐 tui 规范：白卡 + 发丝边 + 去边框感） ========== */
+.mobile-cards { display: flex; flex-direction: column; gap: 10px; }
+
+.mobile-card {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 15px;
+  border-radius: var(--tui-radius);
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  box-shadow: var(--tui-shadow-1);
+}
 
 /* ========== 移动端响应式 ========== */
 @media (max-width: 767px) {
-  .approval-page {
-    padding: 6px 8px;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    margin-bottom: 10px;
-  }
-
   .section-card {
-    padding: 10px;
+    padding: 13px 14px;
     margin-bottom: 10px;
   }
 
   /* 隐藏桌面表格，显示移动端卡片 */
   .desktop-table { display: none; }
-  .mobile-cards { display: block; }
-
-  /* 移动端卡片样式 */
-  .mobile-card {
-    background: #fff;
-    border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 10px;
-    border: 1px solid rgba(0,0,0,0.06);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-    display: flex;
-    flex-direction: column;
-  }
 
   .mobile-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     margin-bottom: 10px;
   }
 
   .mobile-card-student {
     font-size: 15px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--tui-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mobile-card-body {
@@ -778,14 +1000,15 @@ onMounted(loadData)
   .mobile-card-label {
     flex-shrink: 0;
     width: 56px;
-    color: #909399;
+    color: var(--tui-text-quiet);
     font-weight: 500;
   }
 
   .mobile-card-value {
     flex: 1;
-    color: #333;
-    word-break: break-all;
+    min-width: 0;
+    color: var(--tui-text-secondary);
+    word-break: break-word;
   }
 
   .mobile-card-reason {
@@ -798,25 +1021,32 @@ onMounted(loadData)
   .mobile-ai-reason {
     display: block;
     font-size: 12px;
-    color: #909399;
+    color: var(--tui-text-quiet);
     margin-top: 4px;
-    line-height: 1.4;
+    line-height: 1.45;
   }
 
   .mobile-card-actions {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
-    padding-top: 10px;
-    border-top: 1px solid rgba(0,0,0,0.05);
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--tui-border);
   }
 
   .mobile-card-footer {
     display: flex;
-    justify-content: flex-end;
-    padding-top: 10px;
-    border-top: 1px solid rgba(0,0,0,0.05);
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--tui-border);
   }
+
+  .stat-box { padding: 11px 12px; }
+  .stat-num { font-size: 18px; }
 
   /* 分页居中 */
   .pagination-wrapper {
@@ -827,6 +1057,8 @@ onMounted(loadData)
     flex-wrap: wrap;
     justify-content: center;
   }
+
+  .mobile-card-actions :deep(.el-button) { flex: 1; }
 
   :deep(.el-dialog) {
     width: 92vw !important;

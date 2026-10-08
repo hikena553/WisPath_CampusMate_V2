@@ -1,4 +1,6 @@
-"""教师端工具 handlers：名下学生请假审批、学生查询、危机预警、成长统计、请假分析。"""
+"""教师端工具 handlers：名下学生请假审批、学生查询、危机预警、成长统计、请假分析、待办任务与侧写记录。"""
+
+from datetime import date
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.crisis import AIDialogSummary
 from app.models.growth import GrowthRecord
 from app.models.leave import LeaveRequest, LeaveStatus
+from app.models.teacher_task import TaskSourceType
 from app.models.user import User, UserRole
 from app.utils.enum_helpers import safe_enum_str, safe_enum_val
 
@@ -212,4 +215,321 @@ def _analyze_leave(db: Session, args: dict, user: User) -> dict:
             "reason": leave.reason,
         },
         "message": f"学生{student.name if student else '未知'}的请假申请：{leave.start_date}至{leave.end_date}，原因：{leave.reason}，请分析是否批准"
+    }
+
+
+# ============ 待办任务 / 侧写记录工具 ============
+
+_TASK_STATUS_TEXT = {
+    "pending": "待处理",
+    "contacted": "已联系",
+    "cared": "已关怀",
+    "done": "已完成",
+    "expired": "已过期",
+}
+_RECORD_TYPE_TEXT = {"care": "关怀", "talk": "谈心谈话", "comment": "评语"}
+
+
+def _find_my_student(
+    db: Session,
+    user: User,
+    student_name: str | None = None,
+    student_id: int | None = None,
+) -> User | None:
+    """按姓名或ID在教师名下学生中定位，避免跨教师越权操作。"""
+    base = db.query(User).filter(User.role == UserRole.STUDENT, User.tutor_id == user.id)
+    if student_id is not None:
+        return base.filter(User.id == student_id).first()
+    if student_name:
+        from app.services.knowledge_service import _escape_like
+        safe = _escape_like(student_name)
+        exact = base.filter(User.name == student_name).first()
+        if exact:
+            return exact
+        return base.filter(User.name.like(f"%{safe}%", escape="\\")).first()
+    return None
+
+
+def _query_teacher_tasks(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_task_service as svc
+    tasks, total = svc.list_tasks(
+        db,
+        user.id,
+        status=args.get("status"),
+        due=args.get("due"),
+        limit=20,
+    )
+    if not tasks:
+        return {"message": "暂无待办任务", "tasks": []}
+    return {
+        "message": f"共{total}条任务，展示前{len(tasks)}条",
+        "tasks": [
+            {
+                "task_id": t["id"],
+                "title": t["title"],
+                "student_name": t["student_name"],
+                "status": _TASK_STATUS_TEXT.get(t["status"], t["status"]),
+                "due_at": str(t["due_at"]) if t["due_at"] else None,
+                "overdue": t["overdue"],
+            }
+            for t in tasks
+        ],
+    }
+
+
+def _create_teacher_task(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_task_service as svc
+    title = (args.get("title") or "").strip()
+    if not title:
+        return {"success": False, "message": "缺少任务标题"}
+    wants_student = args.get("student_name") or args.get("student_id")
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if wants_student and not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+
+    due_at = None
+    if args.get("due_at"):
+        try:
+            due_at = date.fromisoformat(args["due_at"])
+        except ValueError:
+            return {"success": False, "message": "截止日期格式应为 YYYY-MM-DD"}
+
+    task = svc.create_task(
+        db,
+        teacher_id=user.id,
+        title=title,
+        detail=args.get("detail"),
+        student_id=student.id if student else None,
+        due_at=due_at,
+        source_type=TaskSourceType.MANUAL,
+    )
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": f"已创建跟进任务：{title}" + (f"（{student.name}）" if student else ""),
+    }
+
+
+def _create_care_record(db: Session, args: dict, user: User) -> dict:
+    from app.services import care_record_service as svc
+    content = (args.get("content") or "").strip()
+    if not content:
+        return {"success": False, "message": "缺少记录内容"}
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+
+    record_type = args.get("record_type") or "care"
+    if record_type not in _RECORD_TYPE_TEXT:
+        return {"success": False, "message": "记录类型仅支持 care/talk/comment"}
+    record = svc.create_record(
+        db,
+        teacher_id=user.id,
+        student_id=student.id,
+        content=content,
+        record_type=record_type,
+        is_private=bool(args.get("is_private", True)),
+    )
+    return {
+        "success": True,
+        "record_id": record.id,
+        "message": f"已为{student.name}记录一条{_RECORD_TYPE_TEXT[record_type]}",
+    }
+
+
+def _query_care_records(db: Session, args: dict, user: User) -> dict:
+    from app.services import care_record_service as svc
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    records, total = svc.list_records(db, student_id=student.id, limit=10)
+    if not records:
+        return {"message": f"{student.name}暂无侧写记录", "records": []}
+    return {
+        "message": f"{student.name}共{total}条记录，展示最近{len(records)}条",
+        "records": [
+            {
+                "record_id": r["id"],
+                "record_type": _RECORD_TYPE_TEXT.get(r["record_type"], r["record_type"]),
+                "content": r["content"][:120],
+                "created_at": r["created_at"][:10],
+            }
+            for r in records
+        ],
+    }
+
+
+# ============ P1 模块工具：成长档案 / 问卷互评 / 关怀中心 / 家校沟通 ============
+
+
+def _query_my_portfolio(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_portfolio_service as svc
+    report = svc.report(db, user.id)
+    if not report["total"]:
+        return {"message": "你的成长档案还是空的，可以在「成长档案」页沉淀第一条", "by_type": report["by_type"]}
+    return {
+        "message": f"你共有 {report['total']} 条成长档案",
+        "by_type": [t for t in report["by_type"] if t["count"]],
+        "recent": [
+            {"title": it["title"], "type": it["item_type"], "occurred_on": it["occurred_on"]}
+            for it in report["items"][:8]
+        ],
+    }
+
+
+def _create_portfolio_item(db: Session, args: dict, user: User) -> dict:
+    from app.services import teacher_portfolio_service as svc
+    title = (args.get("title") or "").strip()
+    if not title:
+        return {"success": False, "message": "缺少档案标题"}
+    item_type = args.get("item_type") or "case"
+    if item_type not in ("case", "honor", "training", "research"):
+        return {"success": False, "message": "类型仅支持 case/honor/training/research"}
+    occurred_on = None
+    if args.get("occurred_on"):
+        try:
+            occurred_on = date.fromisoformat(args["occurred_on"])
+        except ValueError:
+            return {"success": False, "message": "日期格式应为 YYYY-MM-DD"}
+    item = svc.create_item(
+        db,
+        teacher_id=user.id,
+        title=title,
+        item_type=item_type,
+        reflection=args.get("reflection"),
+        occurred_on=occurred_on,
+    )
+    label = svc.TYPE_LABELS.get(item_type, item_type)
+    return {"success": True, "item_id": item.id, "message": f"已添加一条{label}成长档案：{title}"}
+
+
+def _query_my_survey_results(db: Session, args: dict, user: User) -> dict:
+    from app.services import peer_survey_service as svc
+    results = svc.my_results(db, user.id)
+    if not results:
+        return {"message": "暂无针对你的问卷评价"}
+    out = []
+    for r in results:
+        out.append(
+            {
+                "title": r["title"],
+                "response_count": r["response_count"],
+                "enough_sample": r["enough_sample"],
+                "overall_average": r["overall_average"],
+                "note": "样本不足，暂不展示分布" if not r["enough_sample"] else "",
+            }
+        )
+    return {"message": f"共{len(results)}份问卷有你被评的记录", "results": out}
+
+
+def _query_care_calendar(db: Session, args: dict, user: User) -> dict:
+    from app.services import care_center_service as svc
+    events = svc.list_events(db, user.id, args.get("month"))
+    if not events:
+        return {"message": "本月的关怀日历还是空的，可用自动生成或手动添加", "events": []}
+    return {
+        "message": f"本月共{len(events)}条关怀事项",
+        "events": [
+            {
+                "event_id": e["id"],
+                "event_type": svc.EVENT_TYPE_LABELS.get(e["event_type"], e["event_type"]),
+                "date": str(e["event_date"]),
+                "title": e["title"],
+                "student_name": e["student_name"],
+            }
+            for e in events
+        ],
+    }
+
+
+def _query_guardian_logs(db: Session, args: dict, user: User) -> dict:
+    from app.services import guardian_service as svc
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    logs = svc.list_logs(db, user.id, student_id=student.id, limit=10)
+    guardians = svc.list_guardians(db, student.id)
+    if not logs and not guardians:
+        return {"message": f"{student.name}暂无家长联系人与沟通记录"}
+    return {
+        "message": f"{student.name}：联系人 {len(guardians)} 位，沟通记录 {len(logs)} 条",
+        "guardians": [
+            {"name": g["name"], "relation": g["relation"], "phone": g["phone_masked"], "is_primary": g["is_primary"]}
+            for g in guardians
+        ],
+        "logs": [
+            {
+                "scene": svc.SCENE_LABELS.get(l["scene"], l["scene"]),
+                "channel": l["channel"],
+                "status": l["status"],
+                "content": l["content_summary"][:120],
+                "created_at": l["created_at"][:10],
+            }
+            for l in logs
+        ],
+    }
+
+
+# ============ P2 底座工具：学情事件 / AI 学情诊断 / 审批流程 ============
+
+
+def _query_learning_events(db: Session, args: dict, user: User) -> dict:
+    """学情数据底座：按学生聚合学情事件（谓语分布 + 最近时间线）。"""
+    from app.services import learning_event_service
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    days = int(args.get("days") or 30)
+    agg = learning_event_service.aggregate(db, student.id, days=days)
+    if not agg["total"]:
+        return {"message": f"{student.name}近{days}天没有学情事件记录", "by_verb": []}
+    return {
+        "message": f"{student.name}近{days}天共 {agg['total']} 条学情事件",
+        "by_verb": agg["by_verb"][:8],
+        "recent": [
+            {"verb": e["verb"], "object_type": e["object_type"], "occurred_at": e["occurred_at"][:10]}
+            for e in agg["recent"][:8]
+        ],
+    }
+
+
+async def _query_student_insight(db: Session, args: dict, user: User) -> dict:
+    """AI 学情诊断：可溯源画像 + 辅导建议（LLM 不可用时自动降级为规则建议）。"""
+    from app.services import student_insight_service
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    days = int(args.get("days") or 30)
+    insight = await student_insight_service.get_insight(db, student.id, days=days)
+    return {
+        "message": insight["advice"],
+        "risk_level": insight["profile"]["risk_level"],
+        "risk_reasons": insight["profile"]["risk_reasons"],
+        "evidence": insight["profile"]["evidence"],
+        "degraded": insight["degraded"],
+    }
+
+
+def _query_my_workflows(db: Session, args: dict, user: User) -> dict:
+    """查看我发起 / 参与的审批流程实例及当前待办节点。"""
+    from app.services import workflow_engine
+    status = args.get("status")
+    instances = workflow_engine.list_instances(
+        db, initiator_id=None if args.get("all") else user.id, status=status, limit=20
+    )
+    if not instances:
+        return {"message": "暂无流程实例", "instances": []}
+    return {
+        "message": f"共{len(instances)}个流程实例",
+        "instances": [
+            {
+                "instance_id": i["id"],
+                "def_name": i["def_name"],
+                "status": i["status"],
+                "current_node": (i.get("current_node") or {}).get("name", ""),
+                "biz_type": i["biz_type"],
+                "biz_id": i["biz_id"],
+            }
+            for i in instances
+        ],
     }

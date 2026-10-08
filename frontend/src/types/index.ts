@@ -64,6 +64,9 @@ export interface LeaveRequestOut {
   leave_type: string
   status: string
   reject_reason: string | null
+  /** 销假闭环：已通过后是否完成返校确认 */
+  return_confirmed?: boolean
+  return_confirmed_at?: string | null
   created_at: string
 }
 

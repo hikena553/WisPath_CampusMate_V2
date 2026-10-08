@@ -152,6 +152,22 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            <!-- 单聊且对方为名下学生：档案 / 关怀快捷操作 -->
+            <el-dropdown v-if="activeType === 'single' && isMyStudent" trigger="click" @command="onStudentMenuCommand">
+              <el-button text circle class="header-more">
+                <el-icon :size="isMobile ? 20 : 18"><Menu v-if="isMobile" /><MoreFilled v-else /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">
+                    <el-icon><User /></el-icon> 查看档案
+                  </el-dropdown-item>
+                  <el-dropdown-item command="care">
+                    <el-icon><ChatDotRound /></el-icon> 记录关怀
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
 
@@ -619,6 +635,13 @@
         <img :src="previewUrl" @click.stop />
       </div>
     </Transition>
+
+    <!-- ============= 记录关怀（单聊学生） ============= -->
+    <CareRecordDialog
+      v-model="showCareDialog"
+      :student-id="careStudentId"
+      :student-name="careStudentName"
+    />
   </div>
 </template>
 
@@ -635,6 +658,8 @@ import {
   type GroupOut, type GroupMemberOut, type UserSearchResult
 } from '@/api/groups'
 import { uploadFile } from '@/api/upload'
+import { getStudents } from '@/api/teacher'
+import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
 import { getToken } from '@/utils/token'
 import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
@@ -660,6 +685,35 @@ const activeType = ref<'single' | 'group'>('single')
 const messages = ref<any[]>([])
 const newMsg = ref('')
 const msgListRef = ref<HTMLDivElement>()
+
+// 单聊对方是否为名下学生（用于展示档案 / 关怀快捷操作）
+const myStudentIds = ref<Set<number>>(new Set())
+const isMyStudent = computed(
+  () => activeType.value === 'single' && !!activeId.value && myStudentIds.value.has(activeId.value)
+)
+const showCareDialog = ref(false)
+const careStudentId = ref(0)
+const careStudentName = ref('')
+
+async function loadMyStudents() {
+  try {
+    const list = await getStudents()
+    myStudentIds.value = new Set(list.map((s) => s.id))
+  } catch {
+    // 非教师账号或接口异常时不展示学生操作入口
+  }
+}
+
+function onStudentMenuCommand(command: string) {
+  if (!activeId.value) return
+  if (command === 'profile') {
+    router.push({ path: '/teacher/students', query: { student: String(activeId.value) } })
+  } else if (command === 'care') {
+    careStudentId.value = activeId.value
+    careStudentName.value = activeName.value
+    showCareDialog.value = true
+  }
+}
 
 // 侧边栏 — 筛选已有会话
 const search = ref('')
@@ -1327,7 +1381,7 @@ onMounted(async () => {
   document.addEventListener('click', onGlobalClick)
   loadPins()
   connectWs()
-  await Promise.all([loadConversations(), loadGroups()])
+  await Promise.all([loadConversations(), loadGroups(), loadMyStudents()])
   if (route.query.groupId) {
     openChat(Number(route.query.groupId), (route.query.groupName as string) || '', 'group')
     router.replace({ query: {} })
@@ -1361,40 +1415,45 @@ function onGlobalClick(e: MouseEvent) {
 <style scoped>
 .msg-page {
   display: flex; height: 100%;
-  background: #fff;   border-radius: 10px; overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+  background: #fff;
+  overflow: hidden;
 }
 
 /* ===== 侧边栏 ===== */
-.msg-sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid #f0f0f0; background: #f7f8fa; }
-.sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; }
+.msg-sidebar { width: 288px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid #eaecf0; background: #fafbfc; }
+.sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 52px; padding: 0 12px; flex-shrink: 0;
+  background: #fff; border-bottom: 1px solid rgba(15,17,21,0.06);
+}
 .header-left,.header-right { width: 36px; display: flex; align-items: center; }
 .header-right { justify-content: flex-end; }
 .header-center { flex: 1; text-align: center; }
-.header-title { font-size: 15px; font-weight: 600; color: #1a1a2e; }
-.action-btn { font-size: 18px; color: #409eff; }
-.header-icon { color: #666; cursor: pointer; }
-.header-icon:hover { color: #409eff; }
-.sidebar-search { padding: 8px 12px; }
-.sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+.header-title { font-size: 16px; font-weight: 600; color: #0f1115; letter-spacing: -0.2px; }
+.action-btn { font-size: 18px; color: #2563eb; }
+.header-icon { color: #6b7280; cursor: pointer; }
+.header-icon:hover { color: #2563eb; }
+.sidebar-search { padding: 10px 12px 6px; }
+.sidebar-search :deep(.el-input__wrapper) { border-radius: 10px; }
+.sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0 8px; }
 
-.conv-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; transition: all .15s; border-left: 3px solid transparent; }
-.conv-item:hover { background: rgba(64,158,255,0.06); }
-.conv-item.active { background: rgba(64,158,255,0.12); border-left-color: #409eff; }
+.conv-item { display: flex; align-items: center; gap: 11px; padding: 10px 12px; cursor: pointer; transition: background .15s ease; border-left: 3px solid transparent; }
+.conv-item:hover { background: rgba(15,17,21,0.035); }
+.conv-item.active { background: #eff4ff; border-left-color: #2563eb; }
 .conv-avatar-wrapper { position: relative; flex-shrink: 0; line-height: 0; }
-.group-badge { position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px; border-radius: 4px; background: #409eff; color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; border: 2px solid #f7f8fa; }
+.group-badge { position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px; border-radius: 5px; background: #2563eb; color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; border: 2px solid #fafbfc; }
 .conv-badge-avatar { line-height: 0; }
 .conv-avatar { flex-shrink: 0; }
 .conv-info { flex: 1; min-width: 0; }
-.conv-top { display: flex; justify-content: space-between; align-items: center; }
-.conv-name { font-size: 13px; font-weight: 500; color: #333; }
-.conv-time { font-size: 10px; color: #bbb; flex-shrink: 0; margin-left: auto; }
-.conv-bottom { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-.conv-preview { font-size: 11px; color: #999; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-badge { --el-badge-bg-color: #f56c6c; flex-shrink: 0; }
-.conv-member-count { font-size: 10px; color: #bbb; flex-shrink: 0; }
+.conv-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.conv-name { font-size: 14px; font-weight: 600; color: #0f1115; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-time { font-size: 10.5px; color: #9ca3af; flex-shrink: 0; margin-left: auto; }
+.conv-bottom { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.conv-preview { font-size: 12px; color: #6b7280; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-badge { --el-badge-bg-color: #d92d20; flex-shrink: 0; }
+.conv-member-count { font-size: 10.5px; color: #9ca3af; flex-shrink: 0; }
 
-.conv-item.pinned { background: #f0f8ff; }
+.conv-item.pinned { background: #f5f8ff; }
 
 /* 右滑置顶容器（仅移动端生效，桌面端隐藏） */
 .conv-swipe-wrap { position: relative; overflow: hidden; }
@@ -1404,16 +1463,16 @@ function onGlobalClick(e: MouseEvent) {
   align-items: stretch; z-index: 1;
 }
 .swipe-action {
-  width: 76px; border: none; background: #12b7f5; color: #fff;
+  width: 76px; border: none; background: #2563eb; color: #fff;
   font-size: 14px; font-weight: 500; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background .15s; outline: none;
   -webkit-tap-highlight-color: transparent;
 }
-.swipe-action:active { background: #0ea5e0; }
+.swipe-action:active { background: #1d4ed8; }
 .swipe-action:focus, .swipe-action:focus-visible { outline: none; box-shadow: none; }
-.swipe-action.pinned { background: #909399; }
-.swipe-action.pinned:active { background: #7a7f84; }
+.swipe-action.pinned { background: #98a2b3; }
+.swipe-action.pinned:active { background: #7d8795; }
 .conv-swipe-wrap .conv-item {
   position: relative; z-index: 2; background: #fff;
   transition: transform .24s cubic-bezier(.22,.68,0,1);
@@ -1423,7 +1482,7 @@ function onGlobalClick(e: MouseEvent) {
   transform: translateX(-76px);
 }
 
-.empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 0; color: #bbb; font-size: 13px; }
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 0; color: #9ca3af; font-size: 13px; }
 
 /* ===== 聊天区域 ===== */
 .msg-chat { flex: 1; display: flex; flex-direction: column; }

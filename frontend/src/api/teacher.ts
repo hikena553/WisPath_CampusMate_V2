@@ -160,3 +160,60 @@ export interface ContactSuggestion {
 export function suggestContacts() {
   return request.get<ContactSuggestion[]>('/teacher/suggest-contacts')
 }
+
+export interface ContactSuggestionPersistResult {
+  created: number
+  total: number
+}
+
+/** 把 AI 推荐联系的学生落为待办任务（幂等，重复调用不重复建） */
+export function persistContactSuggestions(items: ContactSuggestion[]) {
+  return request.post<ContactSuggestionPersistResult>('/teacher/suggest-contacts/persist', {
+    items: items.map((i) => ({
+      student_id: i.student_id,
+      student_name: i.student_name,
+      reason: i.reason,
+    })),
+  })
+}
+
+/** ===== 学情诊断（模块 13）：可溯源画像 + AI 建议 ===== */
+
+export interface InsightEvidence {
+  source: string
+  label: string
+  value: string | number
+}
+
+export interface StudentInsightProfile {
+  student_id: number
+  days: number
+  risk_level: 'low' | 'medium' | 'high'
+  risk_reasons: string[]
+  metrics: Record<string, string | number>
+  by_verb: { verb: string; count: number }[]
+  by_object: { object_type: string; count: number }[]
+  evidence: InsightEvidence[]
+  generated_at: string
+}
+
+export interface StudentInsight {
+  student_id: number
+  student_name: string
+  profile: StudentInsightProfile
+  advice: string
+  degraded: boolean
+  degrade_reason: string
+}
+
+export function getStudentInsight(studentId: number, days = 30) {
+  return request.get<StudentInsight>(`/teacher/students/${studentId}/insight`, { params: { days } })
+}
+
+/** 学情建议一键转跟进任务 */
+export function convertInsightToTask(studentId: number, advice: string, riskLevel: string) {
+  return request.post(`/teacher/students/${studentId}/insight/task`, {
+    advice,
+    risk_level: riskLevel,
+  })
+}
