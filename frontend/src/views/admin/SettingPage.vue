@@ -118,7 +118,7 @@
                 <div class="setting-name">API 地址</div>
                 <div class="setting-desc">API接口地址，Token Plan 使用 OpenAI 兼容端点</div>
               </div>
-              <el-input v-model="settingsMap['llm_base_url']" placeholder="如 https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1" style="width: 360px" />
+              <el-input v-model="settingsMap['llm_base_url']" placeholder="如 https://maas.qianwenaiapi.com/compatible-mode/v1" style="width: 360px" />
             </div>
             <div class="setting-item">
               <div class="setting-info">

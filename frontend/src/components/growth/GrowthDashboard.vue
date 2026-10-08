@@ -18,9 +18,27 @@
       </div>
 
       <div class="gd-hero-main">
-        <div class="gd-next">
-          <div class="gd-next-label">下一节课</div>
-          <template v-if="nextCourse">
+        <!-- 下一节课卡：整卡可点推入课程表（查看全部课程入口移入此处）；编辑卡片模式下禁用跳转 -->
+        <div
+          class="gd-next"
+          :class="{ 'is-link': !editMode }"
+          :role="editMode ? undefined : 'button'"
+          :tabindex="editMode ? -1 : 0"
+          :aria-label="editMode ? undefined : '查看全部课程'"
+          @click="openSchedule"
+          @keydown.enter.prevent="openSchedule"
+        >
+          <div class="gd-next-label-row">
+            <div class="gd-next-label">下一节课</div>
+            <span class="gd-next-more">查看全部课程<el-icon :size="11"><ArrowRight /></el-icon></span>
+          </div>
+          <!-- 课程数据加载中：骨架占位（尺寸对齐 time/name/meta），避免先闪「今日没有课程安排」再出内容 -->
+          <template v-if="coursesLoading">
+            <div class="gd-skel gd-next-skel-time"></div>
+            <div class="gd-skel gd-next-skel-name"></div>
+            <div class="gd-skel gd-next-skel-meta"></div>
+          </template>
+          <template v-else-if="nextCourse">
             <div class="gd-next-time">{{ timeLabel(nextCourse.start_period) }}</div>
             <div class="gd-next-name">{{ nextCourse.name }}</div>
             <div class="gd-next-meta">
@@ -57,7 +75,7 @@
 
     <!-- KPI 行 -->
     <section class="gd-kpi-row">
-      <KpiStat label="今日课程" :value="todayCourses.length" unit="门" tone="primary" />
+      <KpiStat label="今日课程" :value="coursesLoading ? '--' : todayCourses.length" :unit="coursesLoading ? '' : '门'" tone="primary" />
       <KpiStat label="待办" :value="pendingTodos" unit="项" :tone="pendingTodos > 0 ? 'warning' : 'neutral'" />
       <KpiStat label="综合评分" :value="score || '--'" />
       <KpiStat label="成长记录" :value="profile?.total_records ?? 0" unit="条" />
@@ -65,20 +83,8 @@
 
     <!-- 可配置卡片区（编辑态可排序 / 显隐） -->
     <div class="gd-stack">
-      <!-- 今日课程 -->
-      <section class="gd-card" data-card="today" :class="cardClass('today')" :style="{ order: orderOf('today') }" v-show="show('today')">
-        <div v-if="editMode" class="gd-veil" aria-hidden="true"></div>
-        <CardToolbar
-          v-if="editMode" :can-up="canUp('today')" :can-down="canDown('today')" :hidden="!isVisible('today')"
-          @up="move('today', -1)" @down="move('today', 1)" @toggle="toggle('today')"
-        />
-        <div class="gd-head">
-          <h3 class="gd-title">今日课程</h3>
-          <span class="gd-cap">{{ isHoliday ? '假期中' : `${todayCourses.length} 门` }}</span>
-        </div>
-        <TimelineToday v-if="todayCourses.length" :courses="todayCourses" :period-times="periodTimes" />
-        <p v-else class="gd-empty-line">{{ isHoliday ? '当前为假期，好好休息～' : '今日没有课程安排' }}</p>
-      </section>
+      <!-- 今日课程卡已删除：课程表入口在 Hero「下一节课」卡（查看全部课程），
+           今日课次与下一节课信息也都在 Hero/KPI 中，无需重复成卡 -->
 
       <!-- AI 主动发现 -->
       <section class="gd-card" data-card="ai" :class="cardClass('ai')" :style="{ order: orderOf('ai') }" v-show="show('ai')">
@@ -95,7 +101,21 @@
             <el-icon :size="14" :class="{ 'is-loading': discoverLoading }"><Refresh /></el-icon>
           </button>
         </div>
-        <div v-if="!discoverLoading && proactiveActions.length === 0" class="gd-ai-empty">
+        <!-- LLM 洞察引导句：仅在有待处理事项时出现；容器高度固定，
+             异步拿到洞察时不改变卡片高度（此前的高度跳变曾表现为抽搐） -->
+        <div v-if="proactiveActions.length" class="gd-ai-insight">
+          <el-icon class="gd-ai-insight-ico" :size="13"><MagicStick /></el-icon>
+          <span v-if="insight" class="gd-ai-insight-text">{{ insight }}</span>
+          <span v-else-if="insightPending" class="gd-skel gd-ai-insight-skel" aria-hidden="true"></span>
+        </div>
+        <!-- 加载中且尚无数据：首帧即骨架占位，
+             避免「空态文案 → 空列表 → 行内容」连续三次高度变化造成卡片抽搐 -->
+        <div v-if="discoverLoading && !proactiveActions.length" class="gd-insight-list">
+          <div class="gd-skel gd-ai-skel-row"></div>
+          <div class="gd-skel gd-ai-skel-row"></div>
+        </div>
+        <!-- 空态只在首次加载真正完成后才出现，避免先闪一下「状态良好」又被行内容顶掉 -->
+        <div v-else-if="discoverLoaded && !proactiveActions.length" class="gd-ai-empty">
           <el-icon class="gd-ai-empty-icon" :size="17"><CircleCheckFilled /></el-icon>
           <span>状态良好，AI 持续守护你的成长</span>
         </div>
@@ -111,37 +131,9 @@
         </div>
       </section>
 
-      <!-- 我的学业 -->
-      <section class="gd-card" data-card="academic" :class="cardClass('academic')" :style="{ order: orderOf('academic') }" v-show="show('academic')">
-        <div v-if="editMode" class="gd-veil" aria-hidden="true"></div>
-        <CardToolbar
-          v-if="editMode" :can-up="canUp('academic')" :can-down="canDown('academic')" :hidden="!isVisible('academic')"
-          @up="move('academic', -1)" @down="move('academic', 1)" @toggle="toggle('academic')"
-        />
-        <div class="gd-head">
-          <h3 class="gd-title">我的学业</h3>
-          <span class="gd-cap">一键直达</span>
-        </div>
-        <div class="gd-link-list">
-          <button type="button" class="gd-link-row" @click="emit('open', 'schedule')">
-            <span class="gd-link-icon"><el-icon :size="18"><Calendar /></el-icon></span>
-            <span class="gd-link-title">课程表</span>
-            <el-icon class="gd-link-chevron" :size="16"><ArrowRight /></el-icon>
-          </button>
-          <button type="button" class="gd-link-row" @click="emit('open', 'grades')">
-            <span class="gd-link-icon"><el-icon :size="18"><DataLine /></el-icon></span>
-            <span class="gd-link-title">成绩分析</span>
-            <el-icon class="gd-link-chevron" :size="16"><ArrowRight /></el-icon>
-          </button>
-          <button type="button" class="gd-link-row" @click="emit('open', 'growth')">
-            <span class="gd-link-icon"><el-icon :size="18"><TrendCharts /></el-icon></span>
-            <span class="gd-link-title">成长轨迹</span>
-            <el-icon class="gd-link-chevron" :size="16"><ArrowRight /></el-icon>
-          </button>
-        </div>
-      </section>
+      <!-- 我的学业卡已删除：课程表入口在 Hero「下一节课」卡（查看全部课程），成绩分析/成长轨迹在快捷空间 -->
 
-      <!-- 五维成长（渐进披露，默认折叠） -->
+      <!-- 五维成长（默认展开，点标题行可收起） -->
       <section class="gd-card" data-card="dims" :class="cardClass('dims')" :style="{ order: orderOf('dims') }" v-show="show('dims')">
         <div v-if="editMode" class="gd-veil" aria-hidden="true"></div>
         <CardToolbar
@@ -170,7 +162,11 @@
             <span class="gd-dim-value">{{ Math.round(d.value) }}</span>
           </li>
         </ul>
-        <p v-else-if="!radarDims.length && !dimsCollapsed" class="gd-empty-line">暂无五维数据，完善成长记录后自动生成</p>
+        <!-- 画像尚未返回：骨架占位（行高对齐真实五维行），避免先闪「暂无数据」再撑开 5 行 -->
+        <div v-else-if="!dimsCollapsed && !profileLoaded" class="gd-dim-skel">
+          <div v-for="i in 5" :key="i" class="gd-skel gd-dim-skel-row"></div>
+        </div>
+        <p v-else-if="!dimsCollapsed" class="gd-empty-line">暂无五维数据，完善成长记录后自动生成</p>
       </section>
 
       <!-- 快捷空间 -->
@@ -185,6 +181,15 @@
           <span class="gd-cap">常用服务</span>
         </div>
         <div class="gd-space-grid">
+          <!-- 成绩分析 / 成长轨迹：从「我的学业」移入，走 open 事件推入学业中心对应子页（非路由跳转） -->
+          <button type="button" class="gd-space-item" @click="emit('open', 'grades')">
+            <span class="gd-space-icon"><el-icon :size="21"><DataLine /></el-icon></span>
+            <span class="gd-space-label">成绩分析</span>
+          </button>
+          <button type="button" class="gd-space-item" @click="emit('open', 'growth')">
+            <span class="gd-space-icon"><el-icon :size="21"><TrendCharts /></el-icon></span>
+            <span class="gd-space-label">成长轨迹</span>
+          </button>
           <button type="button" class="gd-space-item" @click="go('/student/plan')">
             <span class="gd-space-icon"><el-icon :size="21"><Calendar /></el-icon></span>
             <span class="gd-space-label">学习计划</span>
@@ -193,8 +198,9 @@
             <span class="gd-space-icon"><el-icon :size="21"><Collection /></el-icon></span>
             <span class="gd-space-label">作品集</span>
           </button>
+          <!-- 成长档案图标由 TrendCharts 改为 FolderOpened：与相邻的「成长轨迹」区分（原文/图重复易混淆） -->
           <button type="button" class="gd-space-item" @click="go('/student/growth')">
-            <span class="gd-space-icon"><el-icon :size="21"><TrendCharts /></el-icon></span>
+            <span class="gd-space-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
             <span class="gd-space-label">成长档案</span>
           </button>
           <button type="button" class="gd-space-item" @click="go('/student/emotion')">
@@ -212,15 +218,15 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   TrendCharts, Collection, MagicStick, Refresh,
-  CircleCheckFilled, Calendar, DataLine, ArrowRight, ArrowDown, FirstAidKit
+  CircleCheckFilled, Calendar, DataLine, ArrowRight, ArrowDown, FirstAidKit, FolderOpened
 } from '@element-plus/icons-vue'
 import { getGrowthProfile, type GrowthProfile } from '@/api/growth'
-import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'
+import { fetchProactiveFeed, fetchProactiveInsight, type ProactiveAction } from '@/api/agent'
 import { getToday, type TodayTask } from '@/api/plan'
 import { useAuthStore } from '@/stores/auth'
 import type { Course } from '@/types'
+import { studentDataCache } from '@/utils/studentDataCache'
 import KpiStat from './dashboard/KpiStat.vue'
-import TimelineToday from './dashboard/TimelineToday.vue'
 import CardToolbar from './dashboard/CardToolbar.vue'
 
 const props = withDefaults(defineProps<{
@@ -228,21 +234,34 @@ const props = withDefaults(defineProps<{
   currentWeek?: number
   periodTimes?: Record<number, string>
   isHoliday?: boolean
+  /** 课程数据是否仍在加载：为 true 时 Hero/今日课程显示骨架占位而非空态文案 */
+  coursesLoading?: boolean
 }>(), {
   courses: () => [],
   currentWeek: 1,
   periodTimes: () => ({}),
   isHoliday: false,
+  coursesLoading: false,
 })
 
 const emit = defineEmits<{ (e: 'open', tab: 'schedule' | 'grades' | 'growth'): void }>()
 const router = useRouter()
 const auth = useAuthStore()
-const discoverLoading = ref(false)
-const profile = ref<GrowthProfile | null>(null)
-const proactiveActions = ref<ProactiveAction[]>([])
-const todayTasks = ref<TodayTask[]>([])
-const dimsCollapsed = ref(true)
+// 数据初值取自模块级缓存：从其它页签切回驾驶舱时组件会重建，命中缓存即可首帧渲染真实内容，
+// 不再出现「骨架 → 内容」的高度变化（否则下方卡片会被推动，看起来像抽搐）；挂载后仍静默刷新
+const discoverLoading = ref(!studentDataCache.actions)
+/** 首次请求是否已完成：空态只在完成后出现，避免未加载完就先弹「状态良好」 */
+const discoverLoaded = ref(!!studentDataCache.actions)
+const profile = ref<GrowthProfile | null>(studentDataCache.profile)
+/** 画像是否已加载完成：五维成长默认展开，用它区分「还没回来」与「确实没有数据」 */
+const profileLoaded = ref(!!studentDataCache.profile)
+const proactiveActions = ref<ProactiveAction[]>(studentDataCache.actions ?? [])
+/** LLM 个性化洞察（异步补充，不阻塞卡片；服务端缓存 30 分钟） */
+const insight = ref<string>(studentDataCache.insight ?? '')
+const insightPending = ref(false)
+const todayTasks = ref<TodayTask[]>(studentDataCache.tasks ?? [])
+/** 五维成长默认展开（点标题行可收起） */
+const dimsCollapsed = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 
 const score = computed(() => profile.value?.total_score ?? 0)
@@ -293,12 +312,17 @@ const radarDims = computed(() => {
 })
 
 // ===== 卡片配置化：显隐 / 排序 + 本地持久化 =====
-type CardId = 'today' | 'ai' | 'academic' | 'dims' | 'space'
-const CARD_IDS: CardId[] = ['today', 'ai', 'academic', 'dims', 'space']
+// 默认顺序：快捷空间 → AI 主动发现 → 五维成长（今日课程卡已删除）
+type CardId = 'ai' | 'space' | 'dims'
+const CARD_IDS: CardId[] = ['space', 'ai', 'dims']
 const cardOrder = ref<CardId[]>([...CARD_IDS])
 const hiddenIds = ref<CardId[]>([])
 const editMode = ref(false)
-const storageKey = `cm.dashboard.cards.${auth.user?.id ?? 'anon'}`
+// 存储键带版本号：默认卡片结构（增删卡/默认顺序）变更时升级版本，
+// 旧键整体作废回落新默认，避免浏览器里残留的旧排序盖住新布局。
+// 注：仅删除卡片时无需升版——loadCards 的 isCardId 过滤会自动剔除已删除的 id，
+// 并按原相对顺序保留用户自定义排序
+const storageKey = `cm.dashboard.cards.v2.${auth.user?.id ?? 'anon'}`
 
 function isCardId(v: unknown): v is CardId {
   return typeof v === 'string' && (CARD_IDS as string[]).includes(v)
@@ -316,6 +340,9 @@ function loadCards() {
     if (Array.isArray(parsed.hidden)) hiddenIds.value = parsed.hidden.filter(isCardId)
   } catch { /* ignore */ }
 }
+// 首帧前就应用本地保存的排序/显隐：原先放在 onMounted 里会在挂载后第二次渲染才生效，
+// 卡片位置与显隐会当场跳变（与页面切换动画叠加后尤其明显）
+loadCards()
 function saveCards() {
   try { localStorage.setItem(storageKey, JSON.stringify({ order: cardOrder.value, hidden: hiddenIds.value })) } catch { /* ignore */ }
 }
@@ -389,27 +416,73 @@ function dimOpacity(v: number) {
 }
 
 function go(p: string) { router.push(p) }
+/** 下一节课卡（查看全部课程入口）：整卡点击推入课程表；卡片编辑模式下不跳转 */
+function openSchedule() { if (!editMode.value) emit('open', 'schedule') }
 function pillClass(p: number) {
   return p >= 80 ? 'gd-pill-danger' : p >= 60 ? 'gd-pill-warning' : 'gd-pill-primary'
 }
 function actionLabel(p: number) { return p >= 80 ? '重点关注' : p >= 60 ? '值得关注' : '温馨提醒' }
 
 async function loadOverview() {
-  try { profile.value = await getGrowthProfile() } catch { /* ignore */ }
+  try {
+    profile.value = await getGrowthProfile()
+    studentDataCache.profile = profile.value
+  } catch { /* ignore：保留缓存/上次数据，不清空 */ }
+  finally { profileLoaded.value = true }
 }
 async function loadDiscover() {
   discoverLoading.value = true
   try {
-    const all = await fetchProactiveActions()
-    proactiveActions.value = all.filter(a => a.target_role === 'student')
-  } catch { proactiveActions.value = [] }
-  finally { discoverLoading.value = false }
-}
-async function loadTodayTasks() {
-  try { todayTasks.value = await getToday() } catch { todayTasks.value = [] }
+    const feed = await fetchProactiveFeed()
+    proactiveActions.value = feed.actions.filter(a => a.target_role === 'student')
+    studentDataCache.actions = proactiveActions.value
+
+    // 动作指纹变化（如待办已完成、临考提醒换了一条）说明旧洞察已经过时，作废后重新生成
+    const sig = proactiveActions.value.map(a => `${a.trigger}:${a.title}`).sort().join('|')
+    if (studentDataCache.insightSig !== sig) {
+      studentDataCache.insightSig = sig
+      studentDataCache.insight = null
+      insight.value = ''
+    }
+
+    if (feed.insight) {
+      insight.value = feed.insight
+      studentDataCache.insight = feed.insight
+    } else if (proactiveActions.value.length) {
+      // 服务端缓存未命中：后台补一次 LLM 洞察（不阻塞卡片，失败保持规则文案）
+      void loadInsight()
+    }
+  } catch {
+    // 失败时保留缓存/上次结果（而非清空），避免卡片高度凭空变化
+    if (!proactiveActions.value.length && studentDataCache.actions) proactiveActions.value = studentDataCache.actions
+  }
+  finally { discoverLoading.value = false; discoverLoaded.value = true }
 }
 
-onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() })
+/** 拉取 LLM 洞察：结果写入缓存供二次进入首帧显示；拿不到就不显示（占位区高度固定，不会跳变） */
+async function loadInsight() {
+  if (insight.value || insightPending.value) return
+  insightPending.value = true
+  try {
+    const text = await fetchProactiveInsight()
+    if (text) {
+      insight.value = text
+      studentDataCache.insight = text
+    }
+  } finally {
+    insightPending.value = false
+  }
+}
+async function loadTodayTasks() {
+  try {
+    todayTasks.value = await getToday()
+    studentDataCache.tasks = todayTasks.value
+  } catch {
+    if (!todayTasks.value.length && studentDataCache.tasks) todayTasks.value = studentDataCache.tasks
+  }
+}
+
+onMounted(() => { loadOverview(); loadDiscover(); loadTodayTasks() })
 </script>
 
 <style scoped>
@@ -473,7 +546,16 @@ onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() 
   border-radius: var(--gd-radius-md);
   padding: 11px 13px;
 }
+/* 下一节课卡：整卡可点推入课程表（查看全部课程入口），编辑卡片模式恢复为静态卡 */
+.gd-next.is-link {
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform .15s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.gd-next.is-link:active { transform: scale(.985); box-shadow: 0 2px 10px rgba(47, 127, 216, 0.14); }
+.gd-next.is-link:focus-visible { outline: 2px solid var(--gd-primary); outline-offset: 2px; }
+.gd-next-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .gd-next-label { font-size: 11px; font-weight: 600; color: var(--gd-primary); letter-spacing: 0.02em; }
+.gd-next-more { flex: none; display: inline-flex; align-items: center; gap: 1px; font-size: 11px; font-weight: 600; color: var(--gd-primary); white-space: nowrap; }
 .gd-next-time { margin-top: 3px; font-size: 20px; font-weight: 800; color: var(--gd-ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .gd-next-name {
   margin-top: 1px; font-size: 14px; font-weight: 600; color: var(--gd-ink);
@@ -484,6 +566,19 @@ onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() 
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .gd-next-none { margin-top: 6px; font-size: 13px; color: var(--gd-ink-2); }
+
+/* ===== 课程数据加载骨架（Hero 下一节课 / 今日课程卡）：占位条尺寸对齐真实内容，卡片高度不跳变 ===== */
+.gd-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef2f8 25%, #e2e9f3 50%, #eef2f8 75%);
+  background-size: 200% 100%;
+  animation: gd-skel-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes gd-skel-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.gd-next-skel-time { margin-top: 5px; height: 20px; width: 56px; }
+.gd-next-skel-name { margin-top: 7px; height: 14px; width: 72%; }
+.gd-next-skel-meta { margin-top: 6px; height: 11px; width: 48%; }
+@media (prefers-reduced-motion: reduce) { .gd-skel { animation: none; } }
 
 .gd-ring-wrap { position: relative; width: 92px; height: 92px; flex: none; }
 .gd-ring { display: block; width: 100%; height: 100%; }
@@ -551,29 +646,15 @@ onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() 
 .gd-dim-list { list-style: none; margin: 0; padding: 0; }
 .gd-dim-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
 .gd-dim-row + .gd-dim-row { border-top: 1px solid var(--gd-border); }
+/* 五维成长骨架：行高对齐 gd-dim-row（5 行），画像返回时高度基本不跳 */
+.gd-dim-skel { display: flex; flex-direction: column; }
+.gd-dim-skel-row { height: 26px; border-radius: 6px; }
+.gd-dim-skel-row + .gd-dim-skel-row { margin-top: 7px; }
 .gd-dim-name { flex: none; width: 56px; font-size: 13px; color: var(--gd-ink-2); white-space: nowrap; }
 .gd-dim-track { flex: 1 1 auto; min-width: 0; height: 7px; border-radius: 999px; background: var(--gd-primary-track); overflow: hidden; }
 .gd-dim-fill { display: block; height: 100%; border-radius: 999px; background: var(--gd-primary); transition: width 0.7s cubic-bezier(.22,.61,.36,1); }
 .gd-dim-value { flex: none; width: 26px; text-align: right; font-size: 13px; font-weight: 600; color: var(--gd-ink); font-variant-numeric: tabular-nums; }
 .gd-empty-line { margin: 0; font-size: 12px; color: var(--gd-ink-3); padding: 4px 0; }
-
-/* ===== 我的学业 ===== */
-.gd-link-list { display: flex; flex-direction: column; }
-.gd-link-row {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; min-height: 44px; padding: 0 4px;
-  border: none; background: transparent; text-align: left;
-  font-family: inherit; color: inherit; cursor: pointer;
-  border-radius: var(--gd-radius-md);
-  transition: background-color .18s ease, transform .18s ease;
-}
-.gd-link-row + .gd-link-row { border-top: 1px solid var(--gd-border); }
-.gd-link-icon { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: var(--gd-primary); }
-.gd-link-title { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; color: var(--gd-ink); }
-.gd-link-chevron { flex: none; color: #c0c4cc; }
-.gd-link-row:hover { background: var(--gd-muted); }
-.gd-link-row:active { transform: scale(.99); }
-.gd-link-row:focus-visible { outline: 2px solid var(--gd-primary); outline-offset: 2px; }
 
 /* ===== 快捷空间 ===== */
 .gd-space-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; column-gap: 6px; }
@@ -604,6 +685,23 @@ onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() 
 
 .gd-ai-empty { display: flex; align-items: center; gap: 8px; color: var(--gd-ink-3); font-size: 12.5px; padding: 6px 0; }
 .gd-ai-empty-icon { color: #34d399; }
+/* LLM 洞察引导句：高度固定 50px（容纳 2 行 12px/1.45 文案 + 内边距），
+   异步到达或始终拿不到洞察时卡片高度都不变，避免推动下方卡片 */
+.gd-ai-insight {
+  display: flex; align-items: flex-start; gap: 6px;
+  height: 50px; box-sizing: border-box; margin-bottom: 8px; padding: 7px 9px;
+  border-radius: 8px; background: var(--gd-primary-soft); overflow: hidden;
+  font-size: 12px; line-height: 1.45; color: var(--gd-primary-strong);
+}
+.gd-ai-insight-ico { flex: none; margin-top: 2px; color: var(--gd-primary); }
+.gd-ai-insight-text {
+  flex: 1 1 auto; min-width: 0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.gd-ai-insight-skel { flex: 1 1 auto; height: 12px; margin-top: 3px; }
+/* AI 主动发现加载骨架：行高对齐 gd-insight-row（2 行文案 + 内边距），加载完成时高度基本不跳 */
+.gd-ai-skel-row { height: 50px; border-radius: 8px; }
+.gd-ai-skel-row + .gd-ai-skel-row { margin-top: 8px; }
 
 .gd-insight-list { display: flex; flex-direction: column; }
 .gd-insight-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; min-width: 0; }
@@ -625,6 +723,6 @@ onMounted(() => { loadCards(); loadOverview(); loadDiscover(); loadTodayTasks() 
 
 @media (prefers-reduced-motion: reduce) {
   .gd-ring-progress, .gd-dim-fill, .gd-collapse-ico { transition: none; }
-  .gd-link-row, .gd-space-item, .gd-icon-btn, .gd-mini-btn { transition: none; }
+  .gd-next.is-link, .gd-space-item, .gd-icon-btn, .gd-mini-btn { transition: none; }
 }
 </style>

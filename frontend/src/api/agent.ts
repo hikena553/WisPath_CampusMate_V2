@@ -156,8 +156,18 @@ export interface ProactiveAction {
   target_role: string
 }
 
-/** AI 主动发现驾驶舱：拉取当前角色相关的主动触达动作 */
-export async function fetchProactiveActions(): Promise<ProactiveAction[]> {
+/** 主动发现完整载荷：动作列表 + （服务端命中缓存时的）LLM 洞察 */
+export interface ProactiveFeed {
+  actions: ProactiveAction[]
+  insight: string | null
+}
+
+/**
+ * 拉取主动发现完整载荷。
+ * 后端只回规则文案以保证首屏速度；insight 仅在服务端 30 分钟缓存命中时非空，
+ * 未命中时前端再调 fetchProactiveInsight() 在后台补一句个性化洞察。
+ */
+export async function fetchProactiveFeed(): Promise<ProactiveFeed> {
   const headers: Record<string, string> = {}
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
@@ -165,12 +175,38 @@ export async function fetchProactiveActions(): Promise<ProactiveAction[]> {
     const resp = await fetch('/api/agent/proactive', { headers })
     if (resp.ok) {
       const data = await resp.json()
-      return data.actions || []
+      return { actions: data.actions || [], insight: data.insight ?? null }
     }
   } catch (e) {
     console.error('获取主动发现动作失败', e)
   }
-  return []
+  return { actions: [], insight: null }
+}
+
+/** AI 主动发现驾驶舱：拉取当前角色相关的主动触达动作 */
+export async function fetchProactiveActions(): Promise<ProactiveAction[]> {
+  return (await fetchProactiveFeed()).actions
+}
+
+/**
+ * AI 主动发现：LLM 个性化洞察。
+ * 服务端按「学生 + 动作指纹」缓存 30 分钟；未配置 LLM / 超时 / 异常均返回 null，
+ * 前端保持规则文案即可（调用方不得阻塞卡片渲染）。
+ */
+export async function fetchProactiveInsight(): Promise<string | null> {
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  try {
+    const resp = await fetch('/api/agent/proactive/insight', { headers })
+    if (resp.ok) {
+      const data = await resp.json()
+      return data.insight ?? null
+    }
+  } catch (e) {
+    console.error('获取 AI 洞察失败', e)
+  }
+  return null
 }
 
 

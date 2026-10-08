@@ -77,10 +77,10 @@
 
       <el-form :inline="true" :model="embedForm" class="embed-form" @submit.prevent>
         <el-form-item label="模型名称">
-          <el-input v-model="embedForm.model" placeholder="text-embedding-v3" style="width: 210px" clearable />
+          <el-input v-model="embedForm.model" placeholder="qwen3.7-text-embedding" style="width: 210px" clearable />
         </el-form-item>
         <el-form-item label="接口地址">
-          <el-input v-model="embedForm.base_url" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" style="width: 330px" clearable />
+          <el-input v-model="embedForm.base_url" placeholder="https://maas.qianwenaiapi.com/compatible-mode/v1" style="width: 330px" clearable />
         </el-form-item>
         <el-form-item label="API Key">
           <el-input

@@ -32,20 +32,22 @@ EMOTION_LABELS = {
     "fearful": "害怕", "disgusted": "厌恶", "surprised": "惊讶",
 }
 
-TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com"
+# 原生语音接口根地址：跟随 .env 的 LLM_BASE_URL 推导（TTS/ASR/多模态同域名）
+TOKEN_PLAN_BASE = settings.llm_native_base
 VOICE_STT_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/aigc/multimodal-generation/generation"
 VOICE_STT_MODEL = "qwen-audio-3.0-asr-flash"
 VOICE_TTS_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/audio/tts/SpeechSynthesizer"
-# Token Plan 套餐白名单的语音合成模型仅 plus 版；flash 不在套餐支持列表，
-# 调用会返回 404 Model not exist（此前曾因延迟切到 flash，受套餐限制切回 plus）
-VOICE_TTS_MODEL = "qwen-audio-3.0-tts-plus"
+# 语音合成模型：默认 flash（实测当前 Key 可用，返回 pcm 16kHz）。若所用套餐不包含
+# flash（历史上 Token Plan 白名单只放 plus），调用会返回 404 Model not exist，
+# 此时在系统设置中改用 plus，或把这里改回 qwen-audio-3.0-tts-plus。
+VOICE_TTS_MODEL = "qwen-audio-3.0-tts-flash"
 VOICE_TTS_VOICE = "longanhuan_v3.6"
 
-# ===================== TTS 引擎（开源豆包方案：Edge TTS 多音色 + Token Plan 备选） =====================
+# ===================== TTS 引擎（开源豆包方案：Edge TTS 多音色 + 千问原生 TTS 备选） =====================
 # Edge TTS（微软免费服务，无需 API Key，400+ 音色，其中中文普通话/粤语/
 # 台湾国语/东北、陕西口音共 14 个），作为默认语音合成引擎，解决多音色与
-# “语音播报没有声音”（Token Plan 受限/不稳定）两大问题；管理端仍可切换到
-# Token Plan（qwen-audio-3.0-tts-plus，精品中文音色）。
+# “语音播报没有声音”（套餐模型受限/不稳定）两大问题；管理端仍可切换到
+# 千问原生 TTS（qwen-audio-3.0-tts-flash，精品中文音色，见 VOICE_TTS_MODEL）。
 EDGE_TTS_DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
 
 # 中文音色静态兜底列表（在线 list_voices 获取失败时使用，与在线列表同源）
@@ -292,7 +294,7 @@ async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = N
 
 
 async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None, voice: str | None = None):
-    """调用 Token Plan 语音合成（qwen-audio-3.0-tts-plus），
+    """调用千问原生 TTS（VOICE_TTS_MODEL，默认 qwen-audio-3.0-tts-flash），
     流式下载音频文件，yield PCM 16kHz 16bit mono 分块（边下载边产出，首块尽早送达）。
     voice 参数可临时覆盖当前生效音色（如管理端试听）。"""
     api_key = _get_voice_api_key()
@@ -399,8 +401,8 @@ async def synthesize_speech(text: str, voice: str | None = None):
     """统一语音合成入口（开源豆包方案）：
 
     - 音色为 Edge 风格（以 Neural 结尾）→ Edge TTS（免费多音色，默认引擎）
-      内部自动重试 4 次（1/2/4s 退避），仍失败则自动降级 Token Plan 保证有声音
-    - 其余音色（longan 系列等）→ Token Plan（qwen-audio-3.0-tts-plus）
+      内部自动重试 4 次（1/2/4s 退避），仍失败则自动降级原生 TTS 保证有声音
+    - 其余音色（longan 系列等）→ 千问原生 TTS（VOICE_TTS_MODEL，默认 qwen-audio-3.0-tts-flash）
     yield：16kHz 16bit 单声道 PCM 分块
     """
     chosen = (voice or _get_tts_voice() or "").strip()

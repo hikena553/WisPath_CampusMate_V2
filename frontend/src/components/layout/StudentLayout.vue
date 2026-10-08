@@ -55,7 +55,10 @@
     </header>
     <main class="main-area" :class="{ 'has-bottom-bar': isMobile }">
       <router-view v-slot="{ Component }">
-        <Transition :name="pageTransition">
+        <!-- 两种过渡都用默认的「同时」模式：离场页都是绝对定位（脱离文档流），
+             因此新旧同时在场也不会互相挤压，只是各自做动画；
+             :duration 仅整屏推入显式兜底移除，卡片切换交给 Vue 自动检测 -->
+        <Transition :name="pageTransition" :duration="transitionDuration">
           <component :is="Component" />
         </Transition>
       </router-view>
@@ -67,11 +70,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getConversations } from '@/api/messages'
 import { getGroups } from '@/api/groups'
+import { getCourses } from '@/api/academic'
+import { getGrowthProfile } from '@/api/growth'
+import { fetchProactiveActions } from '@/api/agent'
+import { getToday } from '@/api/plan'
+import { studentDataCache } from '@/utils/studentDataCache'
+import type { Course } from '@/types'
 import { ChatDotRound, PictureFilled, Grid, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
@@ -81,7 +90,9 @@ const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
 
-// 快捷空间子页面：整屏推入/推出过渡（进入子页面=前进，离开子页面=返回）；其余路由不参与
+// 路由过渡分两种：
+// 1) 快捷空间子页面（学习计划/作品集/成长档案/情绪树洞）：整屏推入/退出（进入=前进，离开=返回）
+// 2) 其余同级页面切换（底部导航/顶栏之间，如校园资讯↔驾驶舱）：卡片式切换（新页浮起放大到位，旧页缩小退后）
 const quickPagePaths = ['/student/plan', '/student/portfolio', '/student/growth', '/student/emotion']
 const pageTransition = ref('')
 watch(
@@ -89,9 +100,15 @@ watch(
   (to, from) => {
     if (quickPagePaths.includes(to)) pageTransition.value = 'page-slide'
     else if (quickPagePaths.includes(from)) pageTransition.value = 'page-slide-back'
-    else pageTransition.value = ''
+    else pageTransition.value = 'page-card'
   },
   { flush: 'pre' }
+)
+
+/** 只有整屏推入需要显式时长兜底移除（离场页整屏滑出，见 animations.css）；
+    卡片切换交给 Vue 自动检测，与 CSS 时长精确对齐 */
+const transitionDuration = computed(() =>
+  pageTransition.value.startsWith('page-slide') ? 460 : undefined
 )
 
 // 移动端底部导航
@@ -129,9 +146,27 @@ async function pollUnread() {
   } catch {}
 }
 
+// 驾驶舱首屏数据预热：布局常驻，登录后空闲时先把课程/画像/AI 主动发现/待办灌入模块级缓存，
+// 这样首次切到驾驶舱也能首帧渲染真实内容，不会出现「骨架 → 内容」的高度跳变（卡片抽搐）
+let warmTimer: number | undefined
+function warmDashboardCache() {
+  // 已缓存或当前就在驾驶舱（页面自己会拉）则不重复请求
+  if (route.path === '/student/schedule') return
+  if (!studentDataCache.courses) void getCourses().then(list => { studentDataCache.courses = list as Course[] }).catch(() => {})
+  if (!studentDataCache.profile) void getGrowthProfile().then(p => { studentDataCache.profile = p }).catch(() => {})
+  if (!studentDataCache.actions) void fetchProactiveActions().then(all => { studentDataCache.actions = all.filter(a => a.target_role === 'student') }).catch(() => {})
+  if (!studentDataCache.tasks) void getToday().then(t => { studentDataCache.tasks = t }).catch(() => {})
+}
+
 onMounted(() => {
   pollUnread()
   setInterval(pollUnread, 5000)
+  // 延迟 1.2s 让当前页首屏请求先走，再后台预热
+  warmTimer = window.setTimeout(warmDashboardCache, 1200)
+})
+
+onUnmounted(() => {
+  if (warmTimer) window.clearTimeout(warmTimer)
 })
 
 function goTo(path: string) { router.push(path) }

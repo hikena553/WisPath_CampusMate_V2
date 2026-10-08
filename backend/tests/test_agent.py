@@ -128,11 +128,18 @@ def test_recommendations_without_history_returns_default(api, login_token):
 
 
 def test_proactive_structure(api, login_token):
-    """主动触达驾驶舱返回固定结构：actions/count/evaluated_at/trace_id。"""
+    """主动触达驾驶舱返回固定结构：actions/count/evaluated_at/trace_id(+insight)。
+
+    insight 为改造后新增字段：服务端 LLM 洞察缓存命中时给出文案，未命中/不可用为 null，
+    前端据此决定是否再调 /api/agent/proactive/insight 补齐。
+    """
     login = login_token(UserRole.STUDENT)
     resp = api.get("/api/agent/proactive", headers=login["headers"])
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert set(body) == {"actions", "count", "evaluated_at", "trace_id"}
+    assert set(body) == {"actions", "count", "evaluated_at", "trace_id", "insight"}
     assert body["count"] == len(body["actions"])
     assert body["trace_id"].startswith("prc-")
+    assert body["insight"] is None or isinstance(body["insight"], str)
+    # 学生端只应看到面向学生的动作（教师级预警不在此处下发）
+    assert all(a["target_role"] == "student" for a in body["actions"])

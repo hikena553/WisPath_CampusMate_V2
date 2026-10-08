@@ -1,21 +1,25 @@
 <template>
-  <div class="schedule-page">
+  <div ref="pageEl" class="schedule-page">
     <!-- ===== 移动端：驾驶舱主页（成长总览 + 内置学业功能区，子页面入口） ===== -->
-    <Transition name="subpage-slide" mode="out-in">
+    <!-- 方向感知的整屏推入/退出：forward=子页从右推入，back=主页从左滑回。
+         :duration 仅在确有过渡名（移动端整屏动画）时显式指定；名为空时交回 Vue 自动检测立即替换，
+         否则旧内容会在文档流里滞留同样的时长，与新内容上下叠放 -->
+    <Transition :name="subpageTransitionName" :duration="subpageTransitionName ? 460 : undefined">
     <div v-if="isMobile && activeTab === 'home'" key="home" class="dashboard-home">
       <GrowthDashboard
         :courses="courses"
         :current-week="currentWeek"
         :period-times="periodTimes"
         :is-holiday="isHoliday"
-        @open="tab => activeTab = tab"
+        :courses-loading="!scheduleReady"
+        @open="openSubPage"
       />
     </div>
     <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 ===== -->
     <div v-else key="content" class="content-row">
       <div class="content-main">
         <!-- 移动端子页面返回栏 -->
-        <div v-if="isMobile" class="subpage-bar" @click="activeTab = 'home'">
+        <div v-if="isMobile" class="subpage-bar" @click="backToHome">
           <el-icon :size="18"><ArrowLeft /></el-icon>
           <span class="subpage-title">{{ subPageTitle }}</span>
           <span class="subpage-spacer"></span>
@@ -872,13 +876,13 @@
     </div>
     <!-- ===== 右侧垂直标签栏（桌面端），移动端由驾驶舱入口卡片代替 ===== -->
     <div class="page-tabs" v-if="!isMobile">
-      <div :class="['page-tab', { active: activeTab === 'schedule' }]" @click="activeTab = 'schedule'">
+      <div :class="['page-tab', { active: activeTab === 'schedule' }]" @click="openSubPage('schedule')">
         <el-icon><Calendar /></el-icon> 课程表
       </div>
-      <div :class="['page-tab', { active: activeTab === 'grades' }]" @click="activeTab = 'grades'">
+      <div :class="['page-tab', { active: activeTab === 'grades' }]" @click="openSubPage('grades')">
         <el-icon><DataLine /></el-icon> 成绩分析
       </div>
-      <div :class="['page-tab', { active: activeTab === 'growth' }]" @click="activeTab = 'growth'">
+      <div :class="['page-tab', { active: activeTab === 'growth' }]" @click="openSubPage('growth')">
         <el-icon><TrendCharts /></el-icon> 成长轨迹
       </div>
       <div class="page-tab" @click="goPlan">
@@ -911,6 +915,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import type { Course, Grade, Exam } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
+import { studentDataCache } from '@/utils/studentDataCache'
 import { useResponsive } from '@/composables/useResponsive'
 import { getGrowthRecords, createGrowthRecord, getGrowthProfile, updateSkills, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
 import type { GrowthProfile, StudentProject } from '@/api/growth'
@@ -943,6 +948,37 @@ const subPageTitle = computed(() => {
   const map: Record<string, string> = { schedule: '课程表', grades: '成绩分析', growth: '成长轨迹' }
   return map[activeTab.value] || '学业中心'
 })
+
+// ===== 驾驶舱主页 ↔ 学业子页面：方向感知的整屏推入/推出 =====
+// forward：进入子页面——新页保持文档流、铺不透明底色，从右侧滑入覆盖，主页向左视差让位
+// back：返回主页——主页从左侧滑回，子页向右退出（与 animations.css 的 page-slide / page-slide-back 同一语言）
+// 内层 tab-fade 无需抑制：整屏分支翻转时，离场子树是冻结快照（内层 v-if 不再求值），
+// 进场子树为全新挂载（Transition 初始渲染默认不播动画），二者都不会与外层动画叠加
+const navDir = ref<'forward' | 'back'>('forward')
+/** 桌面端不参与整屏过渡（空 name → 无过渡类，直接换内容，避免 resize 翻转时桌面误播动画） */
+const subpageTransitionName = computed(() =>
+  isMobile.value ? (navDir.value === 'back' ? 'subpage-slide-back' : 'subpage-slide') : ''
+)
+
+/** .schedule-page 是整页滚动容器；离场元素转绝对定位后以内容原点对齐，
+    非零滚动会错位，且新页/主页统一从顶部出现更符合移动端导航习惯 */
+const pageEl = ref<HTMLElement | null>(null)
+function resetPageScroll() { if (pageEl.value) pageEl.value.scrollTop = 0 }
+
+function openSubPage(tab: string) {
+  if (activeTab.value === tab) return
+  if (isMobile.value && activeTab.value === 'home') {
+    navDir.value = 'forward'
+    resetPageScroll()
+  }
+  activeTab.value = tab
+}
+function backToHome() {
+  if (activeTab.value === 'home') return
+  navDir.value = 'back'
+  if (isMobile.value) resetPageScroll()
+  activeTab.value = 'home'
+}
 
 // ===== 移动端：课程画像折叠（默认收起，点击标题行展开；桌面端恒为展开） =====
 const courseProfileOpen = ref(false)
@@ -1541,6 +1577,11 @@ onMounted(() => {
   loadGoals()
   // 只拉当前页签需要的数据；移动端首页由 GrowthDashboard 自己取数，父组件不发任何请求
   void ensureTabData(activeTab.value)
+  // 课程数据随首屏立即并行加载：驾驶舱 Hero「下一节课」/今日课程时间线依赖它，
+  // 加载期间由 GrowthDashboard 骨架占位（courses-loading），避免先闪空态再出内容
+  void ensureTabData('schedule')
+  // 其余子页内容后台预取：首屏让行后错峰拉成绩（含 AI 学情分析）与成长档案，进子页即读
+  scheduleSubPagePrefetch()
 })
 
 /** 页签切换时补拉该页签的数据（每个页签只请求一次） */
@@ -1548,11 +1589,8 @@ watch(activeTab, (tab) => {
   void ensureTabData(tab)
 })
 
-/** 课程表页签：只需要课程数据 */
-async function loadScheduleData() {
-  if (scheduleReady.value) return
-  const all = (await fetchCourses().catch(() => [])) as Course[]
-  allCourses.value = all
+/** 由当前课程集推导周次基准（缓存路径与网络路径都要算，否则 Hero 会先按第 1 周过滤而闪空态） */
+function computeWeekBase() {
   const realWeek = calcCurrentRealWeek()
   if (courses.value.length) {
     baseWeek.value = Math.min(...courses.value.map(c => c.week_start))
@@ -1561,6 +1599,25 @@ async function loadScheduleData() {
     baseWeek.value = 1
     weekOffset.value = realWeek - 1
   }
+}
+
+/** 课程表页签：只需要课程数据 */
+async function loadScheduleData() {
+  if (scheduleReady.value) return
+  // 命中缓存先立即渲染（含空数组：上轮确实无课就直接显示空态），首帧即真实内容、不闪骨架，
+  // 避免「骨架 → 内容」的高度跳变叠加在页面切换动画上（表现为下方卡片被推动的抽搐）
+  if (studentDataCache.courses) {
+    allCourses.value = studentDataCache.courses
+    computeWeekBase()
+    scheduleReady.value = true
+  }
+  // 请求失败时返回 null（不清空缓存、不把失败结果当成「确实无课」缓存下来）
+  const all = (await fetchCourses().catch(() => null)) as Course[] | null
+  if (all) {
+    studentDataCache.courses = all
+    allCourses.value = all
+  }
+  computeWeekBase()
   scheduleReady.value = true
 }
 
@@ -1603,12 +1660,34 @@ async function loadGrowthData() {
   growthLoaded.value = true
 }
 
+/** 页签数据单飞（single-flight）：按需加载与后台预取并发时复用同一次请求，避免重复打接口。
+    各加载器自带幂等守卫（scheduleReady / gradesReady / growthLoaded）且内部已吞错（总会 resolve），
+    失败也不会悬挂后续调用 */
+const tabLoadPromises: Partial<Record<'schedule' | 'grades' | 'growth', Promise<void>>> = {}
 function ensureTabData(tab: string): Promise<void> {
-  if (tab === 'schedule') return loadScheduleData()
-  if (tab === 'grades') return loadGradesData()
-  if (tab === 'growth') return loadGrowthData()
+  if (tab === 'schedule') return (tabLoadPromises.schedule ??= loadScheduleData())
+  if (tab === 'grades') return (tabLoadPromises.grades ??= loadGradesData())
+  if (tab === 'growth') return (tabLoadPromises.growth ??= loadGrowthData())
   return Promise.resolve()
 }
+
+// ===== 子页内容后台预取 =====
+// 课程数据已在 onMounted 随首屏立即加载（驾驶舱 Hero 依赖）；此处只错峰预取其余子页：
+// 1.6s 成绩数据：loadGradesData 在数据就绪后自动触发 AI 学情分析（LLM 流式生成），
+// 提前开始意味着用户进入成绩分析时内容已就绪或接近完成；同刻并行拉成长档案数据。
+// 用户若抢在预取前点入子页，按需加载照常生效且与预取单飞复用，不会重复请求；
+// 卸载时清理定时器，已在途的 AI 流会写入 useAiAnalysis 的模块级缓存，下次进入秒开。
+const prefetchTimers: number[] = []
+function scheduleSubPagePrefetch() {
+  prefetchTimers.push(window.setTimeout(() => {
+    void ensureTabData('grades')
+    void ensureTabData('growth')
+  }, 1600))
+}
+onUnmounted(() => {
+  prefetchTimers.forEach(t => window.clearTimeout(t))
+  prefetchTimers.length = 0
+})
 
 watch(semesters, (list) => {
   if (list.length && !list.includes(selectedSem.value)) { selectedSem.value = list[0] }
@@ -1618,14 +1697,19 @@ watch(semesters, (list) => {
 watch(() => route.query.tab, (val) => {
   if (val && typeof val === 'string') {
     const t = val as string
-    if ((tabKeys as readonly string[]).includes(t)) activeTab.value = t
-    else if (t === 'home' && isMobile.value) activeTab.value = 'home'
+    if ((tabKeys as readonly string[]).includes(t)) openSubPage(t)
+    else if (t === 'home' && isMobile.value) backToHome()
   }
 })
 </script>
 
 <style scoped>
-.schedule-page { height: 100%; width: 100%; padding: 12px 16px 0; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+.schedule-page {
+  height: 100%; width: 100%; padding: 12px 16px 0; display: flex; flex-direction: column; box-sizing: border-box;
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none;
+  /* 整屏推入/推出过渡：离场元素转绝对定位后的对齐基准（随移动端媒体查询同步覆盖） */
+  position: relative; --sp-pad-t: 12px; --sp-pad-x: 16px;
+}
 .schedule-page::-webkit-scrollbar { display: none; }
 
 /* AI 成长驾驶舱区块（学业中心移动端顶部） */
@@ -1649,13 +1733,41 @@ watch(() => route.query.tab, (val) => {
 .tab-fade-enter-from { opacity: 0; transform: translateY(14px) scale(.995); }
 .tab-fade-leave-to { opacity: 0; transform: translateY(-8px) scale(.995); }
 
-/* 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：整屏左右推入 / 退出 */
-.subpage-slide-enter-active { transition: opacity .34s cubic-bezier(.16,1,.3,1), transform .34s cubic-bezier(.16,1,.3,1); }
-.subpage-slide-leave-active { transition: opacity .24s cubic-bezier(.4,0,.6,1), transform .24s cubic-bezier(.4,0,.6,1); }
-.subpage-slide-enter-from { opacity: 0; transform: translateX(100%); }
-.subpage-slide-leave-to { opacity: 0; transform: translateX(-100%); }
+/* ===== 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：方向感知的整屏推入/退出 =====
+   「传送带」式推入：进场页与离场页以相同时长/曲线整屏反向移动，两页边缘始终衔接，
+   旧页整屏滑出视野（±100%）并淡出，不在屏幕侧边留停驻位——此前 ±28% 视差让位的
+   设计会让旧页停在左右两侧直到动画结束（且进场结束后 z-index:1 的定位离场元素
+   反盖在静态新页之上、拦截点击），表现为「跳转完左右停着页面」，已废弃。
+   关键声明带 !important 防级联覆盖；离场页 pointer-events:none 杜绝遮挡误触；
+   有过渡名时由模板上的 :duration 显式兜底移除（名为空时交回 Vue 自动检测立即替换）。 */
+.subpage-slide-enter-active,
+.subpage-slide-back-enter-active {
+  position: relative !important;
+  z-index: 2 !important;
+  background: #f5faff;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  will-change: transform;
+}
+.subpage-slide-leave-active,
+.subpage-slide-back-leave-active {
+  position: absolute !important;
+  top: var(--sp-pad-t, 12px) !important;
+  left: var(--sp-pad-x, 16px) !important;
+  right: var(--sp-pad-x, 16px) !important;
+  bottom: 0 !important;
+  z-index: 1 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important, opacity 0.45s ease !important;
+  will-change: transform, opacity;
+}
+.subpage-slide-enter-from { transform: translateX(100%) !important; }
+.subpage-slide-leave-to { transform: translateX(-100%) !important; opacity: 0 !important; }
+.subpage-slide-back-enter-from { transform: translateX(-100%) !important; }
+.subpage-slide-back-leave-to { transform: translateX(100%) !important; opacity: 0 !important; }
 @media (prefers-reduced-motion: reduce) {
-  .subpage-slide-enter-active, .subpage-slide-leave-active { transition: none; }
+  .subpage-slide-enter-active, .subpage-slide-leave-active,
+  .subpage-slide-back-enter-active, .subpage-slide-back-leave-active { transition: none !important; }
 }
 
 /* ===== 右侧垂直标签栏 ===== */
@@ -2114,7 +2226,7 @@ watch(() => route.query.tab, (val) => {
    这里合并为一块：只在该媒体块生效的规则（v-if="!isMobile" 的 .page-tabs、
    已废弃的 .semester-link / .semester-action-card 等）已删除。 */
 @media (max-width: 767px) {
-  .schedule-page { padding: 8px 12px 0; }
+  .schedule-page { padding: 8px 12px 0; --sp-pad-t: 8px; --sp-pad-x: 12px; }
   .content-main { max-width: 100%; }
   .content-row { flex-direction: column; }
 

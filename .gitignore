@@ -148,3 +148,29 @@ backend/vendor_packages/
 campusmate-v3-implementation-plan/
 campusmate-v3-upgrade-plan/
 campusmate-audit/
+
+# ---------- Generated runtime junk (added 2026-10-08 cleanup) ----------
+# Backend temp files written by tooling / libraries (random 8-char names, zero or "blat" content)
+backend/tmp*
+backend/[0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z]
+# jieba runtime cache (9 MB, regenerated on demand)
+backend/jieba.cache
+# pytest cache dirs that appear when the default cache dir is unwritable
+backend/pytest-cache-files-*/
+pytest-cache-files-*/
+# SQLite side files (main *.db already ignored above)
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ---------- Local probe artifacts (screenshots, browser profiles) ----------
+frontend/probe-profile-*/
+frontend/probe-*.png
+frontend/real-*.png
+
+# ---------- Working snapshots / audit material (keep on disk, out of git) ----------
+out/
+_recovery_audit/
+campus-cockpit/
+_cleanup_backup_manifest.txt
+_acl_recovery/

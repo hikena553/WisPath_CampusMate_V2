@@ -20,14 +20,23 @@ from app.utils.enum_helpers import safe_enum_val
 logger = logging.getLogger(__name__)
 
 
+def _naive_utc(dt: datetime | None) -> datetime | None:
+    """统一成 naive UTC：库内 DateTime 不存时区（读出来是 naive），
+    直接与 aware now 相减会抛 TypeError，导致画像刷新整批静默失败。"""
+    if dt is None:
+        return None
+    return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
+
 def _detect_behavioral_patterns(db, student_id: int, now=None) -> dict:
     if now is None:
         now = datetime.now(timezone.utc)
+    now_naive = _naive_utc(now)
     today = date.today()
 
     leave_count = db.query(LeaveRequest).filter(
         LeaveRequest.student_id == student_id,
-        LeaveRequest.created_at >= now - timedelta(days=90),
+        LeaveRequest.created_at >= now_naive - timedelta(days=90),
     ).count()
     leave_frequency = "high" if leave_count >= 5 else "medium" if leave_count >= 2 else "low"
 
@@ -55,14 +64,15 @@ def _detect_behavioral_patterns(db, student_id: int, now=None) -> dict:
 
     convs_90d = db.query(Conversation).filter(
         Conversation.user_id == student_id,
-        Conversation.created_at >= now - timedelta(days=90),
+        Conversation.created_at >= now_naive - timedelta(days=90),
     ).count()
     engagement_level = "high" if convs_90d > 20 else "medium" if convs_90d > 5 else "low"
 
     last_conv = db.query(Conversation).filter(
         Conversation.user_id == student_id
     ).order_by(Conversation.updated_at.desc()).first()
-    inactive_days = (now - last_conv.updated_at).days if last_conv else 999
+    last_at = _naive_utc(last_conv.updated_at) if last_conv else None
+    inactive_days = max(0, (now_naive - last_at).days) if last_at else 999
 
     return {
         "leave_frequency": leave_frequency,

@@ -200,7 +200,7 @@ def speech_to_text(audio_bytes: bytes, filename: str) -> str:
         },
         "parameters": {"format": fmt, "sample_rate": "16000"},
     }
-    url = "https://token-plan.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    url = f"{settings.llm_native_base}/api/v1/services/aigc/multimodal-generation/generation"
     headers = {"Authorization": f"Bearer {config['api_key']}", "Content-Type": "application/json"}
     try:
         resp = httpx.post(url, headers=headers, json=payload, timeout=120)
@@ -311,6 +311,30 @@ async def recognize_image(image_url: str, hint: str = "") -> dict:
     parsed["success"] = True
     logger.info("图片识别成功: category=%s name=%s", parsed.get("category"), parsed.get("name"))
     return parsed
+
+
+async def complete(prompt: str, *, model: str | None = None,
+                   temperature: float | None = None, max_tokens: int | None = None,
+                   extra_body: dict | None = None) -> str:
+    """一次性（非流式）补全，供内部服务生成短文案使用（如主动发现洞察）。
+
+    与 agent 普通对话保持同一口径：
+    - 模型优先 agent_model；
+    - 默认显式关闭思考（``thinking: disabled``）——本项目所用推理模型在默认/思考模式下
+      首字极慢（实测一句 20 token 回复约 8s，开思考时 20s 都出不来），关闭后短文案秒回。
+    未配置 API Key 时抛 RuntimeError（调用方据此快速降级，不做网络请求）。
+    """
+    config = _get_llm_config()
+    if not config.get('api_key'):
+        raise RuntimeError("LLM 未配置 API Key，请在系统设置中配置")
+    resp = await _get_client().chat.completions.create(
+        model=model or config.get('agent_model') or config['model'],
+        messages=[{"role": "user", "content": prompt}],
+        temperature=config['temperature'] if temperature is None else temperature,
+        max_tokens=config['max_tokens'] if max_tokens is None else max_tokens,
+        extra_body=extra_body if extra_body is not None else {"thinking": {"type": "disabled"}},
+    )
+    return (resp.choices[0].message.content or "").strip()
 
 
 async def chat_stream(messages: list[dict]):

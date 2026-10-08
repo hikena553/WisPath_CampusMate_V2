@@ -127,10 +127,13 @@
 .stagger-9 { animation-delay: 0.27s; animation-fill-mode: both; }
 .stagger-10 { animation-delay: 0.3s; animation-fill-mode: both; }
 
-/* Page Transition - 快捷空间子页面「整屏推入/推出」（覆盖式 Push）
-   前进(page-slide)：新页从屏幕右侧滑入并覆盖，旧页向左让位
-   返回(page-slide-back)：新页从左侧滑入，旧页向右退出
-   进入页留在文档流中（relative + z-index 覆盖旧页），旧页绝对定位脱离文档流避免撑开布局 */
+/* Page Transition - 快捷空间子页面「整屏推入/推出」（传送带式 Push）
+   前进(page-slide)：新页从屏幕右侧整屏滑入，旧页同速整屏滑出（两页边缘衔接）
+   返回(page-slide-back)：新页从左侧滑入，旧页向右整屏滑出
+   进入页留在文档流中（relative + z-index 覆盖旧页），旧页绝对定位脱离文档流避免撑开布局。
+   旧页整屏滑出（±100%）并淡出：不留 ±28% 停驻位（旧设计会让页面停在屏幕侧边，
+   表现为「跳转完左右停着页面」）；离场页 pointer-events:none 防止遮挡新页点击。
+   配合 StudentLayout 中 Transition 的 :duration 显式超时，确保离场元素必定被移除。 */
 .page-slide-enter-active,
 .page-slide-back-enter-active {
   position: relative !important;
@@ -144,15 +147,49 @@
   position: absolute !important;
   inset: 0 !important;
   z-index: 1 !important;
+  pointer-events: none !important;
   transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important, opacity 0.45s ease !important;
   will-change: transform, opacity;
 }
 .page-slide-enter-from { transform: translateX(100%) !important; }
-.page-slide-leave-to { transform: translateX(-28%) !important; opacity: 0.7 !important; }
+.page-slide-leave-to { transform: translateX(-100%) !important; opacity: 0 !important; }
 .page-slide-back-enter-from { transform: translateX(-100%) !important; }
-.page-slide-back-leave-to { transform: translateX(28%) !important; opacity: 0.7 !important; }
+.page-slide-back-leave-to { transform: translateX(100%) !important; opacity: 0 !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .page-slide-enter-active, .page-slide-leave-active,
   .page-slide-back-enter-active, .page-slide-back-leave-active { transition: none !important; }
+}
+
+/* Page Transition - 同级页面切换（底部导航 / 顶栏之间，如校园资讯 ↔ 驾驶舱 ↔ 工作台）：卡片式切换
+   新页像一张卡片从下方浮起并放大到位：scale(.94) + 上移 16px + 投影 → 铺满，
+   旧页作为底下的卡片略微缩小（scale .97）并淡出，形成「抽换卡片」的层次感。
+   旧页绝对定位脱离文档流，因此新旧同时在场也不会互相挤压（此前的叠页问题即源于两页都在流内）；
+   离场页 pointer-events:none，动画期间不会挡住新页的点击。 */
+.page-card-enter-active {
+  position: relative !important;
+  z-index: 2 !important;
+  background: #f5faff;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important,
+    opacity 0.3s ease !important,
+    box-shadow 0.3s ease !important;
+  will-change: transform, opacity;
+}
+.page-card-enter-from {
+  transform: scale(0.94) translateY(16px) !important;
+  opacity: 0 !important;
+  box-shadow: 0 10px 30px rgba(15, 40, 80, 0.14) !important;
+}
+.page-card-leave-active {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  transition: transform 0.22s ease !important, opacity 0.22s ease !important;
+  will-change: transform, opacity;
+}
+.page-card-leave-to { transform: scale(0.97) !important; opacity: 0 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-card-leave-active, .page-card-enter-active { transition: none !important; }
 }

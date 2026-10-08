@@ -177,7 +177,7 @@ class EmbeddingConfigOut(BaseModel):
 
 
 class EmbeddingConfigBody(BaseModel):
-    model: str = ""          # 空串 = 使用默认 text-embedding-v3
+    model: str = ""          # 空串 = 使用默认 qwen3.7-text-embedding
     base_url: str = ""       # 空串 = 沿用环境变量 LLM_BASE_URL
     api_key: str = ""        # 明文，非空时加密存储
 
@@ -198,7 +198,7 @@ def embedding_get_config(
 
     using_fallback = (not base or not api_key) and bool(env_key and env_base)
     effective_base = base or env_base
-    effective_model = model or "text-embedding-v3"
+    effective_model = model or "qwen3.7-text-embedding"
     return EmbeddingConfigOut(
         model=effective_model,
         base_url=effective_base or "",

@@ -2,7 +2,7 @@
 
 v4.0 升级：
 - 使用 jieba 中文分词器进行查询分词（未安装时自动回退空白切分）
-- 可选启用 DashScope text-embedding-v3 文本向量模型，对文档分块建立向量索引，
+- 可选启用千问 MaaS 向量模型（默认 qwen3.7-text-embedding，1024 维）对文档分块建立向量索引，
   检索时执行「关键词检索 + 向量语义检索」的混合排序
 - search_knowledge 返回 (results, meta)，meta 中携带检索引擎/分词/向量模型信息，
   供管理端页面展示「检索或向量分词的模型」
@@ -25,7 +25,8 @@ UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "docume
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------- 分词模型（jieba） ----------
-_EMBEDDING_MODEL = "text-embedding-v3"
+# 文本向量模型默认值（管理端 embedding_model 未配置时生效），调用 `${LLM_BASE_URL}/embeddings`
+_EMBEDDING_MODEL = "qwen3.7-text-embedding"
 _EMBEDDING_ENABLED_ENV = "DASHSCOPE_API_KEY"
 
 _STOPWORDS = {

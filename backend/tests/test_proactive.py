@@ -74,13 +74,15 @@ def test_crisis_low_risk_or_resolved_no_action(db, make_user):
     _add_profile(db, stu_low.id, risk=50.0)
     _add_crisis(db, stu_low.id)
     db.commit()
-    assert proactive_engine.evaluate_student(db, stu_low) == []
+    # 改造后学生会拿到基于真实信号的动作（如低优先级的"完善成长档案"），
+    # 本用例只保证"不产生危机类动作"这一语义
+    assert all(a.trigger != "crisis_escalation" for a in proactive_engine.evaluate_student(db, stu_low))
 
     stu_resolved = make_user()
     _add_profile(db, stu_resolved.id, risk=90.0)
     _add_crisis(db, stu_resolved.id, resolved=True)
     db.commit()
-    assert proactive_engine.evaluate_student(db, stu_resolved) == []
+    assert all(a.trigger != "crisis_escalation" for a in proactive_engine.evaluate_student(db, stu_resolved))
 
 
 def test_inactivity_trigger(db, make_user):
@@ -95,13 +97,18 @@ def test_inactivity_trigger(db, make_user):
 
 
 def test_grade_drop_trigger_and_priority_sort(db, make_user):
-    """成绩下滑 + 久未互动同时命中：按优先级降序且最多 3 条。"""
+    """成绩下滑 + 久未互动同时命中：按优先级降序且最多 3 条。
+
+    注意：改造后新增了低优先级的成长档案引导（growth_record_gap, 26），
+    因此这里只断言前两条与总量上限，不再要求动作恰好只有两条。
+    """
     stu = make_user()
     _add_profile(db, stu.id, academic=40.0, inactive_days=30, trajectory="declining")
     db.commit()
 
     actions = proactive_engine.evaluate_student(db, stu)
-    assert [a.trigger for a in actions] == ["grade_drop", "prolonged_inactivity"]
+    triggers = [a.trigger for a in actions]
+    assert triggers[:2] == ["grade_drop", "prolonged_inactivity"]
     assert actions[0].priority >= actions[1].priority
     assert len(actions) <= 3
 

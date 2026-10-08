@@ -13,10 +13,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    # 千问 MaaS 兼容模式端点（对话/视觉/向量共用）；语音走同域名的原生接口
+    LLM_BASE_URL: str = "https://maas.qianwenaiapi.com/compatible-mode/v1"
     DASHSCOPE_API_KEY: str = ""
-    LLM_MODEL: str = "deepseek-v4-flash-0731"
-    LLM_AGENT_MODEL: str = "deepseek-v4-flash-0731"
+    LLM_MODEL: str = "qwen3.7-flash-2026-07-15"
+    LLM_AGENT_MODEL: str = "qwen3.7-flash-2026-07-15"
     LLM_VISION_MODEL: str = "qwen3.8-max"
     LLM_AGENT_TEMPERATURE: float = 0.7
     LLM_AGENT_MAX_TOKENS: int = 10000
@@ -81,6 +82,19 @@ class Settings(BaseSettings):
     @property
     def llm_api_key(self) -> str:
         return self.LLM_API_KEY or environ.get("OPENAI_API_KEY", "")
+
+    @property
+    def llm_native_base(self) -> str:
+        """由兼容模式端点推导原生接口根地址（TTS/ASR/多模态走 `${base}/api/v1/...`）。
+
+        例：https://maas.qianwenaiapi.com/compatible-mode/v1 -> https://maas.qianwenaiapi.com
+        修改 .env 的 LLM_BASE_URL 即可整体迁移，避免在多处硬编码域名。
+        """
+        base = (self.LLM_BASE_URL or "").strip().rstrip("/")
+        suffix = "/compatible-mode/v1"
+        if base.endswith(suffix):
+            return base[: -len(suffix)]
+        return base
 
     @property
     def is_secure(self) -> bool:

@@ -21,6 +21,7 @@ from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
 from app.services.llm_service import speech_to_text, _get_client, _get_llm_config, build_system_prompt
 from app.services.proactive_engine import evaluate_student
+from app.services.proactive_insight import generate_insight, get_cached_insight
 from app.utils.rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -422,25 +423,55 @@ async def get_recommendations(
 async def get_proactive_actions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """AI 主动发现驾驶舱接口（v3.0 实施文档 §4/§6）
 
-    学生：返回自己的主动触达动作（成长里程碑、久未互动关怀等）
+    学生：返回自己的主动触达动作（今日课程/临考提醒/成绩关注/待办逾期/请假结果/成长里程碑等）
     教师/管理员：返回所带/全体学生的预警与学业关注动作（危机升级、成绩下滑）
+
+    动作来自真实业务信号（课表/考试/成绩/待办/成长档案/请假/对话活跃度），
+    不再依赖只有管理员手动刷新才生成的画像快照；本接口只回规则文案以保证首屏速度，
+    LLM 个性化洞察由 /proactive/insight 异步补充（命中 30 分钟缓存时这里直接附带）。
     """
     from datetime import datetime, timezone
 
     actions = []
     if user.role == UserRole.STUDENT:
-        actions = [a for a in evaluate_student(db, user) if a.target_role == "student"]
+        # 先按受众过滤再截断：避免教师级动作挤占学生可见名额
+        actions = evaluate_student(db, user, target_role="student")
     elif user.role in (UserRole.TEACHER, UserRole.ADMIN):
         students = db.query(User).filter(User.role == UserRole.STUDENT)
         if user.role == UserRole.TEACHER:
             students = students.filter(User.tutor_id == user.id)
         for student in students.all():
-            actions.extend(a for a in evaluate_student(db, student) if a.target_role == "teacher")
+            actions.extend(evaluate_student(db, student, target_role="teacher"))
         actions.sort(key=lambda a: a.priority, reverse=True)
+
+    insight = get_cached_insight(user, actions) if (user.role == UserRole.STUDENT and actions) else None
 
     return {
         "actions": actions[:10],
         "count": len(actions),
+        "insight": insight,
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
         "trace_id": f"prc-{user.id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}",
     }
+
+
+@router.get("/proactive/insight")
+async def get_proactive_insight(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """学生端 AI 洞察（LLM）：卡片先用规则文案渲染，本接口在后台补一句个性化提醒。
+
+    服务端按「学生 + 动作指纹」缓存 30 分钟；未配置 LLM / 超时 / 异常一律返回 null，
+    前端保持规则文案即可（不阻塞、不报错）。
+    """
+    if user.role != UserRole.STUDENT:
+        return {"insight": None, "cached": False}
+
+    actions = evaluate_student(db, user, target_role="student")
+    if not actions:
+        return {"insight": None, "cached": False}
+
+    cached = get_cached_insight(user, actions)
+    if cached:
+        return {"insight": cached, "cached": True}
+
+    insight = await generate_insight(user, actions)
+    return {"insight": insight, "cached": False}
