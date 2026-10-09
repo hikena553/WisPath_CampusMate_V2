@@ -7,22 +7,22 @@
   >
     <template #header>
       <div class="dialog-header">
-        <img src="/images/mascot.png" alt="绵小城" class="dialog-header-mascot" />
+        <img :src="siteMascot" :alt="siteName" class="dialog-header-mascot" />
         <div class="dialog-header-text">
           <div class="dialog-title">班级情况分析</div>
-          <div class="dialog-sub">绵小城基于班级图表与学生成长数据智能生成</div>
+          <div class="dialog-sub">{{ siteName }}基于班级图表与学生成长数据智能生成</div>
         </div>
       </div>
     </template>
     <div class="dialog-content">
       <div v-if="analysisLoading" class="dialog-loading">
-        <img src="/images/mascot.png" alt="绵小城" class="dialog-loading-mascot" />
+        <img :src="siteMascot" :alt="siteName" class="dialog-loading-mascot" />
         <p class="dialog-loading-text">{{ analysisLoadingText }}</p>
       </div>
       <div v-else-if="analysisResult" class="analysis-report markdown-body" v-html="renderedAnalysisHtml"></div>
       <div v-else class="dialog-empty">
         <el-icon class="dialog-empty-icon"><MagicStick /></el-icon>
-        <p>点击下方按钮，绵小城将为您生成班级分析报告</p>
+        <p>点击下方按钮，{{ siteName }}将为您生成班级分析报告</p>
       </div>
     </div>
     <template #footer>
@@ -40,6 +40,10 @@
 import { ref, computed, watch } from 'vue'
 import { MagicStick, Refresh } from '@element-plus/icons-vue'
 import { renderMarkdown } from '@/utils/markdown'
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
+// 吉祥物与站点名称取自站点配置：管理端变更后教师端同步
+const { siteMascot, siteName, agentName } = useSiteConfig()
 
 // 桌宠分析弹窗：AI 状态（loading/result）由父级 useAiAnalysis 实例持有（桌面分析图表区共用），
 // 分析编排依赖（analyze/loadProfiles/buildPrompt）通过 props 注入，保证与父级同一份数据状态
@@ -61,7 +65,7 @@ const visibleModel = computed({
   set: (v: boolean) => emit('update:visible', v),
 })
 
-const analysisLoadingText = ref('绵小城正在深度分析班级情况...')
+const analysisLoadingText = ref(`${agentName.value}正在深度分析班级情况...`)
 
 const renderedAnalysisHtml = computed(() => renderMarkdown(props.analysisResult))
 
@@ -75,9 +79,9 @@ watch(() => props.visible, (open) => {
 /** 重新/开始分析 */
 async function startMascotAnalysis() {
   if (props.analysisLoading) return
-  analysisLoadingText.value = '绵小城正在收集班级数据与学生成长记录...'
+  analysisLoadingText.value = `${agentName.value}正在收集班级数据与学生成长记录...`
   await props.loadProfiles()
-  analysisLoadingText.value = '绵小城正在深度分析班级情况...'
+  analysisLoadingText.value = `${agentName.value}正在深度分析班级情况...`
   await props.analyze(props.buildPrompt(), { skipCache: true })
 }
 </script>

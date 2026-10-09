@@ -2,17 +2,9 @@
   <div class="tui-page">
     <!-- 移动端吸顶品牌栏（「更多」为底部页签页，无返回键） -->
     <header v-if="isMobile" class="tui-appbar tui-appbar-brand">
-      <button
-        class="tui-mascot tui-mascot-md tui-mascot-float tui-mascot-action"
-        type="button"
-        aria-label="去找绵小城"
-        @click="router.push('/teacher/agent')"
-      >
-        <img src="/images/mascot.png" alt="绵小城吉祥物" />
-      </button>
       <div class="tui-appbar-title">
         全部功能
-        <span class="tui-appbar-sub">绵小城 · 按职能分区，点击直达</span>
+        <span class="tui-appbar-sub">{{ siteName }} · 按职能分区，点击直达</span>
       </div>
       <div class="tui-appbar-actions">
         <el-button text circle :aria-label="searchOpen ? '收起搜索' : '搜索'" @click="toggleSearch">
@@ -24,17 +16,9 @@
     <div class="tui-content">
       <header v-if="!isMobile" class="tui-header tui-header-brand">
         <div class="tui-header-lead">
-          <button
-            class="tui-mascot tui-mascot-lg tui-mascot-float tui-mascot-action"
-            type="button"
-            aria-label="去找绵小城"
-            @click="router.push('/teacher/agent')"
-          >
-            <img src="/images/mascot.png" alt="绵小城吉祥物" />
-          </button>
           <div>
             <h2 class="tui-header-title">全部功能</h2>
-            <p class="tui-header-sub">绵小城 · 按职能分区，每个模块只做一件事</p>
+            <p class="tui-header-sub">{{ siteName }} · 按职能分区，每个模块只做一件事</p>
           </div>
         </div>
         <div class="tui-header-actions">
@@ -57,35 +41,6 @@
           />
         </div>
       </Transition>
-
-      <!-- 常用操作 -->
-      <section v-if="!keyword" class="tui-card more-quick">
-        <div class="tui-card-head">
-          <span class="tui-card-head-icon" :style="{ background: '#eff4ff', color: '#1d4ed8' }">
-            <el-icon :size="13"><Star /></el-icon>
-          </span>
-          常用操作
-          <span class="tui-group-count">高频入口</span>
-        </div>
-        <div class="quick-grid">
-          <button
-            v-for="q in quickItems"
-            :key="q.path"
-            type="button"
-            class="quick-cell"
-            @click="router.push(q.path)"
-          >
-            <span class="quick-icon" :style="{ background: q.tint, color: q.color }">
-              <el-icon :size="21"><component :is="q.icon" /></el-icon>
-            </span>
-            <span class="quick-main">
-              <span class="quick-label">{{ q.label }}</span>
-              <span class="quick-desc">{{ q.desc }}</span>
-            </span>
-            <el-icon class="quick-arrow" :size="14"><ArrowRight /></el-icon>
-          </button>
-        </div>
-      </section>
 
       <!-- 分组宫格 -->
       <section
@@ -123,7 +78,7 @@
         <span class="tui-empty-desc">换个关键词试试，或清空搜索查看全部</span>
       </div>
 
-      <p class="more-foot">绵小城 · 教师工作台</p>
+      <p class="more-foot">{{ siteName }} · 教师工作台</p>
     </div>
   </div>
 </template>
@@ -132,14 +87,18 @@
 import { computed, nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import {
-  ArrowRight, Bell, ChatDotRound, Close, Collection, Connection, EditPen, FolderOpened,
-  Search, Star, Stamp, Sunny, WarningFilled,
+  Bell, ChatDotRound, Close, Collection, Connection, EditPen, FolderOpened,
+  Search, Stamp, Sunny, WarningFilled,
 } from '@element-plus/icons-vue'
 
 defineOptions({ name: 'teacher-more' })
 
 const router = useRouter()
+
+// 站点名称取自站点配置：管理端变更后教师端同步
+const { siteName } = useSiteConfig()
 const { isMobile } = useResponsive()
 
 const keyword = ref('')
@@ -161,16 +120,9 @@ function closeSearch() {
   keyword.value = ''
 }
 
-/** 常用操作：跨分组的最高频三项，避免在宫格里来回找 */
-const quickItems = [
-  { path: '/teacher/approval', label: '审批管理', desc: '请假 / 办事 / 材料', icon: Stamp, color: '#b54708', tint: '#fffaeb' },
-  { path: '/teacher/crisis', label: '预警工作台', desc: '心理预警闭环处置', icon: WarningFilled, color: '#d92d20', tint: '#fef3f2' },
-  { path: '/teacher/announcement', label: '班级公告', desc: '发布通知给学生', icon: Bell, color: '#2563eb', tint: '#eff4ff' },
-]
-
 /**
  * 「更多」= 非页签模块的宫格入口（首页 / 学生 / 绵小城 / 个人中心 已在底部导航，此处不重复）。
- * 每个模块归属唯一分组，互不交叉。
+ * 每个模块归属唯一分组，互不交叉；同一功能在本页只出现一次。
  */
 const groups = [
   {
@@ -249,58 +201,6 @@ const visibleGroups = computed(() => {
   .more-search-fade-enter-active,
   .more-search-fade-leave-active { transition: none; }
 }
-
-/* 常用操作：三行大热区，图标 + 标题 + 副标题 + 箭头 */
-.more-quick .quick-grid {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 6px 10px;
-}
-.quick-cell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 10px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  transition: background 0.18s ease, transform 0.18s ease;
-}
-.quick-cell:hover { background: #f7f8fa; }
-.quick-cell:active { background: #eceef1; transform: scale(0.985); }
-.quick-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.quick-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.quick-label {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: #0f1115;
-}
-.quick-desc {
-  font-size: 12px;
-  color: #9ca3af;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.quick-arrow { color: #cbd0d8; flex-shrink: 0; }
 
 .more-group + .more-group { margin-top: 12px; }
 

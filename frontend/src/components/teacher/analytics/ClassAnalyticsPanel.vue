@@ -5,12 +5,9 @@
       <!-- 第一行：雷达图 + 成绩分布 -->
       <div class="chart-row">
         <div class="chart-half">
-          <div class="section-title" @click="emit('navigate', '/teacher/students')">
+          <div class="section-title">
             <el-icon><DataAnalysis /></el-icon>
             <span>班级综合评估</span>
-            <el-link type="primary" :underline="false" class="section-link">
-              学生档案 <el-icon><DArrowRight /></el-icon>
-            </el-link>
           </div>
           <div class="chart-container">
             <VChart v-if="evaluationRadarOptions" :option="evaluationRadarOptions" autoresize />
@@ -119,7 +116,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
-  DataAnalysis, Histogram, UserFilled, WarningFilled, Location, DArrowRight,
+  DataAnalysis, Histogram, UserFilled, WarningFilled, Location,
 } from '@element-plus/icons-vue'
 import VChart from 'vue-echarts'
 import { useClassCharts } from '@/composables/useClassCharts'
@@ -133,7 +130,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  navigate: [link: string]
   analyze: []
 }>()
 
@@ -153,10 +149,9 @@ const { evaluationRadarOptions, gradeBarOptions, politicalPieOptions, crisisTren
 
 .analytics-left, .analytics-right {
   background: #fff;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 14px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+  border: 1px solid #ebedf0;
 }
 
 .analytics-left {
@@ -187,16 +182,6 @@ const { evaluationRadarOptions, gradeBarOptions, politicalPieOptions, crisisTren
   display: flex;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
-}
-
-.section-title:hover {
-  opacity: 0.7;
-}
-
-.section-link {
-  margin-left: auto;
-  font-size: 11px;
 }
 
 .chart-container {

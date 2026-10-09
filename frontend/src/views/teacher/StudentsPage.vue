@@ -2,19 +2,71 @@
   <div class="students-page">
     <!-- ============ 桌面端（保持原样） ============ -->
     <template v-if="!isMobile">
-      <div class="page-header">
-        <div class="header-left">
-          <h2>学生成长档案</h2>
-          <p class="page-sub">共 <strong>{{ filteredStudents.length }}</strong> 名学生</p>
+      <!-- 学生页头：页面标题 + 范围说明 + 更多操作 -->
+      <header class="app-head">
+        <div class="app-head-bar">
+          <div class="app-head-lead">
+            <h1 class="app-head-title">学生</h1>
+            <p class="app-head-sub">名单 · 档案 · 数据分析</p>
+          </div>
+          <el-dropdown trigger="click" @command="onHeadCommand">
+            <button class="app-icon-btn" type="button" aria-label="更多操作" title="更多操作">
+              <el-icon :size="18"><MoreFilled /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="export"><el-icon><Download /></el-icon>导出学生数据</el-dropdown-item>
+                <el-dropdown-item command="import"><el-icon><Upload /></el-icon>导入学生数据</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
-        <div class="header-actions">
-          <el-input v-model="search" placeholder="搜索姓名/学号/学院" style="width:220px" clearable @input="debouncedLoadStudents">
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
+      </header>
+
+      <!-- 概况便当格（Bento Grid）：模块化磁贴，每格只做一件事 -->
+      <section class="bento">
+        <div class="bento-tile bento-tile-lg">
+          <span class="bento-label">在册学生</span>
+          <span class="bento-value">{{ stats.total_students }}</span>
+          <span class="bento-hint">成长档案 · 班级数据分析</span>
         </div>
-      </div>
+        <div class="bento-tile">
+          <span class="bento-label">高危学生</span>
+          <span class="bento-value bento-value-warn">{{ stats.severe_alert_count }}</span>
+        </div>
+        <div class="bento-tile">
+          <span class="bento-label">有成长成果</span>
+          <span class="bento-value bento-value-ok">{{ growthCount }}</span>
+        </div>
+        <button class="bento-tile bento-tile-action" type="button" @click="showAnalyticsPage = true">
+          <span class="bento-action-icon"><el-icon :size="18"><DataAnalysis /></el-icon></span>
+          <span class="bento-action-main">
+            <span class="bento-label">班级数据分析</span>
+            <span class="bento-hint">成绩分布 · 心理危机 · 预警趋势</span>
+          </span>
+          <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+        </button>
+      </section>
+
+      <!-- 班级数据分析：与学生相关的数据维度，归属本页 -->
+      <section class="analytics-section">
+        <div class="analytics-section-head">
+          <span class="analytics-section-title">班级数据分析</span>
+          <span class="analytics-section-sub">班级综合评估 / 成绩分布 / 心理危机 / 学生成长等维度</span>
+        </div>
+        <ClassAnalyticsPanel
+          :class-stats="classStats"
+          :eval-data="evalData"
+          :analysis-result="analysisResult"
+          :analysis-loading="analysisLoading"
+          @analyze="handleClassAnalysis"
+        />
+      </section>
 
       <div class="filter-bar">
+        <el-input v-model="search" class="list-search filter-search" placeholder="搜索姓名 / 学号 / 学院" clearable @input="debouncedLoadStudents">
+          <template #prefix><el-icon><Search /></el-icon></template>
+        </el-input>
         <el-select v-model="filterCrisis" placeholder="危机等级" clearable style="width:130px">
           <el-option label="全部" value="" />
           <el-option label="高危" value="severe" />
@@ -45,11 +97,11 @@
       </div>
 
       <div v-if="!filteredStudents.length && loaded" class="empty-wrapper">
-        <el-empty description="暂无学生记录" :image-size="100">
+        <el-empty :image-size="96">
           <template #image>
-            <el-icon :size="64" color="#ddd"><User /></el-icon>
+            <img :src="siteMascot" :alt="siteName" class="empty-mascot" />
           </template>
-          <p style="color:#999;margin-top:8px">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</p>
+          <p class="empty-text">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</p>
         </el-empty>
       </div>
 
@@ -226,266 +278,95 @@
 
     <!-- ============ 移动端（全新设计） ============ -->
     <template v-else>
-      <!-- 顶部导航：蓝底 + 搜索框 -->
-      <div class="ms-header">
-        <div class="ms-statusbar-space"></div>
-        <div class="ms-header-top">
-          <div class="ms-header-greet">
-            <div class="ms-greet-line1">{{ greeting }}，{{ teacherName }}老师</div>
-            <div class="ms-greet-line2">博学 · 笃行 · 严谨 · 创新</div>
+      <!-- 移动端页头：与桌面端同一套（页面标题 + 范围说明 + 更多操作） -->
+      <header class="app-head">
+        <div class="app-head-bar">
+          <div class="app-head-lead">
+            <h1 class="app-head-title">学生</h1>
+            <p class="app-head-sub">名单 · 档案 · 数据分析</p>
           </div>
-          <img src="/images/mascot.png" alt="绵小城" class="ms-mascot" />
+          <el-dropdown trigger="click" @command="onHeadCommand">
+            <button class="app-icon-btn" type="button" aria-label="更多操作" title="更多操作">
+              <el-icon :size="18"><MoreFilled /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="export"><el-icon><Download /></el-icon>导出学生数据</el-dropdown-item>
+                <el-dropdown-item command="import"><el-icon><Upload /></el-icon>导入学生数据</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
-        <div class="ms-search">
-          <el-input
-            v-model="search"
-            placeholder="搜索姓名 / 学号 / 学院"
-            clearable
-            class="ms-search-input"
-            @input="debouncedLoadStudents"
-          >
-            <template #prefix><el-icon :size="16"><Search /></el-icon></template>
-          </el-input>
+      </header>
+
+      <!-- 概况便当格（Bento Grid）：模块化磁贴，每格只做一件事 -->
+      <section class="bento">
+        <div class="bento-tile bento-tile-lg">
+          <span class="bento-label">在册学生</span>
+          <span class="bento-value">{{ stats.total_students }}</span>
+          <span class="bento-hint">成长档案 · 班级数据分析</span>
         </div>
+        <div class="bento-tile">
+          <span class="bento-label">高危学生</span>
+          <span class="bento-value bento-value-warn">{{ stats.severe_alert_count }}</span>
+        </div>
+        <div class="bento-tile">
+          <span class="bento-label">有成长成果</span>
+          <span class="bento-value bento-value-ok">{{ growthCount }}</span>
+        </div>
+        <button class="bento-tile bento-tile-action" type="button" @click="showAnalyticsPage = true">
+          <span class="bento-action-icon"><el-icon :size="18"><DataAnalysis /></el-icon></span>
+          <span class="bento-action-main">
+            <span class="bento-label">班级数据分析</span>
+            <span class="bento-hint">成绩分布 · 心理危机 · 预警趋势</span>
+          </span>
+          <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+        </button>
+      </section>
+
+      <!-- 名单控制区：搜索 + 危机 chips + 筛选抽屉，紧贴所筛选的列表 -->
+      <div class="ms-list-search">
+        <el-input v-model="search" class="list-search" placeholder="搜索姓名 / 学号 / 学院" clearable @input="debouncedLoadStudents">
+          <template #prefix><el-icon :size="16"><Search /></el-icon></template>
+        </el-input>
       </div>
 
-      <!-- 数据统计卡片 -->
-      <div class="ms-card ms-stats-card">
-        <div class="ms-stats">
-          <div class="ms-stat-item" @click="openSubPage('students')">
-            <div class="ms-stat-num" style="color:#1677ff">{{ stats.total_students }}</div>
-            <div class="ms-stat-label">总学生</div>
-          </div>
-          <div class="ms-stat-divider"></div>
-          <div class="ms-stat-item" @click="router.push('/teacher/approval')">
-            <div class="ms-stat-num" style="color:#ff9500">{{ stats.pending_leave_count }}</div>
-            <div class="ms-stat-label">请假待批</div>
-          </div>
-          <div class="ms-stat-divider"></div>
-          <div class="ms-stat-item" @click="openStudentsCrisis()">
-            <div class="ms-stat-num" style="color:#ff3b30">{{ stats.severe_alert_count }}</div>
-            <div class="ms-stat-label">高危学生</div>
-          </div>
+      <div class="ms-list-toolbar">
+        <div class="ms-chip-scroll">
+          <button
+            v-for="c in crisisChips"
+            :key="c.value"
+            class="ms-chip"
+            :class="{ active: filterCrisis === c.value }"
+            @click="filterCrisis = c.value"
+          >{{ c.label }}</button>
         </div>
-      </div>
-
-      <!-- 功能宫格：圆形彩色图标入口 -->
-      <div class="ms-card ms-modules">
-        <div class="ms-module-grid">
-          <div class="ms-module-cell" @click="openSubPage('students')">
-            <div class="ms-module-icon" style="background:#4d9fff"><el-icon :size="20"><User /></el-icon></div>
-            <span class="ms-module-name">学员</span>
-          </div>
-          <div class="ms-module-cell" @click="openSubPage('analysis')">
-            <div class="ms-module-icon" style="background:#8f7bff"><el-icon :size="20"><DataAnalysis /></el-icon></div>
-            <span class="ms-module-name">学生分析</span>
-          </div>
-          <div class="ms-module-cell" @click="router.push('/teacher/approval')">
-            <div class="ms-module-icon" style="background:#ffb02e"><el-icon :size="20"><Calendar /></el-icon></div>
-            <span class="ms-module-name">请假情况</span>
-          </div>
-          <div class="ms-module-cell" @click="router.push('/teacher/announcement')">
-            <div class="ms-module-icon" style="background:#2ed3a1"><el-icon :size="20"><Bell /></el-icon></div>
-            <span class="ms-module-name">班级公告</span>
-          </div>
-          <div class="ms-module-cell" @click="openSubPage('more')">
-            <div class="ms-module-icon" style="background:#a8b2c5"><el-icon :size="20"><MoreFilled /></el-icon></div>
-            <span class="ms-module-name">更多</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 最近互动学员 / 搜索结果 -->
-      <div class="ms-section-title">
-        <span class="ms-section-title-text">{{ isSearching ? '搜索结果' : '最近互动学员' }}</span>
-        <span v-if="isSearching" class="ms-section-title-extra">共 {{ students.length }} 人</span>
-        <span v-else class="ms-section-title-extra" @click="openSubPage('students')">
-          查看全部<el-icon :size="12"><ArrowRight /></el-icon>
+        <span class="ms-filter-btn" @click="showFilterSheet = true">
+          <el-icon :size="16"><Filter /></el-icon>
+          <span>筛选</span>
         </span>
       </div>
 
-      <!-- 搜索态：在当前页展示搜索结果 -->
-      <template v-if="isSearching">
-        <div v-if="students.length" class="ms-card ms-student-list">
-          <div v-for="(s, i) in students" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === students.length - 1 }" @click="openDetail(s)">
-            <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
-            <div class="ms-student-info">
-              <div class="ms-student-name">
-                {{ s.name }}
-                <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
-                  {{ crisisLabel(s.crisis_level) }}
-                </el-tag>
-              </div>
-              <div class="ms-student-sub">{{ s.college || '未分配' }} · 综合 {{ s.score ?? '--' }}</div>
+      <div v-if="!filteredStudents.length && loaded" class="ms-empty">
+        <img :src="siteMascot" :alt="siteName" class="ms-empty-mascot" />
+        <span>{{ hasActiveFilter || isSearching ? '没有符合条件的学生' : '当前名下暂无学生' }}</span>
+      </div>
+      <div v-else class="ms-card ms-student-list">
+        <div v-for="(s, i) in filteredStudents" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === filteredStudents.length - 1 }" @click="openDetail(s)">
+          <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
+          <div class="ms-student-info">
+            <div class="ms-student-name">
+              {{ s.name }}
+              <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
+                {{ crisisLabel(s.crisis_level) }}
+              </el-tag>
             </div>
-            <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
+            <div class="ms-student-sub">{{ s.college || '未分配' }} · 成果{{ s.growth_count }} · 请假{{ s.leave_count }}</div>
           </div>
-        </div>
-        <div v-else-if="loaded" class="ms-empty">未找到相关学生</div>
-      </template>
-
-      <!-- 非搜索态：最近互动学员 -->
-      <template v-else>
-        <div v-if="recentStudents.length" class="ms-card ms-student-list">
-          <div v-for="(s, i) in recentStudents" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === recentStudents.length - 1 }" @click="openDetail(s)">
-            <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
-            <div class="ms-student-info">
-              <div class="ms-student-name">
-                {{ s.name }}
-                <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
-                  {{ crisisLabel(s.crisis_level) }}
-                </el-tag>
-              </div>
-              <div class="ms-student-sub">{{ s.college || '未分配' }} · 综合 {{ s.score ?? '--' }}</div>
-            </div>
-            <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
-          </div>
-        </div>
-        <div v-else-if="loaded" class="ms-empty">暂无可展示的学员</div>
-      </template>
-    </template>
-
-    <!-- ============ 移动端右滑子页面 ============ -->
-    <transition name="slide-right-in">
-      <div v-if="isMobile && activeSubPage" class="ms-sub-page">
-        <div class="ms-sub-header">
-          <el-button text circle @click="activeSubPage = null"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
-          <span class="ms-sub-title">{{ subPageTitle }}</span>
-          <div style="width:36px"></div>
-        </div>
-        <div class="ms-sub-body">
-          <!-- 学员列表 -->
-          <template v-if="activeSubPage === 'students'">
-            <div class="ms-search-row">
-              <div class="ms-search-input-wrap">
-                <el-input v-model="search" placeholder="搜索姓名 / 学号 / 学院" clearable @input="debouncedLoadStudents">
-                  <template #prefix><el-icon><Search /></el-icon></template>
-                </el-input>
-              </div>
-              <span class="ms-filter-btn" @click="showFilterSheet = true">
-                <el-icon :size="16"><Filter /></el-icon>
-                <span>筛选</span>
-              </span>
-            </div>
-
-            <div class="ms-chip-scroll">
-              <button
-                v-for="c in crisisChips"
-                :key="c.value"
-                class="ms-chip"
-                :class="{ active: filterCrisis === c.value }"
-                @click="filterCrisis = c.value"
-              >{{ c.label }}</button>
-            </div>
-
-            <div v-if="!filteredStudents.length && loaded" class="ms-empty">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</div>
-            <div v-else class="ms-card ms-student-list">
-              <div v-for="(s, i) in filteredStudents" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === filteredStudents.length - 1 }" @click="openDetail(s)">
-                <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
-                <div class="ms-student-info">
-                  <div class="ms-student-name">
-                    {{ s.name }}
-                    <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
-                      {{ crisisLabel(s.crisis_level) }}
-                    </el-tag>
-                  </div>
-                  <div class="ms-student-sub">{{ s.college || '未分配' }} · 成果{{ s.growth_count }} · 请假{{ s.leave_count }}</div>
-                </div>
-                <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </template>
-
-          <!-- 学生分析 -->
-          <template v-else-if="activeSubPage === 'analysis'">
-            <div class="ms-analysis-grid">
-              <div class="ms-chart-card">
-                <div class="ms-chart-card-header">
-                  <el-icon color="#5b8def"><DataAnalysis /></el-icon>
-                  <span>班级成长分析</span>
-                </div>
-                <div class="ms-chart-container">
-                  <VChart v-if="evaluationRadarOptions" :option="evaluationRadarOptions" autoresize />
-                  <el-empty v-else description="暂无数据" :image-size="48" />
-                </div>
-              </div>
-
-              <div class="ms-chart-card">
-                <div class="ms-chart-card-header">
-                  <el-icon color="#f56c6c"><WarningFilled /></el-icon>
-                  <span>心理危机分布</span>
-                </div>
-                <div class="ms-chart-container">
-                  <VChart v-if="crisisPieOptions" :option="crisisPieOptions" autoresize />
-                  <el-empty v-else description="暂无数据" :image-size="48" />
-                </div>
-              </div>
-
-              <div class="ms-chart-card">
-                <div class="ms-chart-card-header">
-                  <el-icon color="#f56c6c"><Histogram /></el-icon>
-                  <span>预警趋势</span>
-                </div>
-                <div class="ms-chart-container">
-                  <VChart v-if="crisisTrendOptions" :option="crisisTrendOptions" autoresize />
-                  <el-empty v-else description="暂无数据" :image-size="48" />
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <!-- 请假审批 → 归属「审批管理」模块页 -->
-          <!-- 班级公告 → 归属「班级公告」模块页 -->
-
-          <!-- 更多 -->
-          <template v-else-if="activeSubPage === 'more'">
-            <div class="ms-more-list">
-              <div class="ms-more-item" @click="router.push('/teacher/agent')">
-                <el-icon color="#6366f1"><ChatDotRound /></el-icon>
-                <span>绵小城智能助手</span>
-                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
-              </div>
-              <div class="ms-more-item" @click="router.push('/teacher/messages')">
-                <el-icon color="#10b981"><Message /></el-icon>
-                <span>消息</span>
-                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
-              </div>
-              <div class="ms-more-item" @click="openStudentsCrisis()">
-                <el-icon color="#f56c6c"><WarningFilled /></el-icon>
-                <span>高危学生名单</span>
-                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
-              </div>
-              <div class="ms-more-item" @click="router.push('/teacher/profile')">
-                <el-icon color="#5b8def"><User /></el-icon>
-                <span>个人中心</span>
-                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
-              </div>
-              <div class="ms-more-item" @click="handleExportStudents">
-                <el-icon color="#67c23a"><Download /></el-icon>
-                <span>导出学生数据</span>
-                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
-              </div>
-              <div class="ms-more-item" @click="importVisible = true">
-                <el-icon color="#e6a23c"><Upload /></el-icon>
-                <span>导入学生数据</span>
-                <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- 悬浮智能体：点击生成班级智能分析 -->
-        <div v-if="activeSubPage === 'analysis'" class="mascot-pet" @click="openMascotAnalysis">
-          <transition name="tip-pop">
-            <div v-if="showMascotTip" class="mascot-tip-bubble">
-              <span class="mascot-tip-close" @click.stop="showMascotTip = false"><el-icon><Close /></el-icon></span>
-              <span class="mascot-tip-text">点我生成班级智能分析~</span>
-            </div>
-          </transition>
-          <img src="/images/mascot.png" alt="绵小城" class="mascot-pet-img" />
+          <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
         </div>
       </div>
-    </transition>
+    </template>
 
     <!-- 移动端筛选抽屉 -->
     <el-drawer v-if="isMobile" v-model="showFilterSheet" title="筛选学生" direction="btt" size="55%" :close-on-click-modal="false">
@@ -608,38 +489,6 @@
       </div>
     </transition>
 
-    <!-- 拒绝对话框 -->
-    <el-dialog v-model="rejectVisible" title="拒绝理由" width="90%" :close-on-click-modal="false" class="ms-dialog" align-center>
-      <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请填写拒绝理由" maxlength="200" show-word-limit />
-      <template #footer>
-        <el-button @click="rejectVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 发布公告 Dialog -->
-    <el-dialog v-model="createDialogVisible" title="发布公告" width="90%" :close-on-click-modal="false" class="ms-dialog" align-center>
-      <el-form :model="createForm" label-position="top">
-        <el-form-item label="标题" required>
-          <el-input v-model="createForm.title" placeholder="请输入公告标题" maxlength="200" />
-        </el-form-item>
-        <el-form-item label="内容" required>
-          <el-input v-model="createForm.content" type="textarea" :rows="4" placeholder="请输入公告内容" />
-        </el-form-item>
-        <el-form-item label="紧急程度">
-          <el-radio-group v-model="createForm.urgency">
-            <el-radio value="normal">普通</el-radio>
-            <el-radio value="important">重要</el-radio>
-            <el-radio value="urgent">紧急</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateAnnouncement">发布</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 导入学生数据 Dialog -->
     <el-dialog v-model="importVisible" title="导入学生数据" width="90%" :close-on-click-modal="false" class="ms-dialog" align-center>
       <div class="ms-import-tip">
@@ -673,86 +522,47 @@
       </template>
     </el-dialog>
 
-    <!-- 悬浮智能体弹窗：班级智能分析 -->
-    <el-dialog
-      v-model="showAnalysisDialog"
-      class="mascot-analysis-dialog"
-      :append-to-body="true"
-      destroy-on-close
-    >
-      <template #header>
-        <div class="dialog-header">
-          <img src="/images/mascot.png" alt="绵小城" class="dialog-header-mascot" />
-          <div class="dialog-header-text">
-            <div class="dialog-title">学生智能分析</div>
-            <div class="dialog-sub">绵小城基于班级图表与学生成长数据智能生成</div>
-          </div>
-        </div>
-      </template>
-      <div class="dialog-content">
-        <div v-if="analysisLoading" class="dialog-loading">
-          <img src="/images/mascot.png" alt="绵小城" class="dialog-loading-mascot" />
-          <p class="dialog-loading-text">{{ analysisLoadingText }}</p>
-        </div>
-        <div v-else-if="analysisResult" class="analysis-report ms-ai-text" v-html="renderedAnalysisHtml"></div>
-        <div v-else class="dialog-empty">
-          <el-icon class="dialog-empty-icon"><MagicStick /></el-icon>
-          <p>点击下方按钮，绵小城将为您生成班级分析报告</p>
-        </div>
-      </div>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button round @click="showAnalysisDialog = false">关闭</el-button>
-          <el-button round type="primary" :loading="analysisLoading" @click="startMascotAnalysis">
-            <el-icon><Refresh /></el-icon> 重新分析
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <!-- 移动端：班级数据分析子页（与学生相关的数据维度） -->
+    <ClassAnalyticsMobile v-if="isMobile && showAnalyticsPage" :class-stats="classStats" :eval-data="evalData"
+      @close="showAnalyticsPage = false" @open-analysis="openMascotAnalysis" />
+
+    <!-- 桌宠弹窗：班级情况分析 -->
+    <ClassAnalysisDialog v-model:visible="showAnalysisDialog" :analysis-result="analysisResult"
+      :analysis-loading="analysisLoading" :analyze="runAnalysis" :load-profiles="loadStudentProfiles"
+      :build-prompt="buildAnalysisPrompt" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Search, User, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
-  WarningFilled, DataAnalysis, Calendar, Bell, MoreFilled,
-  Histogram, Message, Filter, Download, Upload,
-  Refresh, MagicStick,
+  Search, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
+  Filter, Download, Upload, DataAnalysis, MoreFilled,
 } from '@element-plus/icons-vue'
 import {
   getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats, importStudents,
   type StudentSummary, type StudentDetail, type DashboardStats, type ClassEvaluation, type ClassStats, type StudentImportItem,
 } from '@/api/teacher'
-import { getPendingLeaves, getAllLeaves, reviewLeave } from '@/api/leave'
-import { getTeacherAnnouncements, createAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import { getConversations, type ConversationOut } from '@/api/messages'
-import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
-import { useAiAnalysis } from '@/composables/useAiAnalysis'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import CareRecordPanel from '@/components/teacher/care/CareRecordPanel.vue'
 import StudentInsightPanel from '@/components/teacher/insight/StudentInsightPanel.vue'
-import { renderMarkdown } from '@/utils/markdown'
-import type { LeaveRequestOut } from '@/types'
-
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { RadarChart, PieChart, LineChart } from 'echarts/charts'
-import {
-  TooltipComponent, LegendComponent, RadarComponent, GridComponent,
-} from 'echarts/components'
-import VChart from 'vue-echarts'
-
-use([CanvasRenderer, RadarChart, PieChart, LineChart, TooltipComponent, LegendComponent, RadarComponent, GridComponent])
+import ClassAnalyticsPanel from '@/components/teacher/analytics/ClassAnalyticsPanel.vue'
+import ClassAnalyticsMobile from '@/components/teacher/analytics/ClassAnalyticsMobile.vue'
+import ClassAnalysisDialog from '@/components/teacher/analytics/ClassAnalysisDialog.vue'
+import { useAiAnalysis } from '@/composables/useAiAnalysis'
 
 defineOptions({ name: 'teacher-students' })
 
 const { isMobile } = useResponsive()
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
+
+// 吉祥物与站点名称取自站点配置：管理端变更后教师端同步
+const { siteMascot, siteName } = useSiteConfig()
 
 const search = ref('')
 const students = ref<(StudentSummary & { score?: number })[]>([])
@@ -770,27 +580,6 @@ const currentPage = ref(1)
 const pageSize = ref(12)
 
 const showFilterSheet = ref(false)
-const activeSubPage = ref<'students' | 'analysis' | 'more' | null>(null)
-
-const teacherName = computed(() => authStore.userName || '教师')
-
-const greeting = computed(() => {
-  const h = new Date().getHours()
-  if (h < 12) return '上午好'
-  if (h < 18) return '下午好'
-  return '晚上好'
-})
-
-const subPageTitle = computed(() => {
-  const map: Record<string, string> = {
-    students: '学员',
-    analysis: '学生分析',
-    lease: '请假情况',
-    announcement: '班级公告',
-    more: '更多功能',
-  }
-  return map[activeSubPage.value || ''] || ''
-})
 
 // ===== 统计 =====
 const stats = ref<DashboardStats>({
@@ -798,7 +587,10 @@ const stats = ref<DashboardStats>({
   severe_alert_count: 0, resolved_alert_count: 0,
 })
 
-// ===== 班级图表数据 =====
+// 有成长成果的学生数（学生维度概览，移动端统计卡使用）
+const growthCount = computed(() => students.value.filter(s => (s.growth_count || 0) > 0).length)
+
+// ===== 班级数据分析（与学生相关的数据维度，随本页承载） =====
 const evalData = ref<ClassEvaluation>({
   total_students: 0, avg_gpa: 0, avg_score: 0,
   growth: {}, crisis: {}, pending_leaves: 0,
@@ -808,20 +600,85 @@ const classStats = ref<ClassStats>({
   gender_stats: {}, crisis_stats: {}, grade_stats: {},
   political_stats: {}, hometown_stats: {}, crisis_trend: [],
 })
+const showAnalyticsPage = ref(false)
 
-// ===== 请假 =====
-const leaveTab = ref('pending')
-const pendingLeaves = ref<LeaveRequestOut[]>([])
-const approvedLeaves = ref<LeaveRequestOut[]>([])
-const rejectedLeaves = ref<LeaveRequestOut[]>([])
-const rejectVisible = ref(false)
-const rejectTarget = ref<LeaveRequestOut | null>(null)
-const rejectReason = ref('')
+const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 
-// ===== 公告 =====
-const myAnnouncements = ref<AnnouncementItem[]>([])
-const createDialogVisible = ref(false)
-const createForm = ref({ title: '', content: '', urgency: 'normal' as 'normal' | 'important' | 'urgent' })
+// 桌宠与弹窗状态
+const showAnalysisDialog = ref(false)
+const studentProfiles = ref<StudentSummary[]>([])
+
+/** 拉取学生成长画像（供 AI 班级分析使用） */
+async function loadStudentProfiles() {
+  if (studentProfiles.value.length) return
+  try {
+    studentProfiles.value = await getStudents()
+  } catch {
+    studentProfiles.value = students.value // 拉取失败时退化为使用当前列表
+  }
+}
+
+function buildAnalysisPrompt() {
+  const cs = classStats.value
+  const ev = evalData.value
+  const g = ev.growth || {}
+  const profiles = studentProfiles.value.length ? studentProfiles.value : students.value
+  const listed = profiles.slice(0, 60)
+  const profileLines = listed.map((p) => {
+    const skills = p.skills_json?.skills?.length ?? 0
+    const interests = p.skills_json?.interests?.length ?? 0
+    const crisisNote = p.crisis_level && p.latest_crisis_summary
+      ? `、最近危机「${p.latest_crisis_summary.slice(0, 40)}」`
+      : ''
+    return `- ${p.name}：成长记录${p.growth_count}条、综合评分${p.score}分、心理状态「${crisisLevelLabel(p.crisis_level)}」、技能${skills}项、兴趣${interests}项${crisisNote}`
+  })
+  const profileText = profileLines.length
+    ? profileLines.join('\n') + (profiles.length > listed.length ? `\n（其余${profiles.length - listed.length}名学生未列出）` : '')
+    : '（暂无学生明细数据）'
+
+  return `作为辅导员老师，请基于以下班级图表数据与学生成长数据，分析班级情况并提出建议：
+
+班级图表数据：
+- 学生总数：${cs.total_students}
+- 性别比例：${JSON.stringify(cs.gender_stats)}
+- 政治面貌：${JSON.stringify(cs.political_stats)}
+- 生源地分布：${JSON.stringify(cs.hometown_stats)}
+- 心理危机分布：高危${cs.crisis_stats?.severe || 0}人、中危${cs.crisis_stats?.moderate || 0}人、低危${cs.crisis_stats?.mild || 0}人、已解决${cs.crisis_stats?.resolved || 0}人
+- 成绩分布：优秀${cs.grade_stats?.excellent || 0}人、良好${cs.grade_stats?.good || 0}人、中等${cs.grade_stats?.medium || 0}人、及格${cs.grade_stats?.pass || 0}人、不及格${cs.grade_stats?.fail || 0}人
+- 危机预警趋势（近6个月）：${JSON.stringify(cs.crisis_trend)}
+
+班级成长数据：
+- 平均GPA：${ev.avg_gpa}，平均综合评分：${ev.avg_score}
+- 成长记录统计：荣誉${g.honor || 0}条、竞赛${g.competition || 0}条、实践${g.practice || 0}条、论文${g.paper || 0}条、成果${g.achievement || 0}条
+- 待审批请假：${ev.pending_leaves}人
+
+学生成长明细：
+${profileText}
+
+请从以下方面进行分析：
+1. 班级整体概况与综合能力画像
+2. 学业成绩分析
+3. 心理健康与危机预警分析
+4. 学生成长发展分析（成长记录、技能、竞赛、实践等维度）
+5. 辅导员工作建议（对需重点关注的个别学生点名提醒）
+
+请用简洁专业的语言，控制在600字以内。`
+}
+
+async function loadAnalysisData() {
+  try { evalData.value = await getClassEvaluation() } catch {}
+  try { classStats.value = await getClassStats() } catch {}
+}
+
+/** 桌宠：打开分析弹窗（首次自动分析由子组件负责） */
+function openMascotAnalysis() {
+  showAnalysisDialog.value = true
+}
+
+async function handleClassAnalysis() {
+  await loadStudentProfiles()
+  await runAnalysis(buildAnalysisPrompt(), { skipCache: true })
+}
 
 // ===== 导入导出 =====
 const importVisible = ref(false)
@@ -829,42 +686,7 @@ const importing = ref(false)
 const importRows = ref<StudentImportItem[]>([])
 const importSkipped = ref<string[]>([])
 
-// ===== AI 分析 =====
-const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
-const renderedAnalysisHtml = computed(() => renderMarkdown(analysisResult.value))
-
-// 悬浮智能体与弹窗状态
-const showMascotTip = ref(false)
-const showAnalysisDialog = ref(false)
-const analysisLoadingText = ref('绵小城正在深度分析班级情况...')
-let mascotTipTimer: ReturnType<typeof setTimeout> | null = null
-
-// 进入/退出学生分析子页面时控制悬浮智能体提示气泡
-watch(activeSubPage, (page) => {
-  if (mascotTipTimer) { clearTimeout(mascotTipTimer); mascotTipTimer = null }
-  if (page === 'analysis') {
-    showMascotTip.value = true
-    mascotTipTimer = setTimeout(() => { showMascotTip.value = false }, 6000)
-  } else {
-    showMascotTip.value = false
-  }
-})
-
-function openMascotAnalysis() {
-  showMascotTip.value = false
-  showAnalysisDialog.value = true
-  if (!analysisResult.value && !analysisLoading.value) {
-    startMascotAnalysis()
-  }
-}
-
-async function startMascotAnalysis() {
-  if (analysisLoading.value) return
-  analysisLoadingText.value = '绵小城正在深度分析班级情况...'
-  await handleClassAnalysis()
-}
-
-// ===== 最近互动（按最近聊天排序） =====
+// ===== 最近互动时间（作为学生列表默认排序：最近沟通过的排前面） =====
 const conversations = ref<ConversationOut[]>([])
 
 const conversationTimeMap = computed(() => {
@@ -874,20 +696,6 @@ const conversationTimeMap = computed(() => {
   })
   return map
 })
-
-const sortedByRecentChat = computed(() => {
-  const timeMap = conversationTimeMap.value
-  return [...students.value].sort((a, b) => {
-    const ta = timeMap.get(a.id)
-    const tb = timeMap.get(b.id)
-    if (ta && tb) return tb.localeCompare(ta)
-    if (ta) return -1
-    if (tb) return 1
-    return 0
-  })
-})
-
-const recentStudents = computed(() => sortedByRecentChat.value.slice(0, 6))
 
 // ===== 筛选 chips =====
 const crisisChips = [
@@ -917,6 +725,7 @@ const hasActiveFilter = computed(() => {
 const isSearching = computed(() => search.value.trim() !== '')
 
 const filteredStudents = computed(() => {
+  const timeMap = conversationTimeMap.value
   return students.value.filter(s => {
     if (filterCrisis.value) {
       if (filterCrisis.value === 'none') {
@@ -945,6 +754,13 @@ const filteredStudents = computed(() => {
     }
 
     return true
+  }).sort((a, b) => {
+    const ta = timeMap.get(a.id)
+    const tb = timeMap.get(b.id)
+    if (ta && tb) return tb.localeCompare(ta)
+    if (ta) return -1
+    if (tb) return 1
+    return 0
   })
 })
 
@@ -970,108 +786,7 @@ function handleCurrentChange() {
   // 页码变化时自动更新（通过 computed 自动响应）
 }
 
-// ===== 图表 options =====
-const evaluationRadarOptions = computed(() => {
-  const g = evalData.value.growth
-  if (!g || Object.keys(g).length === 0) return null
-  const vals = [g.honor || 0, g.competition || 0, g.practice || 0, g.paper || 0, g.achievement || 0]
-  const max = Math.max(...vals, 1)
-  return {
-    animation: false,
-    tooltip: { trigger: 'item' },
-    radar: {
-      indicator: [
-        { name: '荣誉', max: Math.max(max, 1) },
-        { name: '竞赛', max: Math.max(max, 1) },
-        { name: '实践', max: Math.max(max, 1) },
-        { name: '论文', max: Math.max(max, 1) },
-        { name: '成果', max: Math.max(max, 1) },
-      ],
-      axisName: { color: '#666', fontSize: 12 },
-      splitArea: { areaStyle: { color: ['rgba(91,141,239,0.02)', 'rgba(91,141,239,0.06)'] } },
-      splitLine: { lineStyle: { color: 'rgba(0,0,0,0.06)' } },
-      axisLine: { lineStyle: { color: 'rgba(0,0,0,0.08)' } },
-    },
-    series: [{
-      type: 'radar',
-      data: [{
-        value: vals,
-        name: '班级综合',
-        areaStyle: { color: 'rgba(91,141,239,0.25)' },
-        lineStyle: { color: '#5b8def', width: 2 },
-        itemStyle: { color: '#5b8def' },
-      }],
-    }],
-  }
-})
-
-const crisisPieOptions = computed(() => {
-  const data = classStats.value.crisis_stats
-  if (!data) return null
-  const colors = ['#f56c6c', '#e6a23c', '#67c23a', '#909399']
-  const names = ['高危', '中危', '低危', '已解决']
-  const values = [data.severe || 0, data.moderate || 0, data.mild || 0, data.resolved || 0]
-  const total = values.reduce((sum, v) => sum + v, 0)
-  if (total === 0) return null
-  const pieData = names.map((name, index) => ({ name, value: values[index], itemStyle: { color: colors[index] } }))
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
-    legend: { orient: 'horizontal', bottom: 5, textStyle: { color: '#666', fontSize: 11 } },
-    animation: false,
-    series: [{
-      name: '危机分布',
-      type: 'pie',
-      radius: ['35%', '65%'],
-      center: ['50%', '42%'],
-      avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
-      label: { show: false },
-      emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold' } },
-      data: pieData,
-    }],
-  }
-})
-
-const crisisTrendOptions = computed(() => {
-  const data = classStats.value.crisis_trend
-  if (!data || data.length === 0) return null
-  return {
-    tooltip: { trigger: 'axis', formatter: '{b}<br/>预警数量: {c}' },
-    grid: { left: '3%', right: '4%', bottom: '8%', top: '8%', containLabel: true },
-    xAxis: { type: 'category', data: data.map(d => d.month), axisLabel: { color: '#666', fontSize: 11 } },
-    yAxis: { type: 'value', axisLabel: { color: '#666' } },
-    animation: false,
-    series: [{
-      name: '预警数量',
-      type: 'line',
-      data: data.map(d => d.count),
-      smooth: true,
-      lineStyle: { color: '#f56c6c', width: 2 },
-      itemStyle: { color: '#f56c6c' },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(245,108,108,0.3)' },
-            { offset: 1, color: 'rgba(245,108,108,0.05)' },
-          ],
-        },
-      },
-    }],
-  }
-})
-
 // ===== 业务函数 =====
-function openSubPage(page: 'students' | 'analysis' | 'more') {
-  activeSubPage.value = page
-  if (page === 'analysis') loadAnalysisData()
-}
-
-function openStudentsCrisis() {
-  filterCrisis.value = 'severe'
-  activeSubPage.value = 'students'
-}
-
 async function loadStudents() {
   try {
     students.value = await getStudents(search.value || undefined)
@@ -1096,56 +811,10 @@ async function loadDashboard() {
   } catch {}
 }
 
-async function loadAnalysisData() {
-  try {
-    evalData.value = await getClassEvaluation()
-  } catch {}
-  try {
-    classStats.value = await getClassStats()
-  } catch {}
-}
-
-async function loadLeaveData() {
-  const tab = leaveTab.value
-  try {
-    if (tab === 'pending') pendingLeaves.value = await getPendingLeaves()
-    else if (tab === 'approved') approvedLeaves.value = await getAllLeaves('approved')
-    else if (tab === 'rejected') rejectedLeaves.value = await getAllLeaves('rejected')
-  } catch {}
-}
-
-async function confirmReject() {
-  if (!rejectReason.value.trim()) { ElMessage.warning('请填写拒绝理由'); return }
-  if (!rejectTarget.value) return
-  try {
-    await reviewLeave(rejectTarget.value.id, 'reject', rejectReason.value)
-    ElMessage.success('已拒绝')
-    rejectVisible.value = false
-    loadLeaveData()
-  } catch { ElMessage.error('操作失败') }
-}
-
-async function loadMyAnnouncements() {
-  try {
-    myAnnouncements.value = await getTeacherAnnouncements()
-  } catch {}
-}
-
-async function handleCreateAnnouncement() {
-  if (!createForm.value.title.trim() || !createForm.value.content.trim()) {
-    ElMessage.warning('请填写标题和内容')
-    return
-  }
-  const fd = new FormData()
-  fd.append('title', createForm.value.title)
-  fd.append('content', createForm.value.content)
-  fd.append('urgency', createForm.value.urgency)
-  try {
-    await createAnnouncement(fd)
-    ElMessage.success('公告已发布')
-    createDialogVisible.value = false
-    loadMyAnnouncements()
-  } catch { ElMessage.error('发布失败') }
+/** 页头「更多」菜单：导入 / 导出 */
+function onHeadCommand(cmd: string) {
+  if (cmd === 'export') handleExportStudents()
+  else if (cmd === 'import') importVisible.value = true
 }
 
 // ===== 数据导入导出 =====
@@ -1263,38 +932,6 @@ async function confirmImport() {
   }
 }
 
-// ===== AI 分析 =====
-async function handleClassAnalysis() {
-  await loadAnalysisData()
-  const cs = classStats.value
-  const ev = evalData.value
-  const g = ev.growth || {}
-  const profiles = students.value.slice(0, 60).map(p => {
-    const crisisNote = p.crisis_level && p.latest_crisis_summary
-      ? `、最近危机「${p.latest_crisis_summary.slice(0, 40)}」`
-      : ''
-    return `- ${p.name}：成长记录${p.growth_count}条、综合评分${p.score}分、心理状态「${crisisLevelLabel(p.crisis_level)}」${crisisNote}`
-  }).join('\n')
-
-  const prompt = `作为辅导员老师，请分析班级情况并提出建议：
-
-班级图表数据：
-- 学生总数：${cs.total_students}
-- 心理危机分布：高危${cs.crisis_stats?.severe || 0}人、中危${cs.crisis_stats?.moderate || 0}人、低危${cs.crisis_stats?.mild || 0}人
-- 危机预警趋势：${JSON.stringify(cs.crisis_trend)}
-
-班级成长数据：
-- 平均GPA：${ev.avg_gpa}，平均综合评分：${ev.avg_score}
-- 成长统计：荣誉${g.honor || 0}、竞赛${g.competition || 0}、实践${g.practice || 0}、论文${g.paper || 0}、成果${g.achievement || 0}
-
-手下学生成长明细：
-${profiles || '（暂无）'}
-
-请从班级整体概况、成长分析、心理健康与危机预警、辅导员工作建议（对重点关注学生点名提醒）等方面分析，控制在400字以内。`
-
-  await runAnalysis(prompt, { skipCache: true })
-}
-
 // ===== 工具函数 =====
 function crisisType(level: string) {
   const map: Record<string, string> = { severe: 'danger', moderate: 'warning', mild: 'info' }
@@ -1352,6 +989,7 @@ function openContact(s: StudentSummary) {
 onMounted(async () => {
   await loadStudents()
   loadDashboard()
+  loadAnalysisData()
   // 从消息页等入口深链：?student=<id> 直接打开该学生详情
   const deepId = Number(route.query.student)
   if (deepId) {
@@ -1361,38 +999,171 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (mascotTipTimer) { clearTimeout(mascotTipTimer); mascotTipTimer = null }
+  if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
 
 <style scoped>
-.students-page { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 12px 16px 24px; background: #f5f6f8; }
-
-/* ===== 桌面端样式（对齐教师端 UI 规范） ===== */
-.page-header {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  margin-bottom: 16px; padding: 0 4px;
+.students-page {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px 24px;
+  background: #f6f7f9;
+  /* 静默边框令牌：用 1px 发丝线取代阴影与重背景 */
+  --sp-line: #ebedf0;
+  --sp-line-strong: #e4e7ec;
 }
-.header-left h2 { font-size: 20px; font-weight:700; color:#101828; margin:0; letter-spacing:-0.2px; }
-.page-sub { font-size: 12px; color: #98a2b3; margin: 4px 0 0; }
-.page-sub strong { color: #2563eb; }
-.header-actions { display: flex; gap: 8px; align-items: center; }
+
+/* ===== 概况便当格（Bento Grid）：模块化磁贴，每格只做一件事 ===== */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.bento-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--sp-line);
+  border-radius: 12px;
+  background: #fff;
+}
+.bento-tile-lg { grid-column: span 2; }
+.bento-label { font-size: 12px; color: #71717a; }
+.bento-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #101828;
+  font-variant-numeric: tabular-nums;
+}
+.bento-value-warn { color: #d92d20; }
+.bento-value-ok { color: #079455; }
+.bento-hint { font-size: 11.5px; color: #a1a1aa; }
+.bento-tile-action {
+  grid-column: span 2;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  background: #f8fafc;
+  border-color: #e6ecf6;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.bento-tile-action:hover { border-color: #cfdcf3; }
+.bento-tile-action:active { background: #eff4ff; }
+.bento-action-icon {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: #eff4ff;
+  color: #2563eb;
+}
+.bento-action-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bento-tile-action .bento-label { font-size: 13.5px; font-weight: 600; color: #101828; }
+.bento-tile-action .bento-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 767px) {
+  .bento { margin: 12px 16px 14px; }
+}
+
+/* ===== 学生页头（极简应用栏：仅标题 + 更多操作） ===== */
+.app-head {
+  background: #fff;
+  border-bottom: 1px solid #ebedf0;
+  padding: 0 16px;
+  margin-bottom: 14px;
+}
+.app-head-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 12px;
+}
+.app-head-lead { min-width: 0; }
+.app-head-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  color: #101828;
+}
+.app-head-sub {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: #71717a;
+}
+
+.app-icon-btn {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 999px;
+  background: transparent; color: #4b5563;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.app-icon-btn:active { background: #f2f3f5; }
+.app-icon-btn:hover { background: #f2f3f5; color: #2563eb; }
+
+/* 搜索：白底 + 发丝边（与静默卡片同语言），聚焦时品牌描边 + 柔光环 */
+.list-search :deep(.el-input__wrapper) {
+  height: 38px;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--sp-line) inset;
+  transition: box-shadow 0.15s ease;
+}
+.list-search :deep(.el-input__wrapper:hover) { box-shadow: 0 0 0 1px #d9dee7 inset; }
+.list-search :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #2563eb inset, 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.list-search :deep(.el-input__inner) { height: 38px; font-size: 13.5px; color: #101828; }
+.list-search :deep(.el-input__prefix),
+.list-search :deep(.el-input__clear) { color: #9aa4b2; }
+.filter-search { width: 240px; flex: none; }
+
+/* 桌面端：应用栏收敛为带圆角的白色卡片 */
+@media (min-width: 768px) {
+  .app-head {
+    border: 1px solid #ebedf0;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+}
 
 .filter-bar {
-  display: flex; gap: 8px; margin-bottom: 14px; padding: 10px 14px;
-  background: linear-gradient(135deg, #f8faff 0%, #f0f8ff 100%);
-  border-radius: 10px; border: 1px solid rgba(64,158,255,0.12);
+  display: flex; gap: 8px; margin-bottom: 14px; padding: 10px 12px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--sp-line);
   flex-wrap: wrap; align-items: center;
-  box-shadow: 0 1px 6px rgba(64,158,255,0.06);
 }
+
+/* 空态：吉祥物在此处出现，承担产品个性 */
+.empty-mascot { width: 96px; height: 96px; object-fit: contain; opacity: 0.9; }
+.empty-text { color: #98a2b3; font-size: 13px; margin: 8px 0 0; }
+
+.analytics-section { margin-bottom: 14px; }
+.analytics-section-head { display: flex; align-items: baseline; gap: 10px; padding: 0 4px 8px; }
+.analytics-section-title { font-size: 15px; font-weight: 700; color: #101828; }
+.analytics-section-sub { font-size: 12px; color: #98a2b3; }
 
 .student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .student-card {
-  background: #fff; border-radius: 10px; padding: 14px;
-  border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-  transition: all 0.2s ease; cursor: default;
+  background: #fff; border-radius: 12px; padding: 14px;
+  border: 1px solid var(--sp-line);
+  transition: border-color 0.15s ease; cursor: default;
 }
-.student-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+.student-card:hover { border-color: #cfdcf3; }
 .student-card.level-severe { border-left: 3px solid #f56c6c; }
 .student-card.level-moderate { border-left: 3px solid #e6a23c; }
 .student-card.level-mild { border-left: 3px solid #909399; }
@@ -1440,72 +1211,12 @@ onUnmounted(() => {
 .skill-list { display: flex; flex-direction: column; gap: 6px; }
 .skill-item { display: flex; align-items: center; gap: 6px; }
 
-/* ===== 移动端样式（支付宝风格） ===== */
-.ms-header {
-  background: linear-gradient(160deg, #2374f0 0%, #1a5fe0 60%, #327df0 100%);
-  padding: 0 16px 16px;
-  color: #fff;
-  position: relative;
-  overflow: hidden;
-}
-.ms-header::after {
-  content: '';
-  position: absolute; top: -70px; right: -60px;
-  width: 200px; height: 200px; border-radius: 50%;
-  background: rgba(255,255,255,0.07); pointer-events: none;
-}
-.ms-statusbar-space { height: 14px; }
-.ms-header-top { display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 1; }
-.ms-header-greet { display: flex; flex-direction: column; gap: 4px; }
-.ms-greet-line1 { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; }
-.ms-greet-line2 { font-size: 11px; opacity: 0.82; letter-spacing: 1.5px; }
-.ms-mascot {
-  width: 38px; height: 38px; object-fit: contain;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.22));
-  flex-shrink: 0;
-}
-.ms-search {
-  margin-top: 12px; position: relative; z-index: 1;
-}
-.ms-search-input :deep(.el-input__wrapper) {
-  background: rgba(255,255,255,0.96);
-  border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 4px 14px;
-}
-.ms-search-input :deep(.el-input__wrapper.is-focus) { box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
-.ms-search-input :deep(.el-input__inner) { height: 34px; color: #1a1a2e; font-size: 13px; }
-.ms-search-input :deep(.el-input__inner::placeholder) { color: #a6a9ad; }
-
-/* 通用卡片 */
+/* 通用卡片（静默：1px 发丝边，无阴影） */
 .ms-card {
   background: #fff; border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  border: 1px solid var(--sp-line);
   overflow: hidden;
 }
-.ms-stats-card { margin: -10px 12px 0; padding: 14px 6px; position: relative; z-index: 2; }
-.ms-stats { display: flex; align-items: center; }
-.ms-stat-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
-.ms-stat-item:active { opacity: 0.7; }
-.ms-stat-num { font-size: 20px; font-weight: 700; line-height: 1; font-family: 'DIN Alternate', 'Avenir', sans-serif; }
-.ms-stat-label { font-size: 11px; color: #888; }
-.ms-stat-divider { width: 1px; height: 24px; background: #f0f1f3; }
-
-.ms-modules { margin: 10px 12px 0; padding: 12px 4px 6px; }
-.ms-module-grid { display: flex; justify-content: space-around; align-items: flex-start; }
-.ms-module-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; cursor: pointer; }
-.ms-module-cell:active { opacity: 0.7; }
-.ms-module-icon {
-  width: 40px; height: 40px; border-radius: 50%; color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-}
-.ms-module-name { font-size: 11px; color: #333; }
-
-.ms-section-title { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; }
-.ms-section-title-text { font-size: 15px; font-weight: 700; color: #1a1a2e; }
-.ms-section-title-extra { display: flex; align-items: center; gap: 2px; font-size: 12px; color: #1677ff; }
-
 .ms-student-list { margin: 0 12px; }
 .ms-student-card {
   display: flex; align-items: center; gap: 10px;
@@ -1521,29 +1232,20 @@ onUnmounted(() => {
 .ms-student-sub { font-size: 12px; color: #999; }
 .ms-student-arrow { flex-shrink: 0; }
 
-.ms-empty { text-align: center; color: #999; font-size: 13px; padding: 26px 0; }
+.ms-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; color: #98a2b3; font-size: 13px; padding: 26px 0;
+}
+.ms-empty-mascot { width: 72px; height: 72px; object-fit: contain; opacity: 0.85; }
 
-/* ===== 移动端右滑子页面 ===== */
-.ms-sub-page {
-  position: fixed; inset: 0; background: #f5f6f7;
-  z-index: 200; display: flex; flex-direction: column; overflow: hidden;
-}
-.ms-sub-header {
-  display: flex; align-items: center; justify-content: space-between;
-  height: 50px; padding: 0 12px; background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
-}
-.ms-sub-title { font-size: 16px; font-weight: 600; color: #1a1a1a; }
-.ms-sub-body { flex: 1; overflow-y: auto; padding: 12px; }
+/* 名单区搜索：全宽单行，紧贴它所筛选的列表 */
+.ms-list-search { margin: 0 16px 10px; }
 
-.ms-search-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.ms-search-input-wrap { flex: 1; }
-.ms-search-input-wrap :deep(.el-input__wrapper) {
-  border-radius: 22px; padding: 1px 14px;
-  background: #fff; box-shadow: 0 0 0 1px #fff inset;
-  height: 40px;
-}
-.ms-search-input-wrap :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #1677ff inset; }
-.ms-search-input-wrap :deep(.el-input__inner) { height: 40px; }
+/* ===== 移动端学生列表工具条 ===== */
+.ms-list-toolbar { display: flex; align-items: center; gap: 10px; margin: 0 12px; }
+.ms-list-toolbar .ms-chip-scroll { flex: 1; margin: 0; padding: 0 0 4px; }
+.ms-list-toolbar .ms-filter-btn { margin-bottom: 4px; }
+
 .ms-filter-btn {
   display: flex; align-items: center; gap: 4px;
   height: 40px; padding: 0 12px; border-radius: 20px;
@@ -1561,175 +1263,6 @@ onUnmounted(() => {
   background: #fff; color: #555; font-size: 13px; cursor: pointer;
 }
 .ms-chip.active { background: #1677ff; color: #fff; font-weight: 600; }
-
-.ms-analysis-grid { display: flex; flex-direction: column; gap: 10px; }
-.ms-chart-card {
-  background: #fff; border-radius: 14px; padding: 12px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-}
-.ms-chart-card-header { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #1f2937; margin-bottom: 8px; }
-.ms-chart-container { height: 200px; }
-
-/* ---- 悬浮智能体 + 分析弹窗 ---- */
-.mascot-pet {
-  position: fixed;
-  right: 16px;
-  bottom: 84px;
-  z-index: 130;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  -webkit-tap-highlight-color: transparent;
-}
-.mascot-pet-img {
-  width: 76px;
-  height: 76px;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 14px rgba(91, 141, 239, 0.45));
-}
-.mascot-pet:active .mascot-pet-img { transform: scale(0.92); }
-@keyframes mascot-pet-bounce {
-  0%, 100% { transform: translateY(0) scale(1); }
-  30% { transform: translateY(-8px) scale(1.04); }
-  55% { transform: translateY(0) scale(1); }
-  75% { transform: translateY(-4px) scale(1.02); }
-}
-.mascot-tip-bubble {
-  position: relative;
-  background: #fff;
-  border: 1px solid #e9d5ff;
-  border-radius: 12px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-  padding: 8px 10px 8px 12px;
-  margin-bottom: 10px;
-  margin-right: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #4c1d95;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.mascot-tip-bubble::after {
-  content: '';
-  position: absolute;
-  right: 22px;
-  bottom: -6px;
-  width: 12px;
-  height: 12px;
-  background: #fff;
-  border-right: 1px solid #e9d5ff;
-  border-bottom: 1px solid #e9d5ff;
-  transform: rotate(45deg);
-}
-.mascot-tip-text { white-space: nowrap; }
-.mascot-tip-close {
-  display: inline-flex;
-  width: 16px; height: 16px;
-  align-items: center; justify-content: center;
-  border-radius: 50%;
-  background: #f3e8ff;
-  color: #7c3aed;
-  font-size: 10px;
-  flex-shrink: 0;
-}
-.tip-pop-enter-active,
-.tip-pop-leave-active { transition: all 0.25s ease !important; }
-.tip-pop-enter-from,
-.tip-pop-leave-to { opacity: 0; transform: translateY(8px) scale(0.92); }
-
-.dialog-header { display: flex; align-items: center; gap: 10px; }
-.dialog-header-mascot { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.35)); }
-.dialog-header-text { display: flex; flex-direction: column; }
-.dialog-title { font-size: 16px; font-weight: 700; color: #4c1d95; }
-.dialog-sub { font-size: 11px; color: #7c3aed; margin-top: 2px; }
-.dialog-content { min-height: 200px; }
-.dialog-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 12px; gap: 14px; }
-.dialog-loading-mascot { width: 72px; height: 72px; object-fit: contain; animation: mascot-pet-bounce 1.4s ease-in-out infinite !important; }
-.dialog-loading-text { font-size: 13px; color: #7c3aed; margin: 0; }
-.dialog-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 12px; gap: 10px; color: #9ca3af; font-size: 13px; margin: 0; }
-.dialog-empty-icon { font-size: 32px; color: #c4b5fd; }
-.dialog-footer { display: flex; justify-content: flex-end; gap: 8px; }
-
-.ms-ai-text { font-size: 13px; color: #333; line-height: 1.7; }
-.ms-ai-text :deep(.md-h2), .ms-ai-text :deep(.md-h3), .ms-ai-text :deep(.md-h4) { color: #1a1a2e; margin: 10px 0 6px; }
-.ms-ai-text :deep(.md-li) { margin: 4px 0; }
-.ms-ai-text :deep(.md-ul) { padding-left: 18px; }
-
-:deep(.mascot-analysis-dialog) {
-  border-radius: 16px !important;
-  background: linear-gradient(180deg, #faf7ff 0%, #ffffff 42%) !important;
-}
-:deep(.mascot-analysis-dialog .el-dialog__header) { padding-bottom: 6px; margin-right: 0; }
-:deep(.mascot-analysis-dialog .el-dialog__body) { padding-top: 4px; }
-
-.ms-lease-card {
-  background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-}
-.ms-lease-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.ms-lease-name { font-size: 15px; font-weight: 600; color: #1a1a2e; }
-.ms-lease-date { font-size: 13px; color: #666; margin-bottom: 4px; }
-.ms-lease-reason { font-size: 13px; color: #999; line-height: 1.4; margin-bottom: 8px; }
-.ms-lease-actions { display: flex; gap: 8px; }
-
-.ms-announce-publish {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; height: 44px; border: none; border-radius: 12px;
-  background: linear-gradient(135deg, #2374f0 0%, #1a5fe0 100%);
-  color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 12px rgba(35,116,240,0.25);
-}
-.ms-announce-publish:active { transform: scale(0.98); }
-
-.ms-announce-empty {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  text-align: center; padding: 48px 20px; color: #999;
-}
-.ms-announce-empty-icon {
-  width: 64px; height: 64px; border-radius: 50%; background: #f2f4f7;
-  display: flex; align-items: center; justify-content: center; color: #c0c4cc;
-}
-.ms-announce-empty p { margin: 0; font-size: 15px; color: #666; font-weight: 600; }
-.ms-announce-empty span { font-size: 13px; color: #b0b5c0; }
-
-.ms-announce-list { display: flex; flex-direction: column; gap: 10px; }
-.ms-announce-card {
-  display: flex; gap: 12px;
-  background: #fff; border-radius: 14px; padding: 14px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-  position: relative; overflow: hidden;
-}
-.ms-announce-card.announce-urgent { border-left: 3px solid #f56c6c; }
-.ms-announce-card.announce-important { border-left: 3px solid #e6a23c; }
-.ms-announce-card.announce-normal { border-left: 3px solid #e5e7eb; }
-.ms-announce-icon {
-  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-}
-.announce-icon-urgent { background: rgba(245,108,108,0.1); color: #f56c6c; }
-.announce-icon-important { background: rgba(230,162,60,0.12); color: #e6a23c; }
-.announce-icon-normal { background: rgba(144,147,153,0.1); color: #909399; }
-.ms-announce-main { flex: 1; min-width: 0; }
-.ms-announce-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.ms-announce-title { font-size: 15px; font-weight: 600; color: #1f2937; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ms-announce-content { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 8px; word-break: break-word; }
-.ms-announce-footer { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #999; }
-
-.ms-more-list { display: flex; flex-direction: column; gap: 10px; }
-.ms-more-item {
-  display: flex; align-items: center; gap: 14px;
-  background: #fff; border-radius: 14px; padding: 16px 14px;
-  font-size: 14px; color: #333;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-}
-.ms-more-item :deep(.el-icon:first-child) { font-size: 22px; }
-.ms-more-item span { flex: 1; }
-.ms-more-item:active { background: #fafafa; }
 
 /* ===== 导入学生数据 ===== */
 .ms-import-tip { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 14px; }

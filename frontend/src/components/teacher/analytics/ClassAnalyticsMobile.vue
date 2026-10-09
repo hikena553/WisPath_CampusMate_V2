@@ -2,7 +2,7 @@
   <div class="sub-page">
     <div class="sub-page-header">
       <el-button text circle @click="emit('close')"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
-      <span class="sub-page-title">数据分析</span>
+      <span class="sub-page-title">班级数据分析</span>
       <div style="width:36px"></div>
     </div>
     <div class="sub-page-body">
@@ -54,7 +54,7 @@
           <span class="mascot-tip-text">点我查看班级情况分析~</span>
         </div>
       </transition>
-      <img src="/images/mascot.png" alt="绵小城" class="mascot-pet-img" />
+      <img :src="siteMascot" :alt="siteName" class="mascot-pet-img" />
     </div>
   </div>
 </template>
@@ -65,6 +65,10 @@ import { ArrowLeft, Close, DataAnalysis, Histogram, WarningFilled } from '@eleme
 import VChart from 'vue-echarts'
 import { useClassCharts } from '@/composables/useClassCharts'
 import type { ClassStats, ClassEvaluation } from '@/api/teacher'
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
+// 吉祥物与站点名称取自站点配置：管理端变更后教师端同步
+const { siteMascot, siteName } = useSiteConfig()
 
 const props = defineProps<{
   classStats: ClassStats
@@ -123,10 +127,9 @@ function handleMascotClick() {
 
 .mobile-section-card {
   background: #fff;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 12px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+  border: 1px solid #ebedf0;
 }
 
 .chart-container {

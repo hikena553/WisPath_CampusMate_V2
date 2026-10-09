@@ -24,20 +24,7 @@
     <HomeAiPanel :proactive-actions="proactiveActions" :contact-suggestions="contactSuggestions"
       :ai-loading="aiLoading" @refresh="loadAiDecisions" />
 
-    <!-- ===== 第二层：数据分析区（左2:右1） ===== -->
-    <HomeAnalyticsCharts v-if="!isMobile" :class-stats="classStats" :eval-data="evalData"
-      :analysis-result="analysisResult" :analysis-loading="analysisLoading" @navigate="navigateTo"
-      @analyze="handleClassAnalysis" />
-
-    <!-- 移动端：数据分析入口 -->
-    <div v-if="isMobile" class="mobile-charts">
-      <div class="mobile-section-card mobile-chart-entry" @click="showChartSubPage = true">
-        <div class="mobile-section-header">
-          <div class="section-title"><el-icon><DataAnalysis /></el-icon><span>数据分析</span></div>
-          <el-icon color="#ccc"><DArrowRight /></el-icon>
-        </div>
-      </div>
-    </div>
+    <!-- 班级数据分析：归属「学生」页（与学生相关的数据维度），首页不再内嵌（功能不交叉） -->
 
     <!-- 移动端：逾期提醒 + 今日任务 + 公告 -->
     <HomeMobileToday v-if="isMobile" :today-leaves="todayLeaves" :today-schedules="todaySchedules"
@@ -88,10 +75,6 @@
       @delete="handleDelete"
     />
 
-    <!-- 移动端图表子页面 -->
-    <HomeMobileCharts v-if="isMobile && showChartSubPage" :class-stats="classStats" :eval-data="evalData"
-      @close="showChartSubPage = false" @open-analysis="openMascotAnalysis" />
-
     <!-- 审批管理：归属「审批管理」模块页，首页不再内嵌（功能不交叉） -->
 
     <!-- 发布公告 Dialog -->
@@ -115,11 +98,6 @@
     <!-- 记录关怀（来自任务卡） -->
     <CareRecordDialog v-model="showCareDialog" :student-id="careStudentId"
       :student-name="careStudentName" :task-id="careTaskId" :task-title="careTaskTitle" />
-
-    <!-- 桌宠弹窗：班级情况分析 -->
-    <HomeMascotAnalysisDialog v-model:visible="showAnalysisDialog" :analysis-result="analysisResult"
-      :analysis-loading="analysisLoading" :analyze="runAnalysis" :load-profiles="loadStudentProfiles"
-      :build-prompt="buildAnalysisPrompt" />
   </div>
 </template>
 
@@ -128,29 +106,25 @@ import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivate
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
-  DataAnalysis, UserFilled,
-  WarningFilled as WarnIcon, EditPen, DArrowRight,
-  List, Tickets
+  UserFilled,
+  WarningFilled as WarnIcon, EditPen,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
 import { getAlerts } from '@/api/crisis'
 import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'
 import { getPendingLeaves } from '@/api/leave'
-import { getDashboardStats, getClassEvaluation, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getClassStats, getOverdueSchedules, updateTeacherSchedule, getStudents, suggestContacts } from '@/api/teacher'
-import { getTeacherTaskSummary, type TeacherTask, type TeacherTaskSummary } from '@/api/teacherTask'
-import type { DashboardStats, ClassEvaluation, ClassStats, ScheduleItem, ScheduleUrgency, StudentSummary, ContactSuggestion } from '@/api/teacher'
+import { getDashboardStats, getTeacherSchedules, createTeacherSchedule, deleteTeacherSchedule, getOverdueSchedules, updateTeacherSchedule, suggestContacts } from '@/api/teacher'
+import type { TeacherTask } from '@/api/teacherTask'
+import type { DashboardStats, ScheduleItem, ScheduleUrgency, ContactSuggestion } from '@/api/teacher'
 import { getAnnouncements } from '@/api/campus'
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import type { CrisisAlert, LeaveRequestOut, Announcement } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
 import HomeKpiCards from './HomeKpiCards.vue'
 import HomeTopBanner from './HomeTopBanner.vue'
 import HomeAiPanel from './HomeAiPanel.vue'
-import HomeAnalyticsCharts from './HomeAnalyticsCharts.vue'
-import HomeMobileCharts from './HomeMobileCharts.vue'
 import HomeMobileToday from './HomeMobileToday.vue'
 import HomeDesktopSchedule from './HomeDesktopSchedule.vue'
 import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
@@ -160,7 +134,6 @@ import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import HomeQuickAddTask from './HomeQuickAddTask.vue'
 import HomeAddScheduleDialog from './HomeAddScheduleDialog.vue'
-import HomeMascotAnalysisDialog from './HomeMascotAnalysisDialog.vue'
 import TodayTasksCard from '@/components/teacher/workbench/TodayTasksCard.vue'
 import WeekPlanCard from '@/components/teacher/workbench/WeekPlanCard.vue'
 import WorkloadCard from '@/components/teacher/workbench/WorkloadCard.vue'
@@ -200,17 +173,7 @@ const pendingLeaves = ref<LeaveRequestOut[]>([])
 const announcements = ref<Announcement[]>([])
 const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
-const classStats = ref<ClassStats>({
-  total_students: 0,
-  gender_stats: {},
-  crisis_stats: {},
-  grade_stats: {},
-  political_stats: {},
-  hometown_stats: {},
-  crisis_trend: [],
-})
 const campusAnnouncements = ref<Announcement[]>([])
-const showChartSubPage = ref(false)
 const showScheduleSubPage = ref(false)
 const dataReady = ref(false) // 标记数据是否已加载完成，防止空状态闪烁
 
@@ -220,8 +183,6 @@ function initFromCache() {
   const cachedAlerts = getCachedData<CrisisAlert[]>('alerts')
   const cachedPendingLeaves = getCachedData<LeaveRequestOut[]>('pending-leaves')
   const cachedAnnouncements = getCachedData<Announcement[]>('announcements')
-  const cachedEval = getCachedData<ClassEvaluation>('class-evaluation')
-  const cachedClassStats = getCachedData<ClassStats>('class-stats')
   const cachedCampusAnn = getCachedData<Announcement[]>('announcements')
   const cachedSchedules = getCachedData<ScheduleItem[]>('teacher-schedules')
   const cachedMyAnn = getCachedData<AnnouncementItem[]>('teacher-announcements')
@@ -230,14 +191,12 @@ function initFromCache() {
   if (cachedAlerts) alerts.value = cachedAlerts
   if (cachedPendingLeaves) pendingLeaves.value = cachedPendingLeaves
   if (cachedAnnouncements) announcements.value = cachedAnnouncements
-  if (cachedEval) evalData.value = cachedEval
-  if (cachedClassStats) classStats.value = cachedClassStats
   if (cachedCampusAnn) campusAnnouncements.value = cachedCampusAnn
   if (cachedSchedules) schedules.value = cachedSchedules
   if (cachedMyAnn) myAnnouncements.value = cachedMyAnn
   if (cachedOverdue) overdueSchedules.value = cachedOverdue
   // 只要任意缓存有数据，就标记为 ready，避免显示加载占位符
-  if (cachedStats || cachedAlerts || cachedPendingLeaves || cachedAnnouncements || cachedEval || cachedClassStats || cachedCampusAnn || cachedSchedules || cachedMyAnn) {
+  if (cachedStats || cachedAlerts || cachedPendingLeaves || cachedAnnouncements || cachedCampusAnn || cachedSchedules || cachedMyAnn) {
     dataReady.value = true
   }
 }
@@ -275,85 +234,6 @@ async function toggleScheduleComplete(s: ScheduleItem) {
   }
 }
 
-// ===== AI 班级分析 =====
-const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
-
-// 桌宠与弹窗状态
-const showAnalysisDialog = ref(false)
-const studentProfiles = ref<StudentSummary[]>([])
-
-function crisisLevelLabel(level?: string | null) {
-  const map: Record<string, string> = { severe: '高危预警', moderate: '中危预警', mild: '低危预警', resolved: '已解决' }
-  return level ? (map[level] || level) : '暂无预警'
-}
-
-/** 拉取手下学生的成长画像（供 AI 分析使用） */
-async function loadStudentProfiles() {
-  if (studentProfiles.value.length) return
-  try {
-    studentProfiles.value = await getStudents()
-  } catch {
-    studentProfiles.value = [] // 拉取失败时退化为仅用汇总数据分析
-  }
-}
-
-function buildAnalysisPrompt() {
-  const stats = classStats.value
-  const ev = evalData.value
-  const g = ev.growth || {}
-  const profiles = studentProfiles.value
-  const listed = profiles.slice(0, 60)
-  const profileLines = listed.map((p) => {
-    const skills = p.skills_json?.skills?.length ?? 0
-    const interests = p.skills_json?.interests?.length ?? 0
-    const crisisNote = p.crisis_level && p.latest_crisis_summary
-      ? `、最近危机「${p.latest_crisis_summary.slice(0, 40)}」`
-      : ''
-    return `- ${p.name}：成长记录${p.growth_count}条、综合评分${p.score}分、心理状态「${crisisLevelLabel(p.crisis_level)}」、技能${skills}项、兴趣${interests}项${crisisNote}`
-  })
-  const profileText = profileLines.length
-    ? profileLines.join('\n') + (profiles.length > listed.length ? `\n（其余${profiles.length - listed.length}名学生未列出）` : '')
-    : '（暂无学生明细数据）'
-
-  return `作为辅导员老师，请基于以下班级图表数据与手下学生成长数据，分析班级情况并提出建议：
-
-班级图表数据：
-- 学生总数：${stats.total_students}
-- 性别比例：${JSON.stringify(stats.gender_stats)}
-- 政治面貌：${JSON.stringify(stats.political_stats)}
-- 生源地分布：${JSON.stringify(stats.hometown_stats)}
-- 心理危机分布：高危${stats.crisis_stats?.severe || 0}人、中危${stats.crisis_stats?.moderate || 0}人、低危${stats.crisis_stats?.mild || 0}人、已解决${stats.crisis_stats?.resolved || 0}人
-- 成绩分布：优秀${stats.grade_stats?.excellent || 0}人、良好${stats.grade_stats?.good || 0}人、中等${stats.grade_stats?.medium || 0}人、及格${stats.grade_stats?.pass || 0}人、不及格${stats.grade_stats?.fail || 0}人
-- 危机预警趋势（近6个月）：${JSON.stringify(stats.crisis_trend)}
-
-班级成长数据：
-- 平均GPA：${ev.avg_gpa}，平均综合评分：${ev.avg_score}
-- 成长记录统计：荣誉${g.honor || 0}条、竞赛${g.competition || 0}条、实践${g.practice || 0}条、论文${g.paper || 0}条、成果${g.achievement || 0}条
-- 待审批请假：${ev.pending_leaves}人
-
-手下学生成长明细：
-${profileText}
-
-请从以下方面进行分析：
-1. 班级整体概况与综合能力画像
-2. 学业成绩分析
-3. 心理健康与危机预警分析
-4. 学生成长发展分析（成长记录、技能、竞赛、实践等维度）
-5. 辅导员工作建议（对需重点关注的个别学生点名提醒）
-
-请用简洁专业的语言，控制在600字以内。`
-}
-
-/** 桌宠：打开分析弹窗（首次自动分析由子组件负责） */
-function openMascotAnalysis() {
-  showAnalysisDialog.value = true
-}
-
-async function handleClassAnalysis() {
-  await loadStudentProfiles()
-  await runAnalysis(buildAnalysisPrompt(), { skipCache: true })
-}
-
 const pendingCount = computed(() =>
   stats.value.pending_leave_count + stats.value.severe_alert_count
 )
@@ -371,21 +251,7 @@ const todayStr = computed(() => {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${week[d.getDay()]}`
 })
 
-const pendingTaskCount = computed(() => todayLeaves.value.length + todaySchedules.value.length)
-
-/** 统一待办任务层概览（今日待跟进 / 逾期） */
-const taskSummary = ref<TeacherTaskSummary>({
-  pending: 0, overdue: 0, today: 0, done_this_week: 0, total: 0,
-})
-
-async function loadTaskSummary() {
-  try {
-    taskSummary.value = await getTeacherTaskSummary()
-  } catch {
-    /* 概览失败不影响首页其它数据 */
-  }
-}
-
+// 概览 KPI：只保留班级维度的只读统计；个人待办统一收敛到「我的工作台」，避免同页重复
 const statCards = computed(() => [
   {
     label: '我的学生', value: stats.value.total_students,
@@ -396,25 +262,12 @@ const statCards = computed(() => [
     color: '#f56c6c', icon: WarnIcon, link: '/teacher/crisis',
   },
   {
-    label: '今日待跟进', value: taskSummary.value.pending,
-    color: '#7c3aed', icon: Tickets, link: '__tasks__',
-  },
-  {
-    label: '待办任务', value: pendingTaskCount.value,
-    color: '#e63946', icon: List, link: '__today__',
-  },
-  {
     label: '待批请假', value: stats.value.pending_leave_count,
     color: '#e6a23c', icon: EditPen, link: '/teacher/approval',
   },
 ])
 
 // ===== Class Evaluation Radar =====
-const evalData = ref<ClassEvaluation>({
-  total_students: 0, avg_gpa: 0, avg_score: 0,
-  growth: {}, crisis: {}, pending_leaves: 0,
-})
-
 const showTodaySubPage = ref(false)
 const showTasksSubPage = ref(false)
 // 桌面端全部待办弹窗（工作台入口）
@@ -478,13 +331,7 @@ function handleTaskAdded() {
 }
 
 function navigateTo(path: string) {
-  if (path === '__today__') {
-    showTodaySubPage.value = true
-  } else if (path === '__tasks__') {
-    openTasksPanel()
-  } else {
-    router.push(path)
-  }
+  router.push(path)
 }
 
 /** 工作台：全部待办——移动端进子页，桌面端开弹窗 */
@@ -650,8 +497,6 @@ async function loadData() {
     a: getCachedData<CrisisAlert[]>('alerts'),
     pl: getCachedData<LeaveRequestOut[]>('pending-leaves'),
     ann: getCachedData<Announcement[]>('announcements'),
-    ev: getCachedData<ClassEvaluation>('class-evaluation'),
-    cs: getCachedData<ClassStats>('class-stats'),
     ca: getCachedData<Announcement[]>('announcements'),
   }
   // 立即使用缓存数据（如果有的话），消除加载等待
@@ -659,26 +504,20 @@ async function loadData() {
   if (cached.a) alerts.value = cached.a
   if (cached.pl) pendingLeaves.value = cached.pl
   if (cached.ann) announcements.value = cached.ann
-  if (cached.ev) evalData.value = cached.ev
-  if (cached.cs) classStats.value = cached.cs
   if (cached.ca) campusAnnouncements.value = cached.ca
 
   // 并行刷新最新数据（静默更新，不触发加载状态）
-  const [s, a, pl, ann, ev, cs, ca] = await Promise.all([
+  const [s, a, pl, ann, ca] = await Promise.all([
     getDashboardStats().catch(() => stats.value),
     getAlerts(undefined).catch(() => alerts.value),
     getPendingLeaves().catch(() => pendingLeaves.value),
     getAnnouncements().catch(() => announcements.value),
-    getClassEvaluation().catch(() => evalData.value),
-    getClassStats().catch(() => classStats.value),
     getAnnouncements().catch(() => campusAnnouncements.value),
   ])
   stats.value = s
   alerts.value = a
   pendingLeaves.value = pl
   announcements.value = ann
-  evalData.value = ev
-  classStats.value = cs
   campusAnnouncements.value = ca
 }
 
@@ -692,7 +531,6 @@ async function silentRefresh() {
     loadSchedules(),
     loadMyAnnouncements(),
     loadOverdueSchedules(),
-    loadTaskSummary(),
   ]).catch(() => {})
   lastRefreshAt = Date.now()
   dataReady.value = true // 数据加载完成，允许显示空状态
@@ -822,61 +660,6 @@ onUnmounted(() => {
   font-size: 11px;
   color: #999;
   margin-top: 1px;
-}
-
-/* 移动端图表卡片 */
-.mobile-charts {
-  display: flex; flex-direction: column; gap: 10px;
-  margin-bottom: 12px;
-}
-.mobile-chart-card {
-  background: #fff; border-radius: 10px; padding: 12px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-}
-.mobile-chart-preview {
-  display: flex; flex-direction: column;
-}
-.preview-item {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 8px 0; border-bottom: 1px solid #f5f5f5;
-  font-size: 13px; color: #333; cursor: pointer;
-}
-.preview-item:last-child { border-bottom: none; }
-.preview-arrow { color: #ccc; font-size: 14px; }
-
-/* 子页面 */
-.sub-page {
-  position: fixed; inset: 0; background: #f5f7fa;
-  z-index: 100; display: flex; flex-direction: column;
-}
-.sub-page-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 12px; background: #fff;
-  border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
-}
-.sub-page-title {
-  font-size: 16px; font-weight: 600; color: #1a1a1a;
-}
-.sub-page-body {
-  flex: 1; overflow-y: auto; padding: 12px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-
-/* 移动端区块卡片 */
-.mobile-section-card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 12px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-}
-
-.mobile-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
 }
 
 .dot-leave { background: #e6a23c; }
