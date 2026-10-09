@@ -9,10 +9,10 @@
     <div class="login-layer">
       <div class="brand">
         <div class="brand-icon-wrap">
-          <img src="/images/mascot.png" alt="绵小城" class="brand-mascot" />
+          <img :src="siteMascot" :alt="siteName" class="brand-mascot" />
         </div>
         <div class="brand-text">
-          <h1 class="brand-title">绵小城</h1>
+          <h1 class="brand-title">{{ siteName }}</h1>
           <p class="brand-sub">校园智能小助手</p>
         </div>
       </div>
@@ -28,7 +28,7 @@
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="loading" class="login-btn" size="large" @click="handleLogin">
-              {{ loading ? '登录中...' : '进入绵小城' }}
+              {{ loading ? '登录中...' : `进入${siteName}` }}
             </el-button>
           </el-form-item>
         </el-form>
@@ -49,9 +49,9 @@
       <div ref="trackRef" class="track">
         <section class="section">
           <div class="hero">
-            <img src="/images/mascot.png" class="hero-mascot" alt="绵小城" />
+            <img :src="siteMascot" class="hero-mascot" :alt="siteName" />
             <h1 class="hero-title">你好，新同学</h1>
-            <div class="hero-slogan"><em>绵小城</em>，你的校园 AI 伙伴</div>
+            <div class="hero-slogan"><em>{{ siteName }}</em>，你的校园 AI 伙伴</div>
             <div class="hero-sub">学习 · 生活 · 办事，一个助手全搞定</div>
           </div>
         </section>
@@ -60,7 +60,7 @@
             <div class="copy">
               <span class="tag">SMART Q&amp;A</span>
               <h2 class="section-title">有问必答，<span class="hl">随时在线</span></h2>
-              <p class="desc">学习卡壳了？生活迷茫了？随时问绵小城，<b>秒级响应</b>，全年无休，比辅导员回消息还快！</p>
+              <p class="desc">学习卡壳了？生活迷茫了？随时问{{ siteName }}，<b>秒级响应</b>，全年无休，比辅导员回消息还快！</p>
             </div>
           </div>
         </section>
@@ -69,7 +69,7 @@
             <div class="copy">
               <span class="tag">VOICE CHAT</span>
               <h2 class="section-title">想说就说，<span class="hl2">声临其境</span></h2>
-              <p class="desc">打字太慢？直接开麦！和绵小城<b>实时语音聊天</b>，像和老朋友煲电话粥，亲切又自然。</p>
+              <p class="desc">打字太慢？直接开麦！和{{ siteName }}<b>实时语音聊天</b>，像和老朋友煲电话粥，亲切又自然。</p>
             </div>
           </div>
         </section>
@@ -96,7 +96,7 @@
             <div class="copy">
               <span class="tag">ONE-STOP SERVICE</span>
               <h2 class="section-title">办事少跑腿，<span class="hl2">一站搞定</span></h2>
-              <p class="desc">失物招领、办事流程，校园事务统统交给绵小城，你只管<b>好好学习</b>。</p>
+              <p class="desc">失物招领、办事流程，校园事务统统交给{{ siteName }}，你只管<b>好好学习</b>。</p>
             </div>
           </div>
         </section>
@@ -123,15 +123,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { loginApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+// 站点品牌：登录页同样读取管理端下发的站点名称/吉祥物（未登录也可通过公开接口获取）
+const { siteName, siteMascot } = useSiteConfig()
+watch(
+  siteName,
+  (name) => {
+    document.title = `${name} — 校园智能小助手`
+  },
+  { immediate: true }
+)
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const canvasRef = ref<HTMLCanvasElement>()

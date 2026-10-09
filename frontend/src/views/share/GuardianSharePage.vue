@@ -2,7 +2,7 @@
   <div class="gs-page">
     <div class="gs-card">
       <div class="gs-brand">
-        <img src="/images/校徽_圆形.png" alt="校徽" class="gs-logo" />
+        <img :src="siteLogo" alt="校徽" class="gs-logo" />
         <span>绵阳城市学院 · 家校沟通</span>
       </div>
 
@@ -38,11 +38,15 @@ import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Lock, WarningFilled } from '@element-plus/icons-vue'
 import { viewSharedLog, type SharedLogView } from '@/api/guardian'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 
 const route = useRoute()
 const loading = ref(true)
 const error = ref('')
 const data = ref<SharedLogView | null>(null)
+
+// 分享页无需登录，同样读取管理端下发的站点 Logo（公开接口）
+const { siteLogo } = useSiteConfig()
 
 onMounted(async () => {
   const token = String(route.params.token || '')

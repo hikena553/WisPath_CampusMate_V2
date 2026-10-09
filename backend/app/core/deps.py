@@ -54,6 +54,29 @@ def get_current_user(
     return user
 
 
+def get_optional_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """可选认证：能解析出有效用户则返回，否则返回 None（不抛 401）。
+
+    用于公开但对登录用户做区分的资源（如品牌素材：登录页未登录也要能展示）。
+    """
+    token = credentials.credentials if credentials is not None else None
+    if not token:
+        token = _read_token(request)
+    if not token:
+        return None
+    payload = decode_access_token(token)
+    if not payload or is_token_revoked(token):
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    return db.query(User).filter(User.id == int(user_id)).first()
+
+
 def require_role(*roles: UserRole):
     """创建角色检查依赖"""
     def role_checker(current_user: User = Depends(get_current_user)) -> User:

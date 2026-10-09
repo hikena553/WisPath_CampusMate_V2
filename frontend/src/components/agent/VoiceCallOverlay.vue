@@ -39,14 +39,14 @@
             <span v-else-if="callState === 'connecting'">连接中...</span>
             <span v-else-if="callState === 'listening'">正在聆听...</span>
             <span v-else-if="callState === 'processing'" class="pulse">思考中...</span>
-            <span v-else-if="callState === 'speaking'">绵小城正在回复...</span>
+            <span v-else-if="callState === 'speaking'">{{ agentName }}正在回复...</span>
             <span v-else-if="callState === 'error'" class="error-text">{{ errorMsg || '连接失败' }}</span>
           </div>
 
           <!-- 对话记录区（可滚动） -->
           <div class="voice-conversation" ref="convListRef">
             <div v-if="chatHistory.length === 0" class="voice-conv-empty">
-              开始说话，识别出的文字和绵小城的回复会显示在这里
+              开始说话，识别出的文字和{{ agentName }}的回复会显示在这里
             </div>
             <TransitionGroup name="conv-item">
               <div
@@ -110,6 +110,10 @@ import { useAudioVisualizer } from '@/composables/useAudioVisualizer'
 import { useEmotionDetection } from '@/composables/useEmotionDetection'
 import { batchRecordEmotion } from '@/api/emotion'
 import MianCharacter from './MianCharacter.vue'
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
+// AI 助手称谓取自站点配置（管理端「自我称谓」）：语音通话界面同步显示
+const { agentName } = useSiteConfig()
 
 const props = defineProps<{
   visible: boolean

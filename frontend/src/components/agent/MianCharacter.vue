@@ -10,7 +10,7 @@
       </div>
 
       <div class="mc-core">
-        <img src="/images/mascot.png" alt="绵小城" class="mc-img" draggable="false" />
+        <img :src="siteMascot" :alt="siteName" class="mc-img" draggable="false" />
         <div v-if="state === 'thinking'" class="mc-thought">
           <span></span><span></span><span></span>
         </div>
@@ -23,8 +23,13 @@
 </template>
 
 <script setup lang="ts">
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
 defineProps<{ state?: 'idle' | 'thinking' | 'speaking'; bubble?: string; mini?: boolean }>()
 defineEmits<{ click: [] }>()
+
+// 吉祥物形象与站点名称取自站点配置：管理端更换吉祥物后各端同步
+const { siteMascot, siteName } = useSiteConfig()
 </script>
 
 <style scoped>

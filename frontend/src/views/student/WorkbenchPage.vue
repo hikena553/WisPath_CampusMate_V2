@@ -7,12 +7,12 @@
         <div class="header-greeting">
           <div class="greeting-badge">
             <span class="badge-dot"></span>
-            绵小城 · 工作台
+            {{ siteName }} · 工作台
           </div>
           <div class="greeting-text">你好，{{ auth.userName }}</div>
           <div class="greeting-sub">今天想办理什么业务？</div>
         </div>
-        <img src="/images/mascot.png" alt="绵小城" class="header-mascot" />
+        <img :src="siteMascot" :alt="siteName" class="header-mascot" />
       </div>
     </div>
 
@@ -73,7 +73,7 @@
             <el-icon :size="20"><ChatDotRound /></el-icon>
           </div>
           <div class="contact-info">
-            <div class="contact-name">联系绵小城</div>
+            <div class="contact-name">联系{{ agentName }}</div>
             <div class="contact-desc">AI智能助手，随时解答问题</div>
           </div>
           <el-icon class="contact-arrow"><ArrowRight /></el-icon>
@@ -547,6 +547,7 @@ import { getStudentAnnouncements, getUnreadCount } from '@/api/announcement'
 import { usePolling } from '@/composables/usePolling'
 import AnnouncementPanel from '@/components/announcement/AnnouncementPanel.vue'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import {
   Calendar, Document, Promotion, ChatDotRound, Message,
   ArrowRight, ArrowLeft, Search,
@@ -555,6 +556,9 @@ import {
 
 const router = useRouter()
 const auth = useAuthStore()
+
+// 吉祥物与站点名称取自站点配置：管理端变更后学生端同步
+const { siteMascot, siteName, agentName } = useSiteConfig()
 
 const currentPage = ref<string | null>(null)
 const submitting = ref(false)

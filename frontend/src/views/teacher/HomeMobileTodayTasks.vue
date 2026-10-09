@@ -212,7 +212,7 @@
 
       <!-- 空状态 -->
       <div v-if="props.todayLeaves.length === 0 && props.todaySchedules.length === 0 && props.overdueSchedules.length === 0" class="task-empty">
-        <img src="/images/mascot.png" class="task-empty-mascot" />
+        <img :src="siteMascot" class="task-empty-mascot" />
         <div class="task-empty-text">暂无任务安排</div>
         <div class="task-empty-sub">在上方输入框添加新任务</div>
       </div>
@@ -227,6 +227,10 @@ import { ElMessage } from 'element-plus'
 import { createTeacherSchedule } from '@/api/teacher'
 import type { ScheduleItem, ScheduleUrgency } from '@/api/teacher'
 import type { LeaveRequestOut } from '@/types'
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
+// 吉祥物取自站点配置：管理端变更后教师端同步
+const { siteMascot } = useSiteConfig()
 
 const props = defineProps<{
   selectedDate: string

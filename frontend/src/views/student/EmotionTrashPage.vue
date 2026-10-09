@@ -49,7 +49,7 @@
         </div>
         <div v-else class="empty-block">
           <div class="empty-emoji">🗑️</div>
-          <div class="empty-msg">还没有情绪记录<br />去语音通话并开启摄像头，绵小城会帮你收集今天的情绪</div>
+          <div class="empty-msg">还没有情绪记录<br />去语音通话并开启摄像头，{{ agentName }}会帮你收集今天的情绪</div>
         </div>
       </div>
 
@@ -102,6 +102,10 @@ import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import { fetchEmotionStats, fetchEmotionHistory, clearEmotions, type EmotionStats, type EmotionRecordItem } from '@/api/emotion'
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
+// AI 助手称谓取自站点配置（管理端「自我称谓」）
+const { agentName } = useSiteConfig()
 
 const stats = ref<EmotionStats>({ total: 0, breakdown: [], trending: [] })
 const history = ref<EmotionRecordItem[]>([])

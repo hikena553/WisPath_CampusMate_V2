@@ -112,7 +112,7 @@
             <MianCharacter :state="charState" :bubble="charBubble" />
           </div>
           <div class="welcome-greeting">
-            <h1>你好，我是<span class="gradient-text">绵小城</span></h1>
+            <h1>你好，我是<span class="gradient-text">{{ agentName }}</span></h1>
             <p>你的校园智能管家，所有事情直接跟我聊，一站式办结</p>
           </div>
 
@@ -218,7 +218,7 @@
             ref="textareaRef"
             v-model="input"
             :disabled="loading"
-            placeholder="给绵小城发消息..."
+            :placeholder="`给${agentName}发消息...`"
             class="chat-textarea"
             rows="1"
             @input="autoResize"
@@ -350,12 +350,16 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import MianCharacter from './MianCharacter.vue'
 import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
 import ConversationActionsSheet from './ConversationActionsSheet.vue'
 
 const { isMobile } = useResponsive()
+
+// AI 助手称谓取自站点配置（管理端「自我称谓」）：各端对话界面同步显示
+const { agentName } = useSiteConfig()
 
 const charState = ref<'idle' | 'thinking' | 'speaking'>('idle')
 const charBubble = ref('')

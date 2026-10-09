@@ -32,23 +32,59 @@ EMOTION_LABELS = {
     "fearful": "害怕", "disgusted": "厌恶", "surprised": "惊讶",
 }
 
-# 原生语音接口根地址：跟随 .env 的 LLM_BASE_URL 推导（TTS/ASR/多模态同域名）
-TOKEN_PLAN_BASE = settings.llm_native_base
+TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com"
 VOICE_STT_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/aigc/multimodal-generation/generation"
 VOICE_STT_MODEL = "qwen-audio-3.0-asr-flash"
 VOICE_TTS_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/audio/tts/SpeechSynthesizer"
-# 语音合成模型：默认 flash（实测当前 Key 可用，返回 pcm 16kHz）。若所用套餐不包含
-# flash（历史上 Token Plan 白名单只放 plus），调用会返回 404 Model not exist，
-# 此时在系统设置中改用 plus，或把这里改回 qwen-audio-3.0-tts-plus。
-VOICE_TTS_MODEL = "qwen-audio-3.0-tts-flash"
-VOICE_TTS_VOICE = "longanhuan_v3.6"
+# 默认 TTS 模型：仅在 voice 无法解析到所属模型时使用
+# 大多数情况下按 VOICE_MODEL_CATALOG 自动选模型
+VOICE_TTS_MODEL_DEFAULT = "qwen-audio-3.0-tts-plus"
+# 默认音色（无设置时的兜底）：Edge 微软免费音色，无需 API Key
+EDGE_TTS_DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
+VOICE_TTS_VOICE = EDGE_TTS_DEFAULT_VOICE
 
-# ===================== TTS 引擎（开源豆包方案：Edge TTS 多音色 + 千问原生 TTS 备选） =====================
+# ===== 阿里云百炼 Qwen-Audio-TTS 音色白名单（仅保留账号实测可用的音色） =====
+# 来源：https://help.aliyun.com/zh/model-studio/qwen-audio-tts-voice-list
+# 当前 Token Plan 账号仅开通 qwen-audio-3.0-tts-plus 模型，flash/3.1-flash
+# 模型的音色全部返回 404 "Model not exist."，已全部下架不再下发。
+# 多音色需求改由 Edge TTS（微软免费）承担，无需 API Key，详见 EDGE_TTS_ZH_VOICES。
+#
+# verified 字段：True 表示用户账号/套餐下实测可用。
+VOICE_MODEL_CATALOG: dict[str, list[dict]] = {
+    "qwen-audio-3.0-tts-plus": [
+        # 社交陪伴（旗舰音色，账号实测通过）
+        {"voice": "longanlingxin", "label": "龙安灵心", "gender": "女", "tag": "社交陪伴·知心温暖音", "verified": True},
+        {"voice": "longanlufeng", "label": "龙安鲁风", "gender": "男", "tag": "社交陪伴·明亮开朗音", "verified": True},
+    ],
+    "qwen-audio-3.0-tts-flash": [],
+    "qwen-audio-3.1-tts-flash": [],
+}
+
+
+def _voice_to_model(voice: str | None) -> str:
+    """根据 voice ID 反查所属模型；找不到则用默认模型。"""
+    v = (voice or "").strip()
+    if not v:
+        return VOICE_TTS_MODEL_DEFAULT
+    for model, voices in VOICE_MODEL_CATALOG.items():
+        for item in voices:
+            if item["voice"] == v:
+                return model
+    return VOICE_TTS_MODEL_DEFAULT
+
+
+# Token Plan 音色全集（含未实测）：所有可调用的 voice ID 集合
+TOKENPLAN_ALLOWED_VOICES: set[str] = {
+    item["voice"]
+    for voices in VOICE_MODEL_CATALOG.values()
+    for item in voices
+}
+
+# ===================== TTS 引擎（开源豆包方案：Edge TTS 多音色 + Token Plan 备选） =====================
 # Edge TTS（微软免费服务，无需 API Key，400+ 音色，其中中文普通话/粤语/
 # 台湾国语/东北、陕西口音共 14 个），作为默认语音合成引擎，解决多音色与
-# “语音播报没有声音”（套餐模型受限/不稳定）两大问题；管理端仍可切换到
-# 千问原生 TTS（qwen-audio-3.0-tts-flash，精品中文音色，见 VOICE_TTS_MODEL）。
-EDGE_TTS_DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
+# “语音播报没有声音”（Token Plan 受限/不稳定）两大问题；管理端仍可切换到
+# Token Plan（qwen-audio-3.0-tts-plus，精品中文音色）。
 
 # 中文音色静态兜底列表（在线 list_voices 获取失败时使用，与在线列表同源）
 EDGE_TTS_ZH_VOICES = [
@@ -89,6 +125,32 @@ def is_edge_voice(voice: str) -> bool:
     """判断音色是否属于 Edge TTS：edge 音色以 Neural 结尾（如 zh-CN-XiaoxiaoNeural）；
     Token Plan 音色形如 longanhuan_v3.6 / longanlingxi"""
     return bool(voice and voice.strip().lower().endswith("neural"))
+
+
+def is_valid_voice(voice: str | None) -> bool:
+    """校验音色 ID 是否合法：是否在 VOICE_MODEL_CATALOG 全集中。
+
+    所有官方支持的系统音色（plus / 3.0-flash / 3.1-flash）均接受，
+    后端按 voice 归属自动选择模型调用。但**账号/套餐未实测通过的音色**
+    仍可能在阿里云侧返回 4xx（如 411 TTS speak operation failed），
+    因此调用失败时日志会完整记录真实响应，便于管理员定位可用品色。
+    """
+    v = (voice or "").strip()
+    if not v:
+        return False
+    return v in TOKENPLAN_ALLOWED_VOICES
+
+
+class InvalidVoiceError(ValueError):
+    """音色不在官方系统音色全集中，供前端 400 渲染可定位文案"""
+
+    def __init__(self, voice: str | None):
+        self.voice = voice or ""
+        super().__init__(
+            f"音色 ID 不在阿里云官方系统音色列表中：{voice!r}。"
+            "请从音色下拉中选择官方音色；未实测通过的音色可能触发 cosyvoice 4xx，"
+            "建议先试听确认可用。"
+        )
 
 
 def _fmt_edge_locale(locale: str) -> str:
@@ -157,7 +219,7 @@ def _get_tts_voice() -> str:
             db.close()
     except Exception:
         logger.exception("读取语音音色设置失败")
-    return settings.LLM_TTS_VOICE or EDGE_TTS_DEFAULT_VOICE
+    return settings.LLM_TTS_VOICE or VOICE_TTS_VOICE
 
 
 def _get_tts_prompt() -> str:
@@ -294,18 +356,27 @@ async def tokenplan_stt(audio_bytes: bytes, client: httpx.AsyncClient | None = N
 
 
 async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None, voice: str | None = None):
-    """调用千问原生 TTS（VOICE_TTS_MODEL，默认 qwen-audio-3.0-tts-flash），
-    流式下载音频文件，yield PCM 16kHz 16bit mono 分块（边下载边产出，首块尽早送达）。
+    """调用 Token Plan 语音合成，按 voice 自动选择对应模型（plus / 3.0-flash / 3.1-flash），
+    流式下载音频文件，yield PCM 16kHz 16bit mono 分块。
     voice 参数可临时覆盖当前生效音色（如管理端试听）。"""
     api_key = _get_voice_api_key()
     if not api_key:
         raise RuntimeError("语音合成未配置 API Key")
 
+    target_voice = (voice or _get_tts_voice() or "").strip()
+    # 发送请求前校验 voice：不在 VOICE_MODEL_CATALOG 全集中的 voice 调用阿里云会触发
+    # cosyvoice 4xx（如 411 TTS speak operation failed），此处拦截可避免无效请求
+    if not is_valid_voice(target_voice):
+        raise InvalidVoiceError(target_voice)
+
+    # 按 voice 自动选择所属模型（避免跨模型调用导致 411）
+    target_model = _voice_to_model(target_voice)
+
     payload = {
-        "model": VOICE_TTS_MODEL,
+        "model": target_model,
         "input": {
             "text": text,
-            "voice": voice or _get_tts_voice(),
+            "voice": target_voice,
             "format": "pcm",
             "sample_rate": 16000,
         },
@@ -315,7 +386,14 @@ async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None, voic
     async def _stream(cl: httpx.AsyncClient):
         resp = await cl.post(VOICE_TTS_URL, headers=headers, json=payload)
         if resp.status_code >= 400:
-            raise RuntimeError(f"语音合成接口返回 {resp.status_code}: {resp.text[:200]}")
+            # 完整记录阿里云返回（含 request_id / code / message），便于定位
+            # 套餐白名单、voice 拼写错误、文本超限等真实原因
+            body_text = (resp.text or "")[:500]
+            logger.error(
+                "Token Plan TTS 4xx: status=%s voice=%s model=%s body=%s",
+                resp.status_code, target_voice, target_model, body_text,
+            )
+            raise RuntimeError(f"语音合成接口返回 {resp.status_code}: {body_text}")
         body = resp.json()
         audio_url = (body.get("output") or {}).get("audio", {}).get("url")
         if not audio_url:
@@ -398,26 +476,15 @@ async def edge_tts_tts(
 
 
 async def synthesize_speech(text: str, voice: str | None = None):
-    """统一语音合成入口（开源豆包方案）：
+    """统一语音合成入口：按 voice 自动选择引擎。
 
-    - 音色为 Edge 风格（以 Neural 结尾）→ Edge TTS（免费多音色，默认引擎）
-      内部自动重试 4 次（1/2/4s 退避），仍失败则自动降级原生 TTS 保证有声音
-    - 其余音色（longan 系列等）→ 千问原生 TTS（VOICE_TTS_MODEL，默认 qwen-audio-3.0-tts-flash）
+    - 以 Neural 结尾的 voice 走 Edge TTS（微软免费，多音色，无需 API Key）。
+    - 其它 voice 走 Token Plan（阿里云百炼 qwen-audio-3.0-tts-plus 旗舰音色）。
     yield：16kHz 16bit 单声道 PCM 分块
     """
-    chosen = (voice or _get_tts_voice() or "").strip()
+    chosen = (voice or _get_tts_voice() or EDGE_TTS_DEFAULT_VOICE).strip()
     if is_edge_voice(chosen):
-        try:
-            async for chunk in edge_tts_tts(text, voice=chosen):
-                yield chunk
-            return
-        except Exception as exc:
-            logger.error("Edge TTS 连续失败，自动降级 Token Plan（voice=%s）: %s", chosen, exc)
-            fallback = _get_tts_voice()
-            if is_edge_voice(fallback):
-                fallback = ""  # 兜底音色本身也是 edge 时置空，交给 tokenplan 默认
-        # 降级：走 Token Plan 精品音色，保证播报/试听始终有声音
-        async for chunk in tokenplan_tts(text, voice=fallback or None):
+        async for chunk in edge_tts_tts(text, voice=chosen):
             yield chunk
     else:
         async for chunk in tokenplan_tts(text, voice=chosen or None):

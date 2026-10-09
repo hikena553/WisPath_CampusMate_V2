@@ -3,7 +3,7 @@
     <div class="halo"></div>
     <div class="char-body">
       <div class="char-img-wrap">
-        <img src="/images/06.png" alt="绵小城" class="char-img" />
+        <img src="/images/06.png" :alt="agentName" class="char-img" />
       </div>
       <div class="arm left"><div class="hand"></div></div>
       <div class="arm right"><div class="hand"></div></div>
@@ -12,12 +12,17 @@
       <div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div>
       <div class="dot d4"></div><div class="dot d5"></div>
     </div>
-    <div class="name-tag">绵小城</div>
+    <div class="name-tag">{{ agentName }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
 defineProps<{ state?: 'idle' | 'thinking' | 'speaking' }>()
+
+// AI 助手称谓取自站点配置（管理端「自我称谓」）
+const { agentName } = useSiteConfig()
 </script>
 
 <style scoped>

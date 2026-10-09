@@ -10,6 +10,19 @@ def test_download_requires_auth(client):
     assert resp.status_code == 401
 
 
+def test_branding_download_is_public(client):
+    """品牌素材（站点 Logo/吉祥物）为公开资源：登录页未登录也要能渲染。"""
+    target = UPLOAD_DIR / "branding" / "public_brand.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"BRANDPNG-789")
+    try:
+        resp = client.get("/api/files/branding/public_brand.png")
+        assert resp.status_code == 200
+        assert resp.content == b"BRANDPNG-789"
+    finally:
+        target.unlink(missing_ok=True)
+
+
 def test_download_unknown_category(client, login_token):
     auth = login_token()
     resp = client.get("/api/files/no_such_cat/x.png", headers=auth["headers"])

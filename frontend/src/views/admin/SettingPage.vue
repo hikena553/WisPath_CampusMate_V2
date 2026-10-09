@@ -433,8 +433,10 @@
               <div class="setting-info">
                 <div class="setting-name">合成音色</div>
                 <div class="setting-desc">
-                  当前生效：<span class="mono-text">{{ effectiveVoice }}</span>。
-                  Edge TTS 音色（{{ edgeVoicesCount }} 个）免费、无需 API Key；Token Plan 精品音色需 DashScope Key，Edge 故障时自动降级兜底
+                  当前生效：<span class="mono-text">{{ effectiveVoice }}</span>
+                  <span v-if="currentVoiceModel">（模型：{{ currentVoiceModel }}）</span>。
+                  下方展示阿里云百炼全部可用音色（{{ tokenplanVoicesCount }} 个，按模型分组）；
+                  标"实测"的音色当前账号/套餐下可用，未标的需要先点"试听"确认（可能触发 cosyvoice 4xx）。
                 </div>
               </div>
               <el-select
@@ -446,30 +448,22 @@
                 placeholder="选择或输入音色 ID"
                 style="width: 380px"
               >
-                <el-option-group v-if="edgeVoiceOptions.length" label="免费多音色 · Edge TTS（微软，无需 Key）">
+                <el-option-group
+                  v-for="group in voiceGroups"
+                  :key="group.model"
+                  :label="group.label"
+                >
                   <el-option
-                    v-for="v in edgeVoiceOptions"
+                    v-for="v in group.voices"
                     :key="v.voice"
                     :label="`${v.label}（${v.voice}）`"
                     :value="v.voice"
                   >
                     <div class="voice-option">
                       <span class="voice-option-name">{{ v.label }}</span>
+                      <el-tag v-if="v.verified" size="small" effect="plain" type="success">实测</el-tag>
+                      <el-tag v-else size="small" effect="plain" type="info">待实测</el-tag>
                       <el-tag size="small" effect="plain" :type="v.gender === '男' ? 'primary' : 'danger'">{{ v.gender || '女' }}</el-tag>
-                      <el-tag size="small" effect="plain" type="info">{{ v.tag }}</el-tag>
-                    </div>
-                    <div class="voice-option-value">{{ v.voice }}</div>
-                  </el-option>
-                </el-option-group>
-                <el-option-group v-if="tokenplanVoiceOptions.length" label="精品中文 · Token Plan（qwen-plus，需 Key）">
-                  <el-option
-                    v-for="v in tokenplanVoiceOptions"
-                    :key="v.voice"
-                    :label="`${v.label}（${v.voice}）`"
-                    :value="v.voice"
-                  >
-                    <div class="voice-option">
-                      <span class="voice-option-name">{{ v.label }}</span>
                       <el-tag size="small" effect="plain" type="warning">{{ v.tag }}</el-tag>
                     </div>
                     <div class="voice-option-value">{{ v.voice }}</div>
@@ -569,9 +563,10 @@ import {
 import { ElMessage } from 'element-plus'
 import {
   getSettings, batchUpdateSettings, generateBrandingImages, uploadBrandingImage,
-  getVoicePipelineInfo, testTtsPreview, type Setting as SettingType, type VoicePipelineInfo,
+  getVoicePipelineInfo, testTtsPreview, type Setting as SettingType, type VoicePipelineInfo, type VoiceGroup,
 } from '@/api/setting'
 import { getCrisisConfig } from '@/api/crisis'
+import { refreshSiteConfig } from '@/composables/useSiteConfig'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -727,6 +722,8 @@ async function handleApply(section: BrandSection) {
   try {
     await batchUpdateSettings({ [section.settingKey]: section.selected })
     settingsMap[section.settingKey] = section.selected
+    // 立即刷新站点配置，管理端顶栏与其余端口同步生效
+    refreshSiteConfig()
     ElMessage.success(`${section.key === 'logo' ? 'Logo' : '吉祥物'}已更新，顶栏与全站即刻生效`)
   } catch (error) {
     ElMessage.error('保存失败')
@@ -743,6 +740,7 @@ async function handleReset(section: BrandSection) {
     settingsMap[section.settingKey] = ''
     section.selected = ''
     section.candidates = []
+    refreshSiteConfig()
     ElMessage.success(section.key === 'logo' ? '已恢复默认 Logo' : '已恢复默认吉祥物')
   } catch (error) {
     ElMessage.error('操作失败')
@@ -804,35 +802,80 @@ const audioSrc = ref('')
 const voiceAudioRef = ref<HTMLAudioElement | null>(null)
 const voiceTestResult = ref('')
 
-// 音色静态兜底列表（与后端 voice/info 一致；页面加载后优先使用接口动态列表）
-// Edge TTS：14 个中文音色，免费无需 Key；Token Plan：qwen-plus 精品音色
-const STATIC_VOICE_PRESETS = [
-  { voice: 'zh-CN-XiaoxiaoNeural', label: '晓晓', gender: '女', tag: '普通话·温暖亲切', provider: 'edge' },
-  { voice: 'zh-CN-XiaoyiNeural', label: '晓伊', gender: '女', tag: '普通话·活泼友善', provider: 'edge' },
-  { voice: 'zh-CN-YunjianNeural', label: '云健', gender: '男', tag: '普通话·沉稳有力', provider: 'edge' },
-  { voice: 'zh-CN-YunxiNeural', label: '云希', gender: '男', tag: '普通话·阳光少年', provider: 'edge' },
-  { voice: 'zh-CN-YunxiaNeural', label: '云夏', gender: '男', tag: '普通话·明朗大方', provider: 'edge' },
-  { voice: 'zh-CN-YunyangNeural', label: '云扬', gender: '男', tag: '普通话·专业新闻', provider: 'edge' },
-  { voice: 'zh-CN-liaoning-XiaobeiNeural', label: '晓贝', gender: '女', tag: '东北话·爽朗有趣', provider: 'edge' },
-  { voice: 'zh-CN-shaanxi-XiaoniNeural', label: '晓妮', gender: '女', tag: '陕西话·质朴幽默', provider: 'edge' },
-  { voice: 'zh-HK-HiuGaaiNeural', label: '曉佳', gender: '女', tag: '粤语·亲切', provider: 'edge' },
-  { voice: 'zh-HK-HiuMaanNeural', label: '曉曼', gender: '女', tag: '粤语·温柔', provider: 'edge' },
-  { voice: 'zh-HK-WanLungNeural', label: '雲龍', gender: '男', tag: '粤语·沉稳', provider: 'edge' },
-  { voice: 'zh-TW-HsiaoChenNeural', label: '曉臻', gender: '女', tag: '台湾国语·自然', provider: 'edge' },
-  { voice: 'zh-TW-HsiaoYuNeural', label: '曉雨', gender: '女', tag: '台湾国语·活泼', provider: 'edge' },
-  { voice: 'zh-TW-YunJheNeural', label: '雲哲', gender: '男', tag: '台湾国语·沉稳', provider: 'edge' },
-  { voice: 'longanhuan_v3.6', label: '龙安欢（默认）', gender: '女', tag: '精品中文·默认', provider: 'tokenplan' },
-  { voice: 'longanlingxi', label: '龙安灵希', gender: '女', tag: '精品中文·可爱甜美', provider: 'tokenplan' },
+// 音色静态兜底列表（与后端 voice/info 一致；页面加载后优先使用接口动态分组）
+// Token Plan 当前账号仅开通 plus 模型 2 个音色；多音色需求由 Edge TTS 承担。
+const STATIC_VOICE_GROUPS: VoiceGroup[] = [
+  {
+    provider: 'tokenplan',
+    model: 'qwen-audio-3.0-tts-plus',
+    label: '阿里云百炼 · 旗舰社交陪伴',
+    voices: [
+      { voice: 'longanlingxin', label: '龙安灵心', gender: '女', tag: '社交陪伴·知心温暖音', provider: 'tokenplan', model: 'qwen-audio-3.0-tts-plus', verified: true },
+      { voice: 'longanlufeng', label: '龙安鲁风', gender: '男', tag: '社交陪伴·明亮开朗音', provider: 'tokenplan', model: 'qwen-audio-3.0-tts-plus', verified: true },
+    ],
+  },
+  {
+    provider: 'edge',
+    model: 'edge-tts',
+    label: 'Edge TTS · 普通话',
+    voices: [
+      { voice: 'zh-CN-XiaoxiaoNeural', label: '晓晓', gender: '女', tag: '普通话·温暖亲切', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-CN-XiaoyiNeural', label: '晓伊', gender: '女', tag: '普通话·活泼友善', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-CN-YunjianNeural', label: '云健', gender: '男', tag: '普通话·沉稳有力', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-CN-YunxiNeural', label: '云希', gender: '男', tag: '普通话·阳光少年', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-CN-YunxiaNeural', label: '云夏', gender: '男', tag: '普通话·明朗大方', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-CN-YunyangNeural', label: '云扬', gender: '男', tag: '普通话·专业新闻', provider: 'edge', model: 'edge-tts', verified: true },
+    ],
+  },
+  {
+    provider: 'edge',
+    model: 'edge-tts',
+    label: 'Edge TTS · 普通话·方言',
+    voices: [
+      { voice: 'zh-CN-liaoning-XiaobeiNeural', label: '晓贝', gender: '女', tag: '东北话·爽朗有趣', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-CN-shaanxi-XiaoniNeural', label: '晓妮', gender: '女', tag: '陕西话·质朴幽默', provider: 'edge', model: 'edge-tts', verified: true },
+    ],
+  },
+  {
+    provider: 'edge',
+    model: 'edge-tts',
+    label: 'Edge TTS · 粤语',
+    voices: [
+      { voice: 'zh-HK-HiuGaaiNeural', label: '曉佳', gender: '女', tag: '粤语·亲切', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-HK-HiuMaanNeural', label: '曉曼', gender: '女', tag: '粤语·温柔', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-HK-WanLungNeural', label: '雲龍', gender: '男', tag: '粤语·沉稳', provider: 'edge', model: 'edge-tts', verified: true },
+    ],
+  },
+  {
+    provider: 'edge',
+    model: 'edge-tts',
+    label: 'Edge TTS · 台湾国语',
+    voices: [
+      { voice: 'zh-TW-HsiaoChenNeural', label: '曉臻', gender: '女', tag: '台湾国语·自然', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-TW-HsiaoYuNeural', label: '曉雨', gender: '女', tag: '台湾国语·活泼', provider: 'edge', model: 'edge-tts', verified: true },
+      { voice: 'zh-TW-YunJheNeural', label: '雲哲', gender: '男', tag: '台湾国语·沉稳', provider: 'edge', model: 'edge-tts', verified: true },
+    ],
+  },
 ]
 
-// 音色选项：优先接口动态列表，接口未返回时用静态兜底
-const voiceOptions = computed<typeof STATIC_VOICE_PRESETS>(() => {
-  const dyn = voiceInfo.value?.voices
-  return (dyn && dyn.length ? dyn : STATIC_VOICE_PRESETS) as typeof STATIC_VOICE_PRESETS
+// 音色分组：优先接口动态分组，接口未返回时用静态兜底
+const voiceGroups = computed<VoiceGroup[]>(() => {
+  const dyn = voiceInfo.value?.voice_groups
+  return (dyn && dyn.length ? dyn : STATIC_VOICE_GROUPS)
 })
-const edgeVoiceOptions = computed(() => voiceOptions.value.filter(v => v.provider === 'edge'))
-const tokenplanVoiceOptions = computed(() => voiceOptions.value.filter(v => v.provider === 'tokenplan'))
-const edgeVoicesCount = computed(() => edgeVoiceOptions.value.length)
+const tokenplanVoiceOptions = computed(() =>
+  voiceGroups.value.flatMap(g => g.voices),
+)
+const tokenplanVoicesCount = computed(() => tokenplanVoiceOptions.value.length)
+// 当前生效音色归属的模型（来自接口 voice_model，否则从分组里反查）
+const currentVoiceModel = computed(() => {
+  if (voiceInfo.value?.voice_model) return voiceInfo.value.voice_model
+  const cur = effectiveVoice.value
+  for (const g of voiceGroups.value) {
+    if (g.voices.some(v => v.voice === cur)) return g.model
+  }
+  return ''
+})
 
 const VOICE_PROMPT_EXAMPLES = [
   { label: '温柔亲切', text: '语气温柔亲切、自然有耐心，多用安抚性表达，像知心姐姐一样陪伴学生；句子简短，口语化。' },
@@ -841,25 +884,25 @@ const VOICE_PROMPT_EXAMPLES = [
 ]
 
 const effectiveVoice = computed(() => {
-  return settingsMap['llm_tts_voice']?.trim() || voiceInfo.value?.voice || 'longanhuan_v3.6'
+  return settingsMap['llm_tts_voice']?.trim() || voiceInfo.value?.voice || 'zh-CN-XiaoxiaoNeural'
 })
 
 const voiceKeyConfigured = computed(
-  () => !!(settingsMap['llm_api_key'] || settingsMap['dashscope_api_key']) || edgeVoiceOptions.value.length > 0,
+  () => !!(settingsMap['llm_api_key'] || settingsMap['dashscope_api_key']) || tokenplanVoiceOptions.value.length > 0,
 )
 
 const voicePipeline = computed(() => {
   const llm = voiceInfo.value?.llm_model || settingsMap['llm_agent_model'] || settingsMap['llm_model'] || '未配置'
   const voice = effectiveVoice.value
   const sttModel = voiceInfo.value?.stt?.model || 'qwen-audio-3.0-asr-flash'
-  const isEdge = /neural$/i.test(voice)
-  const ttsModel = isEdge ? 'edge-tts（微软免费）' : (voiceInfo.value?.tts?.model || 'qwen-audio-3.0-tts-plus')
+  // TTS 模型优先用"当前 voice 归属的模型"，便于管理员看到实际生效的模型
+  const ttsModel = currentVoiceModel.value || voiceInfo.value?.tts?.model || 'qwen-audio-3.0-tts-plus'
   return [
     { key: 'mic', icon: Mic, title: '麦克风采集', zone: '客户端', color: 'green', desc: '采集 16kHz PCM 音频流', chips: ['噪音抵消', '端点检测'] },
     { key: 'stt', icon: Monitor, title: 'ASR 语音识别', zone: '服务端', color: 'blue', desc: '语音 → 文本转写', chips: [sttModel] },
     { key: 'emotion', icon: TriangleAlert, title: '情绪 / 危机检测', zone: '服务端', color: 'orange', desc: '视觉情绪 + 敏感词联动', chips: ['心理关注上报'] },
     { key: 'llm', icon: MessageSquare, title: '大模型理解', zone: '服务端', color: 'violet', desc: '上下文 → 流式回复文本', chips: [llm] },
-    { key: 'tts', icon: Sparkles, title: 'TTS 语音合成', zone: '服务端', color: 'cyan', desc: isEdge ? 'Edge TTS 免费合成 · 故障自动降级 Token Plan' : '短语级流式合成（边说边出）', chips: [ttsModel, voice] },
+    { key: 'tts', icon: Sparkles, title: 'TTS 语音合成', zone: '服务端', color: 'cyan', desc: '按音色自动选模型·短语级流式合成（边说边出）', chips: [ttsModel, voice] },
     { key: 'play', icon: Headphones, title: '扬声器播放', zone: '客户端', color: 'green', desc: '播放即达，开口即打断', chips: ['低延迟', '可打断'] },
   ]
 })
@@ -952,6 +995,21 @@ function handleVoiceAudioError() {
 async function handleSaveVoice() {
   savingVoice.value = true
   try {
+    // 音色校验：必须在当前下发的音色分组（任意模型）中存在。
+    // 未实测音色不拦截（管理员可能已经听过官方试听），但提示存在 4xx 风险。
+    const v = (settingsMap['llm_tts_voice'] || '').trim()
+    if (v) {
+      const matched = tokenplanVoiceOptions.value.find(o => o.voice === v)
+      if (!matched) {
+        ElMessage.warning(
+          `音色 ID「${v}」不在阿里云官方系统音色列表中。保存后后端会拒绝调用，请从下拉中选择。`,
+        )
+      } else if (!matched.verified) {
+        ElMessage.warning(
+          `音色「${matched.label}（${v}）」未在当前账号/套餐下实测通过，可能触发阿里云 cosyvoice 4xx。建议先点"试听音色"确认可用。`,
+        )
+      }
+    }
     await batchUpdateSettings({
       llm_tts_voice: settingsMap['llm_tts_voice'] || '',
       llm_tts_prompt: settingsMap['llm_tts_prompt'] || '',
@@ -1054,6 +1112,8 @@ async function handleSave() {
     // 仅提交通用基础字段：敏感 Key 由"保存AI配置"管理，避免脱敏/空值覆盖数据库
     await batchUpdateSettings(payload)
     settingsMap['crisis_keywords'] = keywords.join('，')
+    // 站点名称/系统公告可能变更，刷新站点配置供各端口同步
+    refreshSiteConfig()
     ElMessage.success('设置已保存')
   } catch (error) {
     ElMessage.error('保存失败')
@@ -1085,6 +1145,8 @@ async function handleSaveAI() {
     }
     await batchUpdateSettings(payload)
     ElMessage.success('AI配置已保存')
+    // 助手称谓（agent_name）变更后同步各端口显示
+    refreshSiteConfig()
   } catch (error) {
     ElMessage.error('保存失败')
   } finally {

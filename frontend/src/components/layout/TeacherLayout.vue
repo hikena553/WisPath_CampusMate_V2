@@ -2,8 +2,8 @@
   <div class="app-shell" :class="{ 'app-mobile': isMobile }">
     <header v-if="!isMobile" class="topbar">
       <div class="topbar-left" style="cursor:pointer" @click="goTo('/teacher')">
-        <img src="/images/校徽_圆形.png" class="topbar-badge" />
-        <span class="logo">绵小城</span>
+        <img :src="siteLogo" class="topbar-badge" />
+        <span class="logo">{{ siteName }}</span>
         <span class="logo-divider"></span>
         <span class="motto">博学、笃行、严谨、创新</span>
       </div>
@@ -15,6 +15,8 @@
         </el-tooltip>
       </div>
     </header>
+    <!-- 系统公告：管理端下发的站点公告，各端同步展示 -->
+    <SiteAnnouncementBar />
     <div class="body-area">
       <aside v-if="!isMobile" class="sidebar" :class="{ collapsed: sidebarCollapsed }">
         <nav class="sidebar-nav">
@@ -163,9 +165,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import { updateProfile } from '@/api/user'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import { uploadFile } from '@/api/upload'
@@ -174,6 +177,7 @@ import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
+import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, ChatDotRound, User, Message, Notebook, Stamp, WarningFilled,
@@ -183,6 +187,18 @@ import {
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+// 站点品牌（站点名称/Logo）与站点配置同源：管理端修改后教师端同步生效
+const { siteName, siteLogo, loadSiteConfig } = useSiteConfig()
+watch(
+  siteName,
+  (name) => {
+    document.title = `${name} · 教师端`
+  },
+  { immediate: true }
+)
+// 进入端口时拉取最新站点配置，管理员更新设置后教师端立即同步
+onMounted(() => { void loadSiteConfig(true) })
 
 // 缓存 teacher 端重型页面，避免切换时 ECharts 重建与数据重拉
 const cachedNames = ['teacher-home', 'teacher-students']
@@ -240,13 +256,13 @@ const navGroups = [
  * 移动端底部导航（5 项）：中间为「绵小城」智能体，最右为「个人中心」。
  * 首页 / 学生 / 更多 为功能页签；消息、审批、预警等模块统一收敛到「更多」宫格，避免重复入口。
  */
-const mobileNavItems = [
+const mobileNavItems = computed(() => [
   { key: 'home', label: '首页', icon: HomeFilled, route: '/teacher' },
   { key: 'students', label: '学生', icon: Notebook, route: '/teacher/students' },
-  { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/teacher/agent' },
+  { key: 'agent', label: siteName.value, iconImg: siteLogo.value, center: true, route: '/teacher/agent' },
   { key: 'more', label: '更多', icon: Grid, route: '/teacher/more' },
   { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
-]
+])
 
 const activeNavKey = computed(() => {
   const p = route.path

@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_optional_user
 from app.models.user import User
 
 router = APIRouter(tags=["files"])
@@ -49,11 +49,17 @@ def resolve_safe(rel_path: str, sub_dir: str = "") -> Path | None:
 def download_file(
     category: str,
     filename: str,
-    user: User = Depends(get_current_user),
+    user: User | None = Depends(get_optional_user),
 ):
-    """受保护文件下载：分类白名单 + 真实路径校验。"""
+    """受保护文件下载：分类白名单 + 真实路径校验。
+
+    例外：`branding`（站点 Logo / 吉祥物）属于品牌公开素材，登录页等未登录场景
+    也需要渲染，故允许匿名访问；其余分类仍强制登录。
+    """
     if category not in CATEGORY_DIRS:
         raise HTTPException(404, "文件不存在")
+    if category != "branding" and user is None:
+        raise HTTPException(401, "未登录或登录已失效")
     path = resolve_safe(filename, CATEGORY_DIRS[category])
     if not path:
         raise HTTPException(404, "文件不存在")

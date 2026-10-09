@@ -1,8 +1,8 @@
 <template>
   <!-- ===== AI 绵小城悬浮按钮 ===== -->
   <div class="ai-float" @click="router.push('/teacher/agent')">
-    <img src="/images/mascot.png" alt="绵小城" class="ai-mascot" />
-    <span class="ai-label">绵小城</span>
+    <img :src="siteMascot" :alt="siteName" class="ai-mascot" />
+    <span class="ai-label">{{ siteName }}</span>
   </div>
 
   <!-- ===== AI 决策支持层（v3.0 实施文档 §4）：主动发现 + 推荐联系 ===== -->
@@ -95,6 +95,10 @@ import { ElMessage } from 'element-plus'
 import { MagicStick, Refresh, DArrowRight, Cpu } from '@element-plus/icons-vue'
 import type { ProactiveAction } from '@/api/agent'
 import { persistContactSuggestions, type ContactSuggestion } from '@/api/teacher'
+import { useSiteConfig } from '@/composables/useSiteConfig'
+
+// 吉祥物与站点名称取自站点配置：管理端变更后教师端同步
+const { siteMascot, siteName } = useSiteConfig()
 
 const props = defineProps<{
   proactiveActions: ProactiveAction[]

@@ -116,7 +116,7 @@
             </div>
             <div class="menu-item" @click="openPage('about')">
               <el-icon :size="18"><InfoFilled /></el-icon>
-              <span class="menu-label">关于绵小城</span>
+              <span class="menu-label">关于{{ agentName }}</span>
               <el-icon class="menu-arrow"><ArrowRight /></el-icon>
             </div>
             <div class="menu-item" @click="logout">
@@ -284,8 +284,8 @@
         <div v-if="currentPage === 'help'" class="sub-page-content">
           <div class="help-content">
             <div class="help-item">
-              <div class="help-question">如何联系绵小城？</div>
-              <div class="help-answer">在首页直接输入你的问题，绵小城会即时回复。</div>
+              <div class="help-question">如何联系{{ agentName }}？</div>
+              <div class="help-answer">在首页直接输入你的问题，{{ agentName }}会即时回复。</div>
             </div>
             <div class="help-item">
               <div class="help-question">如何查看课表？</div>
@@ -320,8 +320,8 @@
         <div v-if="currentPage === 'about'" class="sub-page-content">
           <!-- 头部信息 -->
           <div class="about-header">
-            <img src="/images/校徽_圆形.png" class="about-logo" />
-            <div class="about-name">绵小城</div>
+            <img :src="siteLogo" class="about-logo" />
+            <div class="about-name">{{ siteName }}</div>
             <div class="about-version">v1.0.0</div>
             <div class="about-slogan">你的校园智能管家</div>
           </div>
@@ -330,7 +330,7 @@
           <div class="about-section">
             <div class="about-section-title">功能简介</div>
             <div class="about-text">
-              绵小城是绵阳城市学院官方推出的智慧校园AI助手，基于大语言模型技术，为全校师生提供智能化的校园服务。通过自然语言对话，您可以轻松完成课表查询、成绩查询、请假申请、校园通知查看等日常事务，让校园生活更加便捷高效。
+              {{ agentName }}是绵阳城市学院官方推出的智慧校园AI助手，基于大语言模型技术，为全校师生提供智能化的校园服务。通过自然语言对话，您可以轻松完成课表查询、成绩查询、请假申请、校园通知查看等日常事务，让校园生活更加便捷高效。
             </div>
           </div>
 
@@ -427,6 +427,7 @@ import { createFeedback, getFeedbacks } from '@/api/feedback'
 import { uploadFile } from '@/api/upload'
 import { getGrowthProfile, getProjects, type GrowthProfile } from '@/api/growth'
 import { getGoals } from '@/api/plan'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
   ChatDotRound, QuestionFilled, Camera, Picture, Calendar, FolderOpened
@@ -435,6 +436,9 @@ import {
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+
+// 关于页品牌信息与站点配置同源
+const { siteName, siteLogo, agentName } = useSiteConfig()
 
 // 页面状态
 const currentPage = ref<string | null>(null)
@@ -527,7 +531,7 @@ const pageTitle = computed(() => {
     feedback: '意见反馈',
     help: '使用帮助',
     theme: '主题设置',
-    about: '关于绵小城',
+    about: `关于${agentName.value}`,
     banner: '更换背景'
   }
   return titles[currentPage.value || ''] || ''

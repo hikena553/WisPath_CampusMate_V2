@@ -4,9 +4,9 @@
     <!-- 深色侧边栏 -->
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mobile-open': mobileOpen }">
       <div class="sidebar-brand" style="cursor:pointer" @click="goTo('/admin')">
-        <img :src="brand.logo || DEFAULT_LOGO" class="brand-logo" />
+        <img :src="siteLogo" class="brand-logo" />
         <div class="brand-text sidebar-text">
-          <span class="brand-name">{{ brand.siteName || '绵小城' }}</span>
+          <span class="brand-name">{{ siteName }}</span>
           <span class="brand-motto">智慧校园 · 管理端</span>
         </div>
       </div>
@@ -41,9 +41,6 @@
             </div>
           </div>
           <template #dropdown>
-            <el-dropdown-item @click="showChangePassword = true">
-              <el-icon style="margin-right:6px"><KeyRound /></el-icon>修改密码
-            </el-dropdown-item>
             <el-dropdown-item @click="logout">
               <el-icon style="margin-right:6px"><LogOut /></el-icon>退出登录
             </el-dropdown-item>
@@ -106,46 +103,36 @@
         </div>
       </main>
     </div>
-
-    <ChangePasswordDialog v-model="showChangePassword" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getSettings } from '@/api/setting'
-import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import {
   House, Library, TriangleAlert,
   User, Users, Building2,
   CalendarDays, MessageSquare, Settings,
-  LogOut, KeyRound, PanelLeftClose, PanelLeftOpen, X
+  LogOut, PanelLeftClose, PanelLeftOpen, X
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const DEFAULT_LOGO = '/images/校徽_圆形.png'
-const brand = reactive<{ siteName: string; logo: string }>({ siteName: '', logo: '' })
-
-onMounted(async () => {
-  try {
-    const data = await getSettings()
-    const map: Record<string, string> = {}
-    data.forEach((s) => {
-      if (s.key && s.value !== undefined) map[s.key] = s.value
-    })
-    brand.siteName = map['site_name'] || ''
-    brand.logo = map['site_logo'] || ''
-    document.title = `${brand.siteName || '绵小城'} · 管理后台`
-  } catch (error) {
-    // 设置读取失败时使用默认品牌
-    document.title = '绵小城 · 管理后台'
-  }
-})
+// 站点品牌（站点名称/Logo）统一取自站点配置：管理端修改后各端同步生效
+const { siteName, siteLogo, loadSiteConfig } = useSiteConfig()
+watch(
+  siteName,
+  (name) => {
+    document.title = `${name} · 管理后台`
+  },
+  { immediate: true }
+)
+// 进入端口时拉取最新站点配置，避免使用应用启动时的旧缓存
+onMounted(() => { void loadSiteConfig(true) })
 
 // ===== 管理端页面预加载：切换页面动画无延迟 =====
 // 登录进入管理端后，利用浏览器空闲时间预取全部子页面 chunk，
@@ -180,8 +167,6 @@ onMounted(() => {
 
 // ===== 侧边栏：桌面折叠 + 移动端抽屉 =====
 const sidebarCollapsed = ref(false)
-// 管理端改密入口（管理端无个人中心页，统一走右上角/侧边栏用户菜单里的对话框）
-const showChangePassword = ref(false)
 const mobileOpen = ref(false)
 
 // 桌面/平板：窗口进入窄屏（<=900px）时自动折叠侧栏

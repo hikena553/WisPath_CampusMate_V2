@@ -14,12 +14,17 @@ from app.core.crypto import (
 )
 from app.models.user import User, UserRole
 from app.models.setting import SystemSetting
+from app.services.setting_service import get_public_settings
 from app.services.voice_service import (
     VOICE_STT_MODEL, VOICE_STT_URL,
-    VOICE_TTS_MODEL, VOICE_TTS_URL,
+    VOICE_TTS_MODEL_DEFAULT, VOICE_TTS_URL,
     synthesize_speech, pcm_to_wav,
     _get_tts_voice, _get_tts_prompt,
-    get_edge_voices, is_edge_voice,
+    _voice_to_model,
+    InvalidVoiceError,
+    VOICE_MODEL_CATALOG,
+    EDGE_TTS_ZH_VOICES,
+    is_edge_voice,
 )
 
 router = APIRouter(prefix="/api/settings", tags=["系统设置"])
@@ -78,19 +83,74 @@ class VoicePipelineInfo(BaseModel):
     stt: dict
     tts: dict
     voice: str
+    voice_model: str  # 当前 voice 对应的 TTS 模型
     voice_prompt: str
     llm_model: str
-    # 可选用音色：Edge 组（免费多音色）+ Token Plan 组（精品音色），前端按 provider 分组展示
+    # 可选用音色（按模型分组的多分组清单），每项包含 model / verified 字段
     voices: List[dict] = []
-    providers: List[str] = ["edge", "tokenplan"]
+    # 顶层模型分组：[{ model: "qwen-audio-3.0-tts-plus", label: "...", voices: [...] }, ...]
+    voice_groups: List[dict] = []
+    providers: List[str] = ["tokenplan"]
 
 
-def _tokenplan_voice_options() -> list[dict]:
-    """Token Plan 可选用音色（套餐白名单内已验证可用）"""
-    return [
-        {"voice": "longanhuan_v3.6", "label": "龙安欢", "gender": "女", "tag": "精品中文·默认", "provider": "tokenplan"},
-        {"voice": "longanlingxi", "label": "龙安灵希", "gender": "女", "tag": "精品中文·可爱甜美", "provider": "tokenplan"},
-    ]
+def _voice_groups() -> list[dict]:
+    """下发可选用音色清单：仅包含实测可用的音色。
+
+    - tokenplan（阿里云百炼）：当前账号实测仅有 qwen-audio-3.0-tts-plus 模型的 2 个音色。
+    - edge（微软免费）：内置 14 个中文音色全部经过实测可用。
+    每项均包含 provider / model / verified 字段，前端可按 provider 分组渲染。
+    """
+    label_map = {
+        "qwen-audio-3.0-tts-plus": "阿里云百炼 · 旗舰社交陪伴",
+    }
+    groups: list[dict] = []
+    for model, voices in VOICE_MODEL_CATALOG.items():
+        usable = [v for v in voices if v.get("verified")]
+        if not usable:
+            continue
+        groups.append({
+            "provider": "tokenplan",
+            "model": model,
+            "label": label_map.get(model, model),
+            "voices": [{**v, "model": model, "provider": "tokenplan"} for v in usable],
+        })
+    # Edge TTS 组：内置 14 个中文音色，按 locale 分标签
+    edge_groups: dict[str, list[dict]] = {}
+    edge_locale_order = []
+    for v in EDGE_TTS_ZH_VOICES:
+        voice_id = v["voice"]
+        # zh-CN-SMxxxNeural / zh-CN-liaoning-XiaobeiNeural -> 按 locale 归类
+        parts = voice_id.split("-")
+        if "liaoning" in voice_id or "shaanxi" in voice_id:
+            key = "普通话·方言"
+        elif voice_id.startswith("zh-HK"):
+            key = "粤语"
+        elif voice_id.startswith("zh-TW"):
+            key = "台湾国语"
+        else:
+            key = "普通话"
+        if key not in edge_groups:
+            edge_groups[key] = []
+            edge_locale_order.append(key)
+        edge_groups[key].append({
+            **v,
+            "provider": "edge",
+            "model": "edge-tts",
+            "verified": True,
+        })
+    for key in edge_locale_order:
+        groups.append({
+            "provider": "edge",
+            "model": "edge-tts",
+            "label": f"Edge TTS · {key}",
+            "voices": edge_groups[key],
+        })
+    return groups
+
+
+def _flat_voices(groups: list[dict]) -> list[dict]:
+    """把分组清单展开成一维数组，保留 model 字段。"""
+    return [v for g in groups for v in g["voices"]]
 
 
 # ===== Endpoints =====
@@ -113,6 +173,17 @@ def get_settings(
                 val = "****"
         result.append(SettingOut(id=s.id, key=s.key, value=val, description=s.description))
     return result
+
+
+@router.get("/public", response_model=dict[str, str])
+def read_public_settings(db: Session = Depends(get_db)):
+    """获取公开展示类设置（免登录）：站点名称 / Logo / 吉祥物 / 系统公告 / 助手称谓。
+
+    登录页、分享页与各端需在未登录状态下渲染站点品牌，故开放匿名访问；
+    仅返回白名单键，API Key 等敏感配置不下发（见 setting_service.get_public_settings）。
+    注意：必须声明在 `/{key}` 之前，否则会被其吞掉。
+    """
+    return get_public_settings(db)
 
 
 @router.get("/{key}", response_model=SettingOut)
@@ -224,23 +295,24 @@ async def get_voice_pipeline_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    """获取语音 TTS 链路信息：识别/合成模型、当前生效音色、可选用音色列表与播报提示词（仅管理员）"""
+    """获取语音 TTS 链路信息：识别/合成模型、当前生效音色（含归属模型）、
+    可选用音色按模型分组的多分组清单与播报提示词（仅管理员）"""
     llm_model = _read_setting(db, "llm_agent_model") or _read_setting(db, "llm_model")
 
-    # Edge 中文音色（在线获取，失败回退内置列表）
-    edge_voices = await get_edge_voices()
-    voices = [
-        {**v, "provider": "edge"} for v in edge_voices
-    ] + _tokenplan_voice_options()
+    groups = _voice_groups()
+    flat = _flat_voices(groups)
 
     current_voice = _get_tts_voice()
+    current_model = _voice_to_model(current_voice)
     return VoicePipelineInfo(
         stt={"model": VOICE_STT_MODEL, "url": VOICE_STT_URL},
-        tts={"model": VOICE_TTS_MODEL, "url": VOICE_TTS_URL},
+        tts={"model": VOICE_TTS_MODEL_DEFAULT, "url": VOICE_TTS_URL},
         voice=current_voice,
+        voice_model=current_model,
         voice_prompt=_get_tts_prompt(),
         llm_model=llm_model,
-        voices=voices,
+        voices=flat,
+        voice_groups=groups,
     )
 
 
@@ -250,7 +322,10 @@ async def test_tts_synthesis(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    """TTS 试听：按指定音色（缺省用当前生效音色）合成一句示例语音，返回 WAV base64（仅管理员）"""
+    """TTS 试听：按指定音色（缺省用当前生效音色）合成一句示例语音，返回 WAV base64（仅管理员）
+
+    后端按 voice 自动选择对应模型（plus / 3.0-flash / 3.1-flash）调用，
+    试听响应里 model 字段告诉前端实际使用的模型，便于用户排查可用音色。"""
     text = data.text.strip() or TTSTestRequest().text
     if len(text) > 200:
         raise HTTPException(status_code=400, detail="试听文本不能超过 200 字")
@@ -258,15 +333,18 @@ async def test_tts_synthesis(
 
     chunks: list[bytes] = []
     total = 0
-    tts_model = VOICE_TTS_MODEL
+    tts_model = _voice_to_model(voice) or VOICE_TTS_MODEL_DEFAULT
     try:
-        async for chunk in synthesize_speech(text, voice=voice):
-            chunks.append(chunk)
-            total += len(chunk)
-            if total > 8 * 1024 * 1024:  # 单次试听最多 8MB 音频，防止异常响应撑爆内存
-                raise HTTPException(status_code=413, detail="合成音频过大，请缩短试听文本")
-        if is_edge_voice(voice):
-            tts_model = "edge-tts（微软免费）"
+        try:
+            async for chunk in synthesize_speech(text, voice=voice):
+                chunks.append(chunk)
+                total += len(chunk)
+                if total > 8 * 1024 * 1024:  # 单次试听最多 8MB 音频，防止异常响应撑爆内存
+                    raise HTTPException(status_code=413, detail="合成音频过大，请缩短试听文本")
+        except InvalidVoiceError as exc:
+            # 非法音色（如前端 allow-create 输入的任意字符串、拼写错），
+            # 在发送阿里云请求前拦截，避免 cosyvoice 4xx（如 411）暗错
+            raise HTTPException(status_code=400, detail=str(exc))
     except HTTPException:
         raise
     except Exception as exc:

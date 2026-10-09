@@ -374,15 +374,15 @@
 
           <!-- 移动端：右下角绵小城（点击弹出 AI 学情分析） -->
           <div class="grades-mascot" @click="mascotDialogVisible = true">
-            <img src="/images/mascot.png" alt="绵小城" draggable="false" />
+            <img :src="siteMascot" :alt="siteName" draggable="false" />
           </div>
 
           <!-- 移动端：AI 学情分析弹窗 -->
           <el-dialog v-model="mascotDialogVisible" title="AI 学情分析" width="92%" top="6vh" class="mascot-ai-dialog">
             <div class="mascot-ai-head">
-              <img src="/images/mascot.png" alt="绵小城" draggable="false" />
+              <img :src="siteMascot" :alt="siteName" draggable="false" />
               <div class="mascot-ai-head-text">
-                <div class="mascot-ai-title">绵小城学情报告</div>
+                <div class="mascot-ai-title">{{ siteName }}学情报告</div>
                 <div class="mascot-ai-sub">个性化学习建议</div>
               </div>
               <el-button type="primary" size="small" :loading="gradeLoading && !gradeRaw" @click="startAiAnalysis({ stream: true })">
@@ -449,7 +449,7 @@
                 </div>
               </div>
               <div class="score-mascot">
-                <img src="/images/mascot.png" alt="绵小城" draggable="false" />
+                <img :src="siteMascot" :alt="siteName" draggable="false" />
               </div>
             </div>
             <div class="score-stats">
@@ -917,6 +917,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { studentDataCache } from '@/utils/studentDataCache'
 import { useResponsive } from '@/composables/useResponsive'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import { getGrowthRecords, createGrowthRecord, getGrowthProfile, updateSkills, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
 import type { GrowthProfile, StudentProject } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
@@ -930,6 +931,9 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useResponsive()
+
+// 吉祥物与站点名称取自站点配置：管理端变更后学生端同步
+const { siteMascot, siteName } = useSiteConfig()
 
 // ===== 驾驶舱直达入口 =====
 function goPlan() { router.push('/student/plan') }
