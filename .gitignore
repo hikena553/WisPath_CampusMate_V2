@@ -174,3 +174,9 @@ _recovery_audit/
 campus-cockpit/
 _cleanup_backup_manifest.txt
 _acl_recovery/
+
+# ---------- Local voice / settings debug scripts & uv output (added 2026-10-09) ----------
+# 排查语音音色与系统设置时产生的一次性脚本、日志与探测输出，与 _probe*.py 同类，不入库
+backend/scripts/
+backend/uv.out
+backend/uv.err
