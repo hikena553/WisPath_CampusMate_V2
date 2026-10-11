@@ -1,9 +1,9 @@
-<template>
+﻿<template>
   <div class="tui-page">
     <SubPageHeader
       title="问卷互评"
       sub="匿名收集反馈，只出聚合结果，不回溯个人"
-      fallback="/teacher/more"
+      fallback="/teacher"
     />
 
     <div class="tui-content">

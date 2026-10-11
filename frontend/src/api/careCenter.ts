@@ -80,8 +80,10 @@ export function getCareOverview(month?: string) {
   return request.get<CareCenterOverview>('/care-center/overview', { params: { month } })
 }
 
-export function getCareEvents(month?: string) {
-  return request.get<CareEvent[]>('/care-center/events', { params: { month } })
+export function getCareEvents(month?: string, studentId?: number) {
+  const params: Record<string, unknown> = { month }
+  if (studentId != null) params.student_id = studentId
+  return request.get<CareEvent[]>('/care-center/events', { params })
 }
 
 export function createCareEvent(data: {

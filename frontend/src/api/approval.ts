@@ -26,8 +26,8 @@ export interface ApprovalStats {
   trend: Array<{ day: string; count: number }>
 }
 
-// 教师/管理员：聚合待审（按 kind/status 过滤）
-export function getApprovalPending(params?: { status?: string; kind?: string }) {
+// 教师/管理员：聚合待审（按 kind/status/student_id 过滤）
+export function getApprovalPending(params?: { status?: string; kind?: string; student_id?: number }) {
   return request.get<ApprovalItem[]>('/approval/pending', { params })
 }
 
@@ -37,8 +37,10 @@ export function reviewApproval(kind: string, id: number, action: 'approve' | 're
 }
 
 // 数据统计
-export function getApprovalStats(days = 30) {
-  return request.get<ApprovalStats>('/approval/stats', { params: { days } })
+export function getApprovalStats(days = 30, studentId?: number) {
+  const params: Record<string, unknown> = { days }
+  if (studentId != null) params.student_id = studentId
+  return request.get<ApprovalStats>('/approval/stats', { params })
 }
 
 export const APPROVAL_KIND_LABEL: Record<string, string> = {

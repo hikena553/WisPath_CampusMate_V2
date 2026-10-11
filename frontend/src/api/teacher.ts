@@ -157,8 +157,10 @@ export interface ContactSuggestion {
   priority: 'high' | 'medium' | 'low'
 }
 
-export function suggestContacts() {
-  return request.get<ContactSuggestion[]>('/teacher/suggest-contacts')
+export function suggestContacts(studentId?: number) {
+  const params: Record<string, unknown> = {}
+  if (studentId != null) params.student_id = studentId
+  return request.get<ContactSuggestion[]>('/teacher/suggest-contacts', { params })
 }
 
 export interface ContactSuggestionPersistResult {

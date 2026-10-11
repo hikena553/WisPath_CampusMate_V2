@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { ServiceTicket } from '@/types'
 
-export function getTickets(params?: { status?: string }) {
+export function getTickets(params?: { status?: string; student_id?: number }) {
   return request.get<ServiceTicket[]>('/service/tickets', { params })
 }
 

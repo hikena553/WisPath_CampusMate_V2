@@ -214,7 +214,7 @@
       <div v-if="props.todayLeaves.length === 0 && props.todaySchedules.length === 0 && props.overdueSchedules.length === 0" class="task-empty">
         <img :src="siteMascot" class="task-empty-mascot" />
         <div class="task-empty-text">暂无任务安排</div>
-        <div class="task-empty-sub">在上方输入框添加新任务</div>
+        <div class="task-empty-sub">点击下方 + 按钮添加新任务</div>
       </div>
     </div>
   </div>
@@ -398,13 +398,20 @@ async function addTaskFromPopup() {
 </script>
 
 <style scoped>
+  /* 子页面（移动端全屏覆盖层）：组件拆分后需自带基础样式（原定义在首页父组件中） */
+  .sub-page {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    background: #f5f6f8;
+  }
+
   /* ---- 任务管理子页面（飞书风格） ---- */
   .task-page {
     padding: 0 !important;
     background: #f5f6f8;
-  }
-  .task-page .sub-page-body {
-    padding: 0;
   }
 
   /* 校园背景头部 */
@@ -846,8 +853,12 @@ async function addTaskFromPopup() {
     box-shadow: 0 2px 8px rgba(0,0,0,0.14);
   }
 
-  /* 任务列表区域 */
+  /* 任务列表区域（弹性填充并独立滚动） */
   .task-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 0 12px 80px;
   }
   .task-section {

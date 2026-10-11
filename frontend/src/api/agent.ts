@@ -167,12 +167,13 @@ export interface ProactiveFeed {
  * 后端只回规则文案以保证首屏速度；insight 仅在服务端 30 分钟缓存命中时非空，
  * 未命中时前端再调 fetchProactiveInsight() 在后台补一句个性化洞察。
  */
-export async function fetchProactiveFeed(): Promise<ProactiveFeed> {
+export async function fetchProactiveFeed(studentId?: number): Promise<ProactiveFeed> {
   const headers: Record<string, string> = {}
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
+  const url = studentId != null ? `/api/agent/proactive?student_id=${studentId}` : '/api/agent/proactive'
   try {
-    const resp = await fetch('/api/agent/proactive', { headers })
+    const resp = await fetch(url, { headers })
     if (resp.ok) {
       const data = await resp.json()
       return { actions: data.actions || [], insight: data.insight ?? null }
@@ -184,8 +185,8 @@ export async function fetchProactiveFeed(): Promise<ProactiveFeed> {
 }
 
 /** AI 主动发现驾驶舱：拉取当前角色相关的主动触达动作 */
-export async function fetchProactiveActions(): Promise<ProactiveAction[]> {
-  return (await fetchProactiveFeed()).actions
+export async function fetchProactiveActions(studentId?: number): Promise<ProactiveAction[]> {
+  return (await fetchProactiveFeed(studentId)).actions
 }
 
 /**

@@ -124,8 +124,10 @@ def list_items(
 
     total = query.count()
     items = (
+        # occurred_on 可为空：MySQL 不支持 NULLS LAST，改用 is_(None) 升序把空值排到最后
         query.order_by(
-            TeacherPortfolioItem.occurred_on.desc().nulls_last(),
+            TeacherPortfolioItem.occurred_on.is_(None),
+            TeacherPortfolioItem.occurred_on.desc(),
             TeacherPortfolioItem.id.desc(),
         )
         .offset(offset)

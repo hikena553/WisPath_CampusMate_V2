@@ -73,7 +73,7 @@ const emit = defineEmits<{
   changed: []
 }>()
 
-type FilterValue = 'all' | 'pending' | 'contacted' | 'cared' | 'done' | 'overdue'
+type FilterValue = 'all' | 'pending' | 'today' | 'contacted' | 'cared' | 'done' | 'overdue'
 
 const PAGE_SIZE = 20
 const tasks = ref<TeacherTask[]>([])
@@ -90,6 +90,7 @@ const hasMore = computed(() => lastPageFull.value)
 const filters = computed(() => [
   { value: 'all' as const, label: '全部', count: summary.value.total },
   { value: 'pending' as const, label: '待处理', count: summary.value.pending },
+  { value: 'today' as const, label: '今日到期', count: summary.value.today },
   { value: 'overdue' as const, label: '已逾期', count: summary.value.overdue },
   { value: 'contacted' as const, label: '已联系', count: 0 },
   { value: 'cared' as const, label: '已关怀', count: 0 },
@@ -98,6 +99,7 @@ const filters = computed(() => [
 
 const emptyText = computed(() => {
   if (activeFilter.value === 'overdue') return '没有逾期任务，保持得很好'
+  if (activeFilter.value === 'today') return '今天没有到期的任务'
   if (activeFilter.value === 'done') return '还没有办结的任务'
   return '暂无待办任务'
 })
@@ -105,6 +107,7 @@ const emptyText = computed(() => {
 function buildQuery(pageOffset: number) {
   const q: Record<string, unknown> = { limit: PAGE_SIZE, offset: pageOffset }
   if (activeFilter.value === 'overdue') q.due = 'overdue'
+  else if (activeFilter.value === 'today') q.due = 'today'
   else if (activeFilter.value !== 'all') q.status = activeFilter.value
   return q
 }

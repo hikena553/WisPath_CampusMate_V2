@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -135,7 +135,11 @@ def delete_leave(leave_id: int, user: User = Depends(get_current_user), db: Sess
 
 
 @router.get("/pending", response_model=list[LeaveRequestOut])
-def list_pending(user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)), db: Session = Depends(get_db)):
+def list_pending(
+    student_id: int | None = Query(None, description="按学生过滤，闭环用"),
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
     query = db.query(LeaveRequest).filter(LeaveRequest.status == LeaveStatus.PENDING)
     if user.role != UserRole.ADMIN:
         student_ids = [s.id for s in db.query(User).filter(User.tutor_id == user.id).all()]
@@ -143,6 +147,8 @@ def list_pending(user: User = Depends(require_role(UserRole.TEACHER, UserRole.AD
             query = query.filter(LeaveRequest.student_id.in_(student_ids))
         else:
             query = query.filter(False)
+    if student_id is not None:
+        query = query.filter(LeaveRequest.student_id == student_id)
     requests = query.order_by(LeaveRequest.created_at.desc()).all()
     result = []
     for r in requests:
@@ -196,7 +202,12 @@ def review_leave(leave_id: int, req: LeaveApprove, user: User = Depends(require_
 
 
 @router.get("/all", response_model=list[LeaveRequestOut])
-def list_all_requests(status: str | None = None, user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)), db: Session = Depends(get_db)):
+def list_all_requests(
+    status: str | None = None,
+    student_id: int | None = Query(None, description="按学生过滤，闭环用"),
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
     query = db.query(LeaveRequest)
     if user.role != UserRole.ADMIN:
         student_ids = [s.id for s in db.query(User).filter(User.tutor_id == user.id).all()]
@@ -206,6 +217,8 @@ def list_all_requests(status: str | None = None, user: User = Depends(require_ro
             query = query.filter(False)
     if status:
         query = query.filter(LeaveRequest.status == status)
+    if student_id is not None:
+        query = query.filter(LeaveRequest.student_id == student_id)
     requests = query.order_by(LeaveRequest.created_at.desc()).all()
     result = []
     for r in requests:

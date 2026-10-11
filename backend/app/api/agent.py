@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -420,7 +420,11 @@ async def get_recommendations(
 
 
 @router.get("/proactive")
-async def get_proactive_actions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_proactive_actions(
+    student_id: int | None = Query(None, description="按学生过滤，闭环用"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """AI 主动发现驾驶舱接口（v3.0 实施文档 §4/§6）
 
     学生：返回自己的主动触达动作（今日课程/临考提醒/成绩关注/待办逾期/请假结果/成长里程碑等）
@@ -440,6 +444,8 @@ async def get_proactive_actions(user: User = Depends(get_current_user), db: Sess
         students = db.query(User).filter(User.role == UserRole.STUDENT)
         if user.role == UserRole.TEACHER:
             students = students.filter(User.tutor_id == user.id)
+        if student_id is not None:
+            students = students.filter(User.id == student_id)
         for student in students.all():
             actions.extend(evaluate_student(db, student, target_role="teacher"))
         actions.sort(key=lambda a: a.priority, reverse=True)

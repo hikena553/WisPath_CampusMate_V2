@@ -31,36 +31,31 @@ const emit = defineEmits<{ navigate: [link: string] }>()
 </script>
 
 <style scoped>
-/* ===== KPI Cards ===== */
+/* ===== KPI 卡片（对齐设计稿：白卡 + 发丝线 + 38px 圆角图标块） ===== */
 .kpi-cards {
   display: grid;
   /* auto-fit：卡片数量变化时自动均分列数，避免落单 */
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .kpi-card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 14px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 13px 14px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
   cursor: pointer;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-}
-
-.kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .kpi-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -69,36 +64,25 @@ const emit = defineEmits<{ navigate: [link: string] }>()
   flex-shrink: 0;
 }
 
-.kpi-info {
-  flex: 1;
-}
+.kpi-info { flex: 1; min-width: 0; }
 
 .kpi-value {
   font-size: 20px;
   font-weight: 700;
-  color: #1a1a2e;
-  line-height: 1.2;
+  color: var(--tui-text);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .kpi-label {
-  font-size: 11px;
-  color: #888;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   margin-top: 2px;
-}
-
-@media (max-width: 1200px) {
-  .kpi-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .kpi-card:last-child:nth-child(odd) {
-    grid-column: span 2;
-  }
 }
 
 @media (max-width: 767px) {
   .kpi-cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     position: relative;
     z-index: 1;
@@ -110,20 +94,10 @@ const emit = defineEmits<{ navigate: [link: string] }>()
   }
 
   .kpi-card {
-    padding: 10px;
+    padding: 11px 12px;
+    gap: 10px;
   }
 
-  .kpi-icon {
-    width: 36px;
-    height: 36px;
-  }
-
-  .kpi-value {
-    font-size: 18px;
-  }
-
-  .kpi-label {
-    font-size: 11px;
-  }
+  .kpi-value { font-size: 19px; }
 }
 </style>

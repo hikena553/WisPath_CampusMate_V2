@@ -1,54 +1,34 @@
 <template>
-  <!-- 首页头部：简约问候卡
-       克制留白 + 一条品牌发丝边；吉祥物与品牌点承载产品个性，不再使用整块大渐变。 -->
-  <section v-if="isMobile" class="hm-head">
-    <div class="hm-head-main">
-      <h1 class="hm-head-title">{{ greeting }}，{{ userName }}</h1>
-      <p class="hm-head-meta">
-        <span class="hm-dot"></span>{{ siteName }} · 教师端
-        <span class="hm-sep">·</span>{{ todayShort }}
-      </p>
-    </div>
-    <img :src="siteMascot" :alt="siteName" class="hm-head-mascot" />
-  </section>
-  <div v-if="isMobile" class="hm-chips">
-    <span v-if="pendingCount > 0" class="hm-chip hm-chip-warn">
-      <el-icon><Tickets /></el-icon>{{ pendingCount }} 件待办
-    </span>
-    <span v-if="severeAlertCount > 0" class="hm-chip hm-chip-danger">
-      <el-icon><WarningFilled /></el-icon>{{ severeAlertCount }} 条高危预警
-    </span>
-    <span v-if="pendingCount === 0 && severeAlertCount === 0" class="hm-chip hm-chip-quiet">
-      <el-icon><CircleCheck /></el-icon>今日无待办与预警
-    </span>
-  </div>
+  <!-- 首页头部：简约问候卡（吸顶固定）
+       克制留白 + 一条品牌发丝边；吉祥物与品牌点承载产品个性，不再使用整块大渐变。
+       外层 sticky 容器铺满整行并以页面底色遮挡，滚动时下方内容从卡片背后穿过。 -->
+  <div class="hm-head-sticky">
+    <section v-if="isMobile" class="hm-head">
+      <div class="hm-head-main">
+        <h1 class="hm-head-title">{{ greeting }}，{{ userName }}</h1>
+        <p class="hm-head-meta">
+          <span class="hm-dot"></span>{{ siteName }} · 教师端
+          <span class="hm-sep">·</span>{{ todayShort }}
+        </p>
+      </div>
+      <img :src="siteMascot" :alt="siteName" class="hm-head-mascot" />
+    </section>
 
-  <!-- 桌面端：同款问候卡，状态胶囊右对齐 -->
-  <section v-else class="hm-head hm-head-desk">
-    <div class="hm-head-main">
-      <h2 class="hm-head-title">{{ greeting }}，{{ userName }}</h2>
-      <p class="hm-head-meta">
-        <span class="hm-dot"></span>{{ siteName }} · 教师端
-        <span class="hm-sep">·</span>{{ todayStr }}
-      </p>
-    </div>
-    <div class="hm-chips hm-chips-desk">
-      <span v-if="pendingCount > 0" class="hm-chip hm-chip-warn">
-        <el-icon><Tickets /></el-icon>{{ pendingCount }} 件待办
-      </span>
-      <span v-if="severeAlertCount > 0" class="hm-chip hm-chip-danger">
-        <el-icon><WarningFilled /></el-icon>{{ severeAlertCount }} 条高危预警
-      </span>
-      <span v-if="pendingCount === 0 && severeAlertCount === 0" class="hm-chip hm-chip-quiet">
-        <el-icon><CircleCheck /></el-icon>今日无待办与预警
-      </span>
-    </div>
-  </section>
+    <!-- 桌面端：同款问候卡 -->
+    <section v-else class="hm-head hm-head-desk">
+      <div class="hm-head-main">
+        <h2 class="hm-head-title">{{ greeting }}，{{ userName }}</h2>
+        <p class="hm-head-meta">
+          <span class="hm-dot"></span>{{ siteName }} · 教师端
+          <span class="hm-sep">·</span>{{ todayStr }}
+        </p>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Tickets, WarningFilled, CircleCheck } from '@element-plus/icons-vue'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 
 // 吉祥物与站点名称取自站点配置：管理端变更后教师端同步
@@ -65,19 +45,30 @@ defineProps<{
   isMobile: boolean
   userName: string
   greeting: string
-  pendingCount: number
-  severeAlertCount: number
   todayStr: string
 }>()
 </script>
 
 <style scoped>
+/* ===== 吸顶容器 ===== */
+/* 铺满整行（抵消 .home-dashboard 的左右内边距），以页面底色遮挡下方滚动内容，
+   使问候卡在滚动时固定于顶部不动。 */
+.hm-head-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0 -16px;
+  padding: 12px 16px;
+  background: #f5f6f8;
+}
+
 /* ===== 问候卡 ===== */
 .hm-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 0;
   padding: 14px 16px;
   border-radius: 14px;
   border: 1px solid rgba(37, 99, 235, 0.12);
@@ -123,32 +114,16 @@ defineProps<{
   filter: drop-shadow(0 4px 10px rgba(37, 99, 235, 0.22));
 }
 
-/* ===== 状态胶囊 ===== */
-.hm-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-.hm-chips-desk { margin-top: 0; flex-shrink: 0; }
-.hm-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-.hm-chip .el-icon { font-size: 13px; }
-.hm-chip-warn { background: #fffaeb; color: #b54708; }
-.hm-chip-danger { background: #fef3f2; color: #d92d20; }
-.hm-chip-quiet { background: #f2f4f7; color: #667085; font-weight: 500; }
-
 /* ===== 桌面端 ===== */
 .hm-head-desk { padding: 16px 20px; }
+
+/* 移动端：容器左右内边距为 8px，吸顶容器同步收窄，保持铺满整行 */
+@media (max-width: 767px) {
+  .hm-head-sticky {
+    margin: 0 -8px;
+    padding: 8px 8px;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .hm-dot { box-shadow: none; }

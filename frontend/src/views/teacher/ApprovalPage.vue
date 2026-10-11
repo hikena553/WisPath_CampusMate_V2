@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="审批管理" :sub="totalPending + ' 条待处理'" fallback="/teacher/more">
+    <SubPageHeader title="审批管理" :sub="totalPending + ' 条待处理'" fallback="/teacher">
       <template #right>
         <el-button text circle aria-label="刷新" @click="loadData()">
           <el-icon :size="19"><Refresh /></el-icon>
@@ -37,6 +37,13 @@
           <span class="tui-stat-num ap-warn">{{ pendingMaterials.length }}</span>
           <span class="tui-stat-label">材料待归档</span>
         </div>
+      </div>
+
+      <!-- 闭环：从学生成长档案聚焦该生审批事项 -->
+      <div v-if="studentFilter" class="ap-focus">
+        <el-icon :size="14"><User /></el-icon>
+        <span class="ap-focus-text">已聚焦学生「{{ studentFilter.name || '该生' }}」，仅显示其审批事项</span>
+        <button class="ap-focus-clear" type="button" @click="clearStudentFilter">清除聚焦</button>
       </div>
 
       <TuiSegmented
@@ -560,12 +567,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose,
-  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, Refresh
+  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, Refresh, User
 } from '@element-plus/icons-vue'
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
@@ -574,6 +582,26 @@ import type { LeaveRequestOut, ServiceTicket } from '@/types'
 import { useResponsive } from '@/composables/useResponsive'
 
 const { isMobile } = useResponsive()
+
+const route = useRoute()
+const router = useRouter()
+
+/** 闭环：从学生成长档案跳来时聚焦该生，只显示其审批事项 */
+const studentFilter = ref<{ id: number; name: string } | null>(null)
+
+function byStudent(id?: number | null, name?: string | null) {
+  const f = studentFilter.value
+  if (!f) return true
+  if (f.id && id != null) return id === f.id
+  if (f.name && name) return name === f.name
+  return true
+}
+
+function clearStudentFilter() {
+  studentFilter.value = null
+  router.replace({ path: '/teacher/approval' })
+  loadData()
+}
 
 const activeTab = ref('pending')
 const pendingLeaves = ref<LeaveRequestOut[]>([])
@@ -691,18 +719,25 @@ function typeLabel(t: string) {
 }
 
 async function loadData() {
+  const sid = studentFilter.value?.id || undefined
   loadStats()
   if (activeTab.value === 'pending') {
     try {
-      pendingLeaves.value = await getPendingLeaves()
+      pendingLeaves.value = (await getPendingLeaves(sid)).filter((l) => byStudent(l.student_id, l.student_name))
       loadAnalysis()
     } catch {}
-    try { pendingTickets.value = (await getTickets()).filter((t: ServiceTicket) => t.status === 'pending' || t.status === 'processing') } catch {}
-    try { pendingMaterials.value = await getApprovalPending({ kind: 'material', status: 'pending' }) } catch { pendingMaterials.value = [] }
+    try {
+      pendingTickets.value = (await getTickets({ student_id: sid }))
+        .filter((t: ServiceTicket) => (t.status === 'pending' || t.status === 'processing') && byStudent(undefined, t.applicant_name))
+    } catch {}
+    try {
+      pendingMaterials.value = (await getApprovalPending({ kind: 'material', status: 'pending', student_id: sid }))
+        .filter((m) => byStudent(m.applicant_id, m.applicant_name))
+    } catch { pendingMaterials.value = [] }
   } else if (activeTab.value === 'approved') {
-    try { approvedLeaves.value = await getAllLeaves('approved') } catch {}
+    try { approvedLeaves.value = (await getAllLeaves('approved', sid)).filter((l) => byStudent(l.student_id, l.student_name)) } catch {}
   } else if (activeTab.value === 'rejected') {
-    try { rejectedLeaves.value = await getAllLeaves('rejected') } catch {}
+    try { rejectedLeaves.value = (await getAllLeaves('rejected', sid)).filter((l) => byStudent(l.student_id, l.student_name)) } catch {}
   } else if (activeTab.value === 'stats') {
     await loadLeaveStats()
   }
@@ -727,7 +762,7 @@ async function handleConfirmReturn(row: LeaveRequestOut) {
 }
 
 async function loadStats() {
-  try { stats.value = await getApprovalStats(30) } catch { stats.value = null }
+  try { stats.value = await getApprovalStats(30, studentFilter.value?.id || undefined) } catch { stats.value = null }
 }
 
 async function handleMaterialApprove(id: number) {
@@ -840,7 +875,13 @@ async function confirmTicketReview() {
   } catch { ElMessage.error('操作失败') }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  // 闭环：解析学生成长档案传来的聚焦参数
+  const sid = Number(route.query.student_id)
+  const sname = route.query.student_name ? String(route.query.student_name) : ''
+  if (sid || sname) studentFilter.value = { id: sid || 0, name: sname }
+  loadData()
+})
 </script>
 
 <style scoped>
@@ -856,6 +897,33 @@ onMounted(loadData)
 
 /* 待处理总览数字语义色（用双类名提高优先级，避免被 .tui-stat-num 覆盖） */
 .tui-stat-num.ap-warn { color: var(--tui-warn); }
+
+/* 闭环聚焦条：从学生成长档案跳来时的上下文提示 */
+.ap-focus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--tui-radius-sm);
+  background: #eff4ff;
+  border: 1px solid #d3e0fb;
+  color: #1d4ed8;
+  font-size: 12.5px;
+}
+.ap-focus-text { flex: 1; min-width: 0; font-weight: 500; }
+.ap-focus-clear {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+.ap-focus-clear:hover { text-decoration: underline; }
 
 .section-header {
   display: flex; align-items: center; gap: 8px;

@@ -71,7 +71,12 @@ const router = createRouter({
         { path: 'survey', name: 'teacher-survey', component: () => import('@/views/teacher/SurveyPage.vue'), meta: { keepAlive: false } },
         { path: 'care-center', name: 'teacher-care-center', component: () => import('@/views/teacher/CareCenterPage.vue'), meta: { keepAlive: false } },
         { path: 'guardian', name: 'teacher-guardian', component: () => import('@/views/teacher/GuardianPage.vue'), meta: { keepAlive: false } },
-        { path: 'more', name: 'teacher-more', component: () => import('@/views/teacher/MorePage.vue'), meta: { keepAlive: false } },
+        { path: 'tasks', name: 'teacher-tasks', component: () => import('@/views/teacher/TasksPage.vue'), meta: { keepAlive: false } },
+        { path: 'ai', name: 'teacher-ai-insights', component: () => import('@/views/teacher/AiInsightsPage.vue'), meta: { keepAlive: false } },
+        // 功能总览：首页「常用功能」右上角「全部功能」入口下钻至此
+        { path: 'features', name: 'teacher-features', component: () => import('@/views/teacher/AllFeaturesPage.vue'), meta: { keepAlive: false } },
+        // 原「更多」页签已改名为「消息」；其余功能入口迁至首页宫格，旧链接统一重定向回首页
+        { path: 'more', redirect: '/teacher' },
         { path: 'announcement', name: 'teacher-announcement', component: () => import('@/views/teacher/AnnouncementPage.vue'), meta: { keepAlive: false } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
         { path: 'profile', name: 'teacher-profile', component: () => import('@/views/teacher/ProfilePage.vue'), meta: { keepAlive: false } },

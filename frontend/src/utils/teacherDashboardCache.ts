@@ -6,7 +6,6 @@
 import { getDashboardStats, getClassEvaluation, getClassStats } from '@/api/teacher'
 import { getAlerts } from '@/api/crisis'
 import { getPendingLeaves } from '@/api/leave'
-import { getAnnouncements } from '@/api/campus'
 import { getTeacherAnnouncements } from '@/api/announcement'
 import { getTeacherSchedules, getOverdueSchedules } from '@/api/teacher'
 
@@ -35,7 +34,6 @@ export function prefetchDashboardData(): void {
     getDashboardStats().then(d => setCache('dashboard-stats', d)),
     getAlerts(undefined).then(d => setCache('alerts', d)),
     getPendingLeaves().then(d => setCache('pending-leaves', d)),
-    getAnnouncements().then(d => setCache('announcements', d)),
     getClassEvaluation().then(d => setCache('class-evaluation', d)),
     getClassStats().then(d => setCache('class-stats', d)),
     getTeacherAnnouncements().then(d => setCache('teacher-announcements', d)),

@@ -150,13 +150,15 @@ def create_event(
     return event
 
 
-def list_events(db: Session, teacher_id: int, month: str | None = None) -> list[dict]:
+def list_events(db: Session, teacher_id: int, month: str | None = None, student_id: int | None = None) -> list[dict]:
     _, start, end = _month_range(month)
     query = db.query(CareEvent).filter(
         CareEvent.teacher_id == teacher_id,
         CareEvent.event_date >= start,
         CareEvent.event_date <= end,
     )
+    if student_id is not None:
+        query = query.filter(CareEvent.student_id == student_id)
     events = query.order_by(CareEvent.event_date.asc(), CareEvent.id.asc()).all()
     names = _student_names(db, {e.student_id for e in events})
     return [_serialize_event(e, names.get(e.student_id or -1, "")) for e in events]

@@ -35,13 +35,15 @@ def _scoped_student_ids(user: User, db: Session) -> list[int]:
     return ids or []
 
 
-def _leave_items(user: User, db: Session, status: str | None):
+def _leave_items(user: User, db: Session, status: str | None, student_id: int | None = None):
     q = db.query(LeaveRequest)
     if user.role != UserRole.ADMIN:
         ids = _scoped_student_ids(user, db)
         q = q.filter(LeaveRequest.student_id.in_(ids)) if ids else q.filter(False)
     if status:
         q = q.filter(LeaveRequest.status == status)
+    if student_id is not None:
+        q = q.filter(LeaveRequest.student_id == student_id)
     items = []
     for r in q.order_by(LeaveRequest.created_at.desc()).all():
         st = r.student_id
@@ -59,13 +61,15 @@ def _leave_items(user: User, db: Session, status: str | None):
     return items
 
 
-def _ticket_items(user: User, db: Session, status: str | None):
+def _ticket_items(user: User, db: Session, status: str | None, student_id: int | None = None):
     q = db.query(ServiceTicket)
     if user.role != UserRole.ADMIN:
         ids = _scoped_student_ids(user, db)
         q = q.filter(ServiceTicket.applicant_id.in_(ids)) if ids else q.filter(False)
     if status:
         q = q.filter(ServiceTicket.status == status)
+    if student_id is not None:
+        q = q.filter(ServiceTicket.applicant_id == student_id)
     items = []
     for t in q.order_by(ServiceTicket.created_at.desc()).all():
         name = db.query(User).filter(User.id == t.applicant_id).first()
@@ -82,13 +86,15 @@ def _ticket_items(user: User, db: Session, status: str | None):
     return items
 
 
-def _material_items(user: User, db: Session, status: str | None):
+def _material_items(user: User, db: Session, status: str | None, student_id: int | None = None):
     q = db.query(MaterialArchive)
     if user.role != UserRole.ADMIN:
         ids = _scoped_student_ids(user, db)
         q = q.filter(MaterialArchive.student_id.in_(ids)) if ids else q.filter(False)
     if status:
         q = q.filter(MaterialArchive.status == status)
+    if student_id is not None:
+        q = q.filter(MaterialArchive.student_id == student_id)
     items = []
     for m in q.order_by(MaterialArchive.created_at.desc()).all():
         name = db.query(User).filter(User.id == m.student_id).first()
@@ -109,6 +115,7 @@ def _material_items(user: User, db: Session, status: str | None):
 def pending_list(
     status: str | None = Query(None),
     kind: str | None = Query(None),
+    student_id: int | None = Query(None, description="按学生过滤，闭环用"),
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -119,11 +126,11 @@ def pending_list(
         status = None
     result = []
     if kind in (None, "leave"):
-        result += _leave_items(user, db, status)
+        result += _leave_items(user, db, status, student_id)
     if kind in (None, "ticket"):
-        result += _ticket_items(user, db, status)
+        result += _ticket_items(user, db, status, student_id)
     if kind in (None, "material"):
-        result += _material_items(user, db, status)
+        result += _material_items(user, db, status, student_id)
     result.sort(key=lambda x: x["created_at"], reverse=True)
     return result
 
@@ -202,6 +209,7 @@ def review_item(
 @router.get("/stats")
 def approval_stats(
     days: int = Query(30, ge=1, le=3650),
+    student_id: int | None = Query(None, description="按学生过滤，闭环用"),
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
@@ -215,6 +223,8 @@ def approval_stats(
         return q.all()
 
     ids = _scoped_student_ids(user, db)
+    if student_id is not None:
+        ids = [student_id] if (ids is None or student_id in ids) else []
     leaves = _rows(LeaveRequest, LeaveRequest.student_id, ids)
     tickets = _rows(ServiceTicket, ServiceTicket.applicant_id, ids)
     materials = _rows(MaterialArchive, MaterialArchive.student_id, ids)

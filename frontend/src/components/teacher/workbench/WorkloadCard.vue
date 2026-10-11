@@ -33,10 +33,6 @@
         <span class="wl-ml">本周办结</span>
       </div>
       <div class="wl-metric">
-        <span class="wl-mv warn">{{ leave.pending }}</span>
-        <span class="wl-ml">待批请假</span>
-      </div>
-      <div class="wl-metric">
         <span class="wl-mv purple">{{ leave.awaiting_return }}</span>
         <span class="wl-ml">待销假</span>
       </div>
@@ -178,7 +174,7 @@ defineExpose({ reload: load })
 
 .wl-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-top: auto;
 }

@@ -181,7 +181,7 @@ import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, ChatDotRound, User, Message, Notebook, Stamp, WarningFilled,
-  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection, Grid, Bell
+  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection, Bell
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -254,24 +254,29 @@ const navGroups = [
 
 /**
  * 移动端底部导航（5 项）：中间为「绵小城」智能体，最右为「个人中心」。
- * 首页 / 学生 / 更多 为功能页签；消息、审批、预警等模块统一收敛到「更多」宫格，避免重复入口。
+ * 第 4 项由原「更多」改为「消息」，承载钉钉式消息中心（会话 / 通讯录 / 通知）；
+ * 原「更多」内的其余模块已迁至首页「常用功能」宫格，不再占用页签。
  */
 const mobileNavItems = computed(() => [
   { key: 'home', label: '首页', icon: HomeFilled, route: '/teacher' },
   { key: 'students', label: '学生', icon: Notebook, route: '/teacher/students' },
   { key: 'agent', label: siteName.value, iconImg: siteLogo.value, center: true, route: '/teacher/agent' },
-  { key: 'more', label: '更多', icon: Grid, route: '/teacher/more' },
+  { key: 'messages', label: '消息', icon: Message, route: '/teacher/messages', badge: true },
   { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
 ])
 
+/** 首页内下钻的子页面：进入后仍归属「首页」页签，避免误亮「消息」 */
+const HOME_SUB_ROUTES = ['/teacher/tasks', '/teacher/ai', '/teacher/features']
+
 const activeNavKey = computed(() => {
   const p = route.path
-  if (p === '/teacher') return 'home'
+  if (p === '/teacher' || HOME_SUB_ROUTES.some((sub) => p.startsWith(sub))) return 'home'
   if (p.startsWith('/teacher/students')) return 'students'
   if (p.startsWith('/teacher/agent')) return 'agent'
   if (p.startsWith('/teacher/profile')) return 'profile'
-  // 其余模块（审批 / 预警 / 公告 / 成长档案 / 问卷互评 / 关怀 / 家校 / 消息）统一高亮「更多」
-  return 'more'
+  if (p.startsWith('/teacher/messages')) return 'messages'
+  // 原「更多」内的模块入口已迁至首页宫格，进入这些子页面时高亮「首页」
+  return 'home'
 })
 
 function handleNavSelect(item: any) {

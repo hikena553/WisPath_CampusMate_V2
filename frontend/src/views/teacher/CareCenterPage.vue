@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="人文关怀中心" sub="关怀日历 · 家访台账 · 正向激励" fallback="/teacher/more">
+    <SubPageHeader title="人文关怀中心" sub="关怀日历 · 家访台账 · 正向激励" fallback="/teacher">
       <template #right>
         <el-button text circle aria-label="新增事项" @click="eventVisible = true">
           <el-icon :size="19"><Plus /></el-icon>
@@ -43,13 +43,21 @@
         </div>
       </div>
 
+      <!-- 闭环：从学生成长档案聚焦该生关怀记录 -->
+      <div v-if="studentFocus" class="cc-focus">
+        <el-icon :size="14"><User /></el-icon>
+        <span class="cc-focus-text">已聚焦学生「{{ studentFocus.name || '该生' }}」，仅显示其关怀记录</span>
+        <button class="cc-focus-link" type="button" @click="gotoStudent">成长档案</button>
+        <button class="cc-focus-clear" type="button" @click="clearStudentFocus">清除</button>
+      </div>
+
       <div class="tui-seg-wrap">
         <TuiSegmented
           v-model="tab"
           :options="[
-            { value: 'calendar', label: '关怀日历', count: events.length },
-            { value: 'visits', label: '家访记录', count: visits.length },
-            { value: 'praises', label: '正向激励', count: praises.length },
+            { value: 'calendar', label: '关怀日历', count: shownEvents.length },
+            { value: 'visits', label: '家访记录', count: shownVisits.length },
+            { value: 'praises', label: '正向激励', count: shownPraises.length },
           ]"
         />
       </div>
@@ -82,15 +90,15 @@
         </div>
 
         <div class="cc-event-list">
-          <div class="cc-list-title">本月事项（{{ events.length }}）</div>
-          <div v-if="!events.length" class="tui-card">
+          <div class="cc-list-title">本月事项（{{ shownEvents.length }}）</div>
+          <div v-if="!shownEvents.length" class="tui-card">
             <div class="tui-empty">
               <span class="tui-empty-icon"><el-icon :size="26"><Calendar /></el-icon></span>
               <span class="tui-empty-title">本月暂无关怀事项</span>
               <span class="tui-empty-desc">点击「自动生成」按学生情况智能生成关怀事项</span>
             </div>
           </div>
-          <div v-for="e in events" :key="e.id" class="cc-event-item">
+          <div v-for="e in shownEvents" :key="e.id" class="cc-event-item">
             <span class="cc-event-badge" :style="{ background: tintOf(e.event_type), color: CARE_EVENT_COLOR[e.event_type] }">
               {{ CARE_EVENT_LABEL[e.event_type] }}
             </span>
@@ -108,14 +116,14 @@
         <div class="tui-actions cc-panel-ops">
           <el-button size="small" round type="primary" :icon="Plus" @click="visitVisible = true">新增家访</el-button>
         </div>
-        <div v-if="!visits.length" class="tui-card">
+        <div v-if="!shownVisits.length" class="tui-card">
           <div class="tui-empty">
             <span class="tui-empty-icon"><el-icon :size="26"><Document /></el-icon></span>
             <span class="tui-empty-title">暂无家访记录</span>
             <span class="tui-empty-desc">记录每次家访与沟通，形成可追溯的台账</span>
           </div>
         </div>
-        <div v-for="v in visits" :key="v.id" class="cc-record">
+        <div v-for="v in shownVisits" :key="v.id" class="cc-record">
           <div class="cc-record-head">
             <span class="cc-record-name">{{ v.student_name }}</span>
             <el-tag size="small" effect="plain" round>{{ VISIT_METHOD_LABEL[v.method] }}</el-tag>
@@ -134,14 +142,14 @@
         <div class="tui-actions cc-panel-ops">
           <el-button size="small" round type="primary" :icon="Plus" @click="praiseVisible = true">新增激励</el-button>
         </div>
-        <div v-if="!praises.length" class="tui-card">
+        <div v-if="!shownPraises.length" class="tui-card">
           <div class="tui-empty">
             <span class="tui-empty-icon"><el-icon :size="26"><Star /></el-icon></span>
             <span class="tui-empty-title">暂无激励记录</span>
             <span class="tui-empty-desc">及时表扬与发放徽章，让正向反馈被看见</span>
           </div>
         </div>
-        <div v-for="p in praises" :key="p.id" class="cc-record">
+        <div v-for="p in shownPraises" :key="p.id" class="cc-record">
           <div class="cc-record-head">
             <span class="cc-record-name">{{ p.student_name }}</span>
             <el-tag size="small" :type="p.praise_type === 'badge' ? 'warning' : 'success'" effect="plain" round>
@@ -181,9 +189,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import {
-  ArrowLeft, ArrowRight, Calendar, ChatDotRound, Document, Lock, Plus, Refresh, Star,
+  ArrowLeft, ArrowRight, Calendar, ChatDotRound, Document, Lock, Plus, Refresh, Star, User,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
@@ -201,6 +210,41 @@ import PraiseDialog from '@/components/teacher/carecenter/PraiseDialog.vue'
 defineOptions({ name: 'teacher-care-center' })
 
 const { isMobile } = useResponsive()
+
+const route = useRoute()
+const router = useRouter()
+
+/** 闭环：从学生成长档案跳来时聚焦该生 */
+const studentFocus = ref<{ id: number; name: string } | null>(null)
+
+function matchesFocus(id?: number | null, name?: string | null) {
+  const f = studentFocus.value
+  if (!f) return true
+  if (f.id && id != null) return id === f.id
+  if (f.name && name) return name === f.name
+  return true
+}
+
+const shownEvents = computed(() =>
+  studentFocus.value ? events.value.filter((e) => matchesFocus(e.student_id, e.student_name)) : events.value
+)
+const shownVisits = computed(() =>
+  studentFocus.value ? visits.value.filter((v) => matchesFocus(v.student_id, v.student_name)) : visits.value
+)
+const shownPraises = computed(() =>
+  studentFocus.value ? praises.value.filter((p) => matchesFocus(p.student_id, p.student_name)) : praises.value
+)
+
+/** 闭环出口：回到该生成长档案 */
+function gotoStudent() {
+  if (!studentFocus.value) return
+  router.push({ path: '/teacher/students', query: { student: String(studentFocus.value.id) } })
+}
+
+function clearStudentFocus() {
+  studentFocus.value = null
+  router.replace({ path: '/teacher/care-center' })
+}
 
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -246,7 +290,7 @@ const calendarCells = computed(() => {
       day: d,
       inMonth: true,
       isToday: key === todayKey,
-      events: events.value.filter((e) => (e.event_date || '').slice(0, 10) === key),
+      events: shownEvents.value.filter((e) => (e.event_date || '').slice(0, 10) === key),
     })
   }
   while (cells.length % 7 !== 0) {
@@ -264,11 +308,12 @@ function shiftMonth(delta: number) {
 
 async function loadAll() {
   const month = monthKey.value
+  const sid = studentFocus.value?.id || undefined
   const [o, e, v, p] = await Promise.allSettled([
     getCareOverview(month),
-    getCareEvents(month),
-    getHomeVisits(),
-    getPraises(),
+    getCareEvents(month, sid),
+    getHomeVisits(sid),
+    getPraises(sid),
   ])
   if (o.status === 'fulfilled') overview.value = o.value
   if (e.status === 'fulfilled') events.value = e.value
@@ -343,11 +388,52 @@ async function submitHelp() {
   }
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  // 闭环：解析学生成长档案传来的聚焦参数
+  const sid = Number(route.query.student_id)
+  const sname = route.query.student_name ? String(route.query.student_name) : ''
+  if (sid || sname) studentFocus.value = { id: sid || 0, name: sname }
+  loadAll().then(() => {
+    if (!studentFocus.value) return
+    // 聚焦该生时优先落在有数据的 Tab
+    if (shownEvents.value.length) tab.value = 'calendar'
+    else if (shownVisits.value.length) tab.value = 'visits'
+    else if (shownPraises.value.length) tab.value = 'praises'
+  })
+})
 </script>
 
 <style scoped>
 .cc-mobile-ops { margin-bottom: 12px; }
+
+/* 闭环聚焦条：从学生成长档案跳来时的上下文提示 */
+.cc-focus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: #eff4ff;
+  border: 1px solid #d3e0fb;
+  color: #1d4ed8;
+  font-size: 12.5px;
+}
+.cc-focus-text { flex: 1; min-width: 0; font-weight: 500; }
+.cc-focus-link,
+.cc-focus-clear {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+.cc-focus-link:hover,
+.cc-focus-clear:hover { text-decoration: underline; }
 
 .cc-panel-ops { justify-content: flex-end; margin-bottom: 10px; }
 

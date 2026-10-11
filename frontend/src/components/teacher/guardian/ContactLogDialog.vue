@@ -80,6 +80,9 @@ const props = defineProps<{
   modelValue: boolean
   studentId: number
   guardians: Guardian[]
+  /** 闭环：从学生成长档案带过来的反馈事由，打开即预填 */
+  initialContent?: string
+  initialScene?: GuardianScene
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>()
 
@@ -106,11 +109,11 @@ watch(
   () => props.modelValue,
   (open) => {
     if (!open) return
-    form.scene = 'care'
+    form.scene = props.initialScene || 'care'
     form.guardian_id = props.guardians.find((g) => g.is_primary)?.id
     form.channel = 'note'
     form.send_sms = false
-    form.content_summary = ''
+    form.content_summary = props.initialContent || ''
   }
 )
 

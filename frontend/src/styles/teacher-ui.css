@@ -14,9 +14,9 @@
    2) 视觉克制：白卡 + #f2f3f5 底、发丝分割线、弱阴影，靠层级与留白而非装饰取胜
    3) 单一语言：所有教师端页面统一使用 tui- 前缀类，新增类不覆盖存量样式
 
-   结构约定（所有「更多」子页面统一遵循）：
+   结构约定（所有模块子页面统一遵循）：
      <div class="tui-page">
-       <SubPageHeader title="xxx" fallback="/teacher/more" />   <- 移动端吸顶 AppBar
+       <SubPageHeader title="xxx" fallback="/teacher" />   <- 移动端吸顶 AppBar
        <div class="tui-content">
          <header v-if="!isMobile" class="tui-header">…</header> <- 桌面端页头
          …分组卡片…
@@ -261,6 +261,19 @@
   flex-wrap: wrap;
 }
 
+/* 桌面端页头吸顶：滚动页面时页头固定不动，内容从其下方滑过。
+   负外边距抵消 .tui-content 的内边距，让页头背景通栏铺满，避免滚动内容从四周缝隙透出 */
+@media (min-width: 768px) {
+  .tui-page > .tui-content > .tui-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--tui-bg);
+    margin: -20px -24px 4px;
+    padding: 20px 24px 14px;
+  }
+}
+
 /* ============================ 分组 / 卡片 ============================ */
 .tui-groups,
 .tui-stack {
@@ -388,6 +401,8 @@
   line-height: 1;
 }
 .tui-count-soft { background: var(--tui-surface-sunken); color: var(--tui-text-tertiary); }
+/* 待批 / 待处理类角标用琥珀色，与「预警」的红色角标区分轻重 */
+.tui-count-warn { background: #f79009; }
 
 /* ============================ 列表行 ============================ */
 .tui-list {

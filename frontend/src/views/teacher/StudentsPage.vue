@@ -2,12 +2,23 @@
   <div class="students-page">
     <!-- ============ 桌面端（保持原样） ============ -->
     <template v-if="!isMobile">
-      <!-- 学生页头：页面标题 + 范围说明 + 更多操作 -->
+      <!-- 学生页头：品牌形象 + 页面标题 + 实时状态 + 更多操作 -->
       <header class="app-head">
         <div class="app-head-bar">
           <div class="app-head-lead">
-            <h1 class="app-head-title">学生</h1>
-            <p class="app-head-sub">名单 · 档案 · 数据分析</p>
+            <span class="app-head-mark" aria-hidden="true">
+              <img :src="siteMascot" :alt="siteName" />
+            </span>
+            <div class="app-head-text">
+              <h1 class="app-head-title">学生</h1>
+              <p class="app-head-sub">
+                <span class="app-head-live" :class="headAlert ? 'is-alert' : 'is-calm'">
+                  <i class="app-head-live-dot" aria-hidden="true"></i>{{ headStatusText }}
+                </span>
+                <span class="app-head-divider" aria-hidden="true"></span>
+                <span class="app-head-scope">名单 · 档案 · 数据分析</span>
+              </p>
+            </div>
           </div>
           <el-dropdown trigger="click" @command="onHeadCommand">
             <button class="app-icon-btn" type="button" aria-label="更多操作" title="更多操作">
@@ -108,7 +119,7 @@
       <div v-else class="student-grid">
         <div v-for="s in pagedStudents" :key="s.id" :class="['student-card', s.crisis_level ? `level-${s.crisis_level}` : '']">
           <div class="card-head">
-            <el-avatar :size="48" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
+            <el-avatar :size="40" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
             <div class="card-info">
               <strong class="card-name">{{ s.name }}</strong>
               <span class="card-college">{{ s.college || '未分配' }}</span>
@@ -176,6 +187,10 @@
               <el-tabs v-model="detailTab" class="detail-tabs">
                 <el-tab-pane label="技能画像" name="skills">
                   <div class="tab-content">
+                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/ai')">
+                      <span class="loop-bar-text">智能提示 · 用能力画像推荐联系与资源</span>
+                      <el-icon :size="14"><ArrowRight /></el-icon>
+                    </button>
                     <div v-if="detail.skills_json?.skills?.length">
                       <h4>技能</h4>
                       <div class="skill-list">
@@ -196,12 +211,19 @@
                 </el-tab-pane>
                 <el-tab-pane label="成长记录" name="growth">
                   <div class="tab-content">
+                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/guardian', { scene: 'care' })">
+                      <span class="loop-bar-text">家校沟通 · 把成长成果反馈给家长</span>
+                      <el-icon :size="14"><ArrowRight /></el-icon>
+                    </button>
                     <el-timeline>
                       <el-timeline-item v-for="r in detail.growth_records" :key="r.id" :timestamp="r.date">
                         <el-tag size="small" :type="growthType(r.type)">{{ growthLabel(r.type) }}</el-tag>
                         <p style="margin:4px 0"><strong>{{ r.title }}</strong></p>
                         <p v-if="r.description" style="color:#666;font-size:13px">{{ r.description }}</p>
                         <el-link v-if="r.attachment_url" type="primary" :href="r.attachment_url" target="_blank" style="margin-top:4px;font-size:13px">查看附件</el-link>
+                        <div style="margin-top:6px">
+                          <el-button size="small" text type="primary" @click="feedbackGuardian(r.title)">反馈家长</el-button>
+                        </div>
                       </el-timeline-item>
                     </el-timeline>
                     <el-empty v-if="!detail.growth_records.length" description="暂无成长记录" />
@@ -209,28 +231,52 @@
                 </el-tab-pane>
                 <el-tab-pane label="危机预警" name="crisis">
                   <div class="tab-content">
-                    <el-timeline>
-                      <el-timeline-item v-for="a in detail.crisis_alerts" :key="a.id" :timestamp="formatTime(a.created_at)">
-                        <el-alert
-                          :title="crisisLabel(a.level)"
-                          :type="crisisType(a.level)"
-                          :description="a.summary"
-                          :closable="false"
-                          show-icon
-                        />
+                    <button type="button" class="loop-bar" @click="gotoCrisisCenter()">
+                      <span class="loop-bar-text">预警中心 · 发现 → 干预 → 随访 → 闭环</span>
+                      <el-icon :size="14"><ArrowRight /></el-icon>
+                    </button>
+                    <el-timeline v-if="sortedCrisis.length">
+                      <el-timeline-item
+                        v-for="a in sortedCrisis"
+                        :key="a.id"
+                        :timestamp="formatTime(a.created_at)"
+                        :type="crisisType(a.level)"
+                      >
+                        <div class="dc-alert-head">
+                          <el-tag :type="crisisType(a.level)" size="small" effect="dark">{{ crisisLabel(a.level) }}</el-tag>
+                          <el-tag :type="a.resolved ? 'success' : 'warning'" size="small" effect="plain">
+                            {{ a.resolved ? '已闭环' : '待处置' }}
+                          </el-tag>
+                        </div>
+                        <p class="dc-alert-text">{{ a.summary }}</p>
+                        <div v-if="a.resolved || a.intervention_type" class="crisis-loop">
+                          <span class="crisis-loop-tag">{{ a.intervention_type || '已干预' }}</span>
+                          <span class="crisis-loop-note">{{ a.intervention_note || '未填写备注' }}</span>
+                          <span v-if="a.follow_up_date" class="crisis-loop-fu">随访 {{ a.follow_up_date }}</span>
+                        </div>
+                        <el-button v-else size="small" type="primary" plain round @click="gotoCrisisCenter(a)">
+                          去预警中心处置
+                        </el-button>
                       </el-timeline-item>
                     </el-timeline>
-                    <el-empty v-if="!detail.crisis_alerts.length" description="暂无预警记录" />
+                    <el-empty v-else description="暂无预警记录" />
                   </div>
                 </el-tab-pane>
                 <el-tab-pane label="项目展示" name="projects">
                   <div class="tab-content">
+                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/guardian', { scene: 'care' })">
+                      <span class="loop-bar-text">家校沟通 · 把项目成果反馈给家长</span>
+                      <el-icon :size="14"><ArrowRight /></el-icon>
+                    </button>
                     <el-timeline>
                       <el-timeline-item v-for="p in detail.projects" :key="p.id" :timestamp="`${p.start_date} ~ ${p.end_date || '至今'}`">
                         <p style="margin:4px 0"><strong>{{ p.project_name }}</strong></p>
                         <el-tag v-if="p.is_team" size="small" type="primary" round>团队</el-tag>
                         <el-tag v-else size="small" type="info" round>个人</el-tag>
                         <p v-if="p.is_team && p.team_members" style="color:#666;font-size:13px;margin-top:4px">成员：{{ p.team_members }}</p>
+                        <div style="margin-top:6px">
+                          <el-button size="small" text type="primary" @click="feedbackGuardian(p.project_name)">反馈家长</el-button>
+                        </div>
                       </el-timeline-item>
                     </el-timeline>
                     <el-empty v-if="!detail.projects.length" description="暂无项目数据" />
@@ -238,6 +284,10 @@
                 </el-tab-pane>
                 <el-tab-pane label="请假记录" name="leave">
                   <div class="tab-content">
+                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/approval')">
+                      <span class="loop-bar-text">审批管理 · 受理与审批该生请假</span>
+                      <el-icon :size="14"><ArrowRight /></el-icon>
+                    </button>
                     <el-table :data="detail.leave_requests" size="small" style="width:100%"
                       :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
                       <el-table-column prop="start_date" label="日期" width="100" />
@@ -252,17 +302,31 @@
                           </el-tag>
                         </template>
                       </el-table-column>
+                      <el-table-column label="操作" width="90">
+                        <template #default="{ row }">
+                          <el-button v-if="row.status === 'pending'" size="small" text type="primary" @click="gotoFeature('/teacher/approval')">去审批</el-button>
+                          <span v-else style="color:#98a2b3;font-size:12px">已处理</span>
+                        </template>
+                      </el-table-column>
                     </el-table>
                     <el-empty v-if="!detail.leave_requests.length" description="无请假记录" />
                   </div>
                 </el-tab-pane>
                 <el-tab-pane label="工作记录" name="work">
                   <div class="tab-content">
+                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/care-center')">
+                      <span class="loop-bar-text">关怀中心 · 关怀日历 / 家访台账 / 正向激励</span>
+                      <el-icon :size="14"><ArrowRight /></el-icon>
+                    </button>
                     <CareRecordPanel :student-id="detail.id" :student-name="detail.name" />
                   </div>
                 </el-tab-pane>
                 <el-tab-pane label="学情诊断" name="insight">
                   <div class="tab-content">
+                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/ai')">
+                      <span class="loop-bar-text">智能提示 · 学情诊断与跟进建议</span>
+                      <el-icon :size="14"><ArrowRight /></el-icon>
+                    </button>
                     <StudentInsightPanel :student-id="detail.id" :student-name="detail.name" />
                   </div>
                 </el-tab-pane>
@@ -278,12 +342,23 @@
 
     <!-- ============ 移动端（全新设计） ============ -->
     <template v-else>
-      <!-- 移动端页头：与桌面端同一套（页面标题 + 范围说明 + 更多操作） -->
+      <!-- 移动端页头：与桌面端同一套（品牌形象 + 页面标题 + 实时状态 + 更多操作） -->
       <header class="app-head">
         <div class="app-head-bar">
           <div class="app-head-lead">
-            <h1 class="app-head-title">学生</h1>
-            <p class="app-head-sub">名单 · 档案 · 数据分析</p>
+            <span class="app-head-mark" aria-hidden="true">
+              <img :src="siteMascot" :alt="siteName" />
+            </span>
+            <div class="app-head-text">
+              <h1 class="app-head-title">学生</h1>
+              <p class="app-head-sub">
+                <span class="app-head-live" :class="headAlert ? 'is-alert' : 'is-calm'">
+                  <i class="app-head-live-dot" aria-hidden="true"></i>{{ headStatusText }}
+                </span>
+                <span class="app-head-divider" aria-hidden="true"></span>
+                <span class="app-head-scope">名单 · 档案 · 数据分析</span>
+              </p>
+            </div>
           </div>
           <el-dropdown trigger="click" @command="onHeadCommand">
             <button class="app-icon-btn" type="button" aria-label="更多操作" title="更多操作">
@@ -353,7 +428,7 @@
       </div>
       <div v-else class="ms-card ms-student-list">
         <div v-for="(s, i) in filteredStudents" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === filteredStudents.length - 1 }" @click="openDetail(s)">
-          <el-avatar :size="40" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
+          <el-avatar :size="36" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
           <div class="ms-student-info">
             <div class="ms-student-name">
               {{ s.name }}
@@ -406,15 +481,31 @@
         </div>
         <div class="mobile-detail-body">
           <div class="mobile-profile">
-            <el-avatar :size="48" :src="detail.avatar || undefined">{{ detail.name[0] }}</el-avatar>
+            <el-avatar :size="44" :src="detail.avatar || undefined">{{ detail.name[0] }}</el-avatar>
             <div class="mobile-profile-info">
               <strong>{{ detail.name }}</strong>
               <small>{{ detail.college || '未分配' }} · {{ detail.username }}</small>
             </div>
           </div>
+          <div class="mobile-tabbar" role="tablist" aria-label="学生详情分区">
+            <button
+              v-for="t in detailTabs"
+              :key="t.name"
+              type="button"
+              role="tab"
+              class="mobile-tab-chip"
+              :class="{ 'is-active': detailTab === t.name }"
+              :aria-selected="detailTab === t.name"
+              @click="detailTab = t.name"
+            >{{ t.label }}</button>
+          </div>
           <el-tabs v-model="detailTab" class="mobile-tabs">
             <el-tab-pane label="技能" name="skills">
               <div class="mobile-tab-content">
+                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/ai')">
+                  <span class="loop-bar-text">智能提示 · 用能力画像推荐联系与资源</span>
+                  <el-icon :size="14"><ArrowRight /></el-icon>
+                </button>
                 <div v-if="detail.skills_json?.skills?.length" class="mobile-skill-list">
                   <el-tag v-for="sk in detail.skills_json.skills" :key="sk.name" size="small">{{ sk.name }}</el-tag>
                 </div>
@@ -426,6 +517,10 @@
             </el-tab-pane>
             <el-tab-pane label="成长" name="growth">
               <div class="mobile-tab-content">
+                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/guardian', { scene: 'care' })">
+                  <span class="loop-bar-text">家校沟通 · 把成长成果反馈给家长</span>
+                  <el-icon :size="14"><ArrowRight /></el-icon>
+                </button>
                 <div v-for="r in detail.growth_records" :key="r.id" class="mobile-record-card">
                   <div class="mobile-record-top">
                     <el-tag size="small" :type="growthType(r.type)">{{ growthLabel(r.type) }}</el-tag>
@@ -433,20 +528,70 @@
                   </div>
                   <div class="mobile-record-title">{{ r.title }}</div>
                   <div v-if="r.description" class="mobile-record-desc">{{ r.description }}</div>
+                  <button type="button" class="record-op" @click="feedbackGuardian(r.title)">
+                    反馈家长<el-icon :size="12"><ArrowRight /></el-icon>
+                  </button>
                 </div>
                 <el-empty v-if="!detail.growth_records?.length" description="暂无记录" :image-size="48" />
               </div>
             </el-tab-pane>
             <el-tab-pane label="预警" name="crisis">
               <div class="mobile-tab-content">
-                <div v-for="a in detail.crisis_alerts" :key="a.id" class="mobile-record-card">
-                  <el-alert :title="crisisLabel(a.level)" :type="crisisType(a.level)" :description="a.summary" :closable="false" show-icon />
+                <button type="button" class="loop-bar" @click="gotoCrisisCenter()">
+                  <span class="loop-bar-text">预警中心 · 发现 → 干预 → 随访 → 闭环</span>
+                  <el-icon :size="14"><ArrowRight /></el-icon>
+                </button>
+                <div v-if="sortedCrisis.length" class="crisis-list">
+                  <div v-if="pendingCrisisCount" class="crisis-summary">
+                    <span class="crisis-summary-total">待处理 {{ pendingCrisisCount }} 条</span>
+                    <span
+                      v-for="s in crisisSummary.filter((x) => x.count)"
+                      :key="s.level"
+                      class="crisis-summary-item"
+                    >
+                      <i class="crisis-dot" :class="`is-${s.level}`"></i>{{ s.label }} {{ s.count }}
+                    </span>
+                  </div>
+                  <article
+                    v-for="a in sortedCrisis"
+                    :key="a.id"
+                    class="crisis-card"
+                    :class="[`is-${a.level}`, { 'is-resolved': a.resolved }]"
+                  >
+                    <div class="crisis-card-head">
+                      <span class="crisis-level" :class="`is-${a.level}`">{{ crisisLabel(a.level) }}</span>
+                      <span class="crisis-state" :class="{ 'is-done': a.resolved }">
+                        {{ a.resolved ? '已处理' : '待处理' }}
+                      </span>
+                      <time class="crisis-time">{{ formatTime(a.created_at) }}</time>
+                    </div>
+                    <p class="crisis-text">{{ a.summary }}</p>
+                    <div v-if="a.keywords.length" class="crisis-keywords">
+                      <span v-for="k in a.keywords" :key="k" class="crisis-keyword">{{ k }}</span>
+                    </div>
+
+                    <!-- 闭环回流：预警中心的处置结果在学生详情同步可见 -->
+                    <div v-if="a.resolved || a.intervention_type" class="crisis-loop">
+                      <span class="crisis-loop-tag">{{ a.intervention_type || '已干预' }}</span>
+                      <span class="crisis-loop-note">{{ a.intervention_note || '未填写备注' }}</span>
+                      <span v-if="a.follow_up_date" class="crisis-loop-fu">随访 {{ a.follow_up_date }}</span>
+                    </div>
+                    <!-- 未闭环：带着学生与预警跳到预警中心处置 -->
+                    <button v-else type="button" class="crisis-op" @click="gotoCrisisCenter(a)">
+                      去预警中心处置
+                      <el-icon :size="13"><ArrowRight /></el-icon>
+                    </button>
+                  </article>
                 </div>
-                <el-empty v-if="!detail.crisis_alerts?.length" description="暂无预警" :image-size="48" />
+                <el-empty v-else description="暂无预警" :image-size="48" />
               </div>
             </el-tab-pane>
             <el-tab-pane label="项目" name="projects">
               <div class="mobile-tab-content">
+                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/guardian', { scene: 'care' })">
+                  <span class="loop-bar-text">家校沟通 · 把项目成果反馈给家长</span>
+                  <el-icon :size="14"><ArrowRight /></el-icon>
+                </button>
                 <div v-for="p in detail.projects" :key="p.id" class="mobile-record-card">
                   <div class="mobile-record-top">
                     <el-tag v-if="p.is_team" size="small" type="primary" round>团队</el-tag>
@@ -455,12 +600,19 @@
                   </div>
                   <div class="mobile-record-title">{{ p.project_name }}</div>
                   <div v-if="p.team_members" class="mobile-record-desc">成员：{{ p.team_members }}</div>
+                  <button type="button" class="record-op" @click="feedbackGuardian(p.project_name)">
+                    反馈家长<el-icon :size="12"><ArrowRight /></el-icon>
+                  </button>
                 </div>
                 <el-empty v-if="!detail.projects?.length" description="暂无项目" :image-size="48" />
               </div>
             </el-tab-pane>
             <el-tab-pane label="请假" name="leave">
               <div class="mobile-tab-content">
+                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/approval')">
+                  <span class="loop-bar-text">审批管理 · 受理与审批该生请假</span>
+                  <el-icon :size="14"><ArrowRight /></el-icon>
+                </button>
                 <div v-for="l in detail.leave_requests" :key="l.id" class="mobile-record-card">
                   <div class="mobile-record-top">
                     <el-tag size="small" :type="l.status === 'approved' ? 'success' : l.status === 'rejected' ? 'danger' : 'warning'">
@@ -470,17 +622,28 @@
                   </div>
                   <div class="mobile-record-title">{{ leaveTypeLabel(l.leave_type) }}</div>
                   <div class="mobile-record-desc">{{ l.reason }}</div>
+                  <button v-if="l.status === 'pending'" type="button" class="record-op" @click="gotoFeature('/teacher/approval')">
+                    去审批<el-icon :size="12"><ArrowRight /></el-icon>
+                  </button>
                 </div>
                 <el-empty v-if="!detail.leave_requests?.length" description="无请假记录" :image-size="48" />
               </div>
             </el-tab-pane>
             <el-tab-pane label="工作" name="work">
               <div class="mobile-tab-content">
+                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/care-center')">
+                  <span class="loop-bar-text">关怀中心 · 关怀日历 / 家访台账 / 正向激励</span>
+                  <el-icon :size="14"><ArrowRight /></el-icon>
+                </button>
                 <CareRecordPanel :student-id="detail.id" :student-name="detail.name" />
               </div>
             </el-tab-pane>
             <el-tab-pane label="诊断" name="insight">
               <div class="mobile-tab-content">
+                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/ai')">
+                  <span class="loop-bar-text">智能提示 · 学情诊断与跟进建议</span>
+                  <el-icon :size="14"><ArrowRight /></el-icon>
+                </button>
                 <StudentInsightPanel :student-id="detail.id" :student-name="detail.name" />
               </div>
             </el-tab-pane>
@@ -534,7 +697,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Search, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
@@ -570,6 +733,53 @@ const loaded = ref(false)
 const detailVisible = ref(false)
 const detail = ref<StudentDetail | null>(null)
 const detailTab = ref('skills')
+/** 移动端详情分区：横向滚动胶囊标签，替代拥挤的下划线 tabs */
+const detailTabs = [
+  { name: 'skills', label: '技能' },
+  { name: 'growth', label: '成长' },
+  { name: 'crisis', label: '预警' },
+  { name: 'projects', label: '项目' },
+  { name: 'leave', label: '请假' },
+  { name: 'work', label: '工作' },
+  { name: 'insight', label: '诊断' },
+]
+
+/** 预警等级优先级：数字越小越紧急 */
+const CRISIS_RANK: Record<string, number> = { severe: 0, moderate: 1, mild: 2, normal: 3 }
+
+function keywordList(raw?: string | null): string[] {
+  if (!raw) return []
+  return raw.split(/[,，、;；\s]+/).filter(Boolean).slice(0, 6)
+}
+
+/** 预警按「待处理优先 → 等级高→低 → 时间新→旧」排序，最高优先级置顶 */
+const sortedCrisis = computed(() =>
+  [...((detail.value?.crisis_alerts || []) as any[])]
+    .sort((a, b) => {
+      const ra = a.resolved ? 1 : 0
+      const rb = b.resolved ? 1 : 0
+      if (ra !== rb) return ra - rb
+      const la = CRISIS_RANK[a.level] ?? 9
+      const lb = CRISIS_RANK[b.level] ?? 9
+      if (la !== lb) return la - lb
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    })
+    .map((a) => ({ ...a, keywords: keywordList(a.keywords_matched) }))
+)
+
+const pendingCrisisCount = computed(
+  () => ((detail.value?.crisis_alerts || []) as any[]).filter((a) => !a.resolved).length
+)
+
+/** 待处理预警的等级分布，用于顶部优先级概览 */
+const crisisSummary = computed(() => {
+  const pending = ((detail.value?.crisis_alerts || []) as any[]).filter((a) => !a.resolved)
+  return [
+    { level: 'severe', label: '高危', count: pending.filter((a) => a.level === 'severe').length },
+    { level: 'moderate', label: '中度', count: pending.filter((a) => a.level === 'moderate').length },
+    { level: 'mild', label: '轻度', count: pending.filter((a) => a.level === 'mild').length },
+  ]
+})
 
 const filterCrisis = ref('')
 const filterGrowth = ref('')
@@ -589,6 +799,12 @@ const stats = ref<DashboardStats>({
 
 // 有成长成果的学生数（学生维度概览，移动端统计卡使用）
 const growthCount = computed(() => students.value.filter(s => (s.growth_count || 0) > 0).length)
+
+// ===== 页头实时状态：把静态说明换成随数据变化的一句话 =====
+const headAlert = computed(() => stats.value.severe_alert_count > 0)
+const headStatusText = computed(() =>
+  headAlert.value ? `${stats.value.severe_alert_count} 人高危待关注` : '暂无高危预警',
+)
 
 // ===== 班级数据分析（与学生相关的数据维度，随本页承载） =====
 const evalData = ref<ClassEvaluation>({
@@ -939,7 +1155,7 @@ function crisisType(level: string) {
 }
 
 function crisisLabel(level: string) {
-  const map: Record<string, string> = { severe: '高危', moderate: '中度', mild: '轻度' }
+  const map: Record<string, string> = { severe: '高危', moderate: '中度', mild: '轻度', normal: '正常' }
   return map[level] || level
 }
 
@@ -986,17 +1202,55 @@ function openContact(s: StudentSummary) {
   router.push({ path: '/teacher/messages', query: { studentId: String(s.id), studentName: s.name } })
 }
 
+/** 闭环入口：跳到预警中心，可携带当前学生与具体预警，落地即处置 */
+function gotoCrisisCenter(alert?: any) {
+  const sid = detail.value?.id
+  if (!sid) {
+    router.push('/teacher/crisis')
+    return
+  }
+  router.push({
+    path: '/teacher/crisis',
+    query: { student_id: String(sid), ...(alert ? { alert_id: String(alert.id) } : {}) },
+  })
+}
+
+/** 闭环通用入口：带学生上下文跳到对应功能页，落地即可处理 */
+function gotoFeature(path: string, extra?: Record<string, string>) {
+  const q: Record<string, string> = {}
+  if (detail.value?.id) q.student_id = String(detail.value.id)
+  if (detail.value?.name) q.student_name = detail.value.name
+  router.push({ path, query: { ...q, ...(extra || {}) } })
+}
+
+/** 家校沟通闭环：把成长成果 / 项目成果作为事由带给家长反馈 */
+function feedbackGuardian(subject: string) {
+  gotoFeature('/teacher/guardian', {
+    scene: 'care',
+    content: `向家长反馈学生在校成果：${subject}`,
+  })
+}
+
+/** 深链 ?student=<id>：从消息页、预警中心等入口直达该学生成长档案 */
+async function applyDeepLink() {
+  const deepId = Number(route.query.student)
+  if (!deepId) return
+  if (!students.value.length) await loadStudents()
+  const target = students.value.find((s) => s.id === deepId)
+  if (!target) return
+  openDetail(target)
+  router.replace({ path: '/teacher/students' })
+}
+
 onMounted(async () => {
   await loadStudents()
   loadDashboard()
   loadAnalysisData()
-  // 从消息页等入口深链：?student=<id> 直接打开该学生详情
-  const deepId = Number(route.query.student)
-  if (deepId) {
-    const target = students.value.find((s) => s.id === deepId)
-    if (target) openDetail(target)
-  }
+  applyDeepLink()
 })
+
+// 本页 keepAlive：从预警中心返回时不会重新 mount，靠 onActivated 兜住深链
+onActivated(applyDeepLink)
 
 onUnmounted(() => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -1008,7 +1262,7 @@ onUnmounted(() => {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 16px 24px;
+  padding: 0 16px 24px;
   background: #f6f7f9;
   /* 静默边框令牌：用 1px 发丝线取代阴影与重背景 */
   --sp-line: #ebedf0;
@@ -1019,23 +1273,23 @@ onUnmounted(() => {
 .bento {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 .bento-tile {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  padding: 14px;
+  padding: 10px 12px;
   border: 1px solid var(--sp-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
 }
 .bento-tile-lg { grid-column: span 2; }
-.bento-label { font-size: 12px; color: #71717a; }
+.bento-label { font-size: 11.5px; color: #71717a; }
 .bento-value {
-  font-size: 26px;
+  font-size: 21px;
   font-weight: 700;
   line-height: 1.1;
   color: #101828;
@@ -1043,12 +1297,12 @@ onUnmounted(() => {
 }
 .bento-value-warn { color: #d92d20; }
 .bento-value-ok { color: #079455; }
-.bento-hint { font-size: 11.5px; color: #a1a1aa; }
+.bento-hint { font-size: 11px; color: #a1a1aa; }
 .bento-tile-action {
   grid-column: span 2;
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   text-align: left;
   cursor: pointer;
   font-family: inherit;
@@ -1059,51 +1313,125 @@ onUnmounted(() => {
 .bento-tile-action:hover { border-color: #cfdcf3; }
 .bento-tile-action:active { background: #eff4ff; }
 .bento-action-icon {
-  width: 34px; height: 34px; flex-shrink: 0;
+  width: 30px; height: 30px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 10px;
+  border-radius: 9px;
   background: #eff4ff;
   color: #2563eb;
 }
-.bento-action-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.bento-tile-action .bento-label { font-size: 13.5px; font-weight: 600; color: #101828; }
+.bento-action-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.bento-tile-action .bento-label { font-size: 13px; font-weight: 600; color: #101828; }
 .bento-tile-action .bento-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 767px) {
-  .bento { margin: 12px 16px 14px; }
+  .bento { margin: 10px 16px 10px; }
 }
 
-/* ===== 学生页头（极简应用栏：仅标题 + 更多操作） ===== */
+/* ===== 学生页头（品牌栏：形象 + 标题 + 实时状态 + 更多操作） ===== */
+/* 吸顶：滚动页面时页头固定不动，内容从其下方滑过 */
 .app-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background: #fff;
-  border-bottom: 1px solid #ebedf0;
+  border-bottom: 1px solid var(--sp-line);
   padding: 0 16px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 .app-head-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0 12px;
+  padding: 8px 0 10px;
 }
-.app-head-lead { min-width: 0; }
+.app-head-lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+/* 品牌形象：圆形柔光底座承托吉祥物，与教师端其它品牌栏同一视觉语言 */
+.app-head-mark {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, #ffffff 0%, #eff4ff 58%, #dbeafe 100%);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.1), 0 2px 8px rgba(37, 99, 235, 0.14);
+}
+.app-head-mark > img {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.app-head-text { min-width: 0; }
 .app-head-title {
   margin: 0;
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.3px;
   line-height: 1.2;
   color: #101828;
 }
+/* 实时状态行：静态说明 → 「状态胶囊 + 范围说明」，随数据变化 */
 .app-head-sub {
-  margin: 3px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0 0;
+  min-width: 0;
   font-size: 12.5px;
   color: #71717a;
 }
+.app-head-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 2px 9px 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.app-head-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.app-head-live.is-alert { background: #fef3f2; color: #d92d20; }
+.app-head-live.is-alert .app-head-live-dot { animation: app-head-pulse 1.8s ease-in-out infinite; }
+.app-head-live.is-calm { background: #ecfdf3; color: #079455; }
+@keyframes app-head-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-head-live.is-alert .app-head-live-dot { animation: none; }
+}
+.app-head-divider {
+  width: 1px;
+  height: 11px;
+  flex-shrink: 0;
+  background: #e4e7ec;
+}
+.app-head-scope {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .app-icon-btn {
-  width: 36px; height: 36px; flex-shrink: 0;
+  width: 32px; height: 32px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border: none; border-radius: 999px;
   background: transparent; color: #4b5563;
@@ -1115,9 +1443,9 @@ onUnmounted(() => {
 
 /* 搜索：白底 + 发丝边（与静默卡片同语言），聚焦时品牌描边 + 柔光环 */
 .list-search :deep(.el-input__wrapper) {
-  height: 38px;
-  border-radius: 10px;
-  padding: 0 12px;
+  height: 34px;
+  border-radius: 9px;
+  padding: 0 11px;
   background: #fff;
   box-shadow: 0 0 0 1px var(--sp-line) inset;
   transition: box-shadow 0.15s ease;
@@ -1126,24 +1454,32 @@ onUnmounted(() => {
 .list-search :deep(.el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1px #2563eb inset, 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
-.list-search :deep(.el-input__inner) { height: 38px; font-size: 13.5px; color: #101828; }
+.list-search :deep(.el-input__inner) { height: 34px; font-size: 13px; color: #101828; }
 .list-search :deep(.el-input__prefix),
 .list-search :deep(.el-input__clear) { color: #9aa4b2; }
-.filter-search { width: 240px; flex: none; }
+.filter-search { width: 210px; flex: none; }
 
-/* 桌面端：应用栏收敛为带圆角的白色卡片 */
+/* 桌面端：吸顶背板 + 圆角白卡。
+   背板取页面底色并通栏铺满，吸顶后遮住圆角缝隙里滑过的内容，卡片观感与改版前一致 */
 @media (min-width: 768px) {
   .app-head {
-    border: 1px solid #ebedf0;
-    border-radius: 12px;
-    margin-bottom: 16px;
+    background: #f6f7f9;
+    border-bottom: none;
+    margin: 0 -16px 0;
+    padding: 10px 16px 12px;
+  }
+  .app-head-bar {
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid var(--sp-line);
+    border-radius: 10px;
   }
 }
 
 .filter-bar {
-  display: flex; gap: 8px; margin-bottom: 14px; padding: 10px 12px;
+  display: flex; gap: 8px; margin-bottom: 10px; padding: 8px 10px;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--sp-line);
   flex-wrap: wrap; align-items: center;
 }
@@ -1152,14 +1488,14 @@ onUnmounted(() => {
 .empty-mascot { width: 96px; height: 96px; object-fit: contain; opacity: 0.9; }
 .empty-text { color: #98a2b3; font-size: 13px; margin: 8px 0 0; }
 
-.analytics-section { margin-bottom: 14px; }
-.analytics-section-head { display: flex; align-items: baseline; gap: 10px; padding: 0 4px 8px; }
-.analytics-section-title { font-size: 15px; font-weight: 700; color: #101828; }
+.analytics-section { margin-bottom: 10px; }
+.analytics-section-head { display: flex; align-items: baseline; gap: 10px; padding: 0 4px 6px; }
+.analytics-section-title { font-size: 14px; font-weight: 700; color: #101828; }
 .analytics-section-sub { font-size: 12px; color: #98a2b3; }
 
-.student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); gap: 8px; }
 .student-card {
-  background: #fff; border-radius: 12px; padding: 14px;
+  background: #fff; border-radius: 10px; padding: 11px 12px;
   border: 1px solid var(--sp-line);
   transition: border-color 0.15s ease; cursor: default;
 }
@@ -1167,26 +1503,26 @@ onUnmounted(() => {
 .student-card.level-severe { border-left: 3px solid #f56c6c; }
 .student-card.level-moderate { border-left: 3px solid #e6a23c; }
 .student-card.level-mild { border-left: 3px solid #909399; }
-.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
 .card-avatar { flex-shrink: 0; }
 .card-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.card-name { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+.card-name { font-size: 13.5px; font-weight: 600; color: #1a1a2e; }
 .card-college { font-size: 11px; color: #999; margin-top: 1px; }
 .crisis-tag { flex-shrink: 0; }
 .card-stats {
-  display: flex; gap: 12px; margin-bottom: 10px;
-  padding: 8px 0; border-top: 1px solid #f5f5f5; border-bottom: 1px solid #f5f5f5;
+  display: flex; gap: 10px; margin-bottom: 8px;
+  padding: 6px 0; border-top: 1px solid #f5f5f5; border-bottom: 1px solid #f5f5f5;
 }
 .stat-item { display: flex; flex-direction: column; align-items: center; flex: 1; }
-.stat-num { font-size: 15px; font-weight: 700; color: #333; line-height: 1.2; }
+.stat-num { font-size: 14px; font-weight: 700; color: #333; line-height: 1.2; }
 .stat-text { font-size: 10px; color: #999; margin-top: 1px; }
 .score-excellent .stat-num, .score-excellent { color: #67c23a; }
 .score-good .stat-num, .score-good { color: #409eff; }
 .score-average .stat-num, .score-average { color: #e6a23c; }
 .score-poor .stat-num, .score-poor { color: #f56c6c; }
-.card-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.card-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .card-actions { display: flex; gap: 6px; }
-.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 16px; padding: 12px 0; }
+.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; padding: 8px 0; }
 
 :deep(.student-detail-dialog .el-dialog) { height: 520px !important; margin: 12vh auto !important; }
 :deep(.student-detail-dialog .el-dialog__body) {
@@ -1213,54 +1549,83 @@ onUnmounted(() => {
 
 /* 通用卡片（静默：1px 发丝边，无阴影） */
 .ms-card {
-  background: #fff; border-radius: 12px;
+  background: #fff; border-radius: 10px;
   border: 1px solid var(--sp-line);
   overflow: hidden;
 }
 .ms-student-list { margin: 0 12px; }
 .ms-student-card {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px; margin: 0 2px;
+  display: flex; align-items: center; gap: 12px;
+  min-height: 62px; padding: 12px 14px; margin: 0 2px;
   border-bottom: 1px solid #f5f6f7; cursor: pointer;
 }
 .ms-student-card.no-border { border-bottom: none; }
 .ms-student-card:active { background: #fafafa; }
 .ms-student-avatar { flex-shrink: 0; }
-.ms-student-info { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.ms-student-name { display: flex; align-items: center; font-size: 14px; font-weight: 600; color: #1a1a2e; }
+.ms-student-info { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ms-student-name { display: flex; align-items: center; font-size: 14.5px; font-weight: 600; color: #1a1a2e; }
 .ms-student-tag { margin-left: 6px; }
-.ms-student-sub { font-size: 12px; color: #999; }
+.ms-student-sub { font-size: 12px; color: #8a94a6; }
 .ms-student-arrow { flex-shrink: 0; }
 
 .ms-empty {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  text-align: center; color: #98a2b3; font-size: 13px; padding: 26px 0;
+  text-align: center; color: #98a2b3; font-size: 13px; padding: 20px 0;
 }
-.ms-empty-mascot { width: 72px; height: 72px; object-fit: contain; opacity: 0.85; }
+.ms-empty-mascot { width: 64px; height: 64px; object-fit: contain; opacity: 0.85; }
 
 /* 名单区搜索：全宽单行，紧贴它所筛选的列表 */
-.ms-list-search { margin: 0 16px 10px; }
+.ms-list-search { margin: 0 16px 8px; }
+
+/* 移动端搜索框：胶囊形 + 轻投影，聚焦时品牌描边与图标染色 */
+.ms-list-search .list-search :deep(.el-input__wrapper) {
+  height: 40px;
+  padding: 0 15px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--sp-line) inset, 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+.ms-list-search .list-search :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #d5dbe5 inset, 0 2px 6px rgba(16, 24, 40, 0.06);
+}
+.ms-list-search .list-search :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1.5px #1677ff inset, 0 0 0 4px rgba(22, 119, 255, 0.12);
+}
+.ms-list-search .list-search :deep(.el-input__inner) {
+  height: 40px;
+  font-size: 14px;
+  color: #101828;
+}
+.ms-list-search .list-search :deep(.el-input__inner::placeholder) { color: #98a2b3; }
+.ms-list-search .list-search :deep(.el-input__prefix) {
+  color: #8a94a6;
+  transition: color 0.2s ease;
+}
+.ms-list-search .list-search :deep(.el-input__wrapper.is-focus .el-input__prefix) { color: #1677ff; }
+.ms-list-search .list-search :deep(.el-input__clear) { color: #b0b8c4; }
+.ms-list-search .list-search :deep(.el-input__clear:hover) { color: #6b7280; }
 
 /* ===== 移动端学生列表工具条 ===== */
-.ms-list-toolbar { display: flex; align-items: center; gap: 10px; margin: 0 12px; }
+.ms-list-toolbar { display: flex; align-items: center; gap: 8px; margin: 0 12px; }
 .ms-list-toolbar .ms-chip-scroll { flex: 1; margin: 0; padding: 0 0 4px; }
 .ms-list-toolbar .ms-filter-btn { margin-bottom: 4px; }
 
 .ms-filter-btn {
   display: flex; align-items: center; gap: 4px;
-  height: 40px; padding: 0 12px; border-radius: 20px;
-  background: #fff; color: #1677ff; font-size: 14px; cursor: pointer; flex-shrink: 0;
+  height: 34px; padding: 0 11px; border-radius: 17px;
+  background: #fff; color: #1677ff; font-size: 13px; cursor: pointer; flex-shrink: 0;
 }
 .ms-filter-btn:active { opacity: 0.7; }
 
 .ms-chip-scroll {
-  display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 12px;
+  display: flex; gap: 7px; overflow-x: auto; padding: 4px 2px 10px;
   -ms-overflow-style: none; scrollbar-width: none;
 }
 .ms-chip-scroll::-webkit-scrollbar { display: none; }
 .ms-chip {
-  flex-shrink: 0; padding: 6px 16px; border-radius: 18px; border: none;
-  background: #fff; color: #555; font-size: 13px; cursor: pointer;
+  flex-shrink: 0; padding: 5px 13px; border-radius: 16px; border: none;
+  background: #fff; color: #555; font-size: 12.5px; cursor: pointer;
 }
 .ms-chip.active { background: #1677ff; color: #fff; font-weight: 600; }
 
@@ -1304,28 +1669,142 @@ onUnmounted(() => {
 }
 .mobile-detail-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 12px; background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
+  padding: 6px 10px; background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
 }
-.mobile-detail-title { font-size: 15px; font-weight: 600; color: #1a1a1a; }
-.mobile-detail-body { flex: 1; overflow-y: auto; padding: 12px; }
+.mobile-detail-title { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.mobile-detail-body { flex: 1; overflow-y: auto; padding: 14px; }
 .mobile-profile {
-  display: flex; align-items: center; gap: 12px; padding: 12px;
-  background: #fff; border-radius: 10px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 12px; padding: 14px;
+  background: #fff; border-radius: 12px; margin-bottom: 12px;
 }
-.mobile-profile-info { display: flex; flex-direction: column; gap: 2px; }
+.mobile-profile-info { display: flex; flex-direction: column; gap: 4px; }
 .mobile-profile-info strong { font-size: 15px; color: #1a1a1a; }
-.mobile-profile-info small { font-size: 12px; color: #999; }
-.mobile-tabs { background: #fff; border-radius: 10px; padding: 0 8px; }
-.mobile-tabs :deep(.el-tabs__header) { margin-bottom: 8px; }
-.mobile-tabs :deep(.el-tabs__item) { font-size: 13px; padding: 0 10px; height: 36px; line-height: 36px; }
-.mobile-tab-content { padding: 0 4px 12px; }
-.mobile-skill-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.mobile-record-card { padding: 10px; border-bottom: 1px solid #f5f5f5; }
+.mobile-profile-info small { font-size: 12px; color: #8a94a6; }
+/* 移动端详情分区：横向可滚动胶囊标签，替代拥挤的下划线 tabs */
+.mobile-tabbar {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 2px 0 10px; margin: 0 -2px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.mobile-tabbar::-webkit-scrollbar { display: none; }
+.mobile-tab-chip {
+  flex-shrink: 0; height: 34px; padding: 0 15px;
+  border: none; border-radius: 999px; background: #fff; color: #5b6472;
+  font-size: 13px; font-family: inherit; cursor: pointer;
+  box-shadow: inset 0 0 0 1px #eceef2;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+.mobile-tab-chip:active { transform: scale(0.97); }
+.mobile-tab-chip.is-active {
+  background: #1677ff; color: #fff; font-weight: 600;
+  box-shadow: 0 4px 10px rgba(22, 119, 255, 0.24);
+}
+
+/* el-tabs 仅保留面板，头部由胶囊标签栏接管 */
+.mobile-tabs { background: #fff; border-radius: 12px; padding: 0 10px; }
+.mobile-tabs :deep(.el-tabs__header) { display: none; }
+.mobile-tab-content { padding: 14px 4px 14px; }
+.mobile-skill-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.mobile-record-card { padding: 13px 12px; border-bottom: 1px solid #f5f5f5; }
 .mobile-record-card:last-child { border-bottom: none; }
-.mobile-record-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.mobile-record-top small { font-size: 11px; color: #999; }
-.mobile-record-title { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 4px; }
-.mobile-record-desc { font-size: 12px; color: #666; line-height: 1.5; }
+.mobile-record-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.mobile-record-top small { font-size: 11.5px; color: #8a94a6; }
+.mobile-record-title { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 5px; }
+.mobile-record-desc { font-size: 12px; color: #666; line-height: 1.6; }
+
+/* ===== 预警：按优先级排序 + 等级可视化 ===== */
+.crisis-list { display: flex; flex-direction: column; gap: 10px; }
+.crisis-summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 10px 12px; border-radius: 10px; background: #f7f8fa;
+  font-size: 12px; color: #5b6472;
+}
+.crisis-summary-total { font-weight: 600; color: #101828; }
+.crisis-summary-item { display: inline-flex; align-items: center; gap: 5px; }
+.crisis-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.crisis-dot.is-severe { background: #d92d20; }
+.crisis-dot.is-moderate { background: #f79009; }
+.crisis-dot.is-mild { background: #2563eb; }
+
+/* 左侧色条直接表达等级优先级：红 > 橙 > 蓝 */
+.crisis-card {
+  position: relative; padding: 12px 12px 12px 16px;
+  border-radius: 10px; background: #fff; overflow: hidden;
+  box-shadow: inset 0 0 0 1px #eef0f3;
+}
+.crisis-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+}
+.crisis-card.is-severe::before { background: #d92d20; }
+.crisis-card.is-moderate::before { background: #f79009; }
+.crisis-card.is-mild::before { background: #2563eb; }
+.crisis-card.is-normal::before { background: #98a2b3; }
+.crisis-card.is-resolved { background: #fafbfc; }
+.crisis-card.is-resolved::before { background: #d5d9df; }
+.crisis-card.is-resolved .crisis-text { color: #98a2b3; }
+
+.crisis-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.crisis-level {
+  font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+}
+.crisis-level.is-severe { background: #fef3f2; color: #d92d20; }
+.crisis-level.is-moderate { background: #fffaeb; color: #b54708; }
+.crisis-level.is-mild { background: #eff4ff; color: #2563eb; }
+.crisis-level.is-normal { background: #f2f3f5; color: #5b6472; }
+.crisis-state { font-size: 11px; color: #8a94a6; }
+.crisis-state.is-done { color: #079455; }
+.crisis-time { margin-left: auto; font-size: 11px; color: #98a2b3; }
+.crisis-text { margin: 0; font-size: 13px; color: #333; line-height: 1.6; }
+.crisis-keywords { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.crisis-keyword {
+  font-size: 11px; color: #8a94a6; background: #f4f5f7;
+  border-radius: 6px; padding: 2px 7px;
+}
+
+/* 闭环：详情 ↔ 预警中心 双向打通 */
+.loop-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; margin-bottom: 10px; padding: 10px 12px;
+  border: none; border-radius: 10px; cursor: pointer;
+  background: #eff4ff; color: #2563eb;
+  font-size: 12px; font-family: inherit; text-align: left;
+}
+.loop-bar-text { font-weight: 600; }
+.loop-bar:active { background: #e3ecff; }
+
+.crisis-loop {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  margin-top: 9px; padding-top: 9px; border-top: 1px dashed #eaecf0;
+}
+.crisis-loop-tag {
+  font-size: 11px; font-weight: 600; color: #079455;
+  background: #ecfdf3; border-radius: 6px; padding: 2px 7px;
+}
+.crisis-loop-note { font-size: 12px; color: #5b6472; }
+.crisis-loop-fu { font-size: 11px; color: #8a94a6; }
+
+.crisis-op {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 10px; padding: 6px 12px;
+  border: none; border-radius: 999px; cursor: pointer;
+  background: #1677ff; color: #fff;
+  font-size: 12px; font-family: inherit; font-weight: 600;
+}
+.crisis-op:active { background: #0d5fd6; }
+
+/* 桌面端详情弹窗的预警条目 */
+.dc-alert-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dc-alert-text { margin: 0 0 8px; font-size: 13px; color: #333; line-height: 1.6; }
+
+/* 记录卡内的闭环动作（成长 / 项目 / 请假） */
+.record-op {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-top: 8px; padding: 4px 10px;
+  border: none; border-radius: 999px; cursor: pointer;
+  background: #eff4ff; color: #2563eb;
+  font-size: 11.5px; font-family: inherit; font-weight: 600;
+}
+.record-op:active { background: #e3ecff; }
 
 /* ===== 弹窗美化 ===== */
 .ms-dialog :deep(.el-dialog) {
@@ -1346,6 +1825,10 @@ onUnmounted(() => {
 
 /* ===== 桌面端响应式（仅小屏桌面） ===== */
 @media (max-width: 767px) {
-  .students-page { padding: 0; background: #f5f6f7; }
+  .students-page { padding: 0 0 12px; background: #f5f6f7; }
+  /* 移动端页头：形象与标题收敛，为状态胶囊留出横向空间 */
+  .app-head-mark { width: 36px; height: 36px; }
+  .app-head-title { font-size: 18px; }
+  .app-head-sub { font-size: 12px; margin-top: 3px; }
 }
 </style>

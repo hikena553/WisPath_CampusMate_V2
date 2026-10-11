@@ -13,16 +13,18 @@ export function deleteLeave(id: number) {
   return request.delete(`/leave/${id}`)
 }
 
-export function getPendingLeaves() {
-  return request.get<LeaveRequestOut[]>('/leave/pending')
+export function getPendingLeaves(studentId?: number) {
+  return request.get<LeaveRequestOut[]>('/leave/pending', { params: { student_id: studentId } })
 }
 
 export function reviewLeave(id: number, action: 'approve' | 'reject', reject_reason?: string) {
   return request.post(`/leave/${id}/review`, { action, reject_reason })
 }
 
-export function getAllLeaves(status?: string) {
-  const params = status ? { status } : {}
+export function getAllLeaves(status?: string, studentId?: number) {
+  const params: Record<string, unknown> = {}
+  if (status) params.status = status
+  if (studentId != null) params.student_id = studentId
   return request.get<LeaveRequestOut[]>('/leave/all', { params })
 }
 

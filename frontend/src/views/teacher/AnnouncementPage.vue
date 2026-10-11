@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="班级公告" sub="面向名下学生发布通知" fallback="/teacher/more">
+    <SubPageHeader title="班级公告" sub="面向名下学生发布通知" fallback="/teacher">
       <template #right>
         <el-button text circle aria-label="发布公告" @click="dialogVisible = true">
           <el-icon :size="19"><Plus /></el-icon>

@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="家校沟通" sub="家长零账号可完整留痕" fallback="/teacher/more" />
+    <SubPageHeader title="家校沟通" sub="家长零账号可完整留痕" fallback="/teacher" />
 
     <div class="tui-content">
       <header v-if="!isMobile" class="tui-header">
@@ -115,7 +115,7 @@
       </div>
 
       <GuardianDialog v-model="guardianVisible" :student-id="studentId || 0" :guardian="editingGuardian" @saved="loadAll" />
-      <ContactLogDialog v-model="logVisible" :student-id="studentId || 0" :guardians="guardians" @saved="loadAll" />
+      <ContactLogDialog v-model="logVisible" :student-id="studentId || 0" :guardians="guardians" :initial-content="logPresetContent" :initial-scene="logPresetScene" @saved="loadAll" />
     </div>
   </div>
 </template>
@@ -131,14 +131,17 @@ import {
   createShareLink, deleteContactLog, deleteGuardian, getContactLogs, getGuardians,
   getLogShareLink, revokeShareLink, GUARDIAN_CHANNEL_LABEL, GUARDIAN_SCENE_LABEL,
   GUARDIAN_STATUS_LABEL,
-  type ContactLog, type Guardian, type GuardianContactStatus, type ShareLink,
+  type ContactLog, type Guardian, type GuardianContactStatus, type GuardianScene, type ShareLink,
 } from '@/api/guardian'
 import GuardianDialog from '@/components/teacher/guardian/GuardianDialog.vue'
 import ContactLogDialog from '@/components/teacher/guardian/ContactLogDialog.vue'
+import { useRoute, useRouter } from 'vue-router'
 
 defineOptions({ name: 'teacher-guardian' })
 
 const { isMobile } = useResponsive()
+const route = useRoute()
+const router = useRouter()
 
 const students = ref<StudentSummary[]>([])
 const studentId = ref<number | undefined>(undefined)
@@ -149,6 +152,9 @@ const links = ref<Record<number, ShareLink>>({})
 const guardianVisible = ref(false)
 const editingGuardian = ref<Guardian | null>(null)
 const logVisible = ref(false)
+/** 闭环：来自学生成长档案的反馈预填 */
+const logPresetContent = ref('')
+const logPresetScene = ref<GuardianScene>('care')
 
 function statusTag(status: GuardianContactStatus) {
   return status === 'sent' ? 'success' : status === 'pending' ? 'warning' : status === 'failed' ? 'danger' : 'info'
@@ -157,9 +163,22 @@ function statusTag(status: GuardianContactStatus) {
 async function loadStudents() {
   try {
     students.value = await getStudents()
-    if (!studentId.value && students.value.length) {
+    // 闭环：从学生成长档案跳来时直接定位到该学生
+    const deepId = Number(route.query.student_id) || 0
+    const target = deepId ? students.value.find((s) => s.id === deepId) : undefined
+    if (target) {
+      studentId.value = target.id
+      await loadAll()
+    } else if (!studentId.value && students.value.length) {
       studentId.value = students.value[0].id
       await loadAll()
+    }
+    // 闭环：带上反馈事由时，落地即打开沟通记录并预填
+    if (route.query.content) {
+      logPresetContent.value = String(route.query.content)
+      logPresetScene.value = (String(route.query.scene || 'care') as GuardianScene)
+      logVisible.value = true
+      router.replace({ path: '/teacher/guardian' })
     }
   } catch {
     students.value = []

@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="心理预警工作台" sub="AI 心理预警闭环处置" fallback="/teacher/more">
+    <SubPageHeader title="心理预警工作台" sub="AI 心理预警闭环处置" fallback="/teacher">
       <template #right>
         <el-button text circle aria-label="刷新" :loading="loading" @click="loadAlerts">
           <el-icon :size="19"><Refresh /></el-icon>
@@ -52,6 +52,14 @@
         <button type="button" class="tui-seg-item" :class="{ active: filter === 'resolved' }" @click="filter = 'resolved'">已闭环</button>
       </div>
 
+      <!-- 闭环：从学生详情跳来，仅看该学生的预警 -->
+      <div v-if="studentFilter" class="wb-scope">
+        <span class="wb-scope-text">仅看：{{ studentFilterName }}</span>
+        <button type="button" class="wb-scope-clear" @click="clearStudentFilter">
+          查看全部预警<el-icon :size="12"><Close /></el-icon>
+        </button>
+      </div>
+
       <!-- 移动端：卡片列表 -->
       <template v-if="isMobile">
         <div v-if="!filtered.length" class="tui-empty">
@@ -94,6 +102,7 @@
                 干预处置
               </el-button>
               <el-button size="small" text type="success" :disabled="row.resolved" @click="handleResolve(row)">标记闭环</el-button>
+              <el-button size="small" text @click="gotoStudent(row)">查看档案</el-button>
             </div>
           </article>
         </div>
@@ -146,12 +155,13 @@
             <span v-else class="note-text muted">未设置</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" plain round :disabled="row.resolved" @click="openIntervene(row)">
               干预处置
             </el-button>
             <el-button size="small" text type="success" :disabled="row.resolved" @click="handleResolve(row)">标记闭环</el-button>
+            <el-button size="small" text @click="gotoStudent(row)">查看档案</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -197,8 +207,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
-import { Refresh, WarningFilled } from '@element-plus/icons-vue'
+import { Refresh, WarningFilled, Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { getAlerts, resolveAlert, interveneAlert } from '@/api/crisis'
@@ -206,7 +217,20 @@ import type { CrisisAlert } from '@/types'
 
 const { isMobile } = useResponsive()
 
+const route = useRoute()
+const router = useRouter()
+
 const alerts = ref<CrisisAlert[]>([])
+
+/** 来自学生详情的闭环参数：?student_id= 只看该学生，?alert_id= 直接打开该条处置 */
+const studentFilter = computed(() => Number(route.query.student_id) || null)
+const alertFilter = Number(route.query.alert_id) || 0
+const studentFilterName = computed(() => {
+  if (!studentFilter.value) return ''
+  const hit = alerts.value.find((a) => a.student_id === studentFilter.value)
+  return hit?.student_name || `学生 #${studentFilter.value}`
+})
+
 const loading = ref(false)
 const filter = ref<'all' | 'unresolved' | 'follow_up' | 'resolved'>('all')
 
@@ -232,11 +256,27 @@ function isFollowUpDue(row: CrisisAlert) {
 const followUpDue = computed(() => alerts.value.filter(isFollowUpDue))
 
 const filtered = computed(() => {
-  if (filter.value === 'unresolved') return unresolved.value
-  if (filter.value === 'follow_up') return followUpDue.value
-  if (filter.value === 'resolved') return alerts.value.filter(a => a.resolved)
-  return alerts.value
+  const base = studentFilter.value
+    ? alerts.value.filter((a) => a.student_id === studentFilter.value)
+    : alerts.value
+  if (filter.value === 'unresolved') return base.filter((a) => !a.resolved)
+  if (filter.value === 'follow_up') return base.filter(isFollowUpDue)
+  if (filter.value === 'resolved') return base.filter((a) => a.resolved)
+  return base
 })
+
+/** 清除学生维度的闭环过滤，回到全部预警 */
+function clearStudentFilter() {
+  const q = { ...route.query }
+  delete q.student_id
+  delete q.alert_id
+  router.replace({ path: '/teacher/crisis', query: q })
+}
+
+/** 反向闭环：从预警回到该学生的成长档案 */
+function gotoStudent(row: CrisisAlert) {
+  router.push({ path: '/teacher/students', query: { student: String(row.student_id) } })
+}
 
 function levelText(level: string) {
   const map: Record<string, string> = { severe: '高危', moderate: '中度', mild: '轻度', normal: '正常' }
@@ -260,6 +300,11 @@ async function loadAlerts() {
   loading.value = true
   try {
     alerts.value = await getAlerts()
+    // 来自学生详情的闭环：定位到具体预警并直接进入处置
+    if (alertFilter) {
+      const hit = alerts.value.find((a) => a.id === alertFilter)
+      if (hit && !hit.resolved) openIntervene(hit)
+    }
   } catch {
     ElMessage.error('预警加载失败')
   } finally {
@@ -391,4 +436,33 @@ onMounted(loadAlerts)
   justify-content: flex-end;
   padding: 10px 12px 12px 16px;
 }
+
+/* 闭环：学生维度过滤提示条 */
+.wb-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #eff4ff;
+  font-size: 12.5px;
+}
+.wb-scope-text {
+  font-weight: 600;
+  color: #2563eb;
+}
+.wb-scope-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: transparent;
+  color: #5b6472;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.wb-scope-clear:hover { color: #101828; }
 </style>

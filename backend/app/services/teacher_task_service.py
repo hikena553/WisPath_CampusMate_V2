@@ -196,7 +196,13 @@ def list_tasks(
 
     total = query.count()
     tasks = (
-        query.order_by(TeacherTask.status.asc(), TeacherTask.due_at.asc().nulls_last(), TeacherTask.id.desc())
+        # due_at 可为空：MySQL 不支持 NULLS LAST，改用 is_(None) 升序把空值排到最后
+        query.order_by(
+            TeacherTask.status.asc(),
+            TeacherTask.due_at.is_(None),
+            TeacherTask.due_at.asc(),
+            TeacherTask.id.desc(),
+        )
         .offset(offset)
         .limit(limit)
         .all()

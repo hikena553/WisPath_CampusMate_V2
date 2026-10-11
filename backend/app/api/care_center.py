@@ -51,10 +51,13 @@ def get_overview(
 @router.get("/events", response_model=list[CareEventOut])
 def list_events(
     month: str | None = Query(default=None),
+    student_id: int | None = Query(default=None, description="按学生过滤，闭环用"),
     user: User = Depends(_teacher_only),
     db: Session = Depends(get_db),
 ):
-    return care_center_service.list_events(db, user.id, month)
+    if student_id is not None:
+        _assert_student_visible(db, user, student_id)
+    return care_center_service.list_events(db, user.id, month, student_id=student_id)
 
 
 @router.post("/events", response_model=CareEventOut)

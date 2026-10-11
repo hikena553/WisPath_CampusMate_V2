@@ -1,9 +1,9 @@
-<template>
+﻿<template>
   <div class="tui-page">
     <SubPageHeader
       title="成长档案"
       sub="把日常育人经验沉淀成看得见的成长轨迹"
-      fallback="/teacher/more"
+      fallback="/teacher"
     />
 
     <div class="tui-content">

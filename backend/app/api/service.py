@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -34,7 +34,12 @@ def create_ticket(req: TicketCreate, user: User = Depends(get_current_user), db:
 
 
 @router.get("/tickets", response_model=list[TicketOut])
-def list_tickets(status: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_tickets(
+    status: str | None = None,
+    student_id: int | None = Query(None, description="按申请学生过滤，闭环用"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     query = db.query(ServiceTicket)
     if user.role in (UserRole.TEACHER, UserRole.ADMIN):
         # 审批视角：待审批队列（含中间态 PROCESSING），先到先审
@@ -43,6 +48,8 @@ def list_tickets(status: str | None = None, user: User = Depends(get_current_use
             if status not in [s.value for s in _APPROVABLE_STATUSES]:
                 raise HTTPException(status_code=400, detail="审批视角仅支持查询待审批工单")
             query = query.filter(ServiceTicket.status == status)
+        if student_id is not None:
+            query = query.filter(ServiceTicket.applicant_id == student_id)
         return query.order_by(ServiceTicket.created_at.asc()).all()
     # 学生/其他视角：仅本人申请记录
     query = query.filter(ServiceTicket.applicant_id == user.id)

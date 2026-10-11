@@ -43,34 +43,11 @@
           <span><span class="dot-schedule"></span> 日程安排</span>
         </div>
       </div>
-      <div class="upcoming-section">
-        <div class="reminder-title">📌 近期提醒</div>
-        <div v-if="upcomingReminders.length === 0" class="empty-tip-small">暂无提醒</div>
-        <div v-for="r in upcomingReminders.slice(0, 3)" :key="r.id" class="reminder-item">
-          <span class="reminder-date">{{ r.date.slice(5) }}</span>
-          <span class="reminder-content">{{ r.content }}</span>
-          <el-button text type="danger" size="small" @click="emit('delete-schedule', r.id)">删除</el-button>
-        </div>
-      </div>
     </div>
 
     <!-- 右侧：公告（Tab切换） -->
     <div class="announcements-section">
       <el-tabs v-model="activeAnnouncementTab" class="announcement-tabs">
-        <el-tab-pane label="校园公告" name="campus">
-          <div class="announcement-list">
-            <div v-if="campusAnnouncements.length === 0" class="empty-tip-small">暂无校园公告</div>
-            <a v-for="(item, index) in campusAnnouncements.slice(0, 5)" :key="index"
-              :href="item.url || '#'" target="_blank" class="campus-item">
-              <span class="campus-title">{{ item.title }}</span>
-              <span class="campus-date">{{ item.date }}</span>
-            </a>
-          </div>
-          <el-button text type="primary" size="small" class="view-all-btn"
-            href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" target="_blank">
-            查看更多 <el-icon><DArrowRight /></el-icon>
-          </el-button>
-        </el-tab-pane>
         <el-tab-pane label="班级公告" name="class">
           <div class="tab-header">
             <el-button type="primary" size="small" @click="emit('create')">发布公告</el-button>
@@ -103,7 +80,7 @@ import { ref, computed } from 'vue'
 import { Calendar, DArrowRight } from '@element-plus/icons-vue'
 import type { ScheduleItem } from '@/api/teacher'
 import type { AnnouncementItem } from '@/api/announcement'
-import type { LeaveRequestOut, Announcement } from '@/types'
+import type { LeaveRequestOut } from '@/types'
 
 interface CalDay {
   num: number
@@ -121,9 +98,7 @@ const props = defineProps<{
   calMonth: number
   schedules: ScheduleItem[]
   pendingLeaves: LeaveRequestOut[]
-  campusAnnouncements: Announcement[]
   myAnnouncements: AnnouncementItem[]
-  upcomingReminders: ScheduleItem[]
 }>()
 
 const emit = defineEmits<{
@@ -131,7 +106,6 @@ const emit = defineEmits<{
   'prev-month': []
   'next-month': []
   'today-month': []
-  'delete-schedule': [id: number]
   'create': []
   'delete': [id: number]
 }>()
@@ -197,7 +171,7 @@ const calWeeks = computed(() => {
   return weeks
 })
 
-const activeAnnouncementTab = ref('campus')
+const activeAnnouncementTab = ref('class')
 
 const urgencyMap: Record<string, { type: string; label: string }> = {
   normal: { type: '', label: '普通' },
@@ -325,39 +299,6 @@ function formatDate(dateStr: string) {
   align-items: center;
   gap: 3px;
 }
-.upcoming-section {
-  border-top: 1px solid #f0f0f0;
-  padding-top: 10px;
-}
-.reminder-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-  margin-bottom: 6px;
-}
-.reminder-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}
-.reminder-date {
-  font-size: 11px;
-  font-weight: 600;
-  color: #5b8def;
-  background: #f0f7ff;
-  padding: 1px 6px;
-  border-radius: 6px;
-  flex-shrink: 0;
-}
-.reminder-content {
-  flex: 1;
-  font-size: 12px;
-  color: #555;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .announcement-tabs {
   height: 100%;
 }
@@ -398,34 +339,6 @@ function formatDate(dateStr: string) {
 .attach-link {
   text-decoration: none;
   font-size: 13px;
-}
-.campus-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f5f5f5;
-  text-decoration: none;
-}
-.campus-item:last-child {
-  border-bottom: none;
-}
-.campus-item:hover {
-  background: #f8f9ff;
-}
-.campus-title {
-  font-size: 13px;
-  color: #333;
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-right: 10px;
-}
-.campus-date {
-  font-size: 11px;
-  color: #999;
-  flex-shrink: 0;
 }
 .view-all-btn {
   margin-top: 6px;

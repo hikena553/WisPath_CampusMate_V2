@@ -503,11 +503,17 @@ class ContactSuggestionOut(BaseModel):
 
 
 @router.get("/suggest-contacts", response_model=list[ContactSuggestionOut])
-async def suggest_contacts(user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)), db: Session = Depends(get_db)):
+async def suggest_contacts(
+    student_id: int | None = Query(None, description="聚焦单个学生，闭环用"),
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
 
     query = db.query(User).filter(User.role == UserRole.STUDENT)
     if user.role != UserRole.ADMIN:
         query = query.filter(User.tutor_id == user.id)
+    if student_id is not None:
+        query = query.filter(User.id == student_id)
     students = query.all()
     if not students:
         return []
@@ -572,7 +578,27 @@ async def suggest_contacts(user: User = Depends(require_role(UserRole.TEACHER, U
         for info in student_infos
     ])
 
-    prompt = f"""你是校园管理助手。请从以下学生名单中，分析并推荐3位最应该主动联系的学生。
+    focus_one = student_id is not None
+    if focus_one:
+        prompt = f"""你是校园管理助手。请分析下面这位学生，判断是否值得主动联系，并给出具体理由。
+
+学生信息：
+{students_text}
+
+分析维度：
+1. 长时间未联系（优先级高）
+2. 有危机预警（优先级高）
+3. 近期请假较多（需关注）
+4. 有成长成果但未沟通（鼓励）
+
+要求：
+1. 给出该学生的具体理由（至少20字）
+2. 标注优先级：high/medium/low
+3. 只返回JSON数组（仅含该学生一条），不要其他内容
+
+格式：[{{"student_id": {student_id}, "student_name": "姓名", "reason": "具体理由...", "priority": "high"}}]"""
+    else:
+        prompt = f"""你是校园管理助手。请从以下学生名单中，分析并推荐3位最应该主动联系的学生。
 
 学生信息：
 {students_text}
@@ -607,10 +633,10 @@ async def suggest_contacts(user: User = Depends(require_role(UserRole.TEACHER, U
         return result
     except Exception as e:
         logger.error("[AI推荐联系] 错误: %s", e)
-        # fallback: 返回前3个学生
+        # fallback: 聚焦模式返回该生，否则返回前3个学生
         return [
             {"student_id": s["id"], "student_name": s["name"], "reason": "AI分析暂不可用，建议手动查看", "priority": "medium"}
-            for s in student_infos[:3]
+            for s in (student_infos if focus_one else student_infos[:3])
         ]
 
 
