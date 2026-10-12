@@ -1,16 +1,23 @@
+import logging
 import re
 import time
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from bs4 import BeautifulSoup
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.models.campus import CampusScenery, CampusImpressionItem
+from app.models.user import User
+from app.services.article_reader import read_url, is_allowed_url
+from app.services.campus_embed import build_embed_html, build_embed_error_html
 from app.services.impression_crawler import get_impression_cache, refresh_impression_data
-from app.schemas.campus import CampusSceneryOut, AnnouncementOut, GalleryImageOut
+from app.schemas.campus import CampusSceneryOut, AnnouncementOut, GalleryImageOut, CampusArticleOut
 
 router = APIRouter(prefix="/api/campus", tags=["campus"])
+logger = logging.getLogger(__name__)
 
 _cache: dict[str, tuple[float, list]] = {}
 CACHE_TTL = 300  # 5 minutes
@@ -102,3 +109,63 @@ def get_impression(db: Session = Depends(get_db)):
         return data
     # 数据库为空 → 实时爬取兜底
     return refresh_impression_data()
+
+
+@router.get("/reader", response_model=CampusArticleOut)
+def read_campus_article(
+    url: str = Query(..., min_length=8, max_length=700),
+    current_user: User = Depends(get_current_user),
+):
+    """站内阅读：代理抓取校内页面并提取正文/链接清单，避免跳出应用。
+
+    学校站点均设 X-Frame-Options: SAMEORIGIN，无法 iframe 内嵌，
+    由后端代抓 + 白名单校验（仅 *.mycc.edu.cn）+ 正文净化后返回。
+    """
+    if not is_allowed_url(url):
+        raise HTTPException(400, "仅支持校内站点链接")
+    try:
+        return read_url(url)
+    except PermissionError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(502, f"页面抓取失败：{e}")
+    except Exception:
+        raise HTTPException(502, "页面解析失败")
+
+
+@router.get("/embed", response_class=HTMLResponse)
+def embed_campus_page(
+    request: Request,
+    url: str = Query(..., min_length=8, max_length=700),
+):
+    """原页渲染：反代校内页面并注入桥接脚本，供应用内 iframe 原版展示。
+
+    - 学校响应带 X-Frame-Options: SAMEORIGIN，iframe 不能直接嵌学校页面；
+      这里以「我们自己的响应」返回（不带该头），浏览器即允许被应用内嵌。
+    - 相对资源靠注入的 <base> 指回学校站，因此原版样式/图片完整保留。
+    - 页面内脚本跑在代理源；前端 iframe 必须带 sandbox（不含 allow-same-origin），
+      iframe 为不透明源，拿不到应用的 localStorage / Cookie。
+    - 只代理白名单内的校内公开页面，无需登录态（iframe 跨源请求带不上 SameSite=Lax Cookie）。
+    """
+    if not is_allowed_url(url):
+        raise HTTPException(400, "仅支持校内站点链接")
+    embed_base = str(request.base_url) if request is not None else "/"
+    try:
+        html = build_embed_html(url, embed_base)
+    except PermissionError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        # 给 iframe 一张可读的错误页（而不是一坨 JSON），父页面会据桥接消息切到自己的错误态
+        return HTMLResponse(
+            content=build_embed_error_html(url, f"页面抓取失败：{e}"),
+            status_code=502,
+            headers={"Cache-Control": "no-store"},
+        )
+    except Exception:
+        logger.exception("embed 页面构建失败: %s", url)
+        return HTMLResponse(
+            content=build_embed_error_html(url, "页面解析失败，可切换纯净正文查看"),
+            status_code=502,
+            headers={"Cache-Control": "no-store"},
+        )
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})

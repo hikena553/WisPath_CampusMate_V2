@@ -4,6 +4,9 @@
 """
 import logging
 import re
+import socket
+import ssl
+import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -36,7 +39,11 @@ FEED_UPDATED_KEYS = ("updated_at", "pushed_at", "updated")
 
 # ==================== 底层 HTTP ====================
 
-def _get(url: str, params: dict | None = None, headers: dict | None = None) -> httpx.Response:
+def _get(url: str, params: dict | None = None, headers: dict | None = None, retries: int = 1) -> httpx.Response:
+    """带一次重试的 GET：境外源常见 TLS 握手中断（SSL: UNEXPECTED_EOF）等瞬时故障。
+
+    DNS 解析不了（如被墙域名）属确定性失败，重试只会白等，直接抛出交给上层记录。
+    """
     h = {
         "User-Agent": UA,
         "Accept": "application/json,text/xml,application/xml,text/html,*/*",
@@ -45,9 +52,18 @@ def _get(url: str, params: dict | None = None, headers: dict | None = None) -> h
     }
     if headers:
         h.update(headers)
-    resp = httpx.get(url, params=params, headers=h, timeout=TIMEOUT, follow_redirects=True)
-    resp.raise_for_status()
-    return resp
+    last_exc: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            resp = httpx.get(url, params=params, headers=h, timeout=TIMEOUT, follow_redirects=True)
+            resp.raise_for_status()
+            return resp
+        except (httpx.TransportError, ssl.SSLError) as e:
+            last_exc = e
+            if isinstance(getattr(e, "__cause__", None), socket.gaierror) or attempt >= retries:
+                raise
+            time.sleep(0.5)
+    raise last_exc  # pragma: no cover - 循环内必然已 return 或 raise
 
 
 # ==================== arXiv 论文 ====================

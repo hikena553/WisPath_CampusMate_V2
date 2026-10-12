@@ -48,3 +48,37 @@ def test_request_log_emits_structured_record(client, caplog):
     assert record.status_code == 200
     assert record.duration_ms >= 0
     assert record.client_ip
+
+
+def test_run_migrations_keeps_structured_logging(monkeypatch):
+    """回归：迁移流程结束后必须恢复 JSON 结构化日志。
+
+    backend/alembic/env.py 会调用 fileConfig(alembic.ini)，按 ini 把根 logger 换成
+    「WARNING + 文本格式 + stderr」，导致启动后应用 INFO 日志（含访问日志）静默失效。
+    disable_existing_loggers=False 挡不住根 logger 被覆盖，故 run_migrations 末尾需重装日志。
+    """
+    import logging.config
+    import sys
+    from pathlib import Path
+
+    from app.core.config import settings
+    from app.core.logging_setup import setup_logging
+    from app.main import run_migrations
+
+    alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+
+    def fake_upgrade(config, revision):
+        # 模拟 alembic env.py 对根 logger 的覆盖，避免测试真的连库迁移
+        logging.config.fileConfig(str(alembic_ini), disable_existing_loggers=False)
+
+    monkeypatch.setattr("alembic.command.upgrade", fake_upgrade)
+    setup_logging()
+    assert isinstance(logging.getLogger().handlers[0].formatter, JsonFormatter)
+
+    run_migrations()
+
+    root = logging.getLogger()
+    expected_level = getattr(logging, (settings.LOG_LEVEL or "INFO").upper(), logging.INFO)
+    assert isinstance(root.handlers[0].formatter, JsonFormatter), "迁移后 JSON 日志被覆盖未恢复"
+    assert root.handlers[0].stream is sys.stdout
+    assert root.level == expected_level

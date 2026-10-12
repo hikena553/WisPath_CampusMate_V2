@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # 外部资讯源令牌（可选，不配置则按匿名限流抓取）
     GITHUB_TOKEN: str = ""
     GITEE_TOKEN: str = ""
+    # 图书馆官网地址（可选）：默认校内域名；DNS 解析视图异常或站点迁移时可在 .env 覆盖
+    LIBRARY_SITE_URL: str = "https://lib.mycc.edu.cn/"
     # 可观测性：日志级别（DEBUG/INFO/WARNING/ERROR）与 Sentry DSN（可选，未装 SDK 时自动跳过）
     LOG_LEVEL: str = "INFO"
     SENTRY_DSN: str = ""

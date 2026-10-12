@@ -18,17 +18,13 @@
     <!-- ② 教务系统入口 -->
     <section class="campus-section">
       <div class="section-title"><span class="sec-dot"></span> 教务系统入口</div>
-      <div class="entry-groups">
-        <div v-for="(items, groupName) in entryGroups" :key="groupName" class="entry-group">
-          <div class="entry-group-title">{{ groupName }}</div>
-          <div class="entry-grid">
-            <div v-for="e in items" :key="e.url" class="entry-item" @click="openLink(e.url)">
-              <el-icon class="entry-icon"><component :is="getEntryIcon(e.title)" /></el-icon>
-              <p>{{ e.title }}</p>
-              <span v-if="isExternalLink(e.url)" class="entry-external">↗</span>
-            </div>
-          </div>
-        </div>
+      <div class="entry-grid">
+        <a v-for="e in visibleEntries" :key="e.url" class="entry-item" :href="e.url" target="_blank" rel="noopener noreferrer"
+           :title="entryHint(e.url)" @click="onEntryClick(e, $event)">
+          <el-icon class="entry-icon"><component :is="getEntryIcon(e.title)" /></el-icon>
+          <p>{{ e.title }}</p>
+          <span v-if="opensInNewWindow(e.url)" class="entry-external">↗</span>
+        </a>
       </div>
     </section>
 
@@ -37,26 +33,26 @@
       <div class="campus-card campus-card-jx" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><DataBoard /></el-icon> 教学动态</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/jxdt.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/jwgl/jxdt.htm', '教学动态')">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/jxdt.htm" @click.prevent="openArticle('https://jwc.mycc.edu.cn/jwgl/jxdt.htm', '教学动态')">查看详情 →</a>
         </div>
-        <div v-if="impression.jxdt.length" class="jxdt-first" @click="openLink(impression.jxdt[0].url)">
+        <a v-if="impression.jxdt.length" class="jxdt-first" :href="impression.jxdt[0].url" @click.prevent="openArticle(impression.jxdt[0].url, impression.jxdt[0].title)">
           <img v-if="impression.jxdt[0].image_url" :src="impression.jxdt[0].image_url" class="jxdt-first-img" />
           <span class="jxdt-first-title">{{ impression.jxdt[0].title }}</span>
-        </div>
-        <div v-for="a in impression.jxdt.slice(1, 7)" :key="a.url" class="news-row jxdt-date-row" @click="openLink(a.url)">
+        </a>
+        <a v-for="a in impression.jxdt.slice(1, 7)" :key="a.url" class="news-row jxdt-date-row" :href="a.url" @click.prevent="openArticle(a.url, a.title)">
           <span class="jxdt-day"><b>{{ splitDay(a.date) }}</b><span class="jxdt-month">{{ splitMonth(a.date) }}</span></span>
           <span class="news-text">{{ a.title }}</span>
-        </div>
+        </a>
       </div>
       <div class="campus-card" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><Notification /></el-icon> 通知公告</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/jwgl/tzgg.htm', '通知公告')">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jwgl/tzgg.htm" @click.prevent="openArticle('https://jwc.mycc.edu.cn/jwgl/tzgg.htm', '通知公告')">查看详情 →</a>
         </div>
-        <div v-for="a in (isMobile ? impression.tzgg.slice(0, 5) : impression.tzgg)" :key="a.url" class="tzgg-row" @click="openLink(a.url)">
+        <a v-for="a in (isMobile ? impression.tzgg.slice(0, 5) : impression.tzgg)" :key="a.url" class="tzgg-row" :href="a.url" @click.prevent="openArticle(a.url, a.title)">
           <span class="tzgg-date">{{ formatDate(a.date) }}</span>
           <span class="news-text">{{ removeCommonPrefix(a.title) }}</span>
-        </div>
+        </a>
       </div>
     </section>
 
@@ -65,28 +61,28 @@
       <div class="campus-card campus-card-gjxx" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><School /></el-icon> 高教信息</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/gjxx.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/gjxx.htm', '高教信息')">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/gjxx.htm" @click.prevent="openArticle('https://jwc.mycc.edu.cn/gjxx.htm', '高教信息')">查看详情 →</a>
         </div>
         <div class="gjxx-grid">
-          <div v-for="a in impression.gjxx" :key="a.url" class="gjxx-item" @click="openLink(a.url)">
+          <a v-for="a in impression.gjxx" :key="a.url" class="gjxx-item" :href="a.url" @click.prevent="openArticle(a.url, a.title)">
             <el-icon class="gjxx-icon"><Document /></el-icon>
             <span class="gjxx-title">{{ removeCommonPrefix(a.title) }}</span>
             <el-icon class="gjxx-arrow"><ArrowRight /></el-icon>
-          </div>
+          </a>
         </div>
       </div>
       <div class="campus-card" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><Collection /></el-icon> 教学建设</span>
-          <a class="card-more" href="https://jwc.mycc.edu.cn/jxjs.htm" @click.prevent="openLink('https://jwc.mycc.edu.cn/jxjs.htm', '教学建设')">查看详情 →</a>
+          <a class="card-more" href="https://jwc.mycc.edu.cn/jxjs.htm" @click.prevent="openArticle('https://jwc.mycc.edu.cn/jxjs.htm', '教学建设')">查看详情 →</a>
         </div>
-        <div v-for="a in impression.jxjs.slice(0, 7)" :key="a.url" class="build-row" @click="openLink(a.url)">
+        <a v-for="a in impression.jxjs.slice(0, 7)" :key="a.url" class="build-row" :href="a.url" @click.prevent="openArticle(a.url, a.title)">
           <span class="build-mark"></span>
           <el-tooltip :content="removeCommonPrefix(a.title)" placement="top" :show-after="300">
             <span class="build-text">{{ removeCommonPrefix(a.title) }}</span>
           </el-tooltip>
           <span class="build-date">{{ a.date }}</span>
-        </div>
+        </a>
       </div>
     </section>
 
@@ -99,7 +95,7 @@
       <!-- 桌面端：卡片网格 -->
       <div class="card-body college-body-pc">
         <div class="college-grid">
-          <div v-for="c in collegeCards" :key="c.name" class="college-card" @click="openLink(c.url)">
+          <a v-for="c in collegeCards" :key="c.name" class="college-card" :href="c.url" @click.prevent="openArticle(c.url, c.name)">
             <div class="college-head">
               <el-icon class="college-icon" :style="{ color: c.color }"><component :is="c.icon" /></el-icon>
               <span class="college-name">{{ c.name }}</span>
@@ -108,7 +104,7 @@
               <span class="news-dot">▪</span><span class="news-text">{{ n.title }}</span>
             </div>
             <span class="college-link">进入官网 →</span>
-          </div>
+          </a>
         </div>
       </div>
       <!-- 移动端：标签化 -->
@@ -120,7 +116,7 @@
             class="college-tag"
             :style="{ '--tag-color': c.color }"
             :href="c.url"
-            @click.prevent="openLink(c.url, c.name)"
+            @click.prevent="openArticle(c.url, c.name)"
           >
             <el-icon class="college-tag-icon"><component :is="c.icon" /></el-icon>
             <span>{{ c.name }}</span>
@@ -134,33 +130,36 @@
       <div class="campus-card campus-card-impression" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><OfficeBuilding /></el-icon> 绵城印象</span>
-          <a class="card-more" href="https://www.mycc.edu.cn/mcyx/" @click.prevent="openLink('https://www.mycc.edu.cn/mcyx/', '绵城印象')">了解更多 →</a>
+          <a class="card-more" href="https://www.mycc.edu.cn/mcyx/" @click.prevent="openArticle('https://www.mycc.edu.cn/mcyx/', '绵城印象')">了解更多 →</a>
         </div>
         <div class="impression-list">
-          <div v-for="item in impressionItems" :key="item.title" class="impression-row" @click="openLink(item.url)">
+          <a v-for="item in impressionItems" :key="item.title" class="impression-row" :href="item.url" @click.prevent="openArticle(item.url, item.title)">
             <el-icon class="impression-icon" :style="{ color: item.color }"><component :is="item.icon" /></el-icon>
             <div class="impression-info">
               <span class="impression-name">{{ item.title }}</span>
               <span class="impression-desc">{{ item.desc }}</span>
             </div>
             <el-icon class="impression-arrow"><ArrowRight /></el-icon>
-          </div>
+          </a>
         </div>
       </div>
       <div class="campus-card campus-card-library" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><Reading /></el-icon> 图书馆公告</span>
-          <a class="card-more" href="https://lib.mycc.edu.cn/" @click.prevent="openLink('https://lib.mycc.edu.cn/', '图书馆')">进入官网 →</a>
+          <a v-if="libraryHome" class="card-more" :href="libraryHome" @click.prevent="openArticle(libraryHome, '图书馆')">进入官网 →</a>
         </div>
         <div class="lib-list">
-          <div v-for="a in impression.library.slice(0, 4)" :key="a.title" class="lib-item" @click="openLink(a.url)">
+          <a v-for="a in impression.library.slice(0, 4)" :key="a.title" class="lib-item" :href="a.url" @click.prevent="openArticle(a.url, a.title)">
             <span class="lib-date">{{ formatDate(a.date) }}</span>
             <span class="lib-title">{{ a.title }}</span>
-          </div>
+          </a>
         </div>
       </div>
     </section>
   </div>
+
+  <!-- 站内阅读器：点击资讯在应用内打开，不跳出 -->
+  <ArticleReader ref="readerRef" />
 </template>
 
 <script setup lang="ts">
@@ -168,6 +167,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getImpression } from '@/api/campus'
 import type { ImpressionItem } from '@/types'
 import { tilt } from '@/directives/tilt'
+import ArticleReader from '@/components/campus/ArticleReader.vue'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
   Document, Clock, Box, Van, ArrowRight,
@@ -179,6 +179,13 @@ import {
 const vTilt = tilt
 const isMobile = ref(window.innerWidth <= 767)
 window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 767 })
+
+/** 站内阅读器：点击资讯在应用内打开（移动端全屏抽屉），不跳出应用 */
+const readerRef = ref<InstanceType<typeof ArticleReader> | null>(null)
+function openArticle(url: string, title?: string) {
+  if (!url) return
+  readerRef.value?.open(url, title)
+}
 
 interface GalleryImage {
   title: string
@@ -232,6 +239,9 @@ const impression = computed(() => {
   }
 })
 
+/** 图书馆官网入口：取自后端抓取结果（域名可用 .env 的 LIBRARY_SITE_URL 覆盖）；无数据时不展示死链 */
+const libraryHome = computed(() => impression.value.library[0]?.url || '')
+
 function groupCollegeNews(all: ImpressionItem[]): Record<string, ImpressionItem[]> {
   const map: Record<string, ImpressionItem[]> = {}
   for (const i of all.filter(x => x.source === 'college_news')) {
@@ -259,17 +269,10 @@ const entryIconMap: Record<string, any> = {
   '教学校历': DataLine,
   '超星在线学习平台': Reading,
   '教学质量管理平台': TrendCharts,
-  '毕业论文(设计)管理系统': Document,
+  '毕业论文管理系统': Document,
   '实习管理系统': Box,
   '实验管理平台': Van,
   '作息时间': Clock,
-}
-
-// 入口分组关键词
-const entryGroupMap: Record<string, string[]> = {
-  '教学服务': ['教务管理系统', '课表查询', '教学校历'],
-  '学习与质量': ['超星在线学习平台', '教学质量管理平台', '毕业论文'],
-  '实践与管理': ['实习管理系统', '实验管理平台', '作息时间'],
 }
 
 // 获取入口图标
@@ -282,31 +285,60 @@ function getEntryIcon(title: string) {
   return Monitor
 }
 
-// 判断是否为外部链接
-function isExternalLink(url: string) {
-  return !url.includes('mycc.edu.cn')
+// 站内阅读器能渲染的校内静态页（实测：jwc 内容页返回链接清单可读；
+// jwgl.mycc.edu.cn / syglxt.mycc.edu.cn 是登录型系统，抓取返回 502，无法内嵌）
+function isInAppReadable(url: string) {
+  return /^https?:\/\/jwc\.mycc\.edu\.cn\//i.test(url)
 }
 
-// 获取入口分组
-function getEntryGroup(title: string) {
-  for (const [group, keywords] of Object.entries(entryGroupMap)) {
-    if (keywords.some(k => title.includes(k))) {
-      return group
-    }
-  }
-  return '其他'
+// 是否只能在新窗口打开：登录型教务/实验系统与站外 SaaS 都无法内嵌
+// （学校站点统一设了 X-Frame-Options: SAMEORIGIN，禁止 iframe）
+function opensInNewWindow(url: string) {
+  return !isInAppReadable(url)
 }
 
-// 按分组整理入口数据
-const entryGroups = computed(() => {
-  const groups: Record<string, any[]> = {}
-  for (const entry of impression.value.entries) {
-    const group = getEntryGroup(entry.title)
-    if (!groups[group]) groups[group] = []
-    groups[group].push(entry)
-  }
-  return groups
-})
+// 登录型校内系统（教务/实验平台）：能连上但拿不到未登录内容，只能新窗口打开
+function isLoginPortal(url: string) {
+  return /^https?:\/\/(jwgl|syglxt)\.mycc\.edu\.cn/i.test(url)
+}
+
+function entryHint(url: string) {
+  if (isInAppReadable(url)) return '在应用内打开'
+  if (isLoginPortal(url)) return '需要登录的校内系统，将在新窗口打开'
+  return '站外系统，将在新窗口打开'
+}
+
+// 入口点击：可站内阅读的走阅读器，其余交给 <a target="_blank"> 原生行为
+// （保留中键/右键"在新标签页打开"）
+function onEntryClick(e: { url: string; title: string }, ev: MouseEvent) {
+  if (!isInAppReadable(e.url)) return
+  ev.preventDefault()
+  openArticle(e.url, e.title)
+}
+
+// “教务系统入口”网格中不展示的项：课表查询/教学校历/作息时间都是教务处静态工具页，
+// 与应用内页面重复。后端 fetch_jwc_entries 已按同样规则过滤，这里再兜一层，
+// 保证旧进程/缓存数据带出来的也不会显示（标题与链接双重匹配）
+const HIDDEN_ENTRY_TITLES = ['课表查询', '教学校历', '作息时间']
+const HIDDEN_ENTRY_PATHS = ['/jwgl/kbcx.htm', '/jwgl/jxxl.htm', '/jwgl/zxsj.htm']
+
+function isHiddenEntry(entry: { title: string; url: string }) {
+  const title = entry.title || ''
+  const url = (entry.url || '').replace(/\/+$/, '')
+  return HIDDEN_ENTRY_TITLES.some(t => title.includes(t)) || HIDDEN_ENTRY_PATHS.some(p => url.endsWith(p))
+}
+
+// 入口标题清洗：去掉括号补充说明（“毕业论文(设计)管理系统” → “毕业论文管理系统”）
+function cleanEntryTitle(title: string) {
+  return (title || '').replace(/[（(][^（）()]*[）)]/g, '').trim()
+}
+
+// 入口卡片：统一 3 列网格（6 项正好两行），不再按分组分块展示
+const visibleEntries = computed(() =>
+  impression.value.entries
+    .filter(e => !isHiddenEntry(e))
+    .map(e => ({ ...e, title: cleanEntryTitle(e.title) })),
+)
 
 // 统一日期格式：MM-DD
 function formatDate(d: string | null) {
@@ -373,12 +405,6 @@ const carouselImages = computed(() => {
   return [anzhou[0], anzhou[3], anzhou[5], youxian[0], youxian[2], youxian[7]]
 })
 
-function openLink(url: string, _title?: string) {
-  if (!url) return
-  const win = window.open(url, '_blank', 'noopener,noreferrer')
-  if (!win) window.location.href = url
-}
-
 onMounted(async () => {
   loadImpression()
 })
@@ -416,20 +442,6 @@ onMounted(async () => {
 .section-tag {
   font-size: 11px; color: #999; background: #f5f7fa;
   padding: 2px 10px; border-radius: 10px; font-weight: 400;
-}
-
-/* ===== Entry Groups ===== */
-.entry-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.entry-group-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #86909c;
-  margin-bottom: 10px;
-  padding-left: 4px;
 }
 
 /* ===== Entry Grid ===== */
@@ -496,11 +508,19 @@ onMounted(async () => {
 
 /* ===== News Rows ===== */
 .jxdt-first {
+  /* <a> 默认是 inline：行内元素上 overflow/border-radius 不生效，图片方角会溢出圆角边框；
+     display:block 后圆角裁剪、标题绝对定位才真正生效 */
+  display: block;
   position: relative; border-radius: 8px; overflow: hidden;
   margin-bottom: 12px; cursor: pointer;
   background: linear-gradient(135deg, #dbeafe, #60a5fa); min-height: 96px;
 }
-.jxdt-first-img { width: 100%; height: 120px; object-fit: cover; display: block; }
+/* 自适应高度：按原图比例显示，过高才裁切（原先固定 120px 把 4:3 竖版海报压成只剩中间 39%） */
+.jxdt-first-img {
+  width: 100%; height: auto; max-height: 230px;
+  object-fit: cover; object-position: center top;
+  display: block;
+}
 .jxdt-first-title {
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 32px 12px 12px;
@@ -851,6 +871,19 @@ onMounted(async () => {
 
 /* 3D 倾斜统一处理 */
 .entry-item, .campus-card, .college-card { transform-style: preserve-3d; }
+
+/* ===== 外链条目（<div> → <a> 语义化改造）=====
+   去掉浏览器默认 <a> 外观（下划线/蓝色/访问后紫色），保持改造前的卡片视觉；
+   同时保留原 cursor:pointer 与 hover 效果 */
+.campus-page a:not(.card-more):not(.college-tag) {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.campus-page a:not(.card-more):not(.college-tag):visited {
+  color: inherit;
+}
 
 /* ===== Mobile ===== */
 @media (max-width: 767px) {

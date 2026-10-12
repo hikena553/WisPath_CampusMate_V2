@@ -118,13 +118,17 @@ def test_analyze_sse_stream(api, login_token, monkeypatch):
 
 
 def test_recommendations_without_history_returns_default(api, login_token):
-    """无历史会话时直接返回默认推荐（不触发 LLM）。"""
+    """无历史会话时直接返回默认推荐（不触发 LLM），且固定 4 条。"""
     login = login_token(UserRole.STUDENT)
     resp = api.get("/api/agent/recommendations", headers=login["headers"])
     assert resp.status_code == 200, resp.text
     recs = resp.json()["recommendations"]
     assert isinstance(recs, list) and recs
     assert recs == agent_api.DEFAULT_RECOMMENDATIONS[UserRole.STUDENT]
+    # 固定 4 条：前端推荐区（ChatPanel.vue RECOMMEND_COUNT）按这个条数排版，改动必须两边同步
+    assert agent_api.RECOMMEND_COUNT == 4
+    assert len(recs) == 4
+    assert all(len(v) == 4 for v in agent_api.DEFAULT_RECOMMENDATIONS.values())
 
 
 def test_proactive_structure(api, login_token):

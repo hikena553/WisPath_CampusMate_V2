@@ -48,6 +48,12 @@ def run_migrations() -> None:
     backend_dir = Path(__file__).resolve().parent.parent
     cfg = Config(str(backend_dir / "alembic.ini"))
     command.upgrade(cfg, "head")
+    # alembic/env.py 会调用 logging.config.fileConfig(alembic.ini)：根 logger 的 handler
+    # 与 level 会被 ini 里的配置整体替换（WARNING + 文本格式 + stderr），
+    # 导致启动后本应用的结构化 JSON 日志静默失效（INFO 访问日志、排查信息全部丢失）。
+    # disable_existing_loggers=False 只保护已有 logger 对象，挡不住根 logger 被覆盖，
+    # 因此迁移结束后必须重新装配日志。
+    setup_logging()
 
 
 def init_sentry_if_configured() -> None:

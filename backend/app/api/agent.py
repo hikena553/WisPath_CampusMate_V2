@@ -133,33 +133,30 @@ async def speech_to_text_api(
         raise HTTPException(502, str(e))
 
 
-# 各角色默认推荐问题（统一 5 条：无历史/取数失败时的兜底）
+# 各角色默认推荐问题（统一 4 条：无历史/取数失败时的兜底）
 DEFAULT_RECOMMENDATIONS: dict[UserRole, list[str]] = {
     UserRole.STUDENT: [
         "帮我查一下下周的课程安排",
         "我今天的计划任务有哪些",
         "查一下我的作品集",
         "社区最近有什么热门帖子",
-        "有什么好的学习资源推荐",
     ],
     UserRole.TEACHER: [
         "帮我查看今天的待办任务",
         "查一下班级学生的考勤情况",
         "帮我看看最近的校园公告",
         "查询学生的成长记录",
-        "帮我看一下学生的心理预警",
     ],
     UserRole.ADMIN: [
         "帮我查看本周的校园公告",
         "查一下平台的用户统计",
         "有什么待处理的系统事项",
         "帮我查一下通知发布情况",
-        "最近用户增长情况怎么样",
     ],
 }
 
-# 推荐条数：与前端推荐区排版一致
-RECOMMEND_COUNT = 5
+# 推荐条数：与前端推荐区排版一致（固定 4 条，给矮屏留出欢迎语空间）
+RECOMMEND_COUNT = 4
 
 # 各角色可涵盖的功能范围（用于引导 LLM 生成推荐）
 ROLE_FEATURES: dict[UserRole, str] = {
@@ -347,7 +344,7 @@ async def _generate_recommendations_by_llm(
 {history_text}
 
 返回格式示例：
-["帮我查一下下周的课程安排", "我想看看这学期的成绩单", "最近有什么校园活动通知", "帮我记录一下获奖信息", "我这周的任务完成得怎么样"]"""
+["帮我查一下下周的课程安排", "我想看看这学期的成绩单", "最近有什么校园活动通知", "我这周的任务完成得怎么样"]"""
 
     try:
         config = _get_llm_config()
@@ -376,10 +373,10 @@ async def get_recommendations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """根据用户角色、画像与真实待办生成推荐问题（统一返回 5 条）。
+    """根据用户角色、画像与真实待办生成推荐问题（固定返回 RECOMMEND_COUNT 条）。
 
     无历史对话时直接用信号+默认兜底，不再等一次 LLM（首屏秒开）；
-    有历史对话时由 LLM 生成，并用信号/默认补齐到 5 条。
+    有历史对话时由 LLM 生成，并用信号/默认补齐到 RECOMMEND_COUNT 条。
     """
     check_rate_limit(f"agent:rec:user:{user.id}", RATE_RECOMMENDATIONS_PER_MIN, 60, "请求过于频繁，请稍候再试")
     default_recommendations = DEFAULT_RECOMMENDATIONS.get(

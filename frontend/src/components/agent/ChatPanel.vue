@@ -540,38 +540,56 @@ function autoResize() {
   updateRecommendHidden()
 }
 
+/** textarea 是否仍是单行（未被输入内容撑高） */
+function isTextareaSingleLine(): boolean {
+  const ta = textareaRef.value
+  if (!ta || singleLineContentHeight <= 0) return true
+  return ta.getBoundingClientRect().height <= singleLineContentHeight + 1
+}
+
+/** 输入框里是否有附件/图片预览等额外内容（它们同样会撑高容器） */
+function hasExtraInputContent(): boolean {
+  return pendingFiles.value.length > 0 || !!pendingImagePreview.value
+}
+
 /**
- * 输入框是否已经“碰到”推荐区。
- * 推荐区固定在输入栏正上方（bottom = 单行输入栏高度），所以它的底边就是
- * 「容器底边 - 单行输入栏高度」；用真实几何判断：输入框容器上沿越过这条线即视为被盖住。
+ * 输入框是否已经撑高到该给推荐区让位。
+ *
+ * 判据：输入框容器是否比自己「单行且无附件」时的基准高度更高。
+ * 这里刻意不再用「容器上沿 vs 容器底边 - 单行输入栏高度」推算——那个口径依赖
+ * 输入栏高度的测量值，而移动端输入栏是「输入框一行 + 按钮一行」且按钮会换行重排，
+ * 一旦基准测得偏小，这条线就永远落在容器上沿之下，推荐区被判成“被盖住”后不再出现
+ * （桌面端是单行输入栏，只有真正敲多行时才会触发，所以不暴露）。
+ *
+ * 用容器自身高度对比基准还顺带解决两件事：输入框回落即自动恢复显示（无需额外复位）；
  * 不读推荐区自身的 rect —— 它可能正处于退场动画中，也可能已被 v-if 移除。
  */
 function updateRecommendHidden() {
   const box = inputContainerRef.value
-  const root = rootRef.value
-  if (!box || !root || inputBarBaseHeight <= 0) return
-  // 推荐区固定在输入栏正上方，底边 = 容器底边 - 单行输入栏高度
-  const barBottom = root.getBoundingClientRect().bottom - inputBarBaseHeight
-  // 0.5px 容差：静止状态刚好贴住不算被盖住
-  recommendHidden.value = box.getBoundingClientRect().top < barBottom - 0.5
+  if (!box || boxBaseHeight <= 0) return
+  // 0.5px 容差：亚像素抖动不算被撑高
+  recommendHidden.value = box.getBoundingClientRect().height > boxBaseHeight + 0.5
 }
 
-/** 单行基准高度（挂载时测量一次，之后不再变化） */
+/** 单行基准（挂载时量一次，之后由 syncBaseHeights 在单行状态下持续校准） */
 function ensureBaseMetrics() {
   const box = inputContainerRef.value
   if (!box || boxBaseHeight > 0) return
   boxBaseHeight = box.getBoundingClientRect().height
   if (textareaRef.value) singleLineContentHeight = textareaRef.value.scrollHeight
   const bar = box.closest('.input-bar') as HTMLElement | null
-  if (bar) inputBarBaseHeight = bar.getBoundingClientRect().height
+  const barH = bar ? bar.getBoundingClientRect().height : 0
+  // 挂载时就把输入栏高度写进 CSS 变量：否则移动端会退回样式里的兜底值（122px），
+  // 与真实的两行输入栏高度不符，推荐区会被白底输入栏压住
+  if (barH > 0) rootRef.value?.style.setProperty('--chat-input-bar-h', `${barH}px`)
 }
 
 /**
  * 记录「输入框仍是单行时」的基准高度，写进两个 CSS 变量：
  * - --chat-welcome-h   消息区高度，供移动端欢迎语固定高度居中（输入框被撑高时欢迎语不会被往上顶）
  * - --chat-input-bar-h 输入栏高度，供「为你推荐」贴在输入栏正上方
- * 输入框已被撑高时不记录（此时量到的不是基准高度）；
- * 布局变化（横竖屏、公告条出现等）后会重新校准。
+ * 输入框已被撑高时不记录（此时量到的不是基准高度），但会重算推荐区显隐；
+ * 布局变化（横竖屏、公告条出现、移动端按钮换行等）后会重新校准。
  */
 function syncBaseHeights() {
   const root = rootRef.value
@@ -579,36 +597,24 @@ function syncBaseHeights() {
   const box = inputContainerRef.value
   if (!root || !msg || !box) return
   const ta = textareaRef.value
-  // textarea 高于单行时说明输入框已被撑开，跳过，避免记下被压缩的高度
-  if (ta && singleLineContentHeight > 0 && ta.getBoundingClientRect().height > singleLineContentHeight + 1) return
+  // 空输入时 textarea 的高度就是单行基准：先刷新它，避免字体/断点变化后这个基准失效
+  if (ta && !input.value.trim()) singleLineContentHeight = ta.scrollHeight
+  if (!isTextareaSingleLine() || hasExtraInputContent()) {
+    // 输入框已被撑开（多行 / 附件）：不覆盖基准，但撑高会影响推荐区显隐，需要重算
+    updateRecommendHidden()
+    return
+  }
+  // 单行状态下持续校准容器基准：字体、占位文案、移动端按钮换行都会改变输入框高度，
+  // 只量一次会在这些变化之后留下错误基准（基准偏小 → 推荐区被判成被盖住而消失）
+  const boxH = box.getBoundingClientRect().height
+  if (boxH > 0) boxBaseHeight = boxH
   const h = msg.getBoundingClientRect().height
   if (h > 0) root.style.setProperty('--chat-welcome-h', `${h}px`)
   const bar = box.closest('.input-bar') as HTMLElement | null
   const barH = bar ? bar.getBoundingClientRect().height : 0
   if (barH > 0) {
-    inputBarBaseHeight = barH
     root.style.setProperty('--chat-input-bar-h', `${barH}px`)
   }
-  syncRecommendListLimit()
-}
-
-/**
- * 屏幕不够高时（例如 iPhone SE 667pt），欢迎语 + 5 条推荐会挤在一起，
- * 推荐区会盖住欢迎语副标题。这里按「推荐区顶边不高于欢迎语底边 + 8px」反推出
- * 推荐列表的最大高度，超出部分在列表内滚动；屏幕够高时上限等于自然高度，不出现滚动条。
- */
-function syncRecommendListLimit() {
-  const root = rootRef.value
-  if (!root) return
-  const content = root.querySelector('.welcome-content') as HTMLElement | null
-  const barEl = root.querySelector('.recommend-bar') as HTMLElement | null
-  const list = root.querySelector('.recommend-list') as HTMLElement | null
-  if (!content || !barEl || !list) return
-  // 先还原上限再量一次，避免把上一次的压缩结果当成自然高度
-  root.style.removeProperty('--chat-recommend-list-max-h')
-  const overlap = content.getBoundingClientRect().bottom + 8 - barEl.getBoundingClientRect().top
-  const limit = Math.max(80, Math.round(list.getBoundingClientRect().height - Math.max(0, overlap)))
-  root.style.setProperty('--chat-recommend-list-max-h', `${limit}px`)
 }
 
 function handleViewportResize() {
@@ -643,8 +649,8 @@ const inputCharCount = computed(() => input.value.length)
 const isOverLimit = computed(() => inputCharCount.value > MAX_INPUT_CHARS)
 const charRatio = computed(() => Math.min(inputCharCount.value / MAX_INPUT_CHARS, 1))
 
-/** 推荐条数：与推荐区排版一致 */
-const RECOMMEND_COUNT = 5
+/** 推荐条数：固定 4 条（与后端 RECOMMEND_COUNT 一致，矮屏给欢迎语留出空间） */
+const RECOMMEND_COUNT = 4
 /** 推荐缓存有效期：期内直接复用，避免每次进页面都等一次生成（1~3s） */
 const RECOMMEND_CACHE_TTL = 5 * 60 * 1000
 const RECOMMEND_CACHE_KEY = 'campus_agent_recommend_cache'
@@ -697,20 +703,21 @@ const FALLBACK_RECOMMENDATIONS: Record<string, string[]> = {
     '我今天的计划任务有哪些',
     '查一下我的作品集',
     '社区最近有什么热门帖子',
-    '有什么好的学习资源推荐',
   ],
   teacher: [
     '帮我查看今天的待办任务',
     '查一下班级学生的考勤情况',
     '帮我看看最近的校园公告',
     '查询学生的成长记录',
-    '帮我看一下学生的心理预警',
   ],
 }
 
 // 有缓存就直接用它（也是后端上次给的真实结果）；否则先留空，等接口回来再出现
+// 缓存同样按 RECOMMEND_COUNT 截断：旧版本缓存里可能存着更多条，5 分钟 TTL 内不会刷新
 const recommendItems = ref<string[]>(
-  _recommendCache[props.role]?.items?.length ? [..._recommendCache[props.role].items] : []
+  _recommendCache[props.role]?.items?.length
+    ? [..._recommendCache[props.role].items].slice(0, RECOMMEND_COUNT)
+    : []
 )
 
 const fileInputRef = ref<HTMLInputElement>()
@@ -726,14 +733,14 @@ let uploadedFileUrl = ''
  */
 const recommendHidden = ref(false)
 const inputContainerRef = ref<HTMLElement | null>(null)
-/** 单行状态下的输入框容器高度 */
+/** 单行、无附件状态下的输入框容器高度（推荐区是否需要让位的基准） */
 let boxBaseHeight = 0
 /** 空输入（单行）时 textarea 的 scrollHeight */
 let singleLineContentHeight = 0
-/** 单行状态下的输入栏高度（推荐区就贴在它正上方） */
-let inputBarBaseHeight = 0
 /** 监听消息区尺寸变化的观察者：布局变化时重新校准欢迎语基准高度 */
 let msgObserver: ResizeObserver | null = null
+/** 监听输入栏尺寸变化的观察者：移动端按钮换行等会改变输入栏高度，需重新校准 */
+let inputBarObserver: ResizeObserver | null = null
 
 function getFileTypeTag(name: string) {
   const n = name.toLowerCase()
@@ -1122,6 +1129,16 @@ onMounted(() => {
     })
     msgObserver.observe(msgRef.value)
   }
+  // 输入栏尺寸变化（移动端按钮换行、附件行出现等）同样要重新校准：
+  // 只挂消息区/窗口 resize 会漏掉这些只改变输入栏高度的布局变化
+  const inputBarEl = rootRef.value?.querySelector('.input-bar') as HTMLElement | null
+  if (inputBarEl && typeof ResizeObserver !== 'undefined') {
+    inputBarObserver = new ResizeObserver(() => {
+      syncBaseHeights()
+      updateRecommendHidden()
+    })
+    inputBarObserver.observe(inputBarEl)
+  }
   window.addEventListener('resize', handleViewportResize)
   // 动态获取推荐（缓存新鲜则直接复用，否则后台静默刷新）
   loadRecommendations()
@@ -1131,6 +1148,8 @@ onUnmounted(() => {
   closePreview()
   msgObserver?.disconnect()
   msgObserver = null
+  inputBarObserver?.disconnect()
+  inputBarObserver = null
   window.removeEventListener('resize', handleViewportResize)
 })
 </script>
@@ -1320,9 +1339,7 @@ onUnmounted(() => {
   max-width: 820px;
   margin: 0 auto;
   padding-left: 14px;
-  /* 矮屏上限由 syncRecommendListLimit() 量出，超出部分列表内滚动，避免盖住欢迎语 */
-  max-height: var(--chat-recommend-list-max-h, none);
-  overflow-y: auto;
+  /* 不做内部滚动：矮屏上宁可贴近欢迎语，也保证推荐条目完整可见（原先按剩余高度压限高会出滚动条） */
 }
 .recommend-item {
   display: inline-flex;
