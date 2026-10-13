@@ -26,7 +26,7 @@
           <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/workbench') || route.path.startsWith('/student/service') || route.path.startsWith('/student/resources') || route.path.startsWith('/student/community') || route.path.startsWith('/student/feedback') }" @click="goTo('/student/workbench')" style="position:relative">
             <el-icon :size="16"><Grid /></el-icon>
             <span>工作台</span>
-            <el-badge v-if="unreadCount" is-dot class="contact-badge" />
+            <el-badge v-if="unreadCount" is-dot class="contact-badge" title="点击清除未读提示" @click.stop="clearUnread" />
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/profile') }" @click="goTo('/student/profile')">
             <el-icon :size="16"><User /></el-icon>
@@ -73,8 +73,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getConversations } from '@/api/messages'
-import { getGroups } from '@/api/groups'
+import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { getCourses } from '@/api/academic'
 import { getGrowthProfile } from '@/api/growth'
 import { fetchProactiveActions } from '@/api/agent'
@@ -134,17 +133,16 @@ function handleNavSelect(item: { route: string }) {
   router.push(item.route)
 }
 
-const unreadCount = ref(0)
-
-async function pollUnread() {
-  try {
-    const convs: any[] = await getConversations()
-    const groupConvs: any[] = await getGroups()
-    unreadCount.value =
-      convs.reduce((sum: number, c: any) => sum + (c.unread_count ?? 0), 0) +
-      groupConvs.reduce((sum: number, g: any) => sum + (g.unread_count ?? 0), 0)
-  } catch {}
-}
+/**
+ * 全局未读提示：单聊 + 群聊 + 站内通知三路汇总（此前漏算站内通知），
+ * WS 实时 + 5s 轮询兜底；红点可点击清除。
+ */
+const {
+  total: unreadCount,
+  start: startUnreadWatch,
+  stop: stopUnreadWatch,
+  clearAll: clearUnread,
+} = useUnreadSummary()
 
 // 驾驶舱首屏数据预热：布局常驻，登录后空闲时先把课程/画像/AI 主动发现/待办灌入模块级缓存，
 // 这样首次切到驾驶舱也能首帧渲染真实内容，不会出现「骨架 → 内容」的高度跳变（卡片抽搐）
@@ -159,13 +157,13 @@ function warmDashboardCache() {
 }
 
 onMounted(() => {
-  pollUnread()
-  setInterval(pollUnread, 5000)
+  startUnreadWatch()
   // 延迟 1.2s 让当前页首屏请求先走，再后台预热
   warmTimer = window.setTimeout(warmDashboardCache, 1200)
 })
 
 onUnmounted(() => {
+  stopUnreadWatch()
   if (warmTimer) window.clearTimeout(warmTimer)
 })
 
