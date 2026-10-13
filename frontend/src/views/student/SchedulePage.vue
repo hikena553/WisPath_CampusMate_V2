@@ -1738,40 +1738,14 @@ watch(() => route.query.tab, (val) => {
 .tab-fade-leave-to { opacity: 0; transform: translateY(-8px) scale(.995); }
 
 /* ===== 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：方向感知的整屏推入/退出 =====
-   「传送带」式推入：进场页与离场页以相同时长/曲线整屏反向移动，两页边缘始终衔接，
-   旧页整屏滑出视野（±100%）并淡出，不在屏幕侧边留停驻位——此前 ±28% 视差让位的
-   设计会让旧页停在左右两侧直到动画结束（且进场结束后 z-index:1 的定位离场元素
-   反盖在静态新页之上、拦截点击），表现为「跳转完左右停着页面」，已废弃。
-   关键声明带 !important 防级联覆盖；离场页 pointer-events:none 杜绝遮挡误触；
-   有过渡名时由模板上的 :duration 显式兜底移除（名为空时交回 Vue 自动检测立即替换）。 */
-.subpage-slide-enter-active,
-.subpage-slide-back-enter-active {
-  position: relative !important;
-  z-index: 2 !important;
-  background: #f5faff;
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  will-change: transform;
-}
-.subpage-slide-leave-active,
-.subpage-slide-back-leave-active {
-  position: absolute !important;
-  top: var(--sp-pad-t, 12px) !important;
-  left: var(--sp-pad-x, 16px) !important;
-  right: var(--sp-pad-x, 16px) !important;
-  bottom: 0 !important;
-  z-index: 1 !important;
-  overflow: hidden !important;
-  pointer-events: none !important;
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important, opacity 0.45s ease !important;
-  will-change: transform, opacity;
-}
-.subpage-slide-enter-from { transform: translateX(100%) !important; }
-.subpage-slide-leave-to { transform: translateX(-100%) !important; opacity: 0 !important; }
-.subpage-slide-back-enter-from { transform: translateX(-100%) !important; }
-.subpage-slide-back-leave-to { transform: translateX(100%) !important; opacity: 0 !important; }
-@media (prefers-reduced-motion: reduce) {
-  .subpage-slide-enter-active, .subpage-slide-leave-active,
-  .subpage-slide-back-enter-active, .subpage-slide-back-leave-active { transition: none !important; }
+   动画实现已提取到 styles/animations.css（.push / .push-back 系列，全局唯一实现），
+   这里只负责把本页的内边距映射成动画需要的离场页对齐变量：
+   .schedule-page 自身有 padding（移动端 8px/12px，桌面 12px/16px），
+   离场页转 absolute 后是相对滚动容器的 padding box 定位，若不内缩会视觉错位。
+   保留 .subpage-slide* 类名（animations.css 里是等价别名），模板无需改动。 */
+.schedule-page {
+  --push-inset-t: var(--sp-pad-t, 12px);
+  --push-inset-x: var(--sp-pad-x, 16px);
 }
 
 /* ===== 右侧垂直标签栏 ===== */

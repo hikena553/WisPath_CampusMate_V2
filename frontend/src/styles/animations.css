@@ -127,38 +127,81 @@
 .stagger-9 { animation-delay: 0.27s; animation-fill-mode: both; }
 .stagger-10 { animation-delay: 0.3s; animation-fill-mode: both; }
 
-/* Page Transition - 快捷空间子页面「整屏推入/推出」（传送带式 Push）
-   前进(page-slide)：新页从屏幕右侧整屏滑入，旧页同速整屏滑出（两页边缘衔接）
-   返回(page-slide-back)：新页从左侧滑入，旧页向右整屏滑出
-   进入页留在文档流中（relative + z-index 覆盖旧页），旧页绝对定位脱离文档流避免撑开布局。
-   旧页整屏滑出（±100%）并淡出：不留 ±28% 停驻位（旧设计会让页面停在屏幕侧边，
-   表现为「跳转完左右停着页面」）；离场页 pointer-events:none 防止遮挡新页点击。
-   配合 StudentLayout 中 Transition 的 :duration 显式超时，确保离场元素必定被移除。 */
+/* ============================================================================
+   Page Transition - 子页面「传送带式整屏推入/推出」（统一动画语言）
+   ============================================================================
+   这套动画原生于驾驶舱（SchedulePage 的 .subpage-slide / .subpage-slide-back），
+   现在提取为全局唯一实现，供所有子页面复用（快捷空间子页 + 校园资讯阅读器等），
+   避免各处再抄一份、参数漂移。
+
+   方向语义：
+   - 前进(push)：子页从右侧整屏滑入，旧页（列表/主页）同速整屏滑出 → 两页边缘始终衔接
+   - 返回(push-back)：子页向右整屏滑出，旧页从左侧滑回
+
+   三条硬约束（都是踩过坑的，改动前先读）：
+   1) 进场页留在文档流（relative + z-index:2）并铺不透明底，负责盖住旧页；
+      离场页转 absolute 脱离文档流（z-index:1），否则两页在流内会互相挤压。
+   2) 离场页必须整屏滑出（±100%）并淡出：早期 ±28% 的「视差让位」设计会让旧页
+      停在屏幕侧边直到动画结束（表现为「跳转完左右停着页面」），已废弃。
+   3) 离场页 pointer-events:none，杜绝动画期间拦截新页点击。
+
+   时长兜底：调用方（StudentLayout / SchedulePage）给 <Transition> 传 :duration="460"，
+   确保离场元素必定被移除；CSS 过渡 0.45s，留 10ms 余量。
+
+   别名说明：page-slide / subpage-slide 系列保留为等价别名，供历史调用点平滑迁移，
+   新人请直接用 push / push-back。 */
+.push-enter-active,
+.push-back-enter-active,
 .page-slide-enter-active,
-.page-slide-back-enter-active {
+.page-slide-back-enter-active,
+.subpage-slide-enter-active,
+.subpage-slide-back-enter-active {
   position: relative !important;
   z-index: 2 !important;
   background: #f5faff;
   transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
   will-change: transform;
 }
+.push-leave-active,
+.push-back-leave-active,
 .page-slide-leave-active,
-.page-slide-back-leave-active {
+.page-slide-back-leave-active,
+.subpage-slide-leave-active,
+.subpage-slide-back-leave-active {
   position: absolute !important;
-  inset: 0 !important;
+  /* 离场页内缩对齐：驾驶舱的离场页要落在内容区（页面自身有 12px/16px 内边距）内，
+     否则整屏定位会相对含 padding 的滚动容器原点、视觉上错位。
+     用变量兜底：未声明该变量的页面（如快捷空间子页，自身无内边距）取 0，等价于 inset:0。 */
+  top: var(--push-inset-t, 0) !important;
+  left: var(--push-inset-x, 0) !important;
+  right: var(--push-inset-x, 0) !important;
+  bottom: 0 !important;
   z-index: 1 !important;
+  overflow: hidden !important;
   pointer-events: none !important;
   transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important, opacity 0.45s ease !important;
   will-change: transform, opacity;
 }
-.page-slide-enter-from { transform: translateX(100%) !important; }
-.page-slide-leave-to { transform: translateX(-100%) !important; opacity: 0 !important; }
-.page-slide-back-enter-from { transform: translateX(-100%) !important; }
-.page-slide-back-leave-to { transform: translateX(100%) !important; opacity: 0 !important; }
+.push-enter-from,
+.page-slide-enter-from,
+.subpage-slide-enter-from { transform: translateX(100%) !important; }
+.push-leave-to,
+.page-slide-leave-to,
+.subpage-slide-leave-to { transform: translateX(-100%) !important; opacity: 0 !important; }
+.push-back-enter-from,
+.page-slide-back-enter-from,
+.subpage-slide-back-enter-from { transform: translateX(-100%) !important; }
+.push-back-leave-to,
+.page-slide-back-leave-to,
+.subpage-slide-back-leave-to { transform: translateX(100%) !important; opacity: 0 !important; }
 
 @media (prefers-reduced-motion: reduce) {
+  .push-enter-active, .push-leave-active,
+  .push-back-enter-active, .push-back-leave-active,
   .page-slide-enter-active, .page-slide-leave-active,
-  .page-slide-back-enter-active, .page-slide-back-leave-active { transition: none !important; }
+  .page-slide-back-enter-active, .page-slide-back-leave-active,
+  .subpage-slide-enter-active, .subpage-slide-leave-active,
+  .subpage-slide-back-enter-active, .subpage-slide-back-leave-active { transition: none !important; }
 }
 
 /* Page Transition - 同级页面切换（底部导航 / 顶栏之间，如校园资讯 ↔ 驾驶舱 ↔ 工作台）：卡片式切换

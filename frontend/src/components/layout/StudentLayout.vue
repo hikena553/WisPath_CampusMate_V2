@@ -92,14 +92,16 @@ const { isMobile } = useResponsive()
 
 // 路由过渡分两种：
 // 1) 快捷空间子页面（学习计划/作品集/成长档案/情绪树洞）：整屏推入/退出（进入=前进，离开=返回）
+//    与驾驶舱子页共用同一套动画（styles/animations.css 的 .push/.push-back，全局唯一实现），
+//    保证「子页从右侧推入、返回时向右退出」这套手感在各入口完全一致。
 // 2) 其余同级页面切换（底部导航/顶栏之间，如校园资讯↔驾驶舱）：卡片式切换（新页浮起放大到位，旧页缩小退后）
 const quickPagePaths = ['/student/plan', '/student/portfolio', '/student/growth', '/student/emotion']
 const pageTransition = ref('')
 watch(
   () => route.path,
   (to, from) => {
-    if (quickPagePaths.includes(to)) pageTransition.value = 'page-slide'
-    else if (quickPagePaths.includes(from)) pageTransition.value = 'page-slide-back'
+    if (quickPagePaths.includes(to)) pageTransition.value = 'push'
+    else if (quickPagePaths.includes(from)) pageTransition.value = 'push-back'
     else pageTransition.value = 'page-card'
   },
   { flush: 'pre' }
@@ -108,7 +110,7 @@ watch(
 /** 只有整屏推入需要显式时长兜底移除（离场页整屏滑出，见 animations.css）；
     卡片切换交给 Vue 自动检测，与 CSS 时长精确对齐 */
 const transitionDuration = computed(() =>
-  pageTransition.value.startsWith('page-slide') ? 460 : undefined
+  pageTransition.value.startsWith('push') ? 460 : undefined
 )
 
 // 移动端底部导航
