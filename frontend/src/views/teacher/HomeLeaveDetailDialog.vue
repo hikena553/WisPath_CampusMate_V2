@@ -1,6 +1,16 @@
 <template>
   <!-- 待批请假弹窗 -->
-  <el-dialog v-model="dialogVisible" title="待处理事项" width="420px">
+  <el-dialog
+    v-model="dialogVisible"
+    title="待处理事项"
+    :width="isMobile ? '90%' : '380px'"
+    align-center
+    class="tui-dialog"
+  >
+    <div class="tui-section-hint">
+      <el-icon><InfoFilled /></el-icon>
+      <span>以下为今日待你处理的请假申请，点击「详情」可进入审批管理逐条办理。</span>
+    </div>
     <div v-if="leaves.length === 0" class="empty-tip">今日无待处理事项</div>
     <div v-for="l in leaves" :key="l.id" class="schedule-item" @click="emit('navigate')">
       <div class="schedule-dot dot-warning"></div>
@@ -15,10 +25,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { InfoFilled } from '@element-plus/icons-vue'
+import { useResponsive } from '@/composables/useResponsive'
 import type { LeaveRequestOut } from '@/types'
 
 const props = defineProps<{ visible: boolean; leaves: LeaveRequestOut[] }>()
 const emit = defineEmits<{ 'update:visible': [value: boolean]; navigate: [] }>()
+
+const { isMobile } = useResponsive()
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -34,9 +48,9 @@ function typeLabel(t: string) {
 <style scoped>
 .empty-tip {
   text-align: center;
-  color: #bbb;
-  padding: 24px 0;
-  font-size: 13px;
+  color: var(--tui-text-quiet);
+  padding: 20px 0;
+  font-size: 12.5px;
 }
 
 .schedule-item {
@@ -44,12 +58,13 @@ function typeLabel(t: string) {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .schedule-item:hover {
-  background: rgba(91,141,239,0.05);
+  background: var(--tui-surface-muted);
 }
 
 .schedule-dot {
@@ -59,7 +74,7 @@ function typeLabel(t: string) {
   flex-shrink: 0;
 }
 
-.dot-warning { background: #e6a23c; }
+.dot-warning { background: var(--tui-warn); }
 
 .schedule-content {
   flex: 1;
@@ -69,12 +84,12 @@ function typeLabel(t: string) {
 .schedule-title {
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--tui-text);
 }
 
 .schedule-meta {
-  font-size: 11px;
-  color: #999;
-  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+  margin-top: 2px;
 }
 </style>

@@ -255,25 +255,55 @@
   transform: translateY(-1px);
 }
 
-/* ---------- 分页（el-pagination） ---------- */
+/* ---------- 分页（el-pagination） ----------
+   旧实现给当前页加了蓝色渐变底 + 蓝色文字，两者同色导致「页码看不见」；
+   此处改为克制的扁平样式：当前页=品牌实心 + 白字，其余=白底灰字，hover 走品牌浅底。 */
 .main-area .el-pagination {
   --el-pagination-button-bg-color: #fff;
-  --el-pagination-hover-color: #409eff;
+  --el-pagination-hover-color: var(--tui-brand);
+  --el-pagination-font-size: 12.5px;
+  --el-pagination-button-width: 28px;
+  --el-pagination-button-height: 28px;
+  font-weight: 500;
 }
 
-.main-area .el-pagination .el-pager li {
+.main-area .el-pagination .el-pager li,
+.main-area .el-pagination button {
+  min-width: 28px;
+  height: 28px;
+  line-height: 28px;
+  padding: 0 4px;
   border-radius: 8px;
   margin: 0 2px;
+  background: #fff;
+  color: var(--tui-text-secondary);
+  font-size: 12.5px;
   font-weight: 500;
-  transition: all 0.18s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.main-area .el-pagination .el-pager li:hover,
+.main-area .el-pagination button:hover:not(:disabled) {
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
 }
 
 .main-area .el-pagination .el-pager li.is-active {
-  background: linear-gradient(135deg, #409eff 0%, #3377ff 100%);
-  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.3);
+  background: var(--tui-brand) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  font-weight: 600;
 }
 
-.main-area .el-pagination button {
+.main-area .el-pagination .el-pagination__total,
+.main-area .el-pagination .el-pagination__jump,
+.main-area .el-pagination .el-pagination__sizes {
+  font-size: 12.5px;
+  color: var(--tui-text-quiet);
+}
+
+.main-area .el-pagination .el-select__wrapper {
+  min-height: 28px;
   border-radius: 8px;
 }
 
@@ -281,7 +311,7 @@
 .main-area .pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  padding: 16px 4px 4px;
+  padding: 10px 2px 2px;
 }
 
 /* ---------- 标签（el-tag） ---------- */
@@ -380,15 +410,17 @@ html.dark .main-area .filter-bar {
 
 /* ---------- 窄屏适配（<=768px） ---------- */
 @media (max-width: 768px) {
-  /* 弹窗 / 确认框避免溢出视口 */
-  .el-dialog,
-  .el-message-box {
-    width: calc(100% - 32px) !important;
+  /* 弹窗 / 确认框：限制最大宽度 + 保持垂直居中
+     （旧写法 margin-top:6vh 会把弹窗整体下压，导致视觉上不居中；改为 auto 外边距交回全局居中） */
+  .el-dialog {
+    width: min(90vw, 400px) !important;
     max-width: 100%;
+    margin: auto !important;
   }
 
-  .el-dialog {
-    margin-top: 6vh !important;
+  .el-message-box {
+    width: min(86vw, 380px) !important;
+    max-width: 100%;
   }
 
   /* 抽屉最大宽度不超过视口 */

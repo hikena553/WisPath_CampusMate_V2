@@ -2,29 +2,36 @@
   <el-dialog
     :model-value="modelValue"
     :title="isEdit ? '编辑成长档案' : '新增成长档案'"
-    :width="isMobile ? '94%' : '600px'"
+    :width="isMobile ? '90%' : '400px'"
     align-center
+    :close-on-click-modal="false"
+    class="tui-dialog"
     destroy-on-close
-    class="pf-dialog"
     @update:model-value="emit('update:modelValue', $event)"
   >
+    <div class="tui-section-hint">
+      <el-icon><InfoFilled /></el-icon>
+      <span>
+        {{ isEdit ? '正在编辑这条育人档案，保存后会同步更新成长报告。' : '记录一次育人经历：选好类型、写清做法与反思，即可计入成长报告。' }}
+      </span>
+    </div>
+    <div class="pf-ctx">
+      <span class="pf-ctx-item">类型：{{ typeLabel(form.item_type) }}</span>
+      <span class="pf-ctx-item">可见性：{{ form.visibility === 'public' ? '公开展示' : '仅自己可见' }}</span>
+      <span class="pf-ctx-item">时间：{{ form.occurred_on || '未选择' }}</span>
+    </div>
     <div class="pf-form">
-      <!-- 四段式之一：条目类型 -->
+      <!-- 条目类型：下拉选择 -->
       <div class="pf-field">
         <label class="pf-label">类型</label>
-        <div class="pf-type-row">
-          <button
-            v-for="t in typeOptions"
-            :key="t.value"
-            class="pf-type"
-            :class="{ active: form.item_type === t.value }"
-            :style="form.item_type === t.value ? { borderColor: color(t.value), color: color(t.value), background: tint(t.value) } : {}"
-            @click="form.item_type = t.value"
-          >
-            <el-icon :size="15"><component :is="t.icon" /></el-icon>
-            {{ t.label }}
-          </button>
-        </div>
+        <el-select v-model="form.item_type" placeholder="请选择档案类型" style="width: 100%">
+          <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value">
+            <span class="pf-opt">
+              <el-icon :size="14"><component :is="t.icon" /></el-icon>
+              {{ t.label }}
+            </span>
+          </el-option>
+        </el-select>
       </div>
 
       <div class="pf-field">
@@ -45,10 +52,10 @@
         </div>
         <div class="pf-field">
           <label class="pf-label">可见性</label>
-          <el-radio-group v-model="form.visibility">
-            <el-radio-button value="private">仅自己</el-radio-button>
-            <el-radio-button value="public">公开展示</el-radio-button>
-          </el-radio-group>
+          <el-select v-model="form.visibility" placeholder="请选择可见性" style="width: 100%">
+            <el-option label="仅自己可见" value="private" />
+            <el-option label="公开展示" value="public" />
+          </el-select>
         </div>
       </div>
 
@@ -68,21 +75,16 @@
         <el-button size="small" round :icon="Plus" @click="addEvidence">添加证据</el-button>
       </div>
 
-      <!-- 反思 -->
-      <div class="pf-field">
-        <label class="pf-label">
-          反思
-          <small>这次做了什么、为什么有效、下次怎么改</small>
-        </label>
-        <el-input
-          v-model="form.reflection"
-          type="textarea"
-          :rows="4"
-          maxlength="1000"
-          show-word-limit
-          placeholder="记录你的做法与反思，让经验可复用……"
-        />
-      </div>
+      <!-- 反思：AI 辅助填写 -->
+      <AiDraftField
+        v-model="form.reflection"
+        label="反思"
+        :rows="4"
+        :maxlength="1000"
+        placeholder="记录你的做法与反思，让经验可复用……"
+        :draft="aiDraft"
+        :points="aiPoints"
+      />
     </div>
 
     <template #footer>
@@ -97,14 +99,14 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import {
-  Delete, Medal, Plus, Reading, Suitcase, TrendCharts,
+  Delete, InfoFilled, Medal, Plus, Reading, Suitcase, TrendCharts,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import {
   createPortfolioItem,
   updatePortfolioItem,
-  PORTFOLIO_TYPE_COLOR,
   type EvidenceItem,
   type PortfolioItem,
   type PortfolioItemType,
@@ -131,8 +133,38 @@ const typeOptions: { value: PortfolioItemType; label: string; icon: unknown }[] 
   { value: 'research', label: '研究成果', icon: TrendCharts },
 ]
 
-const color = (t: PortfolioItemType) => PORTFOLIO_TYPE_COLOR[t]
-const tint = (t: PortfolioItemType) => `${PORTFOLIO_TYPE_COLOR[t]}14`
+const typeLabel = (t: PortfolioItemType) =>
+  typeOptions.find((o) => o.value === t)?.label || '档案'
+
+/** 今日日期（YYYY-MM-DD）：无发生时间时的 AI 草稿兜底 */
+const today = new Date().toISOString().slice(0, 10)
+
+/** AI 建议要点：随档案类型变化 */
+const aiPoints = computed(() => {
+  const map: Record<PortfolioItemType, string[]> = {
+    case: ['问题背景', '处理做法', '取得效果', '经验反思'],
+    honor: ['荣誉名称', '取得过程', '个人感悟', '推广价值'],
+    training: ['培训主题', '核心收获', '已迁移做法', '后续计划'],
+    research: ['研究问题', '方法过程', '研究结论', '应用价值'],
+  }
+  return map[form.item_type]
+})
+
+/** AI 草稿：结合所选类型 + 日期，写成教师第一人称反思口吻 */
+const aiDraft = computed(() => {
+  const d = form.occurred_on || today
+  const t = typeLabel(form.item_type)
+  if (form.item_type === 'case') {
+    return `${d}，我围绕班级中的典型问题开展了一次${t}：先摸清学生情况与问题成因，再联合家长、任课教师共同制定帮扶措施并跟进落实，学生状态较前期有所好转。有效的关键在于及时介入、多方协同，后续将继续跟踪记录。`
+  }
+  if (form.item_type === 'honor') {
+    return `${d}，本人获得${t}。这份荣誉来自日常教学与班级管理的持续投入，也离不开团队支持。我会把其中的做法梳理成可复用的经验，继续用于育人实践，带动更多学生成长。`
+  }
+  if (form.item_type === 'training') {
+    return `${d}，我参加了${t}，系统学习了相关理念与实操方法，印象最深的是与日常工作紧密结合的案例讲解。我已尝试把其中两点做法迁移到班级管理中，效果有待持续观察与调整。`
+  }
+  return `${d}，我完成了${t}：围绕工作中的实际问题梳理现状、分析成因，并提出可落地的改进方案。成果将在后续实践中检验，再根据反馈持续优化，形成可推广的经验。`
+})
 
 const form = reactive<{
   item_type: PortfolioItemType
@@ -223,7 +255,7 @@ async function submit() {
 .pf-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .pf-label {
@@ -232,53 +264,52 @@ async function submit() {
   gap: 8px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #475467;
-  margin-bottom: 8px;
+  color: var(--tui-text-secondary);
+  margin-bottom: 6px;
 }
 .pf-label small {
   font-size: 11px;
   font-weight: 400;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 
-.pf-type-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-.pf-type {
-  display: flex;
-  flex-direction: column;
+/* 下拉选项内的图标 + 文字 */
+.pf-opt {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 10px 4px;
-  border: 1px solid #e4e7ec;
-  border-radius: 10px;
-  background: #fff;
-  color: #667085;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
+  gap: 6px;
 }
-.pf-type.active { font-weight: 600; }
+
+/* 弹窗上下文信息条 */
+.pf-ctx {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--tui-surface-muted);
+  font-size: 11.5px;
+  color: var(--tui-text-tertiary);
+}
+.pf-ctx-item { white-space: nowrap; }
 
 .pf-grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 .pf-evidence {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .pf-ev-name { flex: 0 0 34%; }
 .pf-ev-url { flex: 1; }
 
 @media (max-width: 767px) {
-  .pf-type-row { grid-template-columns: repeat(2, 1fr); }
   .pf-grid2 { grid-template-columns: 1fr; }
   .pf-evidence { flex-wrap: wrap; }
   .pf-ev-name { flex: 1 1 100%; }

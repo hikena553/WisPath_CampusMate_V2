@@ -1,8 +1,11 @@
 <template>
   <el-dialog
     v-model="visibleModel"
-    class="mascot-analysis-dialog"
+    class="mascot-analysis-dialog tui-dialog"
+    :width="isMobile ? '90%' : '400px'"
+    align-center
     :append-to-body="true"
+    :close-on-click-modal="false"
     destroy-on-close
   >
     <template #header>
@@ -15,14 +18,20 @@
       </div>
     </template>
     <div class="dialog-content">
+      <!-- 引导提示：让老师知道正在分析谁、会发生什么 -->
+      <div class="tui-section-hint">
+        <el-icon><InfoFilled /></el-icon>
+        <span>正在基于班级图表与学生成长数据生成分析，内容由 {{ siteName }} 智能产出，仅供参考。</span>
+      </div>
       <div v-if="analysisLoading" class="dialog-loading">
         <img :src="siteMascot" :alt="siteName" class="dialog-loading-mascot" />
         <p class="dialog-loading-text">{{ analysisLoadingText }}</p>
       </div>
       <div v-else-if="analysisResult" class="analysis-report markdown-body" v-html="renderedAnalysisHtml"></div>
-      <div v-else class="dialog-empty">
-        <el-icon class="dialog-empty-icon"><MagicStick /></el-icon>
-        <p>点击下方按钮，{{ siteName }}将为您生成班级分析报告</p>
+      <div v-else class="tui-empty">
+        <span class="tui-empty-icon"><el-icon :size="22"><MagicStick /></el-icon></span>
+        <span class="tui-empty-title">尚未生成分析</span>
+        <span class="tui-empty-desc">点击下方「重新分析」，{{ siteName }}将为您生成班级分析报告</span>
       </div>
     </div>
     <template #footer>
@@ -38,12 +47,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { MagicStick, Refresh } from '@element-plus/icons-vue'
+import { InfoFilled, MagicStick, Refresh } from '@element-plus/icons-vue'
 import { renderMarkdown } from '@/utils/markdown'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useResponsive } from '@/composables/useResponsive'
 
 // 吉祥物与站点名称取自站点配置：管理端变更后教师端同步
 const { siteMascot, siteName, agentName } = useSiteConfig()
+const { isMobile } = useResponsive()
 
 // 桌宠分析弹窗：AI 状态（loading/result）由父级 useAiAnalysis 实例持有（桌面分析图表区共用），
 // 分析编排依赖（analyze/loadProfiles/buildPrompt）通过 props 注入，保证与父级同一份数据状态
@@ -87,7 +98,6 @@ async function startMascotAnalysis() {
 </script>
 
 <style scoped>
-/* 桌宠分析弹窗（自父级迁移） */
 @keyframes mascot-pet-bounce {
   0%, 100% { transform: translateY(0) scale(1); }
   30% { transform: translateY(-8px) scale(1.04); }
@@ -100,34 +110,31 @@ async function startMascotAnalysis() {
   gap: 10px;
 }
 .dialog-header-mascot {
-  width: 40px; height: 40px;
+  width: 34px; height: 34px;
   object-fit: contain;
-  filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.35));
 }
 .dialog-header-text { display: flex; flex-direction: column; }
-.dialog-title { font-size: 16px; font-weight: 700; color: #4c1d95; }
-.dialog-sub { font-size: 11px; color: #7c3aed; margin-top: 2px; }
-.dialog-content { min-height: 200px; }
+.dialog-title { font-size: 15px; font-weight: 700; color: var(--tui-text); }
+.dialog-sub { font-size: 11px; color: var(--tui-text-tertiary); margin-top: 2px; }
+.dialog-content { min-height: 180px; }
 .dialog-loading {
   display: flex; flex-direction: column; align-items: center;
-  justify-content: center; padding: 36px 12px; gap: 14px;
+  justify-content: center; padding: 28px 12px; gap: 12px;
 }
 .dialog-loading-mascot {
-  width: 72px; height: 72px; object-fit: contain;
-  animation: mascot-pet-bounce 1.4s ease-in-out infinite !important;
+  width: 60px; height: 60px; object-fit: contain;
+  animation: mascot-pet-bounce 1.4s ease-in-out infinite;
 }
-.dialog-loading-text { font-size: 13px; color: #7c3aed; margin: 0; }
-.dialog-empty {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; padding: 36px 12px; gap: 10px;
-  color: #9ca3af; font-size: 13px; margin: 0;
-}
-.dialog-empty-icon { font-size: 32px; color: #c4b5fd; }
+.dialog-loading-text { font-size: 12.5px; color: var(--tui-text-secondary); margin: 0; }
 .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* 弹窗内空态：收紧尺寸，避免默认大留白 */
+.dialog-content .tui-empty { padding: 24px 12px; gap: 8px; }
+.dialog-content .tui-empty-icon { width: 46px; height: 46px; }
+
 :deep(.mascot-analysis-dialog) {
-  border-radius: 16px !important;
-  background: linear-gradient(180deg, #faf7ff 0%, #ffffff 42%) !important;
+  border-radius: var(--tui-radius) !important;
+  background: var(--tui-surface) !important;
 }
 :deep(.mascot-analysis-dialog .el-dialog__header) {
   padding-bottom: 6px;
@@ -135,41 +142,26 @@ async function startMascotAnalysis() {
 }
 :deep(.mascot-analysis-dialog .el-dialog__body) {
   padding-top: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 :deep(.markdown-body) {
   font-size: 13px;
   line-height: 1.75;
-  color: #374151;
+  color: var(--tui-text-secondary);
 }
 :deep(.markdown-body .md-h2),
 :deep(.markdown-body .md-h3) {
   font-size: 14px;
-  color: #4c1d95;
+  color: var(--tui-text);
   margin: 14px 0 6px;
   padding-left: 8px;
-  border-left: 3px solid #8b5cf6;
+  border-left: 3px solid var(--tui-brand);
 }
 :deep(.markdown-body .md-ul) {
   padding-left: 18px;
   margin: 6px 0;
 }
 :deep(.markdown-body .md-li) { margin: 3px 0; }
-:deep(.markdown-body strong) { color: #4c1d95; }
-
-:deep(.el-dialog) {
-  width: 92vw !important;
-  max-height: 80vh;
-  margin: 0 auto !important;
-  border-radius: 16px 16px 0 0 !important;
-  position: fixed !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  top: auto !important;
-}
-
-:deep(.el-dialog__body) {
-  max-height: 60vh;
-  overflow-y: auto;
-}
+:deep(.markdown-body strong) { color: var(--tui-brand-strong); }
 </style>

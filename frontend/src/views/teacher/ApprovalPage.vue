@@ -19,24 +19,30 @@
         </div>
       </header>
 
-      <!-- 待处理总览 -->
+      <!-- 待处理总览：点击卡片直达对应分区 -->
       <div class="tui-stat-row cols-4 ap-overview">
-        <div class="tui-stat">
+        <button class="tui-stat ap-stat" type="button" :class="{ 'is-active': anchor === '' }" @click="jumpTo('')">
           <span class="tui-stat-num">{{ totalPending }}</span>
           <span class="tui-stat-label">待处理合计</span>
-        </div>
-        <div class="tui-stat">
+        </button>
+        <button class="tui-stat ap-stat" type="button" :class="{ 'is-active': anchor === 'ap-sec-leave' }" @click="jumpTo('ap-sec-leave')">
           <span class="tui-stat-num ap-warn">{{ pendingLeaves.length }}</span>
           <span class="tui-stat-label">请假待批</span>
-        </div>
-        <div class="tui-stat">
+        </button>
+        <button class="tui-stat ap-stat" type="button" :class="{ 'is-active': anchor === 'ap-sec-ticket' }" @click="jumpTo('ap-sec-ticket')">
           <span class="tui-stat-num ap-warn">{{ pendingTickets.length }}</span>
           <span class="tui-stat-label">办事待批</span>
-        </div>
-        <div class="tui-stat">
+        </button>
+        <button class="tui-stat ap-stat" type="button" :class="{ 'is-active': anchor === 'ap-sec-material' }" @click="jumpTo('ap-sec-material')">
           <span class="tui-stat-num ap-warn">{{ pendingMaterials.length }}</span>
           <span class="tui-stat-label">材料待归档</span>
-        </div>
+        </button>
+      </div>
+
+      <!-- 办理说明：一眼看懂优先级与规则（原页面缺失的引导） -->
+      <div class="tui-section-hint warn ap-rule">
+        <el-icon><InfoFilled /></el-icon>
+        <span>建议办理顺序：<b>请假</b>（需 24 小时内响应，直接影响考勤销假）→ <b>办事</b>（证明 / 项目 / 反馈类，通过后由对应科室出证）→ <b>材料</b>（归档类，可批量处理）。任一项拒绝都须填写理由，系统会即时推送学生。</span>
       </div>
 
       <!-- 闭环：从学生成长档案聚焦该生审批事项 -->
@@ -54,12 +60,17 @@
       />
 
       <template v-if="activeTab === 'pending'">
-        <div class="section-card">
+        <div id="ap-sec-leave" class="section-card">
           <div class="section-header">
             <h3><el-icon><Document /></el-icon> 请假申请</h3>
-            <el-tag v-if="pendingLeaves.length" type="warning" effect="plain" size="small">
+            <el-tag v-if="pendingLeaves.length" type="warning" effect="light" size="small">
               {{ pendingLeaves.length }} 条待批
             </el-tag>
+            <el-tag v-else type="success" effect="light" size="small">已处理完</el-tag>
+          </div>
+          <div class="tui-section-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>通过后学生考勤自动销假；「AI 分析」是基于出勤率与历史请假给出的建议，点 ⓘ 可查看判断依据，仅供参考。</span>
           </div>
           <!-- 桌面端表格 -->
           <div class="desktop-table" v-if="!isMobile">
@@ -148,100 +159,149 @@
               </div>
             </div>
           </div>
-          <div class="pagination-wrapper" v-if="pendingLeaves.length > 0">
+          <div class="pagination-wrapper" v-if="pendingLeaves.length > pageSizeLeaves">
             <el-pagination
               v-model:current-page="currentPageLeaves"
               v-model:page-size="pageSizeLeaves"
-              :page-sizes="[50, 100, 200]"
+              :page-sizes="[10, 20, 50]"
               :total="pendingLeaves.length"
-              layout="total, sizes, prev, pager, next, jumper"
+              :pager-count="5"
+              small
+              background
+              layout="total, prev, pager, next"
               @size-change="handleLeaveSizeChange"
               @current-change="handleLeaveCurrentChange"
             />
           </div>
-          <div v-else class="tui-empty">
-            <span class="tui-empty-icon"><el-icon :size="26"><Document /></el-icon></span>
+          <div v-else-if="!pendingLeaves.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><Document /></el-icon></span>
             <span class="tui-empty-title">暂无待批请假</span>
+            <span class="tui-empty-desc">当前没有学生提交请假申请</span>
           </div>
         </div>
 
-        <div class="section-card">
+        <div id="ap-sec-ticket" class="section-card">
           <div class="section-header">
             <h3><el-icon><Tickets /></el-icon> 办事申请</h3>
-            <el-tag v-if="pendingTickets.length" type="warning" effect="plain" size="small">
+            <el-tag v-if="pendingTickets.length" type="warning" effect="light" size="small">
               {{ pendingTickets.length }} 条待批
             </el-tag>
+            <el-tag v-else type="success" effect="light" size="small">已处理完</el-tag>
           </div>
+          <div class="tui-section-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>办事申请 = 学生提交的<b>在校 / 在读证明、成绩单、项目立项、反馈</b>等事项。办理前请先点「详情」核对申请人、事由与附件；通过后由对应科室出证，拒绝须写明理由。</span>
+          </div>
+
           <!-- 桌面端表格 -->
           <div class="desktop-table" v-if="!isMobile">
-            <el-table :data="paginatedPendingTickets" v-if="pendingTickets.length" style="width:100%"
-              :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
-              <el-table-column prop="type" label="类型" width="90">
+            <el-table :data="paginatedPendingTickets" v-if="pendingTickets.length" style="width:100%">
+              <el-table-column label="申请人" width="152">
                 <template #default="{ row }">
-                  <el-tag size="small" effect="plain">{{ row.type === 'leave' ? '请假' : '证明' }}</el-tag>
+                  <div class="ap-applicant">
+                    <span class="ap-applicant-name">{{ row.applicant_name || '—' }}</span>
+                    <span class="ap-applicant-no">{{ row.applicant_no || row.applicant_college || '' }}</span>
+                  </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
-              <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip />
-              <el-table-column label="操作" width="180" fixed="right">
+              <el-table-column label="事项类型" width="90">
                 <template #default="{ row }">
-                  <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">
-                    <el-icon><Check /></el-icon> 通过
-                  </el-button>
-                  <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">
-                    <el-icon><Close /></el-icon> 拒绝
-                  </el-button>
+                  <el-tag size="small" effect="plain">{{ ticketTypeLabel(row.type) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="事项 / 事由" min-width="220">
+                <template #default="{ row }">
+                  <div class="ap-ticket-title">{{ row.title }}</div>
+                  <div v-if="row.content" class="ap-ticket-sub">{{ row.content }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="附件" width="76" align="center">
+                <template #default="{ row }">
+                  <span v-if="row.attachments && row.attachments.length" class="ap-attach">
+                    <el-icon><Paperclip /></el-icon>{{ row.attachments.length }}
+                  </span>
+                  <span v-else class="ap-muted">无</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="提交时间" width="136">
+                <template #default="{ row }">
+                  <span class="ap-time"><el-icon><Clock /></el-icon>{{ row.created_at ? row.created_at.slice(5, 16) : '—' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="200" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" @click="openTicketDetail(row)"><el-icon><View /></el-icon>详情</el-button>
+                  <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">通过</el-button>
+                  <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">拒绝</el-button>
                 </template>
               </el-table-column>
             </el-table>
           </div>
+
           <!-- 移动端卡片 -->
           <div class="mobile-cards" v-if="isMobile && paginatedPendingTickets.length">
             <div class="mobile-card" v-for="row in paginatedPendingTickets" :key="row.id">
               <div class="mobile-card-header">
                 <span class="mobile-card-student">{{ row.title }}</span>
-                <el-tag size="small" effect="plain">{{ row.type === 'leave' ? '请假' : '证明' }}</el-tag>
+                <el-tag size="small" effect="plain">{{ ticketTypeLabel(row.type) }}</el-tag>
               </div>
               <div class="mobile-card-body">
+                <div class="mobile-card-row">
+                  <span class="mobile-card-label">申请人</span>
+                  <span class="mobile-card-value">
+                    {{ row.applicant_name || '—' }}<template v-if="row.applicant_no"> · {{ row.applicant_no }}</template>
+                  </span>
+                </div>
                 <div class="mobile-card-row" v-if="row.content">
-                  <span class="mobile-card-label">内容</span>
+                  <span class="mobile-card-label">事由</span>
                   <span class="mobile-card-value mobile-card-reason">{{ row.content }}</span>
+                </div>
+                <div class="mobile-card-row">
+                  <span class="mobile-card-label">提交</span>
+                  <span class="mobile-card-value">{{ row.created_at ? row.created_at.slice(0, 16) : '—' }}</span>
                 </div>
               </div>
               <div class="mobile-card-actions">
-                <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">
-                  <el-icon><Check /></el-icon> 通过
-                </el-button>
-                <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">
-                  <el-icon><Close /></el-icon> 拒绝
-                </el-button>
+                <el-button size="small" @click="openTicketDetail(row)"><el-icon><View /></el-icon>详情</el-button>
+                <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">通过</el-button>
+                <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">拒绝</el-button>
               </div>
             </div>
           </div>
-          <div class="pagination-wrapper" v-if="pendingTickets.length > 0">
+
+          <div class="pagination-wrapper" v-if="pendingTickets.length > pageSizeTickets">
             <el-pagination
               v-model:current-page="currentPageTickets"
               v-model:page-size="pageSizeTickets"
-              :page-sizes="[50, 100, 200]"
+              :page-sizes="[10, 20, 50]"
               :total="pendingTickets.length"
-              layout="total, sizes, prev, pager, next, jumper"
+              :pager-count="5"
+              small
+              background
+              layout="total, prev, pager, next"
               @size-change="handleTicketSizeChange"
               @current-change="handleTicketCurrentChange"
             />
           </div>
-          <div v-else class="tui-empty">
-            <span class="tui-empty-icon"><el-icon :size="26"><Tickets /></el-icon></span>
+          <div v-else-if="!pendingTickets.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><Tickets /></el-icon></span>
             <span class="tui-empty-title">暂无待办申请</span>
+            <span class="tui-empty-desc">学生提交证明 / 项目 / 反馈等事项后会出现在这里</span>
           </div>
         </div>
 
         <!-- 材料档案审批 -->
-        <div class="section-card">
+        <div id="ap-sec-material" class="section-card">
           <div class="section-header">
             <h3><el-icon><FolderOpened /></el-icon> 材料档案</h3>
-            <el-tag v-if="pendingMaterials.length" type="warning" effect="plain" size="small">
+            <el-tag v-if="pendingMaterials.length" type="warning" effect="light" size="small">
               {{ pendingMaterials.length }} 条待归档
             </el-tag>
+            <el-tag v-else type="success" effect="light" size="small">已处理完</el-tag>
+          </div>
+          <div class="tui-section-hint success">
+            <el-icon><InfoFilled /></el-icon>
+            <span>材料归档属于「入库」动作：通过即写入学生成长档案并计入统计，驳回需说明原因让学生重新提交，可批量处理。</span>
           </div>
           <!-- 桌面端表格 -->
           <div class="desktop-table" v-if="!isMobile">
@@ -288,9 +348,10 @@
               </div>
             </div>
           </div>
-          <div v-else class="tui-empty">
-            <span class="tui-empty-icon"><el-icon :size="26"><FolderOpened /></el-icon></span>
+          <div v-else-if="!pendingMaterials.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><FolderOpened /></el-icon></span>
             <span class="tui-empty-title">暂无待归档材料</span>
+            <span class="tui-empty-desc">学生上传材料后会出现在这里，可批量归档</span>
           </div>
         </div>
       </template>
@@ -299,6 +360,11 @@
         <div class="section-card">
           <div class="section-header">
             <h3><el-icon><CircleCheck /></el-icon> 已通过请假</h3>
+            <el-tag v-if="approvedLeaves.length" type="info" effect="light" size="small">{{ approvedLeaves.length }} 条</el-tag>
+          </div>
+          <div class="tui-section-hint success">
+            <el-icon><InfoFilled /></el-icon>
+            <span>学生返校后请点「确认返校」完成销假闭环；未及时销假的记录会在统计中计为「待销假」。</span>
           </div>
           <!-- 桌面端表格 -->
           <div class="desktop-table" v-if="!isMobile">
@@ -355,20 +421,24 @@
               </div>
             </div>
           </div>
-          <div class="pagination-wrapper" v-if="approvedLeaves.length > 0">
+          <div class="pagination-wrapper" v-if="approvedLeaves.length > pageSizeApprovedLeaves">
             <el-pagination
               v-model:current-page="currentPageApprovedLeaves"
               v-model:page-size="pageSizeApprovedLeaves"
-              :page-sizes="[50, 100, 200]"
+              :page-sizes="[10, 20, 50]"
               :total="approvedLeaves.length"
-              layout="total, sizes, prev, pager, next, jumper"
+              :pager-count="5"
+              small
+              background
+              layout="total, prev, pager, next"
               @size-change="handleApprovedLeaveSizeChange"
               @current-change="handleApprovedLeaveCurrentChange"
             />
           </div>
-          <div v-else class="tui-empty">
-            <span class="tui-empty-icon"><el-icon :size="26"><CircleCheck /></el-icon></span>
+          <div v-else-if="!approvedLeaves.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><CircleCheck /></el-icon></span>
             <span class="tui-empty-title">暂无已通过请假</span>
+            <span class="tui-empty-desc">审批通过的请假记录会归档到这里</span>
           </div>
         </div>
       </template>
@@ -377,6 +447,11 @@
         <div class="section-card">
           <div class="section-header">
             <h3><el-icon><CircleClose /></el-icon> 已拒绝请假</h3>
+            <el-tag v-if="rejectedLeaves.length" type="info" effect="light" size="small">{{ rejectedLeaves.length }} 条</el-tag>
+          </div>
+          <div class="tui-section-hint danger">
+            <el-icon><InfoFilled /></el-icon>
+            <span>拒绝记录保留「拒绝理由」并已推送学生；若学生补充材料后可重新提交，不占用本次拒绝次数。</span>
           </div>
           <!-- 桌面端表格 -->
           <div class="desktop-table" v-if="!isMobile">
@@ -425,20 +500,24 @@
               </div>
             </div>
           </div>
-          <div class="pagination-wrapper" v-if="rejectedLeaves.length > 0">
+          <div class="pagination-wrapper" v-if="rejectedLeaves.length > pageSizeRejectedLeaves">
             <el-pagination
               v-model:current-page="currentPageRejectedLeaves"
               v-model:page-size="pageSizeRejectedLeaves"
-              :page-sizes="[50, 100, 200]"
+              :page-sizes="[10, 20, 50]"
               :total="rejectedLeaves.length"
-              layout="total, sizes, prev, pager, next, jumper"
+              :pager-count="5"
+              small
+              background
+              layout="total, prev, pager, next"
               @size-change="handleRejectedLeaveSizeChange"
               @current-change="handleRejectedLeaveCurrentChange"
             />
           </div>
-          <div v-else class="tui-empty">
-            <span class="tui-empty-icon"><el-icon :size="26"><CircleClose /></el-icon></span>
+          <div v-else-if="!rejectedLeaves.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><CircleClose /></el-icon></span>
             <span class="tui-empty-title">暂无已拒绝请假</span>
+            <span class="tui-empty-desc">被拒绝的请假会连同理由归档到这里</span>
           </div>
         </div>
       </template>
@@ -525,8 +604,94 @@
       </template>
     </div>
 
-    <el-dialog v-model="rejectVisible" title="拒绝理由" width="420px" :close-on-click-modal="false">
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules">
+    <!-- ===================== 办事申请详情（先看清再审批） ===================== -->
+    <el-dialog
+      v-model="ticketDetailVisible"
+      title="办事申请详情"
+      :width="isMobile ? '92%' : '420px'"
+      align-center
+      destroy-on-close
+      class="ap-dialog"
+    >
+      <div v-if="ticketDetailTarget" class="ap-detail">
+        <div class="tui-section-hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>请核对申请人、事由与附件后再决定；通过后由对应科室出证，拒绝须写明理由并会推送学生。</span>
+        </div>
+
+        <div class="ap-detail-head">
+          <div class="ap-detail-who">
+            <span class="ap-detail-name">{{ ticketDetailTarget.applicant_name || '—' }}</span>
+            <span class="ap-detail-meta">
+              <template v-if="ticketDetailTarget.applicant_no">{{ ticketDetailTarget.applicant_no }}</template>
+              <template v-if="ticketDetailTarget.applicant_college"> · {{ ticketDetailTarget.applicant_college }}</template>
+            </span>
+          </div>
+          <div class="ap-detail-tags">
+            <el-tag size="small" effect="plain">{{ ticketTypeLabel(ticketDetailTarget.type) }}</el-tag>
+            <el-tag size="small" effect="light" type="warning">{{ ticketStatusLabel(ticketDetailTarget.status) }}</el-tag>
+          </div>
+        </div>
+
+        <el-descriptions :column="1" border size="small" class="ap-detail-desc">
+          <el-descriptions-item label="事项标题">{{ ticketDetailTarget.title || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="事由说明">{{ ticketDetailTarget.content || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="提交时间">
+            {{ ticketDetailTarget.created_at ? ticketDetailTarget.created_at.slice(0, 16) : '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item
+            v-for="(v, k) in (ticketDetailTarget.form_data || {})"
+            :key="k"
+            :label="ticketFormLabel(String(k))"
+          >{{ v }}</el-descriptions-item>
+        </el-descriptions>
+
+        <div class="ap-detail-block">
+          <div class="ap-detail-block-title"><el-icon><Paperclip /></el-icon> 附件</div>
+          <div v-if="ticketDetailTarget.attachments && ticketDetailTarget.attachments.length" class="ap-detail-files">
+            <a v-for="(f, i) in ticketDetailTarget.attachments" :key="i" :href="f" target="_blank" rel="noopener" class="ap-detail-file">
+              <el-icon><Paperclip /></el-icon>
+              <span>{{ String(f).split('/').pop() }}</span>
+            </a>
+          </div>
+          <div v-else class="ap-muted">该申请没有上传附件</div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="ticketDetailVisible = false">关闭</el-button>
+        <el-button
+          v-if="ticketDetailTarget"
+          type="danger"
+          plain
+          @click="reviewFromDetail(ticketDetailTarget, 'reject')"
+        >拒绝申请</el-button>
+        <el-button
+          v-if="ticketDetailTarget"
+          type="success"
+          @click="reviewFromDetail(ticketDetailTarget, 'approve')"
+        >通过申请</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ===================== 请假拒绝 ===================== -->
+    <el-dialog
+      v-model="rejectVisible"
+      title="拒绝请假"
+      :width="isMobile ? '90%' : '380px'"
+      align-center
+      :close-on-click-modal="false"
+      class="ap-dialog"
+    >
+      <div class="ap-dialog-context" v-if="rejectTarget">
+        <el-icon><InfoFilled /></el-icon>
+        <span>
+          正在拒绝 <b>{{ rejectTarget.student_name }}</b> 的
+          {{ typeLabel(rejectTarget.leave_type) }}（{{ rejectTarget.start_date }} ~ {{ rejectTarget.end_date }}）。
+          理由将同步推送给学生。
+        </span>
+      </div>
+      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-position="top">
         <el-form-item label="拒绝理由" prop="reason">
           <el-input v-model="rejectForm.reason" type="textarea" :rows="3" placeholder="请填写拒绝理由，如：请假天数超出规定" maxlength="200" show-word-limit />
         </el-form-item>
@@ -537,7 +702,19 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="rejectMaterialVisible" title="驳回材料" width="420px" :close-on-click-modal="false">
+    <!-- ===================== 材料驳回 ===================== -->
+    <el-dialog
+      v-model="rejectMaterialVisible"
+      title="驳回材料"
+      :width="isMobile ? '90%' : '380px'"
+      align-center
+      :close-on-click-modal="false"
+      class="ap-dialog"
+    >
+      <div class="tui-section-hint warn">
+        <el-icon><InfoFilled /></el-icon>
+        <span>驳回后学生可修改并重新提交；请写明原因，便于学生一次改对。</span>
+      </div>
       <el-form label-position="top">
         <el-form-item label="驳回理由" required>
           <el-input v-model="rejectMaterialReason" type="textarea" :rows="3" placeholder="请填写驳回理由，如：材料不清晰、格式不符合要求" maxlength="200" show-word-limit />
@@ -549,10 +726,25 @@
       </template>
     </el-dialog>
 
-    <el-dialog :title="ticketReviewAction === 'approve' ? '通过申请' : '拒绝申请'" v-model="ticketReviewVisible" width="420px" :close-on-click-modal="false">
+    <!-- ===================== 办事申请 通过 / 拒绝 ===================== -->
+    <el-dialog
+      :title="ticketReviewAction === 'approve' ? '通过办事申请' : '拒绝办事申请'"
+      v-model="ticketReviewVisible"
+      :width="isMobile ? '90%' : '380px'"
+      align-center
+      :close-on-click-modal="false"
+      class="ap-dialog"
+    >
+      <div class="ap-dialog-context" v-if="ticketReviewTarget">
+        <el-icon><InfoFilled /></el-icon>
+        <span>
+          <b>{{ ticketReviewTarget.applicant_name }}</b> · {{ ticketTypeLabel(ticketReviewTarget.type) }} ·
+          {{ ticketReviewTarget.title }}
+        </span>
+      </div>
       <el-form label-position="top">
-        <el-form-item :label="ticketReviewAction === 'approve' ? '审批意见（选填）' : '拒绝意见（必填）'" :required="ticketReviewAction === 'reject'">
-          <el-input v-model="ticketReviewComment" type="textarea" :rows="3" :placeholder="ticketReviewAction === 'approve' ? '可填写审批意见，如：同意，注意返校日期' : '请填写拒绝意见，如：材料不全，请补充后重新提交'" maxlength="500" show-word-limit />
+        <el-form-item :label="ticketReviewAction === 'approve' ? '审批意见（选填）' : '拒绝理由（必填）'" :required="ticketReviewAction === 'reject'">
+          <el-input v-model="ticketReviewComment" type="textarea" :rows="3" :placeholder="ticketReviewAction === 'approve' ? '可填写审批意见，如：同意，请到教务处领取' : '请填写拒绝意见，如：材料不全，请补充后重新提交'" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -566,14 +758,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose,
-  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, Refresh, User
+  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, Refresh, User,
+  View, Paperclip, Clock
 } from '@element-plus/icons-vue'
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
@@ -631,21 +824,21 @@ const ticketReviewComment = ref('')
 const rejectRules = {
   reason: [{ required: true, message: '请填写拒绝理由', trigger: 'blur' }],
 }
-// 请假分页相关状态
+// 请假分页相关状态（每页 10 条，避免分页条过大）
 const currentPageLeaves = ref(1)
-const pageSizeLeaves = ref(50)
+const pageSizeLeaves = ref(10)
 
 // 工单分页相关状态
 const currentPageTickets = ref(1)
-const pageSizeTickets = ref(50)
+const pageSizeTickets = ref(10)
 
 // 已通过请假分页相关状态
 const currentPageApprovedLeaves = ref(1)
-const pageSizeApprovedLeaves = ref(50)
+const pageSizeApprovedLeaves = ref(10)
 
 // 已拒绝请假分页相关状态
 const currentPageRejectedLeaves = ref(1)
-const pageSizeRejectedLeaves = ref(50)
+const pageSizeRejectedLeaves = ref(10)
 
 const totalPending = computed(() => pendingLeaves.value.length + pendingTickets.value.length + pendingMaterials.value.length)
 
@@ -716,6 +909,82 @@ function handleRejectedLeaveCurrentChange() {
 function typeLabel(t: string) {
   const map: Record<string, string> = { competition: '比赛', sick: '病假', personal: '事假', other: '其他' }
   return map[t] || t
+}
+
+/** 办事申请类型标签（与后端 ServiceTicket.type 对齐：leave / certificate / project / feedback） */
+const ticketTypeMap: Record<string, string> = {
+  leave: '请假',
+  certificate: '证明',
+  project: '项目',
+  feedback: '反馈',
+}
+function ticketTypeLabel(t?: string) {
+  if (!t) return '办事'
+  return ticketTypeMap[t] || t
+}
+
+/** 办事申请状态标签 */
+const ticketStatusMap: Record<string, string> = {
+  pending: '待处理',
+  processing: '处理中',
+  approved: '已通过',
+  rejected: '已拒绝',
+}
+function ticketStatusLabel(s?: string) {
+  return s ? ticketStatusMap[s] || s : '—'
+}
+
+/** 办事申请表单字段中文名（form_data 的 key → 中文） */
+const ticketFormLabelMap: Record<string, string> = {
+  leave_type: '请假类型',
+  start_date: '开始日期',
+  end_date: '结束日期',
+  certificate_type: '证明类型',
+  quantity: '份数',
+  project_type: '项目类型',
+  project_name: '项目名称',
+  advisor: '指导老师',
+  team_members: '团队成员',
+  budget: '预算',
+  dormitory_building: '宿舍楼',
+  dormitory_room: '宿舍号',
+  parent_proof: '家长证明',
+}
+function ticketFormLabel(k: string) {
+  return ticketFormLabelMap[k] || k
+}
+
+/** 总览卡片点击 → 切到待审批并滚动定位到对应分区 */
+const anchor = ref('')
+function jumpTo(id: string) {
+  activeTab.value = 'pending'
+  anchor.value = id
+  loadData()
+  nextTick(() => {
+    const page = document.querySelector('.tui-page') as HTMLElement | null
+    if (!page) return
+    if (!id) {
+      page.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    const el = document.getElementById(id)
+    if (!el) return
+    const top = page.scrollTop + (el.getBoundingClientRect().top - page.getBoundingClientRect().top) - 56
+    page.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+  })
+}
+
+/** 办事申请详情弹窗：先看清申请人 / 事由 / 附件，再决定通过或拒绝 */
+const ticketDetailVisible = ref(false)
+const ticketDetailTarget = ref<ServiceTicket | null>(null)
+function openTicketDetail(row: ServiceTicket) {
+  ticketDetailTarget.value = row
+  ticketDetailVisible.value = true
+}
+/** 详情弹窗内直接审批：关闭详情并复用统一的审批弹窗 */
+function reviewFromDetail(row: ServiceTicket, action: 'approve' | 'reject') {
+  ticketDetailVisible.value = false
+  showTicketReview(row, action)
 }
 
 async function loadData() {
@@ -891,12 +1160,128 @@ onMounted(() => {
   border: 1px solid var(--tui-border);
   border-radius: var(--tui-radius);
   box-shadow: var(--tui-shadow-1);
-  padding: 14px 16px;
-  margin-bottom: 12px;
+  padding: 12px 13px;
+  margin-bottom: 10px;
 }
 
 /* 待处理总览数字语义色（用双类名提高优先级，避免被 .tui-stat-num 覆盖） */
 .tui-stat-num.ap-warn { color: var(--tui-warn); }
+
+/* ========== 待办总览：可点击卡片（点击直达对应分区） ========== */
+.ap-stat {
+  position: relative;
+  cursor: pointer;
+}
+/* 纯 CSS 绘制的引导箭头，避免混用图标语言 */
+.ap-stat::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 15px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid #c7ccd4;
+  border-bottom: 1.5px solid #c7ccd4;
+  transform: rotate(-45deg);
+}
+.ap-stat:hover { border-color: #d3ddf5; }
+.ap-stat.is-active {
+  border-color: var(--tui-brand);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* 办理说明条 */
+.ap-rule { margin-bottom: 10px; }
+.ap-rule b { font-weight: 600; }
+
+/* ========== 办事申请：申请人 / 事项 / 附件 / 时间 ========== */
+.ap-applicant { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ap-applicant-name { font-size: 13px; font-weight: 600; color: var(--tui-text); }
+.ap-applicant-no { font-size: 11.5px; color: var(--tui-text-quiet); }
+
+.ap-ticket-title { font-size: 13px; font-weight: 500; color: var(--tui-text); line-height: 1.4; }
+.ap-ticket-sub {
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+  margin-top: 3px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.ap-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--tui-brand-strong);
+}
+.ap-muted { font-size: 12px; color: var(--tui-text-quiet); }
+.ap-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--tui-text-tertiary);
+}
+
+/* ========== 弹窗：上下文提示（让人知道「正在处理谁的事」） ========== */
+.ap-dialog-context {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border-radius: 9px;
+  background: var(--tui-surface-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--tui-text-secondary);
+}
+.ap-dialog-context :deep(.el-icon) {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 13px;
+  color: var(--tui-text-tertiary);
+}
+
+/* ========== 办事申请详情 ========== */
+.ap-detail { display: flex; flex-direction: column; gap: 12px; }
+.ap-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ap-detail-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ap-detail-name { font-size: 15px; font-weight: 700; color: var(--tui-text); }
+.ap-detail-meta { font-size: 11.5px; color: var(--tui-text-quiet); }
+.ap-detail-tags { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.ap-detail-desc { border-radius: 10px; overflow: hidden; }
+.ap-detail-block { border-top: 1px solid var(--tui-border); padding-top: 10px; }
+.ap-detail-block-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tui-text-secondary);
+  margin-bottom: 8px;
+}
+.ap-detail-files { display: flex; flex-direction: column; gap: 6px; }
+.ap-detail-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--tui-surface-muted);
+  color: var(--tui-brand-strong);
+  font-size: 12.5px;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-detail-file:hover { background: var(--tui-brand-soft); }
 
 /* 闭环聚焦条：从学生成长档案跳来时的上下文提示 */
 .ap-focus {
@@ -926,13 +1311,14 @@ onMounted(() => {
 .ap-focus-clear:hover { text-decoration: underline; }
 
 .section-header {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 10px;
 }
 .section-header h3 {
-  font-size: 14.5px; font-weight: 600; color: var(--tui-text); margin: 0;
-  display: flex; align-items: center; gap: 6px;
+  font-size: 13.5px; font-weight: 600; color: var(--tui-text); margin: 0;
+  display: flex; align-items: center; gap: 5px;
 }
+.section-header h3 :deep(.el-icon) { font-size: 15px; color: var(--tui-text-tertiary); }
 .section-header > :deep(.el-tag) { margin-left: auto; }
 
 /* 桌面表格：轻量表头 + 圆角 */
@@ -940,8 +1326,8 @@ onMounted(() => {
 .section-card :deep(.el-table th.el-table__cell) { background: #f8f9fb !important; }
 
 .ai-analyze { display: flex; align-items: center; gap: 6px; }
-.analyze-tip { cursor: pointer; color: #909399; font-size: 14px; }
-.analyze-tip:hover { color: #409eff; }
+.analyze-tip { cursor: pointer; color: var(--tui-text-tertiary); font-size: 13px; }
+.analyze-tip:hover { color: var(--tui-brand); }
 .analyzing-tag { display: inline-flex; align-items: center; gap: 4px; }
 
 .pagination-wrapper {
@@ -1128,20 +1514,18 @@ onMounted(() => {
 
   .mobile-card-actions :deep(.el-button) { flex: 1; }
 
+  /* 弹窗：保持水平 + 垂直居中
+     原实现用 position:fixed + bottom:0 把弹窗改成贴底抽屉，导致视觉上「不居中」且过宽；
+     现只收窄宽度与圆角，居中交给全局 flex + auto 外边距处理。 */
   :deep(.el-dialog) {
-    width: 92vw !important;
-    max-height: 70vh;
-    margin: 0 auto !important;
-    border-radius: 16px 16px 0 0 !important;
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    top: auto !important;
+    width: min(90vw, 400px) !important;
+    max-height: 66vh;
+    max-height: 66dvh;
+    margin: auto !important;
+    border-radius: 14px !important;
   }
 
   :deep(.el-dialog__body) {
-    max-height: 50vh;
     overflow-y: auto;
   }
 }

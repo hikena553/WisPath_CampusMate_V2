@@ -9,7 +9,7 @@
           <p class="tui-header-sub">家长零账号可完整留痕：短信提示 · 报告导出 · 只读链接</p>
         </div>
         <div class="tui-header-actions">
-          <el-select v-model="studentId" filterable placeholder="选择学生" style="width: 220px" @change="onStudentChange">
+          <el-select v-model="studentId" filterable placeholder="选择学生" class="gp-select" @change="onStudentChange">
             <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
         </div>
@@ -33,68 +33,88 @@
       </div>
 
       <div v-else class="tui-stack">
-        <!-- 家长联系人 -->
-        <section class="tui-card">
-          <div class="tui-card-head">
-            <span class="tui-card-head-icon" :style="{ background: '#eff4ff', color: '#1d4ed8' }">
-              <el-icon :size="13"><User /></el-icon>
-            </span>
-            家长联系人
-            <span class="tui-group-count">{{ guardians.length }} 人</span>
-            <el-button size="small" round type="primary" :icon="Plus" @click="openGuardianCreate">新增</el-button>
-          </div>
-          <div class="tui-card-body">
-            <div v-if="!guardians.length" class="tui-empty">
-              <span class="tui-empty-icon"><el-icon :size="26"><User /></el-icon></span>
-              <span class="tui-empty-title">暂无联系人</span>
-              <span class="tui-empty-desc">先建档家长联系人，才能发短信 / 留痕</span>
+        <!-- 家长联系人卡（含通话 / 短信 / 微信快捷留痕） -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><User /></el-icon>家长联系人</h3>
+            <div class="tui-section-extra">
+              <span class="gp-count">{{ guardians.length }} 人</span>
+              <el-button size="small" type="primary" :icon="Plus" @click="openGuardianCreate">新增联系人</el-button>
             </div>
-            <div v-else class="gp-guardians">
-              <div v-for="g in guardians" :key="g.id" class="gp-guardian">
-                <div class="gp-guardian-main">
-                  <span class="gp-guardian-name">{{ g.name }}</span>
-                  <el-tag size="small" effect="plain" round>{{ g.relation }}</el-tag>
-                  <el-tag v-if="g.is_primary" size="small" type="success" effect="plain" round>主要</el-tag>
-                  <span class="gp-guardian-phone">{{ g.phone_masked || '未填手机号' }}</span>
+          </div>
+          <div class="tui-section-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>先建档家长联系人才能留痕；点击卡片上的「通话 / 短信 / 微信」会以对应方式预填一条沟通台账。</span>
+          </div>
+          <div v-if="!guardians.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><User /></el-icon></span>
+            <span class="tui-empty-title">暂无联系人</span>
+            <span class="tui-empty-desc">先建档家长联系人，才能发短信 / 留痕</span>
+          </div>
+          <div v-else class="gp-cards">
+            <div v-for="g in guardians" :key="g.id" class="gp-card">
+              <div class="gp-card-top">
+                <span class="gp-avatar">{{ avatarOf(g.name) }}</span>
+                <div class="gp-card-id">
+                  <span class="gp-card-name">{{ g.name }}</span>
+                  <span class="gp-card-sub">
+                    <el-tag size="small" effect="plain" round>{{ g.relation }}</el-tag>
+                    <el-tag v-if="g.is_primary" size="small" type="success" effect="plain" round>主要</el-tag>
+                  </span>
                 </div>
-                <div class="gp-guardian-ops">
+                <div class="gp-card-ops">
                   <button class="gp-link" @click="openGuardianEdit(g)">编辑</button>
                   <button class="gp-link gp-link-danger" @click="removeGuardian(g)">删除</button>
                 </div>
+              </div>
+              <div class="gp-card-phone">
+                <el-icon :size="13"><Phone /></el-icon>
+                <span>{{ g.phone_masked || '未填手机号' }}</span>
+              </div>
+              <div class="gp-card-actions">
+                <button class="gp-act" @click="openQuickLog(g, 'note')"><el-icon><Phone /></el-icon>通话</button>
+                <button class="gp-act" @click="openQuickLog(g, 'sms')"><el-icon><Message /></el-icon>短信</button>
+                <button class="gp-act" @click="openQuickLog(g, 'note')"><el-icon><ChatLineRound /></el-icon>微信</button>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- 沟通台账 -->
-        <section class="tui-card">
-          <div class="tui-card-head">
-            <span class="tui-card-head-icon" :style="{ background: '#ecfdf3', color: '#079455' }">
-              <el-icon :size="13"><ChatDotRound /></el-icon>
-            </span>
-            沟通台账
-            <span class="tui-group-count">{{ logs.length }} 条</span>
-            <el-button size="small" round :icon="Plus" @click="logVisible = true">记录沟通</el-button>
-          </div>
-          <div class="tui-card-body">
-            <div v-if="!logs.length" class="tui-empty">
-              <span class="tui-empty-icon"><el-icon :size="26"><ChatDotRound /></el-icon></span>
-              <span class="tui-empty-title">暂无沟通记录</span>
-              <span class="tui-empty-desc">每次沟通都留痕，家长零账号也能查看</span>
+        <!-- 沟通台账时间轴 -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><ChatDotRound /></el-icon>沟通台账时间轴</h3>
+            <div class="tui-section-extra">
+              <span class="gp-count">{{ logs.length }} 条</span>
+              <el-button size="small" :icon="Plus" @click="openLogCreate">记录沟通</el-button>
             </div>
-            <div v-else class="tui-stack">
-              <div v-for="l in logs" :key="l.id" class="gp-log">
-                <div class="gp-log-head">
-                  <el-tag size="small" effect="light" round>{{ GUARDIAN_SCENE_LABEL[l.scene] }}</el-tag>
-                  <el-tag size="small" effect="plain" round>{{ GUARDIAN_CHANNEL_LABEL[l.channel] }}</el-tag>
+          </div>
+          <div class="tui-section-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>每次沟通按时间倒序留痕，家长零账号也能通过只读链接查看；危机类记录不会生成分享链接。</span>
+          </div>
+          <div v-if="!logs.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><ChatDotRound /></el-icon></span>
+            <span class="tui-empty-title">暂无沟通记录</span>
+            <span class="tui-empty-desc">每次沟通都留痕，家长零账号也能查看</span>
+          </div>
+          <div v-else class="gp-tl">
+            <div v-for="l in pagedLogs" :key="l.id" class="gp-tl-item">
+              <span class="gp-tl-node" :class="`tone-${channelTone(l.channel)}`">
+                <el-icon><component :is="CHANNEL_ICON[l.channel]" /></el-icon>
+              </span>
+              <div class="gp-tl-card">
+                <div class="gp-tl-top">
+                  <span class="tui-tag">{{ GUARDIAN_SCENE_LABEL[l.scene] }}</span>
+                  <span class="tui-tag">{{ GUARDIAN_CHANNEL_LABEL[l.channel] }}</span>
                   <el-tag size="small" :type="statusTag(l.status)" effect="plain" round>
                     {{ GUARDIAN_STATUS_LABEL[l.status] }}
                   </el-tag>
-                  <span v-if="l.guardian_name" class="gp-log-who">对象：{{ l.guardian_name }}</span>
-                  <span class="gp-log-date">{{ (l.created_at || '').slice(0, 10) }}</span>
+                  <span class="gp-tl-date">{{ (l.created_at || '').slice(0, 10) }}</span>
                 </div>
-                <div class="gp-log-body">{{ l.content_summary }}</div>
-                <div class="gp-log-ops">
+                <div v-if="l.guardian_name" class="gp-tl-who">对象：{{ l.guardian_name }}</div>
+                <div class="gp-tl-body">{{ l.content_summary }}</div>
+                <div class="gp-tl-ops">
                   <template v-if="links[l.id] && !links[l.id].revoked">
                     <span class="gp-link-valid">链接有效至 {{ (links[l.id].expires_at || '').slice(0, 10) }} · 访问 {{ links[l.id].view_count }} 次</span>
                     <button class="gp-link" @click="copyLink(links[l.id])">复制链接</button>
@@ -106,23 +126,53 @@
                   <span v-else class="gp-link-locked">
                     <el-icon :size="11"><Lock /></el-icon>危机记录不生成链接
                   </span>
-                  <button class="gp-link gp-link-danger" @click="removeLog(l)">删除</button>
+                  <button class="gp-link gp-link-danger gp-link-tail" @click="removeLog(l)">删除</button>
                 </div>
               </div>
+            </div>
+            <div v-if="logs.length > pageSizeLogs" class="pagination-wrapper">
+              <el-pagination
+                v-model:current-page="pageLogs"
+                v-model:page-size="pageSizeLogs"
+                :page-sizes="[10, 20, 50]"
+                :total="logs.length"
+                :pager-count="5"
+                small
+                background
+                layout="total, prev, pager, next"
+                @size-change="handleLogsSizeChange"
+                @current-change="handleLogsCurrentChange"
+              />
             </div>
           </div>
         </section>
       </div>
 
-      <GuardianDialog v-model="guardianVisible" :student-id="studentId || 0" :guardian="editingGuardian" @saved="loadAll" />
-      <ContactLogDialog v-model="logVisible" :student-id="studentId || 0" :guardians="guardians" :initial-content="logPresetContent" :initial-scene="logPresetScene" @saved="loadAll" />
+      <GuardianDialog
+        v-model="guardianVisible"
+        :student-id="studentId || 0"
+        :student="currentStudent"
+        :guardian="editingGuardian"
+        @saved="loadAll"
+      />
+      <ContactLogDialog
+        v-model="logVisible"
+        :student-id="studentId || 0"
+        :student="currentStudent"
+        :guardians="guardians"
+        :initial-content="logPresetContent"
+        :initial-scene="logPresetScene"
+        :initial-channel="logPresetChannel"
+        :initial-guardian-id="logPresetGuardianId"
+        @saved="loadAll"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { ChatDotRound, Lock, Plus, User } from '@element-plus/icons-vue'
+import { computed, onMounted, ref, type Component } from 'vue'
+import { ChatDotRound, ChatLineRound, Document, InfoFilled, Link, Lock, Message, Phone, Plus, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
@@ -131,7 +181,8 @@ import {
   createShareLink, deleteContactLog, deleteGuardian, getContactLogs, getGuardians,
   getLogShareLink, revokeShareLink, GUARDIAN_CHANNEL_LABEL, GUARDIAN_SCENE_LABEL,
   GUARDIAN_STATUS_LABEL,
-  type ContactLog, type Guardian, type GuardianContactStatus, type GuardianScene, type ShareLink,
+  type ContactLog, type Guardian, type GuardianChannel, type GuardianContactStatus,
+  type GuardianScene, type ShareLink,
 } from '@/api/guardian'
 import GuardianDialog from '@/components/teacher/guardian/GuardianDialog.vue'
 import ContactLogDialog from '@/components/teacher/guardian/ContactLogDialog.vue'
@@ -143,11 +194,22 @@ const { isMobile } = useResponsive()
 const route = useRoute()
 const router = useRouter()
 
+/** 沟通渠道 → 时间轴节点图标（统一 Element Plus 图标） */
+const CHANNEL_ICON: Record<GuardianChannel, Component> = {
+  sms: Message,
+  report: Document,
+  link: Link,
+  note: ChatDotRound,
+}
+
 const students = ref<StudentSummary[]>([])
 const studentId = ref<number | undefined>(undefined)
 const guardians = ref<Guardian[]>([])
 const logs = ref<ContactLog[]>([])
 const links = ref<Record<number, ShareLink>>({})
+
+/** 当前已选学生：为弹窗提供姓名 / 班级 / 近期预警上下文 */
+const currentStudent = computed(() => students.value.find((s) => s.id === studentId.value) || null)
 
 const guardianVisible = ref(false)
 const editingGuardian = ref<Guardian | null>(null)
@@ -155,9 +217,36 @@ const logVisible = ref(false)
 /** 闭环：来自学生成长档案的反馈预填 */
 const logPresetContent = ref('')
 const logPresetScene = ref<GuardianScene>('care')
+/** 家长联系人卡快捷入口的预填 */
+const logPresetChannel = ref<GuardianChannel>('note')
+const logPresetGuardianId = ref<number | undefined>(undefined)
+
+/* 分页（统一按契约第 2 节） */
+const pageLogs = ref(1)
+const pageSizeLogs = ref(10)
+const pagedLogs = computed(() =>
+  logs.value.slice((pageLogs.value - 1) * pageSizeLogs.value, pageLogs.value * pageSizeLogs.value)
+)
+function handleLogsSizeChange() { pageLogs.value = 1 }
+function handleLogsCurrentChange() { /* v-model 已同步 */ }
 
 function statusTag(status: GuardianContactStatus) {
   return status === 'sent' ? 'success' : status === 'pending' ? 'warning' : status === 'failed' ? 'danger' : 'info'
+}
+
+/** 时间轴节点色调：统一走令牌 */
+function channelTone(c: GuardianChannel): 'brand' | 'success' | 'warn' | 'muted' {
+  switch (c) {
+    case 'sms': return 'brand'
+    case 'link': return 'success'
+    case 'report': return 'muted'
+    default: return 'brand'
+  }
+}
+
+/** 联系人头像占位：取姓名首字 */
+function avatarOf(name?: string) {
+  return (name || '家').trim().charAt(0) || '家'
 }
 
 async function loadStudents() {
@@ -177,6 +266,8 @@ async function loadStudents() {
     if (route.query.content) {
       logPresetContent.value = String(route.query.content)
       logPresetScene.value = (String(route.query.scene || 'care') as GuardianScene)
+      logPresetChannel.value = 'note'
+      logPresetGuardianId.value = undefined
       logVisible.value = true
       router.replace({ path: '/teacher/guardian' })
     }
@@ -193,6 +284,7 @@ async function loadAll() {
   ])
   guardians.value = g.status === 'fulfilled' ? g.value : []
   logs.value = l.status === 'fulfilled' ? l.value : []
+  pageLogs.value = 1
 
   // 回显已有分享链接
   const map: Record<number, ShareLink> = {}
@@ -223,6 +315,24 @@ function openGuardianCreate() {
 function openGuardianEdit(g: Guardian) {
   editingGuardian.value = g
   guardianVisible.value = true
+}
+
+/** 新增沟通：清空上次预填 */
+function openLogCreate() {
+  logPresetContent.value = ''
+  logPresetScene.value = 'care'
+  logPresetChannel.value = 'note'
+  logPresetGuardianId.value = undefined
+  logVisible.value = true
+}
+
+/** 联系人卡快捷入口：以对应渠道 + 该联系人预填一条沟通台账 */
+function openQuickLog(g: Guardian, channel: GuardianChannel) {
+  logPresetContent.value = ''
+  logPresetScene.value = 'care'
+  logPresetChannel.value = channel
+  logPresetGuardianId.value = g.id
+  logVisible.value = true
 }
 
 async function removeGuardian(g: Guardian) {
@@ -283,35 +393,73 @@ onMounted(loadStudents)
 </script>
 
 <style scoped>
-.gp-picker { margin-bottom: 12px; }
+.gp-picker { margin-bottom: 10px; }
+.gp-select { width: 220px; }
+.gp-count { font-size: 11.5px; color: var(--tui-text-quiet); }
 
-.gp-guardians { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.gp-guardian {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+/* 家长联系人卡 */
+.gp-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.gp-card {
+  display: flex; flex-direction: column; gap: 8px;
   border: 1px solid var(--tui-border); border-radius: var(--tui-radius-sm);
-  padding: 11px 13px; background: var(--tui-surface-muted);
+  padding: 10px 11px; background: var(--tui-surface-muted);
 }
-.gp-guardian-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.gp-guardian-name { font-size: 13.5px; font-weight: 600; color: #101828; }
-.gp-guardian-phone { font-size: 12px; color: #98a2b3; }
-.gp-guardian-ops { display: flex; gap: 12px; flex-shrink: 0; }
+.gp-card-top { display: flex; align-items: center; gap: 8px; }
+.gp-avatar {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--tui-brand-soft); color: var(--tui-brand-strong);
+  font-size: 13px; font-weight: 600;
+}
+.gp-card-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.gp-card-name { font-size: 13.5px; font-weight: 600; color: var(--tui-text); }
+.gp-card-sub { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.gp-card-ops { display: flex; gap: 10px; flex-shrink: 0; }
+.gp-card-phone { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--tui-text-tertiary); }
+.gp-card-actions { display: flex; gap: 6px; }
+.gp-act {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 6px 4px; border: 1px solid var(--tui-border-strong); border-radius: 8px;
+  background: var(--tui-surface); color: var(--tui-text-secondary);
+  font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.gp-act:hover { border-color: var(--tui-brand); color: var(--tui-brand); }
 
-.gp-log {
+/* 沟通台账时间轴 */
+.gp-tl { position: relative; padding-left: 24px; }
+.gp-tl::before {
+  content: ''; position: absolute; left: 8px; top: 5px; bottom: 5px;
+  width: 2px; background: var(--tui-border);
+}
+.gp-tl-item { position: relative; margin-bottom: 8px; }
+.gp-tl-item:last-child { margin-bottom: 0; }
+.gp-tl-node {
+  position: absolute; left: -24px; top: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--tui-surface); box-shadow: inset 0 0 0 2px var(--tui-border-strong);
+  color: var(--tui-text-tertiary); display: flex; align-items: center; justify-content: center;
+}
+.gp-tl-node .el-icon { font-size: 10px; }
+.gp-tl-node.tone-brand { box-shadow: inset 0 0 0 2px var(--tui-brand); color: var(--tui-brand); }
+.gp-tl-node.tone-success { box-shadow: inset 0 0 0 2px var(--tui-success); color: var(--tui-success); }
+.gp-tl-node.tone-warn { box-shadow: inset 0 0 0 2px var(--tui-warn); color: var(--tui-warn); }
+.gp-tl-node.tone-muted { box-shadow: inset 0 0 0 2px var(--tui-border-strong); color: var(--tui-text-tertiary); }
+.gp-tl-card {
   border: 1px solid var(--tui-border); border-radius: var(--tui-radius-sm);
-  padding: 12px 14px; background: var(--tui-surface-muted);
+  padding: 8px 10px; background: var(--tui-surface-muted);
 }
-.gp-log-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
-.gp-log-who { font-size: 11.5px; color: #98a2b3; }
-.gp-log-date { margin-left: auto; font-size: 11.5px; color: #98a2b3; }
-.gp-log-body { font-size: 13px; color: #475467; line-height: 1.65; white-space: pre-wrap; }
-.gp-log-ops { display: flex; align-items: center; gap: 14px; margin-top: 9px; flex-wrap: wrap; }
-.gp-link-valid { font-size: 11.5px; color: #079455; }
+.gp-tl-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gp-tl-date { margin-left: auto; font-size: 11.5px; color: var(--tui-text-quiet); }
+.gp-tl-who { font-size: 11.5px; color: var(--tui-text-quiet); margin-top: 5px; }
+.gp-tl-body { font-size: 12.5px; color: var(--tui-text-secondary); line-height: 1.6; white-space: pre-wrap; margin-top: 5px; }
+.gp-tl-ops { display: flex; align-items: center; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.gp-link-valid { font-size: 11.5px; color: var(--tui-success); }
 
-.gp-link { border: none; background: none; padding: 0; font-size: 12px; color: #2563eb; cursor: pointer; font-family: inherit; }
-.gp-link-danger { color: #d92d20; }
-.gp-link-locked { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: #98a2b3; }
+.gp-link { border: none; background: none; padding: 0; font-size: 12px; color: var(--tui-brand); cursor: pointer; font-family: inherit; }
+.gp-link-danger { color: var(--tui-danger); }
+.gp-link-tail { margin-left: auto; }
+.gp-link-locked { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: var(--tui-text-quiet); }
 
 @media (max-width: 767px) {
-  .gp-guardians { grid-template-columns: 1fr; }
+  .gp-cards { grid-template-columns: 1fr; }
 }
 </style>

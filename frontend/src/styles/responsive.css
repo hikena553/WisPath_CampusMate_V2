@@ -18,23 +18,32 @@ body {
 /* ===== 移动端样式覆盖 ===== */
 @media (max-width: 768px) {
 
-  /* --- Element Plus: Dialog 全屏化 --- */
+  /* --- Element Plus: Dialog 紧凑 + 居中（移除旧的 margin-top 偏移，交由全局 auto 外边距居中） --- */
   .el-dialog {
-    --el-dialog-width: 92vw !important;
-    margin-top: 5vh !important;
-    border-radius: 16px !important;
+    --el-dialog-width: 86vw !important;
+    border-radius: 14px !important;
+    max-height: 66vh;
+    max-height: 66dvh;
+  }
+
+  .el-overlay-dialog {
+    padding: 16px 10px !important;
   }
 
   .el-dialog__body {
-    padding: 16px !important;
+    padding: 14px 16px !important;
   }
 
   .el-dialog__header {
-    padding: 16px 16px 12px !important;
+    padding: 14px 16px 10px !important;
   }
 
   .el-dialog__footer {
-    padding: 12px 16px 16px !important;
+    padding: 10px 16px 14px !important;
+  }
+  .el-dialog__footer .el-button {
+    flex: 1;
+    margin-left: 0 !important;
   }
 
   /* --- Element Plus: Drawer 全宽 --- */
@@ -174,6 +183,9 @@ body {
 /* ===== 平板样式 ===== */
 @media (min-width: 768px) and (max-width: 1023px) {
   .el-dialog {
-    --el-dialog-width: 80vw !important;
+    --el-dialog-width: min(640px, 78vw) !important;
+  }
+  .el-overlay-dialog {
+    padding: 20px 16px !important;
   }
 }

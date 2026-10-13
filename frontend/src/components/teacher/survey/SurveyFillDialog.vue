@@ -2,15 +2,22 @@
   <el-dialog
     :model-value="modelValue"
     :title="survey?.title || '参与评价'"
-    :width="isMobile ? '94%' : '560px'"
+    :width="isMobile ? '90%' : '380px'"
     align-center
+    :close-on-click-modal="false"
+    class="tui-dialog"
     destroy-on-close
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div v-if="survey" class="sf-form">
-      <div class="sf-note">
+      <div class="tui-section-hint success">
         <el-icon><Lock /></el-icon>
-        <span>本问卷完全匿名：系统不记录填写人，也不保存任何可回溯身份的信息</span>
+        <span>本问卷完全匿名：系统不记录填写人，也不保存任何可回溯身份的信息；评分需逐项填写后才能提交。</span>
+      </div>
+
+      <div class="sf-ctx">
+        <el-icon><Tickets /></el-icon>
+        <span>{{ SURVEY_TARGET_LABEL[survey.target_type] }} · {{ survey.questions.length }} 个维度 · {{ survey.period || '未标注周期' }}</span>
       </div>
 
       <div class="sf-field">
@@ -26,27 +33,22 @@
       </div>
 
       <div class="sf-field">
-        <label class="sf-label">评分</label>
+        <label class="sf-label">评分<small>1–5 分，逐项必填</small></label>
         <div v-for="q in survey.questions" :key="q.key" class="sf-q">
           <span class="sf-q-label">{{ q.label }}</span>
           <el-rate v-model="scores[q.key]" :max="q.max || 5" />
         </div>
       </div>
 
-      <div class="sf-field">
-        <label class="sf-label">
-          建议
-          <small>选填，匿名展示</small>
-        </label>
-        <el-input
-          v-model="suggestion"
-          type="textarea"
-          :rows="3"
-          maxlength="300"
-          show-word-limit
-          placeholder="给这位老师一条建设性建议……"
-        />
-      </div>
+      <AiDraftField
+        v-model="suggestion"
+        label="建议"
+        :rows="3"
+        :maxlength="300"
+        placeholder="给这位老师一条建设性建议……"
+        :draft="aiDraft"
+        :points="aiPoints"
+      />
     </div>
 
     <template #footer>
@@ -60,12 +62,13 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Lock } from '@element-plus/icons-vue'
+import { Lock, Tickets } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { useAuthStore } from '@/stores/auth'
 import { getTeachers } from '@/api/user'
-import { submitSurvey, type PeerSurvey } from '@/api/peerSurvey'
+import { submitSurvey, SURVEY_TARGET_LABEL, type PeerSurvey } from '@/api/peerSurvey'
+import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 
 const props = defineProps<{ modelValue: boolean; survey: PeerSurvey | null }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>()
@@ -81,6 +84,20 @@ const saving = ref(false)
 
 /** 排除自己：不自评 */
 const candidates = computed(() => teachers.value.filter((t) => t.id !== auth.user?.id))
+
+function today() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** AI 草稿：结合问卷评价类型 + 被评老师 + 日期，写成真实教师口吻的匿名建议 */
+const aiDraft = computed(() => {
+  const t = teachers.value.find((x) => x.id === targetId.value)
+  const name = t?.name || '这位老师'
+  const target = SURVEY_TARGET_LABEL[props.survey?.target_type ?? 'peer']
+  return `${today()} 匿名反馈（${target}）：${name}老师日常对学生的情绪与诉求回应比较及时，沟通也较坦诚。建议继续保持陪伴投入，遇到突发情况及时留下书面记录、主动同步进展，便于家校与同事协同跟进。`
+})
+const aiPoints = ['课堂与陪伴投入', '沟通的及时性', '处事是否公正', '一条可改进的具体建议']
 
 const canSubmit = computed(() => {
   if (!props.survey || !targetId.value) return false
@@ -131,17 +148,22 @@ async function submit() {
 .sf-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
-.sf-note {
+.sf-ctx {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
-  color: #079455;
-  background: #ecfdf3;
-  border-radius: 10px;
-  padding: 9px 12px;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface-muted);
+  font-size: 11.5px;
+  color: var(--tui-text-tertiary);
+}
+.sf-ctx .el-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--tui-text-quiet);
 }
 .sf-label {
   display: flex;
@@ -149,27 +171,27 @@ async function submit() {
   gap: 8px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #475467;
-  margin-bottom: 8px;
+  color: var(--tui-text-secondary);
+  margin-bottom: 6px;
 }
 .sf-label small {
   font-size: 11px;
   font-weight: 400;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 .sf-q {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid #f2f4f7;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--tui-border);
 }
 .sf-q:last-child {
   border-bottom: none;
 }
 .sf-q-label {
-  font-size: 13px;
-  color: #344054;
+  font-size: 12.5px;
+  color: var(--tui-text);
 }
 </style>

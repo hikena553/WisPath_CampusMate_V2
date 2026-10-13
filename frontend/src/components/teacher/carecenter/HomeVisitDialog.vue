@@ -2,12 +2,30 @@
   <el-dialog
     :model-value="modelValue"
     title="新增家访记录"
-    :width="isMobile ? '94%' : '540px'"
+    :width="isMobile ? '90%' : '380px'"
     align-center
+    :close-on-click-modal="false"
     destroy-on-close
+    class="tui-dialog"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="hv-form">
+      <div class="tui-section-hint">
+        <el-icon><InfoFilled /></el-icon>
+        <span>记录后进入「家访时间轴」；填写「后续计划」的事项会自动进入关怀中心的待回访提醒。</span>
+      </div>
+
+      <!-- 上下文信息条 -->
+      <div class="hv-ctx">
+        <el-icon><User /></el-icon>
+        <span v-if="selectedStudent">
+          家访对象：<b>{{ selectedStudent.name }}</b>
+          <template v-if="selectedStudent.college"> · {{ selectedStudent.college }}</template>
+          <template v-if="selectedStudent.crisis_level"> · 预警等级 {{ selectedStudent.crisis_level }}</template>
+        </span>
+        <span v-else>请先选择学生：家访记录会归入该生成长档案并计入家访台账。</span>
+      </div>
+
       <div class="hv-grid2">
         <div class="hv-field">
           <label class="hv-label">学生</label>
@@ -17,29 +35,38 @@
         </div>
         <div class="hv-field">
           <label class="hv-label">日期</label>
-          <el-date-picker v-model="form.visit_date" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+          <el-date-picker
+            v-model="form.visit_date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择日期"
+            style="width:100%"
+          />
         </div>
       </div>
 
       <div class="hv-field">
         <label class="hv-label">沟通方式</label>
-        <el-radio-group v-model="form.method">
-          <el-radio-button v-for="m in methodOptions" :key="m" :value="m">
-            {{ VISIT_METHOD_LABEL[m] }}
-          </el-radio-button>
-        </el-radio-group>
+        <el-select v-model="form.method" placeholder="请选择沟通方式" style="width:100%">
+          <el-option v-for="m in methodOptions" :key="m" :label="VISIT_METHOD_LABEL[m]" :value="m" />
+        </el-select>
       </div>
 
-      <div class="hv-field">
-        <label class="hv-label">沟通内容</label>
-        <el-input v-model="form.content" type="textarea" :rows="4" maxlength="600" show-word-limit
-          placeholder="家长反馈、学生在校表现、达成的共识……" />
-      </div>
+      <AiDraftField
+        v-model="form.content"
+        label="沟通内容"
+        required
+        :rows="4"
+        :maxlength="600"
+        placeholder="家长反馈、学生在校表现、达成的共识……"
+        :draft="aiDraft"
+        :points="aiPoints"
+      />
 
       <div class="hv-field">
         <label class="hv-label">后续计划</label>
         <el-input v-model="form.follow_up" type="textarea" :rows="2" maxlength="300" show-word-limit
-          placeholder="下一步要跟进什么（选填）" />
+          placeholder="下一步要跟进什么（选填），例如：两周后电话回访家长" />
       </div>
     </div>
 
@@ -52,8 +79,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { InfoFilled, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 import { createHomeVisit, VISIT_METHOD_LABEL, type HomeVisitMethod } from '@/api/careCenter'
 
@@ -80,6 +109,28 @@ const form = reactive<{
 })
 
 const valid = computed(() => !!form.student_id && !!form.visit_date && form.content.trim().length > 0)
+
+/** 已选学生（上下文信息条与 AI 草稿共用） */
+const selectedStudent = computed(
+  () => students.value.find((s) => s.id === form.student_id) || null
+)
+
+/** AI 草稿：结合沟通方式 + 学生姓名 + 日期 */
+const aiDraft = computed(() => {
+  const d = form.visit_date
+  const n = selectedStudent.value?.name || '该生'
+  const m = VISIT_METHOD_LABEL[form.method]
+  return `${d}，通过${m}与${n}的家长进行了沟通。向家长反馈了${n}近期在校的学习与情绪状态，说明其表现与需要关注的地方；家长也介绍了孩子在家的情况与顾虑。双方就共同配合的方向达成共识，家长表示会继续支持与督促。`
+})
+
+/** AI 建议要点 */
+const aiPoints = computed<string[]>(() => [
+  '沟通方式与对象',
+  '学生在校表现',
+  '家长反馈与顾虑',
+  '达成的共识',
+  '后续跟进计划',
+])
 
 watch(
   () => props.modelValue,
@@ -123,12 +174,28 @@ async function submit() {
 </script>
 
 <style scoped>
-.hv-form { display: flex; flex-direction: column; gap: 16px; }
+.hv-form { display: flex; flex-direction: column; gap: 12px; }
+.hv-form .tui-section-hint { margin-bottom: 0; }
+
+.hv-ctx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.hv-ctx .el-icon { flex-shrink: 0; color: var(--tui-text-tertiary); }
+.hv-ctx b { color: var(--tui-text); font-weight: 600; }
+
 .hv-label {
   display: block;
   font-size: 12.5px;
   font-weight: 600;
-  color: #475467;
+  color: var(--tui-text-secondary);
   margin-bottom: 8px;
 }
 .hv-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
