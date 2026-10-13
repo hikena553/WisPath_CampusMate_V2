@@ -66,7 +66,7 @@ async def chat_api(
         conv_id = conv.id
 
     async def generate():
-        async for event in chat(req.message, req.history, user, conv_id=conv_id, file_url=req.file_url, deep_think=req.deep_think):
+        async for event in chat(req.message, req.history, user, conv_id=conv_id, file_url=req.file_url, deep_think=req.deep_think, answer_mode=req.answer_mode):
             if isinstance(event, dict):
                 if event["type"] == "reasoning":
                     yield f"event: reasoning\ndata: {json.dumps(event['content'], ensure_ascii=False)}\n\n"

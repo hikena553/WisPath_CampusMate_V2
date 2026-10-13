@@ -344,7 +344,7 @@ watch(() => props.visible, async (v) => {
   }
 })
 
-// 挂断/关闭时：批量上报本通电话的情绪记录（情绪垃圾桶）
+// 挂断/关闭时：批量上报本通电话的情绪记录（情绪树洞）
 async function flushEmotionRecords() {
   const timeline = emotionDetection.timeline.value
   if (!timeline.length) return

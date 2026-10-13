@@ -1,5 +1,8 @@
 from pydantic import BaseModel, field_validator
 
+# 回答模式：normal 常规 / essence 本质回答（先给本质与根因，再给推导依据）
+ANSWER_MODES = {"normal", "essence"}
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -19,7 +22,14 @@ class ChatRequest(BaseModel):
     file_url: str | None = None
     conversation_id: int | None = None
     deep_think: bool = False
+    answer_mode: str = "normal"
     skip_conversation: bool = False
+
+    @field_validator("answer_mode")
+    @classmethod
+    def validate_answer_mode(cls, v: str) -> str:
+        v = (v or "normal").strip().lower()
+        return v if v in ANSWER_MODES else "normal"
 
 
 class Suggestion(BaseModel):

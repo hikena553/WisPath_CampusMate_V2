@@ -271,6 +271,23 @@
             </button>
           </el-tooltip>
 
+          <!-- Essence Toggle（本质回答：先给结论/根因，再给可追溯依据） -->
+          <el-tooltip content="本质回答：先给结论与根因，再给依据" placement="top" :disabled="isMobile">
+            <button
+              type="button"
+              :class="['toggle-btn', { active: essenceEnabled }]"
+              :disabled="loading"
+              @click="essenceEnabled = !essenceEnabled"
+            >
+              <svg class="essence-icon toggle-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" />
+                <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.4" />
+                <circle cx="8" cy="8" r="1.1" fill="currentColor" />
+              </svg>
+              <span>本质回答</span>
+            </button>
+          </el-tooltip>
+
           <!-- Upload buttons -->
           <el-dropdown trigger="click" @command="handleUploadCommand" :disabled="loading">
             <button type="button" class="action-icon-btn" :disabled="loading">
@@ -364,6 +381,8 @@ const { agentName } = useSiteConfig()
 const charState = ref<'idle' | 'thinking' | 'speaking'>('idle')
 const charBubble = ref('')
 const deepThinkEnabled = ref(false)
+// 本质回答：先给结论/根因，再给可追溯的依据（与深度思考可独立叠加）
+const essenceEnabled = ref(false)
 const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
@@ -1030,6 +1049,7 @@ async function send() {
       cid || undefined,
       deepThinkEnabled.value,
       skipConv,
+      essenceEnabled.value ? 'essence' : 'normal',
       (meta) => {
         // 服务端已把本轮回复落库：同步标题并标记已保存，避免前端重复写入
         metaReceived = true
@@ -1749,6 +1769,15 @@ onUnmounted(() => {
   transition: color .26s cubic-bezier(.4, 0, .2, 1);
 }
 
+/* 本质回答胶囊按钮：靶心图标，寓意"直击本质" */
+.essence-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transition: color .26s cubic-bezier(.4, 0, .2, 1);
+}
+
 /* 发送按钮 */
 .send-btn {
   display: inline-flex;
@@ -1911,6 +1940,7 @@ onUnmounted(() => {
   .chat-textarea { font-size: 14px; }
   .action-icon-btn { width: 28px; height: 28px; }
   .deep-think-icon { width: 14px; height: 14px; }
+  .essence-icon { width: 14px; height: 14px; }
   .send-btn { width: 30px; height: 30px; }
   .msg-actions { opacity: 1; }
 }

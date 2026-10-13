@@ -12,7 +12,7 @@ from app.core.database import SessionLocal
 from app.models.user import User, UserRole
 from app.models.knowledge import KnowledgeItem
 from app.models.conversation import Conversation, ConversationMessage
-from app.services.llm_service import build_system_prompt
+from app.services.llm_service import build_system_prompt, build_answer_mode_note
 from app.services.tools import TOOL_DEFINITIONS, TEACHER_TOOL_DEFINITIONS, execute_tool
 from app.services.crisis_service import detect_crisis_keywords, save_crisis_summary
 from app.services.llm_service import _get_client, _get_llm_config
@@ -261,7 +261,7 @@ async def _build_file_context(file_url: str, message: str) -> str:
     )
 
 
-async def chat(message: str, history: list[dict], user: User, conv_id: int | None = None, file_url: str | None = None, deep_think: bool = False):
+async def chat(message: str, history: list[dict], user: User, conv_id: int | None = None, file_url: str | None = None, deep_think: bool = False, answer_mode: str = "normal"):
     system_prompt = build_system_prompt(user)
 
     from app.services.student_profile_engine import get_latest_profile
@@ -286,6 +286,10 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
         system_content += strategy_notes
     if memory_context:
         system_content += f"\n\n关于该生的历史记忆：{memory_context}"
+    # 本质回答模式：置于最后，优先级高于基础提示词中的字数与风格约束
+    answer_mode_note = build_answer_mode_note(answer_mode)
+    if answer_mode_note:
+        system_content += "\n" + answer_mode_note
 
     messages = [{"role": "system", "content": system_content}]
     for h in history[-10:]:

@@ -121,6 +121,7 @@ def build_system_prompt(user: User | None = None) -> str:
 7. 查知识 → query_knowledge | 8. 查风景 → query_sceneries | 9. 查通知 → query_announcements
 10. 成绩分析 → analyze_grades | 11. 课表分析 → analyze_schedule | 12. 成长分析 → analyze_growth
 13. 失物招领 → search_lost_found（检索）+ create_lost_found（登记）
+14. 求助辅导员 → create_help_request（发起求助，可匿名）+ query_my_help_requests（查看回复）
 
 ## 失物招领（重点能力）
 学生说"我丢了…"、"我的…不见了"、"帮我找找…"、"我捡到了…"时，按下面流程处理，不要让学生自己去失物招领页面：
@@ -146,6 +147,8 @@ def build_system_prompt(user: User | None = None) -> str:
 
 ## 规则
 - 请假/获奖/失物招领立即调用对应工具，不要让学生去其他页面
+- 学生说"我有困难/想找老师帮忙/求助辅导员"时，用 create_help_request 直接帮他提交（学业困扰用 academic、生活困难用 life、心理情绪用 mental、人际用 relation）；学生要求匿名时把 anonymous 传 true；学生问"我的求助/老师回复了吗"时用 query_my_help_requests
+- 涉及心理情绪困扰时先共情安抚，再征得同意后帮其向辅导员求助
 - 回答简洁，控制在150字以内
 - 信息模糊时反问补充，确认后再执行
 - 请假类型映射：比赛/竞赛→competition，生病→sick，事假/个人→personal，其他→other
@@ -171,9 +174,12 @@ def build_system_prompt(user: User | None = None) -> str:
 14. 学情底座 → query_learning_events
 15. AI 学情诊断 → query_student_insight
 16. 审批流程 → query_my_workflows
+17. 求助受理 → query_help_requests / reply_help_request
+18. 开源复用 → search_reference_library / generate_page_scaffold
 
 ## 规则
 - 审批操作前向教师确认，避免误操作
+- 教师说"有哪些学生求助/待受理求助/学生求助情况" → 用 query_help_requests；"回复这个求助/帮他处理一下/告诉他…" → 用 reply_help_request 受理并回复，形成帮扶闭环（回复前先向教师确认内容；已解决用 resolved，仍需跟进用 processing）
 - 回答简洁专业，控制在200字以内
 - 教师说"分析这个请假" → 用 analyze_leave 进行AI分析
 - 教师说"我的待办/要跟进谁" → 用 query_teacher_tasks；"帮我记一下要联系某某" → 用 create_teacher_task
@@ -183,9 +189,28 @@ def build_system_prompt(user: User | None = None) -> str:
 - 教师说"这个月要关怀谁" → 用 query_care_calendar；"某某的家长沟通记录" → 用 query_guardian_logs
 - 教师说"诊断一下某某/某某最近怎么样" → 用 query_student_insight（只依据返回的证据清单，不额外推断）
 - 教师说"某某的学情数据" → 用 query_learning_events；"我的审批流程" → 用 query_my_workflows
+- 教师/管理员想复用成熟开源方案或搭新页面 → 用 search_reference_library 检索可合法复用的开源项目（含许可证与署名要求），或直接用 generate_page_scaffold 生成页面骨架；严禁搬运闭源项目代码，只复用许可证允许的范围
 - 只能操作教师名下的学生，学生不在名下时如实说明
 - 回答使用纯文本，避免 Markdown 标记（#、列表、代码块等），需要强调重点时可用 **加粗**
 - 不知道的说"我需要确认后回答你" """
+
+
+# 「本质回答」模式指令：学生开启后，回答要先给最本质的结论/根因，再给可追溯的依据。
+# 目标是让回答"直击本质"而不是罗列表面信息，同时杜绝无依据的编造。
+ESSENCE_MODE_NOTE = """
+## 本质回答模式（本轮已开启，优先级高于上面的字数与风格要求）
+请按下面的结构作答，帮助学生"看到问题的本质"：
+1. 先给本质：开头一到两句直接给出最核心的结论或根因，不铺垫、不客套、不复述问题。
+2. 再给依据：说明这个结论是怎么得出的——引用上面检索到的校园知识、查询到的真实数据作为证据，讲清"因为…所以…"的推导链条。
+3. 若涉及概念或原理，用一句话点破其背后的道理（第一性原理），而不是只给操作步骤。
+4. 标注边界：信息不足或存在不确定时，明确指出"哪一部分不确定、需要向谁/通过什么渠道确认"，绝不编造。
+5. 篇幅放宽到 400 字以内，仍使用纯文本与 **加粗**，不要使用 Markdown 标题、列表符号或代码块。
+"""
+
+
+def build_answer_mode_note(answer_mode: str | None) -> str:
+    """按回答模式返回附加到系统提示词后的指令块；常规模式返回空串。"""
+    return ESSENCE_MODE_NOTE if (answer_mode or "").strip().lower() == "essence" else ""
 
 
 def speech_to_text(audio_bytes: bytes, filename: str) -> str:
