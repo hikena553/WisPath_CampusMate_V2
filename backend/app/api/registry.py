@@ -46,6 +46,7 @@ from app.api.learning_event import router as learning_event_router
 from app.api.workflow import router as workflow_router
 from app.api.help_request import router as help_request_router
 from app.api.reference import router as reference_router
+from app.api.ml_training import router as ml_training_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -94,6 +95,7 @@ ROUTERS = [
     workflow_router,
     help_request_router,
     reference_router,
+    ml_training_router,
 ]
 
 

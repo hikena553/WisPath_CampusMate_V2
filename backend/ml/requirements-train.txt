@@ -1,0 +1,6 @@
+# FaceExpressionNet 训练依赖（离线训练用，Web 运行时不需要）
+# 安装：pip install -r backend/ml/requirements-train.txt
+torch>=2.2
+numpy>=1.24
+pillow>=10.0
+matplotlib>=3.7
