@@ -156,10 +156,16 @@
         </div>
       </div>
     </section>
-  </div>
 
-  <!-- 站内阅读器：点击资讯在应用内打开，不跳出 -->
-  <ArticleReader ref="readerRef" />
+    <!-- 站内阅读器：点击资讯在应用内打开，不跳出。
+         必须放在 .campus-page 内部 —— 它原先与 .campus-page 同级，
+         导致本组件是「多根节点（Fragment）」，而 Vue 的 <Transition>
+         无法对 Fragment 根做动画，控制台会报
+         「Component inside <Transition> renders non-element root node that cannot be animated」，
+         且整个页面的切换动画会失效。
+         阅读器自己会 Teleport 抽屉到 body，放在这里不会影响布局。 -->
+    <ArticleReader ref="readerRef" />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -423,7 +429,9 @@ onMounted(async () => {
   -ms-overflow-style: none;
 }
 .campus-page::-webkit-scrollbar { display: none; }
-.campus-page > *:not(.campus-carousel) {
+/* 直接子元素统一去掉左右内边距（轮播与阅读器除外：
+   轮播自带边距、阅读器是 Teleported 抽屉无布局盒） */
+.campus-page > *:not(.campus-carousel):not(.article-reader-drawer) {
   padding-left: 0;
   padding-right: 0;
 }
