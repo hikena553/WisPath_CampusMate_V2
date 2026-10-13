@@ -80,11 +80,11 @@
         </div>
         <div class="contact-item" @click="openMessages">
           <div class="contact-icon" style="background: rgba(103,194,58,0.1); color: #67c23a;">
-            <el-icon :size="20"><Message /></el-icon>
+            <DtIcon name="message" :size="20" />
           </div>
           <div class="contact-info">
             <div class="contact-name">消息中心</div>
-            <div class="contact-desc">群聊、私聊、联系辅导员、系统通知</div>
+            <div class="contact-desc">群聊、私聊、辅导员、小绵管家</div>
           </div>
           <el-badge v-if="unreadCount" :value="unreadCount" class="contact-badge" />
           <el-icon class="contact-arrow"><ArrowRight /></el-icon>
@@ -138,26 +138,34 @@
 
     <!-- 子页面：办事服务表单 -->
     <transition name="slide-left">
-      <div v-if="currentPage" :class="['sub-page', { 'chat-mode': currentPage === 'tutor' }]">
+      <div v-if="currentPage" :class="['sub-page', { 'chat-mode': isChatMode }]">
         <!-- 非聊天页面显示标准头部 -->
-        <div v-if="currentPage !== 'tutor'" class="sub-page-header">
+        <div v-if="!isChatMode" class="sub-page-header">
           <el-button text circle class="back-btn" @click="closePage">
             <el-icon :size="20"><ArrowLeft /></el-icon>
           </el-button>
           <div class="sub-page-title">{{ pageTitle }}</div>
-          <div class="sub-page-placeholder"></div>
+          <button
+            v-if="currentPage === 'notifications' && notifUnread"
+            type="button"
+            class="sub-page-action"
+            @click="markAllStudentNotificationsRead"
+          >
+            全部已读
+          </button>
+          <div v-else class="sub-page-placeholder"></div>
         </div>
 
         <!-- 聊天页面显示简洁头部 -->
-        <div v-if="currentPage === 'tutor'" class="chat-header">
+        <div v-if="isChatMode" class="chat-header">
           <el-button text circle class="back-btn" @click="closePage">
             <el-icon :size="20"><ArrowLeft /></el-icon>
           </el-button>
-          <div class="chat-header-title">{{ chatPartnerName }}</div>
+          <div class="chat-header-title">{{ chatHeaderTitle }}</div>
           <div class="chat-header-placeholder"></div>
         </div>
 
-        <div :class="['sub-page-content', { 'chat-content': currentPage === 'tutor' }]">
+        <div :class="['sub-page-content', { 'chat-content': isChatMode }]">
           <!-- 请假申请 -->
           <div v-if="currentPage === 'leave'">
             <div class="form-tip">
@@ -400,6 +408,36 @@
 
           <!-- 消息中心 -->
           <div v-if="currentPage === 'messages'" class="messages-page">
+            <!-- 小绵管家：置顶常驻会话（自动推送最新资讯 / 总结对话） -->
+            <div class="tutor-entry butler-entry" @click="openButler">
+              <div class="tutor-entry-avatar">
+                <span class="butler-entry-avatar">
+                  <img v-if="siteMascot" :src="siteMascot" alt="小绵管家" />
+                  <span v-else>绵</span>
+                </span>
+                <span class="butler-entry-online" />
+              </div>
+              <div class="tutor-entry-info">
+                <div class="tutor-entry-name">{{ agentName || '小绵' }}管家</div>
+                <div class="tutor-entry-desc">{{ butlerPreview }}</div>
+              </div>
+              <span class="dt-tag">常驻</span>
+              <DtIcon name="arrow" :size="16" class="tutor-entry-arrow" />
+            </div>
+
+            <!-- 通知：站内通知入口（审批 / 请假 / 公告 / 预警） -->
+            <div class="tutor-entry" @click="openNotifications">
+              <div class="tutor-entry-avatar">
+                <span class="notice-entry-avatar"><DtIcon name="bell" :size="20" /></span>
+              </div>
+              <div class="tutor-entry-info">
+                <div class="tutor-entry-name">通知</div>
+                <div class="tutor-entry-desc">审批、请假、公告与预警提醒</div>
+              </div>
+              <el-badge v-if="notifUnread" :value="notifUnread > 99 ? '99+' : notifUnread" class="contact-badge" />
+              <DtIcon name="arrow" :size="16" class="tutor-entry-arrow" />
+            </div>
+
             <!-- 辅导员入口 -->
             <div v-if="auth.user?.tutor_id" class="tutor-entry" @click="startTutorChat">
               <div class="tutor-entry-avatar">
@@ -412,10 +450,34 @@
               <el-icon class="tutor-entry-arrow"><ArrowRight /></el-icon>
             </div>
 
+            <!-- 群聊（已加入的群：扫码入群后出现在这里） -->
+            <template v-if="myGroups.length">
+              <div class="mcenter-section-head">
+                <span class="mcenter-section-title">群聊</span>
+                <span class="mcenter-section-count">{{ myGroups.length }} 个</span>
+              </div>
+              <div class="messages-list">
+                <div v-for="g in myGroups" :key="g.id" class="message-item" @click="openGroupChat(g)">
+                  <div class="message-avatar">
+                    <el-avatar :size="48" shape="square" :src="g.avatar || undefined">{{ g.name?.[0] }}</el-avatar>
+                    <div v-if="g.unread_count" class="message-unread">{{ g.unread_count > 99 ? '99+' : g.unread_count }}</div>
+                  </div>
+                  <div class="message-info">
+                    <div class="message-top">
+                      <span class="message-name">{{ g.name }}</span>
+                      <DtIcon v-if="g.is_muted" name="bellOff" :size="13" class="muted-icon" />
+                      <span class="message-time">{{ formatDate(g.last_message_time || '') }}</span>
+                    </div>
+                    <div class="message-preview">{{ g.last_message || '暂无消息' }}</div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
             <!-- 消息列表 -->
             <div class="messages-list">
               <div v-if="conversationList.length === 0" class="empty-messages">
-                <el-icon :size="48" color="#d0d5dd"><ChatDotRound /></el-icon>
+                <DtIcon name="empty" :size="48" style="color: var(--dt-text-quiet);" />
                 <span>暂无消息</span>
               </div>
               <div v-for="conv in conversationList" :key="conv.user_id" class="message-item" @click="openConversation(conv)">
@@ -438,7 +500,7 @@
           <div v-if="currentPage === 'tutor'" class="chat-page">
             <div class="chat-messages" ref="tutorMsgRef">
               <div v-if="tutorMessages.length === 0" class="empty-chat">
-                <el-icon :size="48" color="#d0d5dd"><ChatDotRound /></el-icon>
+                <DtIcon name="empty" :size="48" style="color: var(--dt-text-quiet);" />
                 <span>暂无消息，发送第一条消息吧</span>
               </div>
               <div v-for="msg in tutorMessages" :key="msg.id" :class="['chat-msg', msg.sender_id === auth.user?.id ? 'mine' : 'theirs']">
@@ -462,6 +524,75 @@
                 </button>
               </div>
             </div>
+          </div>
+
+          <!-- 小绵管家会话（钉钉式）：自动推送最新资讯 / 总结对话内容 -->
+          <div v-if="currentPage === 'butler'" class="chat-page butler-page">
+            <ButlerChat role="student" />
+          </div>
+
+          <!-- 群聊会话（钉钉式）：群消息 + 发言 -->
+          <div v-if="currentPage === 'group'" class="chat-page">
+            <div class="chat-messages" ref="groupMsgRef">
+              <div v-if="groupMessages.length === 0" class="empty-chat">
+                <DtIcon name="empty" :size="44" style="color: var(--dt-text-quiet);" />
+                <span>暂无消息，发送第一条消息吧</span>
+              </div>
+              <div
+                v-for="msg in groupMessages"
+                :key="msg.id"
+                :class="['chat-msg', msg.sender_id === auth.user?.id ? 'mine' : 'theirs']"
+              >
+                <div v-if="msg.sender_id !== auth.user?.id" class="chat-msg-sender">{{ msg.sender_name }}</div>
+                <div class="chat-msg-bubble">{{ msg.content }}</div>
+                <div class="chat-msg-time">{{ formatDate(msg.created_at) }}</div>
+              </div>
+            </div>
+            <div class="chat-input-bar">
+              <div class="chat-input-container">
+                <textarea
+                  v-model="groupNewMsg"
+                  placeholder="输入消息..."
+                  class="chat-textarea"
+                  rows="1"
+                  @keydown.enter.prevent="sendGroupMsg"
+                ></textarea>
+                <button type="button" class="chat-send-btn" :disabled="!groupNewMsg.trim()" @click="sendGroupMsg">
+                  <el-icon :size="18"><Promotion /></el-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 通知列表（钉钉式列表行：未读点 + 标题/正文/时间） -->
+          <div v-if="currentPage === 'notifications'" class="notif-page">
+            <div v-if="notifLoading" class="empty-messages">
+              <el-icon class="is-loading" :size="22"><Loading /></el-icon>
+              <span>加载中…</span>
+            </div>
+            <div v-else-if="!notificationList.length" class="empty-messages">
+              <DtIcon name="bell" :size="44" style="color: var(--dt-text-quiet);" />
+              <span>暂无通知</span>
+            </div>
+            <template v-else>
+              <button
+                v-for="n in notificationList"
+                :key="n.id"
+                type="button"
+                class="notif-row"
+                :class="{ unread: !n.is_read }"
+                @click="openStudentNotification(n)"
+              >
+                <span class="notif-dot" :class="{ hidden: n.is_read }" />
+                <span class="notif-main">
+                  <span class="notif-top">
+                    <span class="notif-title">{{ n.title }}</span>
+                    <span class="notif-time">{{ formatDate(n.created_at) }}</span>
+                  </span>
+                  <span class="notif-content">{{ n.content }}</span>
+                </span>
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -534,7 +665,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -543,15 +674,30 @@ import { createTicket, getTickets, cancelTicket } from '@/api/service'
 import { getLostFoundItems, createLostFoundItem, getLostFoundItem } from '@/api/lostFound'
 import { getMyMaterials } from '@/api/material'
 import { getConversations } from '@/api/messages'
+// 群聊：扫码入群后学生端可在消息中心查看与发言
+import {
+  getGroups, getGroupMessages, sendGroupMessage, markGroupRead,
+  type GroupOut, type GroupMessageOut,
+} from '@/api/groups'
 import { getStudentAnnouncements, getUnreadCount } from '@/api/announcement'
+// 站内通知：审批 / 请假 / 公告 / 预警等事件，学生端在消息中心内查看
+import {
+  getNotifications, getNotificationCount, markNotificationsRead, markAllNotificationsRead,
+  type Notification as NotificationItem,
+} from '@/api/notification'
 import { usePolling } from '@/composables/usePolling'
 import AnnouncementPanel from '@/components/announcement/AnnouncementPanel.vue'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
+// 小绵管家：教师端与学生端共用的常驻会话（自动推送资讯 + 总结对话）
+import ButlerChat from '@/components/butler/ButlerChat.vue'
+// 钉钉风格图标（对齐钉钉设计的组件图案）
+import DtIcon from '@/components/common/DtIcon.vue'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useButlerPreview } from '@/composables/useButlerPreview'
 import {
-  Calendar, Document, Promotion, ChatDotRound, Message,
+  Calendar, Document, Promotion, ChatDotRound,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened
+  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -559,6 +705,8 @@ const auth = useAuthStore()
 
 // 吉祥物与站点名称取自站点配置：管理端变更后学生端同步
 const { siteMascot, siteName, agentName } = useSiteConfig()
+// 小绵管家入口的动态摘要（取最新一条资讯标题）
+const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
 const currentPage = ref<string | null>(null)
 const submitting = ref(false)
@@ -616,6 +764,7 @@ const pageTitle = computed(() => {
     project: '项目申请',
     lostfound: '失物招领',
     messages: '消息中心',
+    notifications: '通知',
     allRecords: '全部申请',
     announcements: '班级公告'
   }
@@ -632,6 +781,129 @@ const chatPartnerName = computed(() => {
 })
 
 const chatTextareaRef = ref<HTMLTextAreaElement>()
+
+// 聊天态页面：辅导员私聊 + 小绵管家会话 + 群聊共用聊天布局
+const isChatMode = computed(
+  () => currentPage.value === 'tutor' || currentPage.value === 'butler' || currentPage.value === 'group'
+)
+const chatHeaderTitle = computed(() => {
+  if (currentPage.value === 'butler') return `${agentName.value || '小绵'}管家`
+  if (currentPage.value === 'group') return groupActive.value?.name || '群聊'
+  return chatPartnerName.value
+})
+
+// ===== 群聊（加入的群；扫码入群后在此查看） =====
+const myGroups = ref<GroupOut[]>([])
+const groupMessages = ref<GroupMessageOut[]>([])
+const groupNewMsg = ref('')
+const groupActive = ref<GroupOut | null>(null)
+const groupMsgRef = ref<HTMLElement>()
+
+async function loadMyGroups() {
+  try {
+    myGroups.value = await getGroups()
+  } catch {
+    myGroups.value = []
+  }
+}
+
+function scrollGroupToBottom() {
+  const el = groupMsgRef.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+async function openGroupChat(g: GroupOut) {
+  groupActive.value = g
+  currentPage.value = 'group'
+  try {
+    groupMessages.value = await getGroupMessages(g.id)
+    markGroupRead(g.id).catch(() => {})
+    g.unread_count = 0
+  } catch {
+    groupMessages.value = []
+  }
+  await nextTick()
+  scrollGroupToBottom()
+}
+
+async function sendGroupMsg() {
+  const text = groupNewMsg.value.trim()
+  const g = groupActive.value
+  if (!text || !g) return
+  try {
+    await sendGroupMessage(g.id, text)
+    groupMessages.value.push({
+      id: Date.now(),
+      group_id: g.id,
+      sender_id: auth.user?.id ?? 0,
+      sender_name: auth.userName || '我',
+      sender_avatar: null,
+      content: text,
+      created_at: new Date().toISOString(),
+    })
+    groupNewMsg.value = ''
+    await nextTick()
+    scrollGroupToBottom()
+  } catch {
+    ElMessage.error('发送失败')
+  }
+}
+
+/** 打开小绵管家会话：自动推送最新资讯 / 总结对话内容 */
+function openButler() {
+  currentPage.value = 'butler'
+}
+
+// ===== 站内通知（学生端消息中心的「通知」子页，闭环：列表 → 已读 → 跳转） =====
+const notificationList = ref<NotificationItem[]>([])
+const notifLoading = ref(false)
+const notifUnread = ref(0)
+
+async function loadNotifUnread() {
+  try {
+    const r = await getNotificationCount()
+    notifUnread.value = r.unread ?? 0
+  } catch { /* 网络异常时保持 0，不影响页面 */ }
+}
+
+async function openNotifications() {
+  currentPage.value = 'notifications'
+  notifLoading.value = true
+  try {
+    notificationList.value = await getNotifications({ page_size: 50 })
+    notifUnread.value = notificationList.value.filter(n => !n.is_read).length
+  } catch {
+    notificationList.value = []
+  } finally {
+    notifLoading.value = false
+  }
+}
+
+async function openStudentNotification(n: NotificationItem) {
+  if (!n.is_read) {
+    try {
+      await markNotificationsRead([n.id])
+      n.is_read = true
+      notifUnread.value = Math.max(0, notifUnread.value - 1)
+    } catch { /* 标记失败不阻断跳转 */ }
+  }
+  if (n.link) {
+    router.push(n.link)
+  } else {
+    ElMessage.info(n.content || '该通知暂无关联页面')
+  }
+}
+
+async function markAllStudentNotificationsRead() {
+  if (!notifUnread.value) return
+  try {
+    await markAllNotificationsRead()
+    notificationList.value = notificationList.value.map(n => ({ ...n, is_read: true }))
+    notifUnread.value = 0
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
 
 // 最近记录（最多显示3条）
 const recentRecords = computed(() => {
@@ -785,10 +1057,17 @@ function startTutorChat() {
 
 async function loadTutorChat(tutorId: number) {
   try {
-    const { getMessages } = await import('@/api/messages')
+    const { getMessages, markRead } = await import('@/api/messages')
     const msgs = await getMessages(tutorId)
     tutorMessages.value = msgs as any
     tutorIdRef.value = tutorId
+    // 打开会话即标记已读，并清零列表未读角标（此前打开会话后红点不清）
+    await markRead(tutorId)
+    const conv = conversationList.value.find(c => c.user_id === tutorId)
+    if (conv && conv.unread_count) {
+      unreadCount.value = Math.max(0, unreadCount.value - conv.unread_count)
+      conv.unread_count = 0
+    }
   } catch {
     tutorMessages.value = []
   }
@@ -1087,6 +1366,9 @@ async function submitLostFound() {
 
 onMounted(() => {
   loadData()
+  void refreshButlerPreview()
+  void loadNotifUnread()
+  void loadMyGroups()
   announcePolling.start()
 })
 </script>
@@ -1647,7 +1929,9 @@ onMounted(() => {
 @media (max-width: 767px) {
   .sub-page {
     bottom: 56px;
-    height: auto;
+    /* 显式高度：为内部 chat-page / 消息列表的百分比与 flex 高度提供确定基准，
+       否则 position:fixed + height:auto 会让嵌套滚动区失去高度约束而无法滚动 */
+    height: calc(100% - 56px);
   }
 }
 
@@ -1687,6 +1971,7 @@ onMounted(() => {
 
 .sub-page-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px;
 }
@@ -2063,10 +2348,10 @@ onMounted(() => {
   gap: 10px;
 }
 
-/* 消息中心 */
+/* 消息中心（钉钉式：分组卡片 + 56/64px 列表行） */
 .messages-page {
-  background: #fff;
-  border-radius: 16px;
+  background: var(--dt-surface);
+  border-radius: var(--dt-radius);
   overflow: hidden;
 }
 
@@ -2076,13 +2361,13 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  background: #fff;
-  border-bottom: 8px solid #f5f7fa;
+  background: var(--dt-surface);
+  border-bottom: 8px solid var(--dt-bg);
   cursor: pointer;
 }
 
 .tutor-entry:active {
-  background: #f5f7fa;
+  background: var(--dt-surface-press);
 }
 
 .tutor-entry-avatar {
@@ -2092,23 +2377,219 @@ onMounted(() => {
 
 .tutor-entry-info {
   flex: 1;
+  min-width: 0;
 }
 
 .tutor-entry-name {
   font-size: 15px;
-  font-weight: 500;
-  color: #333;
+  font-weight: 600;
+  color: var(--dt-text);
   margin-bottom: 2px;
 }
 
 .tutor-entry-desc {
-  font-size: 12px;
-  color: #999;
+  font-size: 12.5px;
+  color: var(--dt-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tutor-entry-arrow {
-  color: #ccc;
+  color: var(--dt-text-quiet);
   font-size: 14px;
+}
+
+/* ===== 小绵管家：置顶常驻会话（钉钉式） ===== */
+.butler-entry {
+  background: linear-gradient(180deg, var(--dt-primary-soft), #fff 82%);
+}
+
+.butler-entry:active {
+  background: var(--dt-primary-soft);
+}
+
+.butler-entry .tutor-entry-name {
+  font-weight: 600;
+}
+
+.butler-entry .dt-tag {
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.butler-entry-avatar {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dt-primary-soft);
+  color: var(--dt-primary-strong);
+  font-weight: 600;
+}
+
+.butler-entry-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.butler-entry-online {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dt-success);
+  border: 2px solid #fff;
+}
+
+.butler-page {
+  background: var(--dt-bg);
+}
+
+/* ===== 消息中心：分组小标题 / 群聊补充样式 ===== */
+.mcenter-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 6px;
+  background: var(--dt-surface);
+}
+
+.mcenter-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dt-text-tertiary);
+}
+
+.mcenter-section-count {
+  font-size: 12px;
+  color: var(--dt-text-quiet);
+}
+
+.muted-icon {
+  color: var(--dt-text-quiet);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.chat-msg-sender {
+  font-size: 11.5px;
+  color: var(--dt-text-quiet);
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+/* ===== 通知入口 + 通知列表（钉钉式） ===== */
+.notice-entry-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--dt-primary-soft);
+  color: var(--dt-primary-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sub-page-action {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--dt-primary);
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.notif-page {
+  background: var(--dt-surface);
+  border-radius: var(--dt-radius);
+  overflow: hidden;
+}
+
+.notif-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 1px solid var(--dt-divider);
+  background: var(--dt-surface);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s var(--dt-ease);
+}
+
+.notif-row:last-child {
+  border-bottom: none;
+}
+
+.notif-row:active {
+  background: var(--dt-surface-press);
+}
+
+.notif-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dt-danger);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.notif-dot.hidden {
+  background: transparent;
+}
+
+.notif-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.notif-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.notif-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dt-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-time {
+  font-size: 11px;
+  color: var(--dt-text-quiet);
+  flex-shrink: 0;
+}
+
+.notif-content {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dt-text-tertiary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* 消息列表 */
@@ -2124,7 +2605,7 @@ onMounted(() => {
   justify-content: center;
   gap: 12px;
   padding: 60px 0;
-  color: #999;
+  color: var(--dt-text-quiet);
 }
 
 .empty-messages span {
@@ -2135,15 +2616,16 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  background: #fff;
-  border-bottom: 1px solid #f5f5f5;
+  min-height: 64px;
+  padding: 12px 16px;
+  background: var(--dt-surface);
+  border-bottom: 1px solid var(--dt-divider);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s var(--dt-ease);
 }
 
 .message-item:active {
-  background: #f5f7fa;
+  background: var(--dt-surface-press);
 }
 
 .message-avatar {
@@ -2158,7 +2640,7 @@ onMounted(() => {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background: #f56c6c;
+  background: var(--dt-danger);
   color: #fff;
   font-size: 11px;
   font-weight: 500;
@@ -2182,19 +2664,19 @@ onMounted(() => {
 
 .message-name {
   font-size: 15px;
-  font-weight: 500;
-  color: #333;
+  font-weight: 600;
+  color: var(--dt-text);
 }
 
 .message-time {
-  font-size: 12px;
-  color: #999;
+  font-size: 11.5px;
+  color: var(--dt-text-quiet);
   flex-shrink: 0;
 }
 
 .message-preview {
   font-size: 13px;
-  color: #999;
+  color: var(--dt-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2233,13 +2715,16 @@ onMounted(() => {
   padding: 0;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* 聊天页面 */
+/* 聊天页面：作为弹性项撑满剩余高度，内部消息区独立滚动 */
 .chat-page {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   height: 100%;
 }
 
@@ -2247,7 +2732,7 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--dt-bg);
 }
 
 .empty-chat {
@@ -2257,7 +2742,7 @@ onMounted(() => {
   justify-content: center;
   gap: 12px;
   padding: 60px 0;
-  color: #999;
+  color: var(--dt-text-quiet);
 }
 
 .empty-chat span {
@@ -2288,7 +2773,7 @@ onMounted(() => {
 }
 
 .chat-msg.mine .chat-msg-bubble {
-  background: linear-gradient(135deg, #409eff 0%, #337ecc 100%);
+  background: var(--dt-primary);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -2354,7 +2839,7 @@ onMounted(() => {
   height: 36px;
   border-radius: 50%;
   border: none;
-  background: #409eff;
+  background: var(--dt-primary);
   color: #fff;
   cursor: pointer;
   display: flex;
@@ -2365,7 +2850,7 @@ onMounted(() => {
 }
 
 .chat-send-btn:hover:not(:disabled) {
-  background: #337ecc;
+  background: var(--dt-primary-strong);
 }
 
 .chat-send-btn:active:not(:disabled) {

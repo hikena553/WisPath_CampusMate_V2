@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -11,8 +12,12 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User, UserRole
 from app.models.announcement import TeacherAnnouncement, AnnouncementRead, UrgencyLevel, TeacherSchedule
+from app.models.notification import NotificationType
 from app.schemas.announcement import AnnouncementOut, UnreadCountOut, ScheduleOut, ScheduleCreate, ScheduleUpdate
+from app.services.notification_service import send_batch_notifications
 from app.utils.enum_helpers import safe_enum_val
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["announcement"])
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "announcements"
@@ -68,6 +73,31 @@ async def create_announcement(
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    # 打通「公告 → 站内通知」链路：发布后即时给名下学生推送通知，
+    # 学生端消息中心「通知」可直接看到，避免公告只躺在公告页无人知。
+    student_ids = [
+        row[0] for row in db.query(User.id).filter(
+            User.role == UserRole.STUDENT,
+            User.tutor_id == user.id,
+        ).all()
+    ]
+    if student_ids:
+        try:
+            urgency_label = {"normal": "普通", "important": "重要", "urgent": "紧急"}.get(urgency, "普通")
+            send_batch_notifications(
+                db,
+                student_ids,
+                title=f"[{urgency_label}公告] {title}",
+                content=content[:200],
+                notification_type=NotificationType.ANNOUNCEMENT,
+                link="/student/workbench",
+                related_id=item.id,
+                sender_id=user.id,
+            )
+        except Exception:
+            logger.exception("公告发布后推送站内通知失败 announcement_id=%s", item.id)
+
     return AnnouncementOut(
         id=item.id, teacher_id=item.teacher_id, teacher_name=user.name,
         title=item.title, content=item.content,

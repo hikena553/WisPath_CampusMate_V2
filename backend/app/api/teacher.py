@@ -125,11 +125,17 @@ def dashboard_stats(user: User = Depends(require_role(UserRole.TEACHER, UserRole
 @router.get("/students", response_model=list[StudentOut])
 def list_students(
     search: str | None = None,
+    class_group_id: int | None = None,
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
     query = db.query(User).filter(User.role == UserRole.STUDENT)
-    if user.role != UserRole.ADMIN:
+    # 按班级取名单：供通讯录「组织架构 → 班级」下钻使用。
+    # 班级属于公开的组织信息，此时不套用「仅本人名下辅导员关系」的过滤，
+    # 否则教师只能看到自己带的学生，班级下钻会永远为空。
+    if class_group_id:
+        query = query.filter(User.class_group_id == class_group_id)
+    elif user.role != UserRole.ADMIN:
         query = query.filter(User.tutor_id == user.id)
     if search:
         from app.services.knowledge_service import _escape_like

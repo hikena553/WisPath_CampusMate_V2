@@ -17,8 +17,12 @@ router = APIRouter(prefix="/api", tags=["upload"])
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 MAX_UPLOADS_PER_MINUTE = 20
-ALLOWED_TYPES = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".pdf", ".doc", ".docx", ".zip", ".rar"}
-ALLOWED_MIME_PREFIXES = ("image/", "application/pdf", "application/vnd.openxmlformats-officedocument", "application/msword", "application/zip", "application/x-rar", "application/x-zip-compressed")
+ALLOWED_TYPES = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".zip", ".rar"}
+ALLOWED_MIME_PREFIXES = (
+    "image/", "application/pdf", "application/vnd.openxmlformats-officedocument",
+    "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+    "text/plain", "application/zip", "application/x-rar", "application/x-zip-compressed",
+)
 
 # 压缩包安全限制（防解压炸弹与路径穿越）
 ZIP_MAX_MEMBERS = 200
