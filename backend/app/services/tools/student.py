@@ -305,3 +305,53 @@ def _analyze_growth(db: Session, args: dict, user: User) -> dict:
         "data": {"records": records_data, "total": len(records_data)},
         "message": f"共{len(records_data)}条成长记录，请根据以上数据给出综合能力评估和发展建议"
     }
+
+
+# ============ 求助辅导员（学生 → 辅导员帮扶闭环）============
+
+_HELP_STATUS_TEXT = {"pending": "待受理", "processing": "帮扶中", "resolved": "已帮助"}
+
+
+def _create_help_request(db: Session, args: dict, user: User) -> dict:
+    from app.services import help_request_service as svc
+    content = (args.get("content") or "").strip()
+    if not content:
+        return {"success": False, "message": "请先说明你遇到的困难或需要的帮助"}
+    record = svc.create_request(
+        db,
+        student_id=user.id,
+        category=args.get("category") or "other",
+        content=content,
+        anonymous=bool(args.get("anonymous")),
+    )
+    label = svc.CATEGORY_LABELS.get(record.category, record.category)
+    anon_tip = "（匿名提交，老师看不到你的姓名）" if record.anonymous else ""
+    return {
+        "success": True,
+        "request_id": record.id,
+        "category": label,
+        "anonymous": record.anonymous,
+        "status": "pending",
+        "message": f"✅ 求助已提交{anon_tip}，类型：{label}。辅导员会尽快查看并回复你。",
+    }
+
+
+def _query_my_help_requests(db: Session, args: dict, user: User) -> dict:
+    from app.services import help_request_service as svc
+    records = svc.list_mine(db, user.id, limit=10)
+    if not records:
+        return {"message": "你还没有发起过求助", "requests": []}
+    return {
+        "message": f"共{len(records)}条求助",
+        "requests": [
+            {
+                "request_id": r["id"],
+                "category": svc.CATEGORY_LABELS.get(r["category"], r["category"]),
+                "status": _HELP_STATUS_TEXT.get(r["status"], r["status"]),
+                "content": r["content"][:80],
+                "reply": (r["reply"] or "")[:120],
+                "created_at": r["created_at"][:10],
+            }
+            for r in records
+        ],
+    }

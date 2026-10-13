@@ -2,6 +2,7 @@
 
 from datetime import date
 
+from fastapi import HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -532,4 +533,58 @@ def _query_my_workflows(db: Session, args: dict, user: User) -> dict:
             }
             for i in instances
         ],
+    }
+
+
+# ============ 求助受理（学生求助 → 辅导员帮扶闭环）============
+
+_HELP_STATUS_TEXT = {"pending": "待受理", "processing": "帮扶中", "resolved": "已帮助"}
+
+
+def _query_help_requests(db: Session, args: dict, user: User) -> dict:
+    from app.services import help_request_service as svc
+    records = svc.list_for_teacher(db, user.id, status=args.get("status"), limit=20)
+    if not records:
+        return {"message": "暂无学生求助", "requests": []}
+    return {
+        "message": f"共{len(records)}条学生求助",
+        "requests": [
+            {
+                "request_id": r["id"],
+                "student_name": r["student_name"] or "匿名同学",
+                "category": svc.CATEGORY_LABELS.get(r["category"], r["category"]),
+                "status": _HELP_STATUS_TEXT.get(r["status"], r["status"]),
+                "content": r["content"][:80],
+                "created_at": r["created_at"][:10],
+            }
+            for r in records
+        ],
+    }
+
+
+def _reply_help_request(db: Session, args: dict, user: User) -> dict:
+    from app.services import help_request_service as svc
+    request_id = args.get("request_id")
+    reply = (args.get("reply") or "").strip()
+    if not request_id:
+        return {"success": False, "message": "缺少 request_id（求助ID）"}
+    if not reply:
+        return {"success": False, "message": "请填写回复内容"}
+    try:
+        record = svc.reply(
+            db,
+            teacher_id=user.id,
+            is_admin=(user.role == UserRole.ADMIN),
+            request_id=int(request_id),
+            reply=reply,
+            status=args.get("status") or "resolved",
+        )
+    except HTTPException as e:
+        return {"success": False, "message": e.detail}
+    status_text = _HELP_STATUS_TEXT.get(record.status.value, record.status.value)
+    return {
+        "success": True,
+        "request_id": record.id,
+        "status": status_text,
+        "message": f"✅ 已回复该求助（状态：{status_text}）",
     }

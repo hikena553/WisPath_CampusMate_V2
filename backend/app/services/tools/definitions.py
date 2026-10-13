@@ -328,6 +328,30 @@ TOOL_DEFINITIONS = [
             "parameters": {"type": "object", "properties": {}}
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_help_request",
+            "description": "向辅导员发起求助。当学生表达遇到困难、需要老师帮助（学业困扰/生活困难/心理情绪/人际关系等）时调用，直接把求助提交给辅导员，辅导员会一对一回复。可匿名提交",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "enum": ["academic", "life", "mental", "relation", "other"], "description": "求助类型：academic学业困扰/life生活困难/mental心理情绪/relation人际关系/other其他，默认other"},
+                    "content": {"type": "string", "description": "求助内容：学生遇到的困难与希望获得的帮助，取自学生描述，不要编造"},
+                    "anonymous": {"type": "boolean", "description": "是否匿名提交（老师看不到姓名），默认false"}
+                },
+                "required": ["content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_help_requests",
+            "description": "查询学生自己发起过的求助及辅导员的回复进度。当学生问'我的求助''老师回复了吗''求助进度'时调用",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
 ]
 
 
@@ -605,6 +629,65 @@ TEACHER_TOOL_DEFINITIONS = [
                     "status": {"type": "string", "enum": ["running", "approved", "rejected", "cancelled"], "description": "按状态筛选"},
                     "all": {"type": "boolean", "description": "true 表示查看全部（不限于我发起的）"}
                 }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_help_requests",
+            "description": "查询名下学生提交的求助（含匿名）。教师说'有哪些学生求助'、'待受理求助'、'学生求助情况'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "processing", "resolved"], "description": "按状态筛选：pending待受理/processing帮扶中/resolved已帮助，不传则全部"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reply_help_request",
+            "description": "受理并回复学生的求助，形成帮扶闭环。教师说'回复这个求助'、'帮他处理一下'、'告诉他……'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "integer", "description": "求助ID"},
+                    "reply": {"type": "string", "description": "给学生的回复与帮扶建议"},
+                    "status": {"type": "string", "enum": ["processing", "resolved"], "description": "处理状态：processing帮扶中/resolved已帮助，默认resolved"}
+                },
+                "required": ["request_id", "reply"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_reference_library",
+            "description": "在开源参考库中检索可合法复用的成熟开源项目/模板（含许可证、收藏量、可复用范围、署名要求）。当教师/管理员说'想复用某某项目''找个类似的成熟方案''有没有现成的组件库/模板''搭个XX页面参考哪个项目'时调用。只返回许可证允许改造复用的开源项目，不涉及闭源代码搬运",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "要查找的能力或需求关键词，如'表格 虚拟滚动'、'中后台 筛选栏'、'图表 折线'"},
+                    "limit": {"type": "integer", "description": "返回条数，默认5"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_page_scaffold",
+            "description": "按需求生成符合本项目规范的 Vue 页面骨架代码（本地模板生成，会自动附带所参考开源项目的出处署名）。当教师/管理员说'帮我生成一个XX页面''搭个XX页面的骨架''照这个需求起个页面'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "requirement": {"type": "string", "description": "页面需求描述，说明页面用途与需要的结构，如'学生成绩分析页面，包含筛选栏、统计卡片和折线图'"},
+                    "page_name": {"type": "string", "description": "可选，页面组件名（PascalCase），不传则按需求自动推断"}
+                },
+                "required": ["requirement"]
             }
         }
     },
