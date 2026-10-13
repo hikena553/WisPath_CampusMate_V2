@@ -2,48 +2,56 @@
   <el-dialog
     :model-value="modelValue"
     :title="dialogTitle"
-    :width="isMobile ? '92%' : '460px'"
+    :width="isMobile ? '90%' : '380px'"
     align-center
+    :close-on-click-modal="false"
     destroy-on-close
-    class="care-dialog"
+    class="tui-dialog"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="care-form">
-      <div v-if="studentName" class="care-student">
-        <el-icon :size="15"><User /></el-icon>
-        <span>{{ studentName }}</span>
-        <span v-if="taskTitle" class="care-from-task">来自任务：{{ taskTitle }}</span>
+      <div class="tui-section-hint">
+        <el-icon><InfoFilled /></el-icon>
+        <span>
+          这条记录会沉淀到「{{ studentName || '当前学生' }}」的工作记录与成长档案；开启「仅教师可见」后该条记录不会展示给学生。
+        </span>
+      </div>
+
+      <!-- 上下文信息条：确认操作对象 -->
+      <div class="care-ctx">
+        <el-icon><User /></el-icon>
+        <span>
+          记录对象：<b>{{ studentName || '当前学生' }}</b>
+          <template v-if="taskTitle"> · 来自任务「{{ taskTitle }}」</template>
+          <template v-else> · 无关联任务</template>
+        </span>
       </div>
 
       <!-- 记录类型 -->
       <div class="care-field">
         <label class="care-label">记录类型</label>
-        <div class="care-type-row">
-          <button
-            v-for="opt in typeOptions"
-            :key="opt.value"
-            class="care-type"
-            :class="[`type-${opt.value}`, { active: form.record_type === opt.value }]"
-            @click="form.record_type = opt.value"
-          >
-            <el-icon :size="15"><component :is="opt.icon" /></el-icon>
-            {{ opt.label }}
-          </button>
-        </div>
+        <el-select
+          v-model="form.record_type"
+          :disabled="isEdit"
+          placeholder="请选择记录类型"
+          style="width:100%"
+        >
+          <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value" />
+        </el-select>
+        <p v-if="isEdit" class="care-tip">编辑时仅可修改内容与可见范围。</p>
       </div>
 
       <!-- 内容 -->
-      <div class="care-field">
-        <label class="care-label">记录内容</label>
-        <el-input
-          v-model="form.content"
-          type="textarea"
-          :rows="4"
-          maxlength="500"
-          show-word-limit
-          :placeholder="placeholder"
-        />
-      </div>
+      <AiDraftField
+        v-model="form.content"
+        label="记录内容"
+        required
+        :rows="4"
+        :maxlength="500"
+        :placeholder="placeholder"
+        :draft="aiDraft"
+        :points="aiPoints"
+      />
 
       <!-- 仅教师可见 -->
       <div class="care-private">
@@ -66,9 +74,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { ChatDotRound, EditPen, Sunny, User } from '@element-plus/icons-vue'
+import { InfoFilled, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import {
   createCareRecord,
   updateCareRecord,
@@ -93,10 +102,10 @@ const emit = defineEmits<{
 
 const { isMobile } = useResponsive()
 
-const typeOptions: { value: CareRecordType; label: string; icon: unknown }[] = [
-  { value: 'care', label: '关怀记录', icon: Sunny },
-  { value: 'talk', label: '谈心谈话', icon: ChatDotRound },
-  { value: 'comment', label: '评语', icon: EditPen },
+const typeOptions: { value: CareRecordType; label: string }[] = [
+  { value: 'care', label: '关怀记录' },
+  { value: 'talk', label: '谈心谈话' },
+  { value: 'comment', label: '评语' },
 ]
 
 const placeholderMap: Record<CareRecordType, string> = {
@@ -115,6 +124,37 @@ const saving = ref(false)
 const isEdit = computed(() => !!props.record)
 const dialogTitle = computed(() => (isEdit.value ? '编辑工作记录' : '新增工作记录'))
 const placeholder = computed(() => placeholderMap[form.record_type])
+
+/** 草稿日期：编辑态取原记录日期，新建取今天 */
+const today = new Date().toISOString().slice(0, 10)
+const draftDate = computed(() => (props.record?.created_at ? props.record.created_at.slice(0, 10) : today))
+const who = computed(() => props.studentName || '该生')
+
+/** AI 草稿：结合所选类型 + 学生姓名 + 日期，写成真实教师口吻 */
+const aiDraft = computed(() => {
+  const d = draftDate.value
+  const n = who.value
+  switch (form.record_type) {
+    case 'talk':
+      return `${d}，我与${n}进行了一次谈心谈话。了解到其近期因人际与学业压力有些困扰，我耐心倾听并与其一起梳理了应对思路，约定先从小目标做起。谈话后${n}情绪明显放松，后续我会在一周内回访其状态。`
+    case 'comment':
+      return `${d}，对${n}本阶段的表现评价：课堂参与积极，作业按时完成，与同学相处融洽，较之前有可见进步。建议继续保持，并在薄弱环节再下功夫，期待更大突破。`
+    default:
+      return `${d}，我留意到${n}近期状态有些变化，主动进行了关心。了解情况后给予力所能及的帮助，并提醒其注意作息与情绪调节。目前${n}情绪平稳，我会持续关注其后续情况。`
+  }
+})
+
+/** AI 建议要点：随类型变化 */
+const aiPoints = computed<string[]>(() => {
+  switch (form.record_type) {
+    case 'talk':
+      return ['谈话时间与地点', '学生主要困扰', '疏导要点', '学生反馈', '后续回访计划']
+    case 'comment':
+      return ['学习与课堂表现', '行为与习惯', '进步亮点', '改进建议']
+    default:
+      return ['学生近期表现', '触发事件', '已采取的措施', '后续跟进安排']
+  }
+})
 
 watch(
   () => props.modelValue,
@@ -167,70 +207,53 @@ async function submit() {
 .care-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+}
+.care-form .tui-section-hint {
+  margin-bottom: 0;
 }
 
-.care-student {
+.care-ctx {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #101828;
-  background: #f9fafb;
-  border-radius: 10px;
-  padding: 9px 12px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
-.care-from-task {
-  margin-left: auto;
-  font-size: 11.5px;
-  font-weight: 400;
-  color: #98a2b3;
-  max-width: 55%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.care-ctx .el-icon {
+  flex-shrink: 0;
+  color: var(--tui-text-tertiary);
+}
+.care-ctx b {
+  color: var(--tui-text);
+  font-weight: 600;
 }
 
 .care-label {
   display: block;
   font-size: 12.5px;
   font-weight: 600;
-  color: #475467;
+  color: var(--tui-text-secondary);
   margin-bottom: 8px;
 }
-
-.care-type-row {
-  display: flex;
-  gap: 8px;
+.care-tip {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
 }
-.care-type {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 4px;
-  border: 1px solid #e4e7ec;
-  border-radius: 10px;
-  background: #fff;
-  color: #667085;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-}
-.care-type.active.type-care { border-color: #f04438; background: #fef3f2; color: #d92d20; font-weight: 600; }
-.care-type.active.type-talk { border-color: #7c3aed; background: #f4f3ff; color: #6941c6; font-weight: 600; }
-.care-type.active.type-comment { border-color: #2563eb; background: #eff4ff; color: #2563eb; font-weight: 600; }
 
 .care-private {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-  background: #f9fafb;
-  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--tui-surface-muted);
+  border-radius: var(--tui-radius-sm);
 }
 .care-private-text {
   display: flex;
@@ -240,10 +263,10 @@ async function submit() {
 .care-private-text span {
   font-size: 13px;
   font-weight: 500;
-  color: #344054;
+  color: var(--tui-text-secondary);
 }
 .care-private-text small {
   font-size: 11.5px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 </style>

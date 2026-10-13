@@ -14,7 +14,7 @@
           aria-label="发起会话"
           @click="showAddFriend = true"
         >
-          <el-icon :size="20"><Plus /></el-icon>
+          <DtIcon name="plus" :size="20" />
         </button>
         <button
           v-else-if="mobileView === 'notifications'"
@@ -23,7 +23,7 @@
           aria-label="全部标记已读"
           @click="handleReadAllNotifications"
         >
-          <el-icon :size="19"><Check /></el-icon>
+          <DtIcon name="check" :size="19" />
         </button>
       </div>
     </header>
@@ -34,7 +34,7 @@
         <div class="header-left">
           <el-dropdown trigger="click" @command="handleHeaderAction">
             <el-button text circle class="action-btn">
-              <el-icon :size="20"><Plus /></el-icon>
+              <DtIcon name="plus" :size="20" />
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -42,7 +42,7 @@
                   <el-icon><ChatRound /></el-icon> 创建群聊
                 </el-dropdown-item>
                 <el-dropdown-item command="addFriend">
-                  <el-icon><User /></el-icon> 添加好友
+                  <el-icon><User /></el-icon> 发起会话
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -53,7 +53,7 @@
         </div>
         <div class="header-right">
           <el-badge :value="totalUnread" :hidden="!totalUnread" :max="99">
-            <el-icon :size="18" class="header-icon"><Bell /></el-icon>
+            <DtIcon name="bell" :size="18" class="header-icon" />
           </el-badge>
         </div>
       </div>
@@ -81,13 +81,37 @@
         <div class="sidebar-search">
           <el-input v-model="search" placeholder="搜索已有会话" size="small" clearable
             @input="filterConversations">
-            <template #prefix><el-icon><Search /></el-icon></template>
+            <template #prefix><DtIcon name="search" :size="15" /></template>
           </el-input>
+        </div>
+
+        <!-- 小绵管家：置顶常驻会话（自动推送最新资讯 / 总结对话内容） -->
+        <div
+          class="conv-item butler-entry"
+          :class="{ active: activeType === 'butler' && !!activeId }"
+          @click="openButler"
+        >
+          <div class="conv-avatar-wrapper">
+            <span class="butler-entry-avatar">
+              <img v-if="siteMascot" :src="siteMascot" alt="小绵管家" />
+              <DtIcon v-else name="robot" :size="20" />
+            </span>
+            <span class="butler-entry-online" />
+          </div>
+          <div class="conv-info">
+            <div class="conv-top">
+              <span class="conv-name">{{ agentName || '小绵' }}管家</span>
+              <span class="dt-tag">常驻</span>
+            </div>
+            <div class="conv-bottom">
+              <span class="conv-preview">{{ butlerPreview }}</span>
+            </div>
+          </div>
         </div>
 
         <template v-if="filteredList.length === 0">
           <div class="empty-state">
-            <el-icon :size="40" color="#ddd"><ChatDotRound /></el-icon>
+            <DtIcon name="empty" :size="40" style="color: var(--tui-text-quiet);" />
             <span>{{ search.trim() ? '未匹配到会话' : '暂无消息' }}</span>
           </div>
         </template>
@@ -114,6 +138,7 @@
                 <div class="conv-info">
                   <div class="conv-top">
                     <span class="conv-name">{{ item.name }}</span>
+                    <DtIcon v-if="item.is_muted" name="bellOff" :size="13" class="conv-mute" />
                     <span class="conv-time">{{ formatTime(item.last_message_time) }}</span>
                   </div>
                   <div class="conv-bottom">
@@ -121,6 +146,17 @@
                     <el-badge v-if="item.unread_count" :value="item.unread_count" :max="99" class="conv-badge" />
                   </div>
                 </div>
+                <!-- 桌面端置顶入口（移动端用右滑手势） -->
+                <button
+                  v-if="!isMobile"
+                  type="button"
+                  class="conv-pin-btn"
+                  :class="{ on: isPinned(item._key) }"
+                  :aria-label="isPinned(item._key) ? '取消置顶' : '置顶会话'"
+                  @click.stop="togglePin(item._key)"
+                >
+                  <DtIcon name="pin" :size="13" />
+                </button>
               </div>
             </div>
           </template>
@@ -152,6 +188,17 @@
                     <span class="conv-preview">{{ item.last_message }}</span>
                   </div>
                 </div>
+                <!-- 桌面端置顶入口（移动端用右滑手势） -->
+                <button
+                  v-if="!isMobile"
+                  type="button"
+                  class="conv-pin-btn"
+                  :class="{ on: isPinned(item._key) }"
+                  :aria-label="isPinned(item._key) ? '取消置顶' : '置顶会话'"
+                  @click.stop="togglePin(item._key)"
+                >
+                  <DtIcon name="pin" :size="13" />
+                </button>
               </div>
             </div>
           </template>
@@ -189,8 +236,8 @@
               <span class="addr-row-main">
                 <span class="addr-row-name">
                   {{ u.name }}
-                  <span class="tui-tag" :class="u.role === 'teacher' ? 'tui-tag-warn' : 'tui-tag-brand'">
-                    {{ u.role === 'teacher' ? '教师' : '学生' }}
+                  <span class="tui-tag" :class="roleTagClass(u.role)">
+                    {{ roleLabel(u.role) }}
                   </span>
                 </span>
                 <span class="addr-row-sub">{{ u.username }}</span>
@@ -228,7 +275,9 @@
             <!-- 组织架构：学院 → 专业 → 班级 -->
             <div class="addr-section-head">
               <span class="addr-section-title">组织架构</span>
-              <span class="addr-section-count">{{ orgColleges.length }} 个学院</span>
+              <span class="addr-section-count">
+                {{ orgScopeRestricted ? (orgScope?.college_name || '仅展示所在组织') : `${orgColleges.length} 个学院` }}
+              </span>
             </div>
             <div v-if="orgLoading" class="addr-loading">
               <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
@@ -242,9 +291,12 @@
                   <span class="addr-row-name">{{ c.name }}</span>
                   <span class="addr-row-sub">{{ c.code }}</span>
                 </span>
-                <el-icon class="addr-arrow" :size="15">
-                  <ArrowDown v-if="expandedColleges.has(c.id)" /><ArrowRight v-else />
-                </el-icon>
+                <DtIcon
+                  name="arrow"
+                  :size="14"
+                  class="addr-chevron"
+                  :class="{ open: expandedColleges.has(c.id) }"
+                />
               </button>
               <template v-if="expandedColleges.has(c.id)">
                 <template v-for="m in (orgMajors[c.id] || [])" :key="m.id">
@@ -253,23 +305,52 @@
                     <span class="addr-row-main">
                       <span class="addr-row-name">{{ m.name }}</span>
                     </span>
-                    <el-icon class="addr-arrow" :size="15">
-                      <ArrowDown v-if="expandedMajors.has(m.id)" /><ArrowRight v-else />
-                    </el-icon>
+                    <DtIcon
+                      name="arrow"
+                      :size="14"
+                      class="addr-chevron"
+                      :class="{ open: expandedMajors.has(m.id) }"
+                    />
                   </button>
                   <template v-if="expandedMajors.has(m.id)">
-                    <div
-                      v-for="cg in (orgClasses[m.id] || [])"
-                      :key="cg.id"
-                      class="addr-row addr-row-class"
-                    >
-                      <span class="addr-org-icon klass"><el-icon :size="14"><Notebook /></el-icon></span>
-                      <span class="addr-row-main">
-                        <span class="addr-row-name">{{ cg.name }}</span>
-                        <span class="addr-row-sub">{{ cg.grade }} 级</span>
-                      </span>
-                      <span class="tui-row-value">{{ cg.student_count ?? 0 }} 人</span>
-                    </div>
+                    <template v-for="cg in (orgClasses[m.id] || [])" :key="cg.id">
+                      <button type="button" class="addr-row addr-row-class" @click="toggleOrgClass(cg.id)">
+                        <span class="addr-org-icon klass"><el-icon :size="14"><Notebook /></el-icon></span>
+                        <span class="addr-row-main">
+                          <span class="addr-row-name">{{ cg.name }}</span>
+                          <span class="addr-row-sub">{{ cg.grade }} 级 · {{ cg.student_count ?? 0 }} 人</span>
+                        </span>
+                        <DtIcon
+                          name="arrow"
+                          :size="14"
+                          class="addr-chevron"
+                          :class="{ open: expandedClasses.has(cg.id) }"
+                        />
+                      </button>
+                      <!-- 班级 → 学生名单 → 点任意学生直接发起会话（闭环） -->
+                      <template v-if="expandedClasses.has(cg.id)">
+                        <div v-if="classStudentsLoading[cg.id]" class="addr-loading">
+                          <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
+                        </div>
+                        <div v-else-if="!(classStudents[cg.id] || []).length" class="addr-empty">该班级暂无学生</div>
+                        <button
+                          v-for="s in (classStudents[cg.id] || [])"
+                          :key="s.id"
+                          type="button"
+                          class="addr-row addr-row-student"
+                          @click="startChatWith(s)"
+                        >
+                          <el-avatar :size="32" :src="s.avatar || undefined">{{ s.name?.[0] }}</el-avatar>
+                          <span class="addr-row-main">
+                            <span class="addr-row-name">
+                              {{ s.name }}
+                              <span v-if="s.crisis_level && s.crisis_level !== 'none'" class="tui-tag tui-tag-danger">关注</span>
+                            </span>
+                            <span class="addr-row-sub">{{ s.username }}</span>
+                          </span>
+                        </button>
+                      </template>
+                    </template>
                   </template>
                 </template>
               </template>
@@ -280,11 +361,22 @@
 
         <!-- ============ 视图三：通知（不设分类筛选，按时间倒序直出） ============ -->
         <template v-else>
+          <!-- 桌面端：通知无吸顶栏，提供「全部标记已读」入口 -->
+          <div v-if="!isMobile && notifications.length" class="notif-actions">
+            <button
+              type="button"
+              class="notif-action-btn"
+              :disabled="!unreadNotifCount"
+              @click="handleReadAllNotifications"
+            >
+              全部标记已读
+            </button>
+          </div>
           <div v-if="notifLoading && !notifications.length" class="addr-loading">
             <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
           </div>
           <div v-else-if="!notifications.length" class="empty-state">
-            <el-icon :size="40" color="#ddd"><Bell /></el-icon>
+            <DtIcon name="bell" :size="40" style="color: var(--tui-text-quiet);" />
             <span>暂无通知</span>
           </div>
           <button
@@ -374,6 +466,10 @@
           </div>
         </div>
 
+        <!-- 小绵管家会话：自动推送最新资讯 + 总结对话内容（教师 / 学生通用） -->
+        <ButlerChat v-if="activeType === 'butler'" role="teacher" />
+
+        <template v-else>
         <div class="msg-list" ref="msgListRef"
           @dragover.prevent="onDragOver"
           @dragleave="onDragLeave"
@@ -426,7 +522,7 @@
             </div>
           </template>
           <div v-if="messages.length === 0" class="chat-empty">
-            <el-icon :size="48" color="#ddd"><ChatLineRound /></el-icon>
+            <DtIcon name="empty" :size="48" style="color: var(--tui-text-quiet);" />
             <span>暂无聊天记录</span>
           </div>
         </div>
@@ -464,17 +560,21 @@
             发送
           </button>
         </div>
+        </template>
       </template>
 
       <div v-else class="no-selection">
-        <el-icon :size="80" color="var(--tui-text-quiet)"><ChatLineRound /></el-icon>
+        <DtIcon name="empty" :size="72" style="color: var(--tui-text-quiet); margin: 0 auto;" />
         <h2>智慧校园消息中心</h2>
         <p>选择一个会话开始聊天</p>
         <div class="quick-actions">
-          <el-button type="primary" @click="showAddFriend = true">
-            <el-icon><User /></el-icon> 添加好友
+          <el-button type="primary" @click="openButler">
+            <DtIcon name="robot" :size="16" /> 小绵管家
           </el-button>
-          <el-button type="primary" @click="showCreateGroup = true">
+          <el-button @click="showAddFriend = true">
+            <el-icon><User /></el-icon> 发起会话
+          </el-button>
+          <el-button @click="showCreateGroup = true">
             <el-icon><ChatRound /></el-icon> 创建群聊
           </el-button>
         </div>
@@ -482,7 +582,7 @@
     </div>
 
     <!-- ============= 添加好友弹窗 ============= -->
-    <el-dialog v-model="showAddFriend" title="选择联系人" width="480px" :fullscreen="isMobile" :close-on-click-modal="false" @opened="focusAddFriendInput">
+    <el-dialog v-model="showAddFriend" class="dt-dialog-limit" title="选择联系人" width="480px" :fullscreen="isMobile" :close-on-click-modal="false" @opened="focusAddFriendInput">
       <div class="add-friend-dialog">
         <div class="add-friend-search-box">
           <el-input ref="addFriendInputRef" v-model="addFriendSearch" placeholder="输入学号、工号或姓名搜索"
@@ -491,7 +591,7 @@
           </el-input>
           <div class="add-friend-hint">
             <el-icon><InfoFilled /></el-icon>
-            <span>可搜索全校师生进行添加，支持学号/工号/姓名检索</span>
+            <span>可搜索全校师生直接发起会话，支持学号/工号/姓名检索</span>
           </div>
         </div>
         <div class="add-friend-results">
@@ -517,7 +617,7 @@
               </div>
             </div>
             <el-button type="primary" size="small" @click="addFriendAndChat(u)">
-              <el-icon><Plus /></el-icon> 添加
+              <el-icon><ChatDotRound /></el-icon> 聊天
             </el-button>
           </div>
         </div>
@@ -525,7 +625,7 @@
     </el-dialog>
 
     <!-- ============= 创建群聊弹窗 ============= -->
-    <el-dialog v-model="showCreateGroup" title="发起群聊" width="480px" :fullscreen="isMobile" :close-on-click-modal="false">
+    <el-dialog v-model="showCreateGroup" class="dt-dialog-limit" title="发起群聊" width="480px" :fullscreen="isMobile" :close-on-click-modal="false">
       <div class="create-group-form">
         <el-input v-model="newGroupName" placeholder="请输入群名称" maxlength="20" show-word-limit size="large" />
         <div class="member-search-box" style="margin-top:14px">
@@ -557,7 +657,7 @@
     </el-dialog>
 
     <!-- ============= 添加群成员弹窗 ============= -->
-    <el-dialog v-model="showAddMember" title="邀请成员" width="480px" :fullscreen="isMobile" :close-on-click-modal="false">
+    <el-dialog v-model="showAddMember" class="dt-dialog-limit" title="邀请成员" width="480px" :fullscreen="isMobile" :close-on-click-modal="false">
       <el-input v-model="addMemberSearch" placeholder="搜索用户" clearable @input="searchMembersToAdd">
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
@@ -573,8 +673,8 @@
       </div>
     </el-dialog>
 
-    <!-- ============= 群成员列表弹窗 ============= -->
-    <el-dialog v-model="showGroupMembers" title="群成员" width="420px" :fullscreen="isMobile">
+    <!-- ============= 群成员列表弹窗（群主/管理员可移除成员） ============= -->
+    <el-dialog v-model="showGroupMembers" class="dt-dialog-limit" title="群成员" width="420px" :fullscreen="isMobile">
       <div class="group-members-list">
         <div v-for="m in groupMembers" :key="m.user_id" class="group-member-item">
           <el-avatar :size="36">{{ m.user_name[0] }}</el-avatar>
@@ -583,12 +683,21 @@
             <el-tag v-if="m.role === 'owner'" type="danger" size="small">群主</el-tag>
             <el-tag v-else-if="m.role === 'admin'" type="warning" size="small">管理员</el-tag>
           </div>
+          <el-button
+            v-if="canRemoveMember(m)"
+            type="danger"
+            text
+            size="small"
+            @click="handleRemoveMember(m.user_id, m.user_name)"
+          >
+            移除
+          </el-button>
         </div>
       </div>
     </el-dialog>
 
     <!-- ============= 群管理弹窗 ============= -->
-    <el-dialog v-model="showManageGroup" title="群管理" width="560px" :fullscreen="isMobile" :close-on-click-modal="false" @opened="onManageDialogOpened">
+    <el-dialog v-model="showManageGroup" class="dt-dialog-limit" title="群管理" width="560px" :fullscreen="isMobile" :close-on-click-modal="false" @opened="onManageDialogOpened">
       <div class="manage-group-dialog">
         <!-- 群公告 -->
         <div class="manage-section">
@@ -596,7 +705,7 @@
             <span class="manage-section-title">
               <el-icon><Bell /></el-icon> 群公告
             </span>
-            <el-button v-if="!editingAnnouncement" type="primary" text size="small" @click="startEditAnnouncement">
+            <el-button v-if="!editingAnnouncement && isCurrentUserAdmin" type="primary" text size="small" @click="startEditAnnouncement">
               {{ currentGroup?.announcement ? '编辑' : '设置公告' }}
             </el-button>
           </div>
@@ -669,6 +778,51 @@
 
         <el-divider />
 
+        <!-- 群二维码邀请 -->
+        <div class="manage-section">
+          <div class="manage-section-header">
+            <span class="manage-section-title">
+              <el-icon><DocumentCopy /></el-icon> 群二维码
+            </span>
+            <el-button type="primary" text size="small" @click="toggleManageQr">
+              {{ showManageQr ? '收起' : '查看二维码' }}
+            </el-button>
+          </div>
+          <template v-if="showManageQr">
+            <div class="manage-qr-box">
+              <img v-if="qrDataUrl" :src="qrDataUrl" alt="群二维码" />
+              <div v-else class="gsp-qr-loading">
+                <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+                <span>生成中…</span>
+              </div>
+            </div>
+            <div class="manage-qr-actions">
+              <el-button size="small" @click="copyInviteLink">复制链接</el-button>
+              <el-button size="small" @click="saveQrImage">保存二维码</el-button>
+              <el-button size="small" type="danger" text @click="resetInvite">重置</el-button>
+            </div>
+          </template>
+          <span v-else class="manage-empty-hint">生成二维码后，成员扫码登录校园端即可加入本群</span>
+        </div>
+
+        <el-divider />
+
+        <!-- 个人设置 -->
+        <div class="manage-section">
+          <div class="manage-section-header">
+            <span class="manage-section-title">
+              <el-icon><Setting /></el-icon> 个人设置
+            </span>
+          </div>
+          <div class="manage-switch-row">
+            <span>消息免打扰</span>
+            <el-switch :model-value="groupMuted" :loading="savingMute" @change="onMuteChange" />
+          </div>
+          <span class="manage-empty-hint">开启后该群不再计入未读数，也不接收实时消息推送</span>
+        </div>
+
+        <el-divider />
+
         <!-- 危险操作 -->
         <div class="manage-section manage-danger-zone">
           <div class="manage-section-title" style="margin-bottom:12px">
@@ -686,7 +840,7 @@
       </div>
     </el-dialog>
 
-    <!-- ============= 移动端：群设置子页面（QQ 风格） ============= -->
+    <!-- ============= 移动端：群设置子页面（钉钉式：成员九宫格 + 信息/管理分组卡片） ============= -->
     <div v-if="isMobile && groupSubPage === 'settings'" class="group-sub-page">
       <input type="file" hidden ref="groupAvatarInputRef" accept="image/*" @change="onGroupAvatarSelected" />
       <div class="gsp-header">
@@ -696,53 +850,154 @@
         <span class="gsp-title">群设置</span>
         <div style="width:32px"></div>
       </div>
-      <div class="gsp-hero">
-        <div class="gsp-avatar-wrap" :class="{ editable: isCurrentUserAdmin }" @click="triggerGroupAvatar">
-          <el-avatar v-if="currentGroup?.avatar" :size="64" shape="square" :src="currentGroup.avatar" class="gsp-avatar" />
-          <div v-else class="gsp-avatar">{{ (currentGroup?.name || activeName || '群')[0] }}</div>
-          <div v-if="isCurrentUserAdmin" class="gsp-avatar-cam">
-            <el-icon :size="14"><Camera /></el-icon>
-          </div>
-        </div>
-        <div class="gsp-name">{{ activeName }}</div>
-        <div class="gsp-meta">{{ currentGroup?.member_count || 0 }} 名群成员</div>
-      </div>
       <div class="gsp-body">
-        <!-- 群公告 -->
-        <div class="gsp-menu">
-          <div class="gsp-item" @click="groupSubPage = 'announcement'">
-            <div class="gsp-item-icon announce"><el-icon :size="18"><Bell /></el-icon></div>
-            <span class="gsp-item-label">群公告</span>
-            <span class="gsp-item-value">{{ currentGroup?.announcement ? '查看' : '未设置' }}</span>
-            <el-icon class="gsp-arrow" color="var(--tui-text-quiet)"><ArrowRight /></el-icon>
+        <!-- 群成员：钉钉式九宫格（最多展示 8 位 + 添加入口） -->
+        <div class="gsp-card">
+          <div class="gsp-card-head">
+            <span class="gsp-card-title">群成员</span>
+            <button type="button" class="gsp-card-more" @click="openMemberList">
+              全部 {{ currentGroup?.member_count || groupMembers.length }} 人
+              <DtIcon name="arrow" :size="12" />
+            </button>
           </div>
-          <!-- 群文件 -->
-          <div class="gsp-item" @click="openGroupFiles">
-            <div class="gsp-item-icon filee"><el-icon :size="18"><FolderOpened /></el-icon></div>
-            <span class="gsp-item-label">群文件</span>
-            <span class="gsp-item-value">{{ groupFiles.length }} 个文件</span>
-            <el-icon class="gsp-arrow" color="var(--tui-text-quiet)"><ArrowRight /></el-icon>
-          </div>
-          <!-- 群成员 -->
-          <div class="gsp-item" @click="showGroupMembers = true">
-            <div class="gsp-item-icon member"><el-icon :size="18"><User /></el-icon></div>
-            <span class="gsp-item-label">群成员</span>
-            <span class="gsp-item-value">{{ currentGroup?.member_count || 0 }}人</span>
-            <el-icon class="gsp-arrow" color="var(--tui-text-quiet)"><ArrowRight /></el-icon>
-          </div>
-          <div class="gsp-item" @click="showAddMember = true">
-            <div class="gsp-item-icon add"><el-icon :size="18"><Plus /></el-icon></div>
-            <span class="gsp-item-label">添加成员</span>
-            <el-icon class="gsp-arrow" color="var(--tui-text-quiet)"><ArrowRight /></el-icon>
+          <div class="gsp-member-grid">
+            <button
+              v-for="m in groupMembers.slice(0, 8)"
+              :key="m.user_id"
+              type="button"
+              class="gsp-member"
+              @click="openMemberList"
+            >
+              <el-avatar :size="44" :src="m.user_avatar || undefined">{{ m.user_name?.[0] }}</el-avatar>
+              <span class="gsp-member-name">{{ m.user_name }}</span>
+            </button>
+            <button type="button" class="gsp-member gsp-member-add" @click="showAddMember = true">
+              <span class="gsp-member-add-icon"><el-icon :size="20"><Plus /></el-icon></span>
+              <span class="gsp-member-name">添加</span>
+            </button>
           </div>
         </div>
 
-        <!-- 危险操作 -->
+        <!-- 群信息 -->
+        <div class="gsp-card">
+          <div
+            class="gsp-item"
+            :class="{ 'is-readonly': !isCurrentUserAdmin }"
+            @click="triggerGroupAvatar"
+          >
+            <span class="gsp-item-label">群头像</span>
+            <el-avatar v-if="currentGroup?.avatar" :size="28" shape="square" :src="currentGroup.avatar" />
+            <span v-else class="gsp-item-thumb">{{ (currentGroup?.name || activeName || '群')[0] }}</span>
+            <DtIcon v-if="isCurrentUserAdmin" name="arrow" :size="15" class="gsp-arrow" />
+          </div>
+          <div
+            class="gsp-item"
+            :class="{ 'is-readonly': !isCurrentUserAdmin }"
+            @click="openRenameGroup"
+          >
+            <span class="gsp-item-label">群名称</span>
+            <span class="gsp-item-value">{{ currentGroup?.name || activeName }}</span>
+            <DtIcon v-if="isCurrentUserAdmin" name="arrow" :size="15" class="gsp-arrow" />
+          </div>
+          <div class="gsp-item" @click="groupSubPage = 'announcement'">
+            <span class="gsp-item-label">群公告</span>
+            <span class="gsp-item-value">{{ currentGroup?.announcement ? '查看' : '未设置' }}</span>
+            <DtIcon name="arrow" :size="15" class="gsp-arrow" />
+          </div>
+          <div class="gsp-item" @click="openGroupFiles">
+            <span class="gsp-item-label">群文件</span>
+            <span class="gsp-item-value">{{ groupFiles.length }} 个</span>
+            <DtIcon name="arrow" :size="15" class="gsp-arrow" />
+          </div>
+          <div
+            class="gsp-item"
+            :class="{ 'is-readonly': !isCurrentUserAdmin }"
+            @click="openGroupQr"
+          >
+            <span class="gsp-item-label">群二维码</span>
+            <span class="gsp-item-value">{{ isCurrentUserAdmin ? '邀请成员扫码入群' : '仅群主/管理员可查看' }}</span>
+            <DtIcon v-if="isCurrentUserAdmin" name="arrow" :size="15" class="gsp-arrow" />
+          </div>
+        </div>
+
+        <!-- 群管理 -->
+        <div class="gsp-card">
+          <div class="gsp-item" @click="showAddMember = true">
+            <span class="gsp-item-label">添加成员</span>
+            <DtIcon name="arrow" :size="15" class="gsp-arrow" />
+          </div>
+          <div class="gsp-item" @click="openMemberList">
+            <span class="gsp-item-label">成员管理</span>
+            <span class="gsp-item-value">{{ isCurrentUserAdmin ? '可移除成员' : '查看成员' }}</span>
+            <DtIcon name="arrow" :size="15" class="gsp-arrow" />
+          </div>
+          <div class="gsp-item gsp-item-switch">
+            <span class="gsp-item-label">消息免打扰</span>
+            <el-switch
+              :model-value="groupMuted"
+              :loading="savingMute"
+              @change="onMuteChange"
+            />
+          </div>
+        </div>
+
+        <!-- 退出 / 解散 -->
         <button class="gsp-danger-btn" @click="isCurrentUserOwner ? handleDisbandGroup() : handleLeaveGroup()">
           {{ isCurrentUserOwner ? '解散群聊' : '退出群聊' }}
         </button>
       </div>
     </div>
+
+    <!-- ============= 移动端：群二维码子页面（钉钉式邀请卡） ============= -->
+    <div v-if="isMobile && groupSubPage === 'qr'" class="group-sub-page">
+      <div class="gsp-header">
+        <el-button text circle @click="groupSubPage = 'settings'">
+          <el-icon :size="20"><ArrowLeft /></el-icon>
+        </el-button>
+        <span class="gsp-title">群二维码</span>
+        <div style="width:32px"></div>
+      </div>
+      <div class="gsp-body">
+        <div class="gsp-qr-card">
+          <div class="gsp-qr-head">
+            <el-avatar v-if="currentGroup?.avatar" :size="42" shape="square" :src="currentGroup.avatar" />
+            <span v-else class="gsp-qr-avatar">{{ (currentGroup?.name || activeName || '群')[0] }}</span>
+            <div class="gsp-qr-meta">
+              <div class="gsp-qr-name">{{ currentGroup?.name || activeName }}</div>
+              <div class="gsp-qr-sub">{{ currentGroup?.member_count || 0 }} 名成员</div>
+            </div>
+          </div>
+
+          <div class="gsp-qr-box">
+            <img v-if="qrDataUrl" :src="qrDataUrl" alt="群二维码" />
+            <div v-else class="gsp-qr-loading">
+              <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+              <span>生成中…</span>
+            </div>
+          </div>
+          <p class="gsp-qr-tip">成员用手机扫码，登录校园端后即可加入本群</p>
+
+          <div class="gsp-qr-actions">
+            <button class="gsp-qr-btn" type="button" @click="copyInviteLink">
+              <el-icon :size="16"><DocumentCopy /></el-icon> 复制链接
+            </button>
+            <button class="gsp-qr-btn" type="button" @click="saveQrImage">
+              <el-icon :size="16"><Download /></el-icon> 保存二维码
+            </button>
+          </div>
+          <button class="gsp-qr-reset" type="button" @click="resetInvite">重置二维码（旧码立即失效）</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 群名称修改弹窗（钉钉式单行输入） -->
+    <el-dialog v-model="showRenameGroup" title="修改群名称" width="360px" :close-on-click-modal="false">
+      <el-input v-model="groupNameInput" maxlength="50" show-word-limit placeholder="请输入群名称" @keyup.enter="saveGroupName" />
+      <template #footer>
+        <el-button @click="showRenameGroup = false">取消</el-button>
+        <el-button type="primary" :loading="savingGroupName" @click="saveGroupName">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- ============= 移动端：群公告子页面 ============= -->
     <div v-if="isMobile && groupSubPage === 'announcement'" class="group-sub-page">
@@ -870,19 +1125,11 @@
             :class="{ active: mobileView === v.key }"
             @click="switchView(v.key)"
           >
-            <span class="msg-drawer-icon"><el-icon :size="19"><component :is="v.icon" /></el-icon></span>
+            <span class="msg-drawer-icon"><DtIcon :name="v.dtIcon" :size="19" /></span>
             <span class="msg-drawer-label">{{ v.label }}</span>
             <span v-if="v.count > 0" class="tui-count">{{ v.count > 99 ? '99+' : v.count }}</span>
           </button>
         </nav>
-        <div class="msg-drawer-foot">
-          <button class="msg-drawer-foot-btn" type="button" @click="openAddFriendFromDrawer">
-            <el-icon :size="17"><User /></el-icon> 添加好友
-          </button>
-          <button class="msg-drawer-foot-btn" type="button" @click="drawerGoHome">
-            <el-icon :size="17"><HomeFilled /></el-icon> 返回首页
-          </button>
-        </div>
       </aside>
     </Transition>
   </div>
@@ -893,11 +1140,12 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
 import { useAuthStore } from '@/stores/auth'
-import { getConversations, getMessages, sendMessage, markRead } from '@/api/messages'
+import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin } from '@/api/messages'
 import {
   getGroups, getGroup, getGroupMembers, createGroup as apiCreateGroup,
   addGroupMembers, sendGroupMessage, getGroupMessages, searchUsers,
-  updateGroupAnnouncement, updateGroupAvatar, leaveGroup, disbandGroup, removeGroupMember,
+  updateGroupAnnouncement, updateGroupAvatar, renameGroup, leaveGroup, disbandGroup, removeGroupMember,
+  setGroupMuted, getGroupInvite, resetGroupInvite, markGroupRead,
   type GroupOut, type GroupMemberOut, type UserSearchResult
 } from '@/api/groups'
 import { uploadFile } from '@/api/upload'
@@ -906,18 +1154,24 @@ import {
   getNotifications, markNotificationsRead, markAllNotificationsRead,
   type Notification as NotificationItem,
 } from '@/api/notification'
-import { getColleges, getMajors, getClassGroups } from '@/api/organization'
+import { getColleges, getMajors, getClassGroups, getOrgScope, type OrgScope } from '@/api/organization'
 import type { College, Major, ClassGroup } from '@/types'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useButlerPreview } from '@/composables/useButlerPreview'
 import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
+// 小绵管家：教师端与学生端共用的常驻会话（自动推送资讯 + 总结对话）
+import ButlerChat from '@/components/butler/ButlerChat.vue'
+// 钉钉风格图标（对齐钉钉设计的组件图案）
+import DtIcon from '@/components/common/DtIcon.vue'
 import { getToken } from '@/utils/token'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import Cropper from 'cropperjs'
+import QRCode from 'qrcode'
 import {
-  Search, User, UserFilled, ChatDotRound, ChatLineRound, ArrowLeft, ArrowRight, ArrowDown, Plus,
-  Bell, MoreFilled, Loading, Check, InfoFilled, ChatRound, Menu, Stamp, Collection, Notebook,
-  OfficeBuilding, HomeFilled,
-  UploadFilled, Document, FolderOpened, Picture, Setting, WarningFilled, Delete, SwitchButton, Download, Camera
+  Search, User, UserFilled, ChatDotRound, ChatLineRound, ArrowLeft, Plus,
+  Bell, MoreFilled, Loading, InfoFilled, ChatRound, Menu, Stamp, Collection, Notebook,
+  OfficeBuilding,
+  UploadFilled, Document, FolderOpened, Picture, Setting, WarningFilled, Delete, SwitchButton, Download, DocumentCopy
 } from '@element-plus/icons-vue'
 
 const auth = useAuthStore()
@@ -925,7 +1179,9 @@ const route = useRoute()
 const router = useRouter()
 const userId = auth.user?.id ?? 0
 const { isMobile } = useResponsive()
-const { siteName } = useSiteConfig()
+const { siteName, siteMascot, agentName } = useSiteConfig()
+// 小绵管家入口的动态摘要（取最新一条资讯标题）
+const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
 // ===== 消息中心视图（消息 / 通讯录 / 通知）=====
 // 消息为默认主视图；通讯录与通知在移动端收进侧边抽屉，桌面端置于左栏分段切换
@@ -937,9 +1193,10 @@ const mobileViewTitle = computed(
 )
 
 const viewTabs = computed(() => [
-  { key: 'messages' as MsgView, label: '消息', icon: ChatLineRound, count: totalUnread.value },
-  { key: 'contacts' as MsgView, label: '通讯录', icon: User, count: 0 },
-  { key: 'notifications' as MsgView, label: '通知', icon: Bell, count: unreadNotifCount.value },
+  // dtIcon：钉钉风格导航图标（见 components/common/DtIcon.vue）
+  { key: 'messages' as MsgView, label: '消息', icon: ChatLineRound, dtIcon: 'message', count: totalUnread.value },
+  { key: 'contacts' as MsgView, label: '通讯录', icon: User, dtIcon: 'contacts', count: 0 },
+  { key: 'notifications' as MsgView, label: '通知', icon: Bell, dtIcon: 'bell', count: unreadNotifCount.value },
 ])
 
 function switchView(v: MsgView) {
@@ -949,22 +1206,12 @@ function switchView(v: MsgView) {
   if (v === 'notifications') loadNotifications()
 }
 
-function openAddFriendFromDrawer() {
-  drawerOpen.value = false
-  showAddFriend.value = true
-}
-
-function drawerGoHome() {
-  drawerOpen.value = false
-  router.push('/teacher')
-}
-
 const conversations = ref<any[]>([])
 const groups = ref<GroupOut[]>([])
 
 const activeId = ref<number | null>(null)
 const activeName = ref('')
-const activeType = ref<'single' | 'group'>('single')
+const activeType = ref<'single' | 'group' | 'butler'>('single')
 const messages = ref<any[]>([])
 const newMsg = ref('')
 const msgListRef = ref<HTMLDivElement>()
@@ -1001,21 +1248,21 @@ function onStudentMenuCommand(command: string) {
 // 侧边栏 — 筛选已有会话
 const search = ref('')
 
-// 置顶会话 (localStorage 持久化)
+// 置顶会话（服务端持久化：跨端 / 跨设备同步，替代原 localStorage 方案）
 const pinnedKeys = ref<Set<string>>(new Set())
-function loadPins() {
+async function loadPins() {
   try {
-    const raw = localStorage.getItem('teacher-msg-pins')
-    if (raw) pinnedKeys.value = new Set(JSON.parse(raw))
-  } catch {}
-}
-function savePins() {
-  localStorage.setItem('teacher-msg-pins', JSON.stringify([...pinnedKeys.value]))
+    const r = await getSessionPins()
+    pinnedKeys.value = new Set(r.keys || [])
+  } catch { /* 拉取失败时保持无置顶，不影响会话列表展示 */ }
 }
 function togglePin(key: string) {
-  if (pinnedKeys.value.has(key)) pinnedKeys.value.delete(key)
-  else pinnedKeys.value.add(key)
-  savePins()
+  const next = !pinnedKeys.value.has(key)
+  const s = new Set(pinnedKeys.value)
+  if (next) s.add(key)
+  else s.delete(key)
+  pinnedKeys.value = s
+  setSessionPin(key, next).catch(() => ElMessage.error('置顶同步失败'))
 }
 function isPinned(key: string) { return pinnedKeys.value.has(key) }
 
@@ -1092,7 +1339,7 @@ const filteredList = computed(() => {
 
 function filterConversations() {}
 
-// 添加好友
+// 发起会话：组织内用户无需「好友关系」，选中即打开单聊（与钉钉一致，无好友概念）
 const showAddFriend = ref(false)
 const addFriendSearch = ref('')
 const addFriendResults = ref<UserSearchResult[]>([])
@@ -1124,7 +1371,7 @@ async function addFriendAndChat(user: UserSearchResult) {
   addFriendSearch.value = ''
   addFriendResults.value = []
   await openChat(user.id, user.name, 'single')
-  ElMessage.success(`已添加 ${user.name}，可以开始聊天了`)
+  ElMessage.success(`已打开与 ${user.name} 的会话`)
 }
 
 // 创建群聊弹窗
@@ -1170,8 +1417,26 @@ const currentGroup = ref<GroupOut | null>(null)
 
 const showManageGroup = ref(false)
 
-// 移动端群设置子页面（QQ 风格）：settings / announcement / files
-const groupSubPage = ref<'settings' | 'announcement' | 'files' | null>(null)
+// 群名称修改（钉钉群设置「群名称」）
+const showRenameGroup = ref(false)
+const groupNameInput = ref('')
+const savingGroupName = ref(false)
+
+// 移动端群设置子页面（钉钉式）：settings / announcement / files / qr
+const groupSubPage = ref<'settings' | 'announcement' | 'files' | 'qr' | null>(null)
+
+// 群二维码邀请
+const qrDataUrl = ref('')
+const inviteCode = ref('')
+const inviteLink = computed(() =>
+  inviteCode.value ? `${window.location.origin}/join/group/${inviteCode.value}` : ''
+)
+
+// 消息免打扰（仅影响自己）
+const groupMuted = ref(false)
+const savingMute = ref(false)
+// 桌面端群管理弹窗内是否展开群二维码
+const showManageQr = ref(false)
 const groupFileInputRef = ref<HTMLInputElement>()
 const groupAvatarInputRef = ref<HTMLInputElement>()
 const showGroupCrop = ref(false)
@@ -1207,6 +1472,7 @@ async function onManageDialogOpened() {
     showManageInvite.value = false
     manageInviteSearch.value = ''
     manageInviteResults.value = []
+    showManageQr.value = false
   } catch {}
 }
 
@@ -1253,16 +1519,28 @@ async function handleManageAddMember(uid: number) {
     manageInviteResults.value = []
     groupMembers.value = await getGroupMembers(activeId.value)
     currentGroup.value = await getGroup(activeId.value)
+    loadGroups()
   } catch { ElMessage.error('添加失败') }
+}
+
+/** 是否可移除该成员：群主/管理员可移除他人，群主自身不可被移除 */
+function canRemoveMember(m: GroupMemberOut) {
+  return isCurrentUserAdmin.value && m.role !== 'owner' && m.user_id !== userId
 }
 
 async function handleRemoveMember(uid: number, name: string) {
   if (!activeId.value) return
+  const target = groupMembers.value.find((m) => m.user_id === uid)
+  if (target && target.role === 'owner') { ElMessage.warning('群主不可被移除'); return }
+  try {
+    await ElMessageBox.confirm(`确定将「${name}」移出群聊吗？`, '移除成员', { type: 'warning' })
+  } catch { return /* 用户取消 */ }
   try {
     await removeGroupMember(activeId.value, uid)
     ElMessage.success(`已移除 ${name}`)
     groupMembers.value = await getGroupMembers(activeId.value)
     currentGroup.value = await getGroup(activeId.value)
+    loadGroups()
   } catch { ElMessage.error('移除失败') }
 }
 
@@ -1325,6 +1603,7 @@ async function handleAddMember(uid: number) {
     showAddMember.value = false
     groupMembers.value = await getGroupMembers(activeId.value)
     currentGroup.value = await getGroup(activeId.value)
+    loadGroups()
   } catch { ElMessage.error('添加失败') }
 }
 async function openMemberList() {
@@ -1344,12 +1623,130 @@ async function openGroupSettings() {
     groupMembers.value = members
     currentGroup.value = group
     announcementText.value = group?.announcement || ''
+    groupMuted.value = !!group?.is_muted
     editingAnnouncement.value = false
   } catch { /* 已有数据则保留 */ }
 }
 
+// ===== 群二维码邀请（钉钉式，移动端子页 + 桌面弹窗共用） =====
+async function loadGroupQr() {
+  if (!activeId.value) return
+  try {
+    const inv = await getGroupInvite(activeId.value)
+    inviteCode.value = inv.code
+    await renderQr()
+  } catch (e: unknown) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '二维码获取失败')
+  }
+}
+
+async function openGroupQr() {
+  if (!isCurrentUserAdmin.value || !activeId.value) return
+  groupSubPage.value = 'qr'
+  qrDataUrl.value = ''
+  await loadGroupQr()
+}
+
+/** 桌面端「群管理」弹窗内展开/收起二维码 */
+async function toggleManageQr() {
+  if (showManageQr.value) { showManageQr.value = false; return }
+  if (!isCurrentUserAdmin.value) { ElMessage.warning('仅群主或管理员可查看群二维码'); return }
+  showManageQr.value = true
+  if (!qrDataUrl.value) await loadGroupQr()
+}
+
+async function renderQr() {
+  if (!inviteLink.value) return
+  try {
+    qrDataUrl.value = await QRCode.toDataURL(inviteLink.value, {
+      width: 480,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+  } catch {
+    ElMessage.error('二维码生成失败')
+  }
+}
+
+/** 重置邀请码：此前分享出去的二维码立即失效 */
+async function resetInvite() {
+  if (!activeId.value) return
+  try {
+    const inv = await resetGroupInvite(activeId.value)
+    inviteCode.value = inv.code
+    await renderQr()
+    ElMessage.success('二维码已重置，旧码已失效')
+  } catch {
+    ElMessage.error('重置失败')
+  }
+}
+
+async function copyInviteLink() {
+  if (!inviteLink.value) return
+  try {
+    await navigator.clipboard.writeText(inviteLink.value)
+    ElMessage.success('邀请链接已复制')
+  } catch {
+    ElMessage.info(inviteLink.value)
+  }
+}
+
+function saveQrImage() {
+  if (!qrDataUrl.value) return
+  const a = document.createElement('a')
+  a.href = qrDataUrl.value
+  a.download = `群二维码-${currentGroup.value?.name || activeName.value}.png`
+  a.click()
+}
+
+/** 消息免打扰开关：仅影响自己（不计未读、不接收实时推送） */
+async function onMuteChange(val: string | number | boolean) {
+  if (!activeId.value) return
+  const muted = !!val
+  savingMute.value = true
+  try {
+    const r = await setGroupMuted(activeId.value, muted)
+    groupMuted.value = r.muted
+    ElMessage.success(r.muted ? '已开启消息免打扰' : '已关闭消息免打扰')
+    loadGroups()
+  } catch {
+    groupMuted.value = !muted
+    ElMessage.error('设置失败')
+  } finally {
+    savingMute.value = false
+  }
+}
+
 function closeGroupSubPage() {
   groupSubPage.value = null
+}
+
+/** 打开群名称修改弹窗（仅群主/管理员可改） */
+function openRenameGroup() {
+  if (!isCurrentUserAdmin.value) return
+  groupNameInput.value = currentGroup.value?.name || activeName.value
+  showRenameGroup.value = true
+}
+
+async function saveGroupName() {
+  const name = groupNameInput.value.trim()
+  if (!activeId.value) return
+  if (!name) { ElMessage.warning('请输入群名称'); return }
+  savingGroupName.value = true
+  try {
+    await renameGroup(activeId.value, name)
+    ElMessage.success('群名称已更新')
+    showRenameGroup.value = false
+    currentGroup.value = await getGroup(activeId.value)
+    activeName.value = currentGroup.value?.name || name
+    loadGroups()
+  } catch (e: unknown) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '修改失败')
+  } finally {
+    savingGroupName.value = false
+  }
 }
 
 // ===== 群头像编辑 =====
@@ -1395,6 +1792,8 @@ async function confirmGroupCrop() {
     const result: any = await uploadFile(file)
     await updateGroupAvatar(activeId.value, result.url)
     currentGroup.value = await getGroup(activeId.value)
+    // 同步刷新会话列表，避免左侧群头像仍是旧图
+    loadGroups()
     showGroupCrop.value = false
     if (groupCropper) { groupCropper.destroy(); groupCropper = null }
     ElMessage.success('群头像已更新')
@@ -1514,6 +1913,13 @@ function connectWs() {
           messages.value.push({ id: data.id || Date.now(), group_id: data.group_id, sender_id: data.sender_id, sender_name: data.sender_name, content: data.content, created_at: data.created_at })
           scrollToBottom()
         }
+      } else if (data.type === 'group_member_joined') {
+        // 有人扫码入群：刷新群列表；若正在看该群则同步成员与群信息
+        loadGroups()
+        if (data.group_id === activeId.value && activeType.value === 'group' && activeId.value) {
+          getGroupMembers(activeId.value).then((list) => { groupMembers.value = list }).catch(() => {})
+          getGroup(activeId.value).then((g) => { currentGroup.value = g }).catch(() => {})
+        }
       }
     } catch {}
   }
@@ -1542,22 +1948,61 @@ const expandedColleges = ref<Set<number>>(new Set())
 const expandedMajors = ref<Set<number>>(new Set())
 const orgLoading = ref(false)
 
+/** 组织架构范围：只展示「自己所在组织 + 下级架构」 */
+const orgScope = ref<OrgScope | null>(null)
+const orgScopeRestricted = computed(() => !!orgScope.value && orgScope.value.scope !== 'all')
+
 async function ensureContacts() {
   if (contactsLoaded) return
   contactsLoaded = true
   contactsLoading.value = true
   orgLoading.value = true
   try {
-    const [students, colleges] = await Promise.all([
+    const [students, colleges, scope] = await Promise.all([
       getStudents().catch(() => [] as StudentSummary[]),
       getColleges().catch(() => [] as College[]),
+      getOrgScope().catch(() => null),
     ])
     contactStudents.value = students
-    orgColleges.value = colleges
+    orgScope.value = scope
+    // 只保留自己所在的学院；未归属任何组织（scope=all）时才展示全部
+    const collegeId = scope?.college_id ?? null
+    orgColleges.value = collegeId ? colleges.filter((c) => c.id === collegeId) : colleges
+    if (orgColleges.value.length) await expandOwnOrgPath()
   } finally {
     contactsLoading.value = false
     orgLoading.value = false
   }
+}
+
+/** 自动展开「学院 → 专业 → 班级」自己的归属路径，直接看到本班学生 */
+async function expandOwnOrgPath() {
+  const scope = orgScope.value
+  if (!scope || scope.scope === 'all' || !scope.college_id) return
+  try {
+    expandedColleges.value = new Set([scope.college_id])
+    const majors = await getMajors(scope.college_id)
+    const visibleMajors = scope.major_id ? majors.filter((m) => m.id === scope.major_id) : majors
+    orgMajors.value = { ...orgMajors.value, [scope.college_id]: visibleMajors }
+    if (!scope.major_id) return
+
+    expandedMajors.value = new Set([scope.major_id])
+    const classes = await getClassGroups({ major_id: scope.major_id })
+    const visibleClasses = scope.class_group_id ? classes.filter((cg) => cg.id === scope.class_group_id) : classes
+    orgClasses.value = { ...orgClasses.value, [scope.major_id]: visibleClasses }
+    if (!scope.class_group_id) return
+
+    expandedClasses.value = new Set([scope.class_group_id])
+    classStudentsLoading.value = { ...classStudentsLoading.value, [scope.class_group_id]: true }
+    try {
+      const list = await getStudents(undefined, scope.class_group_id)
+      classStudents.value = { ...classStudents.value, [scope.class_group_id]: list }
+    } catch {
+      classStudents.value = { ...classStudents.value, [scope.class_group_id]: [] }
+    } finally {
+      classStudentsLoading.value = { ...classStudentsLoading.value, [scope.class_group_id]: false }
+    }
+  } catch { /* 组织架构加载失败不阻塞消息与检索 */ }
 }
 
 /** 全校师生检索（后端要求关键词至少 1 个字符，故空串直接清空结果） */
@@ -1586,7 +2031,12 @@ async function toggleOrgCollege(id: number) {
   expandedColleges.value = next
   if (next.has(id) && !orgMajors.value[id]) {
     const majors = await getMajors(id).catch(() => [] as Major[])
-    orgMajors.value = { ...orgMajors.value, [id]: majors }
+    // 收敛到本人所在专业时，只展示该专业
+    const scope = orgScope.value
+    orgMajors.value = {
+      ...orgMajors.value,
+      [id]: scope?.major_id && scope.college_id === id ? majors.filter((m) => m.id === scope.major_id) : majors,
+    }
   }
 }
 
@@ -1596,8 +2046,45 @@ async function toggleOrgMajor(id: number) {
   expandedMajors.value = next
   if (next.has(id) && !orgClasses.value[id]) {
     const classes = await getClassGroups({ major_id: id }).catch(() => [] as ClassGroup[])
-    orgClasses.value = { ...orgClasses.value, [id]: classes }
+    // 收敛到本人所在班级时，只展示该班级
+    const scope = orgScope.value
+    orgClasses.value = {
+      ...orgClasses.value,
+      [id]: scope?.class_group_id && scope.major_id === id ? classes.filter((cg) => cg.id === scope.class_group_id) : classes,
+    }
   }
+}
+
+// 班级 → 学生名单（通讯录下钻最后一跳，点学生即可发起会话）
+const expandedClasses = ref<Set<number>>(new Set())
+const classStudents = ref<Record<number, StudentSummary[]>>({})
+const classStudentsLoading = ref<Record<number, boolean>>({})
+
+async function toggleOrgClass(classGroupId: number) {
+  const next = new Set(expandedClasses.value)
+  if (next.has(classGroupId)) { next.delete(classGroupId) } else { next.add(classGroupId) }
+  expandedClasses.value = next
+  if (next.has(classGroupId) && !classStudents.value[classGroupId]) {
+    classStudentsLoading.value = { ...classStudentsLoading.value, [classGroupId]: true }
+    try {
+      const list = await getStudents(undefined, classGroupId)
+      classStudents.value = { ...classStudents.value, [classGroupId]: list }
+    } catch {
+      classStudents.value = { ...classStudents.value, [classGroupId]: [] }
+    } finally {
+      classStudentsLoading.value = { ...classStudentsLoading.value, [classGroupId]: false }
+    }
+  }
+}
+
+/** 通讯录角色标签：管理员此前会被误标为「学生」 */
+function roleLabel(role: string) {
+  if (role === 'teacher') return '教师'
+  if (role === 'admin') return '管理员'
+  return '学生'
+}
+function roleTagClass(role: string) {
+  return role === 'student' ? 'tui-tag-brand' : 'tui-tag-warn'
 }
 
 /* ==================== 通知 ==================== */
@@ -1627,7 +2114,13 @@ async function openNotification(n: NotificationItem) {
   if (!n.is_read) {
     try { await markNotificationsRead([n.id]); n.is_read = true } catch { /* 标记失败不阻断跳转 */ }
   }
-  if (n.link) router.push(n.link)
+  if (n.link) {
+    router.push(n.link)
+  } else {
+    // 部分通知（历史数据 / 无跳转目标）没有 link，此前点击完全无反应，
+    // 这里给出明确反馈，避免用户以为页面坏了。
+    ElMessage.info(n.content || '该通知暂无关联页面')
+  }
 }
 
 /** 通知类型 → 图标与语义色，色值取自设计令牌同源色板（teacher-ui.css） */
@@ -1644,6 +2137,8 @@ function notifMeta(type: string): { icon: any; color: string; tint: string } {
       return { icon: ChatLineRound, color: '#079455', tint: '#ecfdf3' }
     case 'message':
       return { icon: ChatDotRound, color: '#0891b2', tint: '#ecfeff' }
+    case 'system':
+      return { icon: Setting, color: '#2563eb', tint: 'var(--tui-brand-soft)' }
     default:
       return { icon: InfoFilled, color: '#6b7280', tint: '#f2f3f5' }
   }
@@ -1660,6 +2155,8 @@ async function openChat(id: number, name: string, type: 'single' | 'group') {
     } else {
       messages.value = await getGroupMessages(id)
       currentGroup.value = await getGroup(id)
+      // 打开群聊即标记已读：否则群未读角标不会清零，会话列表一直“有红点”
+      await markGroupRead(id)
       loadGroups()
     }
     scrollToBottom()
@@ -1667,7 +2164,19 @@ async function openChat(id: number, name: string, type: 'single' | 'group') {
 }
 function goBack() {
   activeId.value = null; activeName.value = ''; messages.value = []; currentGroup.value = null
+  activeType.value = 'single'
   groupSubPage.value = null
+}
+
+/** 打开「小绵管家」常驻会话：自动推送资讯 / 总结对话，不占用单聊与群聊状态 */
+function openButler() {
+  activeType.value = 'butler'
+  activeId.value = -1
+  activeName.value = `${agentName.value || '小绵'}管家`
+  messages.value = []
+  currentGroup.value = null
+  groupSubPage.value = null
+  drawerOpen.value = false
 }
 function scrollToBottom() { nextTick(() => msgListRef.value?.scrollTo({ top: msgListRef.value.scrollHeight, behavior: 'smooth' })) }
 
@@ -1787,6 +2296,7 @@ onMounted(async () => {
   document.addEventListener('click', onGlobalClick)
   loadPins()
   connectWs()
+  void refreshButlerPreview()
   await Promise.all([loadConversations(), loadGroups(), loadMyStudents()])
   if (route.query.groupId) {
     openChat(Number(route.query.groupId), (route.query.groupName as string) || '', 'group')
@@ -1820,7 +2330,7 @@ function onGlobalClick(e: MouseEvent) {
 
 <style scoped>
 .msg-page {
-  display: flex; height: 100%;
+  display: flex; height: 100%; min-height: 0; min-width: 0;
   background: #fff;
   overflow: hidden;
 }
@@ -1861,6 +2371,23 @@ function onGlobalClick(e: MouseEvent) {
 
 .conv-item.pinned { background: var(--tui-surface-muted); }
 
+/* ===== 小绵管家：置顶常驻会话（钉钉式） ===== */
+.butler-entry { background: linear-gradient(180deg, var(--dt-primary-soft), #fff 82%); }
+.butler-entry:hover { background: var(--dt-primary-soft); }
+.butler-entry.active { background: var(--dt-primary-soft); border-left-color: var(--dt-primary); }
+.butler-entry .conv-name { font-weight: 600; }
+.butler-entry .dt-tag { flex-shrink: 0; }
+.butler-entry-avatar {
+  width: 36px; height: 36px; border-radius: 10px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--dt-primary-soft); color: var(--dt-primary-strong);
+}
+.butler-entry-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.butler-entry-online {
+  position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--dt-success); border: 2px solid #fff;
+}
+
 /* 右滑置顶容器（仅移动端生效，桌面端隐藏） */
 .conv-swipe-wrap { position: relative; overflow: hidden; }
 .conv-swipe-actions {
@@ -1891,12 +2418,12 @@ function onGlobalClick(e: MouseEvent) {
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 0; color: var(--tui-text-quiet); font-size: 13px; }
 
 /* ===== 聊天区域 ===== */
-.msg-chat { flex: 1; display: flex; flex-direction: column; }
+.msg-chat { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .chat-header { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 8px 18px; border-bottom: 1px solid var(--tui-hairline); background: var(--tui-surface); }
 .chat-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .chat-name { font-size: 16.5px; font-weight: 600; color: var(--tui-text); }
 .chat-member-count { font-size: 11.5px; color: var(--tui-text-quiet); margin-top: 2px; }
-.msg-list { flex: 1; overflow-y: auto; padding: 20px; background: var(--tui-bg); }
+.msg-list { flex: 1; overflow-y: auto; padding: 20px; background: var(--dt-bg); }
 .date-separator { text-align: center; margin: 16px 0; }
 .date-separator span { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 11px; color: var(--tui-text-quiet); background: var(--tui-surface-sunken); }
 /* QQ 风消息行：头像 + 气泡 */
@@ -1907,9 +2434,9 @@ function onGlobalClick(e: MouseEvent) {
 .msg-row.mine .msg-col { align-items: flex-end; }
 .sender-name { font-size: 11px; color: var(--tui-text-quiet); margin: 0 4px 4px; }
 .msg-bubble { width: fit-content; max-width: 100%; }
-.bubble-text { padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.5; word-break: break-word; }
-.mine .bubble-text { background: var(--tui-brand); color: #fff; border-top-right-radius: 4px; }
-.theirs .bubble-text { background: var(--tui-surface); color: var(--tui-text); border-top-left-radius: 4px; box-shadow: var(--tui-shadow-1); }
+.bubble-text { padding: 9px 12px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+.mine .bubble-text { background: var(--dt-primary); color: #fff; border-top-right-radius: 4px; }
+.theirs .bubble-text { background: var(--dt-surface); color: var(--dt-text); border-top-left-radius: 4px; box-shadow: var(--dt-shadow-1); }
 .bubble-time { font-size: 10.5px; color: var(--tui-text-quiet); font-family: var(--mono); margin-top: 4px; padding: 0 4px; }
 .chat-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 60px 0; color: var(--tui-text-quiet); font-size: 13px; }
 
@@ -2006,6 +2533,13 @@ function onGlobalClick(e: MouseEvent) {
 :deep(.el-dialog__headerbtn .el-dialog__close) { color: var(--tui-text-tertiary); }
 :deep(.el-dialog__headerbtn:hover) { background: var(--tui-surface-muted); }
 :deep(.el-dialog__body) { padding: 16px 18px; color: var(--tui-text-secondary); }
+/* 列表型弹窗（邀请成员 / 群成员 / 群管理 / 选择联系人 / 发起群聊）：
+   高度随内容自适应，最高到视口 2/3，超出才在弹窗内滚动——不是写死 2/3 高度 */
+:deep(.dt-dialog-limit .el-dialog__body) {
+  max-height: 66vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 :deep(.el-dialog__footer) {
   padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--tui-hairline);
@@ -2062,16 +2596,16 @@ function onGlobalClick(e: MouseEvent) {
 }
 
 /* ==================== 弹窗内选择列表 ==================== */
-/* 统一为白底 + 发丝线 + 56px 行高，与设计稿的 row 规范一致 */
+/* 统一为白底 + 发丝线 + 56px 行高，与钉钉列表行规范一致 */
 .member-search-results,
 .add-member-results,
 .add-friend-results,
 .manage-invite-results,
 .group-members-list {
-  max-height: 340px; overflow-y: auto; overflow-x: hidden;
+  max-height: 56vh; overflow-y: auto; overflow-x: hidden;
   margin-top: 10px;
-  border: 1px solid var(--tui-border); border-radius: var(--tui-radius);
-  background: var(--tui-surface);
+  border: 1px solid var(--dt-divider); border-radius: var(--dt-radius);
+  background: var(--dt-surface);
 }
 .member-search-item,
 .add-member-item,
@@ -2080,9 +2614,9 @@ function onGlobalClick(e: MouseEvent) {
 .group-member-item {
   display: flex; align-items: center; gap: 12px;
   width: 100%; min-height: 56px; padding: 10px 14px;
-  border: none; border-bottom: 1px solid var(--tui-border); background: transparent;
+  border: none; border-bottom: 1px solid var(--dt-divider); background: transparent;
   cursor: pointer; font-family: inherit; text-align: left;
-  transition: background .15s var(--tui-ease);
+  transition: background .15s var(--dt-ease);
 }
 .member-search-item:last-child,
 .add-member-item:last-child,
@@ -2092,26 +2626,26 @@ function onGlobalClick(e: MouseEvent) {
 .member-search-item:hover,
 .add-member-item:hover,
 .add-friend-item:hover,
-.manage-invite-item:hover { background: var(--tui-surface-muted); }
+.manage-invite-item:hover { background: var(--dt-hover); }
 .member-search-item:active,
 .add-member-item:active,
-.add-friend-item:active { background: var(--tui-surface-sunken); }
+.add-friend-item:active { background: var(--dt-surface-press); }
 .add-friend-item { justify-content: space-between; }
 .add-friend-item-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .member-search-info,
 .add-member-info,
 .manage-invite-info,
 .add-friend-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.add-friend-item-name { font-size: 14px; font-weight: 600; color: var(--tui-text); display: flex; align-items: center; gap: 8px; }
+.add-friend-item-name { font-size: 15px; font-weight: 600; color: var(--dt-text); display: flex; align-items: center; gap: 8px; }
 .member-name,
 .add-member-info span,
-.manage-invite-info span { font-size: 14px; font-weight: 500; color: var(--tui-text); }
+.manage-invite-info span { font-size: 15px; font-weight: 600; color: var(--dt-text); }
 .add-friend-item-username,
 .member-username,
 .add-member-info small,
-.manage-invite-info small { font-size: 11.5px; color: var(--tui-text-quiet); }
+.manage-invite-info small { font-size: 12px; color: var(--dt-text-tertiary); }
 .member-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
-.member-info .member-name { font-size: 14px; font-weight: 500; color: var(--tui-text); }
+.member-info .member-name { font-size: 15px; font-weight: 600; color: var(--dt-text); }
 
 /* ===== 选择联系人：搜索框 / 提示 / 已选成员 ===== */
 .add-friend-dialog { }
@@ -2171,8 +2705,8 @@ function onGlobalClick(e: MouseEvent) {
   padding: 12px 14px; border-radius: 12px; cursor: pointer;
   min-width: 200px;
 }
-.mine .bubble-file { background: var(--tui-brand); color: #fff; border-top-right-radius: 4px; }
-.theirs .bubble-file { background: var(--tui-surface); color: var(--tui-text); border-top-left-radius: 4px; box-shadow: var(--tui-shadow-1); }
+.mine .bubble-file { background: var(--dt-primary); color: #fff; border-top-right-radius: 4px; }
+.theirs .bubble-file { background: var(--dt-surface); color: var(--dt-text); border-top-left-radius: 4px; box-shadow: var(--dt-shadow-1); }
 .bubble-file-info { flex: 1; min-width: 0; }
 .bubble-file-name {
   font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -2211,7 +2745,7 @@ function onGlobalClick(e: MouseEvent) {
 .manage-invite-info { flex: 1; display: flex; flex-direction: column; }
 .manage-invite-info span { font-size: 14px; font-weight: 500; color: var(--tui-text); }
 .manage-invite-info small { font-size: 11.5px; color: var(--tui-text-quiet); }
-.manage-members-list { max-height: 240px; overflow-y: auto; }
+.manage-members-list { max-height: 56vh; overflow-y: auto; }
 .manage-member-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 10px 2px; border-bottom: 1px solid var(--tui-border); }
 .manage-member-item:last-child { border-bottom: none; }
 .manage-member-left { display: flex; align-items: center; gap: 10px; }
@@ -2281,7 +2815,7 @@ function onGlobalClick(e: MouseEvent) {
   font-size: 11.5px; color: var(--tui-text-quiet);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.msg-drawer-nav { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.msg-drawer-nav { flex: 1; overflow-y: auto; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 2px; }
 .msg-drawer-item {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 12px; border: none; border-radius: var(--tui-radius-sm);
@@ -2293,17 +2827,6 @@ function onGlobalClick(e: MouseEvent) {
 .msg-drawer-item.active { background: var(--tui-brand-soft); color: var(--tui-brand-strong); font-weight: 600; }
 .msg-drawer-icon { display: flex; color: inherit; }
 .msg-drawer-label { flex: 1; }
-.msg-drawer-foot {
-  padding: 10px 12px calc(14px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--tui-border);
-}
-.msg-drawer-foot-btn {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 11px 12px; border: none; border-radius: var(--tui-radius-sm);
-  background: transparent; cursor: pointer; font-family: inherit;
-  color: var(--tui-text-tertiary); font-size: 13.5px;
-}
-.msg-drawer-foot-btn:active { background: var(--tui-surface-muted); }
 
 .drawer-mask-enter-active, .drawer-mask-leave-active { transition: opacity .22s ease; }
 .drawer-mask-enter-from, .drawer-mask-leave-to { opacity: 0; }
@@ -2311,74 +2834,103 @@ function onGlobalClick(e: MouseEvent) {
 .drawer-panel-leave-active { transition: transform .2s ease-in; }
 .drawer-panel-enter-from, .drawer-panel-leave-to { transform: translateX(-100%); }
 
-/* ==================== 通讯录 ==================== */
-.addr-section-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
-.addr-section-title { font-size: 12.5px; font-weight: 600; color: var(--tui-text-quiet); letter-spacing: .3px; }
-.addr-section-count { margin-left: auto; font-size: 11.5px; color: var(--tui-text-quiet); }
+/* ==================== 通讯录（钉钉列表行规范：56px 行高 + 发丝线） ==================== */
+.addr-section-head { display: flex; align-items: center; gap: 8px; padding: 16px 16px 8px; }
+.addr-section-title { font-size: 13px; font-weight: 600; color: var(--dt-text-tertiary); letter-spacing: .2px; }
+.addr-section-count { margin-left: auto; font-size: 12px; color: var(--dt-text-quiet); }
 .addr-row {
   display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 11px 16px; border: none; background: transparent; cursor: pointer;
+  min-height: 56px; padding: 10px 16px;
+  border: none; border-bottom: 1px solid var(--dt-divider);
+  background: var(--dt-surface); cursor: pointer;
   font-family: inherit; text-align: left;
-  transition: background .15s var(--tui-ease);
+  transition: background .15s var(--dt-ease);
 }
-.addr-row:active { background: var(--tui-surface-muted); }
+.addr-row:active { background: var(--dt-surface-press); }
 .addr-row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.addr-row-name { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: var(--tui-text); }
+.addr-row-name { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--dt-text); }
 .addr-row-sub {
-  font-size: 11.5px; color: var(--tui-text-quiet);
+  font-size: 12.5px; color: var(--dt-text-tertiary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .addr-org-icon {
-  width: 34px; height: 34px; flex-shrink: 0; border-radius: var(--tui-radius-sm);
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--dt-radius-sm);
   display: flex; align-items: center; justify-content: center;
-  background: var(--tui-brand-soft); color: var(--tui-brand-strong);
+  background: var(--dt-primary-soft); color: var(--dt-primary-strong);
 }
-.addr-org-icon.major { width: 30px; height: 30px; background: #f4f3ff; color: #6941c6; }
-.addr-org-icon.klass { width: 28px; height: 28px; background: var(--tui-surface-sunken); color: var(--tui-text-tertiary); }
-.addr-row-major { padding-left: 30px; }
+.addr-org-icon.major { width: 32px; height: 32px; background: var(--dt-primary-soft); color: var(--dt-primary-strong); }
+.addr-org-icon.klass { width: 30px; height: 30px; background: var(--dt-surface-sunken); color: var(--dt-text-secondary); }
+.addr-row-major { padding-left: 32px; }
 .addr-row-class { padding-left: 48px; }
-.addr-arrow { color: #cbd0d8; flex-shrink: 0; }
+.addr-row-student { padding-left: 60px; background: var(--dt-surface-z1); }
+
+/* 组织架构树：层级缩进 + 每一级都有「导轨竖线 + 折角横线」，形成真正的树状层级 */
+.addr-row-org, .addr-row-major, .addr-row-class, .addr-row-student { position: relative; }
+.addr-row-major::before,
+.addr-row-class::before,
+.addr-row-student::before {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 1px;
+  background: var(--dt-tree-line); pointer-events: none;
+}
+.addr-row-major::after,
+.addr-row-class::after,
+.addr-row-student::after {
+  content: ''; position: absolute; top: 50%; height: 1px; width: 12px;
+  background: var(--dt-tree-line); pointer-events: none;
+}
+.addr-row-major::before, .addr-row-major::after { left: 20px; }
+.addr-row-class::before, .addr-row-class::after { left: 36px; }
+.addr-row-student::before, .addr-row-student::after { left: 48px; }
+.addr-chevron {
+  color: var(--dt-text-quiet);
+  flex-shrink: 0;
+  transition: transform .18s var(--dt-ease);
+}
+.addr-chevron.open { transform: rotate(90deg); }
 .addr-search-results { padding-bottom: 8px; }
 .addr-loading {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 22px 0; color: var(--tui-text-quiet); font-size: 13px;
+  padding: 24px 0; color: var(--dt-text-quiet); font-size: 13px;
 }
-.addr-empty { padding: 22px 16px; text-align: center; color: var(--tui-text-quiet); font-size: 12.5px; }
+.addr-empty { padding: 24px 16px; text-align: center; color: var(--dt-text-quiet); font-size: 12.5px; }
 
-/* ==================== 通知 ==================== */
+/* ==================== 通知（钉钉列表行规范） ==================== */
+.notif-actions { display: flex; justify-content: flex-end; padding: 10px 12px 0; }
+.notif-action-btn {
+  border: none; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 13px; color: var(--dt-primary);
+}
+.notif-action-btn:disabled { color: var(--dt-text-quiet); cursor: default; }
 .notif-row {
-  position: relative; display: flex; align-items: flex-start; gap: 12px; width: 100%;
-  padding: 13px 16px; border: none; background: transparent; cursor: pointer;
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  min-height: 56px; padding: 12px 16px;
+  border: none; border-bottom: 1px solid var(--dt-divider);
+  background: var(--dt-surface); cursor: pointer;
   font-family: inherit; text-align: left;
-  transition: background .15s var(--tui-ease);
+  transition: background .15s var(--dt-ease);
 }
-.notif-row::before {
-  content: ''; position: absolute; top: 0; left: 58px; right: 16px; height: 1px;
-  background: var(--tui-border);
-}
-.notif-row:first-child::before { display: none; }
-.notif-row:active { background: var(--tui-surface-muted); }
+.notif-row:last-child { border-bottom: none; }
+.notif-row:active { background: var(--dt-surface-press); }
 .notif-icon {
-  width: 34px; height: 34px; flex-shrink: 0; border-radius: var(--tui-radius-sm);
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--dt-radius-sm);
   display: flex; align-items: center; justify-content: center;
 }
 .notif-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .notif-top { display: flex; align-items: baseline; gap: 8px; }
 .notif-title {
-  flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--tui-text);
+  flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--dt-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.notif-time { font-size: 10.5px; color: var(--tui-text-quiet); flex-shrink: 0; }
-.notif-content { font-size: 12.5px; line-height: 1.5; color: var(--tui-text-tertiary); }
-.notif-row.unread .notif-content { color: var(--tui-text-secondary); }
-.notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tui-danger); flex-shrink: 0; margin-top: 6px; }
+.notif-time { font-size: 11px; color: var(--dt-text-quiet); flex-shrink: 0; }
+.notif-content { font-size: 12.5px; line-height: 1.5; color: var(--dt-text-tertiary); }
+.notif-row.unread .notif-content { color: var(--dt-text-secondary); }
+.notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dt-danger); flex-shrink: 0; margin-top: 7px; }
 
 /* 桌面端左栏：通讯录 / 通知 行以白底呈现，与消息列表观感统一 */
 @media (min-width: 768px) {
-  .addr-row, .notif-row { background: var(--tui-surface); }
-  .notif-row::before { left: 46px; right: 12px; }
   .addr-section-head { padding-left: 12px; padding-right: 12px; }
-  .addr-row:not(.addr-row-major):not(.addr-row-class) { padding-left: 12px; padding-right: 12px; }
+  .addr-row:not(.addr-row-major):not(.addr-row-class),
+  .notif-row { padding-left: 12px; padding-right: 12px; }
 }
 
 /* ===== 移动端适配（QQ 风格） ===== */
@@ -2391,8 +2943,7 @@ function onGlobalClick(e: MouseEvent) {
   .sidebar-search { background: #fff; }
   .sidebar-scroll { background: var(--tui-bg); flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0 0; }
   /* 通讯录 / 通知：移动端整行白底，靠发丝线成组，与桌面端卡片观感一致 */
-  .addr-row, .notif-row { background: #fff; }
-  .addr-row-major, .addr-row-class { background: #fff; }
+  .addr-row, .notif-row, .addr-row-major, .addr-row-class { background: var(--dt-surface); }
   .addr-section-head { padding-top: 16px; }
   .conv-swipe-wrap { margin: 0 0 6px; }
   .conv-item { margin: 0; padding: 10px 14px; background: #fff; border-radius: 0; border-left: none; }
@@ -2453,102 +3004,173 @@ function onGlobalClick(e: MouseEvent) {
   :deep(.manage-invite-box) { border-radius: var(--tui-radius-sm); }
 }
 
-/* ===== 移动端群设置 / 公告 / 文件子页面（QQ 风格） ===== */
+/* ===== 移动端群设置 / 公告 / 文件子页面（钉钉式：卡片 + 56px 列表行） ===== */
 .group-sub-page {
   position: fixed; inset: 0; z-index: 1200;
-  background: var(--tui-bg); display: flex; flex-direction: column;
+  background: var(--dt-bg); display: flex; flex-direction: column;
 }
 .gsp-header {
   display: flex; align-items: center; justify-content: space-between;
-  min-height: 52px; padding: 6px 8px; background: var(--tui-surface); border-bottom: 1px solid var(--tui-hairline);
+  min-height: 48px; padding: 4px 8px; background: var(--dt-surface); border-bottom: 1px solid var(--dt-divider);
   flex-shrink: 0;
 }
-.gsp-title { font-size: 16.5px; font-weight: 600; color: var(--tui-text); letter-spacing: -0.2px; }
-.gsp-edit-btn { color: var(--tui-brand); font-size: 14px; }
-.gsp-hero {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 24px 16px 18px; background: var(--tui-surface); flex-shrink: 0;
+.gsp-title { font-size: 16px; font-weight: 600; color: var(--dt-text); letter-spacing: -0.2px; }
+.gsp-edit-btn { color: var(--dt-primary); font-size: 14px; }
+/* 钉钉式群设置：分组卡片 + 成员九宫格 */
+.gsp-body { flex: 1; overflow-y: auto; padding: 12px; background: var(--dt-bg); }
+.gsp-card { background: var(--dt-surface); border-radius: var(--dt-radius); overflow: hidden; margin-bottom: 12px; }
+.gsp-card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 4px; }
+.gsp-card-title { font-size: 13px; font-weight: 600; color: var(--dt-text-tertiary); }
+.gsp-card-more {
+  display: inline-flex; align-items: center; gap: 2px; border: none; background: transparent;
+  cursor: pointer; font-family: inherit; font-size: 12.5px; color: var(--dt-text-quiet);
 }
-.gsp-avatar-wrap { position: relative; display: flex; }
-.gsp-avatar-wrap.editable { cursor: pointer; }
-.gsp-avatar-wrap.editable:active { transform: scale(.96); }
-.gsp-avatar {
-  width: 68px; height: 68px; border-radius: var(--tui-radius-lg);
-  background: var(--tui-surface-sunken); color: var(--tui-text-secondary);
+.gsp-card .gsp-item:last-child { border-bottom: none; }
+.gsp-item.is-readonly { cursor: default; }
+.gsp-item-thumb {
+  width: 28px; height: 28px; border-radius: var(--dt-radius-sm); flex-shrink: 0;
+  background: var(--dt-surface-sunken); color: var(--dt-text-secondary);
+  font-size: 14px; font-weight: 600;
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 600;
 }
-.gsp-avatar-cam {
-  position: absolute; right: -4px; bottom: -4px;
-  width: 24px; height: 24px; border-radius: 50%;
-  background: var(--tui-surface); color: var(--tui-text-secondary);
-  border: 1px solid var(--tui-border);
+.gsp-member-grid { display: grid; grid-template-columns: repeat(5, 1fr); padding: 8px 6px 14px; }
+.gsp-member {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0;
+  border: none; background: transparent; cursor: pointer; font-family: inherit;
+}
+.gsp-member:active { opacity: .65; }
+.gsp-member-name {
+  max-width: 100%; font-size: 11.5px; color: var(--dt-text-tertiary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gsp-member-add-icon {
+  width: 44px; height: 44px; box-sizing: border-box; border-radius: 50%;
+  border: 1px dashed var(--dt-divider-strong); color: var(--dt-text-tertiary);
   display: flex; align-items: center; justify-content: center;
 }
 .group-crop-box { max-height: 360px; overflow: hidden; }
-.gsp-name { font-size: 17px; font-weight: 600; color: var(--tui-text); text-align: center; margin-top: 2px; }
-.gsp-meta { font-size: 11.5px; color: var(--tui-text-quiet); }
-.gsp-body { flex: 1; overflow-y: auto; padding: 16px 14px; }
-.gsp-menu { background: var(--tui-surface); border: 1px solid var(--tui-border); border-radius: var(--tui-radius); overflow: hidden; box-shadow: var(--tui-shadow-1); }
-.gsp-item {
-  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
-  border-bottom: 1px solid var(--tui-border); cursor: pointer;
-  font-size: 14px; color: var(--tui-text); transition: background .15s var(--tui-ease);
+
+/* 群二维码邀请卡（钉钉式） */
+.gsp-qr-card {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px 16px; background: var(--dt-surface); border-radius: var(--dt-radius);
 }
-.gsp-item:active { background: var(--tui-surface-muted); }
+.gsp-qr-head { display: flex; align-items: center; gap: 10px; width: 100%; }
+.gsp-qr-avatar {
+  width: 42px; height: 42px; border-radius: var(--dt-radius-sm); flex-shrink: 0;
+  background: var(--dt-primary-soft); color: var(--dt-primary-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 600;
+}
+.gsp-qr-meta { min-width: 0; }
+.gsp-qr-name { font-size: 15px; font-weight: 600; color: var(--dt-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsp-qr-sub { font-size: 12px; color: var(--dt-text-quiet); margin-top: 2px; }
+.gsp-qr-box {
+  width: 220px; height: 220px; margin: 18px 0 10px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--dt-divider); border-radius: var(--dt-radius); overflow: hidden;
+}
+.gsp-qr-box img { width: 100%; height: 100%; object-fit: contain; }
+.gsp-qr-loading { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--dt-text-quiet); font-size: 13px; }
+.gsp-qr-tip { margin: 0 0 16px; font-size: 12.5px; color: var(--dt-text-tertiary); text-align: center; line-height: 1.5; }
+.gsp-qr-actions { display: flex; gap: 10px; width: 100%; }
+.gsp-qr-btn {
+  flex: 1; height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: none; border-radius: var(--dt-radius-sm); cursor: pointer; font-family: inherit;
+  font-size: 14px; background: var(--dt-primary-soft); color: var(--dt-primary-strong);
+}
+.gsp-qr-btn:active { background: #d9ebff; }
+.gsp-qr-reset {
+  margin-top: 10px; border: none; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; color: var(--dt-text-quiet); text-decoration: underline;
+}
+.gsp-item-switch { cursor: default; }
+.conv-mute { color: var(--dt-text-quiet); flex-shrink: 0; }
+
+/* 桌面端会话行尾置顶按钮：常占位不抖动，悬停显形，已置顶常亮 */
+.conv-pin-btn {
+  width: 26px; height: 26px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 6px; background: transparent;
+  color: var(--dt-text-quiet); cursor: pointer;
+  opacity: 0; transition: opacity .15s var(--dt-ease), color .15s var(--dt-ease);
+}
+.conv-item:hover .conv-pin-btn { opacity: 1; }
+.conv-pin-btn:hover { background: var(--dt-hover); }
+.conv-pin-btn.on { opacity: 1; color: var(--dt-primary); }
+
+/* 桌面端群管理弹窗：二维码与个人设置 */
+.manage-qr-box {
+  width: 168px; height: 168px; margin: 4px auto 10px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--dt-divider); border-radius: var(--dt-radius); overflow: hidden;
+}
+.manage-qr-box img { width: 100%; height: 100%; object-fit: contain; }
+.manage-qr-actions { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.manage-switch-row {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 44px; font-size: 14px; color: var(--tui-text);
+}
+.gsp-item {
+  display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 16px;
+  border-bottom: 1px solid var(--dt-divider); cursor: pointer;
+  font-size: 15px; color: var(--dt-text); transition: background .15s var(--dt-ease);
+}
+.gsp-item:active { background: var(--dt-surface-press); }
 .gsp-item:last-child { border-bottom: none; }
 .gsp-item-icon {
-  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: var(--dt-radius-sm); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
 }
-.gsp-item-icon.announce { background: var(--tui-warn-soft); color: var(--tui-warn); }
-.gsp-item-icon.filee { background: var(--tui-surface-sunken); color: var(--tui-text-tertiary); }
-.gsp-item-icon.member { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
-.gsp-item-icon.add { background: var(--tui-success-soft); color: var(--tui-success); }
-.gsp-item-icon.manage { background: var(--tui-surface-sunken); color: var(--tui-text-tertiary); }
+.gsp-item-icon.announce { background: var(--dt-warning-soft); color: var(--dt-warning); }
+.gsp-item-icon.filee { background: var(--dt-surface-sunken); color: var(--dt-text-secondary); }
+.gsp-item-icon.member { background: var(--dt-primary-soft); color: var(--dt-primary-strong); }
+.gsp-item-icon.add { background: var(--dt-success-soft); color: var(--dt-success); }
+.gsp-item-icon.manage { background: var(--dt-surface-sunken); color: var(--dt-text-secondary); }
 .gsp-item-label { flex: 1; }
-.gsp-item-value { font-size: 12px; color: var(--tui-text-quiet); }
-.gsp-arrow { font-size: 14px; }
+.gsp-item-value { font-size: 12px; color: var(--dt-text-quiet); }
+.gsp-arrow { font-size: 14px; color: var(--dt-text-quiet); }
 .gsp-danger-btn {
-  margin-top: 16px; width: 100%; padding: 13px 0; border: none; border-radius: 12px;
-  background: var(--tui-surface); color: var(--tui-danger); font-size: 14.5px; cursor: pointer;
+  margin-top: 16px; width: 100%; padding: 14px 0; border: none; border-radius: var(--dt-radius);
+  background: var(--dt-surface); color: var(--dt-danger); font-size: 15px; cursor: pointer;
 }
 .gsp-empty-box {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 56px 0 30px; color: var(--tui-text-quiet); font-size: 14px;
-  background: var(--tui-surface); border-radius: var(--tui-radius);
+  padding: 56px 0 30px; color: var(--dt-text-quiet); font-size: 14px;
+  background: var(--dt-surface); border-radius: var(--dt-radius);
 }
-.gsp-empty-box small { font-size: 12px; color: var(--tui-text-quiet); }
-.gsp-ann-card { background: var(--tui-surface); border: 1px solid var(--tui-border); border-radius: var(--tui-radius); padding: 16px; }
+.gsp-empty-box small { font-size: 12px; color: var(--dt-text-quiet); }
+.gsp-ann-card { background: var(--dt-surface); border: 1px solid var(--dt-divider); border-radius: var(--dt-radius); padding: 16px; }
 .gsp-ann-head {
   display: flex; align-items: center; gap: 6px;
-  font-size: 15px; font-weight: 600; color: var(--tui-text); margin-bottom: 10px;
+  font-size: 15px; font-weight: 600; color: var(--dt-text); margin-bottom: 10px;
 }
-.gsp-ann-head .el-icon { color: var(--tui-warn); }
-.gsp-ann-text { margin: 0; font-size: 14px; color: var(--tui-text-secondary); line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.gsp-ann-head .el-icon { color: var(--dt-warning); }
+.gsp-ann-text { margin: 0; font-size: 14px; color: var(--dt-text-secondary); line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .gsp-ann-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
-.gsp-cancel-btn, .gsp-save-btn { padding: 8px 22px; border-radius: 8px; font-size: 14px; border: none; cursor: pointer; }
-.gsp-cancel-btn { background: var(--tui-surface-sunken); color: var(--tui-text-secondary); }
-.gsp-save-btn { background: var(--tui-brand); color: #fff; }
+.gsp-cancel-btn, .gsp-save-btn { padding: 8px 22px; border-radius: var(--dt-radius-sm); font-size: 14px; border: none; cursor: pointer; }
+.gsp-cancel-btn { background: var(--dt-surface-sunken); color: var(--dt-text-secondary); }
+.gsp-save-btn { background: var(--dt-primary); color: #fff; }
 .gsp-save-btn:disabled { opacity: .5; cursor: not-allowed; }
-.gsp-file-list { background: var(--tui-surface); border: 1px solid var(--tui-border); border-radius: var(--tui-radius); overflow: hidden; margin-bottom: 14px; }
+.gsp-file-list { background: var(--dt-surface); border: 1px solid var(--dt-divider); border-radius: var(--dt-radius); overflow: hidden; margin-bottom: 14px; }
 .gsp-file-item {
-  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
-  border-bottom: 1px solid var(--tui-border); cursor: pointer;
+  display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 14px;
+  border-bottom: 1px solid var(--dt-divider); cursor: pointer;
 }
+.gsp-file-item:active { background: var(--dt-surface-press); }
 .gsp-file-item:last-child { border-bottom: none; }
 .gsp-file-icon {
-  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
-  background: var(--tui-surface-sunken); color: var(--tui-text-tertiary);
+  width: 40px; height: 40px; border-radius: var(--dt-radius-sm); flex-shrink: 0;
+  background: var(--dt-surface-sunken); color: var(--dt-text-secondary);
   display: flex; align-items: center; justify-content: center;
 }
 .gsp-file-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.gsp-file-name { font-size: 14px; color: var(--tui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gsp-file-meta { font-size: 11px; color: var(--tui-text-quiet); }
+.gsp-file-name { font-size: 15px; color: var(--dt-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gsp-file-meta { font-size: 11.5px; color: var(--dt-text-quiet); }
 .gsp-upload-btn {
-  width: 100%; padding: 13px 0; border: 1px dashed var(--tui-border-strong); border-radius: var(--tui-radius-sm);
-  background: var(--tui-surface); color: var(--tui-text-secondary); font-size: 14px; font-weight: 500; cursor: pointer;
+  width: 100%; padding: 14px 0; border: 1px dashed var(--dt-divider-strong); border-radius: var(--dt-radius-sm);
+  background: var(--dt-surface); color: var(--dt-text-secondary); font-size: 14px; font-weight: 500; cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 6px;
 }
-.gsp-upload-btn:active { background: var(--tui-surface-muted); }
+.gsp-upload-btn:active { background: var(--dt-surface-press); }
 </style>

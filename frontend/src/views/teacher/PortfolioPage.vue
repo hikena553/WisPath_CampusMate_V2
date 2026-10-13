@@ -1,80 +1,201 @@
 ﻿<template>
   <div class="tui-page">
     <SubPageHeader
-      title="成长档案"
-      sub="把日常育人经验沉淀成看得见的成长轨迹"
+      title="学生成长档案"
+      sub="按学生查看成长徽章与成长轨迹，并沉淀你的育人档案"
       fallback="/teacher"
     />
 
     <div class="tui-content">
       <header v-if="!isMobile" class="tui-header">
         <div>
-          <h2 class="tui-header-title">成长档案</h2>
-          <p class="tui-header-sub">把日常育人经验沉淀成看得见的成长轨迹</p>
+          <h2 class="tui-header-title">学生成长档案</h2>
+          <p class="tui-header-sub">选择学生查看其成长徽章与成长轨迹，同步维护你的育人档案</p>
         </div>
         <div class="tui-header-actions">
           <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
-          <el-button type="primary" round :icon="Plus" @click="openCreate">新增档案</el-button>
+          <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
         </div>
       </header>
 
       <!-- 移动端高频操作 -->
       <div v-if="isMobile" class="tui-actions pf-topbar">
         <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
-        <el-button type="primary" round :icon="Plus" @click="openCreate">新增档案</el-button>
+        <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
       </div>
 
-      <!-- 类型统计兼筛选 -->
-      <div class="tui-stat-row">
-        <button
-          type="button"
-          class="tui-stat"
-          :class="{ 'is-active': filter === '' }"
-          @click="setFilter('')"
-        >
-          <span class="tui-stat-num">{{ items.length }}</span>
-          <span class="tui-stat-label">全部</span>
-        </button>
-        <button
-          v-for="t in typeOrder"
-          :key="t"
-          type="button"
-          class="tui-stat"
-          :class="{ 'is-active': filter === t }"
-          @click="setFilter(t)"
-        >
-          <span class="tui-stat-num" :style="{ color: PORTFOLIO_TYPE_COLOR[t] }">{{ countOf(t) }}</span>
-          <span class="tui-stat-label">{{ PORTFOLIO_TYPE_LABEL[t] }}</span>
-        </button>
-      </div>
+      <!-- 1. 学生横向选择器 -->
+      <section class="tui-section">
+        <div class="tui-section-head">
+          <h3><el-icon><User /></el-icon>学生横向选择器</h3>
+          <span class="tui-section-extra tui-text-quiet">共 {{ students.length }} 人</span>
+        </div>
+        <div class="tui-section-hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>左右滑动选择学生，下方徽章墙与成长时间轴会随之切换。</span>
+        </div>
+        <div v-if="studentsLoading" class="tui-empty">
+          <span class="tui-empty-title">学生名单加载中…</span>
+        </div>
+        <div v-else-if="!students.length" class="tui-empty">
+          <span class="tui-empty-icon"><el-icon :size="24"><User /></el-icon></span>
+          <span class="tui-empty-title">暂无可查看的学生</span>
+          <span class="tui-empty-desc">当前账号名下还没有学生，先到「学生管理」导入名单后再查看。</span>
+        </div>
+        <div v-else class="pf-rail">
+          <button
+            v-for="s in students"
+            :key="s.id"
+            type="button"
+            class="pf-stu"
+            :class="{ active: s.id === activeStudentId }"
+            @click="selectStudent(s.id)"
+          >
+            <span class="pf-stu-avatar">{{ s.name.slice(0, 1) }}</span>
+            <span class="pf-stu-name">{{ s.name }}</span>
+          </button>
+        </div>
+      </section>
 
-      <div v-if="loading" class="tui-empty">
-        <span class="tui-empty-title">加载中…</span>
-      </div>
-      <div v-else-if="!grouped.length" class="tui-empty">
-        <span class="tui-empty-icon"><el-icon :size="28"><Collection /></el-icon></span>
-        <span class="tui-empty-title">{{ filter ? '该类型暂无档案' : '还没有成长档案' }}</span>
-        <span class="tui-empty-desc">{{ filter ? '换个类型看看，或点击「新增档案」' : '点击「新增档案」沉淀第一条' }}</span>
-      </div>
-
-      <!-- 时间线：按年份分组 -->
-      <div v-else class="tui-groups">
-        <section v-for="g in grouped" :key="g.year">
-          <div class="tui-group-title">
-            {{ g.year }}
-            <span class="tui-group-count">{{ g.items.length }} 条</span>
+      <!-- 2. 徽章墙 -->
+      <section class="tui-section">
+        <div class="tui-section-head">
+          <h3><el-icon><Medal /></el-icon>成长徽章墙</h3>
+          <span v-if="activeStudent" class="tui-section-extra">
+            <el-tag
+              :type="activeStudent.crisis_level ? 'danger' : 'success'"
+              size="small"
+              effect="plain"
+              round
+            >
+              {{ activeStudent.crisis_level ? '心理关注' : '状态平稳' }}
+            </el-tag>
+          </span>
+        </div>
+        <div class="tui-section-hint success">
+          <el-icon><InfoFilled /></el-icon>
+          <span>徽章由学生档案自动派生（成长记录 / 技能 / 兴趣 / 综合评分），无需手工维护。</span>
+        </div>
+        <div v-if="!activeStudent" class="tui-empty">
+          <span class="tui-empty-title">请先选择一名学生</span>
+          <span class="tui-empty-desc">在上方选择学生后，这里会展示其成长徽章。</span>
+        </div>
+        <div v-else class="pf-badges">
+          <div v-for="b in badges" :key="b.key" class="pf-badge" :class="b.tone">
+            <el-icon :size="16"><component :is="b.icon" /></el-icon>
+            <span class="pf-badge-num">{{ b.value }}</span>
+            <span class="pf-badge-lb">{{ b.label }}</span>
           </div>
-          <div class="tui-stack">
-            <PortfolioItemCard
-              v-for="it in g.items"
-              :key="it.id"
-              :item="it"
-              @edit="openEdit"
-              @delete="handleDelete"
+        </div>
+      </section>
+
+      <!-- 3. 成长时间轴 -->
+      <section class="tui-section">
+        <div class="tui-section-head">
+          <h3><el-icon><Clock /></el-icon>成长时间轴</h3>
+          <span v-if="activeStudent" class="tui-section-extra tui-text-quiet">{{ activeStudent.name }}</span>
+        </div>
+        <div class="tui-section-hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>汇总该学生的荣誉、竞赛、实践、论文与成果记录，按时间倒序排列。</span>
+        </div>
+        <div v-if="!activeStudent" class="tui-empty">
+          <span class="tui-empty-title">暂无学生上下文</span>
+          <span class="tui-empty-desc">选择学生后即可查看其成长轨迹。</span>
+        </div>
+        <div v-else-if="growthLoading" class="tui-empty">
+          <span class="tui-empty-title">成长轨迹加载中…</span>
+        </div>
+        <div v-else-if="!timeline.length" class="tui-empty">
+          <span class="tui-empty-icon"><el-icon :size="24"><Clock /></el-icon></span>
+          <span class="tui-empty-title">{{ activeStudent.name }} 暂无成长记录</span>
+          <span class="tui-empty-desc">学生端录入荣誉 / 竞赛 / 实践后，会在这里自动汇总成时间轴。</span>
+        </div>
+        <div v-else class="tl">
+          <div v-for="r in timeline" :key="r.id" class="tl-item">
+            <span class="tl-node"><el-icon :size="11"><component :is="RECORD_META[r.type].icon" /></el-icon></span>
+            <div class="tl-body">
+              <div class="tl-top">
+                <span class="tui-chip tui-chip-brand">{{ RECORD_META[r.type].label }}</span>
+                <span class="tl-date">{{ r.date }}</span>
+              </div>
+              <div class="tl-title">{{ r.title }}</div>
+              <p v-if="r.description" class="tl-desc">{{ r.description }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. 我的育人档案（保留原有增删改 + 报告） -->
+      <section class="tui-section">
+        <div class="tui-section-head">
+          <h3><el-icon><Collection /></el-icon>我的育人档案</h3>
+          <span class="tui-section-extra">
+            <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
+          </span>
+        </div>
+        <div class="tui-section-hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>沉淀你的工作案例、荣誉、研修与研究成果，全部计入成长报告。</span>
+        </div>
+        <div class="tui-section-tools">
+          <button type="button" class="tui-chip" :class="{ 'tui-chip-brand': filter === '' }" @click="setFilter('')">
+            全部 {{ items.length }}
+          </button>
+          <button
+            v-for="t in typeOrder"
+            :key="t"
+            type="button"
+            class="tui-chip"
+            :class="{ 'tui-chip-brand': filter === t }"
+            @click="setFilter(t)"
+          >
+            {{ PORTFOLIO_TYPE_LABEL[t] }} {{ countOf(t) }}
+          </button>
+        </div>
+
+        <div v-if="loading" class="tui-empty">
+          <span class="tui-empty-title">加载中…</span>
+        </div>
+        <div v-else-if="!filteredItems.length" class="tui-empty">
+          <span class="tui-empty-icon"><el-icon :size="24"><Collection /></el-icon></span>
+          <span class="tui-empty-title">{{ filter ? '该类型暂无档案' : '还没有育人档案' }}</span>
+          <span class="tui-empty-desc">{{ filter ? '换个类型看看，或点击「新增档案」补一条。' : '点击「新增档案」，沉淀第一条育人档案。' }}</span>
+        </div>
+        <template v-else>
+          <div class="tui-groups">
+            <section v-for="g in grouped" :key="g.year">
+              <div class="tui-group-title">
+                {{ g.year }}
+                <span class="tui-group-count">{{ g.items.length }} 条</span>
+              </div>
+              <div class="tui-stack">
+                <PortfolioItemCard
+                  v-for="it in g.items"
+                  :key="it.id"
+                  :item="it"
+                  @edit="openEdit"
+                  @delete="handleDelete"
+                />
+              </div>
+            </section>
+          </div>
+          <div class="pagination-wrapper">
+            <el-pagination
+              v-model:current-page="archivePage"
+              v-model:page-size="archivePageSize"
+              :page-sizes="[10, 20, 50]"
+              :total="filteredItems.length"
+              :pager-count="5"
+              small
+              background
+              layout="total, prev, pager, next"
+              @size-change="handleArchiveSizeChange"
+              @current-change="handleArchiveCurrentChange"
             />
           </div>
-        </section>
-      </div>
+        </template>
+      </section>
 
       <PortfolioItemDialog v-model="dialogVisible" :item="editing" @saved="load" />
 
@@ -82,19 +203,25 @@
       <el-dialog
         v-model="reportVisible"
         title="成长报告"
-        :width="isMobile ? '94%' : '720px'"
+        :width="isMobile ? '90%' : '400px'"
         align-center
+        :close-on-click-modal="false"
+        class="tui-dialog"
         destroy-on-close
       >
+        <div class="tui-section-hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>汇总你的全部育人档案，可直接打印或导出 PDF 存档。</span>
+        </div>
         <div v-if="report" class="pf-report">
           <div class="rpt-head">
             <h3>{{ report.teacher_name }} · 教师成长报告</h3>
             <span>{{ (report.generated_at || '').slice(0, 10) }}</span>
           </div>
-          <div class="rpt-total">共 {{ report.total }} 条成长档案</div>
+          <div class="rpt-total">共 {{ report.total }} 条育人档案</div>
           <div class="rpt-types">
             <div v-for="t in report.by_type" :key="t.type" class="rpt-type">
-              <span class="rpt-num" :style="{ color: PORTFOLIO_TYPE_COLOR[t.type] }">{{ t.count }}</span>
+              <span class="rpt-num">{{ t.count }}</span>
               <span class="rpt-lb">{{ t.label }}</span>
             </div>
           </div>
@@ -118,20 +245,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { Collection, Plus, Printer } from '@element-plus/icons-vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import {
+  Clock,
+  Collection,
+  Document,
+  InfoFilled,
+  Medal,
+  Plus,
+  Printer,
+  Star,
+  Suitcase,
+  Trophy,
+  User,
+} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import {
   deletePortfolioItem,
   getPortfolioItems,
   getPortfolioReport,
-  PORTFOLIO_TYPE_COLOR,
   PORTFOLIO_TYPE_LABEL,
   type PortfolioItem,
   type PortfolioItemType,
   type PortfolioReport,
 } from '@/api/teacherPortfolio'
+import { getStudents, type StudentSummary } from '@/api/teacher'
+import { getGrowthRecords } from '@/api/growth'
+import type { GrowthRecord } from '@/types'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import PortfolioItemCard from '@/components/teacher/portfolio/PortfolioItemCard.vue'
 import PortfolioItemDialog from '@/components/teacher/portfolio/PortfolioItemDialog.vue'
@@ -151,19 +292,68 @@ const report = ref<PortfolioReport | null>(null)
 const reportVisible = ref(false)
 const reportLoading = ref(false)
 
+// 学生成长：横向选择器 + 徽章墙 + 时间轴
+const students = ref<StudentSummary[]>([])
+const studentsLoading = ref(false)
+const activeStudentId = ref<number | null>(null)
+const growthRecords = ref<GrowthRecord[]>([])
+const growthLoading = ref(false)
+
+// 育人档案分页（契约 §2）
+const archivePage = ref(1)
+const archivePageSize = ref(10)
+
+const activeStudent = computed(
+  () => students.value.find((s) => s.id === activeStudentId.value) ?? null
+)
+
+const RECORD_META: Record<GrowthRecord['type'], { label: string; icon: unknown }> = {
+  honor: { label: '荣誉', icon: Medal },
+  competition: { label: '竞赛', icon: Trophy },
+  practice: { label: '实践', icon: Suitcase },
+  paper: { label: '论文', icon: Document },
+  achievement: { label: '成果', icon: Star },
+}
+
+const badges = computed(() => {
+  const s = activeStudent.value
+  if (!s) return [] as { key: string; label: string; value: number; icon: unknown; tone: string }[]
+  return [
+    { key: 'growth', label: '成长记录', value: s.growth_count, icon: Collection, tone: 'brand' },
+    { key: 'skill', label: '技能标签', value: s.skills_json?.skills?.length ?? 0, icon: Star, tone: '' },
+    { key: 'interest', label: '兴趣方向', value: s.skills_json?.interests?.length ?? 0, icon: Medal, tone: '' },
+    { key: 'score', label: '综合评分', value: s.score, icon: Trophy, tone: 'success' },
+  ]
+})
+
+const timeline = computed(() =>
+  [...growthRecords.value].sort((a, b) => (a.date < b.date ? 1 : -1))
+)
+
+const filteredItems = computed(() =>
+  filter.value ? items.value.filter((i) => i.item_type === filter.value) : items.value
+)
+
+const pagedItems = computed(() =>
+  filteredItems.value.slice(
+    (archivePage.value - 1) * archivePageSize.value,
+    archivePage.value * archivePageSize.value
+  )
+)
+
 function countOf(t: PortfolioItemType) {
   return items.value.filter((i) => i.item_type === t).length
 }
 
 function setFilter(t: '' | PortfolioItemType) {
   filter.value = filter.value === t ? '' : t
+  archivePage.value = 1
 }
 
-/** 时间线分组：优先按发生年份，其次按创建年份 */
+/** 时间线分组：优先按发生年份，其次按创建年份（对分页后的当页数据分组） */
 const grouped = computed(() => {
-  const list = filter.value ? items.value.filter((i) => i.item_type === filter.value) : items.value
   const map = new Map<string, PortfolioItem[]>()
-  for (const it of list) {
+  for (const it of pagedItems.value) {
     const year = (it.occurred_on || it.created_at || '').slice(0, 4) || '未标注'
     if (!map.has(year)) map.set(year, [])
     map.get(year)!.push(it)
@@ -172,6 +362,10 @@ const grouped = computed(() => {
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
     .map(([year, its]) => ({ year, items: its }))
 })
+
+function selectStudent(id: number) {
+  activeStudentId.value = id
+}
 
 async function load() {
   loading.value = true
@@ -182,6 +376,45 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadStudents() {
+  studentsLoading.value = true
+  try {
+    students.value = await getStudents()
+    if (students.value.length && activeStudentId.value === null) {
+      activeStudentId.value = students.value[0].id
+    }
+  } catch {
+    students.value = []
+  } finally {
+    studentsLoading.value = false
+  }
+}
+
+async function loadGrowth() {
+  if (activeStudentId.value === null) {
+    growthRecords.value = []
+    return
+  }
+  growthLoading.value = true
+  try {
+    growthRecords.value = await getGrowthRecords(activeStudentId.value)
+  } catch {
+    growthRecords.value = []
+  } finally {
+    growthLoading.value = false
+  }
+}
+
+watch(activeStudentId, loadGrowth)
+
+function handleArchiveSizeChange() {
+  archivePage.value = 1
+}
+function handleArchiveCurrentChange() {
+  // 页码由 v-model 同步，这里保留契约要求的回调入口
+  archivePage.value = archivePage.value || 1
 }
 
 function openCreate() {
@@ -271,7 +504,10 @@ function escapeHtml(s: string) {
   )
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadStudents()
+})
 </script>
 
 <style scoped>
@@ -284,84 +520,269 @@ onMounted(load)
   margin-left: 0;
 }
 
+/* 学生横向选择器 */
+.pf-rail {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.pf-rail::-webkit-scrollbar {
+  display: none;
+}
+.pf-stu {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 62px;
+  padding: 8px 4px;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s var(--tui-ease);
+}
+.pf-stu:active {
+  transform: scale(0.97);
+}
+.pf-stu.active {
+  border-color: var(--tui-brand);
+  background: var(--tui-brand-soft);
+}
+.pf-stu-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tui-surface-sunken);
+  color: var(--tui-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.pf-stu.active .pf-stu-avatar {
+  background: var(--tui-brand);
+  color: #fff;
+}
+.pf-stu-name {
+  font-size: 11.5px;
+  color: var(--tui-text-secondary);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-stu.active .pf-stu-name {
+  color: var(--tui-brand-strong);
+  font-weight: 600;
+}
+
+/* 徽章墙 */
+.pf-badges {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.pf-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 6px;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-tertiary);
+}
+.pf-badge.brand {
+  color: var(--tui-brand-strong);
+  background: var(--tui-brand-soft);
+  border-color: transparent;
+}
+.pf-badge.success {
+  color: var(--tui-success);
+  background: var(--tui-success-soft);
+  border-color: transparent;
+}
+.pf-badge-num {
+  font-size: 17px;
+  font-weight: 700;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.pf-badge-lb {
+  font-size: 10.5px;
+  color: var(--tui-text-quiet);
+}
+.pf-badge.brand .pf-badge-lb,
+.pf-badge.success .pf-badge-lb {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* 时间轴 */
+.tl {
+  position: relative;
+  padding-left: 26px;
+}
+.tl::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--tui-border);
+}
+.tl-item {
+  position: relative;
+  margin-bottom: 10px;
+}
+.tl-item:last-child {
+  margin-bottom: 0;
+}
+.tl-node {
+  position: absolute;
+  left: -26px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--tui-surface);
+  box-shadow: inset 0 0 0 2px var(--tui-brand);
+  color: var(--tui-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tl-body {
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface);
+  padding: 8px 10px;
+}
+.tl-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tl-date {
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+  font-variant-numeric: tabular-nums;
+}
+.tl-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tui-text);
+  margin-top: 4px;
+}
+.tl-desc {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--tui-text-secondary);
+  line-height: 1.55;
+}
+
+/* 类型筛选：让 chip 作为按钮可点 */
+.tui-section-tools button.tui-chip {
+  cursor: pointer;
+  font-family: inherit;
+}
+
 /* 成长报告弹窗内容 */
 .pf-report {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .rpt-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 8px;
 }
 .rpt-head h3 {
   margin: 0;
-  font-size: 16px;
-  color: #101828;
+  font-size: 14px;
+  color: var(--tui-text);
 }
 .rpt-head span {
-  font-size: 12px;
-  color: #98a2b3;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+  flex-shrink: 0;
 }
 .rpt-total {
-  font-size: 12.5px;
-  color: #667085;
+  font-size: 12px;
+  color: var(--tui-text-secondary);
 }
 .rpt-types {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .rpt-type {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #f9fafb;
-  border-radius: 10px;
-  padding: 9px 10px;
+  background: var(--tui-surface-muted);
+  border-radius: var(--tui-radius-sm);
+  padding: 8px 10px;
 }
 .rpt-num {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
+  color: var(--tui-brand-strong);
+  font-variant-numeric: tabular-nums;
 }
 .rpt-lb {
   font-size: 11px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 .rpt-list {
   display: flex;
   flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
 }
 .rpt-item {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 8px 2px;
-  border-bottom: 1px solid #f2f4f7;
-  font-size: 13px;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--tui-border);
+  font-size: 12.5px;
+}
+.rpt-item:last-child {
+  border-bottom: none;
 }
 .rpt-idx {
-  width: 18px;
+  width: 16px;
   text-align: center;
-  color: #98a2b3;
-  font-size: 12px;
+  color: var(--tui-text-quiet);
+  font-size: 11px;
   flex-shrink: 0;
 }
 .rpt-title {
-  color: #344054;
+  color: var(--tui-text-secondary);
   flex: 1;
   min-width: 0;
 }
 .rpt-meta {
-  font-size: 11.5px;
-  color: #98a2b3;
+  font-size: 11px;
+  color: var(--tui-text-quiet);
   flex-shrink: 0;
 }
 
 @media (max-width: 767px) {
-  .rpt-types {
-    grid-template-columns: repeat(2, 1fr);
+  .pf-badges {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

@@ -31,6 +31,7 @@ from app.api.community import router as community_router
 from app.api.portfolio import router as portfolio_router
 from app.api.resources import router as resources_router
 from app.api.feeds import router as feeds_router
+from app.api.butler import router as butler_router
 from app.api.emotions import router as emotions_router
 from app.api.approval import router as approval_router
 from app.api.material import router as material_router
@@ -43,6 +44,8 @@ from app.api.care_center import router as care_center_router
 from app.api.guardian import router as guardian_router
 from app.api.learning_event import router as learning_event_router
 from app.api.workflow import router as workflow_router
+from app.api.help_request import router as help_request_router
+from app.api.reference import router as reference_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -76,6 +79,7 @@ ROUTERS = [
     portfolio_router,
     resources_router,
     feeds_router,
+    butler_router,
     emotions_router,
     approval_router,
     material_router,
@@ -88,6 +92,8 @@ ROUTERS = [
     guardian_router,
     learning_event_router,
     workflow_router,
+    help_request_router,
+    reference_router,
 ]
 
 

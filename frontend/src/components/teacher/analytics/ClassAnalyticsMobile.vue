@@ -23,7 +23,7 @@
         <!-- 成绩分布 -->
         <div class="mobile-section-card chart-card">
           <div class="chart-card-header">
-            <el-icon color="#67c23a"><Histogram /></el-icon>
+            <el-icon style="color: var(--tui-success)"><Histogram /></el-icon>
             <span>成绩分布</span>
           </div>
           <div class="chart-container" style="height:200px">
@@ -35,7 +35,7 @@
         <!-- 预警趋势 -->
         <div class="mobile-section-card chart-card">
           <div class="chart-card-header">
-            <el-icon color="#f56c6c"><WarningFilled /></el-icon>
+            <el-icon style="color: var(--tui-danger)"><WarningFilled /></el-icon>
             <span>预警趋势</span>
           </div>
           <div class="chart-container" style="height:200px">

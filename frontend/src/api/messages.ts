@@ -33,3 +33,13 @@ export function sendMessage(receiverId: number, content: string) {
 export function markRead(userId: number) {
   return request.put(`/messages/read/${userId}`)
 }
+
+/** 置顶的会话 key 列表（g-<groupId> / s-<userId>），服务端持久化 */
+export function getSessionPins() {
+  return request.get<{ keys: string[] }>('/messages/pins')
+}
+
+/** 置顶 / 取消置顶某个会话（幂等） */
+export function setSessionPin(sessionKey: string, pinned: boolean) {
+  return request.put<{ key: string; pinned: boolean }>('/messages/pins', { session_key: sessionKey, pinned })
+}

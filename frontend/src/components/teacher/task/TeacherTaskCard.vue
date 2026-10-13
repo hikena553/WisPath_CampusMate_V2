@@ -1,11 +1,21 @@
 <template>
-  <div class="tt-card" :class="[`tt-${task.status}`, { 'tt-overdue': task.overdue }]">
-    <!-- 左侧状态指示条 -->
-    <div class="tt-rail" :class="`rail-${task.status}`"></div>
+  <div class="tt-card" :class="[`is-${tier}`, { 'tt-overdue': task.overdue, 'tt-done': task.status === 'done' }]">
+    <!-- 左侧优先级色条 -->
+    <span class="tt-rail" :class="`is-${tier}`"></span>
 
     <div class="tt-main">
-      <!-- 头部：来源标签 + 逾期标记 -->
+      <!-- 头部：勾选框 + 来源标签 + 逾期标记 + 状态 -->
       <div class="tt-head">
+        <button
+          class="tt-check"
+          type="button"
+          :class="{ checked: task.status === 'done' }"
+          :aria-pressed="task.status === 'done'"
+          :aria-label="task.status === 'done' ? '取消办结' : '勾选办结'"
+          @click="toggleDone"
+        >
+          <el-icon v-if="task.status === 'done'"><Check /></el-icon>
+        </button>
         <span class="tt-source" :class="`src-${task.source_type}`">
           {{ TASK_SOURCE_LABEL[task.source_type] }}
         </span>
@@ -63,7 +73,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Calendar, CircleCheckFilled, MagicStick, User, WarningFilled } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheckFilled, MagicStick, User, WarningFilled } from '@element-plus/icons-vue'
 import {
   TASK_SOURCE_LABEL,
   TASK_STATUS_LABEL,
@@ -77,7 +87,25 @@ const props = defineProps<{ task: TeacherTask }>()
 const emit = defineEmits<{
   'update-status': [task: TeacherTask, status: TaskStatus]
   'record-care': [task: TeacherTask]
+  'toggle-done': [task: TeacherTask, done: boolean]
 }>()
+
+/** 优先级分层：逾期 → 高，今日到期 → 中，其余 → 低 */
+const tier = computed(() => {
+  if (props.task.overdue) return 'high'
+  if (props.task.due_at) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const due = new Date(props.task.due_at)
+    due.setHours(0, 0, 0, 0)
+    if (due.getTime() === today.getTime()) return 'mid'
+  }
+  return 'low'
+})
+
+function toggleDone() {
+  emit('toggle-done', props.task, props.task.status !== 'done')
+}
 
 const dueText = computed(() => {
   if (!props.task.due_at) return ''
@@ -104,40 +132,59 @@ const doneText = computed(() => {
 .tt-card {
   position: relative;
   display: flex;
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.035);
+  background: var(--tui-surface);
+  border-radius: var(--tui-radius-sm);
+  border: 1px solid var(--tui-border);
+  box-shadow: var(--tui-shadow-1);
   overflow: hidden;
 }
 
 .tt-card.tt-overdue {
-  border-color: rgba(239, 68, 68, 0.28);
-  box-shadow: 0 2px 12px rgba(239, 68, 68, 0.1);
+  border-color: var(--tui-danger-soft);
 }
 
 .tt-rail {
   width: 4px;
   flex-shrink: 0;
-  background: #cbd5e1;
+  background: var(--tui-border-strong);
 }
-.rail-pending { background: #3b82f6; }
-.rail-contacted { background: #8b5cf6; }
-.rail-cared { background: #10b981; }
-.rail-done { background: #cbd5e1; }
-.rail-expired { background: #94a3b8; }
+.tt-rail.is-high { background: var(--tui-danger); }
+.tt-rail.is-mid { background: var(--tui-warn); }
+.tt-rail.is-low { background: var(--tui-brand); }
+.tt-card.tt-done .tt-rail { background: var(--tui-border-strong); }
 
 .tt-main {
   flex: 1;
   min-width: 0;
-  padding: 12px 14px 12px 12px;
+  padding: 10px 12px 10px 10px;
 }
 
 .tt-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 7px;
+  margin-bottom: 6px;
+}
+
+/* 勾选框：勾选即办结 */
+.tt-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1.5px solid var(--tui-border-strong);
+  background: var(--tui-surface);
+  color: var(--tui-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.tt-check .el-icon { font-size: 12px; }
+.tt-check.checked {
+  background: var(--tui-success);
+  border-color: var(--tui-success);
 }
 
 .tt-source {
@@ -145,16 +192,16 @@ const doneText = computed(() => {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #eff4ff;
-  color: #2563eb;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
   white-space: nowrap;
 }
-.src-ai_suggest { background: #f4f3ff; color: #6941c6; }
-.src-follow_up { background: #ecfdf3; color: #067647; }
-.src-approval { background: #fffaeb; color: #b54708; }
-.src-alert { background: #fef3f2; color: #d92d20; }
-.src-care_plan { background: #fdf2fa; color: #c11574; }
-.src-manual { background: #f2f4f7; color: #475467; }
+.src-ai_suggest { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
+.src-follow_up { background: var(--tui-success-soft); color: var(--tui-success); }
+.src-approval { background: var(--tui-warn-soft); color: var(--tui-warn); }
+.src-alert { background: var(--tui-danger-soft); color: var(--tui-danger); }
+.src-care_plan { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
+.src-manual { background: var(--tui-surface-muted); color: var(--tui-text-tertiary); }
 
 /* 预警规则标签（learning_alert pipeline 生成的任务） */
 .tt-rule {
@@ -165,8 +212,8 @@ const doneText = computed(() => {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #fdf2fa;
-  color: #c11574;
+  background: var(--tui-warn-soft);
+  color: var(--tui-warn);
   white-space: nowrap;
 }
 
@@ -176,7 +223,7 @@ const doneText = computed(() => {
   gap: 2px;
   font-size: 11px;
   font-weight: 600;
-  color: #dc2626;
+  color: var(--tui-danger);
 }
 
 .tt-spacer { flex: 1; }
@@ -186,28 +233,28 @@ const doneText = computed(() => {
   font-weight: 600;
   white-space: nowrap;
 }
-.st-pending { color: #2563eb; }
-.st-contacted { color: #7c3aed; }
-.st-cared { color: #059669; }
-.st-done { color: #98a2b3; }
-.st-expired { color: #98a2b3; }
+.st-pending { color: var(--tui-brand-strong); }
+.st-contacted { color: var(--tui-brand-strong); }
+.st-cared { color: var(--tui-success); }
+.st-done { color: var(--tui-text-quiet); }
+.st-expired { color: var(--tui-text-quiet); }
 
 .tt-title {
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 600;
-  color: #101828;
+  color: var(--tui-text);
   line-height: 1.45;
   word-break: break-word;
 }
 .tt-done-text {
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
   text-decoration: line-through;
 }
 
 .tt-detail {
   margin-top: 4px;
   font-size: 12.5px;
-  color: #667085;
+  color: var(--tui-text-secondary);
   line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -220,36 +267,36 @@ const doneText = computed(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 7px;
 }
 .tt-meta-item {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   font-size: 12px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
-.tt-due-overdue { color: #dc2626; font-weight: 600; }
+.tt-due-overdue { color: var(--tui-danger); font-weight: 600; }
 
 .tt-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 11px;
+  margin-top: 9px;
 }
 
 .tt-btn {
   border: none;
   border-radius: 8px;
-  padding: 6px 13px;
+  padding: 5px 12px;
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
 }
-.tt-btn-plain { background: #f2f4f7; color: #475467; }
-.tt-btn-care { background: #ecfdf3; color: #067647; }
-.tt-btn-done { background: #2563eb; color: #fff; }
+.tt-btn-plain { background: var(--tui-surface-sunken); color: var(--tui-text-secondary); }
+.tt-btn-care { background: var(--tui-success-soft); color: var(--tui-success); }
+.tt-btn-done { background: var(--tui-brand); color: var(--tui-surface); }
 .tt-btn:active { opacity: 0.75; }
 
 .tt-done-hint {
@@ -257,7 +304,7 @@ const doneText = computed(() => {
   align-items: center;
   gap: 4px;
   font-size: 12.5px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
   margin-right: auto;
 }
 </style>

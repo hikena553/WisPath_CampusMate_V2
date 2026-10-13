@@ -38,8 +38,11 @@ export interface StudentDetail {
   leave_requests: any[]
 }
 
-export function getStudents(search?: string) {
-  const params = search ? { search } : {}
+/** 学生列表：search 关键词检索；classGroupId 用于通讯录「组织架构 → 班级」下钻取名单 */
+export function getStudents(search?: string, classGroupId?: number) {
+  const params: Record<string, string | number> = {}
+  if (search) params.search = search
+  if (classGroupId) params.class_group_id = classGroupId
   return request.get<StudentSummary[]>('/teacher/students', { params })
 }
 

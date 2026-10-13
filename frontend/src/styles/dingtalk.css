@@ -1,0 +1,174 @@
+/* =========================================================================
+   钉钉设计令牌（DingTalk Design Tokens）
+   -------------------------------------------------------------------------
+   依据钉钉开放平台公开的设计规范（钉钉蓝蓝系 / 文字色四级 / 背景色 z 轴
+   层级 / Alpha 分割线 / 圆角与信息色），抽取为可复用的 CSS 变量与基础类，
+   供消息页、消息中心与小绵管家会话共用，使各端口观感与钉钉保持一致。
+   参考：https://open.dingtalk.com/document/resourcedownload/visual-specification-color
+   命名前缀 `--dt-`，不覆盖存量 `--tui-*` / 组件库变量。
+   ========================================================================= */
+:root {
+  /* 主题色 / 钉钉蓝：固定品牌蓝 + 可配置主题色（标准版二者一致） */
+  --dt-primary: #0089ff;
+  --dt-primary-strong: #0070d9;
+  --dt-primary-press: #0063bf;
+  --dt-primary-soft: #e8f3ff;
+  --dt-primary-ghost: rgba(0, 137, 255, 0.08);
+
+  /* 背景色：z 轴层级（页面底 → 卡片面 → 抬起） */
+  --dt-bg: #f5f6f7;
+  --dt-surface: #ffffff;
+  --dt-surface-z1: #fafbfc;
+  --dt-surface-press: #eaebed;
+
+  /* 文字色：主要 / 次要 / 描述 / 禁用占位 */
+  --dt-text: #171a1d;
+  --dt-text-secondary: #5c6269;
+  --dt-text-tertiary: #8a9099;
+  --dt-text-quiet: #b6bcc4;
+  --dt-text-inverse: #ffffff;
+  --dt-link: #0070d9;
+
+  /* 分割线与叠加色：Alpha 灰，亮/暗主题通用 */
+  --dt-divider: rgba(0, 0, 0, 0.06);
+  --dt-divider-strong: rgba(0, 0, 0, 0.1);
+  --dt-overlay: rgba(0, 0, 0, 0.45);
+  --dt-hover: rgba(0, 0, 0, 0.03);
+  /* 组织架构树：层级导轨与折角连线专用线色（比发丝线更深，保证 1px 可见） */
+  --dt-tree-line: rgba(0, 0, 0, 0.16);
+
+  /* 信息色 */
+  --dt-success: #00b42a;
+  --dt-success-soft: #e8ffea;
+  --dt-warning: #ff7d00;
+  --dt-warning-soft: #fff7e8;
+  --dt-danger: #f53f3f;
+  --dt-danger-soft: #ffece8;
+
+  /* 圆角 / 阴影 / 动效 */
+  --dt-radius-xs: 4px;
+  --dt-radius-sm: 8px;
+  --dt-radius: 12px;
+  --dt-radius-lg: 16px;
+  --dt-radius-bubble: 18px;
+  --dt-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --dt-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --dt-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ------------------------------ 基础类 ------------------------------ */
+
+/* 钉钉式应用栏：白底 + 发丝线 + 居中标题 + 两侧 44px 热区 */
+.dt-appbar {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 8px;
+  background: var(--dt-surface);
+  border-bottom: 1px solid var(--dt-divider);
+  flex-shrink: 0;
+}
+
+.dt-appbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--dt-radius-sm);
+  background: transparent;
+  color: var(--dt-text);
+  cursor: pointer;
+  transition: background 0.16s var(--dt-ease);
+}
+
+.dt-appbar-btn:hover,
+.dt-appbar-btn:active {
+  background: var(--dt-hover);
+}
+
+.dt-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* 钉钉式列表行：56px 行高、白底、发丝分割线、按压态 */
+.dt-list {
+  background: var(--dt-surface);
+}
+
+.dt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 16px;
+  background: var(--dt-surface);
+  border: none;
+  border-bottom: 1px solid var(--dt-divider);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s var(--dt-ease);
+}
+
+.dt-row:active {
+  background: var(--dt-surface-press);
+}
+
+.dt-row--active {
+  background: var(--dt-primary-soft);
+}
+
+/* 钉钉式气泡：自己右侧蓝底白字，对方左侧白底深字 */
+.dt-bubble {
+  max-width: 76%;
+  padding: 10px 14px;
+  border-radius: var(--dt-radius-bubble);
+  font-size: 15px;
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.dt-bubble--mine {
+  background: var(--dt-primary);
+  color: var(--dt-text-inverse);
+  border-bottom-right-radius: var(--dt-radius-xs);
+}
+
+.dt-bubble--theirs {
+  background: var(--dt-surface);
+  color: var(--dt-text);
+  border-bottom-left-radius: var(--dt-radius-xs);
+  box-shadow: var(--dt-shadow-1);
+}
+
+/* 钉钉式标签 */
+.dt-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--dt-radius-xs);
+  font-size: 12px;
+  line-height: 1;
+  background: var(--dt-primary-soft);
+  color: var(--dt-primary-strong);
+}
+
+/* 钉钉式未读角标 */
+.dt-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--dt-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

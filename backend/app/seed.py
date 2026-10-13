@@ -18,6 +18,7 @@ from app.models.leave import LeaveRequest, LeaveType, LeaveStatus
 from app.models.crisis import AIDialogSummary, CrisisLevel
 from app.models.knowledge import KnowledgeItem
 from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, PlanStage
+from app.models.reference import OpenSourceReference
 
 logger = logging.getLogger(__name__)
 
@@ -606,6 +607,139 @@ if db.query(AIDialogSummary).count() == 0:
         AIDialogSummary(student_id=qq, summary='学生表示"觉得活着没意思"，触发高危关键词，已立即通知辅导员', level=CrisisLevel.SEVERE, keywords_matched="没意思,活着", resolved=False),
     ]
     db.add_all(alerts)
+    db.commit()
+    seeded = True
+
+
+# ═══════════════════════════════════════════════════════════
+# 11. 开源参考库（仅登记许可证宽松、可合法复用的成熟项目）
+#     stars 为演示用近似快照，实际使用请以仓库实时数据为准
+# ═══════════════════════════════════════════════════════════
+
+if db.query(OpenSourceReference).count() == 0:
+    _references = [
+        dict(
+            name="Element Plus", repo_url="https://github.com/element-plus/element-plus",
+            homepage="https://element-plus.org", license="MIT", license_category="permissive",
+            stars=25000, language="TypeScript", tech_tags="Vue3,UI组件库,表单,表格,弹窗",
+            summary="面向 Vue 3 的桌面端组件库，本项目的按钮/表单/弹窗/表格均基于其构建。",
+            reusable_scope="可直接复用其组件 API 与交互模式；同类页面（表单、表格、弹窗、下拉选择）可照其用法实现。",
+            attribution="MIT：保留版权与许可证声明即可商用与改造，无需开源衍生作品。",
+        ),
+        dict(
+            name="Vue.js", repo_url="https://github.com/vuejs/core",
+            homepage="https://vuejs.org", license="MIT", license_category="permissive",
+            stars=48000, language="TypeScript", tech_tags="Vue3,Composition API,响应式,前端框架",
+            summary="渐进式前端框架，本项目前端的技术底座。",
+            reusable_scope="可复用 Composition API、响应式与组件组织范式（<script setup> 写法）。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Vite", repo_url="https://github.com/vitejs/vite",
+            homepage="https://vitejs.dev", license="MIT", license_category="permissive",
+            stars=69000, language="TypeScript", tech_tags="构建工具,开发服务器,HMR,前端工程化",
+            summary="下一代前端构建工具，本项目开发与打包链路使用。",
+            reusable_scope="可复用其配置范式（别名、代理、环境变量、按需分包）。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Pinia", repo_url="https://github.com/vuejs/pinia",
+            homepage="https://pinia.vuejs.org", license="MIT", license_category="permissive",
+            stars=14000, language="TypeScript", tech_tags="状态管理,Store,组合式",
+            summary="Vue 官方推荐的状态管理库，本项目 stores 目录基于其实现。",
+            reusable_scope="可复用其 store 定义与持久化模式。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Vue Router", repo_url="https://github.com/vuejs/router",
+            homepage="https://router.vuejs.org", license="MIT", license_category="permissive",
+            stars=4500, language="TypeScript", tech_tags="路由,导航守卫,懒加载",
+            summary="Vue 官方路由，本项目按角色分区路由基于其实现。",
+            reusable_scope="可复用路由分层、角色守卫与懒加载写法。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Naive UI", repo_url="https://github.com/tusen-ai/naive-ui",
+            homepage="https://www.naiveui.com", license="MIT", license_category="permissive",
+            stars=16000, language="TypeScript", tech_tags="Vue3,UI组件库,主题定制,数据可视化",
+            summary="Vue 3 组件库，主题可定制、TypeScript 友好。",
+            reusable_scope="可参考其主题变量体系与复杂表单/数据表格的组织方式。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Ant Design Vue", repo_url="https://github.com/vueComponent/ant-design-vue",
+            homepage="https://antdv.com", license="MIT", license_category="permissive",
+            stars=21000, language="TypeScript", tech_tags="Vue3,UI组件库,企业级,中后台",
+            summary="企业级中后台 UI 组件库，适合参考后台管理页面的布局与信息密度。",
+            reusable_scope="可参考其管理端布局、筛选栏与表格交互设计。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Arco Design Vue", repo_url="https://github.com/arco-design/arco-design-vue",
+            homepage="https://arco.design", license="MIT", license_category="permissive",
+            stars=2900, language="TypeScript", tech_tags="Vue3,UI组件库,设计系统,中后台",
+            summary="字节跳动出品的企业级设计系统与 Vue 3 组件库。",
+            reusable_scope="可参考其设计规范（间距、色彩、圆角）与中后台页面结构。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Tailwind CSS", repo_url="https://github.com/tailwindlabs/tailwindcss",
+            homepage="https://tailwindcss.com", license="MIT", license_category="permissive",
+            stars=82000, language="TypeScript", tech_tags="原子化CSS,样式,响应式,设计系统",
+            summary="原子化 CSS 框架，适合快速搭建响应式页面。",
+            reusable_scope="可复用其响应式断点与间距/排版工具类思路（本项目为 scoped CSS，可借鉴其度量）。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="shadcn/ui", repo_url="https://github.com/shadcn-ui/ui",
+            homepage="https://ui.shadcn.com", license="MIT", license_category="permissive",
+            stars=74000, language="TypeScript", tech_tags="React,组件复制,可定制,Radix",
+            summary="以「复制到项目里」为理念的组件集合，组件源码可直接拥有与改造。",
+            reusable_scope="可借鉴其「组件即源码、按需复制」的复用理念与无障碍交互实现（React 版，需改写为 Vue）。",
+            attribution="MIT：保留版权与许可证声明；组件源码可直接改造。",
+        ),
+        dict(
+            name="Apache ECharts", repo_url="https://github.com/apache/echarts",
+            homepage="https://echarts.apache.org", license="Apache-2.0", license_category="permissive",
+            stars=61000, language="TypeScript", tech_tags="图表,数据可视化,折线图,饼图,雷达图",
+            summary="功能强大的可视化图表库，本项目成绩分析、成长轨迹等图表基于其实现。",
+            reusable_scope="可复用其图表配置范式（折线/柱状/饼图/雷达图）与主题。",
+            attribution="Apache-2.0：保留版权、许可证与 NOTICE 声明，需注明修改。",
+        ),
+        dict(
+            name="VueUse", repo_url="https://github.com/vueuse/vueuse",
+            homepage="https://vueuse.org", license="MIT", license_category="permissive",
+            stars=20000, language="TypeScript", tech_tags="Vue3,组合式函数,Hooks,工具集",
+            summary="Vue 组合式工具集，提供大量可复用 composable。",
+            reusable_scope="可复用其响应式/浏览器 API 封装思路（本项目 composables 目录可借鉴）。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="VXE Table", repo_url="https://github.com/x-extends/vxe-table",
+            homepage="https://vxetable.cn", license="MIT", license_category="permissive",
+            stars=7500, language="TypeScript", tech_tags="Vue3,表格,虚拟滚动,大数据量",
+            summary="面向 Vue 的高性能表格组件，适合大数据量、复杂表头场景。",
+            reusable_scope="可参考其虚拟滚动与可编辑表格的实现思路。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Axios", repo_url="https://github.com/axios/axios",
+            homepage="https://axios-http.com", license="MIT", license_category="permissive",
+            stars=106000, language="JavaScript", tech_tags="HTTP客户端,请求拦截,Promise",
+            summary="通用 HTTP 客户端，请求/响应拦截器范式被广泛借鉴。",
+            reusable_scope="可借鉴其拦截器与错误处理封装思路（本项目前端使用 fetch 封装）。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+        dict(
+            name="Day.js", repo_url="https://github.com/iamkun/dayjs",
+            homepage="https://day.js.org", license="MIT", license_category="permissive",
+            stars=47000, language="JavaScript", tech_tags="日期处理,时区,轻量",
+            summary="轻量日期处理库，API 兼容 Moment。",
+            reusable_scope="可复用其日期格式化与时区处理 API。",
+            attribution="MIT：保留版权与许可证声明。",
+        ),
+    ]
+    db.add_all([OpenSourceReference(is_builtin=True, enabled=True, **_r) for _r in _references])
     db.commit()
     seeded = True
 

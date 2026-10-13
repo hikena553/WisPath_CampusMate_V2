@@ -1,14 +1,14 @@
 <template>
   <div class="emotion-page">
-    <SubPageHeader title="情绪垃圾桶" fallback="/student" />
+    <SubPageHeader title="情绪树洞" fallback="/student" />
     <!-- 头部主视觉 -->
     <div class="emotion-hero">
       <div class="hero-glow g1"></div>
       <div class="hero-top">
         <div class="hero-title-wrap">
-          <div class="hero-kicker">MOOD · 情绪垃圾桶</div>
-          <h2 class="hero-title">把情绪倒进来，轻轻放下</h2>
-          <p class="hero-sub">这里存放着你通话中流露的每一种情绪</p>
+          <div class="hero-kicker">MOOD · 情绪树洞</div>
+          <h2 class="hero-title">把情绪说出来，轻轻放下</h2>
+          <p class="hero-sub">这里存放着你通话中流露的情绪，也可以向辅导员求助</p>
         </div>
       </div>
       <div class="hero-stats">
@@ -30,6 +30,35 @@
     </div>
 
     <div class="content">
+      <!-- 求助辅导员：学生有问题 / 求助 → 辅导员一对一查看并帮扶 -->
+      <div class="card help-card">
+        <div class="card-head">
+          <span class="head-bar help-bar"></span>
+          <span class="head-title">求助辅导员</span>
+          <span class="head-sub">有困难，找老师</span>
+          <el-button size="small" text type="primary" class="help-add" @click="openHelp">
+            <el-icon style="margin-right:2px"><ChatDotRound /></el-icon>发起求助
+          </el-button>
+        </div>
+        <p class="help-tip">把困扰写下来，你的辅导员会一对一查看并回复；可匿名提交，也可留下身份方便老师找到你。</p>
+        <div v-if="helpList.length" class="help-list">
+          <div v-for="h in helpList" :key="h.id" class="help-item">
+            <div class="help-top">
+              <span class="help-cat">{{ HELP_CATEGORY_LABEL[h.category] }}</span>
+              <span class="help-status" :class="`st-${h.status}`">{{ HELP_STATUS_LABEL[h.status] }}</span>
+              <span class="help-time">{{ timeStr(h.created_at) }}</span>
+            </div>
+            <div class="help-content">{{ h.content }}</div>
+            <div v-if="h.reply" class="help-reply">
+              <span class="help-reply-label">{{ h.teacher_name || '辅导员' }}回复</span>
+              <span class="help-reply-text">{{ h.reply }}</span>
+            </div>
+            <div v-else class="help-wait">等待辅导员查看…</div>
+          </div>
+        </div>
+        <div v-else class="help-empty">还没有发起过求助。遇到学业、生活或情绪上的难题，都可以告诉辅导员。</div>
+      </div>
+
       <!-- 情绪分布 -->
       <div class="card">
         <div class="card-head">
@@ -59,7 +88,7 @@
           <span class="head-bar"></span>
           <span class="head-title">情绪流水</span>
           <el-button size="small" text type="danger" :disabled="!history.length" @click="handleClear">
-            <el-icon style="margin-right:2px"><Delete /></el-icon>倒空
+            <el-icon style="margin-right:2px"><Delete /></el-icon>清空
           </el-button>
         </div>
         <div v-if="history.length" class="emotion-list">
@@ -93,6 +122,55 @@
         </div>
       </div>
     </div>
+
+    <!-- 发起求助弹窗 -->
+    <el-dialog
+      v-model="helpVisible"
+      title="求助辅导员"
+      width="90%"
+      align-center
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="help-dialog"
+    >
+      <div class="help-form">
+        <div class="help-field">
+          <span class="help-label">求助类型</span>
+          <div class="help-cats">
+            <button
+              v-for="c in HELP_CATEGORIES"
+              :key="c.value"
+              type="button"
+              class="help-cat-btn"
+              :class="{ on: helpForm.category === c.value }"
+              @click="helpForm.category = c.value"
+            >{{ c.label }}</button>
+          </div>
+        </div>
+        <div class="help-field">
+          <span class="help-label">求助内容<span class="req">*</span></span>
+          <el-input
+            v-model="helpForm.content"
+            type="textarea"
+            :rows="5"
+            maxlength="1000"
+            show-word-limit
+            placeholder="说说你遇到的困难，或需要老师帮忙的地方……"
+          />
+        </div>
+        <div class="help-field help-anon">
+          <div class="help-anon-info">
+            <span class="help-label">匿名提交</span>
+            <p class="help-anon-tip">开启后老师看不到你的姓名，但仍可回复你</p>
+          </div>
+          <el-switch v-model="helpForm.anonymous" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="helpVisible = false">取消</el-button>
+        <el-button type="primary" :loading="helpSaving" :disabled="!helpForm.content.trim()" @click="submitHelp">提交求助</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -100,8 +178,13 @@
 import { ref, computed, onMounted } from 'vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { Delete } from '@element-plus/icons-vue'
+import { Delete, ChatDotRound } from '@element-plus/icons-vue'
 import { fetchEmotionStats, fetchEmotionHistory, clearEmotions, type EmotionStats, type EmotionRecordItem } from '@/api/emotion'
+import {
+  createHelpRequest, fetchMyHelpRequests,
+  HELP_CATEGORY_LABEL, HELP_STATUS_LABEL,
+  type HelpRequest, type HelpCategory,
+} from '@/api/helpRequest'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 
 // AI 助手称谓取自站点配置（管理端「自我称谓」）
@@ -109,6 +192,55 @@ const { agentName } = useSiteConfig()
 
 const stats = ref<EmotionStats>({ total: 0, breakdown: [], trending: [] })
 const history = ref<EmotionRecordItem[]>([])
+
+/* ===== 求助辅导员：学生发起 → 辅导员回复 ===== */
+const HELP_CATEGORIES: { value: HelpCategory; label: string }[] = [
+  { value: 'academic', label: '学业困扰' },
+  { value: 'life', label: '生活困难' },
+  { value: 'mental', label: '心理情绪' },
+  { value: 'relation', label: '人际关系' },
+  { value: 'other', label: '其他' },
+]
+const helpList = ref<HelpRequest[]>([])
+const helpVisible = ref(false)
+const helpSaving = ref(false)
+const helpForm = ref<{ category: HelpCategory; content: string; anonymous: boolean }>({
+  category: 'academic',
+  content: '',
+  anonymous: false,
+})
+
+function openHelp() {
+  helpForm.value = { category: 'academic', content: '', anonymous: false }
+  helpVisible.value = true
+}
+
+async function submitHelp() {
+  if (!helpForm.value.content.trim()) return
+  helpSaving.value = true
+  try {
+    await createHelpRequest({
+      category: helpForm.value.category,
+      content: helpForm.value.content.trim(),
+      anonymous: helpForm.value.anonymous,
+    })
+    ElMessage.success('求助已提交，辅导员会尽快查看')
+    helpVisible.value = false
+    await loadHelp()
+  } catch {
+    ElMessage.error('提交失败，请稍后再试')
+  } finally {
+    helpSaving.value = false
+  }
+}
+
+async function loadHelp() {
+  try {
+    helpList.value = await fetchMyHelpRequests()
+  } catch {
+    /* ignore */
+  }
+}
 
 const emoji = (e: string) =>
   ({ neutral: '😐', happy: '😄', sad: '😢', angry: '😡', fearful: '😨', disgusted: '😖', surprised: '😲' }[e] ?? '🙂')
@@ -157,12 +289,13 @@ async function loadAll() {
   } catch {
     /* ignore */
   }
+  await loadHelp()
 }
 
 async function handleClear() {
   try {
-    await ElMessageBox.confirm('确定要倒空情绪垃圾桶吗？历史情绪记录将被删除。', '倒空垃圾桶', {
-      confirmButtonText: '确定倒空',
+    await ElMessageBox.confirm('确定要清空情绪记录吗？历史情绪记录将被删除。', '清空记录', {
+      confirmButtonText: '确定清空',
       cancelButtonText: '再想想',
       type: 'warning',
     })
@@ -171,7 +304,7 @@ async function handleClear() {
   }
   try {
     await clearEmotions()
-    ElMessage.success('已倒空情绪垃圾桶')
+    ElMessage.success('已清空情绪记录')
     await loadAll()
   } catch {
     ElMessage.error('操作失败，请稍后再试')
@@ -310,4 +443,63 @@ onMounted(loadAll)
 }
 .empty-emoji { font-size: 42px; margin-bottom: 8px; }
 .empty-msg { font-size: 13px; color: #a5adbb; line-height: 1.7; }
+
+/* ===== 求助辅导员 ===== */
+.help-bar { background: linear-gradient(180deg, #5b8def, #7c5cff); }
+.help-add { margin-left: auto; font-weight: 600; }
+.help-tip { margin: 0 0 12px; font-size: 12px; color: #909399; line-height: 1.6; }
+.help-list { display: flex; flex-direction: column; gap: 10px; }
+.help-item {
+  border: 1px solid #eef1f6;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fafbfe;
+}
+.help-top { display: flex; align-items: center; gap: 8px; }
+.help-cat {
+  font-size: 11px; font-weight: 600; color: #5b8def;
+  background: #eaf1ff; border-radius: 8px; padding: 2px 8px;
+}
+.help-status {
+  font-size: 11px; font-weight: 600; border-radius: 8px; padding: 2px 8px;
+}
+.help-status.st-pending { color: #e6a23c; background: #fdf3e2; }
+.help-status.st-processing { color: #409eff; background: #e8f3ff; }
+.help-status.st-resolved { color: #34b37a; background: #e6f6ee; }
+.help-time { margin-left: auto; font-size: 11px; color: #a5adbb; }
+.help-content {
+  margin-top: 8px; font-size: 13px; color: #303133;
+  line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+}
+.help-reply {
+  margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+  background: #eef4ff; border-left: 3px solid #5b8def;
+}
+.help-reply-label { display: block; font-size: 11px; font-weight: 700; color: #5b8def; margin-bottom: 3px; }
+.help-reply-text { font-size: 12.5px; color: #4a5568; line-height: 1.6; white-space: pre-wrap; }
+.help-wait { margin-top: 8px; font-size: 12px; color: #a5adbb; }
+.help-empty {
+  text-align: center; font-size: 12.5px; color: #a5adbb;
+  line-height: 1.7; padding: 14px 8px;
+}
+
+/* 求助弹窗 */
+.help-form { display: flex; flex-direction: column; gap: 16px; }
+.help-field { display: flex; flex-direction: column; gap: 8px; }
+.help-label { font-size: 13px; font-weight: 600; color: #303133; }
+.help-label .req { color: #f56c6c; margin-left: 2px; }
+.help-cats { display: flex; flex-wrap: wrap; gap: 8px; }
+.help-cat-btn {
+  font-family: inherit; font-size: 12.5px; color: #606266;
+  padding: 6px 14px; border-radius: 999px;
+  border: 1px solid #e4e7ed; background: #fff; cursor: pointer;
+  transition: all 0.15s ease;
+}
+.help-cat-btn.on {
+  color: #5b8def; border-color: #5b8def;
+  background: #eaf1ff; font-weight: 600;
+}
+.help-anon { flex-direction: row; align-items: center; justify-content: space-between; }
+.help-anon-info { display: flex; flex-direction: column; gap: 3px; }
+.help-anon-tip { margin: 0; font-size: 11.5px; color: #a5adbb; }
 </style>

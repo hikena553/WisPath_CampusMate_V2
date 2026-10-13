@@ -534,7 +534,7 @@ async def _report_emotional_care(
     """
     from app.models.crisis import AIDialogSummary
     from app.models.user import User, UserRole
-    from app.models.notification import Notification
+    from app.models.notification import Notification, NotificationType
 
     emo_label = EMOTION_LABELS.get(dominant_emotion, dominant_emotion) if dominant_emotion else "未检测"
     if keywords:
@@ -566,7 +566,11 @@ async def _report_emotional_care(
                 user_id=tutor.id,
                 title=f"心理关注：{user.name}",
                 content=summary_text,
-                type="warning",
+                # 必须使用枚举成员：写死字符串 "warning" 不在 NotificationType 内，
+                # 提交时整笔事务会抛错回滚，导致心理关注与同事务的对话摘要全部落不了库。
+                type=NotificationType.CRISIS,
+                link="/teacher/crisis",
+                related_id=user.id,
             ))
         db.commit()
         logger.info("语音通话心理关注已上报 student_id=%s level=%s", user.id, level)

@@ -417,6 +417,14 @@ async function handleSaveProfile() {
 
 <style>
 body { overflow: hidden; margin: 0; background-color: #0f172a; }
+
+/* 弹窗「专注填写」模式：教师端子页面打开任一弹窗时隐藏左侧导航，
+   把横向空间让给弹窗与长表单；关闭弹窗后自动恢复。
+   仅匹配 .tui-page（教师端子页面），不影响管理端 / 学生端侧边栏。
+   :has() 不被支持的旧版浏览器会自动忽略该条规则，属安全降级。 */
+@media (min-width: 768px) {
+  .body-area:has(.tui-page .el-overlay) > .sidebar { display: none; }
+}
 </style>
 <style scoped>
 .app-shell {

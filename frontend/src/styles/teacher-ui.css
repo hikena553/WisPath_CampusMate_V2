@@ -693,3 +693,299 @@ button.tui-stat:active { transform: scale(0.98); }
   .tui-stat { padding: 11px 11px; }
   .tui-stat-num { font-size: 19px; }
 }
+
+/* =========================================================================
+   ▼ v3 密度校准（作用域限定 .tui-page，仅影响教师端/子页面，学生端零回归）
+   目标：组件整体收紧约 15%，信息密度更高、滚动更短，同时保留 44px 移动热区。
+   ========================================================================= */
+.tui-page .tui-content { padding: 10px 12px 24px; }
+@media (min-width: 768px) {
+  .tui-page .tui-content { padding: 16px 20px 32px; }
+}
+
+/* 吸顶栏 */
+.tui-page .tui-appbar { min-height: 48px; padding: 0 8px; }
+.tui-page .tui-appbar-brand { min-height: 56px; padding: 6px 8px 6px 12px; }
+.tui-page .tui-appbar-back { width: 36px; height: 36px; }
+.tui-page .tui-appbar-title { font-size: 15.5px; }
+.tui-page .tui-appbar-sub { font-size: 11px; }
+.tui-page .tui-mascot-sm { width: 34px; height: 34px; }
+.tui-page .tui-mascot-md { width: 40px; height: 40px; }
+
+/* 页头 */
+.tui-page .tui-header { margin-bottom: 14px; }
+.tui-page .tui-header-title { font-size: 19px; }
+.tui-page .tui-header-sub { font-size: 12px; margin-top: 4px; }
+
+/* 分组与卡片 */
+.tui-page .tui-groups,
+.tui-page .tui-stack { gap: 10px; }
+.tui-page .tui-group-title { margin: 13px 2px 7px; font-size: 12px; }
+.tui-page .tui-group-count { font-size: 11px; }
+.tui-page .tui-card-pad { padding: 13px; }
+.tui-page .tui-card-body { padding: 12px 13px; }
+.tui-page .tui-card-head { padding: 12px 13px 0; font-size: 13.5px; }
+.tui-page .tui-card-head-icon { width: 20px; height: 20px; border-radius: 6px; }
+.tui-page .tui-card-desc { padding: 4px 13px 0; font-size: 11.5px; }
+
+/* 宫格 */
+.tui-page .tui-grid-nav { padding: 10px 6px 12px; gap: 2px; }
+.tui-page .tui-nav-cell { gap: 6px; padding: 8px 2px 6px; }
+.tui-page .tui-nav-icon { width: 42px; height: 42px; border-radius: 13px; }
+.tui-page .tui-nav-label { font-size: 11.5px; }
+.tui-page .tui-nav-cell .tui-count { top: 5px; right: calc(50% - 27px); }
+.tui-page .tui-count { min-width: 16px; height: 16px; font-size: 10px; }
+
+/* 列表行 */
+.tui-page .tui-row { padding: 10px 13px; gap: 10px; }
+.tui-page .tui-row-icon { width: 32px; height: 32px; border-radius: 9px; }
+.tui-page .tui-row-label { font-size: 13.5px; }
+.tui-page .tui-row-desc { font-size: 11.5px; }
+.tui-page .tui-row-value { font-size: 12.5px; }
+
+/* 分段控件 */
+.tui-page .tui-seg { padding: 2px; border-radius: 10px; gap: 2px; }
+.tui-page .tui-seg-item { padding: 6px 10px; font-size: 12.5px; border-radius: 8px; }
+.tui-page .tui-seg-wrap { margin-bottom: 10px; }
+
+/* 指标卡 */
+.tui-page .tui-stat-row { gap: 8px; margin-bottom: 10px; }
+.tui-page .tui-stat { padding: 10px 11px; gap: 2px; border-radius: 12px; }
+.tui-page .tui-stat-num { font-size: 18px; }
+.tui-page .tui-stat-label { font-size: 11px; }
+
+/* 标签 / 提示 / 空态 */
+.tui-page .tui-chip,
+.tui-page .tui-tag { padding: 2px 8px; font-size: 11px; }
+.tui-page .tui-notice { padding: 8px 10px; font-size: 11.5px; border-radius: 9px; }
+.tui-page .tui-empty { padding: 34px 20px; gap: 10px; }
+.tui-page .tui-empty-icon { width: 52px; height: 52px; }
+.tui-page .tui-empty-title { font-size: 13px; }
+.tui-page .tui-empty-desc { font-size: 11.5px; margin-top: -4px; }
+.tui-page .tui-actions-bottom { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); margin: 12px -12px -24px; }
+@media (min-width: 768px) {
+  .tui-page .tui-actions-bottom { margin: 12px -20px -32px; padding: 8px 20px 10px; }
+}
+
+/* 移动端再压一档 */
+@media (max-width: 767px) {
+  .tui-page .tui-stat { padding: 9px 10px; }
+  .tui-page .tui-stat-num { font-size: 17px; }
+  .tui-page .tui-header-title { font-size: 17px; }
+  .tui-page .tui-content { padding: 10px 10px 22px; }
+}
+
+/* =========================================================================
+   ▼ v3 分区卡片 / 分区提示（子页面统一使用，替代各页各自维护的 .section-card）
+   ========================================================================= */
+.tui-section {
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+  padding: 12px 13px;
+  margin-bottom: 10px;
+}
+.tui-section:last-child { margin-bottom: 0; }
+
+.tui-section-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+.tui-section-head h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tui-text);
+}
+.tui-section-head h3 .el-icon { font-size: 15px; color: var(--tui-text-tertiary); }
+.tui-section-head .tui-section-extra { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+/* 分区说明 / 引导提示：解决「没有提示」的问题，任何分区都可挂一条 */
+.tui-section-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 9px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
+}
+.tui-section-hint .el-icon { flex-shrink: 0; margin-top: 1px; font-size: 13px; }
+.tui-section-hint.warn { background: var(--tui-warn-soft); color: var(--tui-warn); }
+.tui-section-hint.danger { background: var(--tui-danger-soft); color: var(--tui-danger); }
+.tui-section-hint.success { background: var(--tui-success-soft); color: var(--tui-success); }
+
+/* 分区内的小工具行（筛选 / 搜索 / 操作） */
+.tui-section-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.tui-section-tools .el-input,
+.tui-section-tools .el-select { width: 180px; }
+@media (max-width: 767px) {
+  .tui-section-tools .el-input,
+  .tui-section-tools .el-select { width: 100%; }
+}
+
+/* =========================================================================
+   ▼ v3 Element Plus 密度校准（仅 .tui-page 内）
+   ========================================================================= */
+.tui-page .el-table { font-size: 13px; }
+.tui-page .el-table th.el-table__cell {
+  padding: 7px 0;
+  background: var(--tui-surface-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tui-page .el-table td.el-table__cell { padding: 8px 0; }
+.tui-page .el-table .el-table__cell .cell { line-height: 1.5; }
+
+.tui-page .el-button { font-size: 13px; }
+.tui-page .el-button--small { font-size: 12px; }
+.tui-page .el-tag { font-size: 11.5px; }
+.tui-page .el-form-item { margin-bottom: 14px; }
+.tui-page .el-form-item__label { font-size: 12.5px; }
+
+/* 分页：教师端再压一档，移动端只留总数 + 上下页 + 页码 */
+.tui-page .el-pagination { --el-pagination-font-size: 12.5px; }
+@media (max-width: 767px) {
+  .tui-page .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 6px;
+  }
+  .tui-page .el-pagination .el-pagination__sizes,
+  .tui-page .el-pagination .el-pagination__jump { display: none !important; }
+}
+
+/* 教师端分页容器：右对齐（移动端居中），不再留大片空白 */
+.tui-page .pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding: 4px 0 0;
+}
+@media (max-width: 767px) {
+  .tui-page .pagination-wrapper { justify-content: center; }
+}
+
+/* =========================================================================
+   ▼ v4 弹窗精修（作用域 .tui-page .el-dialog，仅影响教师端弹窗，其他端零回归）
+   - 高度上限 66vh（页面的三分之二）由全局给出，内容超出时弹窗内部滚动；
+   - 内部滚动区隐藏可见滚动条，保持干净的「滑动式填写」体验；
+   - 底部按钮缩小，主按钮改中性深色（不再用蓝色实心），取消为发丝描边；
+   - 输出框（textarea / input / select）统一柔化底 + 品牌色聚焦环。
+   ========================================================================= */
+
+/* 1) 滑动式填写：内部滚动 + 隐藏可见滚动条 */
+.tui-page .el-dialog__body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tui-page .el-dialog__body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* 2) 底部按钮：更小、更简约 */
+.tui-page .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tui-page .el-dialog__footer .el-button {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.tui-page .el-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+/* 主操作：中性深色实心，去掉蓝色背景 */
+.tui-page .el-dialog__footer .el-button--primary {
+  background: var(--tui-text);
+  border-color: var(--tui-text);
+  color: #fff;
+}
+.tui-page .el-dialog__footer .el-button--primary:hover:not(.is-disabled):not(.is-loading) {
+  background: #2b3038;
+  border-color: #2b3038;
+  color: #fff;
+}
+.tui-page .el-dialog__footer .el-button--primary.is-disabled,
+.tui-page .el-dialog__footer .el-button--primary.is-disabled:hover {
+  background: #c9ced6;
+  border-color: #c9ced6;
+  color: #fff;
+}
+
+/* 取消 / 次要：白底发丝描边，克制 */
+.tui-page .el-dialog__footer .el-button:not(.el-button--primary):not(.el-button--danger):not(.el-button--success):not(.el-button--warning) {
+  background: #fff;
+  border-color: var(--tui-border-strong);
+  color: var(--tui-text-secondary);
+}
+.tui-page .el-dialog__footer .el-button:not(.el-button--primary):not(.el-button--danger):not(.el-button--success):not(.el-button--warning):hover {
+  background: var(--tui-surface-muted);
+  border-color: #d6dbe3;
+  color: var(--tui-text);
+}
+
+/* 3) 输出框美化：柔化底 + 聚焦品牌环 */
+.tui-page .el-dialog .el-textarea__inner,
+.tui-page .el-dialog .el-input__wrapper,
+.tui-page .el-dialog .el-select__wrapper {
+  border-radius: 10px;
+  background: var(--tui-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--tui-border-strong);
+  transition: box-shadow 0.16s ease, background 0.16s ease;
+}
+.tui-page .el-dialog .el-textarea__inner {
+  padding: 9px 11px;
+  line-height: 1.55;
+}
+.tui-page .el-dialog .el-textarea__inner:hover,
+.tui-page .el-dialog .el-input__wrapper:hover,
+.tui-page .el-dialog .el-select__wrapper:hover {
+  box-shadow: inset 0 0 0 1px #d6dbe3;
+}
+.tui-page .el-dialog .el-textarea__inner:focus,
+.tui-page .el-dialog .el-input__wrapper.is-focus,
+.tui-page .el-dialog .el-select__wrapper.is-focused {
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--tui-brand), 0 0 0 3px var(--tui-brand-soft);
+}
+.tui-page .el-dialog .el-input__count {
+  background: transparent;
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+}
+
+/* 4) 弹窗内表单更紧凑 */
+.tui-page .el-dialog .el-form-item { margin-bottom: 13px; }
+.tui-page .el-dialog .el-form-item:last-child { margin-bottom: 0; }
+.tui-page .el-dialog .el-form-item__label {
+  font-size: 12.5px;
+  color: var(--tui-text-secondary);
+  padding-bottom: 5px;
+}

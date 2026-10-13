@@ -1,6 +1,21 @@
 import request from '@/utils/request'
 import type { College, Major, ClassGroup } from '@/types'
 
+export interface OrgScope {
+  scope: 'all' | 'college' | 'major' | 'class'
+  college_id: number | null
+  college_name: string | null
+  major_id: number | null
+  major_name: string | null
+  class_group_id: number | null
+  class_group_name: string | null
+}
+
+/** 当前用户「所在组织」范围：通讯录据此只展示自己所在组织及下级 */
+export function getOrgScope() {
+  return request.get<OrgScope>('/admin/org-scope')
+}
+
 // ─── 学院 ───────────────────────────────────────────────
 export function getColleges() {
   return request.get<College[]>('/admin/colleges')

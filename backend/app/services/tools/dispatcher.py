@@ -16,6 +16,7 @@ from .plan import (
     _query_profile_overview,
     _submit_plan_stage,
 )
+from .reference import _generate_page_scaffold, _search_reference_library
 from .sanitize import _check_tool_rate_limit, _sanitize_tool_result
 from .student import (
     _analyze_grades,
@@ -23,11 +24,13 @@ from .student import (
     _analyze_schedule,
     _confirm_growth_record,
     _create_growth_record,
+    _create_help_request,
     _create_leave,
     _query_announcements,
     _query_exams,
     _query_grades,
     _query_knowledge,
+    _query_my_help_requests,
     _query_sceneries,
     _query_schedule,
     _submit_service_request,
@@ -44,6 +47,7 @@ from .teacher import (
     _query_crisis_alerts,
     _query_guardian_logs,
     _query_growth_stats,
+    _query_help_requests,
     _query_learning_events,
     _query_my_portfolio,
     _query_my_survey_results,
@@ -53,6 +57,7 @@ from .teacher import (
     _query_student_insight,
     _query_students,
     _query_teacher_tasks,
+    _reply_help_request,
 )
 
 
@@ -91,6 +96,9 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "create_community_post": _create_community_post,
             "query_resources": _query_resources,
             "query_profile_overview": _query_profile_overview,
+            # 求助辅导员（学生 → 辅导员帮扶闭环）
+            "create_help_request": _create_help_request,
+            "query_my_help_requests": _query_my_help_requests,
             # 教师工具
             "query_pending_leaves": _query_pending_leaves,
             "analyze_leave": _analyze_leave,
@@ -114,6 +122,12 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "query_learning_events": _query_learning_events,
             "query_student_insight": _query_student_insight,
             "query_my_workflows": _query_my_workflows,
+            # 求助受理（学生求助 → 辅导员帮扶闭环）
+            "query_help_requests": _query_help_requests,
+            "reply_help_request": _reply_help_request,
+            # 开源参考复用（检索可复用开源项目 / 生成页面骨架）
+            "search_reference_library": _search_reference_library,
+            "generate_page_scaffold": _generate_page_scaffold,
         }
         fn = handler.get(name)
         if not fn:

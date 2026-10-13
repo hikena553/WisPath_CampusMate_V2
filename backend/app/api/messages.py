@@ -1,6 +1,7 @@
 import logging
 from urllib.parse import unquote
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.database import get_db
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 from app.core.deps import get_current_user, AUTH_COOKIE_NAME
 from app.core.security import decode_access_token, is_token_revoked
 from app.models.user import User
-from app.models.message import Message
+from app.models.message import Message, MessageSessionPin
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
 from app.services.ws_manager import manager
 
@@ -122,6 +123,47 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
                     unread_count=0,
                 ))
     return result
+
+# ==================== 会话置顶（服务端持久化，跨端同步） ====================
+
+class SessionPinUpdate(BaseModel):
+    session_key: str
+    pinned: bool
+
+
+@router.get("/pins")
+def list_session_pins(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """当前用户置顶的会话 key 列表（形如 g-<groupId> / s-<userId>）。"""
+    rows = (
+        db.query(MessageSessionPin)
+        .filter(MessageSessionPin.user_id == user.id)
+        .order_by(MessageSessionPin.pinned_at.desc())
+        .all()
+    )
+    return {"keys": [r.session_key for r in rows]}
+
+
+@router.put("/pins")
+def set_session_pin(data: SessionPinUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """置顶 / 取消置顶某个会话（幂等）。"""
+    key = (data.session_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="session_key 不能为空")
+    if len(key) > 64:
+        raise HTTPException(status_code=400, detail="session_key 过长")
+
+    existing = db.query(MessageSessionPin).filter(
+        MessageSessionPin.user_id == user.id,
+        MessageSessionPin.session_key == key,
+    ).first()
+    if data.pinned and not existing:
+        db.add(MessageSessionPin(user_id=user.id, session_key=key))
+        db.commit()
+    elif not data.pinned and existing:
+        db.delete(existing)
+        db.commit()
+    return {"key": key, "pinned": bool(data.pinned)}
+
 
 @router.get("/{user_id}", response_model=list[MessageOut])
 def get_messages(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):

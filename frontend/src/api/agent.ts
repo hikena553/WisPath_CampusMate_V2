@@ -19,6 +19,7 @@ export async function sendChatMessage(
   conversationId?: number,
   deepThink?: boolean,
   skipConv?: boolean,
+  answerMode?: string,
   onMeta?: (meta: ChatMeta) => void,
 ) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
@@ -28,7 +29,7 @@ export async function sendChatMessage(
   const resp = await fetch('/api/agent/chat', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ message, history, file_url: fileUrl, conversation_id: conversationId, deep_think: deepThink || false, skip_conversation: skipConv || false }),
+    body: JSON.stringify({ message, history, file_url: fileUrl, conversation_id: conversationId, deep_think: deepThink || false, answer_mode: answerMode || 'normal', skip_conversation: skipConv || false }),
   })
 
   if (!resp.ok) {

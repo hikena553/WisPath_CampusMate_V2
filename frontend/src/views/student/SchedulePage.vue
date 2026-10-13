@@ -892,7 +892,7 @@
         <el-icon><FolderOpened /></el-icon> 我的作品集
       </div>
       <div class="page-tab" @click="goEmotion">
-        <el-icon><FirstAidKit /></el-icon> 情绪垃圾桶
+        <el-icon><FirstAidKit /></el-icon> 情绪树洞
       </div>
     </div>
     </div>

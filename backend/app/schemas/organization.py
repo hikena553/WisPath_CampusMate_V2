@@ -54,3 +54,18 @@ class ClassGroupOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OrgScopeOut(BaseModel):
+    """当前用户「所在组织」的范围，用于通讯录只展示自己所在组织及下级。
+
+    scope: all（未归属任何组织，展示全部）/ college / major / class
+    """
+
+    scope: str = "all"
+    college_id: Optional[int] = None
+    college_name: Optional[str] = None
+    major_id: Optional[int] = None
+    major_name: Optional[str] = None
+    class_group_id: Optional[int] = None
+    class_group_name: Optional[str] = None

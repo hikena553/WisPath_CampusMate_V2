@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
@@ -9,7 +10,8 @@ from app.models.user import User
 from app.models.message import Message
 from app.models.group import Group, GroupMember, GroupMessage
 from app.schemas.group import (
-    GroupCreate, GroupMemberAdd, GroupMessageSend, AnnouncementUpdate, AvatarUpdate,
+    GroupCreate, GroupMemberAdd, GroupMessageSend, AnnouncementUpdate, AvatarUpdate, GroupNameUpdate,
+    GroupMuteUpdate, GroupJoinRequest, GroupInviteOut, GroupJoinOut,
     GroupOut, GroupMemberOut, GroupMessageOut, UserSearchResult
 )
 from app.services.ws_manager import manager
@@ -77,6 +79,11 @@ def get_groups(user: User = Depends(get_current_user), db: Session = Depends(get
             GroupMessage.created_at > last_read
         ).count()
 
+        # 免打扰：不冒泡未读数（钉钉「消息免打扰」语义）
+        muted = bool(member.is_muted) if member else False
+        if muted:
+            unread = 0
+
         result.append(GroupOut(
             id=g.id,
             name=g.name,
@@ -88,6 +95,7 @@ def get_groups(user: User = Depends(get_current_user), db: Session = Depends(get
             last_message=last_msg.content[:80] if last_msg else "",
             last_message_time=last_msg.created_at if last_msg else None,
             unread_count=unread,
+            is_muted=muted,
         ))
     return result
 
@@ -113,6 +121,10 @@ def get_group(group_id: int, user: User = Depends(get_current_user), db: Session
         GroupMessage.created_at > last_read
     ).count()
 
+    muted = bool(member.is_muted)
+    if muted:
+        unread = 0
+
     return GroupOut(
         id=group.id,
         name=group.name,
@@ -124,6 +136,7 @@ def get_group(group_id: int, user: User = Depends(get_current_user), db: Session
         last_message=last_msg.content[:80] if last_msg else "",
         last_message_time=last_msg.created_at if last_msg else None,
         unread_count=unread,
+        is_muted=muted,
     )
 
 
@@ -143,6 +156,7 @@ def get_group_members(group_id: int, user: User = Depends(get_current_user), db:
                 user_name=u.name,
                 user_avatar=u.avatar,
                 role=m.role,
+                is_muted=bool(m.is_muted),
                 joined_at=m.joined_at,
             ))
     return result
@@ -175,9 +189,13 @@ async def remove_group_member(group_id: int, target_user_id: int, user: User = D
         raise HTTPException(status_code=400, detail="群主不能移除自己")
 
     target = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == target_user_id).first()
-    if target:
-        db.delete(target)
-        db.commit()
+    if not target:
+        return {"message": "成员不在群内"}
+    # 群主不可被移除（含管理员移除群主的场景），需先转让群主或解散群聊
+    if target.role == "owner":
+        raise HTTPException(status_code=400, detail="群主不可被移除，请先转让群主或解散群聊")
+    db.delete(target)
+    db.commit()
 
     return {"message": "已移除"}
 
@@ -195,6 +213,9 @@ async def send_group_message(group_id: int, data: GroupMessageSend, user: User =
 
     members = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id != user.id).all()
     for m in members:
+        # 免打扰成员不接收实时推送（仍会落库，打开群时可见）
+        if m.is_muted:
+            continue
         await manager.send_json(m.user_id, {
             "type": "new_group_message",
             "group_id": group_id,
@@ -247,6 +268,9 @@ def update_group_announcement(group_id: int, data: AnnouncementUpdate, user: Use
     member = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == user.id).first()
     if not member:
         raise HTTPException(status_code=403, detail="您不是该群成员")
+    # 群公告属群管理能力：仅群主/管理员可修改（与前端入口守卫一致）
+    if member.role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="仅群主或管理员可修改群公告")
 
     group = db.query(Group).filter(Group.id == group_id).first()
     if not group:
@@ -271,6 +295,28 @@ def update_group_avatar(group_id: int, data: AvatarUpdate, user: User = Depends(
     group.avatar = data.avatar_url or None
     db.commit()
     return {"message": "群头像已更新", "avatar": group.avatar}
+
+
+@router.patch("/{group_id}/name")
+def update_group_name(group_id: int, data: GroupNameUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """修改群名称（群主/管理员）——钉钉群设置「群名称」入口"""
+    new_name = (data.name or "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="群名称不能为空")
+    if len(new_name) > 50:
+        raise HTTPException(status_code=400, detail="群名称最长 50 个字符")
+
+    member = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == user.id).first()
+    if not member or member.role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="仅群主或管理员可修改群名称")
+
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="群组不存在")
+
+    group.name = new_name
+    db.commit()
+    return {"message": "群名称已更新", "name": group.name}
 
 
 @router.post("/{group_id}/leave")
@@ -300,3 +346,94 @@ def disband_group(group_id: int, user: User = Depends(get_current_user), db: Ses
     group.is_dismissed = True
     db.commit()
     return {"message": "群聊已解散"}
+
+
+# ==================== 群邀请（群二维码）与免打扰 ====================
+
+def _require_group_admin(db: Session, group_id: int, user: User) -> Group:
+    """校验调用者为群主/管理员，并返回可用（未解散）的群。"""
+    member = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id, GroupMember.user_id == user.id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="您不是该群成员")
+    if member.role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="仅群主或管理员可获取群邀请")
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="群组不存在")
+    if group.is_dismissed:
+        raise HTTPException(status_code=400, detail="群聊已解散")
+    return group
+
+
+@router.get("/{group_id}/invite", response_model=GroupInviteOut)
+def get_group_invite(group_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """获取群邀请码（群主/管理员）：首次访问惰性生成，供前端拼邀请链接并生成二维码。"""
+    group = _require_group_admin(db, group_id, user)
+    if not group.invite_code:
+        group.invite_code = secrets.token_urlsafe(9)
+        db.commit()
+        db.refresh(group)
+    return GroupInviteOut(group_id=group.id, group_name=group.name, code=group.invite_code)
+
+
+@router.post("/{group_id}/invite/reset", response_model=GroupInviteOut)
+def reset_group_invite(group_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """重置群邀请码：此前分享出去的二维码立即失效（钉钉「重置二维码」）。"""
+    group = _require_group_admin(db, group_id, user)
+    group.invite_code = secrets.token_urlsafe(9)
+    db.commit()
+    db.refresh(group)
+    return GroupInviteOut(group_id=group.id, group_name=group.name, code=group.invite_code)
+
+
+@router.post("/join", response_model=GroupJoinOut)
+async def join_group(data: GroupJoinRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """扫码 / 打开邀请链接入群（幂等：已在群内直接返回）。"""
+    code = (data.code or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="邀请码不能为空")
+
+    group = db.query(Group).filter(Group.invite_code == code).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="邀请链接无效或已失效")
+    if group.is_dismissed:
+        raise HTTPException(status_code=400, detail="该群聊已解散")
+
+    existing = db.query(GroupMember).filter(
+        GroupMember.group_id == group.id, GroupMember.user_id == user.id
+    ).first()
+    if existing:
+        return GroupJoinOut(group_id=group.id, group_name=group.name, already_member=True, role=existing.role)
+
+    db.add(GroupMember(group_id=group.id, user_id=user.id, role="member"))
+    db.commit()
+
+    # 实时告知群内其他成员有新成员加入（免打扰成员跳过）
+    members = db.query(GroupMember).filter(
+        GroupMember.group_id == group.id, GroupMember.user_id != user.id
+    ).all()
+    for m in members:
+        if m.is_muted:
+            continue
+        await manager.send_json(m.user_id, {
+            "type": "group_member_joined",
+            "group_id": group.id,
+            "user_id": user.id,
+            "user_name": user.name,
+        })
+    return GroupJoinOut(group_id=group.id, group_name=group.name, already_member=False, role="member")
+
+
+@router.patch("/{group_id}/mute")
+def set_group_mute(group_id: int, data: GroupMuteUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """消息免打扰开关（每个成员独立设置，只影响自己）。"""
+    member = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id, GroupMember.user_id == user.id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="您不是该群成员")
+    member.is_muted = bool(data.muted)
+    db.commit()
+    return {"message": "已更新", "muted": member.is_muted}

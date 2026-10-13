@@ -16,6 +16,8 @@ export interface GroupOut {
   last_message: string
   last_message_time: string | null
   unread_count: number
+  /** 当前用户在该群是否已开启消息免打扰 */
+  is_muted: boolean
 }
 
 export interface GroupMemberOut {
@@ -23,6 +25,7 @@ export interface GroupMemberOut {
   user_name: string
   user_avatar: string | null
   role: string
+  is_muted: boolean
   joined_at: string
 }
 
@@ -86,6 +89,44 @@ export function updateGroupAnnouncement(groupId: number, announcement: string) {
 
 export function updateGroupAvatar(groupId: number, avatarUrl: string) {
   return request.patch<{ message: string; avatar: string | null }>(`/groups/${groupId}/avatar`, { avatar_url: avatarUrl })
+}
+
+/** 修改群名称（群主/管理员） */
+export function renameGroup(groupId: number, name: string) {
+  return request.patch<{ message: string; name: string }>(`/groups/${groupId}/name`, { name })
+}
+
+/** 消息免打扰开关（只影响自己） */
+export function setGroupMuted(groupId: number, muted: boolean) {
+  return request.patch<{ message: string; muted: boolean }>(`/groups/${groupId}/mute`, { muted })
+}
+
+export interface GroupInvite {
+  group_id: number
+  group_name: string
+  code: string
+}
+
+/** 获取群邀请码（群主/管理员，首次访问自动生成） */
+export function getGroupInvite(groupId: number) {
+  return request.get<GroupInvite>(`/groups/${groupId}/invite`)
+}
+
+/** 重置群邀请码：此前分享的二维码立即失效 */
+export function resetGroupInvite(groupId: number) {
+  return request.post<GroupInvite>(`/groups/${groupId}/invite/reset`)
+}
+
+export interface GroupJoinResult {
+  group_id: number
+  group_name: string
+  already_member: boolean
+  role: string
+}
+
+/** 扫码 / 打开邀请链接入群（幂等） */
+export function joinGroupByCode(code: string) {
+  return request.post<GroupJoinResult>('/groups/join', { code })
 }
 
 export function leaveGroup(groupId: number) {

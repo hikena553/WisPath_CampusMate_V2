@@ -56,10 +56,17 @@
       return window.DB.quickEntries;
     },
 
-    // TODO: replace with GET /api/teacher/{module}  （审批/预警/公告/成长档案/问卷/关怀/家校）
+    // TODO: replace with GET /api/teacher/{module}  （审批/预警/公告/成长档案/问卷/关怀/家校/任务/AI洞察）
     async getSubPage(id) {
       await delay(300);
-      return window.DB.subPages[id];
+      return window.DB.modules[id] || window.DB.subPages[id];
+    },
+
+    // TODO: replace with POST /api/teacher/{module}/{action}  { payload }
+    // resp: { ok: true, id, message }  —— 当前返回 mock，签名与真实接口对齐
+    async submitModuleAction(module, action, payload) {
+      await delay(180);
+      return { ok: true, module: module, action: action, payload: payload || {}, id: 'local-' + Date.now() };
     },
   };
 

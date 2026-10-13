@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.models.crisis import AIDialogSummary
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationType
 from app.models.user import User, UserRole
 from app.services.proactive_signals import StudentSignals, gather_signals
 
@@ -382,6 +382,8 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
                 ),
             ).all()
             created = False
+            # 主动触达通知必须带可跳转目标，否则前端点击「只标已读、无反应」
+            teacher_link = "/teacher/crisis" if action.action_type == "escalation" else "/teacher/students"
             for tutor in tutors:
                 if _notification_exists(db, tutor.id, action.title):
                     logger.info("[主动触达] 48h 内重复通知已跳过 user_id=%s title=%s", tutor.id, action.title)
@@ -390,7 +392,9 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
                     user_id=tutor.id,
                     title=action.title,
                     content=action.content,
-                    type="system",
+                    type=NotificationType.SYSTEM,
+                    link=teacher_link,
+                    related_id=action.student_id,
                 )
                 db.add(notif)
                 created = True
@@ -403,7 +407,8 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
             user_id=action.student_id,
             title=action.title,
             content=action.content,
-            type="system",
+            type=NotificationType.SYSTEM,
+            link="/student/workbench",
         )
         db.add(notif)
         return True

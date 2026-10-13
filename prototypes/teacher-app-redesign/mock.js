@@ -1,6 +1,8 @@
 /* =========================================================================
    mock.js · 唯一数据源（plain global，无 ES module，保证 file:// 双击可开）
    数据取自真实业务语境：绵阳城市学院 · 信息工程学院 · 辅导员视角
+   ------------------------------------------------------------------
+   DB.modules.<key> 为「常用功能」九个功能的子页面 + 弹窗数据（本轮重构重点）。
    ========================================================================= */
 window.DB = {
   me: { id: 't1', name: '李静', role: 'teacher', college: '信息工程学院', title: '辅导员' },
@@ -54,9 +56,9 @@ window.DB = {
 
   /* ---------------- 通讯录 · 组织架构 ---------------- */
   org: [
-    { id: 'c1', name: '信息工程学院', icon: 'building-2', tone: 'tone-blue',
+    { id: 'c1', name: '信息工程学院', tone: 'tone-blue',
       majors: [
-        { id: 'm1', name: '计算机科学与技术', classes: [
+        { id: 'mo1', name: '计算机科学与技术', classes: [
           { id: 'k1', name: '计科 2301', count: 42, students: [
             { id: 'u1', name: '陈思远', username: '20230101', tone: 'tone-orange', risk: true },
             { id: 'u2', name: '王浩', username: '20230102', tone: 'tone-blue' },
@@ -68,15 +70,15 @@ window.DB = {
             { id: 'u6', name: '孙倩', username: '20230202', tone: 'tone-red' },
           ] },
         ] },
-        { id: 'm2', name: '软件工程', classes: [
+        { id: 'mo2', name: '软件工程', classes: [
           { id: 'k3', name: '软工 2301', count: 38, students: [
             { id: 'u7', name: '周航', username: '20230301', tone: 'tone-slate' },
           ] },
         ] },
       ] },
-    { id: 'c2', name: '经济管理学院', icon: 'building-2', tone: 'tone-cyan',
+    { id: 'c2', name: '经济管理学院', tone: 'tone-cyan',
       majors: [
-        { id: 'm3', name: '工商管理', classes: [
+        { id: 'mo3', name: '工商管理', classes: [
           { id: 'k4', name: '工商 2301', count: 45, students: [
             { id: 'u8', name: '林晓', username: '20230401', tone: 'tone-green' },
           ] },
@@ -107,7 +109,7 @@ window.DB = {
     { id: 'no2', type: '预警', title: '心理测评异常提醒', content: '2 名学生测评结果异常，建议 24 小时内跟进。', time: '今天 08:30', read: false, tone: 'danger', link: 'crisis' },
     { id: 'no3', type: '公告', title: '班会时间调整通知已发布', content: '计科 2301 班会调整至周一 16:00，已推送至学生端。', time: '昨天 17:10', read: true, tone: 'brand', link: 'announcement' },
     { id: 'no4', type: '反馈', title: '学生反馈已收到', content: '孙倩提交了「助学金材料」相关咨询，请回复。', time: '昨天 14:02', read: true, tone: 'cyan' },
-    { id: 'no5', type: '系统', title: '账号安全提示', content: '检测到你的账号在新设备登录，如非本人操作请及时改密。', time: '周三 20:15', read: true, tone: 'slate' },
+    { id: 'no5', type: '系统', title: '账号安全提示', content: '检测到你的账号在新设备登录，如非本人操作请及时改密。', time: '周三 20:15', read: true, tone: 'quiet' },
   ],
 
   /* ---------------- 首页 · 常用功能宫格（原「更多」模块迁入） ---------------- */
@@ -116,9 +118,9 @@ window.DB = {
     { id: 'crisis', label: '预警', desc: '学生风险与危机事件跟进', icon: 'shield-alert', tone: 'danger', badge: 2 },
     { id: 'announcement', label: '公告', desc: '面向班级发布通知与公告', icon: 'megaphone', tone: 'brand' },
     { id: 'portfolio', label: '成长档案', desc: '学生成长记录与作品集管理', icon: 'award', tone: 'violet' },
-    { id: 'survey', label: '问卷互评', desc: '匿名问卷发放与学生互评', icon: 'bar-chart-3', tone: 'brand' },
-    { id: 'care', label: '关怀中心', desc: '谈心记录与心理关怀跟进', icon: 'heart', tone: 'warn' },
-    { id: 'guardian', label: '家校沟通', desc: '家长联系人沟通与记录留痕', icon: 'link', tone: 'cyan' },
+    { id: 'survey', label: '问卷互评', desc: '匿名问卷发放与学生互评', icon: 'clipboard-list', tone: 'cyan' },
+    { id: 'care', label: '关怀中心', desc: '谈心记录与心理关怀跟进', icon: 'heart-pulse', tone: 'warn' },
+    { id: 'guardian', label: '家校沟通', desc: '家长联系人沟通与记录留痕', icon: 'heart-handshake', tone: 'cyan' },
   ],
 
   /* 全部功能总览：底部页签之外的模块入口（原「更多」的功能全集） */
@@ -130,88 +132,265 @@ window.DB = {
     ] },
     { title: '成长与关怀', items: [
       { id: 'portfolio', label: '成长档案', desc: '学生成长记录与作品集管理', icon: 'award', tone: 'violet' },
-      { id: 'survey', label: '问卷互评', desc: '匿名问卷发放与学生互评', icon: 'bar-chart-3', tone: 'brand' },
-      { id: 'care', label: '关怀中心', desc: '谈心记录与心理关怀跟进', icon: 'heart', tone: 'warn' },
-      { id: 'guardian', label: '家校沟通', desc: '家长联系人沟通与记录留痕', icon: 'link', tone: 'cyan' },
+      { id: 'survey', label: '问卷互评', desc: '匿名问卷发放与学生互评', icon: 'clipboard-list', tone: 'cyan' },
+      { id: 'care', label: '关怀中心', desc: '谈心记录与心理关怀跟进', icon: 'heart-pulse', tone: 'warn' },
+      { id: 'guardian', label: '家校沟通', desc: '家长联系人沟通与记录留痕', icon: 'heart-handshake', tone: 'cyan' },
     ] },
     { title: '效率工具', items: [
-      { id: 'tasks', label: '今日任务', desc: '待办、逾期与日程的统一入口', icon: 'clock', tone: 'success' },
-      { id: 'ai', label: 'AI 洞察', desc: '主动发现与推荐联系建议', icon: 'sparkles', tone: 'cyan' },
+      { id: 'tasks', label: '今日任务', desc: '待办、逾期与日程的统一入口', icon: 'list-checks', tone: 'success' },
+      { id: 'ai', label: 'AI 洞察', desc: '主动发现与推荐联系建议', icon: 'sparkles', tone: 'violet' },
     ] },
   ],
 
-  /* ---------------- 统一子页面模板数据 ---------------- */
-  subPages: {
+  /* ==================================================================
+     「常用功能」九个功能：子页面 + 弹窗数据
+     每模块结构各不相同 —— 对应九套专属版式（设计契约 §4）
+     ================================================================== */
+  modules: {
+
+    /* ---------------- ① 审批 ---------------- */
     approval: {
-      title: '审批', sub: '请假、证明等事项的受理与审批', accent: 'warn',
-      stats: [ { num: 3, label: '待审批', tone: 'warn' }, { num: 12, label: '本月已办', tone: 'success' }, { num: 1, label: '已驳回', tone: 'danger' } ],
-      segments: ['待审批 3', '已处理', '全部'],
+      meta: { title: '审批', sub: '请假、证明等事项的受理与审批', accent: 'warn', icon: 'clipboard-check' },
+      fab: null,
+      todo: { count: 3, urgentName: '陈思远', urgentType: '事假 3 天', sla: '剩余 6 小时', note: '今天 17:00 前需完成审批，逾期将自动上报学工处' },
+      stats: [ { num: 3, label: '待我审批', tone: 'warn' }, { num: 12, label: '本月已办', tone: 'success' }, { num: 1, label: '已驳回', tone: 'danger' } ],
+      segments: ['待审批 3', '已处理 8', '我发起的 2'],
       items: [
-        { title: '陈思远 · 事假', tag: '待审批', tagTone: 'warn', body: '请假时间：10 月 13 日 — 10 月 15 日（3 天）\n事由：家中有事，需返回绵阳处理', meta: '计科 2301 · 提交于 09:24', actions: ['驳回', '同意'] },
-        { title: '孙倩 · 病假', tag: '待审批', tagTone: 'warn', body: '请假时间：10 月 14 日（1 天）\n事由：感冒发热，附校医院证明', meta: '计科 2302 · 提交于 08:12', actions: ['驳回', '同意'] },
-        { title: '刘洋 · 在读证明', tag: '待审批', tagTone: 'warn', body: '申请事项：开具在读证明（用于助学贷款）', meta: '计科 2301 · 提交于 昨天 16:40', actions: ['驳回', '同意'] },
-        { title: '赵敏 · 事假', tag: '已通过', tagTone: 'success', body: '请假时间：10 月 8 日（1 天）\n事由：参加校外竞赛', meta: '计科 2302 · 处理于 10 月 7 日' },
+        { id: 'ap1', student: '陈思远', stuTone: 'tone-orange', cls: '计科 2301', type: '事假', tag: '待审批', tagTone: 'warn', urgent: true,
+          range: '10 月 13 日 — 10 月 15 日', days: '3 天', reason: '家中有事，需返回绵阳处理',
+          submitted: '今天 09:24', sla: '剩余 6 小时', files: [ { name: '家长知情书.jpg', size: '860 KB', icon: 'image' } ],
+          flow: [ { k: '学生提交申请', t: '今天 09:24', state: 'done' }, { k: '辅导员审批', t: '进行中', state: 'active' }, { k: '学工处备案', t: '待处理', state: 'wait' } ],
+          actions: ['驳回', '同意'] },
+        { id: 'ap2', student: '孙倩', stuTone: 'tone-red', cls: '计科 2302', type: '病假', tag: '待审批', tagTone: 'warn', urgent: false,
+          range: '10 月 14 日（1 天）', days: '1 天', reason: '感冒发热，附校医院就诊证明',
+          submitted: '今天 08:12', sla: '剩余 20 小时', files: [ { name: '校医院证明.pdf', size: '1.1 MB', icon: 'file-text' } ],
+          flow: [ { k: '学生提交申请', t: '今天 08:12', state: 'done' }, { k: '辅导员审批', t: '进行中', state: 'active' }, { k: '学工处备案', t: '待处理', state: 'wait' } ],
+          actions: ['驳回', '同意'] },
+        { id: 'ap3', student: '刘洋', stuTone: 'tone-violet', cls: '计科 2301', type: '在读证明', tag: '待审批', tagTone: 'warn', urgent: false,
+          range: '—', days: '—', reason: '申请开具在读证明（用于国家助学贷款）',
+          submitted: '昨天 16:40', sla: '剩余 2 天', files: [],
+          flow: [ { k: '学生提交申请', t: '昨天 16:40', state: 'done' }, { k: '辅导员审批', t: '进行中', state: 'active' }, { k: '教务处盖章', t: '待处理', state: 'wait' } ],
+          actions: ['驳回', '同意'] },
+        { id: 'ap4', student: '赵敏', stuTone: 'tone-cyan', cls: '计科 2302', type: '事假', tag: '已通过', tagTone: 'success', urgent: false,
+          range: '10 月 8 日（1 天）', days: '1 天', reason: '参加四川省大学生程序设计竞赛',
+          submitted: '10 月 7 日', sla: '', files: [],
+          flow: [ { k: '学生提交申请', t: '10 月 7 日 09:00', state: 'done' }, { k: '辅导员审批', t: '10 月 7 日 10:20', state: 'done' }, { k: '学工处备案', t: '10 月 7 日 14:00', state: 'done' } ],
+          actions: [] },
       ],
     },
+
+    /* ---------------- ② 预警 ---------------- */
     crisis: {
-      title: '预警', sub: '学生风险与危机事件的预警跟进', accent: 'danger',
+      meta: { title: '预警', sub: '学生风险与危机事件的预警跟进', accent: 'danger', icon: 'shield-alert' },
+      fab: null,
+      risk: { high: 2, mid: 3, low: 5, cleared: 6 },
+      sla: { title: '高危待跟进', hours: 18, note: '孙倩连续缺勤已超 24 小时未处置，建议立即联系家长' },
       stats: [ { num: 2, label: '高危待跟进', tone: 'danger' }, { num: 5, label: '本月已跟进', tone: 'success' }, { num: 1, label: '已解除', tone: 'quiet' } ],
-      segments: ['待跟进 2', '跟进中', '已解除'],
+      segments: ['待跟进 2', '跟进中 3', '已解除 1'],
       items: [
-        { title: '陈思远 · 心理测评异常', tag: '高危', tagTone: 'danger', body: '测评结果：SCL-90 焦虑因子偏高，近期出勤率下降。\n建议：24 小时内面谈并记录关怀。', meta: '计科 2301 · 触发于 今天 08:30', actions: ['记录关怀', '开始跟进'] },
-        { title: '孙倩 · 连续缺勤', tag: '高危', tagTone: 'danger', body: '连续 3 天未签到，联系未果，家长电话无人接听。', meta: '计科 2302 · 触发于 昨天 21:10', actions: ['联系家长', '开始跟进'] },
-        { title: '周航 · 学业预警', tag: '中危', tagTone: 'warn', body: '本学期已有 2 门课程挂科，学分绩点低于 2.0。', meta: '软工 2301 · 触发于 10 月 9 日' },
+        { id: 'cr1', student: '陈思远', stuTone: 'tone-orange', cls: '计科 2301', level: '高危', levelTone: 'danger',
+          title: '心理测评异常', source: '系统自动识别 · SCL-90 测评',
+          signals: [ { k: '近 7 天出勤', v: '-38%', dir: 'down' }, { k: '焦虑因子', v: '偏高', dir: 'up' }, { k: '夜间活跃', v: '异常', dir: 'up' } ],
+          triggered: '今天 08:30',
+          steps: [ { k: '发现预警', state: 'done' }, { k: '联系学生', state: 'done' }, { k: '记录关怀', state: 'active' }, { k: '回访闭环', state: 'wait' } ],
+          actions: ['记录关怀', '开始跟进'] },
+        { id: 'cr2', student: '孙倩', stuTone: 'tone-red', cls: '计科 2302', level: '高危', levelTone: 'danger',
+          title: '连续缺勤', source: '考勤系统 · 连续 3 天未签到',
+          signals: [ { k: '连续缺勤', v: '3 天', dir: 'up' }, { k: '家长电话', v: '无人接听', dir: 'up' } ],
+          triggered: '昨天 21:10',
+          steps: [ { k: '发现预警', state: 'done' }, { k: '联系学生', state: 'active' }, { k: '联系家长', state: 'wait' }, { k: '回访闭环', state: 'wait' } ],
+          actions: ['联系家长', '开始跟进'] },
+        { id: 'cr3', student: '周航', stuTone: 'tone-slate', cls: '软工 2301', level: '中危', levelTone: 'warn',
+          title: '学业预警', source: '教务系统 · 学分绩点统计',
+          signals: [ { k: '挂科课程', v: '2 门', dir: 'up' }, { k: '学分绩点', v: '1.86', dir: 'down' } ],
+          triggered: '10 月 9 日',
+          steps: [ { k: '发现预警', state: 'done' }, { k: '学业谈话', state: 'active' }, { k: '制定计划', state: 'wait' }, { k: '回访闭环', state: 'wait' } ],
+          actions: ['记录关怀', '开始跟进'] },
       ],
     },
+
+    /* ---------------- ③ 公告 ---------------- */
     announcement: {
-      title: '公告', sub: '面向班级发布通知与公告', accent: 'brand',
-      stats: [ { num: 6, label: '本月发布', tone: 'brand' }, { num: 128, label: '累计阅读', tone: 'success' }, { num: 2, label: '紧急公告', tone: 'warn' } ],
-      segments: ['全部', '普通', '重要', '紧急'],
+      meta: { title: '公告', sub: '面向班级发布通知与公告', accent: 'brand', icon: 'megaphone' },
+      fab: { label: '发布公告', icon: 'plus' },
+      reach: { published: 6, read: 156, total: 172, urgent: 2, draft: 1 },
+      stats: [ { num: 6, label: '本月发布', tone: 'brand' }, { num: 156, label: '累计已读', tone: 'success' }, { num: 2, label: '紧急公告', tone: 'warn' } ],
+      segments: ['全部 6', '普通 3', '重要 2', '紧急 1'],
       items: [
-        { title: '关于周一班会时间调整的通知', tag: '重要', tagTone: 'warn', body: '原定周一 14:00 的班会调整至 16:00，地点 3 号教学楼 201，请相互转告。', meta: '计科 2301 · 昨天 17:10 · 已读 38/42' },
-        { title: '助学金申请材料提交提醒', tag: '普通', tagTone: 'brand', body: '请需申请助学金的同学于本周五前将材料交至办公室 A203。', meta: '计科 2302 · 10 月 9 日 · 已读 40/40' },
-        { title: '【紧急】台风天气停课通知', tag: '紧急', tagTone: 'danger', body: '受台风影响，明日全天停课，请留校注意安全，勿外出。', meta: '全部班级 · 10 月 6 日 · 已读 96/98' },
+        { id: 'an1', title: '关于周一班会时间调整的通知', level: '重要', levelTone: 'warn', pinned: true,
+          scope: '计科 2301', read: 38, total: 42, time: '昨天 17:10',
+          excerpt: '原定周一 14:00 的班会调整至 16:00，地点 3 号教学楼 201，请相互转告。' },
+        { id: 'an2', title: '助学金申请材料提交提醒', level: '普通', levelTone: 'brand', pinned: false,
+          scope: '计科 2302', read: 40, total: 40, time: '10 月 9 日',
+          excerpt: '请需申请助学金的同学于本周五前将材料交至办公室 A203。' },
+        { id: 'an3', title: '台风天气停课通知', level: '紧急', levelTone: 'danger', pinned: true,
+          scope: '全部班级', read: 96, total: 98, time: '10 月 6 日',
+          excerpt: '受台风影响，明日全天停课，请留校注意安全，勿外出。' },
+        { id: 'an4', title: '十月心理健康普测安排', level: '普通', levelTone: 'brand', pinned: false,
+          scope: '计科 2301', read: 35, total: 42, time: '10 月 8 日',
+          excerpt: '本周三下午统一在实验楼机房完成心理普测，请提前 10 分钟到场。' },
       ],
     },
+
+    /* ---------------- ④ 成长档案 ---------------- */
     portfolio: {
-      title: '成长档案', sub: '学生成长记录与作品集管理', accent: 'violet',
+      meta: { title: '成长档案', sub: '学生成长记录与作品集管理', accent: 'violet', icon: 'award' },
+      fab: { label: '新增档案', icon: 'plus' },
       stats: [ { num: 47, label: '成长记录', tone: 'violet' }, { num: 12, label: '学生作品', tone: 'brand' }, { num: 8, label: '荣誉奖项', tone: 'warn' } ],
+      students: [
+        { id: 'u1', name: '陈思远', tone: 'tone-orange', count: 9 },
+        { id: 'u3', name: '李梦琪', tone: 'tone-green', count: 7 },
+        { id: 'u2', name: '王浩', tone: 'tone-blue', count: 6 },
+        { id: 'u5', name: '赵敏', tone: 'tone-cyan', count: 5 },
+        { id: 'u4', name: '刘洋', tone: 'tone-violet', count: 4 },
+      ],
+      badges: [
+        { icon: 'trophy', tone: 'warn', name: '竞赛获奖', count: 4 },
+        { icon: 'medal', tone: 'violet', name: '荣誉表彰', count: 6 },
+        { icon: 'graduation-cap', tone: 'brand', name: '学业成果', count: 12 },
+        { icon: 'heart-handshake', tone: 'cyan', name: '志愿服务', count: 5 },
+      ],
       segments: ['全部', '学习成果', '实践经历', '荣誉奖项'],
-      items: [
-        { title: '陈思远 · 省级程序设计竞赛三等奖', tag: '荣誉奖项', tagTone: 'warn', body: '获奖时间：2026 年 9 月；颁发单位：四川省大学生程序设计竞赛组委会。', meta: '计科 2301 · 录入于 9 月 28 日' },
-        { title: '李梦琪 · 暑期社会实践报告', tag: '实践经历', tagTone: 'violet', body: '在绵阳市社区服务中心完成 40 小时志愿服务，提交实践报告一份。', meta: '计科 2301 · 录入于 9 月 15 日' },
-        { title: '王浩 · 数据结构课程设计', tag: '学习成果', tagTone: 'brand', body: '完成「校园导航系统」课程设计，评分 92 分。', meta: '计科 2301 · 录入于 9 月 10 日' },
+      timeline: [
+        { id: 'pf1', student: '陈思远', tone: 'tone-orange', cls: '计科 2301', cat: '荣誉奖项', catTone: 'warn',
+          title: '省级程序设计竞赛三等奖', date: '2026-09-28', icon: 'trophy',
+          desc: '四川省大学生程序设计竞赛组委会颁发，团队赛，担任队长。', thumb: true },
+        { id: 'pf2', student: '李梦琪', tone: 'tone-green', cls: '计科 2301', cat: '实践经历', catTone: 'violet',
+          title: '暑期社会实践报告', date: '2026-09-15', icon: 'heart-handshake',
+          desc: '在绵阳市社区服务中心完成 40 小时志愿服务，提交实践报告一份。', thumb: true },
+        { id: 'pf3', student: '王浩', tone: 'tone-blue', cls: '计科 2301', cat: '学习成果', catTone: 'brand',
+          title: '数据结构课程设计', date: '2026-09-10', icon: 'graduation-cap',
+          desc: '完成「校园导航系统」课程设计，评分 92 分，被评为优秀作品。', thumb: false },
+        { id: 'pf4', student: '赵敏', tone: 'tone-cyan', cls: '计科 2302', cat: '荣誉奖项', catTone: 'warn',
+          title: '校级三好学生', date: '2026-07-01', icon: 'medal',
+          desc: '2025—2026 学年综合测评专业前 5%，获评校级三好学生。', thumb: false },
       ],
     },
+
+    /* ---------------- ⑤ 问卷互评 ---------------- */
     survey: {
-      title: '问卷互评', sub: '匿名问卷发放与学生互评', accent: 'brand',
-      stats: [ { num: 2, label: '进行中', tone: 'brand' }, { num: 5, label: '已结束', tone: 'success' }, { num: 86, label: '回收份数', tone: 'violet' } ],
-      segments: ['进行中 2', '已结束', '草稿'],
+      meta: { title: '问卷互评', sub: '匿名问卷发放与学生互评', accent: 'cyan', icon: 'clipboard-list' },
+      fab: { label: '新建问卷', icon: 'plus' },
+      stats: [ { num: 2, label: '进行中', tone: 'cyan' }, { num: 5, label: '已结束', tone: 'success' }, { num: 86, label: '回收份数', tone: 'violet' } ],
+      segments: ['进行中 2', '已结束 5', '草稿 1'],
       items: [
-        { title: '班级学风建设匿名问卷', tag: '进行中', tagTone: 'brand', body: '回收 32/42 份 · 截止 10 月 15 日\n包含学习氛围、班委工作、课堂纪律三个维度。', meta: '计科 2301 · 发布于 10 月 8 日' },
-        { title: '心理健康状况普测', tag: '进行中', tagTone: 'brand', body: '回收 40/40 份 · 截止 10 月 12 日\n结果仅用于关怀跟进，严格保密。', meta: '计科 2302 · 发布于 10 月 5 日' },
-        { title: '上学期班级工作满意度互评', tag: '已结束', tagTone: 'success', body: '回收 41/42 份 · 满意度 92%\n结果已生成报告，可查看明细。', meta: '计科 2301 · 结束于 9 月 20 日' },
+        { id: 'sv1', title: '班级学风建设匿名问卷', status: '进行中', statusTone: 'cyan', anon: true,
+          collected: 32, total: 42, deadline: '10 月 15 日', questions: 12,
+          dims: ['学习氛围', '班委工作', '课堂纪律'], scope: '计科 2301', published: '10 月 8 日' },
+        { id: 'sv2', title: '心理健康状况普测', status: '进行中', statusTone: 'cyan', anon: true,
+          collected: 40, total: 40, deadline: '10 月 12 日', questions: 30,
+          dims: ['情绪状态', '人际关系', '压力应对'], scope: '计科 2302', published: '10 月 5 日' },
+        { id: 'sv3', title: '上学期班级工作满意度互评', status: '已结束', statusTone: 'success', anon: true,
+          collected: 41, total: 42, deadline: '已截止', questions: 15,
+          dims: ['班级管理', '活动组织', '服务态度'], scope: '计科 2301', published: '9 月 20 日' },
       ],
     },
+
+    /* ---------------- ⑥ 关怀中心 ---------------- */
     care: {
-      title: '关怀中心', sub: '谈心记录与心理关怀跟进', accent: 'warn',
+      meta: { title: '关怀中心', sub: '谈心记录与心理关怀跟进', accent: 'warn', icon: 'heart-pulse' },
+      fab: { label: '新增关怀记录', icon: 'plus' },
+      temperature: { score: 86, note: '本月重点关注学生关怀覆盖 86%，尚有 2 人未完成首次谈心' },
       stats: [ { num: 4, label: '本月谈心', tone: 'warn' }, { num: 2, label: '待回访', tone: 'danger' }, { num: 9, label: '累计记录', tone: 'success' } ],
       segments: ['谈心记录', '家访记录', '激励记录'],
-      items: [
-        { title: '陈思远 · 一对一谈心', tag: '谈心', tagTone: 'warn', body: '了解近期焦虑来源，已安抚情绪并约定每周一次沟通。\n后续：建议转介心理中心做进一步评估。', meta: '今天 16:20 · 地点：辅导员办公室' },
-        { title: '孙倩 · 家访记录', tag: '家访', tagTone: 'brand', body: '电话家访，家长反馈学生近期状态良好，家庭关系融洽。', meta: '昨天 19:30 · 方式：电话' },
-        { title: '李梦琪 · 进步激励', tag: '激励', tagTone: 'success', body: '在班级学风建设中表现突出，予以口头表扬并计入成长档案。', meta: '10 月 9 日 · 记录人：李静' },
+      followups: [
+        { name: '陈思远', tone: 'tone-orange', reason: '焦虑情绪跟进回访', due: '今天到期' },
+        { name: '孙倩', tone: 'tone-red', reason: '缺勤情况家访回访', due: '明天到期' },
+      ],
+      timeline: [
+        { id: 'ca1', student: '陈思远', tone: 'tone-orange', type: '谈心', typeTone: 'warn', icon: 'notebook-pen',
+          title: '一对一谈心 · 焦虑情绪疏导', when: '今天 16:20', place: '辅导员办公室', way: '面对面',
+          content: '了解近期焦虑来源（课业压力 + 家庭期望），已安抚情绪并约定每周一次沟通。',
+          followup: '建议转介心理中心做进一步评估', done: false },
+        { id: 'ca2', student: '孙倩', tone: 'tone-red', type: '家访', typeTone: 'brand', icon: 'heart-handshake',
+          title: '电话家访 · 缺勤情况沟通', when: '昨天 19:30', place: '—', way: '电话',
+          content: '与家长沟通连续缺勤情况，家长反馈学生近期在家状态尚可，承诺督促按时返校。',
+          followup: '下周一确认返校情况', done: true },
+        { id: 'ca3', student: '李梦琪', tone: 'tone-green', type: '激励', typeTone: 'success', icon: 'thumbs-up',
+          title: '进步激励 · 班级学风建设', when: '10 月 9 日', place: '教学楼 302', way: '面对面',
+          content: '在班级学风建设中表现突出，予以口头表扬并计入成长档案。',
+          followup: '—', done: true },
       ],
     },
+
+    /* ---------------- ⑦ 家校沟通 ---------------- */
     guardian: {
-      title: '家校沟通', sub: '家长联系人沟通与记录留痕', accent: 'cyan',
+      meta: { title: '家校沟通', sub: '家长联系人沟通与记录留痕', accent: 'cyan', icon: 'heart-handshake' },
+      fab: { label: '发起沟通', icon: 'plus' },
       stats: [ { num: 6, label: '家长联系人', tone: 'cyan' }, { num: 3, label: '本月沟通', tone: 'brand' }, { num: 1, label: '待反馈', tone: 'warn' } ],
-      segments: ['联系人', '沟通台账'],
-      items: [
-        { title: '陈思远 · 家长：陈建国', tag: '父亲', tagTone: 'cyan', body: '联系电话：138****6621\n沟通记录：已告知学生近期心理测评情况，家长表示会配合关注。', meta: '最近沟通：昨天 19:30' },
-        { title: '孙倩 · 家长：王秀兰', tag: '母亲', tagTone: 'cyan', body: '联系电话：139****3387\n沟通记录：就缺勤情况与家长沟通，家长承诺督促学生按时返校。', meta: '最近沟通：昨天 20:10' },
-        { title: '刘洋 · 家长：刘海峰', tag: '父亲', tagTone: 'cyan', body: '联系电话：137****1102\n沟通记录：反馈学生在校表现良好，家长表示感谢。', meta: '最近沟通：10 月 8 日' },
+      segments: ['联系人 6', '沟通台账 12'],
+      contacts: [
+        { id: 'gd1', student: '陈思远', tone: 'tone-orange', cls: '计科 2301', relation: '父亲', relTone: 'cyan',
+          name: '陈建国', phone: '138****6621', last: '昨天 19:30', channel: '电话', pending: false },
+        { id: 'gd2', student: '孙倩', tone: 'tone-red', cls: '计科 2302', relation: '母亲', relTone: 'cyan',
+          name: '王秀兰', phone: '139****3387', last: '昨天 20:10', channel: '电话', pending: true },
+        { id: 'gd3', student: '刘洋', tone: 'tone-violet', cls: '计科 2301', relation: '父亲', relTone: 'cyan',
+          name: '刘海峰', phone: '137****1102', last: '10 月 8 日', channel: '短信', pending: false },
       ],
+      ledger: [
+        { id: 'gl1', student: '孙倩', tone: 'tone-red', relation: '母亲 王秀兰', channel: '电话', chTone: 'brand',
+          when: '昨天 20:10', dur: '8 分钟',
+          content: '就连续缺勤情况与家长沟通，家长承诺督促学生按时返校，将配合学校做好日常提醒。', pending: true },
+        { id: 'gl2', student: '陈思远', tone: 'tone-orange', relation: '父亲 陈建国', channel: '电话', chTone: 'brand',
+          when: '昨天 19:30', dur: '12 分钟',
+          content: '已告知学生近期心理测评情况与在校表现，家长表示会配合关注孩子的情绪状态。' },
+        { id: 'gl3', student: '刘洋', tone: 'tone-violet', relation: '父亲 刘海峰', channel: '短信', chTone: 'cyan',
+          when: '10 月 8 日', dur: '—',
+          content: '反馈学生在校表现良好，提醒按时提交助学贷款材料，家长表示感谢。' },
+      ],
+      templates: ['缺勤情况沟通', '心理状态告知', '学业预警反馈', '在校表现通报'],
+    },
+
+    /* ---------------- ⑧ 今日任务 ---------------- */
+    tasks: {
+      meta: { title: '今日任务', sub: '待办、逾期与日程的统一入口', accent: 'success', icon: 'list-checks' },
+      fab: { label: '新建任务', icon: 'plus' },
+      progress: { total: 9, done: 5 },
+      stats: [ { num: 5, label: '今日待办', tone: 'success' }, { num: 1, label: '已逾期', tone: 'danger' }, { num: 3, label: '本周计划', tone: 'brand' } ],
+      segments: ['今天 5', '逾期 1', '本周 3'],
+      groups: [
+        { title: '今天', items: [
+          { id: 'tk1', title: '审批陈思远事假申请', done: false, priority: '高', priTone: 'danger', due: '今天 17:00', from: '审批', fromTone: 'warn' },
+          { id: 'tk2', title: '与陈思远完成一对一谈心', done: false, priority: '高', priTone: 'danger', due: '今天 16:20', from: '关怀', fromTone: 'warn' },
+          { id: 'tk3', title: '发布班会时间调整公告', done: true, priority: '中', priTone: 'brand', due: '今天 17:10', from: '公告', fromTone: 'brand' },
+          { id: 'tk4', title: '核对迎新志愿者名单', done: true, priority: '低', priTone: 'quiet', due: '今天 12:00', from: '日常', fromTone: 'quiet' },
+          { id: 'tk5', title: '提交本周工作周报', done: false, priority: '中', priTone: 'brand', due: '今天 20:00', from: '日常', fromTone: 'quiet' },
+        ] },
+        { title: '已逾期', items: [
+          { id: 'tk6', title: '回复孙倩助学金材料咨询', done: false, priority: '高', priTone: 'danger', due: '昨天 18:00', from: '反馈', fromTone: 'cyan' },
+        ] },
+        { title: '本周计划', items: [
+          { id: 'tk7', title: '十五五规划学习心得提交', done: false, priority: '中', priTone: 'brand', due: '周五', from: '日常', fromTone: 'quiet' },
+          { id: 'tk8', title: '学风建设问卷数据回收', done: false, priority: '中', priTone: 'brand', due: '周三', from: '问卷', fromTone: 'cyan' },
+          { id: 'tk9', title: '学工例会（15:00）', done: false, priority: '低', priTone: 'quiet', due: '周五', from: '会议', fromTone: 'violet' },
+        ] },
+      ],
+    },
+
+    /* ---------------- ⑨ AI 洞察 ---------------- */
+    ai: {
+      meta: { title: 'AI 洞察', sub: '主动发现与推荐联系建议', accent: 'violet', icon: 'sparkles' },
+      fab: { label: '生成洞察周报', icon: 'wand-sparkles' },
+      headline: '绵小城为你分析了 47 名学生近 14 天的 12 类行为信号，发现 3 条值得优先关注',
+      insights: [
+        { id: 'ai1', icon: 'heart-pulse', tone: 'danger', title: '优先关注：陈思远',
+          desc: '近 7 天出勤下降 38%，心理测评焦虑因子偏高，夜间活跃异常；建议 24 小时内完成面谈并记录关怀。',
+          confidence: 92, action: '发起沟通', actionKind: 'chat', ref: '陈思远' },
+        { id: 'ai2', icon: 'trending-down', tone: 'warn', title: '学业风险：周航',
+          desc: '本学已有 2 门课程挂科，学分绩点 1.86 低于预警线；建议约谈并制定学业提升计划。',
+          confidence: 84, action: '记录关怀', actionKind: 'care', ref: '周航' },
+        { id: 'ai3', icon: 'thumbs-up', tone: 'success', title: '正向激励：李梦琪',
+          desc: '连续 3 周出勤满勤、课堂互动积极，社区服务时长领先；建议计入成长档案并公开表扬。',
+          confidence: 78, action: '写入档案', actionKind: 'portfolio', ref: '李梦琪' },
+      ],
+      metrics: [
+        { label: '出勤异常', value: 3, delta: '+2', tone: 'danger', icon: 'activity' },
+        { label: '心理关注', value: 2, delta: '持平', tone: 'warn', icon: 'gauge' },
+        { label: '学业预警', value: 1, delta: '-1', tone: 'success', icon: 'chart-line' },
+        { label: '正向信号', value: 8, delta: '+3', tone: 'violet', icon: 'trending-up' },
+      ],
+      report: { week: '第 7 教学周', generated: '今天 08:00',
+        points: [ '本周班级整体出勤率 96.2%，较上周回升 1.4%', '重点关注名单 2 人，均已建立跟进记录', '学风建设问卷回收率 76%，建议再次提醒未提交学生' ] },
     },
   },
 

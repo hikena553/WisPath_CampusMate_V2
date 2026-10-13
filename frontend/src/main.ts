@@ -11,6 +11,7 @@ import './styles/animations.css'
 import './styles/responsive.css'
 import './styles/admin-components.css'
 import './styles/teacher-ui.css'
+import './styles/dingtalk.css'
 import { permissionDirective, roleDirective } from './directives/permission'
 import { startSiteConfigSync } from './composables/useSiteConfig'
 

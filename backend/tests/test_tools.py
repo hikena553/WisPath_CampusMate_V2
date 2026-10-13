@@ -220,3 +220,82 @@ async def test_p2_platform_tools(make_user, db, _tool_counters_clean, monkeypatc
     flows = await execute_tool("query_my_workflows", {}, teacher)
     assert flows["instances"]
     assert flows["instances"][0]["current_node"] == "节点A"
+
+
+@pytest.mark.asyncio
+async def test_help_request_tools_flow(make_user, db, _tool_counters_clean):
+    """求助闭环工具：学生提交（含匿名）→ 学生查我的 → 教师查列表 → 教师回复 → 学生可见。"""
+    from app.models.help_request import HelpRequest, HelpRequestStatus
+
+    teacher = make_user(role=UserRole.TEACHER)
+    student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id, name="求助同学")
+
+    created = await execute_tool(
+        "create_help_request",
+        {"category": "academic", "content": "高数跟不上，想请老师帮忙", "anonymous": False},
+        student,
+    )
+    assert created["success"] is True
+    rid = created["request_id"]
+    assert db.query(HelpRequest).filter(HelpRequest.id == rid).count() == 1
+
+    anon = await execute_tool(
+        "create_help_request",
+        {"category": "mental", "content": "最近压力有点大", "anonymous": True},
+        student,
+    )
+    assert anon["success"] is True
+
+    mine = await execute_tool("query_my_help_requests", {}, student)
+    assert len(mine["requests"]) == 2
+
+    # 教师列表：实名显示姓名，匿名显示“匿名同学”
+    listing = await execute_tool("query_help_requests", {}, teacher)
+    names = {r["request_id"]: r["student_name"] for r in listing["requests"]}
+    assert names[rid] == "求助同学"
+    assert names[anon["request_id"]] == "匿名同学"
+
+    replied = await execute_tool(
+        "reply_help_request",
+        {"request_id": rid, "reply": "周三下午来办公室，我给你补一下", "status": "resolved"},
+        teacher,
+    )
+    assert replied["success"] is True
+    assert replied["status"] == "已帮助"
+
+    mine2 = await execute_tool("query_my_help_requests", {}, student)
+    target = next(r for r in mine2["requests"] if r["request_id"] == rid)
+    assert target["status"] == "已帮助"
+    assert "周三下午" in target["reply"]
+
+    assert db.get(HelpRequest, rid).status == HelpRequestStatus.RESOLVED
+
+
+@pytest.mark.asyncio
+async def test_help_request_tool_scope_guard(make_user, db, _tool_counters_clean):
+    """非本班辅导员不得查看/回复他人学生求助。"""
+    from app.models.help_request import HelpRequest, HelpRequestStatus
+
+    teacher = make_user(role=UserRole.TEACHER)
+    other = make_user(role=UserRole.TEACHER)
+    student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id, name="本班同学")
+
+    created = await execute_tool(
+        "create_help_request",
+        {"content": "想找老师聊聊", "category": "other"},
+        student,
+    )
+    rid = created["request_id"]
+
+    listing = await execute_tool("query_help_requests", {}, other)
+    assert listing["requests"] == []
+
+    denied = await execute_tool(
+        "reply_help_request",
+        {"request_id": rid, "reply": "越权回复"},
+        other,
+    )
+    assert denied["success"] is False
+    record = db.get(HelpRequest, rid)
+    assert record.status == HelpRequestStatus.PENDING
+    assert record.reply is None

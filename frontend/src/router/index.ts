@@ -31,6 +31,13 @@ const router = createRouter({
       component: () => import('@/views/share/GuardianSharePage.vue'),
       meta: { title: '家校沟通' },
     },
+    // 群邀请落地页：登录后扫码/打开链接访问，凭邀请码入群（无角色限制）
+    {
+      path: '/join/group/:code',
+      name: 'join-group',
+      component: () => import('@/views/share/JoinGroupPage.vue'),
+      meta: { title: '加入群聊' },
+    },
 
     {
       path: '/student',
@@ -89,6 +96,7 @@ const router = createRouter({
       children: [
         { path: '', meta: { title: '首页' }, component: () => import('@/views/admin/HomePage.vue') },
         { path: 'knowledge', meta: { title: '知识库' }, component: () => import('@/views/admin/KnowledgePage.vue') },
+        { path: 'references', name: 'admin-references', meta: { title: '开源参考复用' }, component: () => import('@/views/admin/ReferenceLibraryPage.vue') },
         { path: 'teachers', meta: { title: '教师管理' }, component: () => import('@/views/admin/TeachersPage.vue') },
         { path: 'students', meta: { title: '学生管理' }, component: () => import('@/views/admin/StudentsPage.vue') },
         { path: 'organizations', meta: { title: '院系班级' }, component: () => import('@/views/admin/OrganizationsPage.vue') },

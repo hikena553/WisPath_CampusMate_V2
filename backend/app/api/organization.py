@@ -10,15 +10,52 @@ from app.schemas.organization import (
     CollegeCreate, CollegeOut,
     MajorCreate, MajorOut,
     ClassGroupCreate, ClassGroupOut,
+    OrgScopeOut,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["组织架构管理"])
 
 
+# ─── 当前用户所在组织范围 ────────────────────────────────────
+
+@router.get("/org-scope", response_model=OrgScopeOut)
+def get_org_scope(db: Session = Depends(get_db), user: User = Depends(require_role(UserRole.ADMIN, UserRole.TEACHER))):
+    """返回当前用户「所在组织」及其层级，供通讯录只展示自己所在组织与下级。
+
+    归属判定：优先用 class_group_id 反查（班级 → 专业 → 学院），
+    教师无班级归属时用冗余字段 users.college 匹配学院名兜底；
+    都不匹配则 scope=all（不做收敛，避免误伤展示为空白）。
+    """
+    cg = db.query(ClassGroup).get(user.class_group_id) if user.class_group_id else None
+    major = cg.major if cg else None
+    college = major.college if (major and major.college) else None
+    if not college and user.college:
+        college = db.query(College).filter(College.name == user.college).first()
+
+    if cg and major and college:
+        scope = "class"
+    elif major and college:
+        scope = "major"
+    elif college:
+        scope = "college"
+    else:
+        scope = "all"
+
+    return OrgScopeOut(
+        scope=scope,
+        college_id=college.id if college else None,
+        college_name=college.name if college else None,
+        major_id=major.id if major else None,
+        major_name=major.name if major else None,
+        class_group_id=cg.id if cg else None,
+        class_group_name=cg.name if cg else None,
+    )
+
+
 # ─── 学院 ───────────────────────────────────────────────────
 
 @router.get("/colleges", response_model=list[CollegeOut])
-def list_colleges(db: Session = Depends(get_db), _: User = Depends(require_role(UserRole.ADMIN))):
+def list_colleges(db: Session = Depends(get_db), _: User = Depends(require_role(UserRole.ADMIN, UserRole.TEACHER))):
     return db.query(College).order_by(College.id).all()
 
 
@@ -71,7 +108,7 @@ def delete_college(college_id: int, db: Session = Depends(get_db), _: User = Dep
 def list_majors(
     college_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.ADMIN)),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.TEACHER)),
 ):
     q = db.query(Major)
     if college_id:
@@ -132,7 +169,7 @@ def list_class_groups(
     major_id: Optional[int] = None,
     college_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.ADMIN)),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.TEACHER)),
 ):
     q = db.query(ClassGroup)
     if major_id:
