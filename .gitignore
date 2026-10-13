@@ -134,6 +134,11 @@ backend/_probe*.py
 backend/probe_*.py
 backend/models/
 
+# ML 训练模块：FER2013 数据集缓存与最优权重体积大（数十 MB）且可重新生成，
+# 与 backend/models/ 同类不入库；代码、配置、超参与指标产物照常提交
+backend/ml/data/
+backend/ml/runs/*/best_model.pt
+
 # ---------- Database dumps ----------
 *.sql
 *.sqlite
