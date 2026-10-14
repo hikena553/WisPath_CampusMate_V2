@@ -32,13 +32,15 @@ from typing import Callable, Optional
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from . import artifacts
 from .architectures import CLASS_NAMES, CLASS_NAMES_CN, FaceExpressionNet, count_parameters
 from .backbones import build_model, head_prefix_for
 from .config import RUNS_DIR, TrainingConfig
-from .dataset import build_datasets, compute_class_weights, dataset_stats, _load_split, FER2013Dataset, ensure_dataset
+from .dataset import (build_datasets, compute_class_weights, dataset_stats, sampler_weights,
+                      _load_split, FER2013Dataset, ensure_dataset)
+from .losses import build_loss
 from .metrics import classification_report_text, evaluate_predictions
 
 
@@ -172,9 +174,20 @@ def run_training(
     # ---------- 数据 ----------
     train_set, val_set, test_set = build_datasets(cfg)
     stats = dataset_stats(cfg)
-    train_loader = DataLoader(train_set, batch_size=cfg.batch_size, shuffle=True,
-                              num_workers=cfg.num_workers, drop_last=False,
-                              pin_memory=device.type == "cuda", persistent_workers=cfg.num_workers > 0)
+    # 长尾重采样：用温和逆频权重让长尾类获得更多曝光
+    if cfg.balance_sampler:
+        sw = sampler_weights(train_set.records, cfg.num_classes, cfg.sampler_power)
+        sampler = WeightedRandomSampler(torch.as_tensor(sw, dtype=torch.double),
+                                        num_samples=len(sw), replacement=True)
+        train_loader = DataLoader(train_set, batch_size=cfg.batch_size, sampler=sampler,
+                                  num_workers=cfg.num_workers, drop_last=False,
+                                  pin_memory=device.type == "cuda",
+                                  persistent_workers=cfg.num_workers > 0)
+    else:
+        train_loader = DataLoader(train_set, batch_size=cfg.batch_size, shuffle=True,
+                                  num_workers=cfg.num_workers, drop_last=False,
+                                  pin_memory=device.type == "cuda",
+                                  persistent_workers=cfg.num_workers > 0)
     val_loader = DataLoader(val_set, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers,
                             pin_memory=device.type == "cuda", persistent_workers=cfg.num_workers > 0)
     test_loader = DataLoader(test_set, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers,
@@ -184,7 +197,7 @@ def run_training(
     model = build_model(
         cfg.model_name, num_classes=cfg.num_classes,
         pretrained=cfg.pretrained, dropout=cfg.dropout,
-        width_mult=cfg.width_mult,
+        width_mult=cfg.width_mult, use_se=cfg.use_se, se_ratio=cfg.se_ratio,
     ).to(device)
     n_params = count_parameters(model)
     head_prefix = head_prefix_for(cfg.model_name)
@@ -207,9 +220,8 @@ def run_training(
 
     class_weight = None
     if cfg.use_class_weight:
-        train_p, _ = ensure_dataset(cfg)
-        class_weight = compute_class_weights(_load_split(train_p), cfg.num_classes).to(device)
-    criterion = nn.CrossEntropyLoss(weight=class_weight, label_smoothing=cfg.label_smoothing)
+        class_weight = compute_class_weights(train_set.records, cfg.num_classes).to(device)
+    criterion = build_loss(cfg, class_weight)
 
     # 权重滑动平均（EMA）
     ema = ModelEMA(model, cfg.ema_decay) if cfg.ema_decay > 0 else None

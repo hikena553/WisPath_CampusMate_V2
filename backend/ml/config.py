@@ -53,6 +53,15 @@ class TrainingConfig:
     use_class_weight: bool = True # 按类别频次加权，缓解 disgust 等长尾类
     amp: bool = True              # 混合精度（仅在 CUDA 生效，CPU 自动关闭）
 
+    # ---------- 精度改进（本轮新增） ----------
+    use_se: bool = False          # 深度可分离卷积后接 SE 通道注意力
+    se_ratio: int = 8             # SE 压缩比
+    loss: str = "ce"              # ce | focal（focal 缓解易分样本主导梯度）
+    focal_gamma: float = 2.0      # focal 聚焦指数，越大越关注难样本
+    balance_sampler: bool = False # 长尾重采样（WeightedRandomSampler）
+    sampler_power: float = 0.5    # 采样权重 ∝ (1/频次)^power；0.5 比全逆频更温和
+    train_file: str = "train.pt"  # 训练集文件名，可指向去噪后的 train_clean.pt
+
     # ---------- 数据增强 ----------
     aug_hflip: float = 0.5        # 水平翻转概率
     aug_rotation: float = 10.0    # 随机旋转角度上限

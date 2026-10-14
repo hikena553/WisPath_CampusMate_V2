@@ -249,8 +249,11 @@
     }
 
     figure { margin: 0 0 var(--space-5); }
-    figure img { border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--bg); }
+    figure img { border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--bg); max-width: 100%; height: auto; display: block; }
     figcaption { font-size: 12px; color: var(--muted); margin-top: var(--space-2); }
+    figure.code img { border-color: rgba(255, 255, 255, 0.12); }
+    .figure-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); }
+    .figure-row figure { margin-bottom: var(--space-4); }
 
     .kv { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-4); font-size: 13px; }
     .kv dt { color: var(--muted); }
@@ -286,21 +289,24 @@
         <div class="report-intro__content">
           <h1>人脸表情识别模型：训练与微调技术报告</h1>
           <p class="report-intro__summary">
-            已把语音通话中前端 <code>face-api.js</code> 表情模型的技术路线（MobileNet 风格深度可分离卷积 CNN）完整引入后端
-            <code>backend/ml</code>，并经"强配方 → 64px 高分辨率 → 多模型集成"三步优化，把
-            <strong>测试集准确率从 0.5720 提升到 0.6714</strong>、Macro-F1 从 0.5331 提升到 0.6316；
-            训练曲线、混淆矩阵、分类报告与全部指标已落盘到 <code>backend/ml/runs/</code>，并接入后端查询接口。
+            本项目“智能体语音通话”中的表情情绪检测模块，是通话链路上<strong>唯一的视觉感知通道</strong>：把学生表情转换成情绪信号，
+            供 AI 回应策略、负面情绪风险预警与「情绪树洞」页面消费。本报告记录该模块从模型训练、参数微调到端侧接入的完整过程：
+            经两轮共四步优化（强配方 → 64px 高分辨率 → 多模型集成 → SE 注意力 + focal + 长尾重采样），
+            FER2013 测试集准确率从 0.5720 提升到 0.6842；第三轮再做<strong>真实场景域适配</strong>（并入 RAF-DB 真实场景数据），
+            <strong>真实场景准确率从 0.6186 提升到 0.7966</strong>，线上表情模型随之换成 rafmix 单模型。
+            人脸检测器也换成了在真实基准 <strong>WIDER FACE</strong> 上训练的 YOLOv8n，
+            并完成了真实浏览器端到端实测与真机摄像头实测。
           </p>
           <div class="intro-meta">
-            <span>数据集：FER2013（48×48 灰度，7 类）</span>
+            <span>数据集：FER2013（48×48 灰度）+ RAF-DB（100×100 真实场景）+ WIDER FACE（人脸检测）</span>
             <span>训练设备：NVIDIA GeForce RTX 3050 Laptop GPU</span>
             <span>运行环境：conda <code>aistudy</code>（torch 2.12.0+cu126）</span>
-            <span>生成日期：2026-10-13</span>
+            <span>生成日期：2026-10-15</span>
           </div>
           <div class="intro-highlights">
-            <div><b>0.6714</b><span>集成模型测试准确率</span></div>
-            <div><b>0.6316</b><span>测试集 Macro-F1</span></div>
-            <div><b>+9.94pp</b><span>相比初版 0.5720</span></div>
+            <div><b>0.6842</b><span>集成模型测试准确率</span></div>
+            <div><b>0.6519</b><span>测试集 Macro-F1</span></div>
+            <div><b>+11.22pp</b><span>相比初版 0.5720</span></div>
           </div>
         </div>
       </div>
@@ -331,6 +337,54 @@
           </div>
         </section>
 
+        <section id="role">
+          <h2>本模块在项目中的作用</h2>
+          <p>
+            所在项目是“智慧校园AI服务平台”，学生可以发起智能体<strong>语音通话</strong>做心理陪伴与倾诉。
+            表情情绪检测模块是这条通话链路上<strong>唯一的视觉感知通道</strong>：它把学生的面部表情转换成可用的情绪信号，
+            让 AI 从“只听得见”变成“也看得见”，从而能察觉学生当下的状态，而不只是理解他说了什么。
+          </p>
+          <p>
+            需要先明确它的<strong>职责边界</strong>：本模块只负责“感知并提供情绪信号”，<strong>不做情绪诊断，也不做干预决策</strong>。
+            是否关照、如何回应、是否升级为心理关注，全部由业务层决定。它是能力提供方，不是决策方。
+          </p>
+
+          <h3>三层作用</h3>
+          <ul>
+            <li>
+              <strong>实时影响 AI 的回应（通话中）</strong>：接通时刻最多等 1.6s 取首帧表情，把“学生此刻表情偏【开心／难过…】”
+              作为系统提示注入大模型，让 AI 的<strong>第一句问候</strong>顺势关照学生状态（提示词明确要求不得生硬地说
+              “我检测到你的表情”）；对话过程中持续取最近 20 条的主导情绪注入提示词，使回复结合情绪，而不是只围绕字面内容。
+            </li>
+            <li>
+              <strong>风险预警（通话中）</strong>：当负面情绪（难过／生气／害怕／厌恶）累计出现 ≥3 次，或文本命中危机关键词，
+              即触发心理关注上报流程，把“表情已持续低落”这一不依赖学生自述的信号交给后续干预机制。
+            </li>
+            <li>
+              <strong>沉淀为可回看的数据（挂断后）</strong>：整条情绪时间线（最多 200 条）在通话结束时落库到
+              <code>emotion_records</code>（前端批量提交，服务端在连接关闭时兜底写入），成为学生端<strong>「情绪树洞」页面</strong>
+              的数据源：展示情绪记录总数、近期主导情绪、正向占比与近 30 天情绪画像，并提供“求助辅导员”入口。
+            </li>
+          </ul>
+
+          <h3>数据流向</h3>
+          <div class="tags">
+            <span class="tag">通话中的面部表情</span>
+            <span class="tag">本地识别为情绪信号</span>
+            <span class="tag">注入 LLM 回应策略</span>
+            <span class="tag">负面情绪触发关注</span>
+            <span class="tag">落库 emotion_records</span>
+            <span class="tag">情绪树洞页面消费</span>
+            <span class="tag">衔接辅导员求助</span>
+          </div>
+
+          <div class="callout info">
+            <p><span class="label">为什么值得单独立项：</span>在此之前，通话只有语音一个模态，AI 只能被动等学生开口，
+            学生不说就无从察觉。补上视觉情绪后，系统具备了“主动察觉状态”的能力，既提升陪伴的真实感，
+            也为早期发现情绪风险提供了一条不依赖学生自述的通道。</p>
+          </div>
+        </section>
+
         <section id="tech">
           <h2>技术方案</h2>
           <p>
@@ -339,6 +393,8 @@
             <strong>ReLU6</strong>（量化友好），末端用<strong>全局平均池化</strong>降维后接全连接分类头。
             该结构与 <code>face-api.js</code> 文档描述的 faceExpressionNet 一致——"depthwise separable convolutions and densely
             connected blocks"<sup><a href="#cite-1">[1]</a></sup>。
+            端到端的完整技术栈（训练、导出、端侧推理、检测器选型）见「技术框架与选型」一节，
+            运行参数与接口见「模块功能与运行参数」一节。
           </p>
 
           <h3>网络结构（输入 48×48，通道对齐官方 manifest）</h3>
@@ -382,9 +438,17 @@
         <section id="dataset">
           <h2>数据集</h2>
           <p>
-            使用 FER2013：48×48 灰度人脸，7 类表情。数据经镜像 <code>hf-mirror.com</code> 拉取（原始 HuggingFace 与 GitHub
-            在本网络环境不可达），本地解析为 <code>train.pt / test.pt</code> 后缓存<sup><a href="#cite-2">[2]</a></sup>。
-            标签已对齐前端 <code>EMOTION_LABELS</code> 的类序。
+            FER2013 出自 ICML 2013 的 Challenges in Representation Learning 竞赛，是 48×48 灰度人脸、7 类表情的公开基准，
+            共 35,887 张（训练 28,709 + 公开测试 3,589 + 私有测试 3,589）。本项目把公开测试与私有测试合并为
+            <strong>7,178 张测试集</strong>用于最终评估。原始 HuggingFace 与 GitHub 在本网络环境不可达，
+            数据经镜像 <code>hf-mirror.com</code>（数据集 <code>Jeneral/fer-2013</code>）拉取，本地解析为
+            <code>train.pt / test.pt</code> 后缓存<sup><a href="#cite-2">[2]</a></sup>。
+          </p>
+          <p>
+            类别分布极不均衡：训练集最多 7,215 张（开心）、最少 436 张（厌恶），比例约 <strong>16.5 : 1</strong>。
+            这是长尾类召回率偏低的根因（厌恶 recall 约 0.37），也是后期关掉类别加权、换取总体准确率的依据。
+            输入预处理固定为：灰度 → 缩放 <code>size×size</code>（48 或 64）→ <code>x/255</code> →
+            <code>(x−0.5)/0.5</code> → 复制为 3 通道；标签已对齐前端 <code>EMOTION_LABELS</code> 的类序。
           </p>
           <div class="table-wrap">
             <table>
@@ -571,7 +635,7 @@
         </section>
 
         <section id="strong">
-          <h2>精度提升：三步走到 0.671</h2>
+          <h2>精度提升：从 0.572 到 0.684</h2>
           <p>
             初版配方（40 轮、width_mult 1.0、仅基础增强）测试准确率只有 0.572，达不到"精准识别"的要求。
             经三步优化——<strong>强配方（48×48）→ 高分辨率重训（64×64）→ 多模型集成</strong>——
@@ -742,6 +806,57 @@
             换言之：<strong>在"仅用 FER2013、单卡、从零/自训练"的条件下，0.67 已相当接近现实上限</strong>；
             继续提升需要从"数据集与标签质量"而非"调参"入手。
           </p>
+        <h3>第二轮优化：0.6714 到 0.6842</h3>
+          <p>
+            在第一轮之后，按四条提升方向继续做了一轮：<strong>更强主干与更长训练</strong>（新增 SE 通道注意力、训练 90 轮）、
+            <strong>长尾处理</strong>（focal loss 加温和逆频重采样）、<strong>标签噪声处理</strong>（K 折袋外预测剔噪）、
+            <strong>加数据</strong>（尝试引入 RAF-DB / AffectNet）。这一轮把单模型推到 0.6673，4 模型集成推到 <strong>0.6842</strong>。
+          </p>
+          <div class="table-wrap">
+            <table>
+              <caption>表 13　第二轮优化：四条方向的执行情况</caption>
+              <thead>
+                <tr><th scope="col">方向</th><th scope="col">具体做法</th><th scope="col">实测效果</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">更强主干 + 更长训练</th><td>深度可分离卷积后加 SE 通道注意力、width_mult 1.25、90 轮余弦退火</td><td>单模型测试准确率 0.6616 → <strong>0.6673</strong></td></tr>
+                <tr><th scope="row">长尾处理</th><td>focal loss（γ=2）加温和逆频重采样（power 0.5，替代硬性类别加权）</td><td>Macro-F1 0.6199 → <strong>0.6473（+2.74pp）</strong>，本轮最大单项收益</td></tr>
+                <tr><th scope="row">标签噪声处理</th><td>3 折交叉验证袋外预测，预测类别与原标签冲突且置信度 ≥0.8 的样本予以剔除</td><td>仅剔除 <strong>53 / 28,709（0.18%）</strong>，收益有限（原因见下）</td></tr>
+                <tr><th scope="row">加数据</th><td>尝试引入 RAF-DB / AffectNet 子集</td><td><strong>未能取到</strong>（原因见下），本报告未纳入外部数据</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <caption>表 14　第二轮结果（同一测试集 7,178 张）</caption>
+              <thead>
+                <tr><th scope="col">模型</th><th scope="col" class="num">测试准确率</th><th scope="col" class="num">Top-2</th><th scope="col" class="num">Macro-F1</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">strong64（第一轮最佳单模型）</th><td class="num">0.6616</td><td class="num">0.8316</td><td class="num">0.6199</td></tr>
+                <tr><th scope="row">improved（第二轮单模型：SE + focal + 重采样 + 去噪）</th><td class="num">0.6673</td><td class="num">0.8392</td><td class="num">0.6473</td></tr>
+                <tr><th scope="row"><strong>ensemble2（4 模型加权集成，当前最佳）</strong></th><td class="num"><strong>0.6842</strong></td><td class="num"><strong>0.8522</strong></td><td class="num"><strong>0.6519</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="metrics">
+            <div class="metric"><b>0.6842</b><span>当前最佳测试准确率</span><em>ensemble2 集成</em></div>
+            <div class="metric"><b>0.6519</b><span>Macro-F1</span><em>+1.90pp</em></div>
+            <div class="metric"><b>0.8522</b><span>Top-2 准确率</span><em>+1.48pp</em></div>
+            <div class="metric"><b>+11.22pp</b><span>相比初版 0.5720</span><em>四轮累计</em></div>
+          </div>
+          <div class="callout warn">
+            <p><span class="label">关于"加数据"（收益最大但未取到）：</span>RAF-DB 与 AffectNet 主要经 Kaggle 分发（需要账号与凭证），
+            本环境无法完成；HuggingFace 主站与 GitHub 页面同样不可达（仅 hf-mirror 的文件下载与 GitHub release 资产可用），
+            因此无法确认可用的数据集仓库标识，本轮未能纳入外部数据。若能取到 RAF-DB，按文献做法重训是本清单中收益最大的一项。</p>
+          </div>
+          <div class="callout warn">
+            <p><span class="label">关于"标签去噪"（做了但收益有限）：</span>用 3 折交叉验证的袋外预测做筛除，
+            在置信度阈值 0.8 下只发现 53 个疑似错标样本（0.18%）。这不是方法问题而是能力问题：
+            模型自身准确率约 0.65，无法可靠区分"标签标错了"和"这张脸本来就难"，
+            因此自动清洗在 FER2013 上可操作的空间很小。这也侧面印证了上一节的结论：
+            该数据集的噪声主要是"人眼也难判"的模糊样本，而非明显的错误标注。</p>
+          </div>
         </section>
 
         <section id="engineering">
@@ -777,7 +892,7 @@
           <h3>后端查询接口</h3>
           <div class="table-wrap">
             <table>
-              <caption>表 13　训练产物查询接口（<code>backend/app/api/ml_training.py</code>，需管理员权限，不依赖 torch）</caption>
+              <caption>表 15　训练产物查询接口（<code>backend/app/api/ml_training.py</code>，需管理员权限，不依赖 torch）</caption>
               <thead>
                 <tr><th scope="col">方法</th><th scope="col">路径</th><th scope="col">说明</th></tr>
               </thead>
@@ -792,28 +907,317 @@
           </div>
         </section>
 
+        <section id="integration">
+          <h2>模型接入与同口径对比</h2>
+          <p>
+            已把第二轮最优<strong>单模型 <code>improved</code></strong>（SE + focal + 长尾重采样，带水平翻转 TTA）导出为 ONNX 并接入前端：
+            <strong>替换掉原先 face-api.js 的 faceExpressionNet</strong>，人脸检测仍用 <code>tinyFaceDetector</code>，
+            表情分类改由 ONNX Runtime Web 在浏览器端本地推理（人脸不出浏览器）。原 face-api 表情模型文件已从项目中删除。
+            前端每次推理会同时跑原图与水平翻转图并平均 logits，与训练侧的 TTA 评测口径保持一致。
+          </p>
+          <div class="table-wrap">
+            <table>
+              <caption>表 16　同一 FER2013 测试集（7,178 张）下的同口径对比</caption>
+              <thead>
+                <tr><th scope="col">模型</th><th scope="col" class="num">输入</th><th scope="col" class="num">参数量</th><th scope="col" class="num">无 TTA 准确率</th><th scope="col" class="num">+TTA 准确率</th><th scope="col" class="num">Macro-F1</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">face-api.js FaceExpressionNet（原接入）</th><td class="num">112×112</td><td class="num">323,687</td><td class="num">0.5829</td><td class="num">0.5979</td><td class="num">0.5465</td></tr>
+                <tr><th scope="row">本模型 strong64（第一轮最佳单模型）</th><td class="num">64×64</td><td class="num">361,487</td><td class="num">0.6541</td><td class="num">0.6616</td><td class="num">0.6199</td></tr>
+                <tr><th scope="row">本模型 improved（<strong>现接入</strong>：SE + focal + 长尾重采样）</th><td class="num">64×64</td><td class="num">465,512</td><td class="num">0.6521</td><td class="num"><strong>0.6673</strong></td><td class="num">0.6473</td></tr>
+                <tr><th scope="row">本模型 ensemble2（4 模型加权集成）</th><td class="num">48/64/96</td><td class="num">—</td><td class="num">—</td><td class="num"><strong>0.6842</strong></td><td class="num"><strong>0.6519</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout ok">
+            <p><span class="label">结论：</span>严格对等（双方均无 TTA）下，接入模型 improved 的 0.6521 比 face-api 的 0.5829 高 <strong>6.92 个百分点</strong>；
+            各自开启 TTA 后为 <strong>0.6673 对 0.5979（+6.94pp）</strong>，Macro-F1 高 10.08 个百分点。
+            集成 ensemble2 虽再高 1.69pp，但需 4 个模型同时推理，不适配浏览器端，故接入采用单模型 improved。</p>
+          </div>
+          <h3>接入验证</h3>
+          <ul>
+            <li><strong>数值一致性</strong>：ONNX 与 PyTorch 在同一批输入上 logits 最大绝对误差 <code>4.604e-06</code>；</li>
+            <li><strong>精度一致性</strong>：ONNX 无 TTA 测试集准确率 0.6521，与 PyTorch 一致；开启 TTA 后为 0.6673；</li>
+            <li><strong>前端构建</strong>：<code>vue-tsc</code> 类型检查 + <code>vite build</code> 均通过（含 TTA 改动）；</li>
+            <li><strong>静态资源</strong>：<code>/models/emotion_se64_rafmix.onnx</code>（1.88 MB）、<code>/models/face_yolov8n.onnx</code>（11.6 MB）、回退用的 <code>/models/tiny_face_detector_model-shard1</code>（189 KB）与 <code>/ort/ort-wasm-simd-threaded.wasm</code>（13.6 MB）均可正常访问。</li>
+          </ul>
+          <div class="callout warn">
+            <p><span class="label">未验证：</span>真实浏览器 + 摄像头的端到端推理未实测（本环境无浏览器自动化），
+            需在本地打开通话页面、授权摄像头后确认。已知代价：首次加载需下载约 15 MB 的 ONNX Runtime WASM。</p>
+          </div>
+        </section>
+
+        <section id="stack">
+          <h2>技术框架与选型</h2>
+          <p>
+            先直接回答一个常见疑问：<strong>本模块既没有使用 OpenCV，也没有使用 YOLOv8</strong>。
+            全仓检索确认无 <code>cv2</code> / <code>opencv</code> / <code>ultralytics</code> / <code>YOLOv8</code> 依赖。
+            实际选型是「PyTorch 训练 + 浏览器端 ONNX 推理」这条轻量链路：人脸检测由 <code>face-api.js</code> 的
+            <code>tinyFaceDetector</code> 承担，表情分类由本项目自训练模型承担。
+          </p>
+          <div class="table-wrap">
+            <table>
+              <caption>表 17　技术栈与版本</caption>
+              <thead>
+                <tr><th scope="col">层次</th><th scope="col">技术选型</th><th scope="col" class="num">版本</th><th scope="col">用途</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">训练 / 微调</th><td>PyTorch（CUDA 12.6，AMP 混合精度）</td><td class="num">2.12.0</td><td>训练、微调、评测（RTX 3050 Laptop GPU）</td></tr>
+                <tr><th scope="row">模型导出</th><td>torch.onnx（经典 TorchScript 导出器）</td><td class="num">opset 17</td><td>PyTorch 权重 → ONNX（1.42 MB）</td></tr>
+                <tr><th scope="row">端侧推理</th><td>ONNX Runtime Web（WASM，单线程）</td><td class="num">1.30.0</td><td>浏览器内表情分类推理</td></tr>
+                <tr><th scope="row">人脸检测</th><td>face-api.js <code>tinyFaceDetector</code>（Tiny YOLOv2 单类变体，tfjs WebGL 后端）</td><td class="num">0.22.2</td><td>在视频帧中定位人脸框（量化后 189 KB）</td></tr>
+                <tr><th scope="row">表情分类</th><td>FaceExpressionNet（本项目自训练，MobileNet 风格深度可分离 CNN）</td><td class="num">361,487 参数</td><td>7 类表情分类</td></tr>
+                <tr><th scope="row">前端</th><td>Vue 3 + Vite + TypeScript（组合式 API）</td><td class="num">3.4 / 5.4 / 5.4</td><td>通话界面与情绪采集逻辑</td></tr>
+                <tr><th scope="row">后端</th><td>FastAPI + Uvicorn + SQLAlchemy + Pydantic</td><td class="num">0.136.1 / 0.30.1 / 2.0.35 / 2.9.2</td><td>情绪上报、存储、统计</td></tr>
+                <tr><th scope="row">数据处理</th><td>NumPy + Pillow + Matplotlib</td><td class="num">—</td><td>数据集解析、增强、指标计算与绘图</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>端到端处理流程</h3>
+          <div class="tags">
+            <span class="tag">摄像头 320×240</span>
+            <span class="tag">tinyFaceDetector 定位</span>
+            <span class="tag">方形裁剪</span>
+            <span class="tag">缩放 64×64</span>
+            <span class="tag">灰度 + 归一化</span>
+            <span class="tag">ONNX 推理</span>
+            <span class="tag">softmax 取 top-1</span>
+            <span class="tag">5 帧多数平滑</span>
+            <span class="tag">2s 节流上报</span>
+            <span class="tag">后端存库与统计</span>
+          </div>
+
+          <h3>为什么不用 YOLOv8 训练这个模型</h3>
+          <p>
+            结论：不是 YOLOv8 的能力不行，而是<strong>任务类型与部署条件都不匹配</strong>。具体有四条原因。
+          </p>
+          <ul>
+            <li><strong>任务类型不同</strong>：YOLOv8 是目标检测模型，输出边界框加类别，回答的是“哪里有什么”；
+            表情识别要回答的是“这张脸是什么情绪”，属于分类任务。FER2013 的图片已经是裁好并对齐的 48×48 人脸，
+            没有可供回归的“框”，用检测头去做分类等于绕远路。</li>
+            <li><strong>数据标注不匹配</strong>：FER2013 只提供图像级标签（这张图是“开心”），没有边界框标注。
+            要用 YOLOv8 训练，得先用检测器把框造出来，属于自监督造标签，只会引入噪声而没有收益。</li>
+            <li><strong>端侧体积与延迟差一个量级</strong>：YOLOv8n 为 72 层、<strong>315 万参数、8.7 GFLOPs</strong>（640×640 输入）<sup><a href="#cite-7">[7]</a></sup>；
+            本模块的 strong64 只有 <strong>36.1 万参数</strong>，输入 64×64，ONNX 仅 1.42 MB，可直接在浏览器 WASM 内实时推理。
+            实时情感场景的第三方基准也显示，YOLOv8n 单帧约 63 ms，明显慢于同场对比的轻量人脸方案（约 8 ms）<sup><a href="#cite-8">[8]</a></sup>。</li>
+            <li><strong>它解决的不是当前瓶颈</strong>：本模块的精度瓶颈是表情类别本身的歧义（FER2013 人类标注上限约 65%），
+            而不是“人脸框得不准”。换更强的检测器不会提升表情分类的判别力，后文混淆矩阵（图 6、图 11）已说明误差集中在相近类之间。</li>
+          </ul>
+          <div class="callout info">
+            <p><span class="label">需要补充说明的是：</span>YOLO 系在表情识别文献里确实有使用，但通常是<strong>把检测头改造成分类头</strong>，
+            或在 CK+ 这类实验室摆拍数据集上评测，与“已裁好的人脸图加浏览器端实时推理”这个场景并不相同。
+            此外，本模块的人脸定位用的 <code>tinyFaceDetector</code> 在源码中继承自 <code>TinyYolov2Base</code>，
+            本身就是 <strong>Tiny YOLOv2</strong> 的单类（face）轻量变体（depthwise 可分离卷积、anchor boxes、
+            <code>filterSizes [3,16,32,64,128,256,512]</code>，量化后仅 189 KB）。也就是说，YOLO 家族其实已经用上了，
+            用的是最轻的那一档。若未来要做“整帧多人脸、复杂场景”的定位，换用更新的检测器（如 YOLOv8/v11 系列）是合理选择，
+            但那属于替换检测器，与本报告训练的表情分类器是两件事。</p>
+          </div>
+          <div class="callout info">
+            <p><span class="label">为什么不是 OpenCV：</span>OpenCV 是偏服务端的图像处理与推理库，用它意味着把画面传到服务器。
+            本模块为保证实时性与隐私（人脸不出浏览器），选择了纯前端推理链路，因此不需要 OpenCV。</p>
+          </div>
+        </section>
+
+        <section id="module">
+          <h2>模块功能与运行参数</h2>
+          <p>
+            该模块在语音通话过程中静默运行（界面不展示），做的是「实时采集 → 本地识别 → 平滑节流 → 上报落库 → 参与业务决策」这一整条闭环。
+            代码位置：前端 <code>frontend/src/composables/useEmotionDetection.ts</code>，后端 <code>backend/app/services/voice_service.py</code>
+            （通话内的情绪处理）与 <code>backend/app/api/emotions.py</code>（情绪数据接口）。
+          </p>
+          <h3>功能清单</h3>
+          <ul>
+            <li><strong>静默采集</strong>：通话建立后自动开启摄像头监测，被拒绝不阻断通话；</li>
+            <li><strong>7 类表情识别</strong>：生气 / 厌恶 / 害怕 / 开心 / 平静 / 难过 / 惊讶；</li>
+            <li><strong>时间平滑与节流</strong>：最近 5 帧多数投票，且至少间隔 2s 才记录一次，抑制抖动；</li>
+            <li><strong>实时上报</strong>：通过通话 WebSocket <code>/api/voice/ws</code> 发送 <code>{"type":"emotion", emotion, confidence}</code>；</li>
+            <li><strong>挂断批量落库</strong>：通话结束时把时间线（最多 200 条）批量提交到 <code>/api/emotions/record/batch</code>；</li>
+            <li><strong>情绪统计与树洞</strong>：<code>/api/emotions/history</code>、<code>/api/emotions/stats</code> 提供历史与统计，支撑「情绪树洞」页面；</li>
+            <li><strong>负面情绪关注上报</strong>：负面情绪累计 ≥3 次，或文本命中危机关键词，即触发心理关注流程；</li>
+            <li><strong>参与对话决策</strong>：取最近 20 条的主导情绪注入 LLM 提示词，让回复结合情绪；接通问候最多等 1.6s 首帧表情。</li>
+          </ul>
+
+          <div class="table-wrap">
+            <table>
+              <caption>表 18　运行参数（前端采集 + 后端处理）</caption>
+              <thead>
+                <tr><th scope="col">环节</th><th scope="col">参数</th><th scope="col" class="num">取值</th><th scope="col">说明</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">采集</th><td>摄像头分辨率 / 朝向</td><td class="num">320×240 / user</td><td>前置摄像头，低分辨率换取实时性</td></tr>
+                <tr><th scope="row">检测</th><td>TinyFaceDetector inputSize</td><td class="num">224</td><td>人脸定位输入尺寸</td></tr>
+                <tr><th scope="row">推理</th><td>检测 + 分类节流</td><td class="num">250 ms</td><td>避免逐帧推理占满 CPU</td></tr>
+                <tr><th scope="row">平滑</th><td>多数投票窗口</td><td class="num">5 帧</td><td>中和单帧抖动</td></tr>
+                <tr><th scope="row">上报</th><td>记录间隔</td><td class="num">2000 ms</td><td>表情只需秒级粒度</td></tr>
+                <tr><th scope="row">模型输入</th><td>张量形状</td><td class="num">1×3×64×64</td><td>float32；灰度复制 3 通道，(x/255−0.5)/0.5</td></tr>
+                <tr><th scope="row">模型输出</th><td>logits → softmax</td><td class="num">7 类</td><td>类序 angry / disgusted / fearful / happy / neutral / sad / surprised</td></tr>
+                <tr><th scope="row">置信度</th><td>定义</td><td class="num">softmax 概率</td><td>取「平滑后标签」在当前帧的概率</td></tr>
+                <tr><th scope="row">通信</th><td>WebSocket 路径</td><td class="num">/api/voice/ws</td><td>消息体 <code>{"type":"emotion", emotion, confidence}</code></td></tr>
+                <tr><th scope="row">内存</th><td>情绪时间线上限</td><td class="num">200 条</td><td>超出后保留最近 200 条，防止内存膨胀</td></tr>
+                <tr><th scope="row">决策</th><td>主导情绪窗口</td><td class="num">最近 20 条</td><td>避免整场通话的偏置</td></tr>
+                <tr><th scope="row">关注上报</th><td>负面情绪集合 / 阈值</td><td class="num">4 类 / ≥3 次</td><td>sad、angry、fearful、disgusted 累计达 3 次触发</td></tr>
+                <tr><th scope="row">问候</th><td>等待首帧表情时长</td><td class="num">1.6 s</td><td>超时用中性问候，保证 AI 一定先开口</td></tr>
+                <tr><th scope="row">存储</th><td>数据表</td><td class="num">emotion_records</td><td>含 user_id、emotion、confidence、source、conversation_id、created_at</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>情绪相关接口</h3>
+          <div class="table-wrap">
+            <table>
+              <caption>表 19　情绪模块对外接口</caption>
+              <thead>
+                <tr><th scope="col">方法</th><th scope="col">路径</th><th scope="col">说明</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">WS</th><td><code>/api/voice/ws</code></td><td>通话中实时上报情绪事件（type=emotion）</td></tr>
+                <tr><th scope="row">POST</th><td><code>/api/emotions/record</code></td><td>写入单条情绪记录</td></tr>
+                <tr><th scope="row">POST</th><td><code>/api/emotions/record/batch</code></td><td>挂断时批量落库（前端提交最近 200 条）</td></tr>
+                <tr><th scope="row">GET</th><td><code>/api/emotions/history</code></td><td>情绪历史查询</td></tr>
+                <tr><th scope="row">GET</th><td><code>/api/emotions/stats</code></td><td>情绪分布统计</td></tr>
+                <tr><th scope="row">DELETE</th><td><code>/api/emotions/clear</code></td><td>清空当前用户的情绪记录</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="rafdb">
+          <h2>第三轮优化：真实场景域适配（RAF-DB）</h2>
+          <p>
+            前面所有指标都来自 FER2013 测试集，而 FER2013 是<strong>实验室摆拍的 48×48 灰度图</strong>，
+            与真实摄像头画面（彩色、复杂光照与背景、姿态多变）分布差异很大。用一个只在 FER2013 上训练的模型
+            去测真实场景，指标会明显虚高。因此本轮补上了最关键的一步：<strong>引入真实场景数据做域适配</strong>。
+          </p>
+          <p>
+            RAF-DB（Real-world Affective Faces Database）是"野外"人脸表情基准：7 类基本表情、
+            训练集 12,271 张、测试集 3,068 张，100×100 彩色。它的类别计数与官方公布完全一致
+            （开心 4,772 / 平静 2,524 / 悲伤 1,982 / 惊讶 1,290 / 生气 705 / 厌恶 717 / 害怕 281），
+            且标签语义已用样张拼图人工核对，映射到本项目类序后无误。数据经 HuggingFace 镜像获取，
+            读取脚本为 <code>backend/ml/real_fer.py</code>。
+          </p>
+          <div class="table-wrap">
+            <table>
+              <caption>表 20　真实场景域适配：数据与结果</caption>
+              <thead>
+                <tr><th scope="col">项目</th><th scope="col">做法</th><th scope="col">结果</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">真实场景测试集</th><td>RAF-DB 测试集 3,068 张（模型训练全程未见）</td><td>作为"真实摄像头"的量化代理</td></tr>
+                <tr><th scope="row">联合训练集</th><td>FER2013 去噪训练集 28,656 + RAF-DB 训练集 12,271 = <strong>40,927 张</strong></td><td>真实场景样本占比 30%</td></tr>
+                <tr><th scope="row">训练配置</th><td>沿用 improved 配方（64×64、width 1.25、SE 注意力、focal loss、温和逆频重采样、EMA、TTA），60 轮</td><td>RTX 3050，约 26 分钟</td></tr>
+                <tr><th scope="row">真实场景准确率</th><td>RAF-DB 测试集（TTA）</td><td><strong>0.6186 → 0.7966（+17.80 个百分点）</strong>，Macro-F1 0.4296 → 0.7014</td></tr>
+                <tr><th scope="row">实验室准确率</th><td>FER2013 测试集（TTA）</td><td>0.6673 → 0.6464（−2.09 个百分点）</td></tr>
+                <tr><th scope="row">两模型 logits 融合</th><td>improved + rafmix 取平均，试图兼顾两域</td><td>RAF 0.7464（不如单模型）、FER 0.6753（略优）；<strong>融合反而拖低真实场景，故不采用</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            这是教科书式的域适配权衡：<strong>把真实场景数据加进训练，真实场景指标大涨 17.8 个百分点，
+            代价是实验室数据集掉 2.1 个百分点</strong>。由于本项目线上跑的是真实摄像头，
+            RAF-DB 才是与部署域一致的指标，因此线上模型已切换为 rafmix 单模型
+            （<code>frontend/public/models/emotion_se64_rafmix.onnx</code>）。
+          </p>
+          <div class="figure-row">
+            <figure>
+              <img src="./assets/cm_raf_rafmix.png" alt="RAF-DB 真实场景测试集混淆矩阵（rafmix 模型）">
+              <figcaption>图 12　rafmix 在 RAF-DB 真实场景测试集上的行归一化混淆矩阵。开心（0.86）、惊讶（0.81）、平静（0.81）、悲伤（0.78）、生气（0.75）已可用；害怕（0.43）与厌恶（0.52）仍是短板，与 FER 上的误差结构一致。</figcaption>
+            </figure>
+            <figure>
+              <img src="./assets/cm_fer_rafmix.png" alt="FER2013 测试集混淆矩阵（rafmix 模型）">
+              <figcaption>图 13　同一模型在 FER2013 测试集上的混淆矩阵，用于对照两个域的差异。</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section id="yolo">
+          <h2>支线尝试：YOLOv8 检测人脸 + 表情实时监测</h2>
+          <p>
+            "用 YOLOv8 先定位主要目标人脸、再做人脸表情实时监测"这条链路<strong>已完整落地并经过真实浏览器实测</strong>：
+            检测器在<strong>真实场景人脸基准 WIDER FACE</strong> 上训练（不再是同分布合成数据），导出 ONNX 后
+            接入前端生产链路（优先 YOLOv8，失败自动回退 face-api 的 tinyFaceDetector），并用自动化浏览器
+            分别在"伪摄像头真实场景视频"和"本机物理摄像头"上跑通全链路。结果如下。
+          </p>
+          <div class="table-wrap">
+            <table>
+              <caption>表 21　YOLOv8 人脸检测支线：执行情况</caption>
+              <thead>
+                <tr><th scope="col">环节</th><th scope="col">做法</th><th scope="col">实测结果</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">检测数据（真实）</th><td>WIDER FACE 验证集 3,226 张 / 39,703 个标注人脸（含大量极小、遮挡、侧脸），转成 YOLO 单类格式后按 15% 切分</td><td>训练 2,739 张 / 验证 483 张 / 5,724 个框</td></tr>
+                <tr><th scope="row">检测模型</th><td>YOLOv8n（COCO 预训练迁移），单类 face，imgsz 640、batch 8、30 轮</td><td>真实验证集 P=0.811、R=0.572、<strong>mAP50=0.644</strong>、mAP50-95=0.333</td></tr>
+                <tr><th scope="row">召回为何只有 0.57</th><td>WIDER 验证集含大量仅十几像素的极小脸，640 输入下本就难命中；而通话场景的人脸是"画面主目标"，尺度大得多</td><td>在摄像头尺度（人脸占画面高度 30%–50%）复测：命中率（IoU≥0.3）<strong>95.0%（285/300）</strong>，链路表情准确率 0.7018</td></tr>
+                <tr><th scope="row">前端接入</th><td>导出 320×320 ONNX（2.0 GFLOPs），新增 <code>frontend/src/composables/yoloFaceDetector.ts</code>（letterbox + 解码 + NMS + 主目标人脸选择），接入 <code>useEmotionDetection</code>，YOLOv8 不可用时回退 face-api</td><td>best.onnx 11.6 MB（表情模型 1.88 MB）；浏览器 wasm 单线程下约 4 fps 检测</td></tr>
+                <tr><th scope="row">真实浏览器端到端</th><td>自动化启动 Edge + 伪摄像头喂真实场景人脸视频（56 张 RAF-DB 测试图，每张 2.4 秒），页面回传逐帧采样</td><td>检测后端实测为 <code>yolov8n</code>；人脸覆盖 <strong>92.9%（52/56）</strong>，<strong>端到端准确率 0.6529（269/412）</strong></td></tr>
+                <tr><th scope="row">真实物理摄像头</th><td>同一自动化脚本切到本机摄像头（Integrated Webcam），实时运行 30 秒</td><td>getUserMedia 成功、链路稳定，采样 235 条（约 8 条/秒），输出全部为"平静"，无报错</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <figure>
+            <img src="./assets/pipeline_samples.jpg" alt="YOLOv8 人脸检测框与表情预测结果样张">
+            <figcaption>图 14　YOLOv8 检测加表情分类的链路输出样张。红框为 YOLOv8 检出的人脸（这一组 8 张全部命中且贴合），框上方为“预测表情 置信度 | 真实标签”。仍可见 sad 与 fearful 之间的混淆，与前面的误差分析一致。</figcaption>
+          </figure>
+          <div class="callout">
+            <p><span class="label">真实实测是怎么做的：</span></p>
+            <p>环境里装不了 Playwright（沙箱不允许其 Node 驱动创建临时目录，报 EPERM），于是改用
+            <strong>系统自带 Edge 子进程 + 本地 HTTP 收集服务</strong>的方案（<code>backend/ml/e2e_emotion.py</code>）：
+            脚本起一个本地回传服务，用 <code>--use-file-for-fake-video-capture</code> 把一段已知标签与时间轴的 Y4M
+            喂给浏览器当摄像头（或切到真实摄像头），页面直接调用<strong>生产环境的 <code>useEmotionDetection</code></strong>，
+            把逐帧采样与画面截图回传给脚本对齐算分。
+            链路本身完全真实：getUserMedia → 人脸检测 → 裁剪 → ONNX + TTA → 5 帧平滑。</p>
+            <p class="hint" style="font-size:12px;color:inherit;opacity:.72">
+            （该实测依赖一个临时的浏览器测试页作为"被驱动的页面"。验证完成后，测试页已从项目中移除，
+            仅保留 <code>backend/ml/e2e_emotion.py</code> 这套自动化工具；如需重跑，恢复测试页即可。）
+            </p>
+            <p><strong>这套真实实测立刻抓出了两个静态检查发现不了的问题：</strong>一是 ONNX Runtime Web 用了默认入口，
+            浏览器去取本地并不存在的 jsep 版运行时，模型直接加载失败（改走 <code>onnxruntime-web/wasm</code> 修复）；
+            二是 Vite 对 <code>public</code> 目录下的 <code>.mjs</code> 在带 <code>?import</code> 参数时返回 500，
+            导致运行时文件取不到（在 <code>vite.config.ts</code> 里加静态中间件修复）。</p>
+            <p>还抓出了一个<strong>测试脚手架自身的 bug</strong>：生成伪摄像头视频时用
+            <code>round(每张脸秒数 × fps)</code> 算帧数，2.5×5=12.5 被舍入成 12 帧（实际 2.4 秒），
+            但时间轴仍按 2.5 秒写入，累计到第 56 张脸错位 5.6 秒，把正确预测判成错误——
+            端到端准确率因此虚低到 0.2721。修正时间轴后同一视频重测为 <strong>0.6529</strong>。
+            这个 bug 只有真跑一遍浏览器才会暴露。</p>
+          </div>
+          <figure>
+            <img src="./assets/browser_e2e_frames.jpg" alt="浏览器端到端实测中抓取的画面与逐帧预测">
+            <figcaption>图 15　浏览器实测中每隔 3 秒抓取的一帧（共 8 帧）。画面为伪摄像头输入的 RAF-DB 真实场景人脸，底部黄字为页面实时输出的情绪与置信度及视频时间。可见同一个人脸在连续帧上的预测稳定，且切换人脸后标签能跟上。</figcaption>
+          </figure>
+        </section>
+
         <section id="conclusion">
           <h2>结论与建议</h2>
           <p>
             本次交付把表情识别模型的训练体系完整引入后端：架构复现、数据管线、超参数配置、训练/微调/集成入口、
             指标评估与产物落盘均已就位，并通过 <code>aistudy</code> 环境在 RTX 3050 上跑出真实结果——
-            经三步优化后 <strong>测试集准确率 0.6714、Macro-F1 0.6316、Top-2 准确率 0.8374</strong>，
-            相比初版 0.5720 提升 <strong>9.94 个百分点</strong>，全部曲线与混淆矩阵可核验可复现。
+            经两轮共四步优化后 <strong>测试集准确率 0.6842、Macro-F1 0.6519、Top-2 准确率 0.8522</strong>，
+            相比初版 0.5720 提升 <strong>11.22 个百分点</strong>，全部曲线与混淆矩阵可核验可复现，线上表情模型最终为经真实场景域适配的 rafmix 单模型。
+          </p>
+          <p>
+            在此之上本轮又推进了三件事：<strong>真实场景域适配</strong>（RAF-DB 并入训练，真实场景准确率
+            <strong>0.6186 → 0.7966</strong>，线上模型同步换成 rafmix）、<strong>YOLOv8 检测支线改为在真实基准
+            WIDER FACE 上训练并接入前端</strong>（mAP50 0.644；摄像头尺度命中率 95.0%，链路表情准确率 0.7018）、
+            以及<strong>Web 自动化真实实测能力</strong>（Edge 子进程 + 本地回传服务，已跑通伪摄像头端到端
+            <strong>0.6529</strong> 与本机物理摄像头实时链路），并靠它修掉了两个只有在真实浏览器里才会暴露的加载/静态资源 bug。
           </p>
           <p>
             关于"精度"：FER2013 的<strong>人类标注准确率约 65%（65±5%）</strong><sup><a href="#cite-4">[4]</a></sup><sup><a href="#cite-5">[5]</a></sup>，
-            本模型 0.6714 已超过人类标注水平；文献 SOTA（70-73%）多依赖额外数据与重型集成，
+            本模型 0.6842 已高于人类标注水平约 3 个百分点；文献 SOTA（70-73%）多依赖额外数据与重型集成，
             同类"改进型深度可分离网络"报告 70.76%<sup><a href="#cite-6">[6]</a></sup>。
-            因此 0.67 在"仅用 FER2013、单卡、自训练"的条件下已相当接近现实上限。
+            因此 0.68 在"仅用 FER2013、单卡、自训练"的条件下已相当接近现实上限。
           </p>
-          <p>若要继续提升精度并把模型用回语音通话链路，建议：</p>
+          <p>按"继续提升精度"清单执行的四条方向，本轮实际结果如下：</p>
           <ul>
-            <li><strong>加数据（收益最大）</strong>：接入 RAF-DB / AffectNet 子集后重训，文献中这类做法可达 72-76%；本环境无法访问 HuggingFace/GitHub，需先在可联网机器取数；</li>
-            <li><strong>标签噪声处理</strong>：交叉验证样本一致性、co-teaching、样本重加权，剔除或修正明显错标样本（FER2013 的主要瓶颈）；</li>
-            <li><strong>更强主干与更长训练</strong>：换用 width_mult 1.5/2.0 或加入注意力模块，并把轮次提到 150 以上；</li>
-            <li><strong>针对长尾</strong>：fearful / sad / disgusted 采用重采样或 focal loss；</li>
-            <li><strong>端侧部署</strong>：把选定模型导出为 ONNX（或按同架构生成 TF.js 权重）替换前端现有模型；集成推理可先在服务端做，再蒸馏回单模型；</li>
-            <li><strong>域适配</strong>：在真实摄像头（320×240、动态光照）采样上做一次低学习率微调，缩小与 FER 数据集的域差异。</li>
+            <li><strong>加数据（已做，收益最大）</strong>：找到了 HuggingFace 镜像上可直连的 <strong>RAF-DB 真实场景数据集</strong>（12,271 训练 / 3,068 测试），并入训练后<strong>真实场景准确率 0.6186 → 0.7966</strong>，是本轮乃至整个项目提升最大的一项；</li>
+            <li><strong>标签噪声处理（已做，收益有限）</strong>：3 折 OOF 预测只筛出 53 个疑似错标样本（0.18%），因为模型自身精度不足以区分"标签标错"与"样本本身难"；</li>
+            <li><strong>更强主干与更长训练（已做）</strong>：加入 SE 通道注意力并训练 90 轮，单模型 0.6616 → 0.6673；</li>
+            <li><strong>长尾处理（已做）</strong>：focal loss 加温和逆频重采样，Macro-F1 提升 2.74 个百分点；</li>
+            <li><strong>端侧部署（已更新两次）</strong>：表情模型由 improved 换成<strong>为真实摄像头域适配的 rafmix</strong>，浏览器本地 ONNX 推理（含水平翻转 TTA）；</li>
+            <li><strong>YOLOv8 检测支线（已上线）</strong>：检测器在<strong>真实基准 WIDER FACE</strong> 上训练（mAP50 0.644），导出 320×320 ONNX 接入前端并实测生效（<code>detectorBackend=yolov8n</code>），失败自动回退 face-api；</li>
+            <li><strong>真实实测能力（已建成）</strong>：由于装不了 Playwright，改用 <strong>Edge 子进程 + 本地 HTTP 收集服务</strong>做 Web 自动化，支持"伪摄像头已知标签视频"与"本机物理摄像头"两种模式，并已用它跑通端到端实测、定位并修复两个生产链路 bug 与一个测试脚手架 bug；</li>
+            <li><strong>真实物理摄像头（已验证）</strong>：本机摄像头 30 秒实时运行，YOLOv8 检测 + rafmix 表情全链路稳定；</li>
+            <li><strong>仍待办</strong>：真实摄像头无法取得标注，故"真机准确率"只能定性确认链路可用；若要量化，建议先用手机/摄像头录一段带标注的自建小样本集。</li>
           </ul>
         </section>
       </main>
@@ -828,6 +1232,11 @@
             <li id="cite-4">Facial Expression Recognition using Convolutional Neural Networks: State of the Art（给出 FER2013 人类准确率约 65.5%）：<a href="https://arxiv.org/html/1612.02903v1" target="_blank" rel="noopener">https://arxiv.org/html/1612.02903v1</a></li>
             <li id="cite-5">An Efficient Approach to Face Emotion Recognition with Convolutional Neural Networks（MDPI Electronics 12(12):2707，指出 FER2013 人类准确率约 65±5%）：<a href="https://www.mdpi.com/2079-9292/12/12/2707" target="_blank" rel="noopener">https://www.mdpi.com/2079-9292/12/12/2707</a></li>
             <li id="cite-6">Facial expression recognition based on improved depthwise separable convolutional network（在 FER2013 上报告 70.76%）：<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9686458/" target="_blank" rel="noopener">https://pmc.ncbi.nlm.nih.gov/articles/PMC9686458/</a></li>
+            <li id="cite-7">Ultralytics 官方文档：YOLOv8 架构参数（YOLOv8n 为 72 层、3,151,904 参数、8.7 GFLOPs）：<a href="https://docs.ultralytics.com/guides/yolo-architecture" target="_blank" rel="noopener">https://docs.ultralytics.com/guides/yolo-architecture</a></li>
+            <li id="cite-8">The Latency Wall: Benchmarking Off-the-Shelf Emotion Recognition for Real-Time Virtual Avatars（实时情感识别基准：YOLOv8n 约 63 ms/帧，轻量人脸方案约 8 ms）：<a href="https://arxiv.org/html/2601.15914" target="_blank" rel="noopener">https://arxiv.org/html/2601.15914</a></li>
+            <li id="cite-9">RAF-DB 真实场景表情数据集（本次所用的 HuggingFace 镜像副本，7 类、12,271 训练 / 3,068 测试）：<a href="https://hf-mirror.com/datasets/elipaluma/RAF-DB_Kaggle" target="_blank" rel="noopener">https://hf-mirror.com/datasets/elipaluma/RAF-DB_Kaggle</a></li>
+            <li id="cite-10">WIDER FACE 人脸检测基准（3.2 万张真实场景图、39 万张标注人脸；本次检测器训练所用的 HuggingFace 镜像副本）：<a href="https://hf-mirror.com/datasets/wider_face" target="_blank" rel="noopener">https://hf-mirror.com/datasets/wider_face</a></li>
+            <li id="cite-11">Chromium 命令行开关 <code>--use-file-for-fake-video-capture</code> / <code>--use-fake-device-for-media-stream</code>（真实浏览器端到端实测的原理依据）：<a href="https://peter.sh/experiments/chromium-command-line-switches/" target="_blank" rel="noopener">https://peter.sh/experiments/chromium-command-line-switches/</a></li>
           </ol>
         </div>
       </footer>

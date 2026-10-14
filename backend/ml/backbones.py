@@ -42,13 +42,16 @@ def build_model(
     pretrained: bool = False,
     dropout: float = 0.2,
     width_mult: float = 1.0,
+    use_se: bool = False,
+    se_ratio: int = 8,
 ) -> nn.Module:
     """按名称构建模型；torchvision 骨干会替换为 num_classes 分类头。"""
     key = (name or BUILTIN_NAME).lower()
 
     if key in ("face_expression_net", "custom", "builtin"):
         return FaceExpressionNet(in_channels=3, num_classes=num_classes,
-                                 width_mult=width_mult, dropout=dropout)
+                                 width_mult=width_mult, dropout=dropout,
+                                 use_se=use_se, se_ratio=se_ratio)
 
     if key not in TORCHVISION_BACKBONES:
         raise ValueError(

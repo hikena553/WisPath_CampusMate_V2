@@ -1,0 +1,179 @@
+{
+  "run_id": "20261013-180831-ensemble2",
+  "created_at": "2026-10-13T18:08:31.710122+00:00",
+  "kind": "ensemble",
+  "members": [
+    {
+      "run_id": "20261013-174022-improved",
+      "model_name": "face_expression_net",
+      "val_acc": 0.6635,
+      "test_acc": 0.6673,
+      "weight": 0.2671
+    },
+    {
+      "run_id": "20261013-130843-strong64",
+      "model_name": "face_expression_net",
+      "val_acc": 0.653,
+      "test_acc": 0.6616,
+      "weight": 0.2617
+    },
+    {
+      "run_id": "20261013-115245-strong",
+      "model_name": "face_expression_net",
+      "val_acc": 0.6268,
+      "test_acc": 0.6489,
+      "weight": 0.2482
+    },
+    {
+      "run_id": "20261013-124127-transfer2",
+      "model_name": "mobilenet_v3_small",
+      "val_acc": 0.5777,
+      "test_acc": 0.6002,
+      "weight": 0.223
+    }
+  ],
+  "tta": true,
+  "weighting": "按各 run 训练时记录的 best_val_acc 归一化（val_acc - 1/7）加权",
+  "test": {
+    "accuracy": 0.6842,
+    "top2_accuracy": 0.8522,
+    "top3_accuracy": 0.9238,
+    "macro_f1": 0.6519,
+    "weighted_f1": 0.6797,
+    "per_class": [
+      {
+        "index": 0,
+        "precision": 0.5649,
+        "recall": 0.6628,
+        "f1": 0.61,
+        "support": 958,
+        "name": "angry"
+      },
+      {
+        "index": 1,
+        "precision": 0.902,
+        "recall": 0.4144,
+        "f1": 0.5679,
+        "support": 111,
+        "name": "disgusted"
+      },
+      {
+        "index": 2,
+        "precision": 0.5947,
+        "recall": 0.4199,
+        "f1": 0.4923,
+        "support": 1024,
+        "name": "fearful"
+      },
+      {
+        "index": 3,
+        "precision": 0.8701,
+        "recall": 0.8839,
+        "f1": 0.877,
+        "support": 1774,
+        "name": "happy"
+      },
+      {
+        "index": 4,
+        "precision": 0.5849,
+        "recall": 0.7348,
+        "f1": 0.6513,
+        "support": 1233,
+        "name": "neutral"
+      },
+      {
+        "index": 5,
+        "precision": 0.6009,
+        "recall": 0.5301,
+        "f1": 0.5633,
+        "support": 1247,
+        "name": "sad"
+      },
+      {
+        "index": 6,
+        "precision": 0.8022,
+        "recall": 0.8002,
+        "f1": 0.8012,
+        "support": 831,
+        "name": "surprised"
+      }
+    ],
+    "confusion_matrix": [
+      [
+        635,
+        4,
+        56,
+        29,
+        124,
+        93,
+        17
+      ],
+      [
+        42,
+        46,
+        3,
+        3,
+        5,
+        10,
+        2
+      ],
+      [
+        171,
+        0,
+        430,
+        28,
+        131,
+        183,
+        81
+      ],
+      [
+        36,
+        0,
+        24,
+        1568,
+        90,
+        25,
+        31
+      ],
+      [
+        68,
+        1,
+        44,
+        79,
+        906,
+        117,
+        18
+      ],
+      [
+        145,
+        0,
+        95,
+        57,
+        274,
+        661,
+        15
+      ],
+      [
+        27,
+        0,
+        71,
+        38,
+        19,
+        11,
+        665
+      ]
+    ],
+    "num_samples": 7178,
+    "class_names_cn": [
+      "生气",
+      "厌恶",
+      "害怕",
+      "开心",
+      "平静",
+      "难过",
+      "惊讶"
+    ],
+    "tta": true
+  },
+  "elapsed_sec": 26.9
+}

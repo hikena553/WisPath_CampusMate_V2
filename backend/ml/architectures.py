@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 NUM_CLASSES = 7
 
@@ -27,24 +28,49 @@ CLASS_NAMES = ["angry", "disgusted", "fearful", "happy", "neutral", "sad", "surp
 CLASS_NAMES_CN = ["生气", "厌恶", "害怕", "开心", "平静", "难过", "惊讶"]
 
 
+class SEBlock(nn.Module):
+    """SE（Squeeze-and-Excitation）通道注意力。
+
+    先全局平均池化压成通道描述子，再用两层 1×1 卷积学出每个通道的权重并重标定。
+    对表情识别这类"关键线索只集中在少数通道（如眉、嘴区域特征）"的任务，
+    通道注意力能放大有效通道、抑制无关通道，是低成本的涨点手段。
+    """
+
+    def __init__(self, ch: int, ratio: int = 8) -> None:
+        super().__init__()
+        hidden = max(4, ch // ratio)
+        self.fc1 = nn.Conv2d(ch, hidden, 1, bias=True)
+        self.fc2 = nn.Conv2d(hidden, ch, 1, bias=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        s = F.adaptive_avg_pool2d(x, 1)
+        s = F.relu(self.fc1(s), inplace=True)
+        s = torch.sigmoid(self.fc2(s))
+        return x * s
+
+
 class DepthwiseSeparableConv(nn.Module):
-    """深度可分离卷积：depthwise 3×3 + pointwise 1×1 + BN + ReLU6。
+    """深度可分离卷积：depthwise 3×3 + pointwise 1×1 + BN +（可选 SE）+ ReLU6。
 
     ReLU6 是 MobileNet 系的标准激活，保证量化（uint8）友好；
     depthwise 分组数 = 输入通道数，参数量与计算量远低于同规格普通卷积。
     """
 
-    def __init__(self, in_ch: int, out_ch: int, stride: int = 1) -> None:
+    def __init__(self, in_ch: int, out_ch: int, stride: int = 1,
+                 use_se: bool = False, se_ratio: int = 8) -> None:
         super().__init__()
         self.depthwise = nn.Conv2d(in_ch, in_ch, 3, stride, 1, groups=in_ch, bias=False)
         self.pointwise = nn.Conv2d(in_ch, out_ch, 1, 1, 0, bias=False)
         self.bn = nn.BatchNorm2d(out_ch)
+        self.se = SEBlock(out_ch, se_ratio) if use_se else None
         self.act = nn.ReLU6(inplace=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.depthwise(x)
         x = self.pointwise(x)
         x = self.bn(x)
+        if self.se is not None:
+            x = self.se(x)
         return self.act(x)
 
 
@@ -63,6 +89,8 @@ class FaceExpressionNet(nn.Module):
         num_classes: int = NUM_CLASSES,
         width_mult: float = 1.0,
         dropout: float = 0.2,
+        use_se: bool = False,
+        se_ratio: int = 8,
     ) -> None:
         super().__init__()
 
@@ -71,6 +99,9 @@ class FaceExpressionNet(nn.Module):
 
         ch32, ch64, ch128, ch256 = c(32), c(64), c(128), c(256)
 
+        def sep(in_ch: int, out_ch: int, stride: int = 1) -> DepthwiseSeparableConv:
+            return DepthwiseSeparableConv(in_ch, out_ch, stride, use_se, se_ratio)
+
         # 输入下采样：3×S×S -> 32×S/2×S/2
         self.stem = nn.Sequential(
             nn.Conv2d(in_channels, ch32, 3, stride=2, padding=1, bias=False),
@@ -78,29 +109,13 @@ class FaceExpressionNet(nn.Module):
             nn.ReLU6(inplace=True),
         )
         # dense0：通道保持，特征深化
-        self.dense0 = nn.Sequential(
-            DepthwiseSeparableConv(ch32, ch32, 1),
-            DepthwiseSeparableConv(ch32, ch32, 1),
-            DepthwiseSeparableConv(ch32, ch32, 1),
-        )
+        self.dense0 = nn.Sequential(sep(ch32, ch32), sep(ch32, ch32), sep(ch32, ch32))
         # dense1：32 -> 64，空间降采样
-        self.dense1 = nn.Sequential(
-            DepthwiseSeparableConv(ch32, ch64, 2),
-            DepthwiseSeparableConv(ch64, ch64, 1),
-            DepthwiseSeparableConv(ch64, ch64, 1),
-        )
+        self.dense1 = nn.Sequential(sep(ch32, ch64, 2), sep(ch64, ch64), sep(ch64, ch64))
         # dense2：64 -> 128
-        self.dense2 = nn.Sequential(
-            DepthwiseSeparableConv(ch64, ch128, 2),
-            DepthwiseSeparableConv(ch128, ch128, 1),
-            DepthwiseSeparableConv(ch128, ch128, 1),
-        )
+        self.dense2 = nn.Sequential(sep(ch64, ch128, 2), sep(ch128, ch128), sep(ch128, ch128))
         # dense3：128 -> 256
-        self.dense3 = nn.Sequential(
-            DepthwiseSeparableConv(ch128, ch256, 2),
-            DepthwiseSeparableConv(ch256, ch256, 1),
-            DepthwiseSeparableConv(ch256, ch256, 1),
-        )
+        self.dense3 = nn.Sequential(sep(ch128, ch256, 2), sep(ch256, ch256), sep(ch256, ch256))
         self.head = nn.Sequential(
             nn.Dropout(dropout),
             nn.AdaptiveAvgPool2d(1),

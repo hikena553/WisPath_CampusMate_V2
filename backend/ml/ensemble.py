@@ -42,15 +42,17 @@ def _probs_for_run(run_dir: Path, device: torch.device, tta: bool = True, use_am
 
     model = build_model(cfg.model_name, num_classes=cfg.num_classes,
                         pretrained=False, dropout=cfg.dropout,
-                        width_mult=cfg.width_mult).to(device)
+                        width_mult=cfg.width_mult,
+                        use_se=cfg.use_se, se_ratio=cfg.se_ratio).to(device)
     ckpt = torch.load(run_dir / "best_model.pt", map_location=device)
     state = ckpt["model_state"] if isinstance(ckpt, dict) and "model_state" in ckpt else ckpt
     model.load_state_dict(state)
     model.eval()
 
-    _, val_set, test_set = build_datasets(cfg)
-    val_loader = DataLoader(val_set, batch_size=256, shuffle=False, num_workers=0,
-                            pin_memory=device.type == "cuda")
+    # 只需测试集前向。验证准确率直接读该 run 训练时记录的 best_val_acc：
+    # 不同 run 的训练集可能不同（例如去噪后样本数变化），验证集无法逐样本对齐，
+    # 而测试集恒为 test.pt（7,178 张），因此集成评估始终在同一测试集上进行。
+    _, _, test_set = build_datasets(cfg)
     test_loader = DataLoader(test_set, batch_size=256, shuffle=False, num_workers=0,
                              pin_memory=device.type == "cuda")
 
@@ -66,15 +68,13 @@ def _probs_for_run(run_dir: Path, device: torch.device, tta: bool = True, use_am
             targets_all.append(y.numpy())
         return np.concatenate(probs_all), np.concatenate(targets_all)
 
-    val_probs, val_targets = _infer(val_loader)
     test_probs, test_targets = _infer(test_loader)
+    rec = json.loads((run_dir / "metrics.json").read_text("utf-8"))
     return {
         "cfg": cfg,
-        "val_probs": val_probs,
-        "val_targets": val_targets,
         "test_probs": test_probs,
         "test_targets": test_targets,
-        "val_acc": float((val_probs.argmax(1) == val_targets).mean()),
+        "val_acc": float(rec.get("best_val_acc") or 0.0),
         "test_acc": float((test_probs.argmax(1) == test_targets).mean()),
     }
 
@@ -101,17 +101,13 @@ def run_ensemble(run_ids: list[str], name: str = "ensemble", tta: bool = True) -
     weights = raw_w / raw_w.sum()
 
     test_targets = members[0]["test_targets"]
-    val_targets = members[0]["val_targets"]
 
-    val_ens = np.zeros_like(members[0]["val_probs"])
     test_ens = np.zeros_like(members[0]["test_probs"])
     for w, m in zip(weights, members):
-        val_ens += w * m["val_probs"]
         test_ens += w * m["test_probs"]
 
     result = evaluate_predictions(test_ens, test_targets, CLASS_NAMES)
     result["class_names_cn"] = CLASS_NAMES_CN
-    val_result = evaluate_predictions(val_ens, val_targets, CLASS_NAMES)
     result["tta"] = bool(tta)
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{name}"
@@ -138,7 +134,7 @@ def run_ensemble(run_ids: list[str], name: str = "ensemble", tta: bool = True) -
             for m, w in zip(members, weights)
         ],
         "tta": bool(tta),
-        "val": val_result,
+        "weighting": "按各 run 训练时记录的 best_val_acc 归一化（val_acc - 1/7）加权",
         "test": result,
         "elapsed_sec": round(time.time() - t0, 1),
     }

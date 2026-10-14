@@ -1,0 +1,73 @@
+{
+  "created_at": "2026-10-14T11:02:56.753521+00:00",
+  "kind": "browser_e2e_emotion",
+  "mode": "file",
+  "driver": "Edge subprocess + local HTTP collector（未使用 Playwright）",
+  "url": "http://localhost:5173/e2e/emotion-probe.html",
+  "probe_status": {
+    "status": "running",
+    "error": "",
+    "videoSize": "320x240",
+    "total": 376
+  },
+  "samples": 376,
+  "shots": 13,
+  "frames_grid": "D:\\StudyNote\\Mian02\\backend\\ml\\runs\\20261014-110213-e2e-file\\e2e-file-frames.jpg",
+  "emotion_distribution": {
+    "angry": 71,
+    "disgusted": 28,
+    "fearful": 30,
+    "surprised": 128,
+    "happy": 60,
+    "neutral": 31,
+    "sad": 28
+  },
+  "console": [],
+  "fake_camera": {
+    "y4m": "c:\\Users\\29199\\.trae-cn\\work\\6ace07c7090f3196aeac65f3\\fake_camera.y4m",
+    "schedule": "c:\\Users\\29199\\.trae-cn\\work\\6ace07c7090f3196aeac65f3\\fake_camera_schedule.json",
+    "duration_sec": 42.0,
+    "video_mb": 24.2
+  },
+  "result": {
+    "timeline_used": "video.currentTime",
+    "samples_total": 376,
+    "samples_matched": 171,
+    "end_to_end_accuracy": 0.6725,
+    "correct": 115,
+    "faces_total": 14,
+    "faces_with_samples": 13,
+    "face_coverage": 0.9286,
+    "per_class": {
+      "angry": {
+        "n": 14,
+        "acc": 1.0
+      },
+      "disgusted": {
+        "n": 28,
+        "acc": 0.5
+      },
+      "fearful": {
+        "n": 28,
+        "acc": 0.5
+      },
+      "happy": {
+        "n": 28,
+        "acc": 1.0
+      },
+      "neutral": {
+        "n": 28,
+        "acc": 0.5
+      },
+      "sad": {
+        "n": 28,
+        "acc": 0.5
+      },
+      "surprised": {
+        "n": 17,
+        "acc": 1.0
+      }
+    },
+    "guard_sec": 0.8
+  }
+}

@@ -137,6 +137,20 @@ def _random_erase(arr: np.ndarray, cfg: TrainingConfig) -> np.ndarray:
     return arr
 
 
+def sampler_weights(records: list[dict], num_classes: int, power: float = 0.5) -> list[float]:
+    """长尾重采样权重：每个样本的采样概率 ∝ (1/该类频次)^power。
+
+    power=0.5 时是"温和版"逆频采样：既明显提升 disgust / surprised 等长尾类的
+    出现频率，又不会像全逆频（power=1.0）那样把少数类过度重复导致过拟合。
+    """
+    labels = [FER_LABEL_MAP[r["labels"]] for r in records]
+    counts = np.bincount(np.array(labels, dtype=np.int64), minlength=num_classes).astype(np.float64)
+    counts = np.maximum(counts, 1.0)
+    per_class = (1.0 / counts) ** float(power)
+    per_class = per_class / per_class.mean()
+    return [float(per_class[lab]) for lab in labels]
+
+
 class FER2013Dataset(Dataset):
     """FER2013 torch 数据集。
 
@@ -176,6 +190,11 @@ class FER2013Dataset(Dataset):
 def build_datasets(cfg: TrainingConfig, seed: int | None = None) -> tuple[FER2013Dataset, FER2013Dataset, FER2013Dataset]:
     """构建 (train, val, test)。train 内部按 val_split 划分验证集。"""
     train_p, test_p = ensure_dataset(cfg)
+    # 支持指向去噪后的训练集（train_file=train_clean.pt）
+    if cfg.train_file and cfg.train_file != "train.pt":
+        alt = Path(cfg.data_dir) / cfg.train_file
+        if alt.exists():
+            train_p = alt
     train_recs = _load_split(train_p)
     test_recs = _load_split(test_p)
 

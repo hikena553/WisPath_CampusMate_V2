@@ -1,0 +1,76 @@
+{
+  "test_raf.pt": {
+    "n": 3068,
+    "tta": true,
+    "accuracy": 0.7966,
+    "top2_accuracy": 0.9211,
+    "macro_f1": 0.7014,
+    "per_class": [
+      {
+        "index": 0,
+        "precision": 0.6505,
+        "recall": 0.7469,
+        "f1": 0.6954,
+        "support": 162,
+        "name": "angry"
+      },
+      {
+        "index": 1,
+        "precision": 0.4049,
+        "recall": 0.5188,
+        "f1": 0.4548,
+        "support": 160,
+        "name": "disgusted"
+      },
+      {
+        "index": 2,
+        "precision": 0.5818,
+        "recall": 0.4324,
+        "f1": 0.4961,
+        "support": 74,
+        "name": "fearful"
+      },
+      {
+        "index": 3,
+        "precision": 0.9613,
+        "recall": 0.8599,
+        "f1": 0.9078,
+        "support": 1185,
+        "name": "happy"
+      },
+      {
+        "index": 4,
+        "precision": 0.7415,
+        "recall": 0.8059,
+        "f1": 0.7724,
+        "support": 680,
+        "name": "neutral"
+      },
+      {
+        "index": 5,
+        "precision": 0.7495,
+        "recall": 0.7824,
+        "f1": 0.7656,
+        "support": 478,
+        "name": "sad"
+      },
+      {
+        "index": 6,
+        "precision": 0.8241,
+        "recall": 0.8116,
+        "f1": 0.8178,
+        "support": 329,
+        "name": "surprised"
+      }
+    ],
+    "class_names_cn": [
+      "生气",
+      "厌恶",
+      "害怕",
+      "开心",
+      "平静",
+      "难过",
+      "惊讶"
+    ]
+  }
+}

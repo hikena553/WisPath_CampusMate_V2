@@ -1,0 +1,399 @@
+{
+  "run_id": "20261014-121827-rafmix",
+  "created_at": "2026-10-14T12:45:33.653083+00:00",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "amp": true,
+  "ema_decay": 0.999,
+  "mixup_alpha": 0.0,
+  "tta": true,
+  "random_erase_prob": 0.3,
+  "threads": 16,
+  "architecture": "face_expression_net（从头训练）",
+  "params": 465512,
+  "input_size": 64,
+  "num_classes": 7,
+  "class_names": [
+    "angry",
+    "disgusted",
+    "fearful",
+    "happy",
+    "neutral",
+    "sad",
+    "surprised"
+  ],
+  "init_info": "从头训练",
+  "data": {
+    "train": {
+      "total": 28709,
+      "distribution": {
+        "angry": 3995,
+        "disgusted": 436,
+        "fearful": 4097,
+        "happy": 7215,
+        "neutral": 4965,
+        "sad": 4830,
+        "surprised": 3171
+      }
+    },
+    "test": {
+      "total": 7178,
+      "distribution": {
+        "angry": 958,
+        "disgusted": 111,
+        "fearful": 1024,
+        "happy": 1774,
+        "neutral": 1233,
+        "sad": 1247,
+        "surprised": 831
+      }
+    }
+  },
+  "hyperparams": {
+    "data_dir": "D:\\StudyNote\\Mian02\\backend\\ml\\data\\fer2013",
+    "hf_mirror": "https://hf-mirror.com/datasets/Jeneral/fer-2013/resolve/main",
+    "input_size": 64,
+    "in_channels": 3,
+    "num_classes": 7,
+    "val_split": 0.1,
+    "num_workers": 0,
+    "preload": true,
+    "max_samples": 0,
+    "model_name": "face_expression_net",
+    "pretrained": false,
+    "imagenet_norm": false,
+    "width_mult": 1.25,
+    "dropout": 0.3,
+    "epochs": 60,
+    "batch_size": 256,
+    "lr": 0.003,
+    "head_lr_mult": 3.0,
+    "backbone_lr_mult": 1.0,
+    "weight_decay": 0.0005,
+    "optimizer": "adamw",
+    "momentum": 0.9,
+    "scheduler": "cosine",
+    "warmup_epochs": 4,
+    "min_lr": 1e-05,
+    "label_smoothing": 0.1,
+    "grad_clip": 5.0,
+    "use_class_weight": false,
+    "amp": true,
+    "use_se": true,
+    "se_ratio": 8,
+    "loss": "focal",
+    "focal_gamma": 2.0,
+    "balance_sampler": true,
+    "sampler_power": 0.5,
+    "train_file": "train_raf.pt",
+    "aug_hflip": 0.5,
+    "aug_rotation": 12.0,
+    "aug_translate": 0.12,
+    "aug_brightness": 0.25,
+    "aug_scale": 0.12,
+    "random_erase_prob": 0.3,
+    "random_erase_min": 0.02,
+    "random_erase_max": 0.2,
+    "mixup_alpha": 0.0,
+    "ema_decay": 0.999,
+    "tta": true,
+    "init_weights": "",
+    "freeze_backbone": false,
+    "finetune_lr": 0.0,
+    "early_stop_patience": 0,
+    "train_on_all": false,
+    "seed": 42,
+    "run_name": "rafmix",
+    "device": "auto"
+  },
+  "epochs_trained": 60,
+  "epochs_planned": 60,
+  "best_val_acc": 0.6955,
+  "best_epoch": 28,
+  "val": {
+    "accuracy": 0.6999,
+    "top2_accuracy": 0.857,
+    "top3_accuracy": 0.9389,
+    "macro_f1": 0.655,
+    "weighted_f1": 0.7006,
+    "per_class": [
+      {
+        "index": 0,
+        "precision": 0.5532,
+        "recall": 0.6072,
+        "f1": 0.5789,
+        "support": 471,
+        "name": "angry"
+      },
+      {
+        "index": 1,
+        "precision": 0.5982,
+        "recall": 0.5982,
+        "f1": 0.5982,
+        "support": 112,
+        "name": "disgusted"
+      },
+      {
+        "index": 2,
+        "precision": 0.5239,
+        "recall": 0.4346,
+        "f1": 0.4751,
+        "support": 428,
+        "name": "fearful"
+      },
+      {
+        "index": 3,
+        "precision": 0.9208,
+        "recall": 0.8504,
+        "f1": 0.8842,
+        "support": 1190,
+        "name": "happy"
+      },
+      {
+        "index": 4,
+        "precision": 0.62,
+        "recall": 0.743,
+        "f1": 0.676,
+        "support": 751,
+        "name": "neutral"
+      },
+      {
+        "index": 5,
+        "precision": 0.6318,
+        "recall": 0.5983,
+        "f1": 0.6146,
+        "support": 697,
+        "name": "sad"
+      },
+      {
+        "index": 6,
+        "precision": 0.7528,
+        "recall": 0.763,
+        "f1": 0.7578,
+        "support": 443,
+        "name": "surprised"
+      }
+    ],
+    "confusion_matrix": [
+      [
+        286,
+        9,
+        31,
+        15,
+        72,
+        44,
+        14
+      ],
+      [
+        21,
+        67,
+        3,
+        1,
+        7,
+        10,
+        3
+      ],
+      [
+        67,
+        1,
+        186,
+        10,
+        44,
+        76,
+        44
+      ],
+      [
+        31,
+        10,
+        17,
+        1012,
+        67,
+        26,
+        27
+      ],
+      [
+        36,
+        12,
+        19,
+        27,
+        558,
+        80,
+        19
+      ],
+      [
+        57,
+        11,
+        58,
+        21,
+        129,
+        417,
+        4
+      ],
+      [
+        19,
+        2,
+        41,
+        13,
+        23,
+        7,
+        338
+      ]
+    ],
+    "num_samples": 4092,
+    "loss": 0.5659
+  },
+  "test": {
+    "accuracy": 0.6464,
+    "top2_accuracy": 0.8324,
+    "top3_accuracy": 0.9164,
+    "macro_f1": 0.612,
+    "weighted_f1": 0.6451,
+    "per_class": [
+      {
+        "index": 0,
+        "precision": 0.5272,
+        "recall": 0.6273,
+        "f1": 0.5729,
+        "support": 958,
+        "name": "angry"
+      },
+      {
+        "index": 1,
+        "precision": 0.6818,
+        "recall": 0.4054,
+        "f1": 0.5085,
+        "support": 111,
+        "name": "disgusted"
+      },
+      {
+        "index": 2,
+        "precision": 0.4874,
+        "recall": 0.3789,
+        "f1": 0.4264,
+        "support": 1024,
+        "name": "fearful"
+      },
+      {
+        "index": 3,
+        "precision": 0.8969,
+        "recall": 0.8236,
+        "f1": 0.8587,
+        "support": 1774,
+        "name": "happy"
+      },
+      {
+        "index": 4,
+        "precision": 0.5519,
+        "recall": 0.7202,
+        "f1": 0.6249,
+        "support": 1233,
+        "name": "neutral"
+      },
+      {
+        "index": 5,
+        "precision": 0.5622,
+        "recall": 0.5004,
+        "f1": 0.5295,
+        "support": 1247,
+        "name": "sad"
+      },
+      {
+        "index": 6,
+        "precision": 0.7645,
+        "recall": 0.7617,
+        "f1": 0.7631,
+        "support": 831,
+        "name": "surprised"
+      }
+    ],
+    "confusion_matrix": [
+      [
+        601,
+        11,
+        81,
+        20,
+        141,
+        83,
+        21
+      ],
+      [
+        49,
+        45,
+        4,
+        2,
+        3,
+        6,
+        2
+      ],
+      [
+        166,
+        4,
+        388,
+        23,
+        147,
+        199,
+        97
+      ],
+      [
+        64,
+        0,
+        34,
+        1461,
+        133,
+        40,
+        42
+      ],
+      [
+        73,
+        1,
+        48,
+        64,
+        888,
+        143,
+        16
+      ],
+      [
+        156,
+        4,
+        138,
+        33,
+        275,
+        624,
+        17
+      ],
+      [
+        31,
+        1,
+        103,
+        26,
+        22,
+        15,
+        633
+      ]
+    ],
+    "num_samples": 7178,
+    "loss": 0.6511,
+    "class_names_cn": [
+      "生气",
+      "厌恶",
+      "害怕",
+      "开心",
+      "平静",
+      "难过",
+      "惊讶"
+    ],
+    "tta": true
+  },
+  "elapsed_sec": 1611.1,
+  "artifacts": [
+    "config.json",
+    "metrics.json",
+    "history.csv",
+    "training_curves.png",
+    "confusion_matrix.png",
+    "confusion_matrix_normalized.png",
+    "classification_report.txt",
+    "best_model.pt",
+    "summary.md"
+  ]
+}
