@@ -10,6 +10,8 @@ export interface UseVoiceCallOptions {
   onAIText?: (text: string) => void
   onTranscript?: (text: string, final: boolean) => void
   onSpeechStart?: () => void
+  /** 真正发生打断（用户持续说话打断了 AI）时触发，用于丢弃未输出的回答 */
+  onBargeIn?: () => void
   onError?: (message: string) => void
 }
 
@@ -36,6 +38,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let speechStartCandidateAt = 0 // 连续发音候选起点（毫秒时间戳）
   let lastSpeechActivityAt = 0   // 最近一次发音活动时刻
   let isSpeaking = false
+  let speechOnsetAt = 0          // 本轮开口起点（用于二段式打断判定）
+  let bargedIn = false           // 本轮是否已触发过打断
   let nextPlayTime = 0
   // 播放串行队列：所有音频块按到达顺序排队处理，避免并发执行时
   // await resume() 交错，导致多个块调度到同一时刻造成重叠/乱序
@@ -45,11 +49,27 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let playbackGeneration = 0
   // 已调度的播放源集合：打断时立即停止所有待播/播放中的音频
   const activeSources = new Set<AudioBufferSourceNode>()
+  // 预滚样本与"因 AI 正在播报而暂存"标记
+  let prerollSamples: number[] = []
+  let prerollArmed = false
+  // 采集上下午的实际采样率（浏览器可能忽略请求的 16000，Windows 上多为 48000）
+  let captureSampleRate = 16000
 
   const VAD_ENERGY_THRESHOLD = 0.02
-  const VOICE_START_MS = 40   // 连续发音超过该时长视为开始说话（防单帧毛刺）
-  const VOICE_STOP_MS = 600   // 静音持续该时长视为说话结束（说完尽快识别）
-  const AI_SPEAKING_VAD_FACTOR = 2  // AI 播报期间抬高开口阈值，防扬声器回声自激打断
+  // 时间制 VAD：调低开口/收口时延，缩短"开口 -> 打断"与"说完 -> 识别"的响应时间，
+  // 直接压缩端到端延迟（豆包等实时方案的共同取向）
+  const VOICE_START_MS = 30   // 连续发音超过该时长视为开始说话（防单帧毛刺）
+  const VOICE_STOP_MS = 420   // 静音持续该时长视为说话结束（说完尽快识别）
+  // 二段式打断：开口判定很快（30ms），但"打断 AI"要求持续说话达到该时长，
+  // 避免环境噪声/单帧毛刺误触发，把接通问候或正在播报的回答打断掉
+  const BARGE_IN_MS = 150
+  // AI 播报期间更强地抑制"回声自激打断"：抬高开口阈值 + 要求更长持续说话，
+  // 否则扬声器回声会误触发打断，表现为"播报一段就被掐断"
+  const BARGE_IN_MS_AI_SPEAKING = 350
+  const AI_SPEAKING_VAD_FACTOR = 3
+  // 预滚缓冲：AI 播报期间不上传麦克风音频（防回声污染识别），只留最近 300ms，
+  // 待开始说话/打断时补发，避免吃掉第一个字
+  const PREROLL_SAMPLES = 4800  // 300ms @16kHz
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
   // 音频上传节流：合并小块音频再发送，避免高频消息挤占 WebSocket，
@@ -90,8 +110,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         try {
           const msg = JSON.parse(event.data)
           handleServerMessage(msg)
-        } catch {
-          // ignore parse errors
+        } catch (e) {
+          if (import.meta.env.DEV) console.warn('[voice] 消息解析失败', e, event.data)
         }
       }
 
@@ -129,6 +149,14 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   }
 
   function handleServerMessage(msg: Record<string, unknown>) {
+    // 开发期诊断：打印收到的信令（音频只打长度），便于定位"播报中断/文字异常"
+    if (import.meta.env.DEV) {
+      if (msg.type === 'ai_audio') {
+        console.debug('[voice] <- ai_audio b64_len=', (msg.data as string)?.length ?? 0)
+      } else {
+        console.debug('[voice] <-', msg)
+      }
+    }
     switch (msg.type) {
       case 'transcript':
         if (msg.text) {
@@ -151,9 +179,10 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       case 'state':
         if (msg.state === 'listening') {
           setState('listening')
-          // 无论因何进入 listening（打断确认 / 新一轮开始），都作废在途的旧音频块，
-          // 避免旧语音与新一段回答重叠；无在播音频时该操作幂等无害
-          cancelPlayback()
+          // 注意：此处【不能】作废播放队列。listening 表示"服务端生成完毕"，
+          // 此刻前端播放队列往往还没播完（后端出音快于实时播放），一旦 cancel
+          // 就会把刚收到的语音整段掐断 —— 症状正是"有文字没声音/语音截断"。
+          // 真正需要停播的场景只有"用户打断"，统一由 barge-in 路径处理。
         } else if (msg.state === 'processing') {
           setState('processing')
         } else if (msg.state === 'speaking') {
@@ -201,14 +230,26 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       nextPlayTime = playbackAudioCtx.currentTime
     }
 
-    // 浏览器自动播放策略会把 AudioContext 挂起（suspended），
-    // 此时音频调度静默失效（症状：文字/状态正常，但扬声器完全无声），
-    // 每次播放前兜底恢复，确保语音播报始终有声音
+    // 浏览器自动播放策略会把 AudioContext 挂起（suspended），此时音频调度静默失效
+    // （症状：文字/状态正常但无声）。每次播放前兜底恢复；恢复失败时短暂重试，
+    // 避免"恢复失败→丢弃音频块→后续持续无声"（表现为播了一段就没声音）
     if (playbackAudioCtx.state === 'suspended') {
-      try {
-        await playbackAudioCtx.resume()
-      } catch {
-        // 恢复失败：本次播放放弃，等下一次触发再次尝试
+      let resumed = false
+      for (let i = 0; i < 3; i++) {
+        try {
+          await playbackAudioCtx.resume()
+          // 注意：TS 会把 state 收窄为 'suspended'，这里显式取字符串比较
+          if ((playbackAudioCtx.state as string) === 'running') {
+            resumed = true
+            break
+          }
+        } catch {
+          // 继续重试
+        }
+        await new Promise((r) => setTimeout(r, 60))
+      }
+      if (!resumed) {
+        console.warn('[voice] 播放上下文仍挂起，本块音频跳过 state=', playbackAudioCtx.state)
         return
       }
     }
@@ -282,6 +323,12 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     }
 
     audioCtx = new AudioContext({ sampleRate: 16000 })
+    // 记录实际采样率：请求值可能被浏览器忽略（Windows 上多为 48000），
+    // 后续按实际值重采样，否则音频变速变调 → ASR 乱码
+    captureSampleRate = audioCtx.sampleRate || 16000
+    if (import.meta.env.DEV) {
+      console.debug('[voice] 采集采样率 =', captureSampleRate, '(请求 16000)')
+    }
     sourceNode = audioCtx.createMediaStreamSource(mediaStream)
 
     // 尝试使用 AudioWorklet，降级到 ScriptProcessor
@@ -330,13 +377,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
           processVAD(data.energy)
         }
 
-        if (data.audio && ws?.readyState === WebSocket.OPEN && !isMuted.value) {
-          // 发送音频数据到服务端（节流合并，避免高频消息挤占 WebSocket）
-          const int16 = new Int16Array(data.audio.length)
-          for (let i = 0; i < data.audio.length; i++) {
-            int16[i] = Math.max(-32768, Math.min(32767, data.audio[i] * 32768))
-          }
-          pushAudioSamples(int16)
+        if (data.audio && ws?.readyState === WebSocket.OPEN) {
+          // 按"采集上下文实际采样率"重采样到 16k 后统一处理（节流合并 + 回声抑制）
+          handleCapturedAudio(toInt16At16k(data.audio as Float32Array, captureSampleRate))
         }
       }
     } catch {
@@ -356,13 +399,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         energy = Math.sqrt(energy / samples.length)
         processVAD(energy)
 
-        // 发送音频（节流合并）
-        if (ws?.readyState === WebSocket.OPEN && !isMuted.value) {
-          const int16 = new Int16Array(samples.length)
-          for (let i = 0; i < samples.length; i++) {
-            int16[i] = Math.max(-32768, Math.min(32767, samples[i] * 32768))
-          }
-          pushAudioSamples(int16)
+        // 发送音频（重采样到 16k + 节流合并 + 回声抑制，统一走 handleCapturedAudio）
+        if (ws?.readyState === WebSocket.OPEN) {
+          handleCapturedAudio(toInt16At16k(samples, captureSampleRate))
         }
       }
     }
@@ -381,6 +420,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       isSpeaking = false
       speechStartCandidateAt = 0
       lastSpeechActivityAt = 0
+      speechOnsetAt = 0
+      bargedIn = false
       return
     }
 
@@ -389,7 +430,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     // 扬声器声音被麦克风拾取时能量通常较低，抬高阈值可避免 AI 自我打断造成卡壳；
     // 用户正常说话音量远高于该阈值，打断依然灵敏
     const threshold =
-      activeSources.size > 0
+      aiSpeaking()
         ? VAD_ENERGY_THRESHOLD * AI_SPEAKING_VAD_FACTOR
         : VAD_ENERGY_THRESHOLD
     if (energy > threshold) {
@@ -403,27 +444,35 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         }
         speechStartCandidateAt = 0
         isSpeaking = true
-        // 用户开口说话：立即打断 AI（停止播放 + 通知服务端终止生成）。
-        // 只要此刻有音频在播/待播（含后端已发出、尚未到达的在途块窗口）即打断，
-        // 不依赖状态机，避免 listening 状态窗口内旧语音继续播报
-        if (
-          activeSources.size > 0 ||
-          state.value === 'speaking' ||
-          state.value === 'processing'
-        ) {
+        speechOnsetAt = now
+        bargedIn = false
+        options.onSpeechStart?.()
+      }
+      lastSpeechActivityAt = now
+
+      // 二段式打断（barge-in）：用户持续说话达到 BARGE_IN_MS 才打断 AI，
+      // 且仅当确有 AI 输出在播/在生成时才打断，避免"接通瞬间的环境噪声"
+      // 把刚触发的问候语整轮掐掉
+      // AI 播报期间要求更长的持续说话，避免扬声器回声误触发打断（表现为播报被掐断）
+      const bargeInNeedMs = activeSources.size > 0 ? BARGE_IN_MS_AI_SPEAKING : BARGE_IN_MS
+      if (!bargedIn && speechOnsetAt > 0 && now - speechOnsetAt >= bargeInNeedMs) {
+        const hasActiveAI = aiSpeaking() || state.value === 'processing'
+        if (hasActiveAI) {
+          bargedIn = true
           cancelPlayback()
           setState('listening')
           if (ws?.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'interrupt' }))
           }
+          options.onBargeIn?.()
         }
-        options.onSpeechStart?.()
       }
-      lastSpeechActivityAt = now
     } else if (isSpeaking) {
       // 静音持续达到阈值：判定说话结束，通知服务端开始识别
       if (now - lastSpeechActivityAt >= VOICE_STOP_MS) {
         isSpeaking = false
+        speechOnsetAt = 0
+        bargedIn = false
         // 先把节流缓冲中的尾包音频发出，确保服务端收到的音频完整（识别更准）
         flushPendingAudio()
         if (ws?.readyState === WebSocket.OPEN) {
@@ -443,6 +492,58 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   }
 
   // ---- 音频上传节流：采集线程先汇入缓冲，按时间/长度阈值批量发送 ----
+  /** 线性插值重采样为 16kHz 的 Int16 PCM。
+   *  浏览器常忽略我们请求的 16000（Windows 上实际多为 48000），若不按实际
+   *  采样率重采样，音频会"变速变调"送进 ASR，识别结果就是乱码（如"滴滴答答"）。 */
+  function toInt16At16k(input: Float32Array, srcRate: number): Int16Array {
+    const clamp = (v: number) => Math.max(-32768, Math.min(32767, Math.round(v * 32767)))
+    if (!srcRate || srcRate === 16000) {
+      const out = new Int16Array(input.length)
+      for (let i = 0; i < input.length; i++) out[i] = clamp(input[i])
+      return out
+    }
+    const ratio = srcRate / 16000
+    const outLen = Math.max(1, Math.floor(input.length / ratio))
+    const out = new Int16Array(outLen)
+    for (let i = 0; i < outLen; i++) {
+      const pos = i * ratio
+      const i0 = Math.floor(pos)
+      const i1 = Math.min(i0 + 1, input.length - 1)
+      const frac = pos - i0
+      out[i] = clamp(input[i0] * (1 - frac) + input[i1] * frac)
+    }
+    return out
+  }
+
+  /** AI 是否正在发声（有排队/播放中的音频块，或服务端已进入播报态） */
+  function aiSpeaking(): boolean {
+    return activeSources.size > 0 || state.value === 'speaking'
+  }
+
+  /** 采集音频统一入口。
+   *  AI 播报期间麦克风会拾取扬声器回声，若一并上传会污染识别缓冲
+   *  （实测会识别成"滴滴答答对对答的"这类乱码），因此只留预滚、不上传。 */
+  function handleCapturedAudio(int16: Int16Array) {
+    if (isMuted.value) return
+
+    if (aiSpeaking()) {
+      for (let i = 0; i < int16.length; i++) prerollSamples.push(int16[i])
+      if (prerollSamples.length > PREROLL_SAMPLES) {
+        prerollSamples.splice(0, prerollSamples.length - PREROLL_SAMPLES)
+      }
+      prerollArmed = true
+      return
+    }
+
+    if (prerollArmed) {
+      // 刚从"AI 播报"切回：先补上预滚，保证用户开口的第一个字不被吃掉
+      if (prerollSamples.length) pushAudioSamples(new Int16Array(prerollSamples))
+      prerollSamples = []
+      prerollArmed = false
+    }
+    pushAudioSamples(int16)
+  }
+
   function pushAudioSamples(int16: Int16Array) {
     for (let i = 0; i < int16.length; i++) {
       pendingAudio.push(int16[i])
@@ -481,6 +582,25 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     }
   }
 
+  /**
+   * 解锁播放用 AudioContext（须在用户手势内调用）。
+   * 浏览器自动播放策略只信任手势中创建/恢复的上下文，提前解锁可避免
+   * 首个 ai_audio 到达时（异步回调，已不在手势栈中）被挂起 → "有文字没声音"。
+   */
+  async function unlockAudio(): Promise<void> {
+    if (!playbackAudioCtx) {
+      playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
+      nextPlayTime = playbackAudioCtx.currentTime
+    }
+    if (playbackAudioCtx.state === 'suspended') {
+      try {
+        await playbackAudioCtx.resume()
+      } catch {
+        // 恢复失败忽略：每次播放前仍会兜底重试
+      }
+    }
+  }
+
   async function startCall() {
     if (state.value !== 'idle' && state.value !== 'error') return
 
@@ -488,16 +608,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     error.value = ''
 
     try {
-      // 用户手势窗口内预热播放上下文：自动播放策略只信任手势中创建/恢复的
-      // AudioContext，放在这里提前解锁，避免首个 ai_audio 到达时（异步回调，
-      // 已不在手势栈中）新建的上下文被挂起导致播报无声
-      if (!playbackAudioCtx) {
-        playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
-        nextPlayTime = playbackAudioCtx.currentTime
-      }
-      if (playbackAudioCtx.state === 'suspended') {
-        await playbackAudioCtx.resume()
-      }
+      // 用户手势窗口内预热播放上下文（自动播放策略只信任手势中创建/恢复的
+      // AudioContext），避免首个 ai_audio 到达时被挂起导致播报无声
+      await unlockAudio()
 
       await connectWs()
       const source = await startCapture()
@@ -525,6 +638,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     isSpeaking = false
     speechStartCandidateAt = 0
     lastSpeechActivityAt = 0
+    speechOnsetAt = 0
+    bargedIn = false
     // 丢弃节流缓冲中未发送的音频：静音期间的残留不混入取消静音后的第一段识别
     pendingAudio = []
     lastAudioFlushAt = 0
@@ -595,11 +710,23 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     isSpeaking = false
     speechStartCandidateAt = 0
     lastSpeechActivityAt = 0
+    speechOnsetAt = 0
+    bargedIn = false
   }
 
   onUnmounted(() => {
     cleanup()
   })
+
+  // 触发接通问候：智能体先开口（豆包式）。可选携带首次表情，用于定制开场语
+  function requestGreeting(emotion?: string | null, confidence?: number): boolean {
+    const payload: Record<string, unknown> = { type: 'start_call' }
+    if (emotion) {
+      payload.emotion = emotion
+      payload.confidence = confidence ?? 0
+    }
+    return send(payload)
+  }
 
   return {
     state,
@@ -609,6 +736,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     endCall,
     toggleMute,
     send,
+    requestGreeting,
+    unlockAudio,
     cancelPlayback,
   }
 }
