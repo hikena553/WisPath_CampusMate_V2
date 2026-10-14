@@ -2,9 +2,8 @@
   <div :class="['conv-item', { active }]" @click="emit('select')">
     <div class="conv-title" v-html="titleHtml"></div>
 
-    <!-- 桌面端：悬停出 ⋯，点开豆包式下拉菜单 -->
+    <!-- 会话操作：桌面/移动统一用列表行的 ⋯ 弹出下拉菜单（删除等操作只在这里） -->
     <el-dropdown
-      v-if="!isMobile"
       trigger="click"
       placement="bottom-end"
       @command="onCommand"
@@ -41,11 +40,6 @@
         </el-dropdown-menu>
       </template>
     </el-dropdown>
-
-    <!-- 移动端：⋯ 常显，点击打开豆包式底部操作面板（由 Sidebar 统一托管） -->
-    <button v-else type="button" class="conv-more" aria-label="更多操作" @click.stop="emit('menu')">
-      <el-icon :size="16"><MoreFilled /></el-icon>
-    </button>
   </div>
 </template>
 
@@ -53,7 +47,6 @@
 import { computed } from 'vue'
 import { Check, MoreFilled } from '@element-plus/icons-vue'
 import type { Conversation } from '@/stores/conversation'
-import { useResponsive } from '@/composables/useResponsive'
 import { highlightMatches } from './conversationSearch'
 import { stagesOf } from './conversationMeta'
 
@@ -66,14 +59,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: []
-  /** 打开底部操作面板（移动端） */
-  menu: []
   /** 菜单命令：pin | unpin | rename | delete */
   command: [cmd: string]
   stage: [stage: string]
 }>()
-
-const { isMobile } = useResponsive()
 
 const stages = computed(() => stagesOf(props.conv.project_template))
 const titleHtml = computed(() => highlightMatches(props.conv.title, props.query || ''))
@@ -163,5 +152,8 @@ function onCommand(cmd: string) {
     touch-action: manipulation;
   }
   .conv-more:active { background: rgba(15, 23, 42, .1); }
+  /* 触屏下拉菜单：行高与点击区放大到可点范围 */
+  .conv-dropdown-menu { min-width: 164px; padding: 6px; }
+  .conv-dropdown-item { min-height: 44px; padding: 10px 12px; font-size: 14px; }
 }
 </style>
