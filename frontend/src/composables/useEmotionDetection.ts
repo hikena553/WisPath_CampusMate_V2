@@ -67,8 +67,10 @@ const EMOTION_ONNX_URL = '/models/emotion_se64_rafmix.onnx'
 /** ONNX Runtime 的 wasm 运行时目录（离线本地加载，不依赖 CDN） */
 const ORT_WASM_PATH = '/ort/'
 const INPUT_SIZE = 64
-/** 推理节流：表情只需秒级粒度，避免每帧都跑一遍占用 CPU */
-const INFER_INTERVAL = 250
+/** 推理节流：表情只需秒级粒度，避免每帧都跑一遍占用 CPU。
+ *  从 250ms 收紧到 160ms —— 检测/推理本身远快于这个间隔，收紧后
+ *  单位时间内多拿几次判别，配合下面的"快攻"切换，变化响应更快。 */
+const INFER_INTERVAL = 160
 
 let modelsLoaded = false
 let faceapiPromise: Promise<any> | null = null
@@ -141,6 +143,67 @@ async function loadModels(): Promise<boolean> {
   }
 }
 
+/**
+ * 情绪稳定器："快攻慢放"滞回滤波（替代早期的"5 帧硬多数票"）。
+ *
+ * 早期做法的问题（真实测试中暴露）：对最近 5 次**原始标签**做多数票，
+ * 于是从 A 切到 B 至少要攒够 3 票才肯改（约 0.75–1.25 秒），而且低置信度的标签
+ * 与高置信度的标签计票权重完全一样 —— 表现就是"表情已经变了，界面上还挂着旧情绪"。
+ *
+ * 现在的规则分三档，先用置信度筛选、再用一致性确认：
+ *   1) 与当前一致 → 直接输出，零延迟；
+ *   2) 新标签置信度 ≥ FAST_SWITCH_CONF 且连续出现 FAST_SWITCH_STREAK 次 → 立即切换（快攻）；
+ *   3) 否则退回窗口多数票，且需达到 NORMAL_SWITCH_RATIO 才切换（慢放，抑制抖动）。
+ * 即"明显的变化"最快 2 次推理就跟上，"模棱两可的抖动"仍被压住。
+ */
+const SMOOTH_WINDOW = 3
+const FAST_SWITCH_CONF = 0.55
+const FAST_SWITCH_STREAK = 2
+const NORMAL_SWITCH_RATIO = 0.67
+
+export interface SmoothState {
+  label: string
+  window: string[]
+  streakLabel: string
+  streak: number
+}
+
+export function newSmoothState(): SmoothState {
+  return { label: '', window: [], streakLabel: '', streak: 0 }
+}
+
+/** 纯函数实现：无副作用之外的状态，便于离线复现与对比。 */
+export function stabiliseEmotion(state: SmoothState, emotion: string, confidence: number): string {
+  if (emotion === state.streakLabel) state.streak += 1
+  else {
+    state.streakLabel = emotion
+    state.streak = 1
+  }
+
+  if (!state.label) {
+    state.label = emotion
+    return emotion
+  }
+  if (emotion === state.label) return state.label
+
+  if (confidence >= FAST_SWITCH_CONF && state.streak >= FAST_SWITCH_STREAK) {
+    state.label = emotion
+    state.window = [emotion]
+    return emotion
+  }
+
+  state.window.push(emotion)
+  if (state.window.length > SMOOTH_WINDOW) state.window.shift()
+  const counts: Record<string, number> = {}
+  for (const e of state.window) counts[e] = (counts[e] || 0) + 1
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+  if (top[1] / state.window.length >= NORMAL_SWITCH_RATIO) {
+    state.label = top[0]
+    state.window = [top[0]]
+  }
+  return state.label
+}
+
 export function useEmotionDetection() {
   const isSupported = ref(false)
   const isRunning = ref(false)
@@ -167,6 +230,8 @@ export function useEmotionDetection() {
   const FIRE_INTERVAL = 2000 // 每次表情变化至少间隔 2s 记录
   let onEmotion: ((s: EmotionSnapshot) => void) | null = null
   let trackHandle: (() => void) | null = null
+  /** 情绪稳定器状态（"快攻慢放"滞回滤波） */
+  const smoothState = newSmoothState()
 
   async function start(onChange?: (s: EmotionSnapshot) => void): Promise<boolean> {
     if (isRunning.value) return true
@@ -201,16 +266,6 @@ export function useEmotionDetection() {
       stop()
       return false
     }
-  }
-
-  // 均值平滑：用最近几次结果中和抖动
-  const recent: string[] = []
-  function smoothedEmotion(emotion: string): string {
-    recent.push(emotion)
-    if (recent.length > 5) recent.shift()
-    const counts: Record<string, number> = {}
-    for (const e of recent) counts[e] = (counts[e] || 0) + 1
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
   }
 
   /** 按检测框裁剪人脸并做方形补边，缩放到模型输入尺寸。 */
@@ -358,7 +413,7 @@ export function useEmotionDetection() {
               if (predicted) {
                 const { emotion, probs: p, best } = predicted
                 probs.value = p
-                const smoothed = smoothedEmotion(emotion)
+                const smoothed = stabiliseEmotion(smoothState, emotion, p[best])
                 const sIdx = EMOTION_CLASS_NAMES.indexOf(smoothed as (typeof EMOTION_CLASS_NAMES)[number])
                 // 置信度取"平滑后标签"在本帧的概率，避免标签与置信度来自不同类别
                 const confidence = sIdx >= 0 ? p[sIdx] : p[best]
@@ -407,6 +462,7 @@ export function useEmotionDetection() {
     isRunning.value = false
     isReady.value = false
     current.value = null
+    Object.assign(smoothState, newSmoothState())
     if (raf) cancelAnimationFrame(raf)
     raf = 0
     if (stream) {

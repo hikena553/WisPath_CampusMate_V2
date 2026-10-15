@@ -37,9 +37,9 @@ import urllib.request
 from collections import Counter
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
-from .architectures import CLASS_NAMES
+from .architectures import CLASS_NAMES, CLASS_NAMES_CN
 from .dataset import FER_LABEL_MAP
 
 MIRROR = "https://hf-mirror.com/datasets/elipaluma/RAF-DB_Kaggle/resolve/main/data"
@@ -99,6 +99,90 @@ def ensure_raf(root: Path) -> dict[str, Path]:
     return out
 
 
+# ---------- AffectNet 子集：更大量的真实场景样本 ----------
+AFFECTNET_MIRROR = "https://hf-mirror.com/datasets/Mauregato/affectnet_short/resolve/main/data"
+AFFECTNET_FILES = {
+    "train": "train-00000-of-00001-7cbcbf03ccc4c14c.parquet",
+    "val": "val-00000-of-00001-15bd8d507ff5dd11.parquet",
+}
+
+
+def default_affectnet_root(data_dir: str | Path) -> Path:
+    return Path(data_dir).parent / "affectnet"
+
+
+def ensure_affectnet(root: Path) -> dict[str, Path]:
+    out = {}
+    for split, fn in AFFECTNET_FILES.items():
+        p = root / fn
+        if not (p.exists() and p.stat().st_size > 1024 * 1024):
+            print(f"  下载 AffectNet {split}（约 {'412' if split == 'train' else '103'} MB）...", flush=True)
+            _download(f"{AFFECTNET_MIRROR}/{fn}", p)
+        out[split] = p
+    return out
+
+
+def read_parquet_pairs(path: Path) -> list[tuple[bytes, object]]:
+    """通用 parquet 读取：返回 (图片字节, 原始标签) 列表。
+
+    不同镜像的列名不一致，这里按名字自动识别图片列与标签列，
+    避免写死列名导致换数据集就报错。
+    """
+    import pyarrow.parquet as pq
+
+    t = pq.read_table(path)
+    names = t.schema.names
+    img_col = next((n for n in names if "image" in n.lower() or "img" in n.lower()), None)
+    lab_col = next((n for n in names if n.lower() in
+                    ("label", "labels", "emotion", "target", "expression", "class")), None)
+    if img_col is None or lab_col is None:
+        raise SystemExit(f"无法识别列名：{names}")
+    pairs: list[tuple[bytes, object]] = []
+    for im, lab in zip(t.column(img_col).to_pylist(), t.column(lab_col).to_pylist()):
+        if isinstance(im, dict):
+            raw = im.get("bytes") or im.get("path")
+            raw = raw if isinstance(raw, (bytes, bytearray)) else None
+        elif isinstance(im, (bytes, bytearray)):
+            raw = bytes(im)
+        else:
+            raw = None
+        if raw:
+            pairs.append((bytes(raw), lab))
+    return pairs
+
+
+def probe_affectnet(root: Path, out_dir: Path) -> None:
+    """打印 AffectNet 的结构与标签计数，并输出按标签分组的样张拼图供人工核对语义。
+
+    标签语义必须核对：把 0/1/2… 猜成某类而实际是另一类，会让整轮训练白做。
+    """
+    paths = ensure_affectnet(root)
+    for split, p in paths.items():
+        pairs = read_parquet_pairs(p)
+        c = Counter(str(lab) for _raw, lab in pairs)
+        print(f"[{split}] {p.name}  n={len(pairs)}  标签取值数={len(c)}", flush=True)
+        for k, v in sorted(c.items()):
+            print(f"    label={k:<12} {v}", flush=True)
+        im = Image.open(io.BytesIO(pairs[0][0]))
+        print(f"    首图尺寸={im.size} 模式={im.mode}", flush=True)
+
+    # 样张拼图（每个标签取 6 张）
+    pairs = read_parquet_pairs(paths["train"])
+    labs = sorted({str(l) for _r, l in pairs})
+    per, cell = 6, 96
+    grid = Image.new("RGB", (cell * per, (cell + 20) * len(labs)), (18, 20, 24))
+    d = ImageDraw.Draw(grid)
+    for ri, lab in enumerate(labs):
+        picks = [raw for raw, l in pairs if str(l) == lab][:per]
+        for ci, raw in enumerate(picks):
+            im = Image.open(io.BytesIO(raw)).convert("RGB").resize((cell, cell), Image.BILINEAR)
+            grid.paste(im, (ci * cell, ri * (cell + 20)))
+        d.text((4, ri * (cell + 20) + cell + 3), f"label={lab}", fill=(255, 200, 87))
+    out = out_dir / "affectnet_labels_check.jpg"
+    grid.save(out, quality=88)
+    print(f"样张拼图: {out}", flush=True)
+
+
 def _center_crop(img: Image.Image, keep: float) -> Image.Image:
     """RAF-DB 是 100×100 的"半身/带背景"裁剪，而部署链路的输入是紧贴人脸的
     方形框。做一个轻度中心裁切可以让两者的取景口径更接近，减少训练/推理的
@@ -139,17 +223,78 @@ def stats(recs: list[dict]) -> dict:
     return {"total": len(recs), "distribution": {k: c.get(k, 0) for k in CLASS_NAMES}}
 
 
+# AffectNet 原始标签 -> FER2013 字符串标签。
+# 依据该镜像数据卡（dataset_info.features.label.class_label.names）：
+#   0=anger 1=surprise 2=contempt 3=happy 4=neutral 5=fear 6=sad 7=disgust
+# 其中 2=contempt（轻蔑）不在本项目 7 类之内，直接剔除。
+# 该映射已用样张拼图人工核对：surprise / happy / disgust 三行与目视结果一致。
+AFFECTNET_TO_FER = {
+    0: "angry",
+    1: "surprise",
+    3: "happy",
+    4: "neutral",
+    5: "fear",
+    6: "sad",
+    7: "disgust",
+}
+
+
+def load_affectnet_split(path: Path, crop: float = 1.0) -> list[dict]:
+    """把 AffectNet 子集 parquet 转成与 FER2013 同构的记录列表（剔除 contempt）。"""
+    recs: list[dict] = []
+    for raw, lab in read_parquet_pairs(path):
+        fer = AFFECTNET_TO_FER.get(int(lab))
+        if fer is None:
+            continue
+        if crop < 0.999:
+            b = io.BytesIO()
+            _center_crop(Image.open(io.BytesIO(raw)).convert("RGB"), crop).save(
+                b, format="JPEG", quality=95)
+            raw = b.getvalue()
+        recs.append({"img_bytes": raw, "labels": fer, "src": "affectnet"})
+    return recs
+
+
+def verify_mapping_montage(recs: list[dict], out: Path, per: int = 6, cell: int = 96) -> None:
+    """按"映射后的类名"重新拼图，用于核对映射是否确实对得上人眼判断。"""
+    by: dict[str, list[bytes]] = {k: [] for k in CLASS_NAMES}
+    for r in recs:
+        by[CLASS_NAMES[FER_LABEL_MAP[r["labels"]]]].append(r["img_bytes"])
+    grid = Image.new("RGB", (cell * per, (cell + 20) * len(CLASS_NAMES)), (18, 20, 24))
+    d = ImageDraw.Draw(grid)
+    for ri, k in enumerate(CLASS_NAMES):
+        for ci, raw in enumerate(by[k][:per]):
+            im = Image.open(io.BytesIO(raw)).convert("RGB").resize((cell, cell), Image.BILINEAR)
+            grid.paste(im, (ci * cell, ri * (cell + 20)))
+        d.text((4, ri * (cell + 20) + cell + 3),
+               f"{CLASS_NAMES_CN[CLASS_NAMES.index(k)]} {k}  n={len(by[k])}", fill=(255, 200, 87))
+    grid.save(out, quality=88)
+    print(f"映射核对拼图: {out}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="RAF-DB（真实场景表情）接入")
     ap.add_argument("--data-dir", type=str, default=str(Path(__file__).resolve().parent / "data" / "fer2013"))
     ap.add_argument("--crop", type=float, default=0.88, help="RAF-DB 中心裁切比例（1.0=不裁）")
+    ap.add_argument("--affectnet-crop", type=float, default=1.0,
+                    help="AffectNet 中心裁切比例（默认 1.0：其 96×96 已紧贴人脸）")
     ap.add_argument("--build-combined", action="store_true",
                     help="生成 FER2013 训练集 + RAF-DB 训练集的合并训练集 .pt")
     ap.add_argument("--fer-train", type=str, default="train.pt",
                     help="FER2013 训练集文件名（可指向去噪后的 train_clean.pt）")
     ap.add_argument("--out", type=str, default="train_raf.pt")
     ap.add_argument("--stats", action="store_true")
+    ap.add_argument("--probe-affectnet", action="store_true",
+                    help="下载 AffectNet 子集并打印结构/标签计数，输出语义核对样张")
+    ap.add_argument("--with-affectnet", action="store_true",
+                    help="构建合并训练集时并入 AffectNet 子集（剔除 contempt）")
+    ap.add_argument("--verify-affectnet", action="store_true",
+                    help="按映射后的类名输出 AffectNet 样张拼图，用于核对映射")
     args = ap.parse_args()
+
+    if args.probe_affectnet:
+        probe_affectnet(default_affectnet_root(args.data_dir), Path(args.data_dir))
+        return
 
     data_dir = Path(args.data_dir)
     root = default_root(data_dir)
@@ -175,11 +320,26 @@ def main() -> None:
         with open(fer_train_p, "rb") as f:
             fer = pickle.load(f)
         combined = list(fer) + list(raf_tr)
+        src = f"FER {len(fer)} + RAF {len(raf_tr)}"
+        if args.with_affectnet:
+            af_paths = ensure_affectnet(default_affectnet_root(data_dir))
+            # AffectNet 的 96×96 本身就是"紧贴人脸"的裁剪，再中心裁切会切进脸，
+            # 因此这里单独用 --affectnet-crop 控制（默认 1.0 不裁）。
+            af_tr = load_affectnet_split(af_paths["train"], args.affectnet_crop)
+            af_va = load_affectnet_split(af_paths["val"], args.affectnet_crop)
+            combined += af_tr
+            src += f" + AffectNet {len(af_tr)}"
+            print(f"AffectNet train 分布: {stats(af_tr)['distribution']}", flush=True)
+            p_va = data_dir / "test_affnet.pt"
+            with open(p_va, "wb") as f:
+                pickle.dump(af_va, f, protocol=4)
+            print(f"已写出 AffectNet 验证集（额外真实场景测试集）: {p_va}  n={len(af_va)}", flush=True)
+            if args.verify_affectnet:
+                verify_mapping_montage(af_tr, data_dir / "affectnet_mapped_check.jpg")
         out_p = data_dir / args.out
         with open(out_p, "wb") as f:
             pickle.dump(combined, f, protocol=4)
-        print(f"合并训练集: {out_p}  共 {len(combined)} 条"
-              f"（FER {len(fer)} + RAF {len(raf_tr)}）", flush=True)
+        print(f"合并训练集: {out_p}  共 {len(combined)} 条（{src}）", flush=True)
         print(f"  合并分布: {stats(combined)['distribution']}", flush=True)
 
 

@@ -450,26 +450,49 @@
             输入预处理固定为：灰度 → 缩放 <code>size×size</code>（48 或 64）→ <code>x/255</code> →
             <code>(x−0.5)/0.5</code> → 复制为 3 通道；标签已对齐前端 <code>EMOTION_LABELS</code> 的类序。
           </p>
+          <p>
+            第三轮引入<strong>真实场景数据集 RAF-DB</strong>（Real-world Affective Faces Database，100×100 彩色、
+            in-the-wild，训练 12,271 / 测试 3,068）。其类别计数与官方公布完全一致
+            （开心 4,772 / 平静 2,524 / 悲伤 1,982 / 惊讶 1,290 / 生气 705 / 厌恶 717 / 害怕 281），
+            标签语义另用样张拼图人工核对（见附录 A）。两套训练集合并为 <strong>40,927 张</strong>联合训练集，
+            这是"真实场景准确率 0.6186 → 0.7966"的直接原因。
+            人脸检测支线另用 <strong>WIDER FACE</strong>（3,226 张真实场景图 / 39,703 个标注人脸）训练，见附录 A 表 22。
+          </p>
           <div class="table-wrap">
             <table>
-              <caption>表 2　FER2013 类别分布（训练 28,709 / 测试 7,178）</caption>
+              <caption>表 2　数据集分类情况总表（FER2013 + RAF-DB + 联合训练集）</caption>
               <thead>
-                <tr><th scope="col">类别</th><th scope="col" class="num">训练集</th><th scope="col" class="num">测试集</th><th scope="col">备注</th></tr>
+                <tr>
+                  <th scope="col">类别</th>
+                  <th scope="col" class="num">FER2013 训练</th>
+                  <th scope="col" class="num">FER2013 测试</th>
+                  <th scope="col" class="num">RAF-DB 训练</th>
+                  <th scope="col" class="num">RAF-DB 测试</th>
+                  <th scope="col" class="num">联合训练集</th>
+                  <th scope="col" class="num">占联合集</th>
+                </tr>
               </thead>
               <tbody>
-                <tr><th scope="row">angry 生气</th><td class="num">3,995</td><td class="num">958</td><td>—</td></tr>
-                <tr><th scope="row">disgusted 厌恶</th><td class="num">436</td><td class="num">111</td><td>长尾类，样本极少</td></tr>
-                <tr><th scope="row">fearful 害怕</th><td class="num">4,097</td><td class="num">1,024</td><td>与 sad / angry 易混</td></tr>
-                <tr><th scope="row">happy 开心</th><td class="num">7,215</td><td class="num">1,774</td><td>样本最多、最易识别</td></tr>
-                <tr><th scope="row">neutral 平静</th><td class="num">4,965</td><td class="num">1,233</td><td>—</td></tr>
-                <tr><th scope="row">sad 难过</th><td class="num">4,830</td><td class="num">1,247</td><td>—</td></tr>
-                <tr><th scope="row">surprised 惊讶</th><td class="num">3,171</td><td class="num">831</td><td>—</td></tr>
+                <tr><th scope="row">angry 生气</th><td class="num">3,993</td><td class="num">958</td><td class="num">705</td><td class="num">162</td><td class="num">4,698</td><td class="num">11.5%</td></tr>
+                <tr><th scope="row">disgusted 厌恶</th><td class="num">435</td><td class="num">111</td><td class="num">717</td><td class="num">160</td><td class="num">1,152</td><td class="num">2.8%</td></tr>
+                <tr><th scope="row">fearful 害怕</th><td class="num">4,087</td><td class="num">1,024</td><td class="num">281</td><td class="num">74</td><td class="num">4,368</td><td class="num">10.7%</td></tr>
+                <tr><th scope="row">happy 开心</th><td class="num">7,215</td><td class="num">1,774</td><td class="num">4,772</td><td class="num">1,185</td><td class="num">11,987</td><td class="num">29.3%</td></tr>
+                <tr><th scope="row">neutral 平静</th><td class="num">4,944</td><td class="num">1,233</td><td class="num">2,524</td><td class="num">680</td><td class="num">7,468</td><td class="num">18.2%</td></tr>
+                <tr><th scope="row">sad 难过</th><td class="num">4,821</td><td class="num">1,247</td><td class="num">1,982</td><td class="num">478</td><td class="num">6,803</td><td class="num">16.6%</td></tr>
+                <tr><th scope="row">surprised 惊讶</th><td class="num">3,161</td><td class="num">831</td><td class="num">1,290</td><td class="num">329</td><td class="num">4,451</td><td class="num">10.9%</td></tr>
+                <tr><th scope="row">合计</th><td class="num">28,656</td><td class="num">7,178</td><td class="num">12,271</td><td class="num">3,068</td><td class="num">40,927</td><td class="num">100%</td></tr>
               </tbody>
             </table>
           </div>
+          <p class="hint" style="font-size:12px;color:var(--muted)">
+            注：FER2013 原始训练集 28,709 张，表中为 3 折 OOF 去噪后的 28,656 张（剔除 53 张疑似错标），
+            即联合训练集实际使用的那一份；类别不平衡度由 16.5 : 1 降至约 10.4 : 1。
+          </p>
           <p>
-            训练集按 9:1 切出验证集（2,870 张），测试集 7,178 张仅用于最终评估；训练时对训练集做
-            随机水平翻转、±10° 旋转与平移、随机缩放裁切、亮度抖动等增强，验证/测试集不做增强。
+            训练集按 9:1 切出验证集（FER2013 单域时 2,870 张，联合训练集时 4,093 张），
+            测试集仅用于最终评估；训练时对训练集做随机水平翻转、±10° 旋转与平移、随机缩放裁切、亮度抖动等增强，
+            验证/测试集不做增强。RAF-DB 图片并入训练前统一做 0.88 中心裁切，
+            使取景口径更接近部署时"检测框裁剪"的构图，减少训练与推理之间的几何错配。
           </p>
         </section>
 
@@ -1219,6 +1242,76 @@
             <li><strong>真实物理摄像头（已验证）</strong>：本机摄像头 30 秒实时运行，YOLOv8 检测 + rafmix 表情全链路稳定；</li>
             <li><strong>仍待办</strong>：真实摄像头无法取得标注，故"真机准确率"只能定性确认链路可用；若要量化，建议先用手机/摄像头录一段带标注的自建小样本集。</li>
           </ul>
+        </section>
+
+        <section id="appendix-a">
+          <h2>附录 A　数据集类别样张与分布</h2>
+          <p>
+            下面两张图把两套表情数据集按类别各随机抽 8 张并列展示，用于直观核对"类别标签与画面内容是否一致"，
+            同时也是第三轮 RAF-DB 标签映射正确性的核对依据。完整分布见正文表 2。
+          </p>
+          <figure>
+            <img src="./assets/dataset_fer_samples.jpg" alt="FER2013 测试集每类 8 张样张">
+            <figcaption>图 16　FER2013 测试集各类样张（48×48 灰度、实验室摆拍）。每行末尾标注为"中文 英文 该测试集张数"。可见实验室数据表情夸张、光照均匀、人脸紧贴画幅，与真实摄像头画面差异明显。</figcaption>
+          </figure>
+          <figure>
+            <img src="./assets/dataset_raf_samples.jpg" alt="RAF-DB 测试集每类 8 张样张">
+            <figcaption>图 17　RAF-DB 测试集各类样张（100×100 彩色、真实场景 in-the-wild）。受光照、遮挡、姿态与画质影响，同一类内部的表观差异远大于 FER2013，个别样本的标注本身就带主观歧义 —— 这正是真实场景准确率低于实验室准确率的根本原因，也说明用 FER2013 测试集代表真实摄像头会高估效果。</figcaption>
+          </figure>
+          <div class="table-wrap">
+            <table>
+              <caption>表 22　各数据集在训练中的角色与规模</caption>
+              <thead>
+                <tr><th scope="col">数据集</th><th scope="col">类型</th><th scope="col" class="num">规模</th><th scope="col">在项目中的角色</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">FER2013</th><td>48×48 灰度，实验室摆拍</td><td class="num">训练 28,709 / 测试 7,178</td><td>表情分类的主训练集与"实验室口径"基准；测试集用于与初版做同口径对比</td></tr>
+                <tr><th scope="row">RAF-DB</th><td>100×100 彩色，真实场景</td><td class="num">训练 12,271 / 测试 3,068</td><td>真实场景域适配的训练数据；其测试集作为"真实摄像头准确率"的量化代理</td></tr>
+                <tr><th scope="row">联合训练集</th><td>FER2013（去噪）+ RAF-DB 训练集</td><td class="num">40,927（真实场景占 30%）</td><td>rafmix 模型的训练数据</td></tr>
+                <tr><th scope="row">WIDER FACE</th><td>真实场景人脸检测基准</td><td class="num">3,226 图 / 39,703 个标注人脸（训练 2,739 / 验证 483）</td><td>YOLOv8n 人脸检测器的训练与评估数据</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="appendix-b">
+          <h2>附录 B　关键代码</h2>
+          <p>
+            以下代码均从项目当前源文件<strong>原样抽取</strong>（含真实行号），覆盖
+            "网络结构 → 训练技巧 → 真实场景数据接入 → 端侧推理"四段关键路径，便于核对实现与报告结论是否一致。
+          </p>
+          <figure class="code">
+            <img src="./assets/code_conv_se.png" alt="主干基本块：SE 通道注意力与深度可分离卷积">
+            <figcaption>代码 1　主干基本块：SE 通道注意力 + 深度可分离卷积（<code>backend/ml/architectures.py</code>，第 31–74 行）。ReLU6 保证量化友好，SE 是第三轮涨点的关键改动之一。</figcaption>
+          </figure>
+          <figure class="code">
+            <img src="./assets/code_backbone.png" alt="通道配置与分类头">
+            <figcaption>代码 2　通道配置与分类头，严格对齐官方 manifest（<code>backend/ml/architectures.py</code>，第 105–124 行）。<code>width_mult</code> 用于轻量化实验，<code>head</code> 前的 Dropout 抑制过拟合。</figcaption>
+          </figure>
+          <figure class="code">
+            <img src="./assets/code_focal.png" alt="Focal Loss 实现">
+            <figcaption>代码 3　Focal Loss（<code>backend/ml/losses.py</code>，第 15–33 行）。由 <code>pt = exp(-loss)</code> 反推调制因子，把梯度集中到难分样本，缓解长尾类被淹没。</figcaption>
+          </figure>
+          <figure class="code">
+            <img src="./assets/code_augment.png" alt="训练期数据增强">
+            <figcaption>代码 4　训练期数据增强（<code>backend/ml/dataset.py</code>）。水平翻转、旋转平移、缩放裁切、亮度抖动四件套，验证/测试集不做增强。</figcaption>
+          </figure>
+          <figure class="code">
+            <img src="./assets/code_ema_tta.png" alt="EMA 与含 TTA 的评估">
+            <figcaption>代码 5　权重滑动平均 EMA 与含 TTA 的评估（<code>backend/ml/train.py</code>）。EMA 中 <code>d = min(decay, (1+steps)/(10+steps))</code> 做衰减预热，避免训练初期 EMA 落后；评估时原图与水平翻转图各前向一次并平均 logits。</figcaption>
+          </figure>
+          <figure class="code">
+            <img src="./assets/code_rafdb.png" alt="RAF-DB 标签映射与读取">
+            <figcaption>代码 6　真实场景数据 RAF-DB 的标签映射与读取（<code>backend/ml/real_fer.py</code>）。映射表把 RAF-DB 的 1–7 整数标签转到本项目类序，转换后与 FER2013 记录同构，因此可直接复用整套训练流程。</figcaption>
+          </figure>
+          <figure class="code">
+            <img src="./assets/code_front_preprocess.png" alt="前端预处理与训练口径一致">
+            <figcaption>代码 7　前端预处理（<code>frontend/src/composables/useEmotionDetection.ts</code>，第 250–278 行）。灰度 → <code>(x−0.5)/0.5</code> → 复制 3 通道 → CHW，与训练口径严格一致；同一趟循环里顺带生成水平翻转张量供 TTA 使用。</figcaption>
+          </figure>
+          <figure class="code">
+            <img src="./assets/code_yolo_decode.png" alt="YOLOv8 输出解码与 NMS">
+            <figcaption>代码 8　YOLOv8 输出解码与 NMS（<code>frontend/src/composables/yoloFaceDetector.ts</code>，第 120–143 行）。把 ultralytics 导出的 <code>[1,5,2100]</code> 张量按置信度阈值筛选、letterbox 坐标还原到视频像素、再做 IoU 阈值去重。</figcaption>
+          </figure>
         </section>
       </main>
 
