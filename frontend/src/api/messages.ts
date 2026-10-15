@@ -43,3 +43,20 @@ export function getSessionPins() {
 export function setSessionPin(sessionKey: string, pinned: boolean) {
   return request.put<{ key: string; pinned: boolean }>('/messages/pins', { session_key: sessionKey, pinned })
 }
+
+export interface UnreadSummary {
+  chat: number
+  group: number
+  notification: number
+  total: number
+}
+
+/** 全局未读汇总：单聊 + 群聊 + 站内通知，导航红点一次取齐 */
+export function getUnreadSummary() {
+  return request.get<UnreadSummary>('/messages/unread-summary')
+}
+
+/** 清除未读提示：单聊与群聊全部置已读（站内通知走 /notifications/read-all） */
+export function clearAllUnread() {
+  return request.put<{ message: string; chat: number; group: number }>('/messages/read-all')
+}

@@ -19,9 +19,17 @@
     <!-- 消息列表 -->
     <div ref="listRef" class="butler-list">
       <div v-for="m in messages" :key="m.id" class="butler-row" :class="m.role === 'user' ? 'is-mine' : 'is-theirs'">
-        <div v-if="m.role === 'assistant'" class="butler-avatar">
-          <img v-if="siteMascot" :src="siteMascot" alt="小绵管家" />
-          <DtIcon v-else name="robot" :size="22" />
+        <!-- 头像恒为首个子元素：本人消息行 row-reverse 反向后头像落在最外侧（右），
+             与全站聊天（.msg-row.mine）一致；若把本人头像排在末尾，反向后会错位到气泡左侧 -->
+        <div class="butler-avatar" :class="{ 'is-mine': m.role === 'user' }">
+          <template v-if="m.role === 'user'">
+            <img v-if="userAvatar" :src="userAvatar" alt="我" />
+            <span v-else>{{ userInitial }}</span>
+          </template>
+          <template v-else>
+            <img v-if="siteMascot" :src="siteMascot" alt="小绵管家" />
+            <DtIcon v-else name="robot" :size="22" />
+          </template>
         </div>
         <div class="butler-col">
           <div v-if="m.kind === 'briefing'" class="butler-bubble is-push">
@@ -52,10 +60,6 @@
             {{ m.content }}
           </div>
           <div v-if="m.role === 'assistant'" class="butler-time">{{ m.time }}</div>
-        </div>
-        <div v-if="m.role === 'user'" class="butler-avatar is-mine">
-          <img v-if="userAvatar" :src="userAvatar" alt="我" />
-          <span v-else>{{ userInitial }}</span>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from urllib.parse import unquote
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from pydantic import BaseModel
@@ -11,6 +12,8 @@ from app.core.deps import get_current_user, AUTH_COOKIE_NAME
 from app.core.security import decode_access_token, is_token_revoked
 from app.models.user import User
 from app.models.message import Message, MessageSessionPin
+from app.models.group import GroupMember, GroupMessage
+from app.models.notification import Notification
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
 from app.services.ws_manager import manager
 
@@ -49,9 +52,9 @@ async def websocket_chat(ws: WebSocket, token: str | None = Query(None), db: Ses
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(user_id)
+        manager.disconnect(user_id, ws)
     except Exception:
-        manager.disconnect(user_id)
+        manager.disconnect(user_id, ws)
 
 
 @router.post("/send")
@@ -163,6 +166,63 @@ def set_session_pin(data: SessionPinUpdate, user: User = Depends(get_current_use
         db.delete(existing)
         db.commit()
     return {"key": key, "pinned": bool(data.pinned)}
+
+
+# ==================== 未读汇总 / 一键清除（导航红点数据源） ====================
+
+def _group_unread_count(db: Session, user: User) -> int:
+    """本人所有群的未读合计：与群列表口径一致——免打扰群不计、只算他人发的、晚于 last_read_at。"""
+    members = db.query(GroupMember).filter(
+        GroupMember.user_id == user.id,
+        GroupMember.is_muted.is_(False),
+    ).all()
+    total = 0
+    for m in members:
+        last = m.last_read_at or datetime(1970, 1, 1, tzinfo=timezone.utc)
+        total += db.query(GroupMessage).filter(
+            GroupMessage.group_id == m.group_id,
+            GroupMessage.sender_id != user.id,
+            GroupMessage.created_at > last,
+        ).count()
+    return total
+
+
+@router.get("/unread-summary")
+def get_unread_summary(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """全局未读汇总：单聊 + 群聊 + 站内通知，供各端导航红点一次取齐。"""
+    chat = db.query(Message).filter(
+        Message.receiver_id == user.id,
+        Message.read.is_(False),
+    ).count()
+    group = _group_unread_count(db, user)
+    notification = db.query(Notification).filter(
+        Notification.user_id == user.id,
+        Notification.is_read.is_(False),
+    ).count()
+    return {
+        "chat": chat,
+        "group": group,
+        "notification": notification,
+        "total": chat + group + notification,
+    }
+
+
+@router.put("/read-all")
+def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """清除未读提示：单聊全部置已读 + 全部群的 last_read_at 推进到现在。
+
+    站内通知由通知模块的「全部已读」各自负责（/api/notifications/read-all）。
+    """
+    chat = db.query(Message).filter(
+        Message.receiver_id == user.id,
+        Message.read.is_(False),
+    ).update({"read": True}, synchronize_session=False)
+    now = datetime.now(timezone.utc)
+    groups = db.query(GroupMember).filter(GroupMember.user_id == user.id).update(
+        {"last_read_at": now}, synchronize_session=False
+    )
+    db.commit()
+    return {"message": "已清除未读", "chat": int(chat or 0), "group": int(groups or 0)}
 
 
 @router.get("/{user_id}", response_model=list[MessageOut])

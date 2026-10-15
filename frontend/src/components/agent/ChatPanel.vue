@@ -9,30 +9,15 @@
           <span></span>
         </div>
       </el-button>
-      <div
-        class="mobile-header-title"
-        :class="{ 'is-actionable': !!currentConv }"
-        @click="openConvActions"
-      >
+      <!-- 标题只做展示：对话的重命名/置顶/删除统一收在侧边栏列表里，对话页不再弹操作面板 -->
+      <div class="mobile-header-title">
         <span class="title-text">{{ currentTitle }}</span>
-        <el-icon v-if="currentConv" class="title-caret" :size="12"><ArrowDown /></el-icon>
       </div>
       <el-button text circle class="menu-toggle" :disabled="loading" @click="handlePhoneCall">
         <el-icon :size="20"><Phone /></el-icon>
       </el-button>
-      <!-- 无进行中的对话时不渲染，避免出现按了没反应的禁用按钮 -->
-      <el-button v-if="currentConv" text circle class="menu-toggle" aria-label="对话操作" @click="openConvActions">
-        <el-icon :size="20"><MoreFilled /></el-icon>
-      </el-button>
     </div>
 
-    <!-- 移动端会话操作面板：与侧边栏列表共用同一个豆包式底部动作表 -->
-    <ConversationActionsSheet
-      v-model:visible="showConvActions"
-      :conv="currentConv"
-      @command="onSheetCommand"
-      @stage="sheetSetStage"
-    />
     <!-- Pending Files Preview (top-right) -->
     <div v-if="pendingFiles.length > 0" class="pending-files-corner">
       <el-tooltip content="清空全部" placement="bottom">
@@ -183,6 +168,7 @@
 
     <!-- Voice Call Overlay -->
     <VoiceCallOverlay
+      ref="voiceCallRef"
       :visible="showVoiceCall"
       :conversation-id="voiceConvId"
       @close="handleVoiceClose"
@@ -354,7 +340,7 @@ import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAgentStore } from '@/stores/agent'
 import { useTeacherAgentStore } from '@/stores/teacherAgent'
-import { useConversationStore, type Conversation } from '@/stores/conversation'
+import { useConversationStore } from '@/stores/conversation'
 import { useTeacherConversationStore } from '@/stores/teacherConversation'
 import { sendChatMessage, fetchRecommendations } from '@/api/agent'
 import { getToken } from '@/utils/token'
@@ -363,15 +349,13 @@ import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
   Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, Close, Delete,
-  MoreFilled,
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import MianCharacter from './MianCharacter.vue'
 import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
-import ConversationActionsSheet from './ConversationActionsSheet.vue'
 
 const { isMobile } = useResponsive()
 
@@ -387,11 +371,16 @@ const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false })
-const emit = defineEmits<{ toggleSidebar: []; phoneCall: []; 'conversation-removed': [] }>()
+const emit = defineEmits<{ toggleSidebar: []; phoneCall: [] }>()
 const showVoiceCall = ref(false)
 const voiceConvId = ref<number | null>(null)
+const voiceCallRef = ref<InstanceType<typeof VoiceCallOverlay> | null>(null)
 
 async function handlePhoneCall() {
+  // 首个同步动作：在用户手势内解锁音频上下文，保证接通后的语音能出声
+  voiceCallRef.value?.primeAudio()
+  // 预热表情模型（不弹摄像头）：让接通后更快取到首帧表情，用于定制问候语
+  voiceCallRef.value?.prewarmEmotion()
   let cid = props.conversationId
   if (!cid) {
     const conv = await convStore.createConversation('normal')
@@ -399,6 +388,9 @@ async function handlePhoneCall() {
   }
   voiceConvId.value = cid
   showVoiceCall.value = true
+  // 拨通即接通（豆包式）：在用户手势内同步触发，解锁浏览器音频上下文；
+  // 随后智能体先开口问候，无需用户手动开启语音
+  voiceCallRef.value?.beginCall(cid)
 }
 
 async function handleVoiceClose() {
@@ -432,112 +424,6 @@ const currentTitle = computed(() => {
   const conv = convStore.list.find(c => c.id === convStore.activeId)
   return conv?.title || '新对话'
 })
-
-/** 当前对话对象与可选阶段：供移动端操作面板使用 */
-const activeConvSnapshot = ref<Conversation | null>(null)
-// 搜索/归档视图下，当前对话可能不在已加载列表里；缓存一份快照，保证操作面板仍可用
-watch(
-  () => convStore.list.find(c => c.id === convStore.activeId) || null,
-  (found) => { if (found) activeConvSnapshot.value = { ...found } },
-  { immediate: true },
-)
-const currentConv = computed(() => {
-  if (!convStore.activeId) return null
-  const live = convStore.list.find(c => c.id === convStore.activeId)
-  if (live) return live
-  return activeConvSnapshot.value?.id === convStore.activeId ? activeConvSnapshot.value : null
-})
-const showConvActions = ref(false)
-
-function openConvActions() {
-  if (!currentConv.value) return
-  showConvActions.value = true
-}
-
-function convErrorText(e: unknown, fallback: string): string {
-  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  return typeof detail === 'string' && detail ? detail : fallback
-}
-
-/** 移动端底部面板的动作分发（面板本身只管展示，动作仍由这里处理） */
-function onSheetCommand(cmd: string) {
-  switch (cmd) {
-    case 'rename': return sheetRename()
-    case 'pin':
-    case 'unpin': return sheetTogglePinned()
-    case 'delete': return sheetDelete()
-  }
-}
-
-async function sheetRename() {
-  const c = currentConv.value
-  if (!c) return
-  try {
-    const { value } = await ElMessageBox.prompt(' ', '重命名对话', {
-      inputValue: c.title,
-      inputPlaceholder: '请输入对话标题',
-      customClass: 'sidebar-msgbox',
-      inputValidator: (v: string) => {
-        const t = (v || '').trim()
-        if (!t) return '标题不能为空'
-        if (t.length > 200) return '标题不能超过 200 个字符'
-        return true
-      },
-    })
-    const title = (value || '').trim()
-    if (!title || title === c.title) return
-    await convStore.updateConversation(c.id, { title })
-    ElMessage.success('已重命名')
-  } catch (e) {
-    if (e === 'cancel' || e === 'close') return
-    ElMessage.error(convErrorText(e, '重命名失败'))
-  }
-}
-
-async function sheetTogglePinned() {
-  const c = currentConv.value
-  if (!c) return
-  try {
-    await convStore.updateConversation(c.id, { pinned: !c.pinned })
-    ElMessage.success(c.pinned ? '已取消置顶' : '已置顶')
-  } catch (e) {
-    ElMessage.error(convErrorText(e, '操作失败'))
-  }
-}
-
-/** 阶段切换由底部面板的 @stage 触发；面板展开前已在内部收起 */
-async function sheetSetStage(stage: string) {
-  const c = currentConv.value
-  if (!c || stage === c.project_stage) return
-  try {
-    await convStore.updateConversation(c.id, { project_stage: stage })
-    ElMessage.success(`阶段已更新为「${stage}」`)
-  } catch (e) {
-    ElMessage.error(convErrorText(e, '阶段更新失败'))
-  }
-}
-
-async function sheetDelete() {
-  const c = currentConv.value
-  if (!c) return
-  try {
-    await ElMessageBox.confirm(`确定删除「${c.title}」？`, '删除对话', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      customClass: 'sidebar-msgbox',
-    })
-  } catch {
-    return
-  }
-  try {
-    await convStore.deleteConversation(c.id)
-    ElMessage.success('已删除')
-    emit('conversation-removed')
-  } catch (e) {
-    ElMessage.error(convErrorText(e, '删除失败'))
-  }
-}
 
 const msgRef = ref<HTMLElement>()
 const rootRef = ref<HTMLElement | null>(null)
@@ -1856,7 +1742,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
   font-size: 16px;
   font-weight: 600;
   color: #333;
@@ -1864,14 +1749,10 @@ onUnmounted(() => {
   min-width: 0;
   padding: 0 4px;
   cursor: default;
-  -webkit-tap-highlight-color: transparent;
 }
-.mobile-header-title.is-actionable { cursor: pointer; }
 .mobile-header-title .title-text {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.mobile-header-title .title-caret { flex-shrink: 0; color: #9aa0a6; transition: color .15s ease; }
-.mobile-header-title.is-actionable:active .title-caret { color: #6366f1; }
 .mobile-header-placeholder {
   width: 36px;
   flex-shrink: 0;

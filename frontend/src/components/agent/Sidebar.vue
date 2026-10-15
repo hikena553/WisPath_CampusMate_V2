@@ -88,7 +88,6 @@
             :active="c.id === store.activeId"
             :query="search"
             @select="selectConv(c)"
-            @menu="openSheet(c)"
             @command="(cmd: string) => handleConvCmd(cmd, c)"
             @stage="(s: string) => setStage(c, s)"
           />
@@ -109,7 +108,6 @@
             :active="c.id === store.activeId"
             :query="search"
             @select="selectConv(c)"
-            @menu="openSheet(c)"
             @command="(cmd: string) => handleConvCmd(cmd, c)"
             @stage="(s: string) => setStage(c, s)"
           />
@@ -150,14 +148,6 @@
       </div>
     </Transition>
 
-    <!-- 移动端：豆包式底部会话操作面板（列表 ⋯ 打开） -->
-    <ConversationActionsSheet
-      v-model:visible="sheetVisible"
-      :conv="sheetConv"
-      @command="onSheetCommand"
-      @stage="onSheetStage"
-    />
-
   </div>
 </template>
 
@@ -175,7 +165,6 @@ import { useResponsive } from '@/composables/useResponsive'
 import { filterConversations } from './conversationSearch'
 import { groupByType } from './conversationMeta'
 import ConversationItem from './ConversationItem.vue'
-import ConversationActionsSheet from './ConversationActionsSheet.vue'
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
 const store = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
@@ -188,9 +177,6 @@ const search = ref('')
 const searchInputRef = ref<{ focus: () => void; blur: () => void } | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
 const undo = ref<{ label: string; run: () => Promise<void> } | null>(null)
-/** 移动端底部操作面板：绑定的会话与显隐 */
-const sheetVisible = ref(false)
-const sheetConv = ref<Conversation | null>(null)
 let undoTimer: ReturnType<typeof setTimeout> | undefined
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -232,12 +218,6 @@ function onScroll() {
 function selectConv(c: Conversation) {
   if (c.id === store.activeId) return
   emit('select', c)
-}
-
-/** 打开移动端底部操作面板 */
-function openSheet(c: Conversation) {
-  sheetConv.value = c
-  sheetVisible.value = true
 }
 
 /** 撤销条：8 秒后自动消失 */
@@ -300,6 +280,7 @@ async function newProject(template: string) {
   else emit('new')
 }
 
+/** 会话操作统一由列表行的 ⋯ 菜单触发（桌面/移动同一套实现） */
 function handleConvCmd(cmd: string, c: Conversation) {
   switch (cmd) {
     case 'rename': return renameConv(c)
@@ -307,19 +288,6 @@ function handleConvCmd(cmd: string, c: Conversation) {
     case 'pin': return setPinned(c, true)
     case 'unpin': return setPinned(c, false)
   }
-}
-
-/** 移动端底部面板：动作与桌面端菜单共用同一套实现 */
-function onSheetCommand(cmd: string) {
-  const c = sheetConv.value
-  if (!c) return
-  handleConvCmd(cmd, c)
-}
-
-function onSheetStage(stage: string) {
-  const c = sheetConv.value
-  if (!c) return
-  setStage(c, stage)
 }
 
 async function renameConv(c: Conversation) {

@@ -35,6 +35,8 @@
                 v-if="item.badge && unreadCount > 0"
                 :value="unreadCount"
                 class="nav-badge"
+                title="点击清除未读提示"
+                @click.stop.prevent="clearUnread"
               />
             </router-link>
           </template>
@@ -172,7 +174,7 @@ import { useSiteConfig } from '@/composables/useSiteConfig'
 import { updateProfile } from '@/api/user'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import { uploadFile } from '@/api/upload'
-import { getConversations, type ConversationOut } from '@/api/messages'
+import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
 import { useResponsive } from '@/composables/useResponsive'
@@ -211,8 +213,16 @@ const showCrop = ref(false)
 const cropImgRef = ref<HTMLImageElement>()
 let cropper: Cropper | null = null
 let pendingImageSrc = ''
-const unreadCount = ref(0)
-let pollTimer: ReturnType<typeof setInterval> | null = null
+/**
+ * 全局未读提示（导航红点）：单聊 + 群聊 + 站内通知三路汇总，WS 实时 + 5s 轮询兜底。
+ * 此前只统计了单聊未读，导致群消息与站内通知到达时完全没有提示。
+ */
+const {
+  total: unreadCount,
+  start: startUnreadWatch,
+  stop: stopUnreadWatch,
+  clearAll: clearUnread,
+} = useUnreadSummary()
 
 const { isMobile } = useResponsive()
 
@@ -291,22 +301,11 @@ function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
-async function pollUnread() {
-  if (auth.role !== 'teacher' && auth.role !== 'admin') return
-  try {
-    const convs: ConversationOut[] = await getConversations()
-    unreadCount.value = convs.reduce((sum, c) => sum + c.unread_count, 0)
-  } catch {}
-}
-
 // 布局创建时立即启动预加载（比 onMounted 更早，确保子页面 setup 阶段缓存已就绪）
 prefetchDashboardData()
 
-onMounted(() => {
-  pollUnread()
-  pollTimer = setInterval(pollUnread, 5000)
-})
-onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
+onMounted(() => { startUnreadWatch() })
+onUnmounted(() => { stopUnreadWatch() })
 
 function goTo(path: string) { router.push(path) }
 

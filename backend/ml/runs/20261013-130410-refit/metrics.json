@@ -1,0 +1,392 @@
+{
+  "run_id": "20261013-130410-refit",
+  "created_at": "2026-10-13T13:07:40.557535+00:00",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "amp": true,
+  "ema_decay": 0.999,
+  "mixup_alpha": 0.0,
+  "tta": true,
+  "random_erase_prob": 0.3,
+  "threads": 16,
+  "architecture": "face_expression_net（从头训练）",
+  "params": 361487,
+  "input_size": 48,
+  "num_classes": 7,
+  "class_names": [
+    "angry",
+    "disgusted",
+    "fearful",
+    "happy",
+    "neutral",
+    "sad",
+    "surprised"
+  ],
+  "init_info": "载入 best_model.pt 微调（missing=0, unexpected=0）",
+  "data": {
+    "train": {
+      "total": 28709,
+      "distribution": {
+        "angry": 3995,
+        "disgusted": 436,
+        "fearful": 4097,
+        "happy": 7215,
+        "neutral": 4965,
+        "sad": 4830,
+        "surprised": 3171
+      }
+    },
+    "test": {
+      "total": 7178,
+      "distribution": {
+        "angry": 958,
+        "disgusted": 111,
+        "fearful": 1024,
+        "happy": 1774,
+        "neutral": 1233,
+        "sad": 1247,
+        "surprised": 831
+      }
+    }
+  },
+  "hyperparams": {
+    "data_dir": "D:\\StudyNote\\Mian02\\backend\\ml\\data\\fer2013",
+    "hf_mirror": "https://hf-mirror.com/datasets/Jeneral/fer-2013/resolve/main",
+    "input_size": 48,
+    "in_channels": 3,
+    "num_classes": 7,
+    "val_split": 0.1,
+    "num_workers": 0,
+    "preload": true,
+    "max_samples": 0,
+    "model_name": "face_expression_net",
+    "pretrained": false,
+    "imagenet_norm": false,
+    "width_mult": 1.25,
+    "dropout": 0.3,
+    "epochs": 12,
+    "batch_size": 256,
+    "lr": 0.003,
+    "head_lr_mult": 3.0,
+    "backbone_lr_mult": 1.0,
+    "weight_decay": 0.0005,
+    "optimizer": "adamw",
+    "momentum": 0.9,
+    "scheduler": "cosine",
+    "warmup_epochs": 1,
+    "min_lr": 1e-05,
+    "label_smoothing": 0.1,
+    "grad_clip": 5.0,
+    "use_class_weight": false,
+    "amp": true,
+    "aug_hflip": 0.5,
+    "aug_rotation": 12.0,
+    "aug_translate": 0.12,
+    "aug_brightness": 0.25,
+    "aug_scale": 0.12,
+    "random_erase_prob": 0.3,
+    "random_erase_min": 0.02,
+    "random_erase_max": 0.2,
+    "mixup_alpha": 0.0,
+    "ema_decay": 0.999,
+    "tta": true,
+    "init_weights": "ml/runs/20261013-115245-strong/best_model.pt",
+    "freeze_backbone": false,
+    "finetune_lr": 5e-05,
+    "early_stop_patience": 0,
+    "train_on_all": true,
+    "seed": 42,
+    "run_name": "refit",
+    "device": "auto"
+  },
+  "epochs_trained": 12,
+  "epochs_planned": 12,
+  "best_val_acc": 0.6777,
+  "best_epoch": 5,
+  "val": {
+    "accuracy": 0.6777,
+    "top2_accuracy": 0.8262,
+    "top3_accuracy": 0.9199,
+    "macro_f1": 0.1154,
+    "weighted_f1": 0.8079,
+    "per_class": [
+      {
+        "index": 0,
+        "precision": 1.0,
+        "recall": 0.6777,
+        "f1": 0.8079,
+        "support": 512,
+        "name": "angry"
+      },
+      {
+        "index": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0,
+        "name": "disgusted"
+      },
+      {
+        "index": 2,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0,
+        "name": "fearful"
+      },
+      {
+        "index": 3,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0,
+        "name": "happy"
+      },
+      {
+        "index": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0,
+        "name": "neutral"
+      },
+      {
+        "index": 5,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0,
+        "name": "sad"
+      },
+      {
+        "index": 6,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0,
+        "name": "surprised"
+      }
+    ],
+    "confusion_matrix": [
+      [
+        347,
+        0,
+        29,
+        12,
+        71,
+        48,
+        5
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "num_samples": 512,
+    "loss": 1.0983
+  },
+  "test": {
+    "accuracy": 0.6489,
+    "top2_accuracy": 0.8256,
+    "top3_accuracy": 0.9079,
+    "macro_f1": 0.5985,
+    "weighted_f1": 0.6446,
+    "per_class": [
+      {
+        "index": 0,
+        "precision": 0.538,
+        "recall": 0.6273,
+        "f1": 0.5793,
+        "support": 958,
+        "name": "angry"
+      },
+      {
+        "index": 1,
+        "precision": 0.8108,
+        "recall": 0.2703,
+        "f1": 0.4054,
+        "support": 111,
+        "name": "disgusted"
+      },
+      {
+        "index": 2,
+        "precision": 0.5245,
+        "recall": 0.4072,
+        "f1": 0.4585,
+        "support": 1024,
+        "name": "fearful"
+      },
+      {
+        "index": 3,
+        "precision": 0.862,
+        "recall": 0.8664,
+        "f1": 0.8642,
+        "support": 1774,
+        "name": "happy"
+      },
+      {
+        "index": 4,
+        "precision": 0.5495,
+        "recall": 0.7024,
+        "f1": 0.6166,
+        "support": 1233,
+        "name": "neutral"
+      },
+      {
+        "index": 5,
+        "precision": 0.5522,
+        "recall": 0.4747,
+        "f1": 0.5106,
+        "support": 1247,
+        "name": "sad"
+      },
+      {
+        "index": 6,
+        "precision": 0.7707,
+        "recall": 0.7401,
+        "f1": 0.7551,
+        "support": 831,
+        "name": "surprised"
+      }
+    ],
+    "confusion_matrix": [
+      [
+        601,
+        3,
+        65,
+        29,
+        131,
+        103,
+        26
+      ],
+      [
+        45,
+        30,
+        8,
+        1,
+        9,
+        13,
+        5
+      ],
+      [
+        169,
+        0,
+        417,
+        35,
+        135,
+        187,
+        81
+      ],
+      [
+        54,
+        1,
+        28,
+        1537,
+        101,
+        28,
+        25
+      ],
+      [
+        69,
+        1,
+        57,
+        80,
+        866,
+        138,
+        22
+      ],
+      [
+        151,
+        2,
+        121,
+        57,
+        300,
+        592,
+        24
+      ],
+      [
+        28,
+        0,
+        99,
+        44,
+        34,
+        11,
+        615
+      ]
+    ],
+    "num_samples": 7178,
+    "loss": 1.1798,
+    "class_names_cn": [
+      "生气",
+      "厌恶",
+      "害怕",
+      "开心",
+      "平静",
+      "难过",
+      "惊讶"
+    ],
+    "tta": true
+  },
+  "elapsed_sec": 198.0,
+  "artifacts": [
+    "config.json",
+    "metrics.json",
+    "history.csv",
+    "training_curves.png",
+    "confusion_matrix.png",
+    "confusion_matrix_normalized.png",
+    "classification_report.txt",
+    "best_model.pt",
+    "summary.md"
+  ]
+}

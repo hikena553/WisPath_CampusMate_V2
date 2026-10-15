@@ -7,6 +7,8 @@ import time
 import wave
 import base64
 import logging
+import logging.handlers
+import threading
 import httpx
 from pathlib import Path
 from datetime import datetime, timezone
@@ -25,8 +27,69 @@ from app.services.crisis_service import detect_crisis_keywords
 
 logger = logging.getLogger(__name__)
 
+# ===== 语音通话诊断日志 =====
+# 单独落盘（backend/logs/voice-call.log），完整记录 STT 文本、逐段 TTS 结果、
+# LLM 分片统计与异常，便于定位"播报中断 / 文字异常"等问题，可直接提供该文件排障。
+_VOICE_LOG_PATH = Path(__file__).resolve().parent.parent.parent / "logs" / "voice-call.log"
+
+
+def _ensure_voice_file_log() -> None:
+    """为 voice_service 挂专用滚动文件日志（幂等）。"""
+    if any(isinstance(h, logging.handlers.RotatingFileHandler) for h in logger.handlers):
+        return
+    try:
+        _VOICE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        fh = logging.handlers.RotatingFileHandler(
+            _VOICE_LOG_PATH, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8",
+        )
+        fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        fh.setLevel(logging.DEBUG)
+        logger.addHandler(fh)
+        logger.setLevel(logging.DEBUG)
+    except Exception:
+        logger.exception("语音诊断日志文件初始化失败（不影响功能）")
+
+
+_ensure_voice_file_log()
+
 # 负面情绪标签：持续高频出现时触发心理关注上报
 NEGATIVE_EMOTIONS = {"sad", "angry", "fearful", "disgusted"}
+# 接通问候时等待首帧表情的最长时长（秒）。
+# 首帧表情需要"摄像头授权 + 模型加载 + 首帧推理"，1.6s 基本等不到，会导致
+# 问候永远用不上表情（表现为"没结合我的表情"）。这里放宽到 6s；同时前端在
+# 摄像头不可用时会立刻发 emotion_unavailable，让问候立即进行、不空等。
+EMOTION_GREET_WAIT = 6.0
+# Edge TTS 合成失败时的兜底音色（Token Plan 旗舰中文音色，需已配置 API Key）
+FALLBACK_TOKENPLAN_VOICE = "longanlingxin"
+
+# ===== Token Plan TTS 限流保护 =====
+# 句子级流式会让多段合成"同时"发起（原设计为缩短首音），但 Token Plan 对 TTS
+# 有 QPS 配额，无限并发会触发 429（Throttling.RateQuota），表现为
+# "播报一小段后，剩余内容合成失败/没声音"。此处以全局信号量限流（同时保护
+# 账号级配额），并对 429 做退避重试，保留"边生成边合成"的流式设计不变。
+TTS_MAX_CONCURRENCY = 1      # 同时进行的合成请求数上限（=1 最稳，且仍快于实时播放）
+TTS_MAX_RETRY = 3            # 429 限流时的最大重试次数
+TTS_RETRY_BACKOFF_S = 1.2    # 429 重试退避基数（秒）
+
+_TTS_SEMAPHORE: asyncio.Semaphore | None = None
+
+
+def _tts_semaphore() -> asyncio.Semaphore:
+    """惰性创建 TTS 并发信号量（避免导入期绑定事件循环）。"""
+    global _TTS_SEMAPHORE
+    if _TTS_SEMAPHORE is None:
+        _TTS_SEMAPHORE = asyncio.Semaphore(TTS_MAX_CONCURRENCY)
+    return _TTS_SEMAPHORE
+# 一轮识别所需的最少音频（字节）：16kHz/16bit 单声道约 250ms，
+# 过滤噪声毛刺触发的空识别（本地 SenseVoice 对纯静音易输出"没。"等幻觉）
+MIN_SPEECH_BYTES = 8000
+
+# Edge TTS 熔断：本机实测微软合成端点返回 403（网络/风控受限），
+# 若每次都先撞 Edge 会明显拖慢首音；连续失败达阈值后进入冷却期，期间直连 Token Plan。
+_EDGE_FAIL_COUNT = 0
+_EDGE_COOLDOWN_UNTIL = 0.0
+EDGE_FAIL_THRESHOLD = 1          # 连续失败次数达到该值即熔断
+EDGE_COOLDOWN_SECONDS = 600.0    # 冷却时长（秒）
 EMOTION_LABELS = {
     "neutral": "平静", "happy": "开心", "sad": "难过", "angry": "生气",
     "fearful": "害怕", "disgusted": "厌恶", "surprised": "惊讶",
@@ -273,6 +336,16 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sa
     return buf.getvalue()
 
 
+def _is_speakable(text: str) -> bool:
+    """该片段是否值得送去合成。
+
+    必须至少含一个字母/数字/汉字：纯空白（如段落换行 "\\n\\n"）或纯标点
+    会被 TTS 接口拒（Token Plan 返回 400 InvalidParameter），
+    导致该段没有声音（表现为"播报一段后中断"）。
+    """
+    return any(ch.isalnum() for ch in text)
+
+
 def _take_tts_phrases(buffer: str, first_early: bool = False) -> tuple[list[str], str]:
     """从流式文本缓冲中切出可立即合成的自然语句，返回 (语句列表, 剩余缓冲)。
 
@@ -301,16 +374,24 @@ def _take_tts_phrases(buffer: str, first_early: bool = False) -> tuple[list[str]
                 phrases[-1] += ch
                 start = i + 1
             else:
-                phrases.append(buffer[start:i + 1])
+                piece = buffer[start:i + 1]
+                # 纯空白/纯标点段（典型：段落间的 "\n\n"）不送去合成，直接丢弃，
+                # 否则 TTS 会因"空文本"返回 400，造成该段没有声音
+                if _is_speakable(piece):
+                    phrases.append(piece)
                 start = i + 1
         elif ch in "，、,":
             length = i - start
             if (first_early and length >= EARLY_LEN) or (not first_early and length >= MAX_SENT_LEN):
-                phrases.append(buffer[start:i + 1])
+                piece = buffer[start:i + 1]
+                if _is_speakable(piece):
+                    phrases.append(piece)
                 start = i + 1
         elif i - start >= MAX_SENT_LEN:
             # 兜底：极长无标点串按上限硬切，宁可切也不无限等待
-            phrases.append(buffer[start:i + 1])
+            piece = buffer[start:i + 1]
+            if _is_speakable(piece):
+                phrases.append(piece)
             start = i + 1
     return phrases, buffer[start:]
 
@@ -383,21 +464,46 @@ async def tokenplan_tts(text: str, client: httpx.AsyncClient | None = None, voic
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    async def _stream(cl: httpx.AsyncClient):
-        resp = await cl.post(VOICE_TTS_URL, headers=headers, json=payload)
-        if resp.status_code >= 400:
-            # 完整记录阿里云返回（含 request_id / code / message），便于定位
-            # 套餐白名单、voice 拼写错误、文本超限等真实原因
-            body_text = (resp.text or "")[:500]
-            logger.error(
-                "Token Plan TTS 4xx: status=%s voice=%s model=%s body=%s",
-                resp.status_code, target_voice, target_model, body_text,
+    async def _request_audio_url(cl: httpx.AsyncClient) -> str:
+        """申请合成并取回音频直链：带全局并发上限 + 429 限流退避重试。
+
+        Token Plan 对 TTS 有 QPS 配额；句子级流式会同时发起多段合成，
+        无限并发会触发 429（Throttling.RateQuota），症状即
+        "播报一小段后，剩余内容无法合成"。这里用信号量限流 + 退避重试兜住，
+        既保留"边生成边合成"的流式设计，又不撞配额。
+        """
+        last_body = ""
+        for attempt in range(1, TTS_MAX_RETRY + 1):
+            async with _tts_semaphore():
+                resp = await cl.post(VOICE_TTS_URL, headers=headers, json=payload)
+                if resp.status_code < 400:
+                    body = resp.json()
+                    audio_url = (body.get("output") or {}).get("audio", {}).get("url")
+                    if audio_url:
+                        return audio_url
+                    raise RuntimeError(f"语音合成响应缺少音频地址: {body}")
+                last_body = (resp.text or "")[:500]
+                if resp.status_code != 429:
+                    # 完整记录阿里云返回（含 request_id / code / message），便于定位
+                    # 套餐白名单、voice 拼写错误、文本超限等真实原因
+                    logger.error(
+                        "Token Plan TTS 4xx: status=%s voice=%s model=%s body=%s",
+                        resp.status_code, target_voice, target_model, last_body,
+                    )
+                    raise RuntimeError(f"语音合成接口返回 {resp.status_code}: {last_body}")
+            # 429：限流。在信号量之外退避等待，避免占着并发额度空转
+            wait = TTS_RETRY_BACKOFF_S * attempt
+            logger.warning(
+                "Token Plan TTS 触发限流 429（第 %s/%s 次）voice=%s，%.1fs 后重试",
+                attempt, TTS_MAX_RETRY, target_voice, wait,
             )
-            raise RuntimeError(f"语音合成接口返回 {resp.status_code}: {body_text}")
-        body = resp.json()
-        audio_url = (body.get("output") or {}).get("audio", {}).get("url")
-        if not audio_url:
-            raise RuntimeError(f"语音合成响应缺少音频地址: {body}")
+            await asyncio.sleep(wait)
+        raise RuntimeError(
+            f"语音合成接口返回 429（触发限流，已重试 {TTS_MAX_RETRY} 次）: {last_body}"
+        )
+
+    async def _stream(cl: httpx.AsyncClient):
+        audio_url = await _request_audio_url(cl)
         # 流式下载：不等待整段音频下载完成，边收边产出
         async with cl.stream("GET", audio_url) as audio_resp:
             audio_resp.raise_for_status()
@@ -432,7 +538,7 @@ async def edge_tts_tts(
     from edge_tts import Communicate
 
     voice = voice or _get_tts_voice()
-    max_retries = 4
+    max_retries = 2
     last_exc: Exception | None = None
     for attempt in range(1, max_retries + 1):
         mp3_buf = io.BytesIO()
@@ -446,18 +552,24 @@ async def edge_tts_tts(
             last_exc = RuntimeError("微软未返回音频（疑似瞬时限流）")
         except Exception as exc:
             last_exc = exc
+            # 403 / 握手失败通常是网络或风控拦截，重试无意义：立即放弃，
+            # 交由上层熔断逻辑快速回退 Token Plan，避免首音被拖到十几秒
+            if "403" in str(exc) or "Handshake" in type(exc).__name__:
+                logger.warning("Edge TTS 被拒（%s），跳过重试", type(exc).__name__)
+                break
         if attempt < max_retries:
             # 微软对高频新连接有限流窗口，快速重试会撞在同一窗口内；
-            # 按 1s/2s/4s 退避，等待限流窗口过期
+            # 按 1s 退避，等待限流窗口过期
             backoff = float(2 ** (attempt - 1))
             logger.warning(
                 "Edge TTS 第 %s/%s 次合成失败 voice=%s: %s；%.0fs 后重试",
                 attempt, max_retries, voice, last_exc, backoff,
             )
             await asyncio.sleep(backoff)
-    else:
+
+    if mp3_buf.getbuffer().nbytes == 0:
         raise RuntimeError(
-            f"Edge TTS 合成失败 voice={voice}（已自动重试 {max_retries} 次）: {last_exc}"
+            f"Edge TTS 合成失败 voice={voice}（已尝试 {max_retries} 次）: {last_exc}"
         ) from last_exc
 
     mp3_buf.seek(0)
@@ -475,16 +587,131 @@ async def edge_tts_tts(
     yield data.tobytes()
 
 
+# ===================== 本地语音识别（sherpa-onnx SenseVoice，低延迟首选） =====================
+# 采用开源成熟的 sherpa-onnx（k2-fsa）离线识别器 + SenseVoice 多语种模型（随仓库内置于
+# backend/models/sense-voice），在服务进程内 CPU 推理，免去云端 ASR 的一次网络往返，
+# 是语音链路"首字延迟"优化的关键一环。识别失败 / 模型缺失时自动回退云端
+# qwen-audio-3.0-asr-flash，保证功能全链路不中断。
+
+_SENSEVOICE_RECOGNIZER = None
+_SENSEVOICE_UNAVAILABLE = False
+_SENSEVOICE_LOCK = threading.Lock()
+
+# 问候语按表情状态的情绪关照提示（视觉模块 -> 通话开场语定制）
+GREETING_EMOTION_HINT: dict[str, str] = {
+    "happy": "请用轻快、分享喜悦的语气回应，可以顺着他的好心情聊开。",
+    "sad": "请用温柔、安抚的语气，先接住他的情绪，不要急着说教。",
+    "angry": "请保持平和包容，先让他平复，避免争辩或说教。",
+    "fearful": "请给予安全感，语气坚定而温和，让他安心。",
+    "disgusted": "请温和转移话题，不要强化不快的情绪。",
+    "surprised": "请带着一点好奇自然地回应，顺着他的关注点聊聊。",
+    "neutral": "按日常问候即可，语气亲切自然。",
+}
+
+
+def _get_local_recognizer():
+    """懒加载本地 SenseVoice 识别器（进程内单例，线程安全）。
+
+    模型目录：backend/models/sense-voice/{model.int8.onnx,tokens.txt}
+    不可用时返回 None，并由调用方回退云端识别（只判定一次，避免反复失败拖慢链路）。
+    """
+    global _SENSEVOICE_RECOGNIZER, _SENSEVOICE_UNAVAILABLE
+    if _SENSEVOICE_RECOGNIZER is not None:
+        return _SENSEVOICE_RECOGNIZER
+    if _SENSEVOICE_UNAVAILABLE:
+        return None
+    with _SENSEVOICE_LOCK:
+        if _SENSEVOICE_RECOGNIZER is not None:
+            return _SENSEVOICE_RECOGNIZER
+        if _SENSEVOICE_UNAVAILABLE:
+            return None
+        try:
+            _ensure_vendor_on_path()
+            import sherpa_onnx
+            model_dir = Path(__file__).resolve().parent.parent.parent / "models" / "sense-voice"
+            model_path = model_dir / "model.int8.onnx"
+            tokens_path = model_dir / "tokens.txt"
+            if not model_path.is_file() or not tokens_path.is_file():
+                logger.warning("本地 SenseVoice 模型缺失，改用云端 STT：%s", model_dir)
+                _SENSEVOICE_UNAVAILABLE = True
+                return None
+            _SENSEVOICE_RECOGNIZER = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+                model=str(model_path),
+                tokens=str(tokens_path),
+                num_threads=2,
+                use_itn=True,
+                language="zh",
+                debug=False,
+            )
+            logger.info("本地 SenseVoice 识别器已加载：%s", model_path.name)
+            return _SENSEVOICE_RECOGNIZER
+        except Exception:
+            logger.exception("本地 SenseVoice 加载失败，改用云端 STT")
+            _SENSEVOICE_UNAVAILABLE = True
+            return None
+
+
+async def local_sensevoice_stt(audio_bytes: bytes) -> str:
+    """本地 SenseVoice 识别：16kHz 16bit 单声道 PCM -> 文本。
+
+    识别为同步 CPU 推理，放入线程池执行，避免阻塞事件循环影响其它连接；
+    输出中的 <|lang|> / <|emotion|> 等特殊标记会被剥离。
+    """
+    import numpy as np
+
+    recognizer = await asyncio.to_thread(_get_local_recognizer)
+    if recognizer is None:
+        raise RuntimeError("本地识别不可用")
+
+    samples = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+    if samples.size == 0:
+        return ""
+
+    def _decode() -> str:
+        stream = recognizer.create_stream()
+        stream.accept_waveform(16000, samples)
+        recognizer.decode_stream(stream)
+        return getattr(stream.result, "text", "") or ""
+
+    text = await asyncio.to_thread(_decode)
+    # 剥离 SenseVoice 特殊标记（语言/情绪/事件/ITN 等 <|...|> 标记）
+    return re.sub(r"<\|[^|]*\|>", "", text).strip()
+
+
 async def synthesize_speech(text: str, voice: str | None = None):
     """统一语音合成入口：按 voice 自动选择引擎。
 
     - 以 Neural 结尾的 voice 走 Edge TTS（微软免费，多音色，无需 API Key）。
     - 其它 voice 走 Token Plan（阿里云百炼 qwen-audio-3.0-tts-plus 旗舰音色）。
-    yield：16kHz 16bit 单声道 PCM 分块
+    Edge TTS 不可用（网络受限 / 403 风控 / 缺少解码依赖）时，自动回退 Token Plan
+    （若已配置 Key），避免"有文字没声音"。yield：16kHz 16bit 单声道 PCM 分块
     """
+    global _EDGE_FAIL_COUNT, _EDGE_COOLDOWN_UNTIL
     chosen = (voice or _get_tts_voice() or EDGE_TTS_DEFAULT_VOICE).strip()
     if is_edge_voice(chosen):
-        async for chunk in edge_tts_tts(text, voice=chosen):
+        # 熔断冷却期内直接用 Token Plan，避免每次合成先撞 Edge 的超时/403
+        if time.time() < _EDGE_COOLDOWN_UNTIL:
+            logger.debug("Edge TTS 处于熔断冷却期，直接使用 Token Plan 音色")
+        else:
+            try:
+                async for chunk in edge_tts_tts(text, voice=chosen):
+                    yield chunk
+                _EDGE_FAIL_COUNT = 0
+                return
+            except Exception:
+                _EDGE_FAIL_COUNT += 1
+                if _EDGE_FAIL_COUNT >= EDGE_FAIL_THRESHOLD:
+                    _EDGE_COOLDOWN_UNTIL = time.time() + EDGE_COOLDOWN_SECONDS
+                logger.warning(
+                    "Edge TTS 合成失败（连续 %s 次），已回退 Token Plan 音色，冷却 %ss",
+                    _EDGE_FAIL_COUNT, int(EDGE_COOLDOWN_SECONDS),
+                )
+        if not _get_voice_api_key():
+            # 没有任何可用 Key，只能把 Edge 的错误抛给上层（前端会提示原因）
+            async for chunk in edge_tts_tts(text, voice=chosen):
+                yield chunk
+            return
+        async for chunk in tokenplan_tts(text, voice=FALLBACK_TOKENPLAN_VOICE):
             yield chunk
     else:
         async for chunk in tokenplan_tts(text, voice=chosen or None):
@@ -637,20 +864,252 @@ async def handle_voice_connection(
             )
 
         # ============================================================
+        # 语音识别：本地 SenseVoice（低延迟首选）-> 云端 qwen-audio-asr 兜底
+        # ============================================================
+        async def transcribe_audio(audio_bytes: bytes) -> str:
+            t0 = time.monotonic()
+            try:
+                text = await local_sensevoice_stt(audio_bytes)
+                if text:
+                    logger.info(
+                        "[STT] engine=local-sensevoice bytes=%d ms=%d text=%r",
+                        len(audio_bytes), int((time.monotonic() - t0) * 1000), text,
+                    )
+                    return text
+                logger.info("[STT] 本地识别为空，回退云端 bytes=%d", len(audio_bytes))
+            except Exception:
+                logger.warning("本地 SenseVoice 识别失败，回退云端 STT", exc_info=True)
+            t1 = time.monotonic()
+            text = await tokenplan_stt(audio_bytes, client=http_client)
+            logger.info(
+                "[STT] engine=cloud-qwen-asr bytes=%d ms=%d text=%r",
+                len(audio_bytes), int((time.monotonic() - t1) * 1000), text,
+            )
+            return text
+
+        # ============================================================
+        # 通用回复链：LLM 流式 -> 句子级 TTS（边说边出）
+        # 问候轮次与用户轮次共用，保证"智能体先开口"与正常对话同一套低延迟链路
+        # ============================================================
+        async def run_llm_tts(run_messages: list[dict]) -> tuple[str, bool]:
+            """流式 LLM + 句级 TTS 链。返回 (完整回复文本, 是否被打断)。
+
+            全程监听 cancel_event：用户开口即终止生成、跳过未播音频（豆包式打断），
+            已播放/已输出的内容保留，未输出的直接作废。
+            """
+            full_response = ""
+            interrupted = False
+            sentence_buf = ""
+            speaking_notified = False
+            tts_error_notified = False
+            tts_chain: asyncio.Task | None = None
+            delta_count = 0
+            first_delta_ms: int | None = None
+            llm_t0 = time.monotonic()
+
+            async def _synth_to_queue(phrase: str, q: asyncio.Queue) -> None:
+                """独立合成一段短语：边产出边放入队列；结束/异常/被打断时放入 None 信号"""
+                nonlocal tts_error_notified
+                t0 = time.monotonic()
+                nbytes = 0
+                try:
+                    async for chunk in synthesize_speech(phrase):
+                        if cancel_event.is_set():
+                            break
+                        nbytes += len(chunk)
+                        await q.put(chunk)
+                    # 逐段合成结果落日志：这是定位"播报到一半失败"的关键证据
+                    logger.info(
+                        "[TTS] ok chars=%d bytes=%d ms=%d text=%r",
+                        len(phrase), nbytes, int((time.monotonic() - t0) * 1000), phrase,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.exception(
+                        "[TTS] fail chars=%d bytes=%d ms=%d text=%r",
+                        len(phrase), nbytes, int((time.monotonic() - t0) * 1000), phrase,
+                    )
+                    # 告知前端"这段没声音"，但错误文案保持友好（原始细节只进日志）
+                    if not tts_error_notified:
+                        tts_error_notified = True
+                        await safe_send_json(websocket, {
+                            "type": "error",
+                            "message": "语音合成暂时不可用，已继续显示文字",
+                        })
+                finally:
+                    await q.put(None)
+
+            def enqueue_tts(phrase: str) -> None:
+                """短语级流式 TTS：合成立即并发发起，发送严格按入队顺序链式执行。
+                每段音频边下载边发送（首块到达即播报，无需等整段下载完），
+                且多段合成时间重叠，整体播报显著提前"""
+                nonlocal tts_chain
+                prev = tts_chain
+                chunk_q: asyncio.Queue[bytes | None] = asyncio.Queue()
+                asyncio.create_task(_synth_to_queue(phrase, chunk_q))
+
+                async def runner() -> None:
+                    nonlocal speaking_notified
+                    if prev is not None:
+                        try:
+                            await prev
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception:
+                            pass
+                    if cancel_event.is_set():
+                        return
+                    while True:
+                        chunk = await chunk_q.get()
+                        if chunk is None:
+                            break
+                        if cancel_event.is_set():
+                            break
+                        if not speaking_notified:
+                            speaking_notified = True
+                            await safe_send_json(websocket, {"type": "state", "state": "speaking"})
+                        for i in range(0, len(chunk), 8192):
+                            if cancel_event.is_set():
+                                break
+                            if not await safe_send_json(websocket, {
+                                "type": "ai_audio",
+                                "data": base64.b64encode(chunk[i:i + 8192]).decode(),
+                            }):
+                                break
+
+                tts_chain = asyncio.create_task(runner())
+
+            try:
+                stream = await _get_client().chat.completions.create(
+                    model=_get_llm_config()["model"],
+                    messages=run_messages,
+                    stream=True,
+                    temperature=0.7,
+                    max_tokens=1024,
+                )
+                async for chunk in stream:
+                    delta = chunk.choices[0].delta if chunk.choices else None
+                    if not (delta and delta.content):
+                        continue
+                    if cancel_event.is_set():
+                        # 用户开口打断：终止本轮生成，不保留半截回复
+                        interrupted = True
+                        break
+                    delta_count += 1
+                    if first_delta_ms is None:
+                        first_delta_ms = int((time.monotonic() - llm_t0) * 1000)
+                    # 编码异常探测：出现替换字符 U+FFFD 说明上游流式解码有问题（文字乱码根源）
+                    if "\ufffd" in delta.content:
+                        logger.warning(
+                            "[LLM] 分片含替换字符 U+FFFD（疑似上游编码问题）delta#%d=%r",
+                            delta_count, delta.content,
+                        )
+                    full_response += delta.content
+                    sentence_buf += delta.content
+                    if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
+                        break
+                    # 语句级切分：产出即合成，实现"早开场"（不等完整回答）；
+                    # 整句归段、首段早出音，杜绝碎块化造成的随机停顿
+                    phrases, sentence_buf = _take_tts_phrases(
+                        sentence_buf, first_early=(tts_chain is None)
+                    )
+                    for p in phrases:
+                        if not _is_speakable(p):
+                            # 纯空白/纯标点不合成（TTS 会 400）
+                            continue
+                        logger.debug("[PHRASE] enqueue %r", p)
+                        enqueue_tts(p)
+
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("LLM 失败")
+                await safe_send_json(websocket, {"type": "error", "message": "AI 回复失败"})
+                return full_response, interrupted
+
+            # 打断时：已入队的短语通过 runner 内的 cancel_event 检查跳过发送，
+            # 合成任务自然结束，保证本轮历史/DB 正常收尾
+            if not interrupted and sentence_buf.strip() and _is_speakable(sentence_buf):
+                enqueue_tts(sentence_buf)
+
+            if tts_chain is not None:
+                try:
+                    await tts_chain
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    pass
+
+            logger.info(
+                "[LLM] done deltas=%d first_delta_ms=%s chars=%d interrupted=%s",
+                delta_count, first_delta_ms, len(full_response), interrupted,
+            )
+            return full_response, interrupted
+
+        # ============================================================
+        # 接通问候：智能体先开口（豆包式"AI 先说话"），按摄像头表情状态定制开场语
+        # ============================================================
+        async def process_greeting(emotion: str | None) -> None:
+            """通话接通瞬间由 AI 先说话：结合当前表情状态生成一句自然口语化问候"""
+            try:
+                if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
+                    return
+                logger.info("[GREET] 开始生成问候 emotion=%s", emotion)
+                greet_messages = [{"role": "system", "content": system_prompt}]
+                if emotion:
+                    greet_messages.append({
+                        "role": "system",
+                        "content": (
+                            f"视觉情绪模块刚检测到：学生此刻表情偏【{EMOTION_LABELS.get(emotion, emotion)}】。"
+                            f"{GREETING_EMOTION_HINT.get(emotion, '')}"
+                        ),
+                    })
+                greet_messages.append({
+                    "role": "system",
+                    "content": (
+                        "【本次为语音通话接通时刻】请由你先开口，用一句自然、亲切、口语化的问候开启聊天，"
+                        "不超过 30 字，不要提及‘接通’‘系统’‘检测’等字眼；"
+                        "若已知学生的表情状态，请自然地关照一下他的状态，可顺着你观察到的情绪开口，"
+                        "但不要生硬地说‘我检测到你的表情’。"
+                    ),
+                })
+                greet_messages.extend(history[-4:])  # 续聊时让问候承接上文
+                full_response, interrupted = await run_llm_tts(greet_messages)
+                if not interrupted and full_response.strip():
+                    history.append({"role": "assistant", "content": full_response})
+                    if len(history) > 50:
+                        history[:] = history[-50:]
+                    if conversation_id:
+                        try:
+                            db.add(ConversationMessage(
+                                conversation_id=conversation_id, role="assistant", content=full_response,
+                            ))
+                            conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+                            if conv:
+                                conv.updated_at = datetime.now(timezone.utc)
+                            db.commit()
+                        except Exception:
+                            db.rollback()
+                            logger.exception("保存问候语失败")
+                await safe_send_json(websocket, {"type": "state", "state": "listening"})
+            except Exception:
+                logger.exception("问候轮次失败")
+
+        # ============================================================
         # 单轮对话处理：STT -> LLM 流式 -> 句子级 TTS 链（边说边出）
         # ============================================================
         async def process_round(audio_bytes: bytes) -> None:
             """处理一轮 语音->识别->对话->合成；全程监听打断信号 cancel_event"""
-            interrupted_llm = False
             text = ""
             full_response = ""
             try:
                 if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
                     return
 
-                # 1. STT
+                # 1. STT（本地 SenseVoice 优先，云端兜底）
                 try:
-                    text = await tokenplan_stt(audio_bytes, client=http_client)
+                    text = await transcribe_audio(audio_bytes)
                 except Exception:
                     logger.exception("STT 失败")
                     await safe_send_json(websocket, {"type": "error", "message": "语音识别失败，请重试"})
@@ -660,7 +1119,10 @@ async def handle_voice_connection(
                 if cancel_event.is_set():
                     # 用户已开口打断本轮，丢弃识别结果
                     return
-                if not text or not text.strip():
+                if not text or not text.strip() or not _is_speakable(text):
+                    # 空识别或"纯标点"（典型是音频质量差/采样率不匹配造成的幻觉输出），
+                    # 不进入对话，避免把"。"当成学生说的内容去回答
+                    logger.info("[STT] 识别结果无有效内容，忽略: %r", text)
                     await safe_send_json(websocket, {"type": "state", "state": "listening"})
                     return
 
@@ -690,112 +1152,11 @@ async def handle_voice_connection(
                 messages.extend(history[-8:])  # 最近 8 条历史，控制 LLM 首字延迟
                 messages.append({"role": "user", "content": text})
 
-                sentence_buf = ""
-                speaking_notified = False
-                tts_chain: asyncio.Task | None = None
-
-                async def _synth_to_queue(phrase: str, q: asyncio.Queue) -> None:
-                    """独立合成一段短语：边产出边放入队列；结束/异常/被打断时放入 None 信号"""
-                    try:
-                        async for chunk in synthesize_speech(phrase):
-                            if cancel_event.is_set():
-                                break
-                            await q.put(chunk)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:
-                        logger.exception("短语语音合成失败")
-                    finally:
-                        await q.put(None)
-
-                def enqueue_tts(phrase: str) -> None:
-                    """短语级流式 TTS：合成立即并发发起，发送严格按入队顺序链式执行。
-                    每段音频边下载边发送（首块到达即播报，无需等整段下载完），
-                    且多段合成时间重叠，整体播报显著提前"""
-                    nonlocal tts_chain
-                    prev = tts_chain
-                    chunk_q: asyncio.Queue[bytes | None] = asyncio.Queue()
-                    synth = asyncio.create_task(_synth_to_queue(phrase, chunk_q))
-
-                    async def runner() -> None:
-                        nonlocal speaking_notified
-                        if prev is not None:
-                            try:
-                                await prev
-                            except asyncio.CancelledError:
-                                raise
-                            except Exception:
-                                pass
-                        if cancel_event.is_set():
-                            return
-                        while True:
-                            chunk = await chunk_q.get()
-                            if chunk is None:
-                                break
-                            if cancel_event.is_set():
-                                break
-                            if not speaking_notified:
-                                speaking_notified = True
-                                await safe_send_json(websocket, {"type": "state", "state": "speaking"})
-                            for i in range(0, len(chunk), 8192):
-                                if cancel_event.is_set():
-                                    break
-                                if not await safe_send_json(websocket, {
-                                    "type": "ai_audio",
-                                    "data": base64.b64encode(chunk[i:i + 8192]).decode(),
-                                }):
-                                    break
-
-                    tts_chain = asyncio.create_task(runner())
-
-                try:
-                    stream = await _get_client().chat.completions.create(
-                        model=_get_llm_config()["model"],
-                        messages=messages,
-                        stream=True,
-                        temperature=0.7,
-                        max_tokens=1024,
-                    )
-                    async for chunk in stream:
-                        delta = chunk.choices[0].delta if chunk.choices else None
-                        if not (delta and delta.content):
-                            continue
-                        if cancel_event.is_set():
-                            # 用户开口打断：终止本轮生成，不保留半截回复
-                            interrupted_llm = True
-                            break
-                        full_response += delta.content
-                        sentence_buf += delta.content
-                        if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
-                            break
-                        # 语句级切分：产出即合成，实现"早开场"（不等完整回答）；
-                        # 整句归段、首段 14 字早出音，杜绝碎块化造成的随机停顿
-                        phrases, sentence_buf = _take_tts_phrases(
-                            sentence_buf, first_early=(tts_chain is None)
-                        )
-                        for p in phrases:
-                            enqueue_tts(p)
-
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    logger.exception("LLM 失败")
-                    await safe_send_json(websocket, {"type": "error", "message": "AI 回复失败"})
-                    await safe_send_json(websocket, {"type": "state", "state": "listening"})
-                    return
-
-                # 打断时：已入队的短语通过 runner 内的 cancel_event 检查跳过发送，
-                # 合成任务自然结束，保证本轮历史/DB 正常收尾
-                if not interrupted_llm and sentence_buf.strip():
-                    enqueue_tts(sentence_buf)
-
-                if tts_chain is not None:
-                    try:
-                        await tts_chain
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:
-                        pass
+                full_response, interrupted_llm = await run_llm_tts(messages)
+                logger.info(
+                    "[ROUND] done user=%r chars=%d interrupted=%s",
+                    text, len(full_response), interrupted_llm,
+                )
 
                 # 4. 保存对话历史（被打断的轮次不保留半截回复）
                 history.append({"role": "user", "content": text})
@@ -823,6 +1184,39 @@ async def handle_voice_connection(
             except Exception:
                 logger.exception("语音处理轮次失败")
 
+        # ============================================================
+        # 接通即问候（豆包式"AI 先说话"）：连接建立即由后端自动触发，
+        # 最多等待 EMOTION_GREET_WAIT 秒以取到首帧表情用于定制开场语。
+        # 由后端主动触发（而非依赖前端时序），杜绝"问候语丢失"。
+        # ============================================================
+        first_emotion: dict = {"value": None}
+        emotion_ready = asyncio.Event()
+        greeted = False
+
+        async def _greet_after_connect() -> None:
+            nonlocal greeted
+            t0 = time.monotonic()
+            try:
+                try:
+                    await asyncio.wait_for(emotion_ready.wait(), timeout=EMOTION_GREET_WAIT)
+                    waited = "(已就绪)"
+                except asyncio.TimeoutError:
+                    waited = f"(等待超时 {int(EMOTION_GREET_WAIT)}s)"
+                emo = first_emotion["value"]
+                logger.info(
+                    "[GREET] 表情获取 %s waited_ms=%d emotion=%s → %s",
+                    waited, int((time.monotonic() - t0) * 1000), emo,
+                    "按表情定制问候" if emo else "未取到表情，用中性问候",
+                )
+                if greeted or cancel_event.is_set():
+                    return
+                greeted = True
+                await process_greeting(emo)
+            except Exception:
+                logger.exception("接通问候失败")
+
+        round_task = asyncio.create_task(_greet_after_connect())
+
         while True:
             raw = await websocket.receive_text()
             msg = json.loads(raw)
@@ -841,31 +1235,57 @@ async def handle_voice_connection(
                         "confidence": float(msg.get("confidence") or 0),
                         "ts": datetime.now(timezone.utc),
                     })
+                    # 首帧表情：用于接通问候的开场语定制
+                    if first_emotion["value"] is None:
+                        first_emotion["value"] = emo
+                    emotion_ready.set()
                     # 保留最近 200 条，防止内存膨胀
                     if len(emotion_timeline) > 200:
                         emotion_timeline = emotion_timeline[-200:]
 
+            elif msg["type"] == "emotion_unavailable":
+                # 前端表情识别不可用（摄像头被拒 / 模型未就绪）：立即放行问候，不空等
+                logger.info("[GREET] 收到 emotion_unavailable，立即进行问候")
+                emotion_ready.set()
+
+            elif msg["type"] == "start_call":
+                # 兼容旧前端的显式问候触发：仅补记表情（问候已由连接时自动触发，避免重复）
+                emo = msg.get("emotion")
+                if emo and emo in EMOTION_LABELS:
+                    if first_emotion["value"] is None:
+                        first_emotion["value"] = emo
+                    emotion_ready.set()
+
             elif msg["type"] == "end_of_speech":
-                if len(audio_buffer) < 1000:
-                    # 音频太短，忽略
+                if len(audio_buffer) < MIN_SPEECH_BYTES:
+                    # 音频太短，忽略（防噪声/毛刺触发空识别）
                     audio_buffer.clear()
                     continue
 
                 payload = bytes(audio_buffer)
                 audio_buffer.clear()
 
-                # 上一轮（可能正被中断）先收尾，保证 history/DB 写入顺序
-                if round_task is not None and not round_task.done():
-                    try:
-                        await round_task
-                    except (Exception, asyncio.CancelledError):
-                        pass
-                cancel_event.clear()
-                round_task = asyncio.create_task(process_round(payload))
+                # 不在接收循环里阻塞等待上一轮：把"等上一轮收尾 + 本轮处理"链进新任务，
+                # 保证生成期间仍能及时处理 interrupt（用户打断）等信令
+                prev_round = round_task
+
+                async def _chained_round(prev: asyncio.Task | None, data: bytes = payload) -> None:
+                    if prev is not None and not prev.done():
+                        try:
+                            await prev
+                        except (Exception, asyncio.CancelledError):
+                            pass
+                    cancel_event.clear()
+                    await process_round(data)
+
+                round_task = asyncio.create_task(_chained_round(prev_round))
 
             elif msg["type"] == "interrupt":
                 # 用户开口：终止正在进行的生成与合成（只保留最近一轮回答）
                 cancel_event.set()
+                # 丢弃已累积音频：此前缓冲里大量是 AI 自身播报的回声，
+                # 若保留会与用户新说的话混在一起，被识别成乱码
+                audio_buffer.clear()
                 await safe_send_json(websocket, {"type": "state", "state": "listening"})
 
             elif msg["type"] == "mute":

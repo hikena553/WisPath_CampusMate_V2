@@ -1,0 +1,15 @@
+{
+  "exported_at": "2026-10-13T15:10:47.668658+00:00",
+  "source_run": "20261013-130843-strong64",
+  "onnx_path": "D:\\StudyNote\\Mian02\\frontend\\public\\models\\emotion_strong64.onnx",
+  "onnx_bytes": 1451799,
+  "params": 361487,
+  "input": "1x3x64x64 float32",
+  "preprocess": "gray->size->x/255->(x-0.5)/0.5->repeat 3ch->CHW（与训练一致）",
+  "output": "logits(7) 顺序 = angry,disgusted,fearful,happy,neutral,sad,surprised",
+  "max_logit_diff_first256": 2.384185791015625e-06,
+  "test_accuracy_no_tta": 0.6538,
+  "test_top2_no_tta": 0.8256,
+  "test_macro_f1_no_tta": 0.6077,
+  "train_record_accuracy_with_tta": 0.6616
+}

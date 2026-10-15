@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-10-14T13:39:59.947248+00:00",
+  "kind": "browser_e2e_emotion",
+  "mode": "realtime",
+  "driver": "Edge subprocess + local HTTP collector（未使用 Playwright）",
+  "url": "http://localhost:5173/e2e/emotion-probe.html",
+  "probe_status": {
+    "status": "running",
+    "error": "",
+    "videoSize": "320x240",
+    "total": 235,
+    "detectorBackend": "yolov8n"
+  },
+  "samples": 235,
+  "shots": 0,
+  "frames_grid": null,
+  "emotion_distribution": {
+    "neutral": 235
+  },
+  "console": []
+}

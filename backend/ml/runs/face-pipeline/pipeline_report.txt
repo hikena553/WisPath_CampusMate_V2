@@ -1,0 +1,5 @@
+detector: D:\StudyNote\Mian02\backend\ml\runs\wider-face\weights\best.pt
+mAP50=0.6442 mAP50-95=0.3331 precision=0.8111 recall=0.5716
+expression_model: 20261013-174022-improved (face_expression_net, input 64)
+detection_hit_rate_iou30: 0.9500 (285/300)
+chain_expression_accuracy: 0.7018 (200/285)

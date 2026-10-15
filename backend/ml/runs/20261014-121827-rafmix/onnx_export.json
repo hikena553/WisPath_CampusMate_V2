@@ -1,0 +1,15 @@
+{
+  "exported_at": "2026-10-14T12:50:53.559398+00:00",
+  "source_run": "20261014-121827-rafmix",
+  "onnx_path": "d:\\StudyNote\\Mian02\\frontend\\public\\models\\emotion_se64_rafmix.onnx",
+  "onnx_bytes": 1882047,
+  "params": 465512,
+  "input": "1x3x64x64 float32",
+  "preprocess": "gray->size->x/255->(x-0.5)/0.5->repeat 3ch->CHW（与训练一致）",
+  "output": "logits(7) 顺序 = angry,disgusted,fearful,happy,neutral,sad,surprised",
+  "max_logit_diff_first256": 2.86102294921875e-06,
+  "test_accuracy_no_tta": 0.6388,
+  "test_top2_no_tta": 0.8243,
+  "test_macro_f1_no_tta": 0.6022,
+  "train_record_accuracy_with_tta": 0.6464
+}

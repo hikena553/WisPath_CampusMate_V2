@@ -19,7 +19,6 @@
           :fetching="fetching"
           :show-menu-button="isMobile"
           @toggle-sidebar="mobileSidebarVisible = !mobileSidebarVisible"
-          @conversation-removed="onConversationRemoved"
         />
       </Transition>
     </div>
@@ -73,13 +72,6 @@ function onNew() {
   if (isMobile.value) {
     mobileSidebarVisible.value = false
   }
-}
-
-/** 当前对话被删除/归档（移动端操作面板触发）：切到下一个对话，没有则回到新对话 */
-function onConversationRemoved() {
-  const next = store.list[0]
-  if (next) onSelect(next)
-  else onNew()
 }
 
 watch(() => store.activeId, () => {

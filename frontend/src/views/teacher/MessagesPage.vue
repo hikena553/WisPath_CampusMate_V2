@@ -17,11 +17,11 @@
           <DtIcon name="plus" :size="20" />
         </button>
         <button
-          v-else-if="mobileView === 'notifications'"
+          v-if="hasUnread"
           class="msg-appbar-btn"
           type="button"
-          aria-label="全部标记已读"
-          @click="handleReadAllNotifications"
+          aria-label="清除未读提示"
+          @click="handleClearUnread"
         >
           <DtIcon name="check" :size="19" />
         </button>
@@ -52,9 +52,16 @@
           <span class="header-title">消息</span>
         </div>
         <div class="header-right">
-          <el-badge :value="totalUnread" :hidden="!totalUnread" :max="99">
-            <DtIcon name="bell" :size="18" class="header-icon" />
-          </el-badge>
+          <button
+            type="button"
+            class="header-icon-btn"
+            :title="hasUnread ? '清除未读提示' : '暂无未读'"
+            @click="handleClearUnread"
+          >
+            <el-badge :value="totalUnread" :hidden="!totalUnread" :max="99">
+              <DtIcon name="bell" :size="18" class="header-icon" />
+            </el-badge>
+          </button>
         </div>
       </div>
 
@@ -1157,6 +1164,7 @@ import {
 import { getColleges, getMajors, getClassGroups, getOrgScope, type OrgScope } from '@/api/organization'
 import type { College, Major, ClassGroup } from '@/types'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useButlerPreview } from '@/composables/useButlerPreview'
 import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
 // 小绵管家：教师端与学生端共用的常驻会话（自动推送资讯 + 总结对话）
@@ -1851,6 +1859,19 @@ const totalUnread = computed(() => {
   return convUnread + groupUnread
 })
 
+// 全局未读提示（与布局红点同一数据源）：清除后同步刷新页内各列表红点
+const { clearAll: clearUnreadAll } = useUnreadSummary()
+const hasUnread = computed(() => totalUnread.value > 0 || unreadNotifCount.value > 0)
+
+/** 清除未读提示：单聊 + 群聊 + 站内通知一次清掉 */
+async function handleClearUnread() {
+  await clearUnreadAll()
+  ElMessage.success('已清除未读提示')
+  loadConversations()
+  loadGroups()
+  loadNotifications()
+}
+
 // 时间线
 const messageTimeline = computed(() => {
   const items: Array<{ type: 'date'; date: string; label: string } | { type: 'msg'; msg: any }> = []
@@ -2349,6 +2370,13 @@ function onGlobalClick(e: MouseEvent) {
 .action-btn { font-size: 18px; color: var(--tui-brand); }
 .header-icon { color: var(--tui-text-tertiary); cursor: pointer; }
 .header-icon:hover { color: var(--tui-brand); }
+/* 头部铃铛：点击即清除未读提示（单聊 + 群聊 + 站内通知） */
+.header-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: transparent; padding: 2px 4px;
+  border-radius: 8px; cursor: pointer;
+}
+.header-icon-btn:hover { background: var(--dt-hover); }
 .sidebar-search { padding: 10px 12px 6px; }
 .sidebar-search :deep(.el-input__wrapper) { border-radius: var(--tui-radius-sm); }
 .sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0 8px; }
