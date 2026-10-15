@@ -31,6 +31,13 @@ export interface CampusArticle {
   content_html: string | null
   links: CampusArticleLink[]
   source_url: string
+  /**
+   * 该页面能否用「原页渲染」（反代 iframe）打开。
+   * 后端对超星系 SPA（lib.mycc.edu.cn 等）返回 false —— 其正文由脚本注入，
+   * 而不透明源 iframe 会中断这些脚本，原页必然白屏。
+   * 老后端不返回该字段时按 true 处理（保持既有行为）。
+   */
+  supports_original?: boolean
 }
 
 /** 站内阅读：后端代理抓取校内页面并提取正文，避免跳出应用 */

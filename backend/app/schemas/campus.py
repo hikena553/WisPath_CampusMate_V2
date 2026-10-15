@@ -38,3 +38,6 @@ class CampusArticleOut(BaseModel):
     content_html: str | None = None
     links: list[CampusArticleLink] = []
     source_url: str
+    # 该页面能否用「原页渲染」（反代 + iframe）打开。
+    # False 表示站点内容由 JS 注入，原页必然白屏，前端不应提供该切换选项。
+    supports_original: bool = True

@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.campus import CampusScenery, CampusImpressionItem
 from app.models.user import User
-from app.services.article_reader import read_url, is_allowed_url
+from app.services.article_reader import read_url, is_allowed_url, requires_js
 from app.services.campus_embed import build_embed_html, build_embed_error_html
 from app.services.impression_crawler import get_impression_cache, refresh_impression_data
 from app.schemas.campus import CampusSceneryOut, AnnouncementOut, GalleryImageOut, CampusArticleOut
@@ -120,17 +120,24 @@ def read_campus_article(
 
     学校站点均设 X-Frame-Options: SAMEORIGIN，无法 iframe 内嵌，
     由后端代抓 + 白名单校验（仅 *.mycc.edu.cn）+ 正文净化后返回。
+
+    响应附带 supports_original：该页面能否用「原页渲染」（反代 iframe）打开。
+    对超星系 SPA（lib.mycc.edu.cn 等）为 False —— 其正文由脚本注入，
+    而不透明源 iframe 会中断这些脚本，原页必然白屏。
     """
     if not is_allowed_url(url):
         raise HTTPException(400, "仅支持校内站点链接")
     try:
-        return read_url(url)
+        data = read_url(url)
     except PermissionError as e:
         raise HTTPException(400, str(e))
     except RuntimeError as e:
         raise HTTPException(502, f"页面抓取失败：{e}")
     except Exception:
         raise HTTPException(502, "页面解析失败")
+    # 在接口层附加而非写进 read_url 的缓存：缓存值保持纯解析结果，
+    # 该标记始终按「本次请求的地址」计算，不会因缓存命中而串站。
+    return {**data, "supports_original": not requires_js(url)}
 
 
 @router.get("/embed", response_class=HTMLResponse)
@@ -168,4 +175,21 @@ def embed_campus_page(
             status_code=502,
             headers={"Cache-Control": "no-store"},
         )
-    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+    return HTMLResponse(
+        content=html,
+        headers={
+            "Cache-Control": "no-store",
+            # 反代页跑的是学校站点的全部脚本（含内联），来源是我们自己的源。
+            # sandbox（不含 allow-same-origin）已挡住「读应用数据」，但挡不住
+            # 「脚本能发请求 / 能弹窗」。这里补一条 CSP 收口：
+            #   - script-src 允许 inline/eval：学校页有 12+ 个内联脚本与 jQuery 系
+            #     动态求值，收紧会直接白屏，只能保持宽松（这是原页渲染的固有代价）；
+            #   - object-src / base-uri 'none'：挡插件与 <base> 劫持；
+            #   - frame-ancestors 'self'：反代页只允许被本应用嵌（防被第三方盗嵌）；
+            #   - img/style/font 放开 * 与 data:，因为资源经注入的 <base> 回学校站加载。
+            "Content-Security-Policy": (
+                "default-src 'self' * data: blob: 'unsafe-inline' 'unsafe-eval'; "
+                "object-src 'none'; base-uri 'none'; frame-ancestors 'self'"
+            ),
+        },
+    )
