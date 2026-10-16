@@ -97,6 +97,39 @@ def smooth_v2(state: dict, emotion: str, confidence: float) -> str:
     return smooth_hyst(state, emotion, confidence, hi_conf=0.75)
 
 
+def smooth_v3(state: dict, emotion: str, confidence: float, proba: np.ndarray | None = None,
+              margin: float = 0.12) -> str:
+    """v3：在 v2 基础上增加"相对优势"判定，用于识别**细微变化**。
+
+    v2 只看新标签的**绝对**置信度（≥0.55 / ≥0.75）。但表情只是轻微变化时，
+    模型对新表情的置信度可能只有 0.4 左右，永远够不到阈值 —— 表现就是"脸上明明变了、界面不动"。
+    v3 additionally 比较"新标签概率 vs 当前显示标签概率"，只要**相对优势**够大就切换：
+      advantage = p(新) − p(当前显示)  ≥ margin  →  切换（连续 2 次确认，抑制抖动）
+    这样"弱但明确"的变化也能跟上，而两个标签概率接近的随机抖动仍被压住。
+    """
+    if proba is not None and state.get("label"):
+        cur = CLASS_NAMES.index(state["label"])
+        new_i = CLASS_NAMES.index(emotion)
+        if new_i != cur and confidence < 0.75:
+            adv = float(proba[new_i] - proba[cur])
+            if adv >= margin:
+                if state.get("advLabel") == emotion:
+                    state["advCount"] = state.get("advCount", 0) + 1
+                else:
+                    state["advLabel"] = emotion
+                    state["advCount"] = 1
+                if state["advCount"] >= 2:
+                    state["label"] = emotion
+                    state["window"] = [emotion]
+                    state["streakLabel"] = emotion
+                    state["streak"] = 1
+                    return emotion
+            else:
+                state["advLabel"] = ""
+                state["advCount"] = 0
+    return smooth_hyst(state, emotion, confidence, hi_conf=0.75)
+
+
 def new_state() -> dict:
     return {"recent": [], "label": "", "window": [], "streakLabel": "", "streak": 0}
 
@@ -179,12 +212,20 @@ def evaluate(probs: np.ndarray, truth: np.ndarray, order: list[str], per_seg: in
     n = len(truth)
     seg_true = np.array([CLASS_NAMES.index(l) for l in order for _ in range(per_seg)])
 
+    raw = probs.argmax(axis=1)
     out = {}
-    for name, fn in (("legacy_majority5", smooth_legacy),
-                     ("hysteresis_v1", smooth_v1),
-                     ("hysteresis_v2", smooth_v2)):
+    policies = (
+        ("legacy_majority5", smooth_legacy, False),
+        ("hysteresis_v2", smooth_v2, False),
+        ("margin_v3(微变化增强)", smooth_v3, True),
+    )
+    for name, fn, want_proba in policies:
         st = new_state()
-        smoothed = [fn(st, CLASS_NAMES[int(probs[i].argmax())], float(probs[i].max())) for i in range(n)]
+        smoothed = []
+        for i in range(n):
+            lab = CLASS_NAMES[int(raw[i])]
+            conf = float(probs[i].max())
+            smoothed.append(fn(st, lab, conf, probs[i]) if want_proba else fn(st, lab, conf))
         sm = np.array([CLASS_NAMES.index(s) for s in smoothed])
 
         lags = []
@@ -198,12 +239,18 @@ def evaluate(probs: np.ndarray, truth: np.ndarray, order: list[str], per_seg: in
             a, b = s * per_seg, (s + 1) * per_seg
             steady.extend((sm[a + 2:b] == seg_true[a:b][2:]).tolist())
         flips = int((np.diff(sm) != 0).sum())
+        # 弱信号帧跟随率：模型自己判对、但置信度偏低（<0.55）的帧，平滑后是否仍跟随真实类别。
+        # 这正是"细微变化"的场景：信号弱、但不该被平滑吞掉。
+        weak = [bool(sm[i] == truth[i]) for i in range(n)
+                if i % per_seg >= 2 and raw[i] == truth[i] and probs[i].max() < 0.55]
         out[name] = {
             "switch_lag_frames_mean": round(float(np.mean(lags)), 2),
             "switch_lag_frames_median": float(np.median(lags)),
             "switch_lag_seconds_mean": round(float(np.mean(lags)) * inference_ms / 1000.0, 2),
             "steady_state_accuracy": round(float(np.mean(steady)), 4),
             "label_flips_total": flips,
+            "weak_signal_frames": len(weak),
+            "weak_signal_follow_rate": round(float(np.mean(weak)), 4) if weak else None,
         }
 
     raw = probs.argmax(axis=1)
@@ -243,13 +290,17 @@ def main() -> None:
 
     print(f"\n模型: runs/{args.run}")
     print(f"逐帧原始准确率: {(probs.argmax(1) == truth).mean():.4f}")
-    print(f"\n{'策略':<20} {'切换滞后(帧)':>12} {'滞后(秒)':>10} {'稳定期准确率':>12} {'标签翻转次数':>12}")
-    for k in ("raw_no_smoothing", "legacy_majority5", "hysteresis_v1", "hysteresis_v2"):
+    print(f"\n{'策略':<24} {'滞后(帧)':>9} {'滞后(秒)':>9} {'稳定期准确率':>12} {'标签翻转':>9} {'弱信号跟随率':>12}")
+    for k in ("raw_no_smoothing", "legacy_majority5", "hysteresis_v2", "margin_v3(微变化增强)"):
         r = res[k]
         ms = args.legacy_ms if k == "legacy_majority5" else args.new_ms
         lag_s = r["switch_lag_frames_mean"] * ms / 1000.0
-        print(f"{k:<20} {r['switch_lag_frames_mean']:>12.2f} {lag_s:>10.2f} "
-              f"{r['steady_state_accuracy']:>12.4f} {r['label_flips_total']:>12d}")
+        weak = r.get("weak_signal_follow_rate")
+        weak_s = f"{weak:.4f}" if weak is not None else "—"
+        print(f"{k:<24} {r['switch_lag_frames_mean']:>9.2f} {lag_s:>9.2f} "
+              f"{r['steady_state_accuracy']:>12.4f} {r['label_flips_total']:>9d} {weak_s:>12}")
+    wf = res["hysteresis_v2"].get("weak_signal_frames")
+    print(f"\n（弱信号帧 = 模型判对但置信度 <0.55 的帧，共 {wf} 帧；这是「细微变化」的直接代理指标）")
 
     payload = {"run_id": args.run, "frames": len(seq), "segments": len(order),
                "per_seg": args.per_seg, "new_infer_ms": args.new_ms,

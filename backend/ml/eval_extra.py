@@ -25,7 +25,7 @@ from .backbones import build_model
 from .config import RUNS_DIR, TrainingConfig
 from .dataset import FER2013Dataset
 from .losses import build_loss
-from .metrics import classification_report_text, evaluate_predictions
+from .metrics import classification_report_text, evaluate_predictions, grouped_accuracy
 
 
 @torch.no_grad()
@@ -45,6 +45,8 @@ def _evaluate(model, loader, device, tta: bool):
 def main() -> None:
     ap = argparse.ArgumentParser(description="真实场景/其它数据集评测")
     ap.add_argument("--run-id", type=str, required=True)
+    ap.add_argument("--config", type=str, default="",
+                    help="run 目录下尚无 config.json 时（训练进行中）用它指定配置")
     ap.add_argument("--data", type=str, default="test_raf.pt")
     ap.add_argument("--tag", type=str, default="raf")
     ap.add_argument("--batch-size", type=int, default=256)
@@ -55,7 +57,12 @@ def main() -> None:
     run_dir = RUNS_DIR / args.run_id
     if not run_dir.exists():
         raise SystemExit(f"run 不存在：{run_dir}")
-    cfg = TrainingConfig.load(run_dir / "config.json")
+    cfg_path = run_dir / "config.json"
+    if not cfg_path.exists() and args.config:
+        cfg_path = Path(args.config)
+    if not cfg_path.exists():
+        raise SystemExit(f"缺少配置：{cfg_path}")
+    cfg = TrainingConfig.load(cfg_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = build_model(cfg.model_name, num_classes=cfg.num_classes, pretrained=False,
@@ -76,6 +83,16 @@ def main() -> None:
     loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
     logits, targets = _evaluate(model, loader, device, args.tta)
     res = evaluate_predictions(logits, targets, CLASS_NAMES)
+    pol = grouped_accuracy(logits, targets, CLASS_NAMES)
+    # 产品真正消费的是二元判断："要不要关怀"（负性）与"是否开心"，单独给出这两个口径
+    bin_neg = grouped_accuracy(logits, targets, CLASS_NAMES, groups={
+        "negative": ["sad", "angry", "fearful", "disgusted"],
+        "non_negative": ["happy", "neutral", "surprised"],
+    })
+    bin_hap = grouped_accuracy(logits, targets, CLASS_NAMES, groups={
+        "happy": ["happy"],
+        "not_happy": ["sad", "angry", "fearful", "disgusted", "neutral", "surprised"],
+    })
 
     pf = run_dir / f"{args.tag}_eval_metrics.json"
     prev = json.loads(pf.read_text("utf-8")) if pf.exists() else {}
@@ -83,6 +100,13 @@ def main() -> None:
         "n": len(recs), "tta": bool(args.tta), "accuracy": res["accuracy"],
         "top2_accuracy": res["top2_accuracy"], "macro_f1": res["macro_f1"],
         "per_class": res.get("per_class"),
+        "confusion_matrix": res.get("confusion_matrix"),
+        "polarity_3class": {"accuracy": pol["accuracy"], "macro_f1": pol["macro_f1"],
+                            "groups": pol["groups"], "per_group": pol["per_group"]},
+        "binary_negative": {"accuracy": bin_neg["accuracy"], "macro_f1": bin_neg["macro_f1"],
+                            "groups": bin_neg["groups"], "per_group": bin_neg["per_group"]},
+        "binary_happy": {"accuracy": bin_hap["accuracy"], "macro_f1": bin_hap["macro_f1"],
+                         "groups": bin_hap["groups"], "per_group": bin_hap["per_group"]},
         "class_names_cn": CLASS_NAMES_CN,
     }
     pf.write_text(json.dumps(prev, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -95,6 +119,9 @@ def main() -> None:
 
     print(f"数据集: {data_p}  n={len(recs)}  TTA={args.tta}")
     print(f"准确率 {res['accuracy']:.4f} | Top-2 {res['top2_accuracy']:.4f} | Macro-F1 {res['macro_f1']:.4f}")
+    print(f"极性三分组（正/中/负）准确率 {pol['accuracy']:.4f} | Macro-F1 {pol['macro_f1']:.4f}")
+    print(f"二元·是否需要关怀（负性 vs 非负性）准确率 {bin_neg['accuracy']:.4f} | Macro-F1 {bin_neg['macro_f1']:.4f}")
+    print(f"二元·是否开心（开心 vs 非开心）准确率 {bin_hap['accuracy']:.4f} | Macro-F1 {bin_hap['macro_f1']:.4f}")
     for r in res.get("per_class") or []:
         print(f"  {r['name']:10s} n={r['support']:5d} precision={r['precision']:.3f} "
               f"recall={r['recall']:.3f} f1={r['f1']:.3f}")
