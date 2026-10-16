@@ -15,6 +15,7 @@ from app.models.conversation import Conversation
 from app.models.profile import StudentProfileSnapshot, ConversationSummary
 from app.services.scoring import calc_radar_score, get_risk_indicators, get_trajectory, get_record_type_counts
 from app.services.llm_service import _get_client, _get_llm_config
+from app.services.prompts import build_student_insights_prompt
 from app.utils.enum_helpers import safe_enum_val
 
 logger = logging.getLogger(__name__)
@@ -142,19 +143,7 @@ async def _batch_generate_insights(db, students_batch: list[tuple[int, dict, dic
                 f"参与度={scores['engagement']}，请假频率={patterns['leave_frequency']}，"
                 f"危机趋势={patterns['crisis_trend']}，成绩轨迹={patterns['grade_trajectory']}"
             )
-        prompt = f"""你是一名校园学生数据分析师。基于以下学生数据，为每位学生生成1-2条关键洞察（中文）。
-
-每条洞察包含：
-- dimension: academic/psychology/behavior/engagement/growth
-- type: warning/praise/observation/escalation
-- content: 具体描述（20-40字）
-
-学生数据：
-{chr(10).join(lines)}
-
-以JSON数组格式返回，每个元素包含 student_id 和 insights 数组：
-[{{"student_id": 1, "insights": [{{"dimension": "academic", "type": "warning", "content": "..."}}]}}]
-只返回JSON，不要其他文字。"""
+        prompt = build_student_insights_prompt(chr(10).join(lines))
         config = _get_llm_config()
         resp = await _get_client().chat.completions.create(
             model=config['model'],

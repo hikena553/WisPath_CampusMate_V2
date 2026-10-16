@@ -20,6 +20,7 @@ from app.core.deps import get_current_user
 from app.models.feed import ExternalFeedItem
 from app.models.user import User
 from app.services import llm_service
+from app.services.prompts import build_butler_chat_prompt, build_butler_summary_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -212,14 +213,7 @@ async def summarize(
     if not transcript:
         return ButlerReplyOut(reply=_fallback_summary(messages))
 
-    prompt = (
-        "你是校园智能管家「小绵」，请阅读下面这段对话，输出简洁的中文总结。\n"
-        "要求：\n"
-        "1. 先用一句话概括对话主题；\n"
-        "2. 再用不超过 5 条要点列出关键信息与待办事项；\n"
-        "3. 纯文本，不使用 Markdown 标记（#、代码块等），不要编造对话中没有的信息。\n\n"
-        f"【对话记录】\n{transcript}\n\n【总结】"
-    )
+    prompt = build_butler_summary_prompt(transcript)
     try:
         reply = await llm_service.complete(prompt, max_tokens=600)
         if reply:
@@ -244,13 +238,7 @@ async def chat(
         return await summarize(ButlerSummarizeIn(messages=body.history or []), current_user)
 
     transcript = _format_history(body.history)
-    context = f"\n\n【最近对话】\n{transcript}" if transcript else ""
-    prompt = (
-        "你是校园智能管家「小绵」，服务绵阳城市学院的师生。"
-        "回答要亲切、简洁，纯文本输出，不使用 Markdown 标记，控制在 150 字以内。"
-        "涉及个人隐私数据或不确定的信息时，如实说明并建议对方咨询老师或辅导员。"
-        f"{context}\n\n【用户提问】\n{message}\n\n【回答】"
-    )
+    prompt = build_butler_chat_prompt(message=message, transcript=transcript)
     try:
         reply = await llm_service.complete(prompt, max_tokens=500)
         if reply:

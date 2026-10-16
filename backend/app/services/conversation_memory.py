@@ -8,6 +8,7 @@ from app.core.database import SessionLocal
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.profile import ConversationSummary
 from app.services.llm_service import _get_client, _get_llm_config
+from app.services.prompts import build_conversation_summary_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +26,7 @@ async def summarize_conversation(db: Session, conversation_id: int) -> Conversat
     message_text = "\n".join(
         f"{m.role}: {m.content[:200]}" for m in messages if m.content
     )
-    prompt = f"""你是一名对话分析助手。分析以下AI助手与学生的对话，生成摘要和洞察。
-
-对话内容：
-{message_text}
-
-以JSON格式返回：
-{{
-    "summary": "对话摘要（50字以内）",
-    "key_insights": {{"skills": [], "concerns": [], "interests": [], "requests": []}},
-    "topics": ["主题1", "主题2"],
-    "sentiment": "positive/neutral/negative"
-}}
-只返回JSON，不要其他内容。"""
+    prompt = build_conversation_summary_prompt(message_text)
     try:
         config = _get_llm_config()
         resp = await _get_client().chat.completions.create(

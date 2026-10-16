@@ -6,6 +6,7 @@ from app.core.database import SessionLocal
 from app.models.crisis import AIDialogSummary, CrisisLevel
 from app.models.user import User
 from app.services.llm_service import _get_llm_config
+from app.services.prompts import build_crisis_summary_prompt, build_semantic_risk_prompt
 from app.utils.enum_helpers import safe_enum_val
 
 CRISIS_KEYWORDS = [
@@ -51,23 +52,9 @@ async def generate_crisis_summary(user_message: str, ai_reply: str, keywords: li
         return None
     try:
         from app.services.llm_service import _get_client as get_client
-        prompt = f"""你是一名校园心理健康辅助分析助手。学生向AI助手发送了以下消息，其中包含潜在心理危机关键词：{', '.join(keywords)}。
-
-学生消息：{user_message}
-AI回复：{ai_reply}
-
-请生成一段脱敏摘要（不包含具体姓名、班级、学号等可识别信息），并评估危机等级。
-
-以JSON格式返回：
-{{
-    "summary": "脱敏后的摘要描述",
-    "level": "severe" 或 "moderate" 或 "mild"
-}}
-
-等级定义：
-- severe: 明确的自杀/自残倾向
-- moderate: 明显的焦虑、抑郁、压力过大
-- mild: 轻度情绪困扰"""
+        prompt = build_crisis_summary_prompt(
+            user_message=user_message, ai_reply=ai_reply, keywords=keywords
+        )
 
         config = _get_llm_config()
         resp = await get_client().chat.completions.create(
@@ -105,18 +92,7 @@ async def save_crisis_summary(db: Session, student_id: int, user_message: str, a
 
 async def analyze_semantic_risk(user_message: str, context: list[dict] | None = None) -> dict | None:
     from app.services.llm_service import _get_client as get_client
-    prompt = f"""你是一名校园心理健康分析助手。分析以下学生消息中是否存在心理危机信号。
-
-消息内容：{user_message}
-
-请评估：
-1. risk_level: "none" / "mild" / "moderate" / "severe"
-2. emotion_tags: 情绪标签数组（如 ["焦虑","无助"]）
-3. recommended_action: "none" / "monitor" / "intervene" / "immediate_intervention"
-4. explanation: 简要说明判断依据
-
-只返回JSON，不要其他内容。
-{{"risk_level": "none", "emotion_tags": [], "recommended_action": "none", "explanation": ""}}"""
+    prompt = build_semantic_risk_prompt(user_message)
     try:
         config = _get_llm_config()
         resp = await get_client().chat.completions.create(

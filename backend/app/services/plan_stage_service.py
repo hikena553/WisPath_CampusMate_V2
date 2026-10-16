@@ -9,6 +9,7 @@ from datetime import date
 
 from app.models.plan import StudyPlan, PlanStage, PlanTask, TaskStatus, StageStatus, TaskPriority
 from app.services.llm_service import _get_llm_config, _get_client
+from app.services.prompts import build_plan_stages_prompt, build_stage_evaluation_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -39,19 +40,12 @@ async def ai_generate_stages(db, plan: StudyPlan, student_id: int) -> tuple[str,
         client = _get_client()
         today = date.today()
         days_left = (plan.end_date - today).days if plan.end_date else None
-        prompt = (
-            f"学生有一个学习计划，请把它拆解为 3-6 个循序渐进的阶段（里程碑/关卡），用于闯关式任务流。\n"
-            f"计划标题：{plan.title}\n"
-            f"计划目标：{plan.objective or '未填写'}\n"
-            f"周期：{plan.start_date} 至 {plan.end_date or '至今'}"
-            + (f"（剩余 {days_left} 天）" if days_left is not None else "")
-            + "\n"
-            "要求：\n"
-            "1. 阶段按完成目标的先后逻辑排列，每阶段给出简短标题（如'基础夯实'）与阶段目标 goal（说明本阶段要达成什么，40字内）\n"
-            "2. 每个阶段给出 1-4 个具体任务（title + 简短 description），任务要可执行、可量化\n"
-            "3. 总任务量要符合剩余时间，避免过重\n"
-            '只输出 JSON：{"summary": "拆解思路(40字内)", "stages": [{"title": "...", "goal": "...", "tasks": [{"title": "...", "description": "..."}]}]}\n'
-            "不要输出其他文字。"
+        prompt = build_plan_stages_prompt(
+            title=plan.title,
+            objective=plan.objective,
+            start_date=plan.start_date,
+            end_date=plan.end_date,
+            days_left=days_left,
         )
         resp = await client.chat.completions.create(
             model=cfg["model"],
@@ -128,15 +122,12 @@ async def ai_evaluate_stage(db, stage: PlanStage) -> tuple[int, str, str, str]:
         if not cfg["api_key"]:
             raise RuntimeError("no api key")
         client = _get_client()
-        prompt = (
-            "学生提交了学习计划中一个阶段的成果，请严格评估并给出改进建议。\n"
-            f"计划目标：{plan.objective or plan.title if plan else ''}\n"
-            f"阶段：{stage.title}\n"
-            f"阶段目标：{stage.goal or '未填写'}\n"
-            f"阶段任务：\n{task_lines}\n"
-            f"学生提交的成果：{stage.submitted_result or ''}\n"
-            '只输出 JSON：{"score": 0-100的整数, "evaluation": "综合评估(120字内)", "weaknesses": "不足与改进点(100字内)", "suggestions": "对后续阶段任务的调整建议(100字内)"}\n'
-            "不要输出其他文字。score 要结合任务完成情况与成果质量合理打分。"
+        prompt = build_stage_evaluation_prompt(
+            objective=(plan.objective or plan.title) if plan else "",
+            stage_title=stage.title,
+            stage_goal=stage.goal,
+            task_lines=task_lines,
+            submitted_result=stage.submitted_result,
         )
         resp = await client.chat.completions.create(
             model=cfg["model"],

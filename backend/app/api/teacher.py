@@ -13,6 +13,7 @@ from app.models.leave import LeaveRequest
 from app.models.academic import Grade
 from app.models.message import Message
 from app.services.llm_service import _get_client, _get_llm_config
+from app.services.prompts import build_teacher_outreach_prompt
 from app.services.scoring import calc_radar_score
 from app.services import teacher_task_service
 from app.core.security import hash_password
@@ -585,43 +586,10 @@ async def suggest_contacts(
     ])
 
     focus_one = student_id is not None
-    if focus_one:
-        prompt = f"""你是校园管理助手。请分析下面这位学生，判断是否值得主动联系，并给出具体理由。
-
-学生信息：
-{students_text}
-
-分析维度：
-1. 长时间未联系（优先级高）
-2. 有危机预警（优先级高）
-3. 近期请假较多（需关注）
-4. 有成长成果但未沟通（鼓励）
-
-要求：
-1. 给出该学生的具体理由（至少20字）
-2. 标注优先级：high/medium/low
-3. 只返回JSON数组（仅含该学生一条），不要其他内容
-
-格式：[{{"student_id": {student_id}, "student_name": "姓名", "reason": "具体理由...", "priority": "high"}}]"""
-    else:
-        prompt = f"""你是校园管理助手。请从以下学生名单中，分析并推荐3位最应该主动联系的学生。
-
-学生信息：
-{students_text}
-
-分析维度：
-1. 长时间未联系的学生（优先级高）
-2. 有危机预警的学生（优先级高）
-3. 近期请假较多的学生（需关注）
-4. 有成长成果但未沟通的学生（鼓励）
-
-要求：
-1. 从列表中选出3位学生
-2. 每位学生给出具体理由（至少20字）
-3. 标注优先级：high/medium/low
-4. 只返回JSON数组，不要其他内容
-
-格式：[{{"student_id": 1, "student_name": "姓名", "reason": "具体理由...", "priority": "high"}}]"""
+    prompt = build_teacher_outreach_prompt(
+        students_text=students_text,
+        focus_student_id=student_id if focus_one else None,
+    )
 
     try:
         config = _get_llm_config()
