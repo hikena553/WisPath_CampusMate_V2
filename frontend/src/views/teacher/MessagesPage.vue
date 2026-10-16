@@ -159,6 +159,7 @@
                     <span class="conv-time">{{ formatTime(item.last_message_time) }}</span>
                   </div>
                   <div class="conv-bottom">
+                    <span v-if="item.online_count" class="conv-online-count">{{ item.online_count }}人在线</span>
                     <span class="conv-preview">{{ item.last_message || '暂无消息' }}</span>
                     <el-badge v-if="item.unread_count" :value="item.unread_count" :max="99" class="conv-badge" />
                   </div>
@@ -205,6 +206,7 @@
                   <el-badge :value="item.unread_count" :hidden="!item.unread_count" class="conv-badge-avatar">
                     <el-avatar :size="36" :src="item.user_avatar || undefined">{{ item.name[0] }}</el-avatar>
                   </el-badge>
+                  <span v-if="isOnline(item.id)" class="conv-online-dot" title="在线" />
                 </div>
                 <div class="conv-info">
                   <div class="conv-top">
@@ -395,7 +397,61 @@
           </template>
         </template>
 
-        <!-- ============ 视图三：通知（不设分类筛选，按时间倒序直出） ============ -->
+        <!-- ============ 视图三：文件（跨会话汇总，QQ「文件」页） ============ -->
+        <template v-else-if="mobileView === 'files'">
+          <!-- 顶部：搜索 + 类别筛选；搜索框与类别、类别与列表之间都留出间距 -->
+          <div class="file-topbar">
+            <el-input v-model="fileKeyword" placeholder="搜索文件名" size="small" clearable @input="onFileSearch">
+              <template #prefix><DtIcon name="search" :size="15" /></template>
+            </el-input>
+
+            <div class="file-filter">
+              <button
+                v-for="f in FILE_TYPE_FILTERS"
+                :key="f.key"
+                type="button"
+                class="file-filter-item"
+                :class="{ active: fileTypeFilter === f.key }"
+                @click="setFileTypeFilter(f.key)"
+              >{{ f.label }}</button>
+            </div>
+          </div>
+
+          <div v-if="filesLoading" class="addr-loading">
+            <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
+          </div>
+          <div v-else-if="!sharedFiles.length" class="empty-state">
+            <el-icon :size="40" style="color: var(--tui-text-quiet);"><FolderOpened /></el-icon>
+            <span>{{ fileKeyword.trim() ? '未找到匹配的文件' : '暂无聊天文件' }}</span>
+          </div>
+          <div v-else class="file-list">
+            <div v-for="f in sharedFiles" :key="f.id" class="file-item" @click="openSharedFile(f)">
+              <div class="file-thumb" :class="'t-' + f.file_type">
+                <img v-if="f.file_type === 'image'" :src="f.url" alt="" loading="lazy" />
+                <el-icon v-else :size="20"><component :is="fileTypeIcon(f.file_type)" /></el-icon>
+              </div>
+              <div class="file-body">
+                <div class="file-name">
+                  <template v-if="f.file_type === 'voice'">语音消息 · {{ f.duration || 1 }}″</template>
+                  <template v-else>{{ f.name || '未命名文件' }}</template>
+                </div>
+                <div class="file-meta">
+                  <span class="file-source" :title="f.session_name" @click.stop="openFileSession(f)">
+                    <span v-if="f.is_group" class="file-src-tag">群</span>{{ f.session_name || '会话' }}
+                  </span>
+                  <span>{{ f.sender_name }}</span>
+                  <span>{{ formatTime(f.created_at) }}</span>
+                </div>
+              </div>
+              <el-icon class="file-action" :size="16">
+                <View v-if="f.file_type === 'image'" />
+                <Download v-else />
+              </el-icon>
+            </div>
+          </div>
+        </template>
+
+        <!-- ============ 视图四：通知（不设分类筛选，按时间倒序直出） ============ -->
         <template v-else>
           <!-- 桌面端：通知无吸顶栏，提供「全部标记已读」入口 -->
           <div v-if="!isMobile && notifications.length" class="notif-actions">
@@ -546,13 +602,23 @@
                   {{ item.msg.sender_name }}
                 </div>
                 <div class="msg-bubble" :class="item.msg.sender_id === userId ? 'mine' : 'theirs'">
-                  <!-- 文件/图片消息 -->
+                  <!-- 文件/图片/语音消息 -->
                   <template v-if="getMsgMeta(item.msg).isFile">
-                    <template v-if="getMsgMeta(item.msg).fileType === 'image'">
-                      <div class="bubble-image" @click="previewImage(getMsgMeta(item.msg).url)">
-                        <img :src="getMsgMeta(item.msg).url" :alt="getMsgMeta(item.msg).text" />
-                      </div>
-                    </template>
+                    <div v-if="getMsgMeta(item.msg).fileType === 'image'" class="bubble-image"
+                      @click="previewImage(getMsgMeta(item.msg).url)">
+                      <img :src="getMsgMeta(item.msg).url" :alt="getMsgMeta(item.msg).text" />
+                    </div>
+                    <div v-else-if="getMsgMeta(item.msg).fileType === 'voice'" class="bubble-voice"
+                      :class="{ playing: playingVoiceUrl === getMsgMeta(item.msg).url }"
+                      :style="{ width: voiceBubbleWidth(getMsgMeta(item.msg).duration) }"
+                      @click="toggleVoicePlay(getMsgMeta(item.msg).url)">
+                      <el-icon :size="16" class="voice-play-icon">
+                        <VideoPause v-if="playingVoiceUrl === getMsgMeta(item.msg).url" />
+                        <VideoPlay v-else />
+                      </el-icon>
+                      <span class="voice-bars"><i v-for="n in 3" :key="n" /></span>
+                      <span class="voice-dur">{{ (getMsgMeta(item.msg).duration || 1) }}″</span>
+                    </div>
                     <div v-else class="bubble-file" @click="downloadFile(getMsgMeta(item.msg).url, getMsgMeta(item.msg).text)">
                       <el-icon :size="28"><Document /></el-icon>
                       <div class="bubble-file-info">
@@ -575,38 +641,80 @@
         </div>
         </div><!-- /.ptr-host -->
 
-        <div class="msg-input-bar">
-          <!-- 综合加号按钮：点击展开附件面板 -->
-          <div class="plus-panel-wrap">
-            <button class="plus-btn" :class="{ open: showAttachPanel }" title="发送附件"
-              @click="toggleAttachPanel" aria-label="发送附件">
-              <el-icon :size="20"><Plus /></el-icon>
+        <div class="msg-composer">
+          <div class="msg-input-bar">
+            <!-- 左侧：语音输入 / 键盘切换 -->
+            <button class="tool-btn" type="button"
+              :title="voiceMode ? '切换到键盘' : '语音输入'" aria-label="语音输入" @click="toggleVoiceMode">
+              <el-icon :size="20"><EditPen v-if="voiceMode" /><Microphone v-else /></el-icon>
             </button>
-            <Transition name="attach">
-              <div v-if="showAttachPanel" class="attach-panel">
-                <div class="attach-item" @click="pickImage">
-                  <div class="attach-item-icon img"><el-icon :size="22"><Picture /></el-icon></div>
-                  <span class="attach-item-label">图片</span>
-                </div>
-                <div class="attach-item" @click="pickFile">
-                  <div class="attach-item-icon file"><el-icon :size="22"><Document /></el-icon></div>
-                  <span class="attach-item-label">文件</span>
-                </div>
-              </div>
-            </Transition>
-            <input type="file" multiple hidden ref="fileInputRef" @change="onFileSelect"
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt" />
-            <input type="file" multiple hidden ref="imageInputRef" @change="onFileSelect"
-              accept=".jpg,.jpeg,.png,.gif,.bmp" />
+
+            <div class="input-main composer-input">
+              <!-- 语音模式：QQ 风格「按住说话」 -->
+              <button v-if="voiceMode" class="hold-talk" type="button"
+                :class="{ recording: isRecording, cancel: recordCancelled }"
+                @pointerdown.prevent="onTalkStart"
+                @pointermove="onTalkMove"
+                @pointerup="onTalkEnd"
+                @pointercancel="onTalkCancel"
+                @contextmenu.prevent>
+                {{ isRecording ? (recordCancelled ? '松开取消' : '松开发送') : '按住 说话' }}
+              </button>
+              <el-input v-else v-model="newMsg" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
+                placeholder="输入消息..."
+                @keydown.enter.exact.prevent="sendMsg" />
+            </div>
+
+            <!-- 右侧：表情（单色线条图标） -->
+            <button class="tool-btn" :class="{ active: showEmoji }" type="button" title="表情"
+              aria-label="表情" @click="toggleEmoji">
+              <DtIcon name="smile" :size="21" />
+            </button>
+
+            <!-- 右侧：有内容 → 发送；无内容 → 加号（两态同尺寸叠放，切换不重排、不闪跳） -->
+            <div class="action-slot">
+              <button class="send-btn" :class="hasText ? 'visible' : 'hidden'" type="button" @click="sendMsg">发送</button>
+              <button class="tool-btn plus-action" :class="[!hasText ? 'visible' : 'hidden', { active: showAttachPanel }]"
+                type="button" title="更多" aria-label="更多" @click="toggleAttachPanel">
+                <el-icon :size="21"><Plus /></el-icon>
+              </button>
+            </div>
           </div>
-          <div class="input-main">
-            <el-input v-model="newMsg" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
-              placeholder="输入消息..."
-              @keydown.enter.exact.prevent="sendMsg" />
+
+          <!-- 底部展开面板（表情 / 更多）：单容器统一定高，内容切换不改变高度，自下而上滑出 -->
+          <div class="composer-panel" :class="{ open: !!activePanel }">
+            <div class="composer-panel-head">{{ activePanel === 'plus' ? '更多' : '表情' }}</div>
+            <!-- 更多：图片 / 文件 -->
+            <div v-if="activePanel === 'plus'" class="plus-grid">
+              <button class="plus-fn" type="button" @click="pickImage">
+                <span class="plus-fn-icon"><el-icon :size="24"><Picture /></el-icon></span>
+                <span class="plus-fn-label">图片</span>
+              </button>
+              <button class="plus-fn" type="button" @click="pickFile">
+                <span class="plus-fn-icon"><el-icon :size="24"><Document /></el-icon></span>
+                <span class="plus-fn-label">文件</span>
+              </button>
+            </div>
+            <!-- 表情 -->
+            <div v-else-if="activePanel === 'emoji'" class="emoji-grid">
+              <button v-for="e in EMOJIS" :key="e" type="button" class="emoji-cell"
+                :title="e" @click="insertEmoji(e)">{{ e }}</button>
+            </div>
           </div>
-          <button class="send-btn" :class="{ active: newMsg.trim() }" :disabled="!newMsg.trim()" @click="sendMsg">
-            发送
-          </button>
+
+          <input type="file" multiple hidden ref="fileInputRef" @change="onFileSelect"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt" />
+          <input type="file" multiple hidden ref="imageInputRef" @change="onFileSelect"
+            accept=".jpg,.jpeg,.png,.gif,.bmp" />
+
+          <!-- 录音浮层：松开发送 / 上滑取消 -->
+          <Transition name="fade">
+            <div v-if="isRecording" class="record-overlay" :class="{ cancel: recordCancelled }">
+              <el-icon :size="30"><Microphone /></el-icon>
+              <div class="record-time">{{ recordSeconds }}″</div>
+              <div class="record-hint">{{ recordCancelled ? '松开手指，取消发送' : '手指上滑，取消发送' }}</div>
+            </div>
+          </Transition>
         </div>
         </template>
       </template>
@@ -1184,11 +1292,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
 import { useAuthStore } from '@/stores/auth'
-import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin, deleteSession } from '@/api/messages'
+import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin, deleteSession, getSharedFiles, type SharedFile } from '@/api/messages'
 import {
   getGroups, getGroup, getGroupMembers, createGroup as apiCreateGroup,
   addGroupMembers, sendGroupMessage, getGroupMessages, searchUsers,
@@ -1221,7 +1329,8 @@ import {
   Search, User, UserFilled, ChatDotRound, ChatLineRound, ArrowLeft, Plus,
   Bell, MoreFilled, Loading, InfoFilled, ChatRound, Menu, Stamp, Collection, Notebook,
   OfficeBuilding,
-  UploadFilled, Document, FolderOpened, Picture, Setting, WarningFilled, Delete, SwitchButton, Download, DocumentCopy
+  UploadFilled, Document, FolderOpened, Picture, Setting, WarningFilled, Delete, SwitchButton, Download, DocumentCopy,
+  Microphone, EditPen, VideoPlay, VideoPause, View
 } from '@element-plus/icons-vue'
 
 const auth = useAuthStore()
@@ -1233,19 +1342,20 @@ const { siteName, siteMascot, agentName } = useSiteConfig()
 // 小绵管家入口的动态摘要（取最新一条资讯标题）
 const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
-// ===== 消息中心视图（消息 / 通讯录 / 通知）=====
-// 消息为默认主视图；通讯录与通知在移动端收进侧边抽屉，桌面端置于左栏分段切换
-type MsgView = 'messages' | 'contacts' | 'notifications'
+// ===== 消息中心视图（消息 / 通讯录 / 文件 / 通知）=====
+// 消息为默认主视图；其余在移动端收进侧边抽屉，桌面端置于左栏分段切换
+type MsgView = 'messages' | 'contacts' | 'files' | 'notifications'
 const mobileView = ref<MsgView>('messages')
 const drawerOpen = ref(false)
 const mobileViewTitle = computed(
-  () => ({ messages: '消息', contacts: '通讯录', notifications: '通知' } as Record<MsgView, string>)[mobileView.value]
+  () => ({ messages: '消息', contacts: '通讯录', files: '文件', notifications: '通知' } as Record<MsgView, string>)[mobileView.value]
 )
 
 const viewTabs = computed(() => [
   // dtIcon：钉钉风格导航图标（见 components/common/DtIcon.vue）
   { key: 'messages' as MsgView, label: '消息', icon: ChatLineRound, dtIcon: 'message', count: totalUnread.value },
   { key: 'contacts' as MsgView, label: '通讯录', icon: User, dtIcon: 'contacts', count: 0 },
+  { key: 'files' as MsgView, label: '文件', icon: Document, dtIcon: 'file', count: 0 },
   { key: 'notifications' as MsgView, label: '通知', icon: Bell, dtIcon: 'bell', count: unreadNotifCount.value },
 ])
 
@@ -1253,6 +1363,7 @@ function switchView(v: MsgView) {
   mobileView.value = v
   drawerOpen.value = false
   if (v === 'contacts') ensureContacts()
+  if (v === 'files') loadSharedFiles()
   if (v === 'notifications') loadNotifications()
 }
 
@@ -1378,7 +1489,11 @@ const filteredList = computed(() => {
   const kw = search.value.trim().toLowerCase()
   const fmt = (m: string) => {
     if (m.startsWith('{') && m.includes('"type"')) {
-      try { const p = JSON.parse(m); return p.type === 'image' ? '[图片] ' + (p.text||'') : '[文件] ' + (p.text||'') } catch {}
+      try {
+        const p = JSON.parse(m)
+        if (p.type === 'voice') return '[语音]'
+        return p.type === 'image' ? '[图片] ' + (p.text||'') : '[文件] ' + (p.text||'')
+      } catch {}
     }
     return m
   }
@@ -1651,6 +1766,7 @@ const previewUrl = ref('')
 const showAttachPanel = ref(false)
 function toggleAttachPanel() {
   showAttachPanel.value = !showAttachPanel.value
+  if (showAttachPanel.value) showEmoji.value = false
 }
 function pickImage() {
   showAttachPanel.value = false
@@ -1924,8 +2040,16 @@ const totalUnread = computed(() => {
 })
 
 // 全局未读提示（与布局红点同一数据源）：清除后同步刷新页内各列表红点
-const { clearAll: clearUnreadAll } = useUnreadSummary()
+const {
+  clearAll: clearUnreadAll,
+  isOnline,
+  syncPresence,
+  presenceTick,
+} = useUnreadSummary()
 const hasUnread = computed(() => totalUnread.value > 0 || unreadNotifCount.value > 0)
+
+// 在线状态变更（他人上/下线）后重拉群列表：群在线人数由服务端聚合，需重新取数
+watch(presenceTick, () => { loadGroups() })
 
 /** 清除未读提示：单聊 + 群聊 + 站内通知一次清掉 */
 async function handleClearUnread() {
@@ -2012,7 +2136,13 @@ function connectWs() {
 }
 function disconnectWs() { if (ws) { ws.close(); ws = null } }
 
-async function loadConversations() { try { conversations.value = await getConversations() } catch {} }
+async function loadConversations() {
+  try {
+    conversations.value = await getConversations()
+    // 用会话列表返回的在线初值回填在线映射（WebSocket 事件在两次拉取之间保持实时）
+    syncPresence(conversations.value.map((c: any) => ({ user_id: c.user_id, online: !!c.online })))
+  } catch {}
+}
 async function loadGroups() { try { groups.value = await getGroups() } catch {} }
 
 /* ==================== 通讯录 ==================== */
@@ -2172,6 +2302,65 @@ function roleTagClass(role: string) {
   return role === 'student' ? 'tui-tag-brand' : 'tui-tag-warn'
 }
 
+/* ==================== 文件（跨会话汇总，QQ「文件」页） ==================== */
+// 汇总历史各聊天里发送/接收过的文件、图片、语音：单聊 + 群聊一次取齐（服务端聚合）
+const sharedFiles = ref<SharedFile[]>([])
+const filesLoading = ref(false)
+const fileKeyword = ref('')
+const fileTypeFilter = ref<'' | 'file' | 'image' | 'voice'>('')
+let fileSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+const FILE_TYPE_FILTERS = [
+  { key: '' as const, label: '全部' },
+  { key: 'image' as const, label: '图片' },
+  { key: 'file' as const, label: '文档' },
+  { key: 'voice' as const, label: '语音' },
+]
+
+async function loadSharedFiles() {
+  if (filesLoading.value) return
+  filesLoading.value = true
+  try {
+    const params: { keyword?: string; file_type?: string } = {}
+    const kw = fileKeyword.value.trim()
+    if (kw) params.keyword = kw
+    if (fileTypeFilter.value) params.file_type = fileTypeFilter.value
+    const res = await getSharedFiles(params)
+    sharedFiles.value = res.items || []
+  } catch {
+    sharedFiles.value = []
+  } finally {
+    filesLoading.value = false
+  }
+}
+
+function onFileSearch() {
+  if (fileSearchTimer) clearTimeout(fileSearchTimer)
+  fileSearchTimer = setTimeout(() => { void loadSharedFiles() }, 300)
+}
+
+function setFileTypeFilter(key: '' | 'file' | 'image' | 'voice') {
+  fileTypeFilter.value = key
+  loadSharedFiles()
+}
+
+function fileTypeIcon(t: SharedFile['file_type']) {
+  if (t === 'image') return Picture
+  if (t === 'voice') return Microphone
+  return Document
+}
+
+/** 打开文件：图片走大图预览，其余直接下载 */
+function openSharedFile(f: SharedFile) {
+  if (f.file_type === 'image') previewImage(f.url)
+  else downloadFile(f.url, f.name || '文件')
+}
+
+/** 点击来源会话 → 跳到对应聊天 */
+function openFileSession(f: SharedFile) {
+  openChat(Number(f.session_key.slice(2)), f.session_name, f.is_group ? 'group' : 'single')
+}
+
 /* ==================== 通知 ==================== */
 // 通知不设分类筛选：按时间倒序直出，点击直达对应子页面
 const notifications = ref<NotificationItem[]>([])
@@ -2291,22 +2480,187 @@ async function sendTextMsg(text: string) {
   } catch { ElMessage.error('发送失败') }
 }
 
-// 文件/图片消息
+// 文件/图片/语音消息
 function getMsgMeta(msg: any) {
   const c = msg.content || ''
   if (c.startsWith('{') && c.includes('"type"')) {
     try {
       const parsed = JSON.parse(c)
-      if (parsed.type === 'file' || parsed.type === 'image') {
-        return { isFile: true, fileType: parsed.type, text: parsed.text || '', url: parsed.url || '' }
+      if (parsed.type === 'file' || parsed.type === 'image' || parsed.type === 'voice') {
+        return {
+          isFile: true, fileType: parsed.type, text: parsed.text || '',
+          url: parsed.url || '', duration: Number(parsed.duration) || 0,
+        }
       }
     } catch {}
   }
-  return { isFile: false, fileType: '', text: '', url: '' }
+  return { isFile: false, fileType: '', text: '', url: '', duration: 0 }
 }
 
 function makeFileContent(fileType: string, filename: string, url: string) {
   return JSON.stringify({ type: fileType, text: filename, url })
+}
+
+/* ==================== QQ 风格输入：表情面板 ==================== */
+const showEmoji = ref(false)
+// 常用表情（QQ 输入框表情面板）
+const EMOJIS = [
+  '😀', '😄', '😁', '😆', '😅', '😂', '😊', '😇',
+  '🙂', '😉', '😍', '🥰', '😘', '😋', '😜', '🤪',
+  '🤔', '🤨', '😐', '😑', '😶', '🙄', '😏', '😴',
+  '😔', '😢', '😭', '😤', '😠', '😡', '🥺', '😱',
+  '😳', '🤗', '🤭', '🤫', '😷', '🤒', '🥳', '😎',
+  '👍', '👎', '👌', '🙏', '👏', '🙌', '💪', '🤝',
+  '❤️', '💔', '💯', '🔥', '✨', '🎉', '🌹', '☕',
+  '🍺', '🎁', '⭐', '🌈', '☀️', '🌙', '🐶', '🐱'
+]
+
+function toggleEmoji() {
+  showEmoji.value = !showEmoji.value
+  if (showEmoji.value) { voiceMode.value = false; showAttachPanel.value = false }
+}
+
+function toggleVoiceMode() {
+  voiceMode.value = !voiceMode.value
+  if (voiceMode.value) { showEmoji.value = false; showAttachPanel.value = false }
+}
+
+// 输入框是否有内容：决定右侧显示「发送」还是「加号」
+const hasText = computed(() => !!newMsg.value.trim())
+
+// 当前展开的底部面板：'emoji' | 'plus' | null
+// 两者互斥且共用同一个容器，切换时高度不变，避免"两个面板同时过渡"造成的高度跳动
+const activePanel = computed<'emoji' | 'plus' | null>(() => {
+  if (showAttachPanel.value) return 'plus'
+  if (showEmoji.value && !voiceMode.value) return 'emoji'
+  return null
+})
+
+// 输入框有内容时右侧「加号」切换为「发送」：同步收起「更多」面板，避免面板悬挂在已消失的按钮上
+watch(newMsg, (val) => { if (val.trim()) showAttachPanel.value = false })
+
+/** 表情插入到输入框光标处 */
+function insertEmoji(emoji: string) {
+  const el = document.querySelector<HTMLTextAreaElement>('.composer-input .el-textarea__inner')
+  if (!el) { newMsg.value += emoji; return }
+  const start = el.selectionStart ?? newMsg.value.length
+  const end = el.selectionEnd ?? start
+  newMsg.value = newMsg.value.slice(0, start) + emoji + newMsg.value.slice(end)
+  nextTick(() => { el.focus(); el.selectionStart = el.selectionEnd = start + emoji.length })
+}
+
+/* ==================== QQ 风格输入：语音消息（按住说话） ==================== */
+const voiceMode = ref(false)
+const isRecording = ref(false)
+const recordCancelled = ref(false)
+const recordSeconds = ref(0)
+let mediaRecorder: MediaRecorder | null = null
+let mediaStream: MediaStream | null = null
+let audioChunks: Blob[] = []
+let recordTimer: number | null = null
+let talkPressed = false
+let talkStartY = 0
+
+async function onTalkStart(e: PointerEvent) {
+  if (isRecording.value) return
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    ElMessage.warning('当前环境不支持语音录制')
+    return
+  }
+  talkPressed = true
+  talkStartY = e.clientY
+  recordCancelled.value = false
+  recordSeconds.value = 0
+  try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* 指针捕获失败不影响录音 */ }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // 授权期间用户已松手：直接释放麦克风，避免空录音
+    if (!talkPressed) { stream.getTracks().forEach(t => t.stop()); return }
+    mediaStream = stream
+    audioChunks = []
+    const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mime })
+    mediaRecorder.ondataavailable = (ev: BlobEvent) => { if (ev.data.size > 0) audioChunks.push(ev.data) }
+    mediaRecorder.start()
+    isRecording.value = true
+    const startedAt = Date.now()
+    recordTimer = window.setInterval(() => {
+      recordSeconds.value = Math.floor((Date.now() - startedAt) / 1000)
+    }, 200)
+  } catch {
+    talkPressed = false
+    ElMessage.error('无法访问麦克风，请检查权限')
+  }
+}
+
+function onTalkMove(e: PointerEvent) {
+  if (!isRecording.value) return
+  // 手指上滑超过 60px 视为取消发送（QQ / 微信一致的交互）
+  recordCancelled.value = (talkStartY - e.clientY) > 60
+}
+
+function onTalkCancel() {
+  if (isRecording.value) { recordCancelled.value = true; void onTalkEnd() }
+  else talkPressed = false
+}
+
+async function onTalkEnd() {
+  talkPressed = false
+  if (!isRecording.value || !mediaRecorder) return
+  const cancelled = recordCancelled.value
+  const short = recordSeconds.value < 1
+  const duration = Math.max(1, Math.round(recordSeconds.value))
+  const recorder = mediaRecorder
+  const stream = mediaStream
+  isRecording.value = false
+  if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
+  mediaRecorder = null
+  mediaStream = null
+  await new Promise<void>((resolve) => {
+    recorder.addEventListener('stop', () => resolve(), { once: true })
+    try { recorder.stop() } catch { resolve() }
+  })
+  stream?.getTracks().forEach(t => t.stop())
+  if (cancelled) { ElMessage.info('已取消发送'); return }
+  if (short) { ElMessage.warning('说话时间太短'); return }
+  const blob = new Blob(audioChunks, { type: recorder.mimeType || 'audio/webm' })
+  audioChunks = []
+  if (!blob.size) { ElMessage.error('录音失败，请重试'); return }
+  await sendVoiceMessage(blob, duration)
+}
+
+async function sendVoiceMessage(blob: Blob, duration: number) {
+  try {
+    const ext = blob.type.includes('mp4') ? 'm4a' : 'webm'
+    const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type })
+    const result = await uploadFile(file)
+    await sendTextMsg(JSON.stringify({ type: 'voice', text: '', url: result.url, duration }))
+  } catch {
+    ElMessage.error('语音发送失败')
+  }
+}
+
+// 语音消息播放：同一时刻只播放一条
+const playingVoiceUrl = ref('')
+let voiceAudioEl: HTMLAudioElement | null = null
+function toggleVoicePlay(url: string) {
+  if (!url) return
+  if (playingVoiceUrl.value === url && voiceAudioEl) {
+    voiceAudioEl.pause(); voiceAudioEl = null; playingVoiceUrl.value = ''
+    return
+  }
+  if (voiceAudioEl) { voiceAudioEl.pause(); voiceAudioEl = null }
+  const audio = new Audio(url)
+  voiceAudioEl = audio
+  audio.onended = () => { if (playingVoiceUrl.value === url) playingVoiceUrl.value = '' }
+  audio.onerror = () => { playingVoiceUrl.value = ''; ElMessage.error('语音播放失败') }
+  audio.play().then(() => { playingVoiceUrl.value = url }).catch(() => { ElMessage.error('语音播放失败') })
+}
+
+/** 语音气泡宽度随时长递增（QQ 语音条样式） */
+function voiceBubbleWidth(duration: number) {
+  const d = Number(duration) || 1
+  return `${Math.min(180, 84 + d * 8)}px`
 }
 
 function downloadFile(url: string, name: string) {
@@ -2386,6 +2740,8 @@ async function refreshSidebar() {
   } else if (mobileView.value === 'contacts') {
     contactsLoaded = false
     await Promise.all([ensureContacts(), loadMyStudents()])
+  } else if (mobileView.value === 'files') {
+    await loadSharedFiles()
   } else {
     await loadNotifications()
   }
@@ -2431,14 +2787,24 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', onGlobalClick)
   disconnectWs()
+  if (fileSearchTimer) { clearTimeout(fileSearchTimer); fileSearchTimer = null }
+  // 释放录音资源：避免离开消息页后麦克风仍在占用
+  if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
+  try { mediaRecorder?.stop() } catch { /* 忽略停止异常 */ }
+  mediaStream?.getTracks().forEach(t => t.stop())
+  mediaStream = null
+  mediaRecorder = null
+  try { voiceAudioEl?.pause() } catch { /* 忽略暂停异常 */ }
+  voiceAudioEl = null
 })
 
 function onGlobalClick(e: MouseEvent) {
-  const panel = document.querySelector('.attach-panel')
-  const btn = document.querySelector('.plus-btn')
-  if (panel && btn) {
-    const t = e.target as HTMLElement
-    if (!panel.contains(t) && !btn.contains(t)) showAttachPanel.value = false
+  const t = e.target as HTMLElement
+  // 点击其他区域关闭底部面板（触发按钮本身以 .tool-btn 排除）
+  const panel = document.querySelector('.composer-panel')
+  if (panel && activePanel.value && !panel.contains(t) && !t.closest('.tool-btn')) {
+    showEmoji.value = false
+    showAttachPanel.value = false
   }
   // 点击其他区域关闭右滑置顶
   if (swipedKey.value) {
@@ -2506,6 +2872,12 @@ function onGlobalClick(e: MouseEvent) {
 .conv-item.active { background: var(--tui-brand-soft); border-left-color: var(--tui-brand); }
 .conv-avatar-wrapper { position: relative; flex-shrink: 0; line-height: 0; }
 .group-badge { position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px; border-radius: 5px; background: var(--tui-surface-sunken); color: var(--tui-text-tertiary); font-size: 9px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--tui-surface); }
+/* 单聊在线绿点：仅对方在线时展示 */
+.conv-online-dot {
+  position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--dt-success); border: 2px solid #fff;
+  box-sizing: content-box;
+}
 .conv-badge-avatar { line-height: 0; }
 .conv-avatar { flex-shrink: 0; }
 .conv-info { flex: 1; min-width: 0; }
@@ -2516,6 +2888,8 @@ function onGlobalClick(e: MouseEvent) {
 .conv-preview { font-size: 12.5px; color: var(--tui-text-quiet); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-badge { --el-badge-bg-color: var(--tui-danger); flex-shrink: 0; }
 .conv-member-count { font-size: 11px; color: var(--tui-text-quiet); flex-shrink: 0; }
+/* 群聊在线人数：紧随最后一条消息前 */
+.conv-online-count { font-size: 11.5px; color: var(--dt-success); flex-shrink: 0; font-weight: 500; }
 
 .conv-item.pinned { background: var(--tui-surface-muted); }
 
@@ -2591,55 +2965,74 @@ function onGlobalClick(e: MouseEvent) {
 .bubble-time { font-size: 10.5px; color: var(--tui-text-quiet); font-family: var(--mono); margin-top: 4px; padding: 0 4px; }
 .chat-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 60px 0; color: var(--tui-text-quiet); font-size: 13px; }
 
-/* QQ 风单行输入栏：加号按钮 + 胶囊输入框 + 发送按钮 */
+/* QQ 风输入区：表情 + 附件 + 胶囊输入框 / 按住说话 + 语音 + 发送 */
+.msg-composer { position: relative; flex-shrink: 0; }
 .msg-input-bar {
   border-top: 1px solid var(--tui-hairline); background: var(--tui-surface);
-  display: flex; align-items: flex-end; gap: 8px;
+  display: flex; align-items: flex-end; gap: 4px;
   padding: 8px 10px; position: relative;
 }
-
-/* ===== 综合加号按钮 + 附件面板 ===== */
-.plus-panel-wrap { position: relative; flex-shrink: 0; }
-.plus-btn {
+.tool-btn {
   width: 36px; height: 36px; padding: 0; border: none; cursor: pointer;
-  border-radius: 50%; background: var(--tui-surface-sunken); color: var(--tui-text-secondary);
+  border-radius: 50%; background: transparent; color: var(--tui-text-secondary);
   display: flex; align-items: center; justify-content: center;
-  transition: transform .22s cubic-bezier(.34,1.4,.64,1), background .18s, color .18s;
-  -webkit-tap-highlight-color: transparent;
+  transition: background .18s, color .18s; -webkit-tap-highlight-color: transparent;
 }
-.plus-btn:hover { background: var(--tui-surface-sunken); color: var(--tui-text); }
-.plus-btn.open {
-  transform: rotate(45deg);
-  background: var(--tui-surface-sunken);
-  color: var(--tui-text);
-}
+.tool-btn:hover { background: var(--tui-surface-sunken); color: var(--tui-text); }
+/* 面板展开时的按下态：只加深灰度，不给图标着色（QQ 表情按钮为单色） */
+.tool-btn.active { background: var(--tui-surface-sunken); color: var(--tui-text); }
 
-.attach-panel {
-  position: absolute; left: 0; bottom: calc(100% + 12px);
-  background: var(--tui-surface); border: 1px solid var(--tui-border);
-  border-radius: var(--tui-radius); padding: 14px 10px 12px;
-  box-shadow: var(--tui-shadow-2);
-  display: flex; gap: 8px; z-index: 30;
-  transform-origin: bottom left;
+/* ===== 右侧动作插槽：加号 / 发送 同尺寸叠放，切换不重排、无卡顿 ===== */
+/* 宽度按「发送」按钮所需的最小宽度收敛，并让加号靠左，尽量拉长输入框、收紧与表情的间距 */
+.action-slot { position: relative; width: 44px; height: 36px; flex-shrink: 0; }
+.action-slot > button {
+  position: absolute; border: none; cursor: pointer;
+  /* 两态共用左边缘：缩放锚点靠左，叠放切换时不会左右漂移 */
+  transform-origin: left center;
+  transition: opacity .16s ease, transform .18s ease;
 }
-/* 简约：附件面板不再使用气泡尖角 */
-.attach-item {
-  width: 68px; display: flex; flex-direction: column; align-items: center; gap: 6px;
-  cursor: pointer; padding: 4px 2px; border-radius: 10px;
+.action-slot > button.hidden { opacity: 0; transform: scale(.8); pointer-events: none; }
+.action-slot > button.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
+.send-btn {
+  left: 0; top: 0; width: 44px; height: 36px; padding: 0; border-radius: 12px;
+  font-size: 13px; font-weight: 600;
+  background: var(--tui-brand); color: #fff;
+}
+.send-btn:hover { opacity: .92; }
+.plus-action { left: 0; top: 50%; width: 36px; height: 36px; margin-top: -18px; border-radius: 50%; }
+
+/* ===== 底部展开面板（表情 / 更多）：单容器统一定高，内容切换不改变高度 ===== */
+/* 高度 / 内边距 / 分隔线一起过渡，实现「自下而上」平滑展开，消息列表同步让位 */
+.composer-panel {
+  height: 0; flex-shrink: 0;
+  padding: 0 10px;
+  border-top: 0 solid var(--tui-hairline);
+  background: var(--tui-surface);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: height .24s cubic-bezier(.4, 0, .2, 1),
+              padding .24s cubic-bezier(.4, 0, .2, 1),
+              border-top-width .24s cubic-bezier(.4, 0, .2, 1);
+}
+.composer-panel.open { height: 236px; padding: 8px 10px 10px; border-top-width: 1px; }
+.composer-panel-head { font-size: 12px; color: var(--tui-text-tertiary); margin-bottom: 8px; flex-shrink: 0; }
+.plus-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; align-content: start;
+}
+.plus-fn {
+  border: none; background: transparent; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 2px; border-radius: 10px;
   transition: background .15s, transform .12s;
 }
-.attach-item:hover { background: var(--tui-surface-muted); }
-.attach-item:active { transform: scale(.94); }
-.attach-item-icon {
-  width: 50px; height: 50px; border-radius: 14px;
+.plus-fn:hover { background: var(--tui-surface-muted); }
+.plus-fn:active { transform: scale(.94); }
+.plus-fn-icon {
+  width: 52px; height: 52px; border-radius: 14px;
   display: flex; align-items: center; justify-content: center;
   background: var(--tui-surface-muted); color: var(--tui-text-secondary);
 }
-.attach-item-label { font-size: 11.5px; color: var(--tui-text-tertiary); }
-
-.attach-enter-active { transition: opacity .18s ease-out, transform .22s cubic-bezier(.34,1.4,.64,1); }
-.attach-leave-active { transition: opacity .14s ease-in, transform .14s ease-in; }
-.attach-enter-from, .attach-leave-to { opacity: 0; transform: translateY(8px) scale(.9); }
+.plus-fn-label { font-size: 12px; color: var(--tui-text-tertiary); }
 
 .input-main { flex: 1; min-width: 0; }
 .input-main .el-textarea__inner {
@@ -2650,13 +3043,42 @@ function onGlobalClick(e: MouseEvent) {
 .input-main .el-textarea__inner:focus {
   background: var(--tui-surface); box-shadow: 0 0 0 1px var(--tui-brand) inset;
 }
-.send-btn {
-  height: 36px; flex-shrink: 0; padding: 0 18px; border: none; border-radius: 12px;
-  font-size: 13.5px; font-weight: 600; cursor: pointer;
-  background: var(--tui-surface-sunken); color: var(--tui-text-quiet); transition: all .18s;
+
+.emoji-grid {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  flex: 1; min-height: 0; overflow-y: auto; align-content: start;
 }
-.send-btn.active { background: var(--tui-brand); color: #fff; }
-.send-btn:disabled { cursor: not-allowed; }
+.emoji-cell {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 21px; line-height: 1; padding: 6px 0; border-radius: 8px;
+  transition: background .14s, transform .12s;
+}
+.emoji-cell:hover { background: var(--tui-surface-muted); }
+.emoji-cell:active { transform: scale(.88); }
+
+/* ===== QQ 风格「按住说话」 ===== */
+.hold-talk {
+  width: 100%; height: 38px; border: none; border-radius: 12px; cursor: pointer;
+  background: var(--tui-surface-sunken); color: var(--tui-text-secondary);
+  font-size: 14px; font-weight: 600;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none; -webkit-touch-callout: none;
+  transition: background .18s, color .18s;
+}
+.hold-talk.recording { background: var(--tui-brand-soft); color: var(--tui-brand); }
+.hold-talk.cancel { background: #fef3f2; color: var(--tui-danger); }
+
+/* ===== 录音浮层（松开发送 / 上滑取消） ===== */
+.record-overlay {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 168px; padding: 22px 18px; border-radius: 18px;
+  background: rgba(17, 24, 39, .82); color: #fff; z-index: 3000;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.28); backdrop-filter: blur(6px);
+}
+.record-overlay.cancel { background: rgba(190, 26, 26, .86); }
+.record-time { font-size: 26px; font-weight: 700; font-family: var(--mono); }
+.record-hint { font-size: 12px; opacity: .85; text-align: center; }
 
 .no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--tui-text-quiet); }
 .no-selection h2 { font-size: 18px; color: var(--tui-text-secondary); margin: 0; }
@@ -2865,6 +3287,24 @@ function onGlobalClick(e: MouseEvent) {
 }
 .bubble-file-info small { font-size: 11px; opacity: .7; }
 
+/* 语音消息（QQ 风格语音条） */
+.bubble-voice {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 12px; cursor: pointer; min-width: 84px;
+}
+.mine .bubble-voice { background: var(--dt-primary); color: #fff; border-top-right-radius: 4px; }
+.theirs .bubble-voice { background: var(--dt-surface); color: var(--dt-text); border-top-left-radius: 4px; box-shadow: var(--dt-shadow-1); }
+.bubble-voice .voice-play-icon { flex-shrink: 0; }
+.voice-bars { display: flex; align-items: center; gap: 3px; flex: 1; }
+.voice-bars i { width: 3px; height: 8px; border-radius: 2px; background: currentColor; opacity: .55; }
+.voice-bars i:nth-child(2) { height: 15px; }
+.voice-bars i:nth-child(3) { height: 10px; }
+.bubble-voice.playing .voice-bars i { animation: voicePulse .8s ease-in-out infinite; }
+.bubble-voice.playing .voice-bars i:nth-child(2) { animation-delay: .15s; }
+.bubble-voice.playing .voice-bars i:nth-child(3) { animation-delay: .3s; }
+.voice-dur { font-size: 12px; opacity: .8; flex-shrink: 0; font-family: var(--mono); }
+@keyframes voicePulse { 0%, 100% { transform: scaleY(.6); } 50% { transform: scaleY(1.5); } }
+
 /* ===== 图片预览 ===== */
 .image-preview-overlay {
   position: fixed; inset: 0; z-index: 3000;
@@ -3045,6 +3485,60 @@ function onGlobalClick(e: MouseEvent) {
 }
 .addr-empty { padding: 24px 16px; text-align: center; color: var(--dt-text-quiet); font-size: 12.5px; }
 
+/* ==================== 文件（QQ「文件」页：跨会话文件汇总） ==================== */
+/* 顶部区：搜索框 → 类别筛选 → 列表，三段之间留出呼吸间距 */
+.file-topbar { padding: 12px 12px 0; }
+.file-topbar .el-input__wrapper { border-radius: var(--tui-radius-sm); }
+.file-filter {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 16px 0 14px;
+}
+.file-filter-item {
+  border: none; cursor: pointer; font-family: inherit;
+  font-size: 13px; line-height: 1; padding: 8px 14px; border-radius: 999px;
+  background: var(--tui-surface-sunken); color: var(--tui-text-secondary);
+  transition: background .16s, color .16s;
+}
+.file-filter-item:hover { color: var(--tui-text); }
+.file-filter-item.active { background: var(--tui-brand-soft); color: var(--tui-brand-strong); font-weight: 600; }
+
+.file-list { padding: 0 8px 12px; }
+.file-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px; border-radius: 10px; cursor: pointer;
+  transition: background .15s;
+}
+.file-item:hover { background: var(--tui-surface-muted); }
+.file-thumb {
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--tui-surface-sunken); color: var(--tui-brand-strong);
+  overflow: hidden;
+}
+.file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.file-thumb.t-voice { color: #079455; }
+.file-body { flex: 1; min-width: 0; }
+.file-name {
+  font-size: 13.5px; font-weight: 500; color: var(--tui-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-meta {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  font-size: 11.5px; color: var(--tui-text-quiet);
+}
+.file-source {
+  display: inline-flex; align-items: center; gap: 3px;
+  max-width: 45%; overflow: hidden; white-space: nowrap;
+  color: var(--tui-brand-strong);
+}
+.file-source:hover { text-decoration: underline; }
+.file-src-tag {
+  flex-shrink: 0; font-size: 10px; line-height: 1;
+  padding: 1px 3px; border-radius: 4px;
+  background: var(--tui-brand-soft); color: var(--tui-brand-strong);
+}
+.file-action { flex-shrink: 0; color: var(--tui-text-quiet); }
+
 /* ==================== 通知（钉钉列表行规范） ==================== */
 .notif-actions { display: flex; justify-content: flex-end; padding: 10px 12px 0; }
 .notif-action-btn {
@@ -3129,6 +3623,10 @@ function onGlobalClick(e: MouseEvent) {
   .bubble-image { max-width: 180px; }
   .bubble-file { min-width: 150px; }
   .msg-input-bar { padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); }
+  /* 底部展开面板在窄屏占满宽度，并留出安全区 */
+  .composer-panel.open { height: 224px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .hold-talk { height: 40px; }
+  .tool-btn { width: 34px; height: 34px; }
 
   /* 弹窗在移动端走整页流程（钉钉式）：只微调触控尺寸与列表形态 */
   :deep(.el-dialog.is-fullscreen .el-dialog__body) { padding: 12px 12px 16px; }

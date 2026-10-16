@@ -25,6 +25,18 @@ CATEGORY_DIRS = {
     "documents": "documents",
 }
 
+# 语音消息音频：显式声明 media type，避免系统 mimetypes 缺失（如 .m4a）导致浏览器无法播放
+AUDIO_MEDIA_TYPES = {
+    ".webm": "audio/webm",
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".aac": "audio/aac",
+    ".amr": "audio/amr",
+}
+
 
 def resolve_safe(rel_path: str, sub_dir: str = "") -> Path | None:
     """按子目录拼接相对路径，校验真实路径仍位于 uploads 根内。
@@ -63,7 +75,8 @@ def download_file(
     path = resolve_safe(filename, CATEGORY_DIRS[category])
     if not path:
         raise HTTPException(404, "文件不存在")
-    return FileResponse(path)
+    media_type = AUDIO_MEDIA_TYPES.get(path.suffix.lower())
+    return FileResponse(path, media_type=media_type) if media_type else FileResponse(path)
 
 
 @router.get("/uploads/{path:path}")

@@ -21,3 +21,5 @@ class ConversationOut(BaseModel):
     last_message: str
     last_message_time: datetime | None = None
     unread_count: int = 0
+    # 对方当前是否在线（有活跃 WebSocket 连接即视为已登录在线）
+    online: bool = False

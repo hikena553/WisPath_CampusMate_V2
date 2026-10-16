@@ -468,7 +468,10 @@
                       <DtIcon v-if="g.is_muted" name="bellOff" :size="13" class="muted-icon" />
                       <span class="message-time">{{ formatDate(g.last_message_time || '') }}</span>
                     </div>
-                    <div class="message-preview">{{ g.last_message || '暂无消息' }}</div>
+                    <div class="message-preview-row">
+                      <span v-if="g.online_count" class="message-online-count">{{ g.online_count }}人在线</span>
+                      <span class="message-preview">{{ g.last_message || '暂无消息' }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -484,6 +487,7 @@
                 <div class="message-avatar">
                   <el-avatar :size="48" :src="conv.user_avatar || ''">{{ conv.user_name?.[0] }}</el-avatar>
                   <div v-if="conv.unread_count" class="message-unread">{{ conv.unread_count > 99 ? '99+' : conv.unread_count }}</div>
+                  <span v-if="isOnline(conv.user_id)" class="message-online-dot" title="在线" />
                 </div>
                 <div class="message-info">
                   <div class="message-top">
@@ -665,7 +669,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -674,6 +678,7 @@ import { createTicket, getTickets, cancelTicket } from '@/api/service'
 import { getLostFoundItems, createLostFoundItem, getLostFoundItem } from '@/api/lostFound'
 import { getMyMaterials } from '@/api/material'
 import { getConversations } from '@/api/messages'
+import { useUnreadSummary } from '@/composables/useUnreadSummary'
 // 群聊：扫码入群后学生端可在消息中心查看与发言
 import {
   getGroups, getGroupMessages, sendGroupMessage, markGroupRead,
@@ -724,6 +729,10 @@ const lostfoundItems = ref<any[]>([])
 const lostfoundDetail = ref<any>(null)
 const lostfoundDetailVisible = ref(false)
 const conversationList = ref<any[]>([])
+
+// 在线状态（布局层全局 WebSocket 维护）：单聊绿点实时刷新，群聊在线人数需服务端聚合
+const { isOnline, syncPresence, presenceTick } = useUnreadSummary()
+watch(presenceTick, () => { loadMyGroups() })
 const tutorMessages = ref<any[]>([])
 const tutorIdRef = ref<number | null>(null)
 const tutorNewMsg = ref('')
@@ -1032,6 +1041,8 @@ async function loadConversations() {
   try {
     const convs = await getConversations()
     conversationList.value = convs as any
+    // 用会话列表返回的在线初值回填在线映射
+    syncPresence((convs as any[]).map((c) => ({ user_id: c.user_id, online: !!c.online })))
   } catch {
     conversationList.value = []
   }
@@ -2677,9 +2688,37 @@ onMounted(() => {
 .message-preview {
   font-size: 13px;
   color: var(--dt-text-tertiary);
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 群聊在线人数：与最后一条消息同行展示 */
+.message-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.message-online-count {
+  font-size: 12px;
+  color: var(--dt-success);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* 单聊在线绿点：仅对方在线时展示 */
+.message-online-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dt-success);
+  border: 2px solid #fff;
+  box-sizing: content-box;
 }
 
 /* 聊天页面模式 */

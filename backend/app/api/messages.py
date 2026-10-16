@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timezone
 from urllib.parse import unquote
@@ -12,7 +13,7 @@ from app.core.deps import get_current_user, AUTH_COOKIE_NAME
 from app.core.security import decode_access_token, is_token_revoked
 from app.models.user import User
 from app.models.message import Message, MessageSessionPin, MessageSessionHidden
-from app.models.group import GroupMember, GroupMessage
+from app.models.group import Group, GroupMember, GroupMessage
 from app.models.notification import Notification
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
 from app.services.session_hidden import hidden_watermarks, is_hidden, hide_session
@@ -48,14 +49,21 @@ async def websocket_chat(ws: WebSocket, token: str | None = Query(None), db: Ses
     if not user_id:
         await ws.close(code=4001)
         return
-    await manager.connect(user_id, ws)
+    first_connect = await manager.connect(user_id, ws)
+    if first_connect:
+        # 首次连接（离线 → 在线）：广播上线状态
+        await manager.broadcast({"type": "presence", "user_id": user_id, "online": True})
     try:
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(user_id, ws)
+        pass
     except Exception:
-        manager.disconnect(user_id, ws)
+        pass
+    finally:
+        # 最后一条连接断开（在线 → 离线）：广播下线状态
+        if manager.disconnect(user_id, ws):
+            await manager.broadcast({"type": "presence", "user_id": user_id, "online": False})
 
 
 @router.post("/send")
@@ -109,6 +117,7 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
             last_message=last_msg.content[:80] if last_msg else "",
             last_message_time=last_msg.created_at if last_msg else None,
             unread_count=unread,
+            online=manager.is_online(other.id),
         )
         # 检查是否是辅导员
         if user_tutor_id and other.id == user_tutor_id:
@@ -129,6 +138,7 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
                     last_message="",
                     last_message_time=None,
                     unread_count=0,
+                    online=manager.is_online(tutor.id),
                 ))
     return result
 
@@ -274,6 +284,130 @@ def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(
     )
     db.commit()
     return {"message": "已清除未读", "chat": int(chat or 0), "group": int(groups or 0)}
+
+
+# ==================== 跨会话文件汇总（QQ「文件」页） ====================
+
+_ATTACHMENT_TYPES = ("file", "image", "voice")
+
+
+def _parse_attachment(content: str | None) -> dict | None:
+    """解析消息内容中的结构化附件（文件 / 图片 / 语音），非附件返回 None。"""
+    if not content or not content.startswith("{"):
+        return None
+    try:
+        data = json.loads(content)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, dict) or data.get("type") not in _ATTACHMENT_TYPES or not data.get("url"):
+        return None
+    return {
+        "type": data["type"],
+        "text": data.get("text") or "",
+        "url": data["url"],
+        "duration": data.get("duration") or 0,
+    }
+
+
+@router.get("/files")
+def list_shared_files(
+    keyword: str | None = Query(None, description="按文件名搜索"),
+    file_type: str | None = Query(None, description="按类型过滤：file / image / voice"),
+    limit: int = Query(200, ge=1, le=500),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """跨会话文件汇总：本人单聊 + 所属群聊中发送过的文件 / 图片 / 语音。
+
+    对应 QQ「文件」入口：一处查看历史各聊天里发送过的文件（含自己发出的）。
+    已删除的会话按其隐藏水位一并过滤，避免"列表里看不到会话、文件页却还在"。
+    """
+    watermarks = hidden_watermarks(db, user.id)
+    items: list[dict] = []
+
+    # ---- 单聊 ----
+    single_rows = (
+        db.query(Message)
+        .filter(
+            or_(Message.sender_id == user.id, Message.receiver_id == user.id),
+            Message.content.like("{%"),
+        )
+        .order_by(Message.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    peer_ids = {m.receiver_id if m.sender_id == user.id else m.sender_id for m in single_rows}
+    peer_names = (
+        {u.id: u.name for u in db.query(User).filter(User.id.in_(peer_ids)).all()} if peer_ids else {}
+    )
+    for m in single_rows:
+        meta = _parse_attachment(m.content)
+        if not meta:
+            continue
+        peer_id = m.receiver_id if m.sender_id == user.id else m.sender_id
+        session_key = f"s-{peer_id}"
+        if is_hidden(watermarks, session_key, m.id):
+            continue
+        mine = m.sender_id == user.id
+        items.append({
+            "id": f"s-{m.id}",
+            "message_id": m.id,
+            "file_type": meta["type"],
+            "name": meta["text"],
+            "url": meta["url"],
+            "duration": meta["duration"],
+            "session_key": session_key,
+            "session_name": peer_names.get(peer_id, ""),
+            "is_group": False,
+            "sender_name": "我" if mine else peer_names.get(peer_id, ""),
+            "created_at": m.created_at,
+        })
+
+    # ---- 群聊 ----
+    group_ids = [r.group_id for r in db.query(GroupMember).filter(GroupMember.user_id == user.id).all()]
+    if group_ids:
+        group_rows = (
+            db.query(GroupMessage)
+            .filter(GroupMessage.group_id.in_(group_ids), GroupMessage.content.like("{%"))
+            .order_by(GroupMessage.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        group_names = {g.id: g.name for g in db.query(Group).filter(Group.id.in_(group_ids)).all()}
+        sender_ids = {m.sender_id for m in group_rows}
+        sender_names = (
+            {u.id: u.name for u in db.query(User).filter(User.id.in_(sender_ids)).all()} if sender_ids else {}
+        )
+        for m in group_rows:
+            meta = _parse_attachment(m.content)
+            if not meta:
+                continue
+            session_key = f"g-{m.group_id}"
+            if is_hidden(watermarks, session_key, m.id):
+                continue
+            mine = m.sender_id == user.id
+            items.append({
+                "id": f"g-{m.id}",
+                "message_id": m.id,
+                "file_type": meta["type"],
+                "name": meta["text"],
+                "url": meta["url"],
+                "duration": meta["duration"],
+                "session_key": session_key,
+                "session_name": group_names.get(m.group_id, ""),
+                "is_group": True,
+                "sender_name": "我" if mine else sender_names.get(m.sender_id, ""),
+                "created_at": m.created_at,
+            })
+
+    # ---- 过滤 + 排序（最新在前） ----
+    kw = (keyword or "").strip().lower()
+    if kw:
+        items = [i for i in items if kw in (i["name"] or "").lower()]
+    if file_type in _ATTACHMENT_TYPES:
+        items = [i for i in items if i["file_type"] == file_type]
+    items.sort(key=lambda i: i["created_at"], reverse=True)
+    return {"items": items[:limit], "total": len(items)}
 
 
 @router.get("/{user_id}", response_model=list[MessageOut])

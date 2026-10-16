@@ -63,6 +63,12 @@ const ICONS: Record<string, string> = {
   arrow: '<path d="M9.4 5.4 16 12l-6.6 6.6"/>',
   // 动作：发送
   send: '<path d="M20.4 3.6 3.6 10.4l7 2.6 2.6 7z"/><path d="M20.4 3.6 10.6 13"/>',
+  // 动作：表情（笑脸，单色线条）
+  smile:
+    '<circle cx="12" cy="12" r="8.2"/><path d="M8.7 13.9a4.2 4.2 0 0 0 6.6 0"/><circle cx="9.3" cy="9.9" r="1.05" fill="currentColor" stroke="none"/><circle cx="14.7" cy="9.9" r="1.05" fill="currentColor" stroke="none"/>',
+  // 导航：文件（跨会话文件汇总，文件夹样式）
+  file:
+    '<path d="M5.1 5.8h3.5l1.7 2h8.6a1.7 1.7 0 0 1 1.7 1.7v6.9a1.7 1.7 0 0 1-1.7 1.7H5.1a1.7 1.7 0 0 1-1.7-1.7V7.5a1.7 1.7 0 0 1 1.7-1.7z"/>',
   // 动作：置顶会话
   pin: '<path d="M5.4 5.6h13.2"/><path d="M12 19.4V9.6"/><path d="M7.8 13.8 12 9.6l4.2 4.2"/>',
   // 动作：更多
