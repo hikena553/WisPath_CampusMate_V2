@@ -3,7 +3,7 @@
     <!-- 移动端吸顶栏：会话 / 通讯录 / 通知 三视图共用（聊天态由会话页头接管） -->
     <header v-if="isMobile && !activeId" class="msg-appbar">
       <button class="msg-appbar-btn" type="button" aria-label="打开侧边导航" @click="drawerOpen = true">
-        <el-icon :size="20"><Menu /></el-icon>
+        <DtIcon name="gridDots" :size="20" />
       </button>
       <div class="msg-appbar-title">{{ mobileViewTitle }}</div>
       <div class="msg-appbar-actions">
@@ -82,7 +82,16 @@
         </div>
       </div>
 
-      <div class="sidebar-scroll">
+      <div class="ptr-host">
+        <div class="ptr-ind" :style="sidebarPull.indicatorStyle" aria-hidden="true">
+          <img class="ptr-mascot" :class="{ jumping: sidebarPull.ready || sidebarPull.refreshing }"
+            :src="siteMascot" alt="" />
+        </div>
+      <div class="sidebar-scroll" :style="sidebarPull.scrollStyle"
+        @touchstart.passive="sidebarPull.onStart"
+        @touchmove="sidebarPull.onMove"
+        @touchend="sidebarPull.onEnd"
+        @touchcancel="sidebarPull.onCancel">
         <!-- ============ 视图一：消息（会话列表） ============ -->
         <template v-if="mobileView === 'messages'">
         <div class="sidebar-search">
@@ -132,6 +141,7 @@
                   @click="togglePin(item._key); swipedKey = null">
                   {{ isPinned(item._key) ? '取消置顶' : '置顶' }}
                 </button>
+                <button class="swipe-action danger" @click="handleDeleteSession(item)">删除</button>
               </div>
               <div class="conv-item" :class="{ active: activeId === item.id && activeType === 'group', pinned: isPinned(item._key) }"
                 @click="openChat(item.id, item.name, 'group')"
@@ -153,7 +163,7 @@
                     <el-badge v-if="item.unread_count" :value="item.unread_count" :max="99" class="conv-badge" />
                   </div>
                 </div>
-                <!-- 桌面端置顶入口（移动端用右滑手势） -->
+                <!-- 桌面端置顶 / 删除入口（移动端用右滑手势） -->
                 <button
                   v-if="!isMobile"
                   type="button"
@@ -163,6 +173,15 @@
                   @click.stop="togglePin(item._key)"
                 >
                   <DtIcon name="pin" :size="13" />
+                </button>
+                <button
+                  v-if="!isMobile"
+                  type="button"
+                  class="conv-del-btn"
+                  aria-label="删除会话"
+                  @click.stop="handleDeleteSession(item)"
+                >
+                  <DtIcon name="trash" :size="13" />
                 </button>
               </div>
             </div>
@@ -175,6 +194,7 @@
                   @click="togglePin(item._key); swipedKey = null">
                   {{ isPinned(item._key) ? '取消置顶' : '置顶' }}
                 </button>
+                <button class="swipe-action danger" @click="handleDeleteSession(item)">删除</button>
               </div>
               <div class="conv-item" :class="{ active: activeId === item.id && activeType === 'single', pinned: isPinned(item._key) }"
                 @click="openChat(item.id, item.name, 'single')"
@@ -195,7 +215,7 @@
                     <span class="conv-preview">{{ item.last_message }}</span>
                   </div>
                 </div>
-                <!-- 桌面端置顶入口（移动端用右滑手势） -->
+                <!-- 桌面端置顶 / 删除入口（移动端用右滑手势） -->
                 <button
                   v-if="!isMobile"
                   type="button"
@@ -205,6 +225,15 @@
                   @click.stop="togglePin(item._key)"
                 >
                   <DtIcon name="pin" :size="13" />
+                </button>
+                <button
+                  v-if="!isMobile"
+                  type="button"
+                  class="conv-del-btn"
+                  aria-label="删除会话"
+                  @click.stop="handleDeleteSession(item)"
+                >
+                  <DtIcon name="trash" :size="13" />
                 </button>
               </div>
             </div>
@@ -411,6 +440,7 @@
           </button>
         </template>
       </div>
+      </div><!-- /.ptr-host -->
     </div>
 
     <!-- 聊天区域 -->
@@ -477,7 +507,17 @@
         <ButlerChat v-if="activeType === 'butler'" role="teacher" />
 
         <template v-else>
+        <div class="ptr-host">
+          <div class="ptr-ind" :style="chatPull.indicatorStyle" aria-hidden="true">
+            <img class="ptr-mascot" :class="{ jumping: chatPull.ready || chatPull.refreshing }"
+              :src="siteMascot" alt="" />
+          </div>
         <div class="msg-list" ref="msgListRef"
+          :style="chatPull.scrollStyle"
+          @touchstart.passive="chatPull.onStart"
+          @touchmove="chatPull.onMove"
+          @touchend="chatPull.onEnd"
+          @touchcancel="chatPull.onCancel"
           @dragover.prevent="onDragOver"
           @dragleave="onDragLeave"
           @drop.prevent="onDrop"
@@ -533,6 +573,7 @@
             <span>暂无聊天记录</span>
           </div>
         </div>
+        </div><!-- /.ptr-host -->
 
         <div class="msg-input-bar">
           <!-- 综合加号按钮：点击展开附件面板 -->
@@ -1147,7 +1188,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
 import { useAuthStore } from '@/stores/auth'
-import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin } from '@/api/messages'
+import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin, deleteSession } from '@/api/messages'
 import {
   getGroups, getGroup, getGroupMembers, createGroup as apiCreateGroup,
   addGroupMembers, sendGroupMessage, getGroupMessages, searchUsers,
@@ -1166,6 +1207,7 @@ import type { College, Major, ClassGroup } from '@/types'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useButlerPreview } from '@/composables/useButlerPreview'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
 // 小绵管家：教师端与学生端共用的常驻会话（自动推送资讯 + 总结对话）
 import ButlerChat from '@/components/butler/ButlerChat.vue'
@@ -1273,6 +1315,28 @@ function togglePin(key: string) {
   setSessionPin(key, next).catch(() => ElMessage.error('置顶同步失败'))
 }
 function isPinned(key: string) { return pinnedKeys.value.has(key) }
+
+/** 删除会话：只从本人列表移除（记录保留、对方不受影响），对方再来消息会自动恢复 */
+async function handleDeleteSession(item: { _key: string; _type: string; name: string }) {
+  const tip = item._type === 'group'
+    ? `「${item.name}」将从会话列表移除，群聊与聊天记录都还在，群里有新消息会重新出现。`
+    : `「${item.name}」将从会话列表移除，聊天记录保留，对方不受影响，对方再来消息会重新出现。`
+  try {
+    await ElMessageBox.confirm(tip, '删除会话', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch { return }
+  try {
+    await deleteSession(item._key)
+    swipedKey.value = null
+    // 服务端已按删除水位过滤，重拉列表即可同步；顺手清掉本地置顶残留
+    if (pinnedKeys.value.has(item._key)) togglePin(item._key)
+    await Promise.all([loadConversations(), loadGroups()])
+    ElMessage.success('已删除会话')
+  } catch { ElMessage.error('删除失败') }
+}
 
 // 右滑置顶（移动端）
 const swipedKey = ref<string | null>(null)
@@ -2313,6 +2377,43 @@ function handleHeaderAction(cmd: string) {
   else if (cmd === 'addFriend') { showAddFriend.value = true }
 }
 
+/* ==================== 移动端下拉刷新 ==================== */
+// 会话 / 通讯录 / 通知三视图共用侧栏滚动容器：下拉时按当前视图重新拉取，
+// 兜底 WebSocket 断线或漏推导致的"消息不更新"
+async function refreshSidebar() {
+  if (mobileView.value === 'messages') {
+    await Promise.all([loadConversations(), loadGroups(), refreshButlerPreview()])
+  } else if (mobileView.value === 'contacts') {
+    contactsLoaded = false
+    await Promise.all([ensureContacts(), loadMyStudents()])
+  } else {
+    await loadNotifications()
+  }
+}
+
+// 聊天区下拉：重新拉取当前会话消息；原本停在底部时顺带标记已读并回到底部，
+// 否则保持当前阅读位置，不打断翻看历史消息
+async function refreshChat() {
+  const id = activeId.value
+  const el = msgListRef.value
+  if (!id || id < 0 || !el) return
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+  if (activeType.value === 'single') {
+    messages.value = await getMessages(id)
+    if (atBottom) await markRead(id)
+    await loadConversations()
+  } else if (activeType.value === 'group') {
+    messages.value = await getGroupMessages(id)
+    if (atBottom) await markGroupRead(id)
+    await loadGroups()
+  }
+  if (atBottom) scrollToBottom()
+}
+
+// 手势仅在移动端生效：桌面端不做下拉刷新交互
+const sidebarPull = usePullRefresh(refreshSidebar, { enabled: () => isMobile.value })
+const chatPull = usePullRefresh(refreshChat, { enabled: () => isMobile.value })
+
 onMounted(async () => {
   document.addEventListener('click', onGlobalClick)
   loadPins()
@@ -2379,7 +2480,26 @@ function onGlobalClick(e: MouseEvent) {
 .header-icon-btn:hover { background: var(--dt-hover); }
 .sidebar-search { padding: 10px 12px 6px; }
 .sidebar-search :deep(.el-input__wrapper) { border-radius: var(--tui-radius-sm); }
-.sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0 8px; }
+.sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0 8px; overscroll-behavior-y: contain; }
+
+/* ===== 移动端下拉刷新（会话列表 / 聊天记录共用） ===== */
+.ptr-host { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ptr-ind {
+  position: absolute; top: 0; left: 0; right: 0; height: 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; pointer-events: none; z-index: 5;
+}
+.ptr-mascot { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; display: block; }
+/* 拉过阈值 / 刷新中：吉祥物起跳（按压-腾空-落地），替代文字状态提示 */
+.ptr-mascot.jumping { animation: ptr-jump .7s ease-in-out infinite; }
+@keyframes ptr-jump {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  22% { transform: translateY(-7px) scale(0.96, 1.05); }
+  55% { transform: translateY(0) scale(1.04, 0.95); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ptr-mascot.jumping { animation: none; }
+}
 
 .conv-item { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 11px 14px; cursor: pointer; transition: background .15s var(--tui-ease); border-left: 3px solid transparent; }
 .conv-item:hover { background: var(--tui-surface-muted); }
@@ -2434,13 +2554,16 @@ function onGlobalClick(e: MouseEvent) {
 .swipe-action:focus, .swipe-action:focus-visible { outline: none; box-shadow: none; }
 .swipe-action.pinned { background: #f79009; color: #fff; }
 .swipe-action.pinned:active { background: #e0820a; }
+.swipe-action.danger { background: var(--tui-danger); color: #fff; }
+.swipe-action.danger:active { background: #b42318; }
 .conv-swipe-wrap .conv-item {
   position: relative; z-index: 2; background: #fff;
   transition: transform .24s cubic-bezier(.22,.68,0,1);
   will-change: transform;
 }
+/* 两个动作（置顶 + 删除）：整行右滑位移按动作总宽计 */
 .conv-swipe-wrap.swiped .conv-item {
-  transform: translateX(-76px);
+  transform: translateX(-152px);
 }
 
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 0; color: var(--tui-text-quiet); font-size: 13px; }
@@ -2451,7 +2574,7 @@ function onGlobalClick(e: MouseEvent) {
 .chat-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .chat-name { font-size: 16.5px; font-weight: 600; color: var(--tui-text); }
 .chat-member-count { font-size: 11.5px; color: var(--tui-text-quiet); margin-top: 2px; }
-.msg-list { flex: 1; overflow-y: auto; padding: 20px; background: var(--dt-bg); }
+.msg-list { flex: 1; overflow-y: auto; padding: 20px; background: var(--dt-bg); overscroll-behavior-y: contain; }
 .date-separator { text-align: center; margin: 16px 0; }
 .date-separator span { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 11px; color: var(--tui-text-quiet); background: var(--tui-surface-sunken); }
 /* QQ 风消息行：头像 + 气泡 */
@@ -2973,8 +3096,9 @@ function onGlobalClick(e: MouseEvent) {
   /* 通讯录 / 通知：移动端整行白底，靠发丝线成组，与桌面端卡片观感一致 */
   .addr-row, .notif-row, .addr-row-major, .addr-row-class { background: var(--dt-surface); }
   .addr-section-head { padding-top: 16px; }
-  .conv-swipe-wrap { margin: 0 0 6px; }
-  .conv-item { margin: 0; padding: 10px 14px; background: #fff; border-radius: 0; border-left: none; }
+  /* QQ 风格：会话行紧贴无间隙，靠发丝线分隔成组 */
+  .conv-swipe-wrap { margin: 0; }
+  .conv-item { margin: 0; padding: 10px 14px; background: #fff; border-radius: 0; border-left: none; border-bottom: 1px solid var(--dt-divider); }
   .conv-item:hover { background: var(--tui-surface-muted); }
   .conv-item.active { background: var(--tui-brand-soft); }
   .conv-item.pinned { background: var(--tui-surface-muted); }
@@ -3115,17 +3239,21 @@ function onGlobalClick(e: MouseEvent) {
 .gsp-item-switch { cursor: default; }
 .conv-mute { color: var(--dt-text-quiet); flex-shrink: 0; }
 
-/* 桌面端会话行尾置顶按钮：常占位不抖动，悬停显形，已置顶常亮 */
-.conv-pin-btn {
+/* 桌面端会话行尾操作按钮（置顶 / 删除）：常占位不抖动，悬停显形，已置顶常亮 */
+.conv-pin-btn,
+.conv-del-btn {
   width: 26px; height: 26px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border: none; border-radius: 6px; background: transparent;
   color: var(--dt-text-quiet); cursor: pointer;
   opacity: 0; transition: opacity .15s var(--dt-ease), color .15s var(--dt-ease);
 }
-.conv-item:hover .conv-pin-btn { opacity: 1; }
-.conv-pin-btn:hover { background: var(--dt-hover); }
+.conv-item:hover .conv-pin-btn,
+.conv-item:hover .conv-del-btn { opacity: 1; }
+.conv-pin-btn:hover,
+.conv-del-btn:hover { background: var(--dt-hover); }
 .conv-pin-btn.on { opacity: 1; color: var(--dt-primary); }
+.conv-del-btn:hover { color: var(--tui-danger); }
 
 /* 桌面端群管理弹窗：二维码与个人设置 */
 .manage-qr-box {

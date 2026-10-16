@@ -14,6 +14,7 @@ from app.schemas.group import (
     GroupMuteUpdate, GroupJoinRequest, GroupInviteOut, GroupJoinOut,
     GroupOut, GroupMemberOut, GroupMessageOut, UserSearchResult
 )
+from app.services.session_hidden import hidden_watermarks, is_hidden
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
@@ -62,9 +63,14 @@ def get_groups(user: User = Depends(get_current_user), db: Session = Depends(get
     ).all()
 
     result = []
+    watermarks = hidden_watermarks(db, user.id)
     for g in groups:
         member_count = db.query(GroupMember).filter(GroupMember.group_id == g.id).count()
         last_msg = db.query(GroupMessage).filter(GroupMessage.group_id == g.id).order_by(GroupMessage.created_at.desc()).first()
+
+        # 已删除的会话：与单聊共用一套隐藏水位（来了新消息自动恢复展示）
+        if is_hidden(watermarks, f"g-{g.id}", last_msg.id if last_msg else 0):
+            continue
 
         # 获取用户的最后阅读时间
         member = db.query(GroupMember).filter(

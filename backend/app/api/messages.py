@@ -11,10 +11,11 @@ logger = logging.getLogger(__name__)
 from app.core.deps import get_current_user, AUTH_COOKIE_NAME
 from app.core.security import decode_access_token, is_token_revoked
 from app.models.user import User
-from app.models.message import Message, MessageSessionPin
+from app.models.message import Message, MessageSessionPin, MessageSessionHidden
 from app.models.group import GroupMember, GroupMessage
 from app.models.notification import Notification
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
+from app.services.session_hidden import hidden_watermarks, is_hidden, hide_session
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
@@ -83,6 +84,7 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
     received_ids = db.query(Message.sender_id).filter(Message.receiver_id == user.id).distinct().subquery()
     all_ids = db.query(sent_ids.c.receiver_id).union(db.query(received_ids.c.sender_id)).subquery()
     other_users = db.query(User).filter(User.id.in_(db.query(all_ids))).all()
+    watermarks = hidden_watermarks(db, user.id)
     result = []
     tutor_conv = None
     # 获取用户的 tutor_id
@@ -94,6 +96,9 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
                 (Message.sender_id == other.id) & (Message.receiver_id == user.id)
             )
         ).order_by(Message.created_at.desc()).first()
+        # 已删除的会话：隐藏水位之后没有新消息就不展示（来了新消息自动恢复）
+        if is_hidden(watermarks, f"s-{other.id}", last_msg.id if last_msg else 0):
+            continue
         unread = db.query(Message).filter(
             Message.sender_id == other.id, Message.receiver_id == user.id, Message.read == False
         ).count()
@@ -114,7 +119,7 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
     if user_tutor_id:
         if tutor_conv:
             result.insert(0, tutor_conv)
-        else:
+        elif f"s-{user_tutor_id}" not in watermarks:
             tutor = db.query(User).filter(User.id == user_tutor_id).first()
             if tutor:
                 result.insert(0, ConversationOut(
@@ -166,6 +171,52 @@ def set_session_pin(data: SessionPinUpdate, user: User = Depends(get_current_use
         db.delete(existing)
         db.commit()
     return {"key": key, "pinned": bool(data.pinned)}
+
+
+# ==================== 会话删除（用户级隐藏，跨端同步） ====================
+
+@router.delete("/sessions/{session_key}")
+def delete_session(session_key: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """删除会话条目：只从本人列表移除，聊天记录与对方都不受影响。
+
+    - 记下删除时刻的最后一条消息 id 作为隐藏水位，出现更新的消息时会话自动恢复；
+    - 同时把该会话置为已读，避免"列表里看不到条目、导航却一直挂着红点"。
+    """
+    key = (session_key or "").strip()
+    prefix, _, raw_id = key.partition("-")
+    if prefix not in ("s", "g") or not raw_id.isdigit():
+        raise HTTPException(status_code=400, detail="session_key 格式不正确")
+    target_id = int(raw_id)
+
+    if prefix == "s":
+        pair = or_(
+            (Message.sender_id == user.id) & (Message.receiver_id == target_id),
+            (Message.sender_id == target_id) & (Message.receiver_id == user.id),
+        )
+        last_msg = db.query(Message).filter(pair).order_by(Message.id.desc()).first()
+        db.query(Message).filter(
+            Message.sender_id == target_id,
+            Message.receiver_id == user.id,
+            Message.read.is_(False),
+        ).update({"read": True}, synchronize_session=False)
+        # 无消息的会话（如辅导员占位条目）水位取 0，来消息即恢复
+        latest_id = last_msg.id if last_msg else 0
+    else:
+        member = db.query(GroupMember).filter(
+            GroupMember.group_id == target_id,
+            GroupMember.user_id == user.id,
+        ).first()
+        if not member:
+            raise HTTPException(status_code=404, detail="群聊不存在或您不是群成员")
+        last_msg = db.query(GroupMessage).filter(
+            GroupMessage.group_id == target_id,
+        ).order_by(GroupMessage.id.desc()).first()
+        member.last_read_at = datetime.now(timezone.utc)
+        latest_id = last_msg.id if last_msg else 0
+
+    hide_session(db, user.id, key, latest_id)
+    db.commit()
+    return {"session_key": key, "hidden_upto_id": latest_id}
 
 
 # ==================== 未读汇总 / 一键清除（导航红点数据源） ====================

@@ -44,6 +44,14 @@ export function setSessionPin(sessionKey: string, pinned: boolean) {
   return request.put<{ key: string; pinned: boolean }>('/messages/pins', { session_key: sessionKey, pinned })
 }
 
+/**
+ * 删除会话条目（服务端按用户级隐藏记录，跨端同步）。
+ * 只从本人列表移除：聊天记录保留、对方不受影响，之后收到新消息会自动恢复展示。
+ */
+export function deleteSession(sessionKey: string) {
+  return request.delete<{ session_key: string; hidden_upto_id: number }>(`/messages/sessions/${sessionKey}`)
+}
+
 export interface UnreadSummary {
   chat: number
   group: number
