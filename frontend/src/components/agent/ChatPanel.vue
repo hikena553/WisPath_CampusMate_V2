@@ -87,7 +87,7 @@
       </template>
     </div>
 
-    <div class="messages" ref="msgRef" :class="{ scrolling: store.messages.length > 0 }">
+    <div class="messages" ref="msgRef" :class="{ scrolling: store.messages.length > 0 }" @scroll="onMessagesScroll" @wheel="onMessagesWheel" @touchstart.passive="onMessagesTouchStart" @touchmove.passive="onMessagesTouchMove">
 
       <!-- Welcome Screen -->
       <div v-if="store.messages.length === 0" class="welcome">
@@ -104,7 +104,8 @@
           </div>
       </div>
 
-      <!-- Messages -->
+      <!-- Messages（外层包裹：用 ResizeObserver 盯内容高度，任何增高都强制落到最新） -->
+      <div ref="msgContentRef" class="msg-content">
       <template v-for="(msg, _i) in store.messages" :key="msg.id">
         <div :class="['msg-row', msg.role]">
           <div class="msg-bubble-col">
@@ -148,9 +149,23 @@
           </div>
         </div>
       </template>
+      </div>
 
 
     </div>
+
+    <!-- 回到最新（QQ 式）：上翻阅读历史时不打断，出现按钮一键回到底部 -->
+    <Transition name="scrollbtn">
+      <button
+        v-if="store.messages.length > 0 && !atBottom"
+        type="button"
+        class="scroll-bottom-btn"
+        @click="scrollToBottom(true)"
+      >
+        <el-icon :size="15"><ArrowDown /></el-icon>
+        <span>回到最新</span>
+      </button>
+    </Transition>
 
     <!-- Image Preview Overlay -->
     <Teleport to="body">
@@ -426,6 +441,8 @@ const currentTitle = computed(() => {
 })
 
 const msgRef = ref<HTMLElement>()
+/** 消息行的外层包裹：仅用于观察内容高度变化（不含欢迎语，避免破坏其 min-height:100% 居中） */
+const msgContentRef = ref<HTMLElement>()
 const rootRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
@@ -646,6 +663,8 @@ let singleLineContentHeight = 0
 let msgObserver: ResizeObserver | null = null
 /** 监听输入栏尺寸变化的观察者：移动端按钮换行等会改变输入栏高度，需重新校准 */
 let inputBarObserver: ResizeObserver | null = null
+/** 监听消息内容高度变化的观察者：任何增高（流式正文/思考/建议标签/图片）都强制落到最新 */
+let msgContentObserver: ResizeObserver | null = null
 
 function getFileTypeTag(name: string) {
   const n = name.toLowerCase()
@@ -870,6 +889,8 @@ async function send() {
     timestamp: new Date().toISOString(),
   }
   store.addMessage(assistantMsg)
+  // 本轮生成期间逐帧贴底（含思考展开阶段），直到回复结束
+  startStickLoop()
 
   const history = store.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
 
@@ -904,6 +925,7 @@ async function send() {
         scrollToBottom()
       },
       (full: string) => {
+        stopStickLoop()
         loading.value = false
         charState.value = 'idle'
         charBubble.value = ''
@@ -961,6 +983,7 @@ async function send() {
       }
     }
   } catch {
+    stopStickLoop()
     const placeholder = store.messages.find(m => m.id === assistantId)
     if (placeholder) {
       placeholder.content = '抱歉，连接失败，请稍后再试。'
@@ -1007,20 +1030,120 @@ function editAndRevert(content: string, index: number) {
   })
 }
 
-function scrollToBottom() {
+/**
+ * 是否贴底跟随（QQ 式）：
+ * 默认**始终跟随最新消息**；只有在用户「主动上翻」时才暂停，回到底部或发送后立刻恢复。
+ * 注意：暂停只能由真实的滚动手势触发——绝不能用「当前滚动距离」来判定，
+ * 否则内容增长与程序化滚动的竞态会把跟随误关，导致必须手动点「回到最新」。
+ */
+const atBottom = ref(true)
+/** 判定为「已经到底」的容差（px） */
+const BOTTOM_THRESHOLD = 40
+
+function scrollToBottom(force = false) {
+  if (force) atBottom.value = true
+  if (!atBottom.value) return
   nextTick(() => {
-    if (msgRef.value) {
-      msgRef.value.scrollTop = msgRef.value.scrollHeight
-    }
+    const el = msgRef.value
+    if (el) el.scrollTop = el.scrollHeight
   })
 }
 
+/** 滚动位置回到（或本来就在）底部 → 恢复跟随 */
+function onMessagesScroll() {
+  const el = msgRef.value
+  if (!el) return
+  if (el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD) {
+    atBottom.value = true
+  }
+}
+
+/** 列表是否真的可滚动（内容未超出时不存在"上翻"，不应暂停跟随） */
+function listScrollable(): boolean {
+  const el = msgRef.value
+  return !!el && el.scrollHeight - el.clientHeight > 1
+}
+
+/**
+ * 下一帧强制贴底（与布局同帧合并，避免高频流式增量反复触发）。
+ * 只要仍处于跟随状态就执行——用于兜住「消息加载完/建议标签渲染/图片/换行」等
+ * 由内容高度变化引起的增高，确保发消息后始终落在最新一屏。
+ */
+let stickRaf = 0
+function scheduleStick() {
+  if (!atBottom.value) return
+  if (stickRaf) return
+  stickRaf = requestAnimationFrame(() => {
+    stickRaf = 0
+    const el = msgRef.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+/**
+ * 生成期间的「逐帧贴底」循环。
+ * 从发送到本轮结束一直开着：思考（深度思考）展开、正文流式、建议标签渲染……
+ * 只要内容高度有任何变化都会在下一帧贴底，不依赖 ResizeObserver 的触发时机，
+ * 因此不会出现「思考完整段才回到最新」。
+ */
+let stickLoop = 0
+function startStickLoop() {
+  if (stickLoop) return
+  const tick = () => {
+    if (atBottom.value) {
+      const el = msgRef.value
+      if (el) el.scrollTop = el.scrollHeight
+    }
+    stickLoop = requestAnimationFrame(tick)
+  }
+  stickLoop = requestAnimationFrame(tick)
+}
+
+function stopStickLoop() {
+  if (stickLoop) {
+    cancelAnimationFrame(stickLoop)
+    stickLoop = 0
+  }
+}
+
+/** 用户主动上翻（滚轮向上）→ 暂停自动跟随 */
+function onMessagesWheel(e: WheelEvent) {
+  if (e.deltaY >= 0) return
+  if (!listScrollable()) return
+  atBottom.value = false
+}
+
+let touchStartY = 0
+function onMessagesTouchStart(e: TouchEvent) {
+  touchStartY = e.touches[0]?.clientY ?? 0
+}
+
+/** 用户主动上翻（手指向下拖拽 = 内容上移看历史）→ 暂停自动跟随 */
+function onMessagesTouchMove(e: TouchEvent) {
+  const y = e.touches[0]?.clientY ?? 0
+  if (y - touchStartY > 6 && listScrollable()) atBottom.value = false
+}
+
+// 新增消息（用户发送 / 切换会话 / 语音通话回填）一律直接展示最新
 watch(() => store.messages.length, () => {
+  atBottom.value = true
   scrollToBottom()
 })
 
+/**
+ * 流式回复期间内容持续增长，长度不变、长度 watch 抓不到：
+ * 盯最后一条消息的正文/思考长度，保证首字到正文任一时刻都贴底跟随。
+ */
+watch(
+  () => {
+    const last = store.messages[store.messages.length - 1]
+    return last ? `${last.content?.length ?? 0}:${last.thinking?.length ?? 0}` : ''
+  },
+  () => scrollToBottom(),
+)
+
 onMounted(() => {
-  scrollToBottom()
+  scrollToBottom(true)
   // 记录单行状态下的基准几何（此时输入框尚未被内容撑高）
   nextTick(() => {
     ensureBaseMetrics()
@@ -1034,6 +1157,11 @@ onMounted(() => {
       updateRecommendHidden()
     })
     msgObserver.observe(msgRef.value)
+  }
+  // 内容高度变化（流式正文/思考/建议标签/图片等）→ 只要仍跟随就强制落到最新
+  if (msgContentRef.value && typeof ResizeObserver !== 'undefined') {
+    msgContentObserver = new ResizeObserver(() => scheduleStick())
+    msgContentObserver.observe(msgContentRef.value)
   }
   // 输入栏尺寸变化（移动端按钮换行、附件行出现等）同样要重新校准：
   // 只挂消息区/窗口 resize 会漏掉这些只改变输入栏高度的布局变化
@@ -1056,6 +1184,13 @@ onUnmounted(() => {
   msgObserver = null
   inputBarObserver?.disconnect()
   inputBarObserver = null
+  msgContentObserver?.disconnect()
+  msgContentObserver = null
+  if (stickRaf) {
+    cancelAnimationFrame(stickRaf)
+    stickRaf = 0
+  }
+  stopStickLoop()
   window.removeEventListener('resize', handleViewportResize)
 })
 </script>
@@ -1078,6 +1213,38 @@ onUnmounted(() => {
 .messages.scrolling::-webkit-scrollbar { width: 4px; }
 .messages.scrolling::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
 .messages.scrolling::-webkit-scrollbar-thumb:hover { background: #b0b5bd; }
+
+/* ── 回到最新（QQ 式）──
+   居中悬浮在输入栏上方：只有用户上翻、脱离底部时才出现，点击立即回到底部。 */
+.scroll-bottom-btn {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--chat-input-bar-h, 112px) + 14px);
+  transform: translateX(-50%);
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, .96);
+  color: #4b5563;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .12);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background .18s, color .18s, border-color .18s;
+}
+.scroll-bottom-btn:hover { color: #409eff; border-color: #a9c6f0; background: #f7faff; }
+.scrollbtn-enter-active,
+.scrollbtn-leave-active { transition: opacity .18s ease, transform .18s ease; }
+.scrollbtn-enter-from,
+.scrollbtn-leave-to { opacity: 0; transform: translateX(-50%) translateY(6px); }
+.scrollbtn-enter-to,
+.scrollbtn-leave-from { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ── Pending Files Corner ── */
 .pending-files-corner {

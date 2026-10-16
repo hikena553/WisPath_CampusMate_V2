@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import Sidebar from './Sidebar.vue'
 import ChatPanel from './ChatPanel.vue'
 import { useConversationStore, type Conversation } from '@/stores/conversation'
@@ -41,12 +41,10 @@ const agentStore = props.role === 'teacher' ? useTeacherAgentStore() : useAgentS
 const { isMobile } = useResponsive()
 const collapsed = computed(() => store.sidebarCollapsed)
 const chatKey = ref(0)
-let selecting = false
 const fetching = ref(false)
 const mobileSidebarVisible = ref(false)
 
 async function onSelect(conv: Conversation) {
-  selecting = true
   fetching.value = true
   store.setActive(conv.id)
   await store.fetchMessages(conv.id)
@@ -59,7 +57,6 @@ async function onSelect(conv: Conversation) {
   agentStore.replaceMessages(msgs)
   fetching.value = false
   chatKey.value++
-  selecting = false
   if (isMobile.value) {
     mobileSidebarVisible.value = false
   }
@@ -74,9 +71,10 @@ function onNew() {
   }
 }
 
-watch(() => store.activeId, () => {
-  if (!selecting) chatKey.value++
-})
+// 注意：不要再监听 store.activeId 去 chatKey++。
+// 首次发送时 ChatPanel 会先建会话并 setActive，若此处跟着重挂载，流式回调仍绑在已被销毁的
+// 旧实例上（msgRef 已脱离文档流），后续增量不再自动滚动——这正是「发消息后不滚动」的根因。
+// 切换会话的重挂载由 onSelect / onNew（以及 Sidebar 的 select/new 事件）显式触发即可。
 
 onMounted(() => {
   store.setActive(null)
