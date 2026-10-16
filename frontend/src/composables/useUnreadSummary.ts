@@ -20,6 +20,12 @@ const group = ref(0)
 const notification = ref(0)
 const total = ref(0)
 
+// 在线状态：user_id → 是否在线。由「列表接口初值 + WebSocket presence 事件」共同维护，
+// 供消息页单聊绿点与群聊在线人数实时刷新。
+const onlineMap = ref<Map<number, boolean>>(new Map())
+// 在线状态变更计数：页面可 watch 它来重拉群列表（群在线人数需服务端聚合）
+const presenceTick = ref(0)
+
 let timer: ReturnType<typeof setInterval> | null = null
 let ws: WebSocket | null = null
 let started = false
@@ -44,12 +50,42 @@ function connectWs() {
     // 刷新后内存 token 为空时省略参数，由 httpOnly Cookie 兜底认证
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : ''
     ws = new WebSocket(`${proto}//${location.host}/api/messages/ws${tokenParam}`)
-    ws.onmessage = () => { void refresh() }
+    ws.onmessage = (e) => {
+      let data: { type?: string; user_id?: number; online?: boolean } | null = null
+      try { data = JSON.parse(e.data) } catch { /* 非法负载忽略，仍刷新未读 */ }
+      // 在线状态变更：只更新在线映射，不牵动未读计数
+      if (data?.type === 'presence' && typeof data.user_id === 'number') {
+        applyPresence(data.user_id, !!data.online)
+        return
+      }
+      void refresh()
+    }
     ws.onclose = () => { ws = null }
     ws.onerror = () => { ws = null }
   } catch {
     ws = null
   }
+}
+
+/** 应用一次在线状态变更（WebSocket 推送） */
+function applyPresence(userId: number, online: boolean) {
+  const next = new Map(onlineMap.value)
+  next.set(userId, online)
+  onlineMap.value = next
+  presenceTick.value++
+}
+
+/** 用列表接口返回的在线初值回填在线映射（覆盖同一批用户的旧值） */
+function syncPresence(entries: Array<{ user_id: number; online: boolean }>) {
+  if (!entries.length) return
+  const next = new Map(onlineMap.value)
+  for (const e of entries) next.set(e.user_id, !!e.online)
+  onlineMap.value = next
+}
+
+/** 指定用户当前是否在线 */
+function isOnline(userId: number) {
+  return onlineMap.value.get(userId) === true
 }
 
 function onVisibilityChange() {
@@ -91,5 +127,9 @@ async function clearAll() {
 }
 
 export function useUnreadSummary() {
-  return { chat, group, notification, total, refresh, start, stop, clearAll }
+  return {
+    chat, group, notification, total,
+    refresh, start, stop, clearAll,
+    onlineMap, presenceTick, isOnline, syncPresence,
+  }
 }

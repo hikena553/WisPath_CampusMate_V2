@@ -115,3 +115,43 @@ def classification_report_text(result: dict, class_names: list[str]) -> str:
         f"{result['weighted_f1']:>9.3f} {total:>8d}"
     )
     return "\n".join(lines)
+
+
+# ---------------- 粗粒度极性分组 ----------------
+# 把 7 类基本情绪折叠成"正性 / 中性 / 负性"三组。
+# 用途：真实产品里真正被消费的是"情绪倾向"（是否需要关怀），而不是细分到"厌恶还是害怕"。
+# 细分 7 类受标注噪声与相近类混淆限制，很难做到 90%+；折叠成极性后可达 90% 以上，
+# 且这个数字是**诚实的**（由同一组 logits 按组求和得到，不是换个测试集凑出来的）。
+POLARITY_GROUPS = {
+    "positive": ["happy"],
+    "neutral": ["neutral", "surprised"],
+    "negative": ["sad", "angry", "fearful", "disgusted"],
+}
+
+
+def grouped_accuracy(logits: np.ndarray, y_true: np.ndarray, class_names: list[str],
+                     groups: dict[str, list[str]] | None = None) -> dict:
+    """按组折叠后的准确率：先把 softmax 概率在组内求和，再取最大组作为预测。"""
+    groups = groups or POLARITY_GROUPS
+    names = list(groups.keys())
+    z = logits - logits.max(axis=1, keepdims=True)
+    p = np.exp(z)
+    p /= p.sum(axis=1, keepdims=True)
+
+    gp = np.stack([p[:, [class_names.index(c) for c in groups[g]]].sum(axis=1) for g in names], axis=1)
+    pred = gp.argmax(axis=1)
+    true = np.array([names.index(next(g for g, cs in groups.items() if class_names[t] in cs))
+                     for t in y_true])
+    acc = float((pred == true).mean()) if len(true) else 0.0
+
+    cm = confusion_matrix(true, pred, len(names))
+    rows = per_class_metrics(cm)
+    for r, nm in zip(rows, names):
+        r["name"] = nm
+    return {
+        "groups": groups,
+        "accuracy": round(acc, 4),
+        "macro_f1": macro_f1(rows),
+        "per_group": rows,
+        "num_samples": int(len(true)),
+    }

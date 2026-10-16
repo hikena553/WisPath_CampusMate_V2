@@ -23,6 +23,8 @@ class GroupOut(BaseModel):
     announcement: str | None = None
     is_dismissed: bool = False
     member_count: int = 0
+    # 群成员中当前在线（已登录）的人数
+    online_count: int = 0
     last_message: str = ""
     last_message_time: datetime | None = None
     unread_count: int = 0

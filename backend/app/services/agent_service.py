@@ -13,6 +13,7 @@ from app.models.user import User, UserRole
 from app.models.knowledge import KnowledgeItem
 from app.models.conversation import Conversation, ConversationMessage
 from app.services.llm_service import build_system_prompt, build_answer_mode_note
+from app.services.prompts import build_skill_extraction_prompt
 from app.services.tools import TOOL_DEFINITIONS, TEACHER_TOOL_DEFINITIONS, execute_tool
 from app.services.crisis_service import detect_crisis_keywords, save_crisis_summary
 from app.services.llm_service import _get_client, _get_llm_config
@@ -416,16 +417,7 @@ async def _try_extract_skills(user_message: str, user: User):
     if not any(kw in user_message for kw in skill_keywords):
         return
     try:
-        prompt = f"""从学生的发言中提取技能和兴趣信息。只提取明确提及的技能或兴趣。
-
-学生发言：{user_message}
-
-以JSON格式返回：
-{{
-    "skills": [{{"name": "技能名称", "context": "上下文"}}],
-    "interests": ["兴趣1", "兴趣2"]
-}}
-如果没有提取到，返回 {{"skills": [], "interests": []}}"""
+        prompt = build_skill_extraction_prompt(user_message)
 
         config = _get_llm_config()
         resp = await _get_client().chat.completions.create(

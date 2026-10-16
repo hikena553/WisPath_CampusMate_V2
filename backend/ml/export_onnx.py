@@ -72,32 +72,37 @@ def main() -> None:
     )
     print(f"已导出: {out_path} ({out_path.stat().st_size:,} 字节)", flush=True)
 
-    # ---------- 验证 1：数值一致性 ----------
+    # ---------- 验证 1/2：数值一致性 + 测试集精度 ----------
     _, test_p = ensure_dataset(cfg)
     records = _load_split(test_p)
     X = _preprocess(records, size)
     y = np.array([FER_LABEL_MAP[r["labels"]] for r in records], dtype=np.int64)
-
     with torch.no_grad():
         logits_torch = model(torch.from_numpy(X[:256])).numpy()
 
-    import onnxruntime as ort
-    sess = ort.InferenceSession(str(out_path), providers=["CPUExecutionProvider"])
-    logits_onnx = sess.run(["logits"], {"input": X[:256]})[0]
-    max_diff = float(np.abs(logits_torch - logits_onnx).max())
-    print(f"数值一致性: 前 256 张的 logits 最大绝对误差 = {max_diff:.3e}", flush=True)
+    # 下面两步依赖 onnxruntime；该环境未安装时优雅跳过（ONNX 文件本身已导出成功），
+    # 目标环境可用 `pip install onnxruntime` 后再跑同一命令完成校验。
+    result = None
+    max_diff = None
+    try:
+        import onnxruntime as ort
+        sess = ort.InferenceSession(str(out_path), providers=["CPUExecutionProvider"])
+        logits_onnx = sess.run(["logits"], {"input": X[:256]})[0]
+        max_diff = float(np.abs(logits_torch - logits_onnx).max())
+        print(f"数值一致性: 前 256 张的 logits 最大绝对误差 = {max_diff:.3e}", flush=True)
 
-    # ---------- 验证 2：测试集精度（全量，分批） ----------
-    probs_all = []
-    for i in range(0, len(X), 512):
-        out = sess.run(["logits"], {"input": X[i:i + 512]})[0]
-        e = np.exp(out - out.max(axis=1, keepdims=True))
-        probs_all.append(e / e.sum(axis=1, keepdims=True))
-    probs = np.concatenate(probs_all)
-    result = evaluate_predictions(probs, y, CLASS_NAMES)
-    result["class_names_cn"] = CLASS_NAMES_CN
-    print(f"ONNX 测试集: 准确率 {result['accuracy']:.4f} | Top-2 {result['top2_accuracy']:.4f} "
-          f"| Top-3 {result['top3_accuracy']:.4f} | Macro-F1 {result['macro_f1']:.4f}", flush=True)
+        probs_all = []
+        for i in range(0, len(X), 512):
+            out = sess.run(["logits"], {"input": X[i:i + 512]})[0]
+            e = np.exp(out - out.max(axis=1, keepdims=True))
+            probs_all.append(e / e.sum(axis=1, keepdims=True))
+        probs = np.concatenate(probs_all)
+        result = evaluate_predictions(probs, y, CLASS_NAMES)
+        result["class_names_cn"] = CLASS_NAMES_CN
+        print(f"ONNX 测试集: 准确率 {result['accuracy']:.4f} | Top-2 {result['top2_accuracy']:.4f} "
+              f"| Top-3 {result['top3_accuracy']:.4f} | Macro-F1 {result['macro_f1']:.4f}", flush=True)
+    except ImportError:
+        print("跳过 ONNX 校验：当前环境未安装 onnxruntime（ONNX 文件已正常导出）", flush=True)
 
     # ---------- 与训练时记录的指标比对 ----------
     ref = json.loads((run_dir / "metrics.json").read_text("utf-8"))
@@ -113,9 +118,10 @@ def main() -> None:
         "preprocess": "gray->size->x/255->(x-0.5)/0.5->repeat 3ch->CHW（与训练一致）",
         "output": "logits(7) 顺序 = " + ",".join(CLASS_NAMES),
         "max_logit_diff_first256": max_diff,
-        "test_accuracy_no_tta": result["accuracy"],
-        "test_top2_no_tta": result["top2_accuracy"],
-        "test_macro_f1_no_tta": result["macro_f1"],
+        "test_accuracy_no_tta": result["accuracy"] if result else None,
+        "test_top2_no_tta": result["top2_accuracy"] if result else None,
+        "test_macro_f1_no_tta": result["macro_f1"] if result else None,
+        "verified_with_onnxruntime": result is not None,
         "train_record_accuracy_with_tta": ref["test"]["accuracy"],
     }
     (run_dir / "onnx_export.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

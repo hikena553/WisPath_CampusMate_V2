@@ -87,7 +87,7 @@
     <el-dialog
       v-model="drawerVisible"
       class="org-detail-modal"
-      width="920px"
+      width="780px"
       align-center
       :show-close="false"
     >
@@ -1009,7 +1009,7 @@ onMounted(async () => {
   min-height: 0;
   overflow-y: auto;
   padding: 0;
-  max-height: 58vh;
+  max-height: 54vh;
   /* 隐藏滚动条（仍可滚动） */
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -1030,21 +1030,21 @@ onMounted(async () => {
   --od-accent: #409eff;
   position: relative;
   overflow: hidden;
-  padding: 18px 24px 14px;
+  padding: 13px 20px 11px;
   background:
-    radial-gradient(120% 150% at 0% 0%, color-mix(in srgb, var(--od-accent) 18%, transparent) 0%, transparent 58%),
+    radial-gradient(120% 150% at 0% 0%, color-mix(in srgb, var(--od-accent) 14%, transparent) 0%, transparent 58%),
     linear-gradient(180deg, #ffffff 0%, #f5f8fd 100%);
   border-bottom: 1px solid #eef0f4;
 }
 .odm-head-glow {
   position: absolute;
-  right: -60px;
-  top: -90px;
-  width: 260px;
-  height: 260px;
+  right: -40px;
+  top: -60px;
+  width: 160px;
+  height: 160px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--od-accent) 16%, transparent);
-  filter: blur(40px);
+  background: color-mix(in srgb, var(--od-accent) 12%, transparent);
+  filter: blur(30px);
   pointer-events: none;
 }
 .odm-head-inner {
@@ -1053,17 +1053,17 @@ onMounted(async () => {
 .odm-close {
   position: absolute;
   right: 0;
-  top: 0;
-  width: 30px;
-  height: 30px;
+  top: 1px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 9px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   color: #7a8699;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.16s ease;
 }
@@ -1074,43 +1074,43 @@ onMounted(async () => {
 .odm-head-main {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-right: 42px;
+  gap: 10px;
+  padding-right: 36px;
 }
 .odm-head-icon {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 17px;
   color: var(--od-accent);
   background: #fff;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--od-accent) 22%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--od-accent) 20%, transparent);
 }
 .odm-head-text {
   min-width: 0;
 }
 .odm-head-text h3 {
   margin: 0;
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
   color: #1f2d3d;
   word-break: break-all;
 }
 .odm-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
+  gap: 5px;
+  margin-top: 6px;
 }
 .odm-tag {
-  font-size: 11.5px;
-  line-height: 20px;
-  padding: 0 9px;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 8px;
   border-radius: 6px;
   color: #6b7688;
   background: rgba(255, 255, 255, 0.86);
@@ -1130,12 +1130,12 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 3px;
-  margin-top: 14px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 9px;
   border-top: 1px dashed #e3e8f1;
 }
 .odm-crumb-seg {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #8a94a6;
 }
 .odm-crumb-seg.is-last {
@@ -1150,12 +1150,12 @@ onMounted(async () => {
 /* ---------- 主体两列布局 ---------- */
 .odm-body {
   --od-accent: #409eff;
-  padding: 18px 24px 22px;
+  padding: 14px 18px 16px;
 }
 .odm-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 258px;
+  gap: 14px;
   align-items: start;
 }
 .odm-main,
@@ -1165,27 +1165,27 @@ onMounted(async () => {
 
 /* ---------- 卡片 ---------- */
 .odm-card {
-  padding: 16px 18px 18px;
+  padding: 13px 15px 14px;
   background: #fff;
   border: 1px solid #eef0f4;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
 }
 .odm-card + .odm-card {
-  margin-top: 18px;
+  margin-top: 13px;
 }
 .odm-card-head {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 14px;
-  font-size: 14px;
+  margin-bottom: 11px;
+  font-size: 13.5px;
   font-weight: 600;
   color: #2b3245;
 }
 .odm-card-bar {
   width: 3px;
-  height: 14px;
+  height: 13px;
   border-radius: 2px;
   background: var(--od-accent);
 }
@@ -1193,16 +1193,16 @@ onMounted(async () => {
 /* ---------- 数据概览瓦片 ---------- */
 .odm-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
 }
 .odm-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 18px 10px;
-  border-radius: 12px;
+  gap: 3px;
+  padding: 13px 8px;
+  border-radius: 11px;
   border: 1px solid #eef0f4;
   background: linear-gradient(180deg, color-mix(in srgb, var(--od-accent) 8%, #fff) 0%, #fff 100%);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
@@ -1212,14 +1212,14 @@ onMounted(async () => {
   box-shadow: 0 10px 22px rgba(16, 24, 40, 0.08);
 }
 .odm-tile-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.1;
   color: var(--od-accent);
   font-variant-numeric: tabular-nums;
 }
 .odm-tile-label {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #8a94a6;
 }
 
@@ -1231,8 +1231,8 @@ onMounted(async () => {
 .odm-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 2px;
+  gap: 14px;
+  padding: 9px 2px;
   border-bottom: 1px solid #f4f6f9;
 }
 .odm-row:last-child {
@@ -1240,7 +1240,7 @@ onMounted(async () => {
 }
 .odm-row-k {
   flex-shrink: 0;
-  width: 84px;
+  width: 78px;
   font-size: 12.5px;
   color: #8a94a6;
 }
@@ -1275,8 +1275,8 @@ onMounted(async () => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-bottom: 18px;
+  gap: 9px;
+  padding-bottom: 14px;
 }
 .odm-step:last-child {
   padding-bottom: 0;
@@ -1323,7 +1323,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 24px;
+  padding: 10px 18px;
 }
 .odm-footer-hint {
   font-size: 12.5px;
@@ -1446,17 +1446,17 @@ onMounted(async () => {
 .odg-types {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 .odg-type {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: 13px 12px 12px;
+  gap: 1px;
+  padding: 9px 10px 8px;
   border: 1.5px solid #e7ecf4;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
   cursor: pointer;
   text-align: left;
@@ -1479,38 +1479,38 @@ onMounted(async () => {
   opacity: 0.55;
 }
 .odg-type-icon {
-  width: 30px;
-  height: 30px;
-  margin-bottom: 6px;
-  border-radius: 9px;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 13px;
   color: var(--tc);
   background: color-mix(in srgb, var(--tc) 12%, transparent);
 }
 .odg-type b {
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #1f2d3d;
 }
 .odg-type em {
-  font-size: 11px;
+  font-size: 10.5px;
   font-style: normal;
   color: #9aa3b2;
 }
 .odg-type-check {
   position: absolute;
-  right: 9px;
-  top: 9px;
-  width: 17px;
-  height: 17px;
+  right: 7px;
+  top: 7px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   color: #fff;
   background: var(--tc);
   opacity: 0;

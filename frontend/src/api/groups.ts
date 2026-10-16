@@ -13,6 +13,8 @@ export interface GroupOut {
   announcement: string | null
   is_dismissed: boolean
   member_count: number
+  /** 群成员中当前在线的人数 */
+  online_count: number
   last_message: string
   last_message_time: string | null
   unread_count: number

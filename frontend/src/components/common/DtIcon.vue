@@ -47,6 +47,9 @@ const ICONS: Record<string, string> = {
   // 导航：工作台（宫格）
   grid:
     '<rect x="3.6" y="3.6" width="7" height="7" rx="1.8"/><rect x="13.4" y="3.6" width="7" height="7" rx="1.8"/><rect x="3.6" y="13.4" width="7" height="7" rx="1.8"/><rect x="13.4" y="13.4" width="7" height="7" rx="1.8"/>',
+  // 导航：宫格（圆点极简版，同 grid 语义）
+  gridDots:
+    '<circle cx="6.75" cy="6.75" r="3" fill="currentColor" stroke="none"/><circle cx="17.25" cy="6.75" r="3" fill="currentColor" stroke="none"/><circle cx="6.75" cy="17.25" r="3" fill="currentColor" stroke="none"/><circle cx="17.25" cy="17.25" r="3" fill="currentColor" stroke="none"/>',
   // 导航：我的（人）
   mine:
     '<circle cx="12" cy="8.2" r="3.7"/><path d="M4.9 20.1c0-3.5 3.2-5.6 7.1-5.6s7.1 2.1 7.1 5.6"/>',
@@ -60,10 +63,19 @@ const ICONS: Record<string, string> = {
   arrow: '<path d="M9.4 5.4 16 12l-6.6 6.6"/>',
   // 动作：发送
   send: '<path d="M20.4 3.6 3.6 10.4l7 2.6 2.6 7z"/><path d="M20.4 3.6 10.6 13"/>',
+  // 动作：表情（笑脸，单色线条）
+  smile:
+    '<circle cx="12" cy="12" r="8.2"/><path d="M8.7 13.9a4.2 4.2 0 0 0 6.6 0"/><circle cx="9.3" cy="9.9" r="1.05" fill="currentColor" stroke="none"/><circle cx="14.7" cy="9.9" r="1.05" fill="currentColor" stroke="none"/>',
+  // 导航：文件（跨会话文件汇总，文件夹样式）
+  file:
+    '<path d="M5.1 5.8h3.5l1.7 2h8.6a1.7 1.7 0 0 1 1.7 1.7v6.9a1.7 1.7 0 0 1-1.7 1.7H5.1a1.7 1.7 0 0 1-1.7-1.7V7.5a1.7 1.7 0 0 1 1.7-1.7z"/>',
   // 动作：置顶会话
   pin: '<path d="M5.4 5.6h13.2"/><path d="M12 19.4V9.6"/><path d="M7.8 13.8 12 9.6l4.2 4.2"/>',
   // 动作：更多
   more: '<circle cx="12" cy="5.8" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="18.2" r="1.5" fill="currentColor" stroke="none"/>',
+  // 动作：删除（回收站）
+  trash:
+    '<path d="M4.6 6.6h14.8"/><path d="M9.4 6.6V4.9a1.3 1.3 0 0 1 1.3-1.3h2.6a1.3 1.3 0 0 1 1.3 1.3v1.7"/><path d="M17.4 6.6l-.9 11.6a1.8 1.8 0 0 1-1.8 1.7H9.3a1.8 1.8 0 0 1-1.8-1.7L6.6 6.6"/><path d="M10.2 10.6v5.6M13.8 10.6v5.6"/>',
   // 动作：勾选
   check: '<path d="M5.2 12.6 9.6 17 19 6.8"/>',
   // 动作：刷新

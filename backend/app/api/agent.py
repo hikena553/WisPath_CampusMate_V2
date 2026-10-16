@@ -20,6 +20,7 @@ from app.models.plan import PlanTask, StudyPlan, TaskStatus
 from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
 from app.services.llm_service import speech_to_text, _get_client, _get_llm_config, build_system_prompt
+from app.services.prompts import build_recommend_questions_prompt
 from app.services.proactive_engine import evaluate_student
 from app.services.proactive_insight import generate_insight, get_cached_insight
 from app.utils.rate_limiter import check_rate_limit
@@ -327,24 +328,13 @@ async def _generate_recommendations_by_llm(
     """有历史对话时，让 LLM 结合画像/信号/历史生成推荐。失败返回空列表。"""
     role_label = "学生" if user.role == UserRole.STUDENT else "教师" if user.role == UserRole.TEACHER else "管理员"
     context_text = "\n".join(context) if context else "（暂无）"
-    prompt = f"""根据以下用户的信息与历史对话，生成{RECOMMEND_COUNT}个用户可能接下来想问的推荐问题。
-
-用户角色：{role_label}
-
-用户当前画像与待办（真实数据，优先结合这些）：
-{context_text}
-
-要求：
-1. 问题控制在20字以内，自然口语化
-2. 结合用户的历史兴趣、画像与待办事项，避免空泛
-3. 推荐内容必须贴合该用户角色，涵盖其常用功能（{ROLE_FEATURES.get(user.role, ROLE_FEATURES[UserRole.STUDENT])}），不要推荐其他角色的功能（例如不要给学生推荐班级管理，不要给教师推荐成绩单查询）
-4. 直接返回{RECOMMEND_COUNT}个问题的JSON数组，不要其他文字
-
-历史对话记录：
-{history_text}
-
-返回格式示例：
-["帮我查一下下周的课程安排", "我想看看这学期的成绩单", "最近有什么校园活动通知", "我这周的任务完成得怎么样"]"""
+    prompt = build_recommend_questions_prompt(
+        role_label=role_label,
+        context_text=context_text,
+        history_text=history_text,
+        count=RECOMMEND_COUNT,
+        features=ROLE_FEATURES.get(user.role, ROLE_FEATURES[UserRole.STUDENT]),
+    )
 
     try:
         config = _get_llm_config()

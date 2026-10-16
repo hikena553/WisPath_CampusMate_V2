@@ -14,6 +14,7 @@ from app.models.favorite import ResourceFavorite
 from app.models.plan import GrowthGoal
 from app.models.user import User
 from app.services.llm_service import _get_llm_config, _get_client
+from app.services.prompts import build_resource_recommend_prompt
 from app.schemas.resources import FavoriteCreate, FavoriteOut, ResourceItem, RecommendItem
 
 router = APIRouter(prefix="/api/resources", tags=["资源中心"])
@@ -260,12 +261,9 @@ async def recommend(
              "category": r.category or "", "summary": (r.summary or "")[:60]}
             for i, r in enumerate(candidates[:30])
         ]
-        sys_msg = (
-            "你是校园平台的内容推荐助手。根据学生的兴趣画像，从候选资源中挑选最值得推荐的条目，"
-            "并给出简短推荐理由（不超过25字，贴合学生方向）。"
-            f"学生画像关键词：{', '.join(keywords[:10]) if keywords else '暂无（默认推荐热门内容）'}"
+        sys_msg, user_msg = build_resource_recommend_prompt(
+            keywords=keywords, pool=pool, limit=limit
         )
-        user_msg = f"候选资源：{pool}\n请返回 JSON：{{\"items\":[{{\"index\":0,\"reason\":\"...\"}}]}}，共 {limit} 条。"
         resp = await client.chat.completions.create(
             model=cfg["model"],
             messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": user_msg}],

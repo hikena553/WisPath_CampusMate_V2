@@ -16,6 +16,11 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 from app.services.llm_service import _get_client, _get_llm_config, build_system_prompt
+from app.services.prompts import (
+    build_tts_style_suffix,
+    build_voice_emotion_context_prompt,
+    build_voice_greeting_prompt,
+)
 from app.models.user import User
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.setting import SystemSetting
@@ -855,13 +860,10 @@ async def handle_voice_connection(
 
         system_prompt = build_system_prompt(user)
 
-        # 语音播报风格提示词：叠加到系统提示词，使回复适合语音合成播报
+        # 语音播报风格提示词：以规范标签块叠加到系统提示词，使回复适合语音合成播报
         voice_prompt = _get_tts_prompt()
         if voice_prompt:
-            system_prompt = (
-                f"{system_prompt}\n\n【语音播报风格要求】{voice_prompt}\n"
-                "请遵循以上风格要求回复，并在表达时尽量口语化、简短，便于语音合成朗读。"
-            )
+            system_prompt = f"{system_prompt}\n\n{build_tts_style_suffix(voice_prompt)}"
 
         # ============================================================
         # 语音识别：本地 SenseVoice（低延迟首选）-> 云端 qwen-audio-asr 兜底
@@ -1057,21 +1059,11 @@ async def handle_voice_connection(
                     return
                 logger.info("[GREET] 开始生成问候 emotion=%s", emotion)
                 greet_messages = [{"role": "system", "content": system_prompt}]
-                if emotion:
-                    greet_messages.append({
-                        "role": "system",
-                        "content": (
-                            f"视觉情绪模块刚检测到：学生此刻表情偏【{EMOTION_LABELS.get(emotion, emotion)}】。"
-                            f"{GREETING_EMOTION_HINT.get(emotion, '')}"
-                        ),
-                    })
                 greet_messages.append({
                     "role": "system",
-                    "content": (
-                        "【本次为语音通话接通时刻】请由你先开口，用一句自然、亲切、口语化的问候开启聊天，"
-                        "不超过 30 字，不要提及‘接通’‘系统’‘检测’等字眼；"
-                        "若已知学生的表情状态，请自然地关照一下他的状态，可顺着你观察到的情绪开口，"
-                        "但不要生硬地说‘我检测到你的表情’。"
+                    "content": build_voice_greeting_prompt(
+                        emotion_label=EMOTION_LABELS.get(emotion, emotion) if emotion else "",
+                        emotion_hint=GREETING_EMOTION_HINT.get(emotion, "") if emotion else "",
                     ),
                 })
                 greet_messages.extend(history[-4:])  # 续聊时让问候承接上文
@@ -1145,9 +1137,9 @@ async def handle_voice_connection(
                 if dominant_emotion:
                     messages.append({
                         "role": "system",
-                        "content": f"视觉情绪模块检测到：学生当前情绪状态为【{EMOTION_LABELS.get(dominant_emotion, dominant_emotion)}】。"
-                                   f"请感知并顺应学生的情绪状态，语气温暖、共情地回应；若学生情绪低落或紧张，请给予安抚与支持，"
-                                   f"避免生硬说教。回答保持简洁。",
+                        "content": build_voice_emotion_context_prompt(
+                            emotion_label=EMOTION_LABELS.get(dominant_emotion, dominant_emotion)
+                        ),
                     })
                 messages.extend(history[-8:])  # 最近 8 条历史，控制 LLM 首字延迟
                 messages.append({"role": "user", "content": text})

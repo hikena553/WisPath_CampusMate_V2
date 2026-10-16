@@ -14,6 +14,7 @@ from app.schemas.group import (
     GroupMuteUpdate, GroupJoinRequest, GroupInviteOut, GroupJoinOut,
     GroupOut, GroupMemberOut, GroupMessageOut, UserSearchResult
 )
+from app.services.session_hidden import hidden_watermarks, is_hidden
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
@@ -62,9 +63,17 @@ def get_groups(user: User = Depends(get_current_user), db: Session = Depends(get
     ).all()
 
     result = []
+    watermarks = hidden_watermarks(db, user.id)
+    online_ids = manager.online_ids()
     for g in groups:
-        member_count = db.query(GroupMember).filter(GroupMember.group_id == g.id).count()
+        member_ids = [m.user_id for m in db.query(GroupMember).filter(GroupMember.group_id == g.id).all()]
+        member_count = len(member_ids)
+        online_count = sum(1 for uid in member_ids if uid in online_ids)
         last_msg = db.query(GroupMessage).filter(GroupMessage.group_id == g.id).order_by(GroupMessage.created_at.desc()).first()
+
+        # 已删除的会话：与单聊共用一套隐藏水位（来了新消息自动恢复展示）
+        if is_hidden(watermarks, f"g-{g.id}", last_msg.id if last_msg else 0):
+            continue
 
         # 获取用户的最后阅读时间
         member = db.query(GroupMember).filter(
@@ -92,6 +101,7 @@ def get_groups(user: User = Depends(get_current_user), db: Session = Depends(get
             announcement=g.announcement,
             is_dismissed=g.is_dismissed,
             member_count=member_count,
+            online_count=online_count,
             last_message=last_msg.content[:80] if last_msg else "",
             last_message_time=last_msg.created_at if last_msg else None,
             unread_count=unread,
@@ -110,7 +120,10 @@ def get_group(group_id: int, user: User = Depends(get_current_user), db: Session
     if not group:
         raise HTTPException(status_code=404, detail="群组不存在")
 
-    member_count = db.query(GroupMember).filter(GroupMember.group_id == group_id).count()
+    member_ids = [m.user_id for m in db.query(GroupMember).filter(GroupMember.group_id == group_id).all()]
+    member_count = len(member_ids)
+    online_ids = manager.online_ids()
+    online_count = sum(1 for uid in member_ids if uid in online_ids)
     last_msg = db.query(GroupMessage).filter(GroupMessage.group_id == group_id).order_by(GroupMessage.created_at.desc()).first()
 
     # 计算未读消息数
@@ -133,6 +146,7 @@ def get_group(group_id: int, user: User = Depends(get_current_user), db: Session
         announcement=group.announcement,
         is_dismissed=group.is_dismissed,
         member_count=member_count,
+        online_count=online_count,
         last_message=last_msg.content[:80] if last_msg else "",
         last_message_time=last_msg.created_at if last_msg else None,
         unread_count=unread,

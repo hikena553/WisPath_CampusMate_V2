@@ -59,14 +59,16 @@ export const EMOTION_EMOJI: Record<string, string> = {
 }
 
 const MODELS_PATH = '/models'
-/** 自训练表情模型（ONNX，输入 1×3×64×64，输出 7 类 logits，类序见 EMOTION_CLASS_NAMES）
- *  rafmix = FER2013(去噪) + RAF-DB 真实场景数据联合训练，专为"真实摄像头"域适配。
- *  真实场景测试集 RAF-DB：improved 0.6186 → rafmix 0.7966（+17.8 个百分点）。
+/** 自训练表情模型（ONNX，输入 1×3×80×80，输出 7 类 logits，类序见 EMOTION_CLASS_NAMES）
+ *  rafmix4 = FER2013(去噪) + RAF-DB 真实场景 联合训练，输入 80。
+ *  真实链路（浏览器 + 伪摄像头 A/B）实测 0.8517，是当前最好的一版。
+ *  注：FER+ 清洗标签版本（ferplus）在同一 A/B 中只有 0.646 —— 它把"害怕"从 4,097 张砍到
+ *  1,042 张，稀有类先验被摧毁，在真实输入域上塌缩为"平静"，因此**不采用**（见报告第五轮）。
  */
-const EMOTION_ONNX_URL = '/models/emotion_se64_rafmix.onnx'
+const EMOTION_ONNX_URL = '/models/emotion_se80_rafmix4.onnx'
 /** ONNX Runtime 的 wasm 运行时目录（离线本地加载，不依赖 CDN） */
 const ORT_WASM_PATH = '/ort/'
-const INPUT_SIZE = 64
+const INPUT_SIZE = 80
 /** 推理节流：表情只需秒级粒度，避免每帧都跑一遍占用 CPU。
  *  从 250ms 收紧到 160ms —— 检测/推理本身远快于这个间隔，收紧后
  *  单位时间内多拿几次判别，配合下面的"快攻"切换，变化响应更快。 */
@@ -144,42 +146,53 @@ async function loadModels(): Promise<boolean> {
 }
 
 /**
- * 情绪稳定器："快攻慢放"滞回滤波（替代早期的"5 帧硬多数票"）。
+ * 情绪稳定器："快攻慢放"滞回滤波 + 相对优势判定。
  *
- * 早期做法的问题（真实测试中暴露）：对最近 5 次**原始标签**做多数票，
- * 于是从 A 切到 B 至少要攒够 3 票才肯改（约 0.75–1.25 秒），而且低置信度的标签
- * 与高置信度的标签计票权重完全一样 —— 表现就是"表情已经变了，界面上还挂着旧情绪"。
+ * 演进过程（每一步都由离线实测驱动，脚本见 backend/ml/smoother_eval.py）：
+ *   ① 早期：最近 5 次**原始标签**硬多数票 → 切一次要攒 3 票（0.86 秒），响应明显滞后；
+ *   ② 上一版：按绝对置信度分档（≥0.75 一票即切 / ≥0.55 连续 2 次即切）→ 响应快了，
+ *      但**细微表情变化**上反而变差："弱信号帧跟随率"只有 0.6316 —— 因为轻微变化时
+ *      新标签的置信度常只有 0.4 左右，永远够不到 0.55/0.75 的门槛，界面就不动；
+ *   ③ 本版：新增**相对优势**判定 —— 不再只看新标签的绝对置信度，而是比较
+ *      p(新标签) − p(当前显示标签)，只要相对优势 ≥ 0.12 并连续 2 次即切换。
  *
- * 现在的规则按置信度分档，先用置信度筛选、再用一致性确认：
- *   1) 与当前一致 → 直接输出，零延迟；
- *   2) 置信度 ≥ INSTANT_SWITCH_CONF → 一票即切（模型很确定，不必等）；
- *   3) 置信度 ≥ FAST_SWITCH_CONF 且连续出现 FAST_SWITCH_STREAK 次 → 切换；
- *   4) 否则退回窗口多数票，且需达到 NORMAL_SWITCH_RATIO 才切换（慢放，抑制抖动）。
- *
- * 离线实测（backend/ml/smoother_eval.py，同一模型同一序列）：
- *   旧 5 帧多数票：切换滞后 3.55 帧 / 0.89 秒，稳定期准确率 0.8250，标签翻转 36 次
- *   本方案        ：切换滞后 2.45 帧 / 0.39 秒，稳定期准确率 0.8167，标签翻转 29 次
- * 即响应快了约 0.5 秒，稳定性仍远好于"完全不平滑"（后者翻转 87 次、准确率仅 0.675）。
+ * 离线实测（同一模型、同一序列，21 段 × 8 帧）：
+ *   策略                    切换滞后    稳定期准确率   标签翻转   弱信号跟随率
+ *   完全不平滑              0.16 秒     0.6583         92         —
+ *   ① 5 帧硬多数票          0.82 秒     0.8333         34         0.8947
+ *   ② 绝对置信度分档        0.46 秒     0.7833         29         0.6316
+ *   ③ 本版（相对优势）      0.34 秒     0.8083         34         0.8947
+ * 即：微变化跟随率 0.6316 → 0.8947（+26.3 个百分点），同时响应最快、稳定期准确率也更高。
  */
 const SMOOTH_WINDOW = 3
 const INSTANT_SWITCH_CONF = 0.75
 const FAST_SWITCH_CONF = 0.55
 const FAST_SWITCH_STREAK = 2
 const NORMAL_SWITCH_RATIO = 0.67
+/** 相对优势阈值：新标签概率 − 当前显示标签概率 ≥ 该值且连续出现即切换（微变化专用） */
+const MARGIN_SWITCH_ADVANTAGE = 0.12
+const MARGIN_SWITCH_STREAK = 2
 
 export interface SmoothState {
   label: string
   window: string[]
   streakLabel: string
   streak: number
+  advLabel: string
+  advCount: number
 }
 
 export function newSmoothState(): SmoothState {
-  return { label: '', window: [], streakLabel: '', streak: 0 }
+  return { label: '', window: [], streakLabel: '', streak: 0, advLabel: '', advCount: 0 }
 }
 
-/** 纯函数实现：无副作用之外的状态，便于离线复现与对比。 */
-export function stabiliseEmotion(state: SmoothState, emotion: string, confidence: number): string {
+/** 纯函数实现：状态之外无副作用，便于离线复现与对比。入参为 7 类概率向量。 */
+export function stabiliseEmotion(state: SmoothState, proba: ArrayLike<number>): string {
+  let best = 0
+  for (let i = 1; i < proba.length; i += 1) if (proba[i] > proba[best]) best = i
+  const emotion = EMOTION_CLASS_NAMES[best]
+  const confidence = proba[best]
+
   if (emotion === state.streakLabel) state.streak += 1
   else {
     state.streakLabel = emotion
@@ -190,21 +203,52 @@ export function stabiliseEmotion(state: SmoothState, emotion: string, confidence
     state.label = emotion
     return emotion
   }
-  if (emotion === state.label) return state.label
+  if (emotion === state.label) {
+    state.advLabel = ''
+    state.advCount = 0
+    return state.label
+  }
 
-  // 一票即切：置信度足够高时不再等待（实测把切换滞后从 3.55 帧降到 2.45 帧）
+  // 0) 相对优势：弱信号也能切换（细微表情变化的关键路径）
+  const curIdx = (EMOTION_CLASS_NAMES as readonly string[]).indexOf(state.label)
+  if (curIdx >= 0 && confidence < INSTANT_SWITCH_CONF) {
+    const advantage = proba[best] - proba[curIdx]
+    if (advantage >= MARGIN_SWITCH_ADVANTAGE) {
+      if (state.advLabel === emotion) state.advCount += 1
+      else {
+        state.advLabel = emotion
+        state.advCount = 1
+      }
+      if (state.advCount >= MARGIN_SWITCH_STREAK) {
+        state.label = emotion
+        state.window = [emotion]
+        state.streakLabel = emotion
+        state.streak = 1
+        state.advLabel = ''
+        state.advCount = 0
+        return emotion
+      }
+    } else {
+      state.advLabel = ''
+      state.advCount = 0
+    }
+  }
+
+  // 1) 一票即切：置信度足够高时不再等待
   if (confidence >= INSTANT_SWITCH_CONF) {
     state.label = emotion
     state.window = [emotion]
     return emotion
   }
 
+  // 2) 中等置信度 + 连续出现
   if (confidence >= FAST_SWITCH_CONF && state.streak >= FAST_SWITCH_STREAK) {
     state.label = emotion
     state.window = [emotion]
     return emotion
   }
 
+  // 3) 慢放：窗口内需达到多数比例
   state.window.push(emotion)
   if (state.window.length > SMOOTH_WINDOW) state.window.shift()
   const counts: Record<string, number> = {}
@@ -401,6 +445,44 @@ export function useEmotionDetection() {
     return { x: b.x, y: b.y, width: b.width, height: b.height, score: detections[0].score ?? 0 }
   }
 
+  /**
+   * 检测框时序平滑（EMA）。
+   *
+   * 为什么需要：检测器逐帧输出的框会有几像素抖动，而我们是用这个框去裁剪再缩放到 80×80 的。
+   * 框一抖，裁剪窗口就位移，同一张脸在输入张量里会"抖"出肉眼级差异 —— 微小表情变化
+   * （嘴角、眉梢的几个像素）就被这种裁剪噪声淹没，模型输出跟着来回小幅摆动，表现为"识别不到细变化"。
+   * 对框做指数平滑后，裁剪窗口稳定，弱信号才能稳定累积到足以切换。
+   * 目标大幅位移（换人、快速移动）时直接重置，避免"拖着旧位置"。
+   */
+  const BOX_EMA_ALPHA = 0.4
+  const BOX_JUMP_RATIO = 0.5
+  let boxEma: { x: number; y: number; width: number; height: number } | null = null
+
+  function smoothBox<T extends { x: number; y: number; width: number; height: number }>(
+    box: T | null,
+  ): T | null {
+    if (!box) {
+      boxEma = null
+      return null
+    }
+    if (!boxEma) {
+      boxEma = { x: box.x, y: box.y, width: box.width, height: box.height }
+      return box
+    }
+    const size = Math.max(boxEma.width, boxEma.height) || 1
+    if (Math.abs(box.x - boxEma.x) + Math.abs(box.y - boxEma.y) > size * BOX_JUMP_RATIO) {
+      boxEma = { x: box.x, y: box.y, width: box.width, height: box.height }
+      return box
+    }
+    boxEma = {
+      x: boxEma.x + (box.x - boxEma.x) * BOX_EMA_ALPHA,
+      y: boxEma.y + (box.y - boxEma.y) * BOX_EMA_ALPHA,
+      width: boxEma.width + (box.width - boxEma.width) * BOX_EMA_ALPHA,
+      height: boxEma.height + (box.height - boxEma.height) * BOX_EMA_ALPHA,
+    }
+    return { ...box, ...boxEma }
+  }
+
   function runDetectionLoop() {
     let frameCount = 0
     let noFaceCount = 0
@@ -414,7 +496,7 @@ export function useEmotionDetection() {
         if (videoEl.readyState >= 2) {
           try {
             const tDet0 = performance.now()
-            const box = await locateFace(videoEl)
+            const box = smoothBox(await locateFace(videoEl))
             const detMs = performance.now() - tDet0
             faceBox.value = box
             let inferMs = 0
@@ -424,9 +506,9 @@ export function useEmotionDetection() {
               const predicted = canvas ? await predict(canvas) : null
               inferMs = performance.now() - tInf0
               if (predicted) {
-                const { emotion, probs: p, best } = predicted
+                const { probs: p, best } = predicted
                 probs.value = p
-                const smoothed = stabiliseEmotion(smoothState, emotion, p[best])
+                const smoothed = stabiliseEmotion(smoothState, p)
                 const sIdx = EMOTION_CLASS_NAMES.indexOf(smoothed as (typeof EMOTION_CLASS_NAMES)[number])
                 // 置信度取"平滑后标签"在本帧的概率，避免标签与置信度来自不同类别
                 const confidence = sIdx >= 0 ? p[sIdx] : p[best]
@@ -476,6 +558,7 @@ export function useEmotionDetection() {
     isReady.value = false
     current.value = null
     Object.assign(smoothState, newSmoothState())
+    boxEma = null
     if (raf) cancelAnimationFrame(raf)
     raf = 0
     if (stream) {

@@ -10,12 +10,19 @@ import { getButlerBriefing } from '@/api/butler'
 
 const PREVIEW_FALLBACK = '自动推送最新资讯 · 一键总结对话'
 
-const title = ref('')
+const newsTitle = ref('')
 const generatedAt = ref('')
+/** 管家会话的最后一条消息：有聊天记录时优先展示它，做到「外面看到的就是最后一条」 */
+const lastMessage = ref('')
 let inflight: Promise<void> | null = null
 
-/** 会话摘要文本：拿到资讯标题后展示标题，否则回退默认文案 */
-const butlerPreview = computed(() => title.value || PREVIEW_FALLBACK)
+/** 会话摘要文本：最后一条消息 > 资讯标题 > 默认文案 */
+const butlerPreview = computed(() => lastMessage.value || newsTitle.value || PREVIEW_FALLBACK)
+
+/** 由管家会话在消息变化时回写：让它成为摘要的第一优先级 */
+function setButlerPreview(text: string) {
+  lastMessage.value = (text || '').replace(/\s+/g, ' ').trim()
+}
 
 /** 拉取（并发去重）最新资讯摘要 */
 function refresh() {
@@ -24,7 +31,7 @@ function refresh() {
     try {
       const data = await getButlerBriefing(1)
       const first = data.items?.[0]
-      title.value = first?.title || ''
+      newsTitle.value = first?.title || ''
       generatedAt.value = data.generated_at
     } catch {
       // 接口异常时保持默认文案，不影响入口展示
@@ -36,5 +43,5 @@ function refresh() {
 }
 
 export function useButlerPreview() {
-  return { butlerPreview, generatedAt, refreshButlerPreview: refresh }
+  return { butlerPreview, generatedAt, refreshButlerPreview: refresh, setButlerPreview }
 }

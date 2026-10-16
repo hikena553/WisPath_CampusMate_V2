@@ -134,10 +134,26 @@ backend/_probe*.py
 backend/probe_*.py
 backend/models/
 
-# ML 训练模块：FER2013 数据集缓存与最优权重体积大（数十 MB）且可重新生成，
-# 与 backend/models/ 同类不入库；代码、配置、超参与指标产物照常提交
+# ML 表情识别模块：只保留「最终结果模型」，训练过程 / 测试页面 / 数据集全部不入库
+#   保留：frontend/public/models/ 下的模型文件（最终交付物，前端运行时依赖）
+#   忽略：训练过程产物（权重、训练曲线、混淆矩阵、指标 JSON、分类报告、日志）
+#         数据集与派生缓存（FER2013 / RAF-DB / WIDER FACE 及 .pt 缓存、核对样张）
+#         浏览器测试页面（人工实测台 frontend/demo、自动化探针页 frontend/e2e）
+#   注意：backend/ml/ 下的训练代码与配置**不忽略** —— backend/app/api/ml_training.py
+#         是已注册的训练接口，会惰性导入 ml.train，忽略代码会让该接口失效
 backend/ml/data/
-backend/ml/runs/*/best_model.pt
+backend/ml/runs/
+backend/ml/*.pt
+backend/ml/*.y4m
+
+# 浏览器测试页面（非业务代码，仅用于实测与调试）
+frontend/demo/
+frontend/e2e/
+
+# 最终结果模型：显式白名单，避免后续新增通用规则（如 *.onnx）时误伤交付物
+!frontend/public/models/*.onnx
+!frontend/public/models/*-shard1
+!frontend/public/models/*-weights_manifest.json
 
 # ---------- Database dumps ----------
 *.sql
@@ -153,6 +169,8 @@ backend/vendor_packages/
 campusmate-v3-implementation-plan/
 campusmate-v3-upgrade-plan/
 campusmate-audit/
+# 语音通话改造方案：一次性方案稿，保留在本地工作快照，不入库
+绵小城语音通话改造方案.html
 
 # ---------- Generated runtime junk (added 2026-10-08 cleanup) ----------
 # Backend temp files written by tooling / libraries (random 8-char names, zero or "blat" content)

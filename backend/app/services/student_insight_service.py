@@ -18,6 +18,7 @@ from app.models.leave import LeaveRequest, LeaveStatus
 from app.models.teacher_task import TaskSourceType, TaskStatus, TeacherTask
 from app.models.user import User
 from app.services import learning_event_service, teacher_task_service
+from app.services.prompts import build_insight_advice_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -167,14 +168,11 @@ async def generate_advice(profile: dict, student_name: str) -> tuple[str, bool, 
     from app.services.llm_service import _get_client, _get_llm_config
 
     facts = "\n".join(f"- {e['label']}：{e['value']}" for e in profile["evidence"])
-    prompt = (
-        f"你是高校辅导员的工作助手。请基于以下**已核实事实**，为辅导员生成对学生「{student_name}」的辅导建议。\n\n"
-        f"事实清单：\n{facts}\n\n"
-        f"系统判定风险等级：{profile['risk_level']}；依据：{'；'.join(profile['risk_reasons']) or '无'}\n\n"
-        "要求：\n"
-        "1. 只能使用上述事实，不得编造任何未给出的信息；\n"
-        "2. 用 3 条以内的要点给出可执行动作（先做什么、再做什么）；\n"
-        "3. 控制在 150 字以内，纯文本，不要 Markdown 标记。"
+    prompt = build_insight_advice_prompt(
+        student_name=student_name,
+        facts=facts,
+        risk_level=profile["risk_level"],
+        risk_reasons=profile["risk_reasons"],
     )
 
     config = _get_llm_config()

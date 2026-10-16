@@ -14,6 +14,7 @@ import time
 
 from app.models.user import User
 from app.services.llm_service import complete
+from app.services.prompts import build_proactive_insight_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +56,11 @@ def get_cached_insight(user: User, actions: list) -> str | None:
 def _build_prompt(user: User, actions: list) -> str:
     picked = sorted(actions, key=lambda a: a.priority, reverse=True)[:MAX_ACTIONS_IN_PROMPT]
     lines = "\n".join(f"- {a.title}：{a.content}" for a in picked)
-    return f"""你是校园 AI 助手，正在给学生「{user.name or '同学'}」做主动提醒。
-
-系统基于真实数据发现了以下情况：
-{lines}
-
-请用一句自然、体贴的中文口语（不超过 {MAX_INSIGHT_CHARS} 字）总结提醒重点，
-给出一个可执行的小建议。只返回这一句话，不要列表、不要引号、不要解释。"""
+    return build_proactive_insight_prompt(
+        student_name=user.name or "同学",
+        lines=lines,
+        max_chars=MAX_INSIGHT_CHARS,
+    )
 
 
 async def _produce(user: User, actions: list, key: tuple[int, str]) -> str | None:

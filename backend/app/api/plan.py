@@ -28,6 +28,7 @@ from app.schemas.plan import (
 from app.api.notification import create_notification
 from app.models.notification import NotificationType
 from app.services.llm_service import _get_llm_config, _get_client
+from app.services.prompts import build_plan_reschedule_prompt
 from app.services.plan_stage_service import (
     ai_generate_stages, ai_evaluate_stage, persist_generated_stages,
 )
@@ -619,10 +620,8 @@ async def _gen_suggest_by_llm(db: Session, plans: list, tasks: list, today: date
             f"- 任务[{t.id}] 「{t.title}」截止 {t.due_date or '未定'} 状态={t.status.value} 优先级={t.priority.value}"
             for t in tasks
         )
-        prompt = (
-            f"今天是 {today.isoformat()}。学生有以下学习计划与未完成/未开始任务：\n{plan_lines}\n{task_lines}\n"
-            "请以 JSON 输出顺延与重排建议：{\"summary\": \"总体建议(60字内)\", \"items\": [{\"task_id\": 数字, \"suggest\": \"针对该任务的一句建议(40字内)\"}]}。"
-            "只对未完成任务给出建议，任务ID必须来自上面列表。不要输出其他内容。"
+        prompt = build_plan_reschedule_prompt(
+            today_iso=today.isoformat(), plan_lines=plan_lines, task_lines=task_lines
         )
         resp = await client.chat.completions.create(
             model=cfg["model"],

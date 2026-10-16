@@ -20,6 +20,7 @@ from app.schemas.leave import (
 from app.services import teacher_task_service
 from app.services import learning_event_service
 from app.services.llm_service import _get_client, _get_llm_config
+from app.services.prompts import build_leave_analysis_prompt
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
 
 logger = logging.getLogger(__name__)
@@ -327,19 +328,13 @@ async def analyze_leave(id: int, user: User = Depends(require_role(UserRole.TEAC
     if not leave:
         raise HTTPException(status_code=404, detail="请假申请不存在")
     student = db.query(User).filter(User.id == leave.student_id).first()
-    prompt = f"""你是一位校园审批助手。请分析以下请假申请，给出审批建议和理由。
-
-学生：{student.name if student else "未知"}
-类型：{safe_enum_val(leave.leave_type)}
-时间：{leave.start_date} 至 {leave.end_date}
-原因：{leave.reason}
-
-要求：
-1. suggestion 必须是 "approve" 或 "reject"
-2. reason 必须用中文给出具体的分析理由（至少20字）
-3. 只返回JSON，不要其他内容
-
-格式：{{"suggestion": "approve", "reason": "具体分析理由..."}}"""
+    prompt = build_leave_analysis_prompt(
+        student_name=student.name if student else "未知",
+        leave_type=safe_enum_val(leave.leave_type),
+        start_date=leave.start_date,
+        end_date=leave.end_date,
+        reason=leave.reason,
+    )
     try:
         config = _get_llm_config()
         resp = await _get_client().chat.completions.create(

@@ -17,9 +17,12 @@ router = APIRouter(prefix="/api", tags=["upload"])
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 MAX_UPLOADS_PER_MINUTE = 20
-ALLOWED_TYPES = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".zip", ".rar"}
+ALLOWED_TYPES = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".zip", ".rar",
+                 # 语音消息（聊天「按住说话」录制的音频）
+                 ".webm", ".m4a", ".mp3", ".wav", ".ogg", ".opus", ".aac", ".amr"}
 ALLOWED_MIME_PREFIXES = (
-    "image/", "application/pdf", "application/vnd.openxmlformats-officedocument",
+    "image/", "audio/", "video/webm",
+    "application/pdf", "application/vnd.openxmlformats-officedocument",
     "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
     "text/plain", "application/zip", "application/x-rar", "application/x-zip-compressed",
 )

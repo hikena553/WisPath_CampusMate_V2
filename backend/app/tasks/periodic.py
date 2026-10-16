@@ -6,6 +6,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 REFRESH_INTERVAL_SECONDS = 1800
+# 主动触达推送间隔：30 分钟扫一轮全体学生，命中规则即落库站内通知
+PROACTIVE_INTERVAL_SECONDS = 1800
 
 
 async def _periodic_impression_refresh() -> None:
@@ -32,6 +34,18 @@ async def _periodic_feed_refresh() -> None:
         await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
 
 
+async def _periodic_proactive_push() -> None:
+    """定期执行 AI 主动触达全量评估：命中规则即落库站内通知，实现服务端自动推送。"""
+    from app.services.proactive_engine import evaluate_all
+
+    while True:
+        try:
+            await asyncio.to_thread(evaluate_all)
+        except Exception:
+            logger.exception("后台主动触达推送异常")
+        await asyncio.sleep(PROACTIVE_INTERVAL_SECONDS)
+
+
 def start_periodic_tasks() -> list[asyncio.Task]:
     """创建全部周期任务，返回任务句柄供应用生命周期管理。"""
     from app.tasks.learning_alert import _periodic_learning_alert
@@ -41,6 +55,8 @@ def start_periodic_tasks() -> list[asyncio.Task]:
         asyncio.create_task(_periodic_feed_refresh()),
         # 学习预警 pipeline：每小时检查，内部按「每日一次」标记真正执行
         asyncio.create_task(_periodic_learning_alert()),
+        # AI 主动触达：每 30 分钟扫描全体学生，命中规则落到站内通知
+        asyncio.create_task(_periodic_proactive_push()),
     ]
 
 
