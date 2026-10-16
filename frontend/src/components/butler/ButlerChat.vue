@@ -17,7 +17,7 @@
     </div>
 
     <!-- 消息列表 -->
-    <div ref="listRef" class="butler-list">
+    <div ref="listRef" class="butler-list" @scroll="onListScroll" @wheel="onListWheel" @touchstart.passive="onListTouchStart" @touchmove.passive="onListTouchMove">
       <div v-for="m in messages" :key="m.id" class="butler-row" :class="m.role === 'user' ? 'is-mine' : 'is-theirs'">
         <!-- 头像恒为首个子元素：本人消息行 row-reverse 反向后头像落在最外侧（右），
              与全站聊天（.msg-row.mine）一致；若把本人头像排在末尾，反向后会错位到气泡左侧 -->
@@ -72,6 +72,23 @@
       </div>
     </div>
 
+    <!-- 回到最新（QQ 式）：上翻阅读历史时不打断，出现按钮一键回底 -->
+    <Transition name="butler-scrollbtn">
+      <button
+        v-if="messages.length > 0 && !atBottom"
+        type="button"
+        class="butler-scroll-bottom"
+        @click="scrollToBottom(true)"
+      >
+        <svg class="butler-scroll-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4.8v14.4" />
+          <path d="M6.4 13.6 12 19.2l5.6-5.6" />
+        </svg>
+        <span>回到最新</span>
+      </button>
+    </Transition>
+
     <!-- 输入栏 -->
     <div class="butler-input">
       <div class="butler-input-box">
@@ -103,10 +120,12 @@
  * - 与管家自由对话（/api/butler/chat）
  * 视觉沿用钉钉设计令牌（--dt-*）与钉钉风格图标（DtIcon）。
  */
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import DtIcon from '@/components/common/DtIcon.vue'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useAuthStore } from '@/stores/auth'
+import { useButlerPreview } from '@/composables/useButlerPreview'
+import { getUserId } from '@/utils/token'
 import {
   getButlerBriefing, butlerChat, butlerSummarize,
   type ButlerFeedItem, type ButlerChatMessage,
@@ -124,6 +143,8 @@ interface LocalMessage {
   time: string
   kind?: 'text' | 'briefing'
   items?: ButlerFeedItem[]
+  /** 简报归属日期（YYYY-M-D），用于「每天只自动推一次」判重 */
+  dateKey?: string
 }
 
 const messages = ref<LocalMessage[]>([])
@@ -132,6 +153,68 @@ const loading = ref(false)
 const listRef = ref<HTMLElement>()
 const inputRef = ref<HTMLTextAreaElement>()
 let seq = 0
+
+// ── 历史持久化（按用户 + 角色分区，换账号不串扰）──
+const STORAGE_PREFIX = 'campus_butler_messages'
+function storageKey(): string {
+  const uid = getUserId()
+  return uid ? `${STORAGE_PREFIX}_${props.role}_${uid}` : `${STORAGE_PREFIX}_${props.role}`
+}
+function loadHistory(): LocalMessage[] {
+  try {
+    const raw = localStorage.getItem(storageKey())
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed as LocalMessage[] : []
+  } catch {
+    return []
+  }
+}
+function persist() {
+  try {
+    localStorage.setItem(storageKey(), JSON.stringify(messages.value.slice(-200)))
+  } catch { /* 隐私模式等场景忽略 */ }
+}
+const { setButlerPreview } = useButlerPreview()
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+watch(messages, () => {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(persist, 300)
+  // 会话列表里的入口摘要＝最后一条消息：让「外面」看到的与聊天框里一致
+  const last = messages.value[messages.value.length - 1]
+  setButlerPreview(last ? last.content : '')
+}, { deep: true })
+
+// 进入「小绵正在思考…」加载态时立刻贴到最新（此前要等整段回复到达才滚动）
+watch(loading, (v) => {
+  if (v) void scrollToBottom(true)
+})
+
+// ── QQ 式滚动：默认始终跟随最新；只有用户「主动上翻」时才暂停，回到底部即恢复 ──
+// 暂停只由真实滚动手势触发——用滚动距离判定会被内容增长的竞态误关。
+const atBottom = ref(true)
+const BOTTOM_THRESHOLD = 40
+function listScrollable() {
+  const el = listRef.value
+  return !!el && el.scrollHeight - el.clientHeight > 1
+}
+function onListScroll() {
+  const el = listRef.value
+  if (!el) return
+  if (el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD) atBottom.value = true
+}
+function onListWheel(e: WheelEvent) {
+  if (e.deltaY >= 0 || !listScrollable()) return
+  atBottom.value = false
+}
+let touchStartY = 0
+function onListTouchStart(e: TouchEvent) {
+  touchStartY = e.touches[0]?.clientY ?? 0
+}
+function onListTouchMove(e: TouchEvent) {
+  const y = e.touches[0]?.clientY ?? 0
+  if (y - touchStartY > 6 && listScrollable()) atBottom.value = false
+}
 
 const userAvatar = computed(() => auth.user?.avatar || '')
 const userInitial = computed(() => (auth.userName || '我').slice(0, 1))
@@ -146,7 +229,8 @@ function nowLabel() {
 
 function push(role: 'user' | 'assistant', content: string, extra: Partial<LocalMessage> = {}) {
   messages.value.push({ id: ++seq, role, content, time: nowLabel(), ...extra })
-  void scrollToBottom()
+  // 任何新消息都直接展示到最新（管家回复整段到达，不存在流式中途被打断的问题）
+  void scrollToBottom(true)
 }
 
 function truncate(text: string, max: number) {
@@ -161,7 +245,9 @@ function formatShort(iso: string | null) {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-async function scrollToBottom() {
+async function scrollToBottom(force = false) {
+  if (force) atBottom.value = true
+  if (!atBottom.value) return
   await nextTick()
   const el = listRef.value
   if (el) el.scrollTop = el.scrollHeight
@@ -174,13 +260,19 @@ function autoResize() {
   el.style.height = `${Math.min(el.scrollHeight, 96)}px`
 }
 
+/** 本地日期键（YYYY-M-D），用于「简报每天只自动推一次」判重 */
+function todayKey() {
+  const d = new Date()
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+}
+
 /** 拉取并推送「最新资讯简报」 */
 async function pushBriefing(manual = false) {
   if (loading.value) return
   loading.value = true
   try {
     const data = await getButlerBriefing(5)
-    push('assistant', data.digest, { kind: 'briefing', items: data.items })
+    push('assistant', data.digest, { kind: 'briefing', items: data.items, dateKey: todayKey() })
   } catch {
     if (manual) push('assistant', '资讯暂时拉取失败，稍后再试一次吧。')
   } finally {
@@ -233,17 +325,28 @@ async function send() {
 }
 
 onMounted(() => {
-  const who = props.role === 'teacher' ? '老师' : '同学'
-  push(
-    'assistant',
-    `你好，我是${agentName.value || '小绵'}管家。\n我会自动为你推送校园与行业的最新资讯，也可以帮你总结聊天要点。\n${who}，今天想看点什么呢？`,
-  )
-  void pushBriefing()
+  // 先恢复历史：这样每次进入不再是空白新对话，而是接着上次继续（与智能体历史口径一致）
+  messages.value = loadHistory()
+  seq = messages.value.reduce((max, m) => Math.max(max, m.id || 0), 0)
+
+  if (!messages.value.length) {
+    const who = props.role === 'teacher' ? '老师' : '同学'
+    push(
+      'assistant',
+      `你好，我是${agentName.value || '小绵'}管家。\n我会自动为你推送校园与行业的最新资讯，也可以帮你总结聊天要点。\n${who}，今天想看点什么呢？`,
+    )
+  }
+  // 自动推送资讯：今天还没推过才推，避免每次进入重复刷屏
+  if (!messages.value.some((m) => m.kind === 'briefing' && m.dateKey === todayKey())) {
+    void pushBriefing()
+  }
+  void scrollToBottom(true)
 })
 </script>
 
 <style scoped>
 .butler-chat {
+  position: relative;
   flex: 1 1 auto;
   height: 100%;
   min-width: 0;
@@ -304,6 +407,39 @@ onMounted(() => {
   -webkit-overflow-scrolling: touch;
   padding: 16px 14px 8px;
 }
+
+/* ── 回到最新（QQ 式）──
+   居中悬浮在输入栏上方：仅当上翻历史、脱离底部时出现，点击立即回底。 */
+.butler-scroll-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: 78px; /* 输入栏（约 62px）+ 14px 间距 */
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, .1);
+  background: rgba(255, 255, 255, .96);
+  color: #4b5563;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .12);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: color .18s, border-color .18s, background .18s;
+}
+.butler-scroll-bottom:hover { color: var(--dt-primary-strong, #1677ff); border-color: #a9c6f0; background: #f7faff; }
+.butler-scroll-arrow { width: 14px; height: 14px; display: block; flex-shrink: 0; }
+.butler-scrollbtn-enter-active,
+.butler-scrollbtn-leave-active { transition: opacity .18s ease, transform .18s ease; }
+.butler-scrollbtn-enter-from,
+.butler-scrollbtn-leave-to { opacity: 0; transform: translateX(-50%) translateY(6px); }
+.butler-scrollbtn-enter-to,
+.butler-scrollbtn-leave-from { opacity: 1; transform: translateX(-50%) translateY(0); }
 .butler-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 16px; }
 .butler-row.is-mine { flex-direction: row-reverse; }
 .butler-avatar {
