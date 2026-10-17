@@ -1,6 +1,7 @@
 """绵城印象爬虫服务：抓取 → 入库 → 更新缓存"""
 import logging
 import re
+import threading
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -63,6 +64,9 @@ COLLEGES = {
 _impression_cache: list[dict] | None = None
 _impression_cache_ts = 0.0
 IMPRESSION_TTL = 300
+# 同一时刻只允许一个后台刷新在跑（爬虫是同步阻塞网络请求，重复触发只会白烧带宽）
+_refresh_lock = threading.Lock()
+_refresh_running = False
 
 
 def _set_impression_cache(data: list[dict]) -> None:
@@ -71,10 +75,38 @@ def _set_impression_cache(data: list[dict]) -> None:
     _impression_cache_ts = time.time()
 
 
+def _refresh_in_background() -> None:
+    """后台线程里跑一次全量刷新（stale-while-revalidate 的 revalidate 阶段）。
+
+    为什么要另起线程：crawl_all() 是同步阻塞网络请求（要串行访问十余个校站，
+    教学动态还对每条新闻再抓一次详情页），放进请求线程会让 /api/campus/impression
+    卡住数秒——前端表现为「进页面空白很久」。这里改为后台刷新，请求立刻返回旧数据。
+    """
+    global _refresh_running
+    with _refresh_lock:
+        if _refresh_running:
+            return
+        _refresh_running = True
+    try:
+        refresh_impression_data()
+    finally:
+        with _refresh_lock:
+            _refresh_running = False
+
+
 def get_impression_cache() -> list[dict] | None:
-    if _impression_cache is not None and time.time() - _impression_cache_ts < IMPRESSION_TTL:
-        return _impression_cache
-    return None
+    """读取内存缓存：存在即返回，不因 TTL 过期而返回 None。
+
+    stale-while-revalidate：过期只代表「该刷新了」，不代表「没数据可用」。
+    若因过期返回 None，接口会退化成同步全量爬取（卡数秒甚至几十秒），
+    前端每次都要重新等待——这正是校园资讯页反复闪加载的根因之一。
+    这里改为：过期时启动后台刷新，本次仍返回旧数据，前端始终秒开。
+    """
+    if _impression_cache is None:
+        return None
+    if time.time() - _impression_cache_ts >= IMPRESSION_TTL:
+        threading.Thread(target=_refresh_in_background, daemon=True).start()
+    return _impression_cache
 
 
 def _get(url: str, timeout: float = 10) -> str:

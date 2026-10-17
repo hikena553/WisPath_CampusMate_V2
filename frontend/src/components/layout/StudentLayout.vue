@@ -55,9 +55,11 @@
     </header>
     <main class="main-area" :class="{ 'has-bottom-bar': isMobile }">
       <router-view v-slot="{ Component }">
-        <!-- 两种过渡都用默认的「同时」模式：离场页都是绝对定位（脱离文档流），
-             因此新旧同时在场也不会互相挤压，只是各自做动画；
-             :duration 仅整屏推入显式兜底移除，卡片切换交给 Vue 自动检测 -->
+        <!-- 两种过渡都用默认的「同时」模式（新旧同时在场），因此两者都必须让离场页脱流，
+              否则两个整页组件会在 .main-area（flex column）里分摊高度、互相挤压：
+              - route-subpage：离场页 absolute + inset:0（见 animations.css）
+              - page-card：离场页同样 absolute + inset:0
+              :duration 仅覆盖式滑动显式兜底移除，卡片切换交给 Vue 自动检测 -->
         <Transition :name="pageTransition" :duration="transitionDuration">
           <component :is="Component" />
         </Transition>
@@ -90,26 +92,28 @@ const auth = useAuthStore()
 const { isMobile } = useResponsive()
 
 // 路由过渡分两种：
-// 1) 快捷空间子页面（学习计划/作品集/成长档案/情绪树洞）：整屏推入/退出（进入=前进，离开=返回）
-//    与驾驶舱子页共用同一套动画（styles/animations.css 的 .push/.push-back，全局唯一实现），
-//    保证「子页从右侧推入、返回时向右退出」这套手感在各入口完全一致。
+// 1) 快捷空间子页面（学习计划/作品集/成长档案/情绪树洞）：覆盖式滑入/滑出
+//    用 .route-subpage（styles/animations.css 的「路由级」版本）：新页从右滑入盖住旧页，
+//    旧页脱流后向右滑出。**不能用 .subpage** —— 那个类给页内场景设计（主页面在 Transition
+//    之外、没有 leave 元素），离场侧刻意不脱流；而路由切换是真正的组件替换，
+//    新旧两页都是 .main-area 这个 flex column 的直接子项，离场页不脱流就会与进场页
+//    分摊高度（各约 50%）→ 高度塌陷抽搐、退出动画被掩盖。
 // 2) 其余同级页面切换（底部导航/顶栏之间，如校园资讯↔驾驶舱）：卡片式切换（新页浮起放大到位，旧页缩小退后）
 const quickPagePaths = ['/student/plan', '/student/portfolio', '/student/growth', '/student/emotion']
 const pageTransition = ref('')
 watch(
   () => route.path,
   (to, from) => {
-    if (quickPagePaths.includes(to)) pageTransition.value = 'push'
-    else if (quickPagePaths.includes(from)) pageTransition.value = 'push-back'
+    if (quickPagePaths.includes(to) || quickPagePaths.includes(from)) pageTransition.value = 'route-subpage'
     else pageTransition.value = 'page-card'
   },
   { flush: 'pre' }
 )
 
-/** 只有整屏推入需要显式时长兜底移除（离场页整屏滑出，见 animations.css）；
+/** 只有覆盖式滑动需要显式时长兜底移除（离场页脱流，见 animations.css）；
     卡片切换交给 Vue 自动检测，与 CSS 时长精确对齐 */
 const transitionDuration = computed(() =>
-  pageTransition.value.startsWith('push') ? 460 : undefined
+  pageTransition.value === 'route-subpage' ? 320 : undefined
 )
 
 // 移动端底部导航

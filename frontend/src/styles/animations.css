@@ -128,80 +128,105 @@
 .stagger-10 { animation-delay: 0.3s; animation-fill-mode: both; }
 
 /* ============================================================================
-   Page Transition - 子页面「传送带式整屏推入/推出」（统一动画语言）
+   Page Transition - 子页面「覆盖式」滑入/滑出（全站唯一实现）
    ============================================================================
-   这套动画原生于驾驶舱（SchedulePage 的 .subpage-slide / .subpage-slide-back），
-   现在提取为全局唯一实现，供所有子页面复用（快捷空间子页 + 校园资讯阅读器等），
-   避免各处再抄一份、参数漂移。
+   适用所有「主页面不动、子页盖上来」的场景，目前四个调用点共用：
+   1) 工作台子页（WorkbenchPage 办事服务表单）
+   2) 校园资讯站内阅读器（ArticleReader）
+   3) 驾驶舱主页 ↔ 学业子页（SchedulePage）
+   4) 快捷空间子页路由过渡（StudentLayout 的 plan / portfolio / growth / emotion）
 
-   方向语义：
-   - 前进(push)：子页从右侧整屏滑入，旧页（列表/主页）同速整屏滑出 → 两页边缘始终衔接
-   - 返回(push-back)：子页向右整屏滑出，旧页从左侧滑回
+   为什么只留这一套：此前仓里同时存在多种「子页滑入」的写法（本文件的
+   push/subpage-slide/page-slide、WorkbenchPage 的 .slide-left、ArticleReader 的
+   reader-overlay、SchedulePage 的 .slide-left/.slide-right），类名不同、
+   时长从 .18s 到 .45s 不等、方向语义还分「传送带」与「覆盖」两种，维护时极易改错。
+   现已统一为本文件这一套，其余各处改为引用这里的类名。
 
-   三条硬约束（都是踩过坑的，改动前先读）：
-   1) 进场页留在文档流（relative + z-index:2）并铺不透明底，负责盖住旧页；
-      离场页转 absolute 脱离文档流（z-index:1），否则两页在流内会互相挤压。
-   2) 离场页必须整屏滑出（±100%）并淡出：早期 ±28% 的「视差让位」设计会让旧页
-      停在屏幕侧边直到动画结束（表现为「跳转完左右停着页面」），已废弃。
-   3) 离场页 pointer-events:none，杜绝动画期间拦截新页点击。
+   行为（与 WorkbenchPage 原 .slide-left 逐字一致）：
+   - 子页从右侧滑入盖住主页面，主页面全程不动；
+   - 返回时子页原路向右滑出；
+   - 进场与退场**同向**（都是 translateX(100%)）—— 这是「覆盖式」的标志，
+     与「传送带式」（两页反向位移、同时在场）恰好相反，不要改成反向。
 
-   时长兜底：调用方（StudentLayout / SchedulePage）给 <Transition> 传 :duration="460"，
-   确保离场元素必定被移除；CSS 过渡 0.45s，留 10ms 余量。
+   关键实现约束：
+   1) 滑动的元素必须**不透明**且铺满内容区，否则会看到下层页面透出来；
+   2) 离场元素只加 pointer-events:none，**不要**加 position/inset/overflow
+      （原因见下方 .subpage-leave-active 的详细注释，三处调用点各有各的坏法）；
+   3) 时长 0.3s；调用方给 <Transition> 传 :duration="320"（0.3s + 20ms 余量）
+      兜底移除离场元素，避免其滞留在文档流里。 */
+.subpage-enter-active,
+.subpage-leave-active {
+  transition: transform 0.3s ease;
+  will-change: transform;
+}
+.subpage-enter-from { transform: translateX(100%); }
+.subpage-leave-to { transform: translateX(100%); }
 
-   别名说明：page-slide / subpage-slide 系列保留为等价别名，供历史调用点平滑迁移，
-   新人请直接用 push / push-back。 */
-.push-enter-active,
-.push-back-enter-active,
-.page-slide-enter-active,
-.page-slide-back-enter-active,
-.subpage-slide-enter-active,
-.subpage-slide-back-enter-active {
+/* 离场元素停止响应点击：0.3s 内新旧两页同时在位，不设这条会让离场页挡住新页的首次点击。
+   只保留 pointer-events，绝不加 position/inset/overflow —— 这三条是「传送带式」旧模型的
+   遗留，在覆盖式模型下会把三处调用点搞坏，且坏法各不相同（都已实测踩过）：
+   1) 工作台 .sub-page 自己是 position:fixed；组件 <style scoped> 编译出的
+      .sub-page[data-v-x] 特异性 (0,2,0) 高于本文件全局类 (0,1,0)，于是 absolute 被压掉，
+      离场页继续以不透明全屏 fixed 停留 0.3s，把正在滑入的进场页整个盖住 → 「动画没了」。
+   2) 驾驶舱 .content-row / .dashboard-home 都没声明 position，absolute 真实生效：
+      它们是 .schedule-page（flex column + overflow-y:auto）的 flex item，一脱流就
+      导致容器内容高度塌陷、滚动位置被重置，且 absolute 的包含块是 padding box，
+      inset:0 会让离场页相对内容偏移 12~16px → 滑动时错位跳动。
+   3) 阅读器 .reader-mask 也是 fixed（同样压掉 absolute），只是因为不透明视觉放在
+      内层 .reader-panel 上才侥幸没暴露 —— 属于「碰巧没事」，不能作为保留 absolute 的理由。
+   结论：覆盖式模型下离场元素无需脱流（两页都在动，0.3s 后即被 :duration 移除），
+   唯一真正需要的是 pointer-events:none —— 它不依赖 position，因而不会被上述特异性之争影响。 */
+.subpage-leave-active {
+  pointer-events: none;
+}
+
+/* ============================================================================
+   Route Transition - 路由级整页切换专用（StudentLayout 的 <router-view>）
+   ============================================================================
+   目标观感与工作台办事服务子页一致：**新页从右滑入盖住旧页，旧页原地不动**；
+   返回时新页原路向右滑出，旧页直接露出来。
+
+   与页内 .subpage 的异同：
+   - 相同：进出同向（进场 translateX(100%)），离场不位移。
+   - 不同：这里是**真正的组件替换**，新旧两个整页组件同时在 DOM 且都是
+     .main-area（flex column）的直接子项。离场页若留在流内，两页会各分走约
+     50% 高度 → 高度塌陷抽搐。所以离场页**必须脱流**（absolute + inset:0）。
+     页内 .subpage 恰恰不能脱流（会把 fixed 的调用方压坏），故两类必须分开命名。
+
+   注意离场页**不能**再给 transform：
+   早先写成 leave-to { translateX(100%) }（照搬工作台）是错的 —— 工作台的主列表在
+   <Transition> **外面**，永远不动，所以只有子页在滑；而路由级旧页也在 Transition 内，
+   若让它一起向右滑，就变成「两页同时向右」的穿帮画面（用户反馈的「退出动画不对」）。
+   现在离场页零位移，仅脱流 + 停止响应点击，正好被动地被滑入的新页盖住。
+
+   用 !important：四个路由页（PlanView / PortfolioView / GrowthPage / EmotionTrashPage）
+   根类都是 <style scoped> 编译出的 (0,2,0)，特异性高于本全局类 (0,1,0)。
+   包含块 = .main-area（StudentLayout 内 position:relative），inset:0 即整块内容区。 */
+.route-subpage-enter-active {
   position: relative !important;
   z-index: 2 !important;
   background: #f5faff;
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: transform 0.3s ease !important;
   will-change: transform;
 }
-.push-leave-active,
-.push-back-leave-active,
-.page-slide-leave-active,
-.page-slide-back-leave-active,
-.subpage-slide-leave-active,
-.subpage-slide-back-leave-active {
+.route-subpage-enter-from { transform: translateX(100%) !important; }
+/* 离场页：脱流（不参与 flex 高度分配）+ 零位移（原地被新页盖住）+ 不拦点击。
+   不给 transition/transform —— 它本来就不该动。 */
+.route-subpage-leave-active {
   position: absolute !important;
-  /* 离场页内缩对齐：驾驶舱的离场页要落在内容区（页面自身有 12px/16px 内边距）内，
-     否则整屏定位会相对含 padding 的滚动容器原点、视觉上错位。
-     用变量兜底：未声明该变量的页面（如快捷空间子页，自身无内边距）取 0，等价于 inset:0。 */
-  top: var(--push-inset-t, 0) !important;
-  left: var(--push-inset-x, 0) !important;
-  right: var(--push-inset-x, 0) !important;
-  bottom: 0 !important;
+  inset: 0 !important;
   z-index: 1 !important;
   overflow: hidden !important;
   pointer-events: none !important;
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important, opacity 0.45s ease !important;
-  will-change: transform, opacity;
+  background: #f5faff;
 }
-.push-enter-from,
-.page-slide-enter-from,
-.subpage-slide-enter-from { transform: translateX(100%) !important; }
-.push-leave-to,
-.page-slide-leave-to,
-.subpage-slide-leave-to { transform: translateX(-100%) !important; opacity: 0 !important; }
-.push-back-enter-from,
-.page-slide-back-enter-from,
-.subpage-slide-back-enter-from { transform: translateX(-100%) !important; }
-.push-back-leave-to,
-.page-slide-back-leave-to,
-.subpage-slide-back-leave-to { transform: translateX(100%) !important; opacity: 0 !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .push-enter-active, .push-leave-active,
-  .push-back-enter-active, .push-back-leave-active,
-  .page-slide-enter-active, .page-slide-leave-active,
-  .page-slide-back-enter-active, .page-slide-back-leave-active,
-  .subpage-slide-enter-active, .subpage-slide-leave-active,
-  .subpage-slide-back-enter-active, .subpage-slide-back-leave-active { transition: none !important; }
+  .route-subpage-enter-active { transition: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subpage-enter-active, .subpage-leave-active { transition: none !important; }
 }
 
 /* Page Transition - 同级页面切换（底部导航 / 顶栏之间，如校园资讯 ↔ 驾驶舱 ↔ 工作台）：卡片式切换

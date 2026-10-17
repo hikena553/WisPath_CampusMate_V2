@@ -128,6 +128,8 @@ tmp/
 .trae/
 .trae-html-share-packages/
 CLAUDE.md
+# Brainstorm 可视化预览会话（本地 mockup 持久化目录）
+.superpowers/
 
 # ---------- Local probe / one-off scripts / ML model binaries ----------
 backend/_probe*.py

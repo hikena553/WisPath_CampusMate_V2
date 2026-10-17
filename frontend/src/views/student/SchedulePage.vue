@@ -1,11 +1,12 @@
 <template>
-  <div ref="pageEl" class="schedule-page">
-    <!-- ===== 移动端：驾驶舱主页（成长总览 + 内置学业功能区，子页面入口） ===== -->
-    <!-- 方向感知的整屏推入/退出：forward=子页从右推入，back=主页从左滑回。
-         :duration 仅在确有过渡名（移动端整屏动画）时显式指定；名为空时交回 Vue 自动检测立即替换，
-         否则旧内容会在文档流里滞留同样的时长，与新内容上下叠放 -->
-    <Transition :name="subpageTransitionName" :duration="subpageTransitionName ? 460 : undefined">
-    <div v-if="isMobile && activeTab === 'home'" key="home" class="dashboard-home">
+  <div ref="pageEl" class="schedule-page" :class="{ 'has-subpage': isMobile && activeTab !== 'home' }">
+    <!-- ===== 移动端：驾驶舱主页（成长总览 + 内置学业功能区，子页面入口） =====
+         主页**刻意放在 <Transition> 之外**：这样它永远收不到 enter/leave 类，
+         任何时刻都不会有动画 —— 进子页时被子页盖住，返回时子页滑走即露出主页。
+         （此前主页与子页是同一个 <Transition> 的两个互斥分支，导致「返回主页」时
+         主页作为进场页从右侧滑入，看起来像「主页面有滑出动画」，已按此结构消除。）
+         桌面端不渲染本块（!isMobile），由下面的 .content-row 承载两栏布局。 -->
+    <div v-if="isMobile && activeTab === 'home'" class="dashboard-home">
       <GrowthDashboard
         :courses="courses"
         :current-week="currentWeek"
@@ -15,8 +16,10 @@
         @open="openSubPage"
       />
     </div>
-    <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 ===== -->
-    <div v-else key="content" class="content-row">
+    <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 =====
+         只有本块参与过渡（覆盖式：从右滑入 / 原路向右滑出），主页在 Transition 之外不动。 -->
+    <Transition :name="subpageTransitionName" :duration="subpageTransitionName ? 320 : undefined">
+    <div v-if="!isMobile || activeTab !== 'home'" key="content" class="content-row">
       <div class="content-main">
         <!-- 移动端子页面返回栏 -->
         <div v-if="isMobile" class="subpage-bar" @click="backToHome">
@@ -953,33 +956,24 @@ const subPageTitle = computed(() => {
   return map[activeTab.value] || '学业中心'
 })
 
-// ===== 驾驶舱主页 ↔ 学业子页面：方向感知的整屏推入/推出 =====
-// forward：进入子页面——新页保持文档流、铺不透明底色，从右侧滑入覆盖，主页向左视差让位
-// back：返回主页——主页从左侧滑回，子页向右退出（与 animations.css 的 page-slide / page-slide-back 同一语言）
-// 内层 tab-fade 无需抑制：整屏分支翻转时，离场子树是冻结快照（内层 v-if 不再求值），
-// 进场子树为全新挂载（Transition 初始渲染默认不播动画），二者都不会与外层动画叠加
-const navDir = ref<'forward' | 'back'>('forward')
-/** 桌面端不参与整屏过渡（空 name → 无过渡类，直接换内容，避免 resize 翻转时桌面误播动画） */
-const subpageTransitionName = computed(() =>
-  isMobile.value ? (navDir.value === 'back' ? 'subpage-slide-back' : 'subpage-slide') : ''
-)
+// ===== 驾驶舱主页 ↔ 学业子页面：覆盖式滑入/滑出 =====
+// 用全局 .subpage（styles/animations.css，全站唯一实现）：子页从右滑入盖住主页，
+// 返回时原路向右滑出。主页放在 <Transition> **之外**（见模板），所以它全程静止、
+// 不会有任何动画；只有子页在动 —— 与工作台子页、校园资讯阅读器结构一致。
+const subpageTransitionName = computed(() => (isMobile.value ? 'subpage' : ''))
 
-/** .schedule-page 是整页滚动容器；离场元素转绝对定位后以内容原点对齐，
-    非零滚动会错位，且新页/主页统一从顶部出现更符合移动端导航习惯 */
+/** .schedule-page 是整页滚动容器；进出子页统一从顶部开始更符合移动端导航习惯
+    （子页滑入时若沿用主页的滚动位置，新页会显示在中段，观感突兀） */
 const pageEl = ref<HTMLElement | null>(null)
 function resetPageScroll() { if (pageEl.value) pageEl.value.scrollTop = 0 }
 
 function openSubPage(tab: string) {
   if (activeTab.value === tab) return
-  if (isMobile.value && activeTab.value === 'home') {
-    navDir.value = 'forward'
-    resetPageScroll()
-  }
+  if (isMobile.value && activeTab.value === 'home') resetPageScroll()
   activeTab.value = tab
 }
 function backToHome() {
   if (activeTab.value === 'home') return
-  navDir.value = 'back'
   if (isMobile.value) resetPageScroll()
   activeTab.value = 'home'
 }
@@ -1719,7 +1713,10 @@ watch(() => route.query.tab, (val) => {
 /* AI 成长驾驶舱区块（学业中心移动端顶部） */
 /* ===== 移动端：驾驶舱主页 ===== */
 /* ===== 移动端：驾驶舱主页 ===== */
-.dashboard-home { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
+/* 主页同样铺不透明底：覆盖式滑入的 0.3s 内子页尚未盖满，若主页透明，
+   会从子页右侧露出的缝隙里透出下层容器背景，出现闪色。
+   （旧模型由 animations.css 统一给进场页铺底，统一后由调用方各自负责。） */
+.dashboard-home { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; background: var(--dt-bg, #f5faff); }
 
 /* 移动端子页面：返回栏 */
 .subpage-bar {
@@ -1737,16 +1734,11 @@ watch(() => route.query.tab, (val) => {
 .tab-fade-enter-from { opacity: 0; transform: translateY(14px) scale(.995); }
 .tab-fade-leave-to { opacity: 0; transform: translateY(-8px) scale(.995); }
 
-/* ===== 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：方向感知的整屏推入/退出 =====
-   动画实现已提取到 styles/animations.css（.push / .push-back 系列，全局唯一实现），
-   这里只负责把本页的内边距映射成动画需要的离场页对齐变量：
-   .schedule-page 自身有 padding（移动端 8px/12px，桌面 12px/16px），
-   离场页转 absolute 后是相对滚动容器的 padding box 定位，若不内缩会视觉错位。
-   保留 .subpage-slide* 类名（animations.css 里是等价别名），模板无需改动。 */
-.schedule-page {
-  --push-inset-t: var(--sp-pad-t, 12px);
-  --push-inset-x: var(--sp-pad-x, 16px);
-}
+/* ===== 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：覆盖式滑入/滑出 =====
+   动画实现已提取到 styles/animations.css 的 .subpage（全站唯一实现），本页无需再
+   声明任何动画参数 —— 旧版的 --push-inset-t/--push-inset-x 是「传送带式」用来给
+   离场页做内缩对齐的（离场页相对含 padding 的滚动容器 padding box 定位），
+   新模型离场页用 inset:0 脱离文档流，不再需要这组变量，故一并移除。 */
 
 /* ===== 右侧垂直标签栏 ===== */
 .page-tabs { display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); padding: 8px; width: 96px; flex-shrink: 0; align-self: flex-start; position: sticky; top: 12px; }
@@ -1758,7 +1750,11 @@ watch(() => route.query.tab, (val) => {
 .page-tab.active .el-icon { transform: scale(1.08); }
 
 /* ===== 两栏布局 ===== */
-.content-row { display: flex; gap: 16px; flex: 1; min-height: 0; }
+/* 覆盖式滑入时进场的是本容器，必须铺不透明底盖住下面的主页 ——
+   （旧版由 animations.css 的 .push-enter-active 统一铺 #f5faff，统一到 .subpage 后
+   该职责回到调用方，见 animations.css 注释「滑动的元素必须不透明」）。
+   桌面端不参与过渡，此背景同样无害。 */
+.content-row { display: flex; gap: 16px; flex: 1; min-height: 0; background: var(--dt-bg, #f5faff); }
 .content-main { flex: 1; min-width: 0; max-width: 1200px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
 
 /* ===== 通用卡片 ===== */
@@ -2207,6 +2203,20 @@ watch(() => route.query.tab, (val) => {
   .schedule-page { padding: 8px 12px 0; --sp-pad-t: 8px; --sp-pad-x: 12px; }
   .content-main { max-width: 100%; }
   .content-row { flex-direction: column; }
+  /* 移动端覆盖式布局（仅在子页激活时生效，见下方 .has-subpage 条件）。
+     为什么用条件类：.schedule-page 是整页滚动容器，只有 in-flow 内容才能撑起它的滚动高度。
+     - 显示主页时：主页必须留在流内，否则滚动高度为 0、仪表盘无法滚动；
+     - 显示子页时：主页脱流垫在下层（此时它已被完全盖住，不需要滚动），
+       子页留在流内，长内容（课程表/成绩列表）照旧随整页滚动 —— 与改造前一致。
+     反过来把子页做成 absolute + bottom:0 是错的：高度会被钉死、长内容被裁掉无法滚动。 */
+  .schedule-page.has-subpage .dashboard-home {
+    position: absolute;
+    top: var(--sp-pad-t, 8px);
+    left: var(--sp-pad-x, 12px);
+    right: var(--sp-pad-x, 12px);
+    z-index: 1;
+  }
+  .content-row { position: relative; z-index: 2; }
 
   /* ── 教学安排工具栏 ── */
   .schedule-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; row-gap: 8px; }

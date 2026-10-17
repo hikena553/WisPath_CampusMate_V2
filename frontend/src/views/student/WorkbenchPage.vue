@@ -136,8 +136,10 @@
 
     <div style="height: 80px;"></div>
 
-    <!-- 子页面：办事服务表单 -->
-    <transition name="slide-left">
+    <!-- 子页面：办事服务表单
+         动画统一走 styles/animations.css 的 .subpage（覆盖式：子页从右滑入盖住列表，
+         主页面不动；返回时原路滑出），不再在本文件自带一份 slide-left 定义。 -->
+    <transition name="subpage" :duration="320">
       <div v-if="currentPage" :class="['sub-page', { 'chat-mode': isChatMode }]">
         <!-- 非聊天页面显示标准头部 -->
         <div v-if="!isChatMode" class="sub-page-header">
@@ -2901,17 +2903,7 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-/* 滑动动画 */
-.slide-left-enter-active,
-.slide-left-leave-active {
-  transition: transform 0.3s ease;
-}
-
-.slide-left-enter-from {
-  transform: translateX(100%);
-}
-
-.slide-left-leave-to {
-  transform: translateX(100%);
-}
+/* 子页滑动动画见 styles/animations.css 的 .subpage（全站唯一实现），
+   此处不再重复定义 slide-left —— 原先本地那份与全局版本参数不同（0.3s ease 一致但
+   方向语义、离场定位各写各的），是本次统一要消除的重复。 */
 </style>

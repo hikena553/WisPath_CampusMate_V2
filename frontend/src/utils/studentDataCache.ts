@@ -14,7 +14,7 @@
  * - 空数组是合法值（确实无课/无待办），命中后直接显示空态而不闪骨架。
  */
 
-import type { Course } from '@/types'
+import type { Course, ImpressionItem } from '@/types'
 import type { GrowthProfile } from '@/api/growth'
 import type { ProactiveAction } from '@/api/agent'
 import type { TodayTask } from '@/api/plan'
@@ -32,6 +32,10 @@ export interface StudentDataCache {
   insight: string | null
   /** 洞察对应的动作指纹，用于判断旧洞察是否已过时 */
   insightSig: string | null
+  /** 校园资讯聚合数据（绵城印象：教务入口/教学动态/通知公告/学院新闻…） */
+  campusImpression: ImpressionItem[] | null
+  /** 校园资讯写入时间戳（ms），用于 TTL 判定 */
+  campusImpressionTs: number
 }
 
 /** 模块级单例：跨页面/跨组件重建共享，仅在会话内有效（刷新即清空） */
@@ -42,6 +46,28 @@ export const studentDataCache: StudentDataCache = {
   tasks: null,
   insight: null,
   insightSig: null,
+  campusImpression: null,
+  campusImpressionTs: 0,
+}
+
+/**
+ * 校园资讯缓存有效期（10 分钟）。
+ * 服务端对同一份数据有 5 分钟缓存，这里取稍长一档：命中即秒开，
+ * 过期后页面先渲染旧数据、再静默刷新，用户始终看不到空态。
+ */
+export const CAMPUS_IMPRESSION_TTL = 10 * 60 * 1000
+
+/** 读取校园资讯缓存：未加载过或已过期返回 null，调用方据此决定是否发请求 */
+export function getCampusImpressionCache(): ImpressionItem[] | null {
+  if (studentDataCache.campusImpression === null) return null
+  if (Date.now() - studentDataCache.campusImpressionTs > CAMPUS_IMPRESSION_TTL) return null
+  return studentDataCache.campusImpression
+}
+
+/** 写入校园资讯缓存；空数组是合法值（确实没有资讯），同样算「已加载」 */
+export function setCampusImpressionCache(data: ImpressionItem[]): void {
+  studentDataCache.campusImpression = data
+  studentDataCache.campusImpressionTs = Date.now()
 }
 
 /** 清空缓存（登出或切换账号时调用，避免下一个账号看到上一个账号的数据） */
@@ -52,4 +78,6 @@ export function resetStudentDataCache(): void {
   studentDataCache.tasks = null
   studentDataCache.insight = null
   studentDataCache.insightSig = null
+  studentDataCache.campusImpression = null
+  studentDataCache.campusImpressionTs = 0
 }
