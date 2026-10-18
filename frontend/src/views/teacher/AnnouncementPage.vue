@@ -3,12 +3,130 @@
     <SubPageHeader title="班级公告" sub="发布与触达 · 一条不落传达到学生" fallback="/teacher" />
 
     <div class="tui-content">
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">班级公告</h2>
-          <p class="tui-header-sub">发布与触达：发布通知 → 标记紧急 → 置顶高优，一条不落传达到学生</p>
-        </div>
-      </header>
+      <!-- 桌面端特色头部：广播语义色 + 喇叭图标。
+           本页下方「触达概览」已用环形呈现触达强度与等级分布，头部不重复挂数字。 -->
+      <TuiPageHero
+        v-if="!isMobile"
+        title="班级公告"
+        sub="发布与触达：发布通知 → 标记紧急 → 置顶高优"
+        :icon="Promotion"
+        tone="cyan"
+      />
+
+      <!-- ===================== 桌面端骨架：触达概览横向带 + 公告卡片网格 =====================
+           为什么这样改：概览是全局汇总，横向一条带即可读完「整体触达 + 等级构成」；
+           公告是并列的同类卡片，双列网格比单列长列表更省纵向空间、也更便于横向扫读。 -->
+      <template v-if="!isMobile">
+        <!-- ① 触达概览横向带：环形 + 图例 + 三等级迷你条，一行铺开 -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><Promotion /></el-icon>触达概览</h3>
+            <div class="tui-section-extra"><span class="an-total">共 {{ items.length }} 条</span></div>
+          </div>
+          <div class="an-band">
+            <!-- 环形：整体触达强度（复用 .tui-ring，--pct = 触达率） -->
+            <div class="an-band-ring">
+              <span class="tui-ring is-brand" :style="{ '--pct': reachRate / 100 }">
+                <span class="tui-ring-num">{{ reachRate }}%</span>
+              </span>
+              <span class="an-band-cap">整体触达强度</span>
+            </div>
+            <!-- 图例（复用 .an-legend，此处在横向带内改为一行） -->
+            <ul class="an-legend">
+              <li><i class="dot dot-danger"></i>紧急 {{ dist.urgent }}</li>
+              <li><i class="dot dot-warn"></i>重要 {{ dist.important }}</li>
+              <li><i class="dot dot-quiet"></i>普通 {{ dist.normal }}</li>
+            </ul>
+            <!-- 三等级迷你条：各占一条横向进度，长度按占比 -->
+            <div class="an-band-bars">
+              <div class="an-mini">
+                <span class="an-mini-label">紧急</span>
+                <div class="an-mini-track"><i class="bar-danger" :style="{ width: barWidth(dist.urgent) }"></i></div>
+                <span class="an-mini-num">{{ dist.urgent }}</span>
+              </div>
+              <div class="an-mini">
+                <span class="an-mini-label">重要</span>
+                <div class="an-mini-track"><i class="bar-warn" :style="{ width: barWidth(dist.important) }"></i></div>
+                <span class="an-mini-num">{{ dist.important }}</span>
+              </div>
+              <div class="an-mini">
+                <span class="an-mini-label">普通</span>
+                <div class="an-mini-track"><i class="bar-brand" :style="{ width: barWidth(dist.normal) }"></i></div>
+                <span class="an-mini-num">{{ dist.normal }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ② 公告卡片网格：双列（auto-fill 320px） -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><Bell /></el-icon>公告流</h3>
+            <div class="tui-section-extra">
+              <span class="an-total">{{ items.length }} 条</span>
+              <el-button class="an-publish" size="small" :icon="Plus" @click="dialogVisible = true">发布公告</el-button>
+            </div>
+          </div>
+
+          <div v-if="loading" class="tui-empty">
+            <span class="tui-empty-title">加载中…</span>
+          </div>
+
+          <div v-else-if="!items.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="26"><Bell /></el-icon></span>
+            <span class="tui-empty-title">还没有发布过公告</span>
+            <span class="tui-empty-desc">发布第一条通知，让学生第一时间知晓</span>
+            <el-button class="an-publish" size="small" @click="dialogVisible = true">发布第一条</el-button>
+          </div>
+
+          <div v-else class="an-grid">
+            <article v-for="a in paged" :key="a.id" class="tui-card an-card" :class="{ 'is-urgent': a.urgency === 'urgent' }">
+              <div class="tui-card-body">
+                <div class="an-head">
+                  <span v-if="a.urgency === 'urgent'" class="an-pin"><el-icon :size="11"><Top /></el-icon>置顶</span>
+                  <span class="tui-chip" :class="urgencyClass(a.urgency)">{{ urgencyLabel(a.urgency) }}</span>
+                  <span class="an-date">{{ (a.created_at || '').slice(0, 10) }}</span>
+                </div>
+                <h3 class="an-title">{{ a.title }}</h3>
+                <p class="an-content tui-ellipsis-2">{{ a.content }}</p>
+                <div class="an-reachbar">
+                  <div class="an-reachbar-head">
+                    <span>触达强度</span>
+                    <span>{{ reachOf(a) }}%</span>
+                  </div>
+                  <div class="an-reachbar-track">
+                    <i :class="urgencyBarClass(a.urgency)" :style="{ width: reachOf(a) + '%' }"></i>
+                  </div>
+                </div>
+                <!-- 操作沿用现有事件：附件查看 / 删除（无附件时用弱化标记占位） -->
+                <div class="an-ops">
+                  <a v-if="a.attachment_url" class="an-link" :href="a.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
+                  <span v-else class="an-link an-link-muted">无附件</span>
+                  <button class="an-link an-link-danger" @click="remove(a)">删除</button>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div v-if="items.length" class="pagination-wrapper">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[10, 20, 50]"
+              :total="items.length"
+              :pager-count="5"
+              small
+              background
+              layout="total, prev, pager, next"
+              @size-change="handleSizeChange"
+              @current-change="handlePageChange"
+            />
+          </div>
+        </section>
+      </template>
+
+      <!-- ===================== 移动端：完全保留原有纵向结构（类名 / 顺序不变） ===================== -->
+      <template v-if="isMobile">
 
       <!-- ① 触达概览：触达率环形进度 + 等级分布 -->
       <section class="tui-section">
@@ -100,6 +218,7 @@
           />
         </div>
       </section>
+      </template>
 
       <el-dialog
         v-model="dialogVisible"
@@ -155,6 +274,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Bell, Plus, InfoFilled, Promotion, Top } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import { useResponsive } from '@/composables/useResponsive'
 import {
@@ -215,6 +335,12 @@ function urgencyBarClass(u: AnnouncementItem['urgency']) {
 /** 触达强度（估算）：暂无以读回执，按紧急程度映射推送强度 */
 function reachOf(a: AnnouncementItem) {
   return a.urgency === 'urgent' ? 100 : a.urgency === 'important' ? 65 : 35
+}
+
+/** 迷你分布条宽度：某等级条数占全部公告的比例（无数据时给 0，避免 NaN） */
+function barWidth(n: number) {
+  const total = items.value.length || 1
+  return `${Math.round((n / total) * 100)}%`
 }
 
 /** 公告等级分布 */
@@ -303,6 +429,60 @@ onMounted(load)
 
 <style scoped>
 .an-total { font-size: 11.5px; color: var(--tui-text-quiet); }
+
+/* ===== 桌面端 触达概览横向带：环形 + 图例 + 三条迷你分布条，横向一行铺开 ===== */
+.an-band {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.an-band-ring {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.an-band-cap { font-size: 10.5px; color: var(--tui-text-quiet); white-space: nowrap; }
+/* 图例在横向带内改为一行，避免三行竖排把带子撑高 */
+.an-band .an-legend { flex-direction: row; gap: 16px; flex: 0 0 auto; }
+.an-band-bars {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.an-mini { display: flex; align-items: center; gap: 10px; }
+.an-mini-label { flex: 0 0 30px; font-size: 11.5px; color: var(--tui-text-secondary); }
+.an-mini-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--tui-surface-sunken);
+  overflow: hidden;
+}
+.an-mini-track > i { display: block; height: 100%; border-radius: 999px; }
+.an-mini-num {
+  flex: 0 0 22px;
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tui-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 桌面端 公告卡片网格：双列自适应（窄屏自动回退单列） ===== */
+.an-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+/* 网格内正文改用常规换行，配合 .tui-ellipsis-2 正常截断（移动端单列仍保持 pre-wrap） */
+.an-grid .an-content { white-space: normal; }
+/* 无附件时的弱化标记，占位于「查看附件」同一行 */
+.an-link-muted { color: var(--tui-text-quiet); cursor: default; }
 
 /* 发布公告入口：放在「公告流」分区头部（紧邻它要写入的列表），
    采用中性描边小按钮，不再使用蓝色实心，保持简约。 */

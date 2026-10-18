@@ -26,6 +26,17 @@
       </button>
     </div>
 
+    <!-- 本周推进进度（仅桌面端）：桌面仪表盘第一屏就能看到「办了多少 / 还剩多少」。
+         移动端保持原有卡片结构不变，故不渲染。
+         使用教师端统一进度构件（宽度由 --pct 驱动，无过渡动效，不与首页零动效约束冲突） -->
+    <div v-if="!isMobile" class="tf-rate">
+      <span class="tf-rate-lb">本周推进</span>
+      <div class="tui-progress-track">
+        <span class="tui-progress-fill" :style="{ '--pct': weekRate }" />
+      </div>
+      <span class="tf-rate-val">{{ summary.done_this_week }} / {{ weekTotal }}</span>
+    </div>
+
     <div class="tf-list">
       <div v-if="!loading && !rows.length" class="tf-empty">今天没有需要处理的事项</div>
       <button v-for="row in rows" :key="row.key" class="tf-item" @click="emit('navigate', row.link)">
@@ -48,9 +59,12 @@ import {
   type TeacherTaskSummary,
 } from '@/api/teacherTask'
 import { getPendingLeaves } from '@/api/leave'
+import { useResponsive } from '@/composables/useResponsive'
 import type { LeaveRequestOut } from '@/types'
 
 const emit = defineEmits<{ navigate: [path: string] }>()
+
+const { isMobile } = useResponsive()
 
 const loading = ref(false)
 const summary = ref<TeacherTaskSummary>({
@@ -116,6 +130,10 @@ const rows = computed<FocusRow[]>(() => {
   }
   return out.slice(0, 5)
 })
+
+/** 本周推进进度：已办结占总量的比例（总量 = 本周办结 + 当前待处理） */
+const weekTotal = computed(() => summary.value.done_this_week + summary.value.pending)
+const weekRate = computed(() => (weekTotal.value ? summary.value.done_this_week / weekTotal.value : 0))
 
 async function load() {
   loading.value = true
@@ -227,6 +245,24 @@ defineExpose({ reload: load })
 .tf-lb {
   font-size: 11.5px;
   color: #98a2b3;
+}
+
+/* 本周推进进度行 */
+.tf-rate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tf-rate-lb {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: #98a2b3;
+}
+.tf-rate-val {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: #667085;
+  font-variant-numeric: tabular-nums;
 }
 
 .tf-list {

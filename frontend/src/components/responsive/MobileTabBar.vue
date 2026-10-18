@@ -72,27 +72,63 @@ defineEmits<{
   cursor: pointer;
   color: #999;
   -webkit-tap-highlight-color: transparent;
+  /* 切换时颜色需要过渡，否则选中/取消选中会「瞬切」，与圆托的弹性动画不同步 */
+  transition: color 0.2s ease;
 }
 
 .tab-item.active {
   color: #409eff;
 }
 
-/* 中间标签样式 */
+/* 中间标签：凸起圆托（底部导航主入口强调，不显示文字） */
 .tab-item.center {
   position: relative;
+  justify-content: flex-start;
+  padding-bottom: 0;
+}
+
+.tab-item.center .tab-icon-wrap {
+  width: 42px;
+  height: 42px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, #ffffff 0%, #eff6ff 58%, #dbeafe 100%);
+  /* 4px 白色描边把圆托从导航栏上沿「顶」出来，外圈一条淡描边保证在浅色内容上也有轮廓 */
+  box-shadow:
+    0 0 0 4px #fff,
+    0 0 0 5px rgba(15, 23, 42, 0.06),
+    0 6px 16px rgba(64, 158, 255, 0.24);
+  transition:
+    transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.26s ease;
 }
 
 .tab-item.center .tab-icon-img {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  margin-top: -8px;
+  width: 80%;
+  height: 80%;
+  border-radius: 0;
+  margin-top: 0;
 }
 
-.tab-item.center.active .tab-icon-img {
-  transform: scale(1.1);
-  filter: drop-shadow(0 2px 8px rgba(64, 158, 255, 0.3));
+.tab-item.center .tab-label {
+  display: none;
+}
+
+/* 选中态：只加强描边与投影，不做缩放（避免点击后「弹一下变大」） */
+.tab-item.center.active .tab-icon-wrap {
+  box-shadow:
+    0 0 0 4px #fff,
+    0 0 0 5px rgba(64, 158, 255, 0.22),
+    0 6px 16px rgba(64, 158, 255, 0.34);
+}
+
+/* 按下态：必须放在 .active 之后，否则特异性相同时会被覆盖，
+   导致「已选中时再点一次没有反馈」；只做轻微下压，同样不放大 */
+.tab-item.center:active .tab-icon-wrap {
+  transform: scale(0.97);
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.12s ease-out;
 }
 
 .tab-label {

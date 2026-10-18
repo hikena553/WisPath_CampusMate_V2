@@ -18,6 +18,7 @@
           :conversation-id="store.activeId"
           :fetching="fetching"
           :show-menu-button="isMobile"
+          :pull-refresh="pullRefresh"
           @toggle-sidebar="mobileSidebarVisible = !mobileSidebarVisible"
         />
       </Transition>
@@ -35,7 +36,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useTeacherAgentStore } from '@/stores/teacherAgent'
 import { useResponsive } from '@/composables/useResponsive'
 
-const props = withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
+const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; pullRefresh?: boolean }>(), { role: 'student', pullRefresh: false })
 const store = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
 const agentStore = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore()
 const { isMobile } = useResponsive()

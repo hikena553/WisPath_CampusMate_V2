@@ -1,81 +1,203 @@
 <template>
-  <div class="home-dashboard">
-    <!-- 移动端头部 + 欢迎横幅 -->
+  <div class="home-dashboard"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel">
+    <!-- 移动端头部 + 欢迎横幅（吸顶固定，不参与下拉位移）
+         桌面端此卡同时充当整页页头，右上角接收页面级操作 -->
     <HomeTopBanner :is-mobile="isMobile" :user-name="authStore.userName || '教师'" :greeting="greeting"
-      :today-str="todayStr" />
+      :today-str="todayStr">
+      <template #actions>
+        <span class="hm-sync-hint">
+          <i class="hm-sync-dot" />每 30 秒自动同步
+        </span>
+        <el-button text circle aria-label="刷新" :loading="refreshing" @click="onManualRefresh">
+          <el-icon :size="18"><Refresh /></el-icon>
+        </el-button>
+      </template>
+    </HomeTopBanner>
 
-    <!-- ===== 今日重点（置顶，突出教师个人事务） ===== -->
-    <TodayFocusCard @navigate="navigateTo" />
+    <!-- 移动端下拉刷新：吉祥物指示器（与消息页共用同一模块）
+         必须插在吸顶头之后：靠自身高度把下方内容下推，头部才能留在原位不动 -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
-    <!-- ===== 第一层：KPI统计卡片 ===== -->
-    <HomeKpiCards :cards="statCards" @navigate="navigateTo" />
+    <!-- ============ 桌面端仪表盘（本次改造仅限桌面端；移动端保持原有 UI） ============ -->
+    <template v-if="!isMobile">
+      <div class="dash-grid">
+        <!-- ===== 数据概览：关键指标 ===== -->
+        <section class="dash-cell cell-kpi">
+          <HomeKpiCards :cards="statCardsDesktop" @navigate="navigateTo" />
+        </section>
 
-    <!-- ===== 常用功能：原「更多」页签内的模块入口，统一收敛为首页彩色圆角宫格 ===== -->
-    <section class="home-features">
-      <div class="tui-card">
-        <div class="tui-card-head">
-          <span class="tui-card-head-icon feat-head-icon">
-            <el-icon :size="13"><Grid /></el-icon>
-          </span>
-          常用功能
-          <button class="feat-all" type="button" @click="navigateTo('/teacher/features')">
-            全部功能
-            <el-icon :size="12"><ArrowRight /></el-icon>
-          </button>
-        </div>
-        <div class="tui-grid-nav">
-          <button
-            v-for="f in featureEntries"
-            :key="f.path"
-            type="button"
-            class="tui-nav-cell"
-            @click="navigateTo(f.path)"
-          >
-            <span class="tui-nav-icon" :style="{ background: f.tint, color: f.color }">
-              <el-icon :size="21"><component :is="f.icon" /></el-icon>
+        <!-- ===== 学生成长与学业：把学生档案里的直观数据提到首页（数字赋能主带） ===== -->
+        <section class="dash-cell cell-growth">
+          <div class="growth-band">
+            <div class="growth-head">
+              <div class="growth-head-main">
+                <span class="growth-title">学生成长与学业</span>
+                <span class="growth-sub">本学期累计 {{ growthTotal }} 条成长记录</span>
+              </div>
+              <button class="growth-more" type="button" @click="navigateTo('/teacher/portfolio')">
+                成长档案
+                <el-icon :size="12"><ArrowRight /></el-icon>
+              </button>
+            </div>
+
+            <div class="growth-body">
+              <!-- 五类成长成果：条长按相对最大值等比换算，一眼看出结构分布 -->
+              <div class="growth-bars">
+                <div v-for="b in growthBars" :key="b.key" class="growth-bar">
+                  <div class="growth-bar-top">
+                    <span class="growth-bar-label">{{ b.label }}</span>
+                    <span class="growth-bar-num">{{ b.value }}</span>
+                  </div>
+                  <span class="growth-bar-track">
+                    <span class="growth-bar-fill" :style="{ '--pct': b.pct, background: b.color }" />
+                  </span>
+                </div>
+              </div>
+
+              <!-- 学业两个关键值：等宽大号数字 -->
+              <div class="growth-eval">
+                <div class="growth-eval-item">
+                  <span class="growth-eval-num">{{ classEval ? classEval.avg_gpa.toFixed(2) : '—' }}</span>
+                  <span class="growth-eval-lb">平均绩点</span>
+                </div>
+                <div class="growth-eval-item">
+                  <span class="growth-eval-num">{{ classEval ? classEval.avg_score.toFixed(1) : '—' }}</span>
+                  <span class="growth-eval-lb">平均成绩</span>
+                </div>
+                <div class="growth-eval-item">
+                  <span class="growth-eval-num">{{ classEval ? classEval.total_students : '—' }}</span>
+                  <span class="growth-eval-lb">覆盖学生</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== 今日重点：可执行待办 ===== -->
+        <section class="dash-cell cell-focus">
+          <TodayFocusCard @navigate="navigateTo" />
+        </section>
+
+        <!-- ===== 我的节奏：本周计划 / 工作量 ===== -->
+        <section class="dash-cell cell-rhythm">
+          <div class="dash-sec-head">
+            <span class="dash-sec-title">我的节奏</span>
+            <span class="dash-sec-sub">本周安排与工作沉淀</span>
+          </div>
+          <div class="workbench-grid">
+            <WeekPlanCard @open-schedule="openSchedulePanel" />
+            <WorkloadCard @open-records="router.push('/teacher/students')" />
+          </div>
+        </section>
+
+        <!-- ===== 日程与公告 ===== -->
+        <section class="dash-cell cell-schedule">
+          <HomeDesktopSchedule
+            :schedules="schedules"
+            :pending-leaves="pendingLeaves"
+            :my-announcements="myAnnouncements"
+            :cal-year="calYear"
+            :cal-month="calMonth"
+            @select-day="onDayClick"
+            @prev-month="prevMonth"
+            @next-month="nextMonth"
+            @today-month="todayMonth"
+            @create="openCreateDialog"
+            @delete="handleDelete"
+          />
+        </section>
+
+        <!-- ===== 快捷入口：侧边栏未单列的次级能力 ===== -->
+        <section class="dash-cell cell-quick">
+          <div class="dash-sec-head">
+            <span class="dash-sec-title">快捷入口</span>
+            <button class="feat-all" type="button" @click="navigateTo('/teacher/features')">
+              全部功能
+              <el-icon :size="12"><ArrowRight /></el-icon>
+            </button>
+          </div>
+          <div class="quick-row">
+            <button
+              v-for="f in quickEntries"
+              :key="f.path"
+              type="button"
+              class="quick-pill"
+              @click="navigateTo(f.path)"
+            >
+              <span class="quick-pill-icon" :style="{ background: f.tint, color: f.color }">
+                <el-icon :size="15"><component :is="f.icon" /></el-icon>
+              </span>
+              <span class="quick-pill-label">{{ f.label }}</span>
+              <el-icon :size="12" class="quick-pill-arrow"><ArrowRight /></el-icon>
+            </button>
+          </div>
+        </section>
+      </div>
+    </template>
+
+    <!-- ============ 移动端首页：保持原有 UI 设计不变 ============ -->
+    <template v-else>
+      <!-- ===== 今日重点（置顶，突出教师个人事务） ===== -->
+      <TodayFocusCard @navigate="navigateTo" />
+
+      <!-- ===== 第一层：KPI统计卡片 ===== -->
+      <HomeKpiCards :cards="statCards" @navigate="navigateTo" />
+
+      <!-- ===== 常用功能：原「更多」页签内的模块入口，统一收敛为首页彩色圆角宫格 ===== -->
+      <section class="home-features">
+        <div class="tui-card">
+          <div class="tui-card-head">
+            <span class="tui-card-head-icon feat-head-icon">
+              <el-icon :size="13"><Grid /></el-icon>
             </span>
-            <span class="tui-nav-label">{{ f.label }}</span>
-            <span
-              v-if="f.count > 0"
-              class="tui-count"
-              :class="{ 'tui-count-warn': f.tone === 'warn' }"
-            >{{ f.count > 99 ? '99+' : f.count }}</span>
-          </button>
+            常用功能
+            <button class="feat-all" type="button" @click="navigateTo('/teacher/features')">
+              全部功能
+              <el-icon :size="12"><ArrowRight /></el-icon>
+            </button>
+          </div>
+          <div class="tui-grid-nav">
+            <button
+              v-for="f in featureEntries"
+              :key="f.path"
+              type="button"
+              class="tui-nav-cell"
+              @click="navigateTo(f.path)"
+            >
+              <span class="tui-nav-icon" :style="{ background: f.tint, color: f.color }">
+                <el-icon :size="21"><component :is="f.icon" /></el-icon>
+              </span>
+              <span class="tui-nav-label">{{ f.label }}</span>
+              <span
+                v-if="f.count > 0"
+                class="tui-count"
+                :class="{ 'tui-count-warn': f.tone === 'warn' }"
+              >{{ f.count > 99 ? '99+' : f.count }}</span>
+            </button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ===== 我的节奏：本周计划 / 工作量 ===== -->
-    <section class="workbench-section">
-      <div class="workbench-head">
-        <span class="workbench-title">我的节奏</span>
-        <span class="workbench-sub">本周安排与工作沉淀</span>
-      </div>
-      <div class="workbench-grid">
-        <WeekPlanCard @open-schedule="openSchedulePanel" />
-        <WorkloadCard @open-records="router.push('/teacher/students')" />
-      </div>
-    </section>
+      <!-- ===== 我的节奏：本周计划 / 工作量 ===== -->
+      <section class="workbench-section">
+        <div class="workbench-head">
+          <span class="workbench-title">我的节奏</span>
+          <span class="workbench-sub">本周安排与工作沉淀</span>
+        </div>
+        <div class="workbench-grid">
+          <WeekPlanCard @open-schedule="openSchedulePanel" />
+          <WorkloadCard @open-records="router.push('/teacher/students')" />
+        </div>
+      </section>
+    </template>
 
     <!-- ===== AI 悬浮按钮 + 决策支持层 ===== -->
     <HomeAiPanel :proactive-actions="proactiveActions" :contact-suggestions="contactSuggestions"
       :ai-loading="aiLoading" @refresh="loadAiDecisions" />
-
-    <!-- ===== 第三层：日程 + 班级公告（桌面端） ===== -->
-    <HomeDesktopSchedule
-      v-if="!isMobile"
-      :schedules="schedules"
-      :pending-leaves="pendingLeaves"
-      :my-announcements="myAnnouncements"
-      :cal-year="calYear"
-      :cal-month="calMonth"
-      @select-day="onDayClick"
-      @prev-month="prevMonth"
-      @next-month="nextMonth"
-      @today-month="todayMonth"
-      @create="openCreateDialog"
-      @delete="handleDelete"
-    />
 
     <!-- 发布公告 Dialog -->
     <HomeAnnouncementDialog v-model:visible="createDialogVisible" @created="loadMyAnnouncements" />
@@ -108,19 +230,22 @@ import { useAuthStore } from '@/stores/auth'
 import {
   UserFilled,
   WarningFilled as WarnIcon,
-  Grid, Stamp, Bell, Collection, EditPen, Sunny, Connection, ArrowRight,
+  Grid, Stamp, Bell, Collection, EditPen, Sunny, Connection,
+  DataAnalysis, ArrowRight, Refresh,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
 import { getAlerts } from '@/api/crisis'
 import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'
 import { getPendingLeaves } from '@/api/leave'
-import { getDashboardStats, getTeacherSchedules, updateTeacherSchedule, deleteTeacherSchedule, getOverdueSchedules, suggestContacts } from '@/api/teacher'
-import type { DashboardStats, ScheduleItem, ScheduleUrgency, ContactSuggestion } from '@/api/teacher'
+import { getDashboardStats, getTeacherSchedules, updateTeacherSchedule, deleteTeacherSchedule, getOverdueSchedules, suggestContacts, getTeacherGrowthStats, getClassEvaluation } from '@/api/teacher'
+import type { DashboardStats, ScheduleItem, ScheduleUrgency, ContactSuggestion, GrowthStats, ClassEvaluation } from '@/api/teacher'
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import HomeKpiCards from './HomeKpiCards.vue'
 import HomeTopBanner from './HomeTopBanner.vue'
 import HomeAiPanel from './HomeAiPanel.vue'
@@ -212,7 +337,7 @@ const todayStr = computed(() => {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${week[d.getDay()]}`
 })
 
-// 概览 KPI：只保留班级维度的只读统计；个人待办统一收敛到「今日重点」，避免同页重复
+// 概览 KPI（移动端）：只保留班级维度的只读统计；个人待办统一收敛到「今日重点」，避免同页重复
 const statCards = computed(() => [
   {
     label: '我的学生', value: stats.value.total_students,
@@ -224,8 +349,38 @@ const statCards = computed(() => [
   },
 ])
 
+// 概览 KPI（桌面端）：仪表盘第一屏的「一瞥层」。
+// ratio / hint 一律由真实统计派生（已闭环数、占比），没有分母的指标不画假进度。
+const statCardsDesktop = computed(() => {
+  const alertTotal = stats.value.alert_count || 0
+  const resolved = stats.value.resolved_alert_count || 0
+  const severe = stats.value.severe_alert_count || 0
+  return [
+    {
+      label: '我的学生', value: stats.value.total_students,
+      color: '#2563eb', icon: UserFilled, link: '/teacher/students',
+    },
+    {
+      label: '心理预警', value: alertTotal,
+      color: '#b54708', icon: WarnIcon, link: '/teacher/crisis',
+      ratio: alertTotal ? resolved / alertTotal : 0,
+      hint: `已闭环 ${resolved}/${alertTotal}`,
+    },
+    {
+      label: '高危预警', value: severe,
+      color: '#d92d20', icon: WarnIcon, link: '/teacher/crisis',
+      ratio: alertTotal ? severe / alertTotal : 0,
+      hint: `占预警 ${alertTotal ? Math.round((severe / alertTotal) * 100) : 0}%`,
+    },
+    {
+      label: '待批请假', value: stats.value.pending_leave_count,
+      color: '#0891b2', icon: Stamp, link: '/teacher/approval',
+    },
+  ]
+})
+
 /**
- * 常用功能宫格：原「更多」页签内的模块入口，全部迁入首页，点击下钻到对应子页面。
+ * 常用功能宫格（移动端）：原「更多」页签内的模块入口，点击下钻到对应子页面。
  * 图标底色取自设计令牌（teacher-ui.css）的同源色值，避免各处硬编码散色；
  * 审批 / 预警挂实时角标，来源为首页已预取的 dashboard 统计数据。
  */
@@ -238,6 +393,48 @@ const featureEntries = computed(() => [
   { path: '/teacher/care-center', label: '关怀中心', icon: Sunny, color: '#f79009', tint: '#fffaeb', count: 0, tone: 'warn' },
   { path: '/teacher/guardian', label: '家校沟通', icon: Connection, color: '#0891b2', tint: '#ecfeff', count: 0, tone: 'cyan' },
 ])
+
+/**
+ * 学生成长与学业（桌面端首页的「数据赋能」主带）：
+ * 数据来自学生成长档案统计与班级学业评估，把原本散落在「学生档案」里的直观数据
+ * 提到首页第一屏——教师打开工作台即可看到班级成长面貌，学生档案页只保留名册类数据。
+ * 全部为真实统计值，条形长度按各项相对最大值等比换算，不做任何估算。
+ */
+const growthStats = ref<GrowthStats | null>(null)
+const classEval = ref<ClassEvaluation | null>(null)
+
+const growthBars = computed(() => {
+  const g = growthStats.value
+  if (!g) return []
+  const items = [
+    { key: 'honor', label: '荣誉', value: g.honor, color: '#7f56d9' },
+    { key: 'competition', label: '竞赛', value: g.competition, color: '#2563eb' },
+    { key: 'practice', label: '实践', value: g.practice, color: '#06aed4' },
+    { key: 'paper', label: '论文', value: g.paper, color: '#f79009' },
+    { key: 'achievement', label: '成果', value: g.achievement, color: '#12b76a' },
+  ]
+  const max = Math.max(1, ...items.map((i) => i.value))
+  return items.map((i) => ({ ...i, pct: i.value / max }))
+})
+
+const growthTotal = computed(() =>
+  growthBars.value.reduce((n, i) => n + i.value, 0)
+)
+
+async function loadGrowthAndEval() {
+  const [g, e] = await Promise.allSettled([getTeacherGrowthStats(), getClassEvaluation()])
+  if (g.status === 'fulfilled') growthStats.value = g.value
+  if (e.status === 'fulfilled') classEval.value = e.value
+}
+/**
+ * 快捷入口（桌面端）：侧边栏已单列大部分模块，这里只放侧边栏未单列的次级能力，
+ * 避免与侧边栏重复堆入口。
+ */
+const quickEntries = [
+  { path: '/teacher/portfolio', label: '成长档案', icon: Collection, color: '#6941c6', tint: '#f4f3ff' },
+  { path: '/teacher/survey', label: '问卷互评', icon: EditPen, color: '#2563eb', tint: '#eff4ff' },
+  { path: '/teacher/ai', label: '智能问数', icon: DataAnalysis, color: '#0891b2', tint: '#ecfeff' },
+]
 
 // 任务等级选项（普通/重要/紧急）
 const urgencyOptions: { value: ScheduleUrgency; label: string }[] = [
@@ -468,9 +665,30 @@ async function silentRefresh() {
     loadSchedules(),
     loadMyAnnouncements(),
     loadOverdueSchedules(),
+    loadGrowthAndEval(),
   ]).catch(() => {})
   lastRefreshAt = Date.now()
   dataReady.value = true // 数据加载完成，允许显示空状态
+}
+
+/** 下拉刷新：静默重载首页全部数据（含 AI 决策支持），复用轮询的加载逻辑，不触发骨架/加载态 */
+async function refreshAll() {
+  await Promise.all([silentRefresh(), loadAiDecisions()])
+}
+
+// 移动端下拉刷新：桌面端不响应手势；指示器（吉祥物起跳动画）与消息页共用同一模块
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+
+/** 桌面端手动刷新：与移动端下拉共用 refreshAll，补上鼠标场景缺失的刷新入口 */
+const refreshing = ref(false)
+async function onManualRefresh() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await refreshAll()
+  } finally {
+    refreshing.value = false
+  }
 }
 
 onMounted(() => {
@@ -509,11 +727,12 @@ onUnmounted(() => {
 </script>
 
 <style>
-/* 全局禁用教师首页所有 CSS 动效（非 scoped：覆盖 Element Plus 内部元素与伪元素；ECharts 动画已在各图表选项中单独关闭） */
+/* 全局禁用教师首页所有 CSS 动效（非 scoped：覆盖 Element Plus 内部元素与伪元素；ECharts 动画已在各图表选项中单独关闭）。
+   下拉刷新指示器（.ptr-ind / .ptr-mascot）除外：它需要保留吉祥物起跳与下拉位移的收起过渡 */
 .home-dashboard,
-.home-dashboard *,
-.home-dashboard *::before,
-.home-dashboard *::after {
+.home-dashboard *:not(.ptr-ind):not(.ptr-mascot),
+.home-dashboard *:not(.ptr-ind):not(.ptr-mascot)::before,
+.home-dashboard *:not(.ptr-ind):not(.ptr-mascot)::after {
   transition: none !important;
   animation: none !important;
 }
@@ -525,6 +744,8 @@ onUnmounted(() => {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
   /* 顶部留白交由吸顶问候卡（HomeTopBanner）自身内边距提供，便于其铺满整行遮挡滚动内容 */
   padding: 0 16px 12px;
 }
@@ -622,7 +843,16 @@ onUnmounted(() => {
   }
 }
 
-/* ===== 常用功能：原「更多」迁入的模块宫格（一行平铺，可左右滑动） ===== */
+/* 桌面端：仪表盘整体改为纵向 flex，让栅格吃掉剩余高度，
+   内容不足时也不会在底部留出大片空白 */
+@media (min-width: 768px) {
+  .home-dashboard {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* ===== 常用功能（移动端）：原「更多」迁入的模块宫格（一行平铺，可左右滑动） ===== */
 .home-features {
   margin: 4px 0 14px;
 }
@@ -656,7 +886,246 @@ onUnmounted(() => {
   background: #eff4ff;
   color: #2563eb;
 }
-/* 卡片头部右侧「全部功能」入口：轻量文字按钮，不抢主内容 */
+
+/* ===== 桌面端页头操作（插进 HomeTopBanner 的 actions 插槽，作用域在 HomePage） ===== */
+.hm-sync-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  font-size: 11.5px;
+  color: #667085;
+  white-space: nowrap;
+}
+.hm-sync-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #12b76a;
+  box-shadow: 0 0 0 2px rgba(18, 183, 106, 0.18);
+  flex-shrink: 0;
+}
+
+/* ===== 仪表盘栅格（仅桌面端渲染） =====
+   12 列基准：4 张 KPI 各占 3 列铺满首行；今日重点 5 列 + 我的节奏 7 列（内含 2 张并排卡）；
+   日程与公告 12 列（自身内含日历 + 公告双栏）；快捷入口 12 列（3 块等宽平铺）。
+   align-items: stretch 让同一行的卡片等高，避免参差留白。 */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+  flex: 1;
+  align-content: start;
+}
+.dash-cell { min-width: 0; display: flex; flex-direction: column; }
+/* 让单元格里的卡片纵向撑满整行高度：同一行卡片真正等高，底边对齐 */
+.cell-kpi > *,
+.cell-focus > *,
+.cell-schedule > * { flex: 1; }
+.cell-kpi { grid-column: span 12; }
+/* 学生成长与学业：整行数据带，插在 KPI 与待办之间，形成「概览 → 结构 → 行动」的阅读顺序 */
+.cell-growth { grid-column: span 12; }
+.cell-growth > * { flex: 1; }
+
+/* ===== 学生成长与学业带 ===== */
+.growth-band {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px 16px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+  position: relative;
+  overflow: hidden;
+}
+/* 顶部一条品牌色细线：与 KPI 卡同语言，但用整行宽度强调它是「结构层」 */
+.growth-band::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, #7f56d9 0%, #2563eb 42%, #06aed4 70%, #12b76a 100%);
+}
+
+.growth-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.growth-head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.growth-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #101828;
+}
+.growth-sub {
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+  font-variant-numeric: tabular-nums;
+}
+.growth-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.growth-more:hover { color: var(--tui-brand); }
+
+.growth-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+}
+
+/* 五类成果：横向五等分，每格「类目 + 数值 + 等比条」 */
+.growth-bars {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+.growth-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.growth-bar-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.growth-bar-label {
+  font-size: 12px;
+  color: var(--tui-text-secondary);
+}
+.growth-bar-num {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tui-text);
+  font-variant-numeric: tabular-nums;
+}
+.growth-bar-track {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tui-surface-sunken);
+  overflow: hidden;
+}
+.growth-bar-fill {
+  display: block;
+  height: 100%;
+  width: calc(var(--pct, 0) * 100%);
+  border-radius: 999px;
+}
+
+/* 学业关键值：等宽大号数字，靠左侧发丝线与成果区隔开 */
+.growth-eval {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-left: 20px;
+  border-left: 1px solid var(--tui-border);
+}
+.growth-eval-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 68px;
+}
+.growth-eval-num {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: #101828;
+  font-variant-numeric: tabular-nums;
+}
+.growth-eval-lb {
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+}
+.cell-focus { grid-column: span 5; }
+.cell-rhythm { grid-column: span 7; }
+.cell-schedule { grid-column: span 12; }
+.cell-quick { grid-column: span 12; }
+
+/* 区块小标题：仪表盘内各层的统一层级标识 */
+.dash-sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px 8px;
+}
+.dash-sec-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #101828;
+}
+.dash-sec-sub {
+  font-size: 11.5px;
+  color: #98a2b3;
+}
+
+/* 我的节奏在 7 列里横向铺开两张卡，与左侧「今日重点」等高 */
+.cell-rhythm .workbench-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 1; }
+
+/* ===== 快捷入口：三块等宽平铺，横向铺满整行 ===== */
+.quick-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.quick-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.quick-pill:hover { border-color: #d0d5dd; background: #fcfcfd; }
+.quick-pill-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.quick-pill-label {
+  font-size: 13px;
+  color: #344054;
+  white-space: nowrap;
+}
+.quick-pill-arrow { color: #c1c7d0; flex-shrink: 0; }
+
 .feat-all {
   margin-left: auto;
   display: inline-flex;

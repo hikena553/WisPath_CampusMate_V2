@@ -22,23 +22,36 @@
         <nav class="sidebar-nav">
           <template v-for="g in navGroups" :key="g.title">
             <div v-if="!sidebarCollapsed" class="nav-group-title">{{ g.title }}</div>
-            <router-link
-              v-for="item in g.items"
-              :key="item.path"
-              :to="item.path"
-              class="nav-item"
-              :class="{ active: isActive(item.path) }"
-            >
-              <el-icon :size="18"><component :is="item.icon" /></el-icon>
-              <span v-if="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
-              <el-badge
-                v-if="item.badge && unreadCount > 0"
-                :value="unreadCount"
-                class="nav-badge"
-                title="点击清除未读提示"
-                @click.stop.prevent="clearUnread"
-              />
-            </router-link>
+            <!-- 单个 v-for 保持声明顺序；弹窗型项用 button，其余用 router-link -->
+            <template v-for="item in g.items" :key="item.path">
+              <button
+                v-if="item.dialog"
+                type="button"
+                class="nav-item"
+                :class="{ active: route.path === item.path }"
+                @click="openDialog(item)"
+              >
+                <el-icon :size="18"><component :is="item.icon" /></el-icon>
+                <span v-if="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
+              </button>
+              <router-link
+                v-else
+                :to="item.path"
+                class="nav-item"
+                :class="{ active: isActive(item) }"
+              >
+                <img v-if="item.iconImg" :src="item.iconImg" class="nav-icon-img" alt="" />
+                <el-icon v-else :size="18"><component :is="item.icon" /></el-icon>
+                <span v-if="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
+                <el-badge
+                  v-if="item.badge && unreadCount > 0"
+                  :value="unreadCount"
+                  class="nav-badge"
+                  title="点击清除未读提示"
+                  @click.stop.prevent="clearUnread"
+                />
+              </router-link>
+            </template>
           </template>
         </nav>
         <div class="sidebar-footer">
@@ -63,7 +76,9 @@
           </el-dropdown>
         </div>
       </aside>
-      <main class="main-area" :class="{ 'has-bottom-bar': isMobile }">
+      <!-- teacher-scope 仅桌面端挂载：它是「桌面端密度规范」的作用域开关。
+           移动端不挂，页面仍走原有的 .tui-page 规则，保证移动端 UI 不被桌面改造影响。 -->
+      <main class="main-area" :class="{ 'teacher-scope': !isMobile, 'has-bottom-bar': isMobile }">
         <router-view v-slot="{ Component }">
           <keep-alive :include="cachedNames">
             <component :is="Component" />
@@ -80,7 +95,16 @@
       @select="handleNavSelect"
     />
 
-    <el-dialog v-model="showProfile" title="个人资料" width="800px" :close-on-click-modal="false">
+    <!-- 桌面桌宠：不跳转智能体页即可对话并驱动智能体执行功能。
+         1) 挂在布局层而非页面内 —— 与 HomePage 的 .home-dashboard 是兄弟关系，
+            不会被其「全局禁动效」规则冻住，路由切换也不会重置拖拽位置；
+         2) 智能体页本身已有完整的 ChatShell，且两者复用同一组会话 store，
+            同路由下同时挂两份 ChatPanel 会互相干扰流式回包，故此路由下隐藏桌宠；
+         3) v-if="!isMobile" —— 移动端已有底部「绵小城」页签作为同等入口。 -->
+    <DesktopPet v-if="!isMobile && route.path !== '/teacher/agent'" />
+
+    <!-- 个人中心弹窗：桌面端低频设置不再占用整页，改为就地弹窗处理 -->
+    <el-dialog v-model="showProfile" title="个人中心" width="800px" :close-on-click-modal="false">
       <div class="profile-layout">
         <div class="profile-avatar-col">
           <div class="avatar-upload-wrap" @click="triggerFileInput">
@@ -167,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
@@ -179,11 +203,13 @@ import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
+import DesktopPet from '@/components/teacher/DesktopPet.vue'
 import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
-  HomeFilled, ChatDotRound, User, Message, Notebook, Stamp, WarningFilled,
-  SwitchButton, CameraFilled, Fold, Expand, Collection, EditPen, Sunny, Connection, Bell
+  HomeFilled, User, Message, Notebook,
+  List, Stamp, WarningFilled, Bell, ChatDotRound, Sunny,
+  SwitchButton, CameraFilled, Fold, Expand
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -227,40 +253,71 @@ const {
 const { isMobile } = useResponsive()
 
 /**
- * 桌面端侧边栏导航：按职能分组（概览 / 学生 / 我的 / 其他），
- * 与移动端「首页 / 学生 / 更多」的分区口径一致，保证同一功能不重复出现。
+ * 侧边栏导航项：支持图标组件（Element Plus 图标）或站点 Logo 图片两种形态。
+ * 显式声明类型，避免各分组因字段差异被推断成联合类型而丢失可选字段。
  */
-const navGroups = [
+interface NavItem {
+  path: string
+  label: string
+  icon?: Component
+  iconImg?: string
+  badge?: boolean
+  /** 点击后打开弹窗而不是跳路由（仅桌面端侧边栏生效） */
+  dialog?: 'profile'
+}
+
+/**
+ * 未在侧边栏单列的子路由 → 其归属的侧边栏入口。
+ * 例如成长档案 / 问卷互评 是「学生档案」的下钻能力，进入后高亮「学生档案」，
+ * 保证页面归属清晰，而不是所有子页都亮「首页」。
+ */
+const SUB_ROUTE_PARENT: Record<string, string> = {
+  '/teacher/portfolio': '/teacher/students',
+  '/teacher/survey': '/teacher/students',
+  '/teacher/ai': '/teacher',
+  '/teacher/features': '/teacher',
+}
+
+/**
+ * 桌面端侧边栏导航：按「工作 / 班级 / 我的」三组共 11 项。
+ *
+ * 顺序按教师的日常动线重排：先「工作」组（首页 → 今日要办 → 待批 → 预警 → 消息），
+ * 这一组是每天必走的处理流；再把与学生/班级相关的四页收进「班级」组
+ * （学生档案 → 班级公告 → 家校沟通 → 人文关怀），它是查阅与留痕类；
+ * 最后「我的」组放智能体与个人中心。
+ *
+ * 「个人中心」在桌面端不再跳整页路由，而是打开弹窗（见 dialog 字段），
+ * 避免为低频设置占用一个整页；移动端仍走 /teacher/profile 页面（底部页签）。
+ */
+const navGroups: { title: string; items: NavItem[] }[] = [
   {
-    title: '概览',
-    items: [{ path: '/teacher', label: '首页', icon: HomeFilled }],
+    title: '工作',
+    items: [
+      { path: '/teacher', label: '首页', icon: HomeFilled },
+      { path: '/teacher/tasks', label: '任务清单', icon: List },
+      { path: '/teacher/approval', label: '审批管理', icon: Stamp },
+      { path: '/teacher/crisis', label: '心理预警', icon: WarningFilled },
+      { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
+    ],
   },
   {
-    title: '学生',
+    title: '班级',
     items: [
       { path: '/teacher/students', label: '学生档案', icon: Notebook },
-      { path: '/teacher/approval', label: '审批管理', icon: Stamp },
-      { path: '/teacher/crisis', label: '预警工作台', icon: WarningFilled },
       { path: '/teacher/announcement', label: '班级公告', icon: Bell },
+      { path: '/teacher/guardian', label: '家校沟通', icon: ChatDotRound },
+      { path: '/teacher/care-center', label: '人文关怀', icon: Sunny },
     ],
   },
   {
     title: '我的',
     items: [
-      { path: '/teacher/portfolio', label: '成长档案', icon: Collection },
-      { path: '/teacher/survey', label: '问卷互评', icon: EditPen },
-      { path: '/teacher/care-center', label: '关怀中心', icon: Sunny },
-      { path: '/teacher/guardian', label: '家校沟通', icon: Connection },
-    ],
-  },
-  {
-    title: '其他',
-    items: [
-      { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
-      { path: '/teacher/agent', label: '智能助手', icon: ChatDotRound },
+      { path: '/teacher/agent', label: siteName.value, iconImg: siteLogo.value },
+      { path: '/teacher/profile', label: '个人中心', icon: User, dialog: 'profile' },
     ],
   },
 ]
+
 
 /**
  * 移动端底部导航（5 项）：中间为「绵小城」智能体，最右为「个人中心」。
@@ -293,13 +350,57 @@ function handleNavSelect(item: any) {
   router.push(item.route)
 }
 
-function isActive(path: string) {
-  return route.path === path
+/**
+ * 侧边栏高亮判定：
+ * - 未单列的子路由先按其归属入口高亮（如 /teacher/portfolio → 学生档案）；
+ * - 「首页」只精确匹配自身，避免所有子页都亮首页；
+ * - 其余项按自身路径精确匹配或子路径前缀匹配。
+ */
+function isActive(item: NavItem) {
+  const p = route.path
+  const owner = SUB_ROUTE_PARENT[p]
+  if (owner) return item.path === owner
+  if (item.path === '/teacher') return p === '/teacher'
+  return p === item.path || p.startsWith(item.path + '/')
 }
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
+
+/**
+ * dialog 型导航项：桌面端就地打开弹窗，不跳整页路由。
+ * 目前只有「个人中心」，复用已有的资料弹窗（含头像裁剪与修改密码）。
+ */
+function openDialog(item: NavItem) {
+  if (item.dialog === 'profile') openProfile()
+}
+
+// 必须声明在下方 watch({ immediate: true }) 之前：该 watch 在 setup 阶段就会调用
+// openProfile()，而 openProfile 会读写 profileForm，声明靠后会命中 TDZ 报错
+// （Cannot access 'profileForm' before initialization），导致整个布局渲染失败。
+const profileForm = reactive({
+  username: '', name: '', college: '',
+  avatar: '', gender: '', age: 30, title: '', hometown: '', phone: '', department: '',
+  class_name: '',
+})
+
+/**
+ * 桌面端把 /teacher/profile 收敛成弹窗：
+ * 无论是深链直达还是旧书签，都打开弹窗并把地址替换回首页，
+ * 避免「同一个个人中心既有整页又有弹窗」两套入口。
+ * 移动端不处理——底部页签仍需要这个整页。
+ */
+watch(
+  () => route.path,
+  (p) => {
+    if (p === '/teacher/profile' && !isMobile.value) {
+      openProfile()
+      router.replace('/teacher')
+    }
+  },
+  { immediate: true }
+)
 
 // 布局创建时立即启动预加载（比 onMounted 更早，确保子页面 setup 阶段缓存已就绪）
 prefetchDashboardData()
@@ -315,12 +416,6 @@ function logout() {
 }
 
 const showChangePassword = ref(false)
-
-const profileForm = reactive({
-  username: '', name: '', college: '',
-  avatar: '', gender: '', age: 30, title: '', hometown: '', phone: '', department: '',
-  class_name: '',
-})
 
 function openProfile() {
   const u = auth.user
@@ -416,14 +511,6 @@ async function handleSaveProfile() {
 
 <style>
 body { overflow: hidden; margin: 0; background-color: #0f172a; }
-
-/* 弹窗「专注填写」模式：教师端子页面打开任一弹窗时隐藏左侧导航，
-   把横向空间让给弹窗与长表单；关闭弹窗后自动恢复。
-   仅匹配 .tui-page（教师端子页面），不影响管理端 / 学生端侧边栏。
-   :has() 不被支持的旧版浏览器会自动忽略该条规则，属安全降级。 */
-@media (min-width: 768px) {
-  .body-area:has(.tui-page .el-overlay) > .sidebar { display: none; }
-}
 </style>
 <style scoped>
 .app-shell {
@@ -482,28 +569,55 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 .sidebar.collapsed { width: 64px; }
 
 .sidebar-nav {
-  flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px;
+  flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 2px;
   overflow-y: auto; overflow-x: hidden;
+  /* 隐藏侧边栏滚动框：功能不变，只去掉可见滚动条 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.sidebar-nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
+/* ===== 分组标题：从「一行灰字」升级为真正的分组头 =====
+   之前三个分组标题只是三行同样大小的灰色文字，组与组之间没有分隔，
+   11 项导航连成一片、看不出层次。现在给标题加一条向右延伸的发丝线，
+   并拉开组与组的间距，让「工作 / 班级 / 我的」成为清晰的三段。 */
 .nav-group-title {
-  padding: 12px 10px 6px;
-  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px 6px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.08em;
   color: #98a2b3;
-  letter-spacing: 0.4px;
+  white-space: nowrap;
 }
-.nav-group-title:first-child { padding-top: 6px; }
+.nav-group-title::after {
+  content: '';
+  flex: 1;
+  min-width: 10px;
+  height: 1px;
+  background: #eef0f3;
+}
+.nav-group-title:first-child { padding-top: 4px; }
 
+/* 导航项：a 与 button 两种宿主必须完全同款。
+   原生 button 自带边框、灰底、系统字体与居中，若不在基类里抹平，
+   「个人中心」（弹窗入口，用 button）就会与其余 router-link 项长得不一样。 */
 .nav-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; border-radius: 8px;
-  text-decoration: none; color: #475467; font-size: 13.5px; font-weight: 500;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px; border-radius: 9px;
+  border: none; background: transparent;
+  font-family: inherit; font-size: 13.5px; font-weight: 500;
+  text-align: left; cursor: pointer;
+  text-decoration: none; color: #475467;
   transition: background 0.15s ease, color 0.15s ease;
   position: relative; white-space: nowrap;
 }
-.sidebar.collapsed .nav-item { justify-content: center; padding: 9px; }
-.nav-item:hover { background: #f9fafb; color: #101828; }
+.sidebar.collapsed .nav-item { justify-content: center; padding: 8px; }
+.nav-item:hover { background: #f6f7f9; color: #101828; }
 .nav-item.active { background: #eff4ff; color: #1d4ed8; font-weight: 600; }
 .nav-item.active::before {
   content: '';
@@ -513,15 +627,18 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 }
 .nav-item.active .el-icon { color: #1d4ed8; }
 .nav-label { flex: 1; }
+/* 侧边栏品牌图标（绵小城形象）：与 el-icon 统一 18px 视觉尺寸 */
+.nav-icon-img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
 .nav-badge { position: absolute; top: 4px; right: 6px; }
 
 /* ===== Sidebar Footer ===== */
 .sidebar-footer {
-  padding: 12px; border-top: 1px solid #eaecf0;
+  padding: 10px; border-top: 1px solid #eaecf0;
 }
+/* 底部账号块与导航项左右对齐（同为 10px 内边距），头像与文字间距收紧到 10px */
 .teacher-info {
-  display: flex; align-items: center; gap: 14px;
-  padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 9px; cursor: pointer;
   transition: background 0.15s;
 }
 .sidebar.collapsed .teacher-info { justify-content: center; padding: 10px 0; }

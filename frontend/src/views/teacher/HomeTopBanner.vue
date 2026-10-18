@@ -14,7 +14,7 @@
       <img :src="siteMascot" :alt="siteName" class="hm-head-mascot" />
     </section>
 
-    <!-- 桌面端：同款问候卡 -->
+    <!-- 桌面端：整页唯一的页头（问候 + 日期 + 页面级操作），不再另设标题栏 -->
     <section v-else class="hm-head hm-head-desk">
       <div class="hm-head-main">
         <h2 class="hm-head-title">{{ greeting }}，{{ userName }}</h2>
@@ -22,6 +22,9 @@
           <span class="hm-dot"></span>{{ siteName }} · 教师端
           <span class="hm-sep">·</span>{{ todayStr }}
         </p>
+      </div>
+      <div v-if="$slots.actions" class="hm-head-actions">
+        <slot name="actions" />
       </div>
     </section>
   </div>
@@ -115,7 +118,20 @@ defineProps<{
 }
 
 /* ===== 桌面端 ===== */
-.hm-head-desk { padding: 16px 20px; }
+/* 桌面端此卡即整页页头：左侧问候与日期，右侧承载页面级操作（同步提示 + 刷新） */
+.hm-head-desk {
+  padding: 18px 20px;
+  border-color: var(--tui-border);
+  background: linear-gradient(120deg, #ffffff 0%, #f5f9ff 58%, #eef5ff 100%);
+}
+.hm-head-desk .hm-head-title { font-size: 20px; }
+
+.hm-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
 /* 移动端：容器左右内边距为 8px，吸顶容器同步收窄，保持铺满整行 */
 @media (max-width: 767px) {
