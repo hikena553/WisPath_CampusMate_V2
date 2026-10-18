@@ -1,5 +1,107 @@
 <template>
   <div class="campus-page">
+    <!-- ===== 页头（桌面 / 移动两套，刻意不合并：两者版式差一整代）=====
+         桌面端：白底通栏大标题 + 纯图标搜索；标题本身可点 = 刷新（标题是这页最强的
+         「我要看这个」暗示，点它重取比多放一个按钮更省地方）。
+         移动端：品牌渐变「头牌」—— 移动端没有顶部蓝条（StudentLayout 在 ≤767px 隐藏
+         .topbar），这页是全应用最前面的内容页，用它把品牌色补回来：135° 品牌蓝渐变 +
+         右上柔光 + 斜向高光，矩形通栏（无圆角）；吸顶后即是一条品牌栏。
+         文字只有一枚 22px/800 的标题 + 一根 3px 白色竖条（沿用本页区块标题的「竖条 + 粗体」
+         排版语言），不放副标题/小字；右侧只保留搜索一枚磨砂方角图标按钮。
+         移动端不提供手动刷新：没有刷新按钮，标题也不做点击刷新（这页由 10 分钟缓存 +
+         后端 5 分钟缓存兜住，重进页面即可重新取数）。
+         不放返回箭头：本页是底部导航的一级 Tab，没有「上一页」可回。 -->
+    <header v-if="isMobile" class="campus-appbar">
+      <div class="appbar-title">
+        <h1>校园资讯</h1>
+      </div>
+      <div class="appbar-actions">
+        <button
+          type="button"
+          class="appbar-btn"
+          aria-label="搜索校园资讯"
+          @click="openSearch"
+        >
+          <el-icon><Search /></el-icon>
+        </button>
+      </div>
+    </header>
+
+    <section v-else class="campus-hero-head">
+      <button
+        class="hero-head-text"
+        type="button"
+        :disabled="refreshing"
+        aria-label="刷新校园资讯"
+        @click="refreshImpression"
+      >
+        <h2>校园资讯</h2>
+      </button>
+      <button
+        class="hero-head-search"
+        type="button"
+        aria-label="搜索校园资讯"
+        @click="openSearch"
+      >
+        <el-icon><Search /></el-icon>
+      </button>
+    </section>
+
+    <!-- 搜索浮层：先在本页已加载的资讯里过滤，一条都没有再兜到知识库检索。
+         这个顺序符合直觉 —— 用户在这页点搜索，多半想找刚看到的某条资讯；
+         本页资讯是「校内动态」、知识库是「办事问答」，两层语义不同但都该给到。 -->
+    <el-dialog v-model="searchVisible" title="搜索校园资讯" width="600px">
+      <el-input
+        v-model="searchKeyword"
+        placeholder="搜索资讯标题，如：图书馆、放假、招聘……"
+        :prefix-icon="Search"
+        clearable
+        @keyup.enter="runSearch"
+      />
+      <div class="search-hot">
+        <span class="search-hot-label">热门：</span>
+        <el-tag
+          v-for="kw in SEARCH_HOT_KEYWORDS"
+          :key="kw"
+          class="search-hot-tag"
+          effect="plain"
+          @click="quickSearch(kw)"
+        >{{ kw }}</el-tag>
+      </div>
+
+      <!-- ① 本页资讯命中 -->
+      <div v-if="searchDone" class="search-block">
+        <div class="search-block-title">校园资讯（{{ newsHits.length }}）</div>
+        <a
+          v-for="h in newsHits"
+          :key="h.url + h.title"
+          class="search-hit"
+          :href="h.url"
+          @click.prevent="openSearchHit(h)"
+        >
+          <span class="search-hit-source">{{ h.sourceLabel }}</span>
+          <span class="search-hit-title">{{ h.title }}</span>
+          <span v-if="h.date" class="search-hit-date">{{ h.date }}</span>
+        </a>
+        <p v-if="!newsHits.length" class="search-empty">本页资讯中没有匹配项</p>
+      </div>
+
+      <!-- ② 知识库兜底：仅在本页资讯 0 命中时才去查，避免无谓的后端检索 -->
+      <div v-if="searchDone" class="search-block">
+        <div class="search-block-title">
+          知识库{{ knowledgeLoading ? '' : `（${knowledgeHits.length}）` }}
+        </div>
+        <p v-if="knowledgeLoading" class="search-empty">检索中…</p>
+        <template v-else-if="knowledgeHits.length">
+          <div v-for="(h, i) in knowledgeHits" :key="i" class="search-hit search-hit-static">
+            <span class="search-hit-source">{{ h.category || (h.type === 'qa' ? '问答' : '文档') }}</span>
+            <span class="search-hit-title">{{ h.question || h.content || '未命名' }}</span>
+          </div>
+        </template>
+        <p v-else class="search-empty">知识库中也没有找到相关内容</p>
+      </div>
+    </el-dialog>
+
     <!-- 移动端顶部：教学动态图文轮播 —— 图片来源 =「教学动态」卡片内展示的前 5 条（仅取带图的条目，
          按列表顺序、从第一条的图开始），每张图叠加深色渐变标题，点按进对应动态。
          桌面端不渲染：桌面端顶部为校园风光轮播，该图文大图在「教学动态」卡片内展示（见下） -->
@@ -31,16 +133,21 @@
       </el-carousel>
     </section>
 
-    <!-- ② 教务系统入口 -->
+    <!-- ② 教务系统入口
+         移动端（≤767px）：一张白卡 + 3×2 瓷片宫格，6 个入口瓷片完全同口径（浅蓝底 + 蓝图标），
+         主入口「教务管理系统」只靠首位顺序 + 标题字重区分。桌面端沿用原来的 3 列白卡 + 单色图标。 -->
     <section class="campus-section">
-      <div class="section-title"><span class="sec-dot"></span> 教务系统入口</div>
-      <div class="entry-grid">
-        <a v-for="e in visibleEntries" :key="e.url" class="entry-item" :href="e.url" target="_blank" rel="noopener noreferrer"
-           :title="entryHint(e.url)" @click="onEntryClick(e, $event)">
-          <el-icon class="entry-icon"><component :is="getEntryIcon(e.title)" /></el-icon>
-          <p>{{ e.title }}</p>
-          <span v-if="opensInNewWindow(e.url)" class="entry-external">↗</span>
-        </a>
+      <div class="section-title">教务系统入口</div>
+      <div class="entry-card">
+        <div class="entry-grid">
+          <a v-for="e in visibleEntries" :key="e.url" class="entry-item" :class="{ 'is-primary': isPrimaryEntry(e.title) }"
+             :href="e.url" target="_blank" rel="noopener noreferrer"
+             :title="entryHint(e.url)" :style="{ '--entry-color': getEntryColor(e.title) }" @click="onEntryClick(e, $event)">
+            <span class="entry-chip"><el-icon class="entry-icon"><component :is="getEntryIcon(e.title)" /></el-icon></span>
+            <p>{{ e.title }}</p>
+            <span v-if="opensInNewWindow(e.url)" class="entry-external">↗</span>
+          </a>
+        </div>
       </div>
     </section>
 
@@ -238,8 +345,9 @@ import {
   Document, Clock, Box, Van, ArrowRight,
   Notification, DataBoard,
   School, Collection,
-  SetUp, Histogram, HomeFilled, OfficeBuilding
+  SetUp, Histogram, HomeFilled, OfficeBuilding, Search
 } from '@element-plus/icons-vue'
+import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
 
 const vTilt = tilt
 const isMobile = ref(window.innerWidth <= 767)
@@ -260,6 +368,9 @@ interface GalleryImage {
 
 /** 初始值直接取模块级缓存：二次进入命中时首帧就是真实内容，不会闪空态 */
 const impressionData = ref<ImpressionItem[]>(getCampusImpressionCache() ?? [])
+
+/** 刷新在途态：桌面端「点标题刷新」用，防重复点击（连点会重复打后端） */
+const refreshing = ref(false)
 
 function byDateDesc(a: ImpressionItem, b: ImpressionItem) {
   const da = a.date ? Date.parse(a.date) : NaN
@@ -413,6 +524,27 @@ function getEntryIcon(title: string) {
   return Monitor
 }
 
+// 教务入口配色（桌面端）：整组入口图标统一用中性深灰 #4E5969
+// （灰 = 底层系统入口，把彩色权重让给页面里的教学动态/专业分院等内容区）。
+// 移动端不吃这里的颜色 —— 移动端是「浅蓝瓷片 + 主入口实心蓝」，配色在样式区 @media 块里。
+// 想给某个入口单独提色，只需在 ENTRY_COLOR_MAP 里加一条「标题关键词: 色值」，会覆盖默认灰。
+const ENTRY_COLOR_MAP: Record<string, string> = {}
+const DEFAULT_ENTRY_COLOR = '#4E5969'
+
+function getEntryColor(title: string) {
+  for (const [key, color] of Object.entries(ENTRY_COLOR_MAP)) {
+    if (title.includes(key) || key.includes(title)) return color
+  }
+  return DEFAULT_ENTRY_COLOR
+}
+
+// 主入口：教务管理系统（学生 90% 的入口使用都在这一个上）。
+// 移动端 6 个瓷片完全同口径，主入口只靠「排在第一位 + 标题字重 600」区分；
+// 不给它单独上实心蓝 —— 宫格里一块实心会被读成「当前选中」，那是错的语义。
+function isPrimaryEntry(title: string) {
+  return title.includes('教务管理系统')
+}
+
 // 站内阅读器能渲染的校内静态页（实测：jwc 内容页返回链接清单可读；
 // jwgl.mycc.edu.cn / syglxt.mycc.edu.cn 是登录型系统，抓取返回 502，无法内嵌）
 function isInAppReadable(url: string) {
@@ -508,6 +640,122 @@ async function loadImpression() {
   } catch { /* 静默：失败保留已有（可能是缓存）内容，不回写空数组 */ }
 }
 
+/**
+ * 刷新：强制重取一次，绕过前端 10 分钟缓存。
+ * 后端对同一份聚合数据另有 5 分钟内存缓存（过期时后台异步刷新、本次仍返回旧数据），
+ * 所以点一下未必立刻拿到全新的外网抓取结果 —— 但足以覆盖「前端缓存把旧数据
+ * 锁死 10 分钟」这个更常见的场景，且失败时保持旧内容、不清空页面。
+ * 入口：移动端页头的刷新按钮、桌面端点标题。两者都是「重新取一次」而非「重置页面」，
+ * 所以不给 ElMessage 提示打扰阅读（状态都收在页头副标题/图标旋转上）。
+ */
+async function refreshImpression() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await loadImpression()
+  } finally {
+    refreshing.value = false
+  }
+}
+
+// ---------------- 头部搜索 ----------------
+
+const SEARCH_HOT_KEYWORDS = ['图书馆', '放假', '招聘', '奖学金', '讲座']
+
+/** source 字段 → 中文名：搜索结果每条都标出来源，用户才知道点进去是什么 */
+const SOURCE_LABELS: Record<string, string> = {
+  jwc_entries: '系统入口',
+  jwc_jxdt: '教学动态',
+  jwc_tzgg: '通知公告',
+  jwc_gjxx: '高教信息',
+  jwc_jxjs: '教学建设',
+  college_news: '学院动态',
+  library: '图书馆',
+}
+
+interface NewsHit {
+  title: string
+  url: string
+  date: string
+  sourceLabel: string
+}
+
+const searchVisible = ref(false)
+const searchKeyword = ref('')
+const searchDone = ref(false)
+/** 本页资讯命中（纯前端过滤，不发请求） */
+const newsHits = ref<NewsHit[]>([])
+/** 知识库命中（仅本页 0 命中时才发起） */
+const knowledgeHits = ref<KnowledgeHit[]>([])
+const knowledgeLoading = ref(false)
+
+function openSearch() {
+  searchVisible.value = true
+  // 每次打开都是干净状态：上次的结果留着会让人以为「已经搜过了」
+  searchKeyword.value = ''
+  searchDone.value = false
+  newsHits.value = []
+  knowledgeHits.value = []
+}
+
+/**
+ * 第一层：在本页已加载的资讯里按标题过滤。
+ * 直接吃 impressionData（页面已渲染的那份数据），所以「搜得到 = 看得见」，
+ * 不会出现搜索结果里有、页面上却找不到的割裂。
+ */
+function filterNews(keyword: string): NewsHit[] {
+  const kw = keyword.toLowerCase()
+  return impressionData.value
+    .filter(i => (i.title || '').toLowerCase().includes(kw))
+    .map(i => ({
+      title: i.title,
+      url: i.url,
+      date: formatDate(i.date),
+      sourceLabel: SOURCE_LABELS[i.source] || '资讯',
+    }))
+}
+
+/**
+ * 第二层：本页 0 命中才兜到知识库（RAG 混合检索，全端可用）。
+ * 不做前端空转 —— 本页资讯只有几十条，命中率低是常态，
+ * 用户真正想找的「办事问答」在知识库里。
+ */
+async function runSearch() {
+  const keyword = searchKeyword.value.trim()
+  if (!keyword) return
+  newsHits.value = filterNews(keyword)
+  searchDone.value = true
+  knowledgeHits.value = []
+  if (newsHits.value.length) {
+    // 本页已命中，不再打后端：既省一次检索，也避免两段结果互相干扰
+    return
+  }
+  knowledgeLoading.value = true
+  try {
+    knowledgeHits.value = await searchKnowledge(keyword)
+  } catch {
+    // 检索失败按「无结果」处理，不弹错打断阅读；下面的空态文案已说明情况
+    knowledgeHits.value = []
+  } finally {
+    knowledgeLoading.value = false
+  }
+}
+
+function quickSearch(kw: string) {
+  searchKeyword.value = kw
+  runSearch()
+}
+
+/** 点搜索结果：可站内阅读的走阅读器（与页面其它入口一致），其余新窗口打开 */
+function openSearchHit(h: NewsHit) {
+  if (isInAppReadable(h.url)) {
+    openArticle(h.url, h.title)
+    searchVisible.value = false
+  } else {
+    window.open(h.url, '_blank', 'noopener,noreferrer')
+  }
+}
+
 const galleryImages: GalleryImage[] = [
   { title: '安州校区博润楼', image_url: '/images/campus/安州校区博润楼.jpg', campus: '安州' },
   { title: '安州校区众立楼', image_url: '/images/campus/安州校区众立楼.jpg', campus: '安州' },
@@ -570,9 +818,9 @@ onMounted(() => {
   -ms-overflow-style: none;
 }
 .campus-page::-webkit-scrollbar { display: none; }
-/* 直接子元素统一去掉左右内边距（轮播与阅读器除外：
-   轮播自带边距、阅读器是 Teleported 抽屉无布局盒） */
-.campus-page > *:not(.campus-carousel):not(.article-reader-drawer) {
+/* 直接子元素统一去掉左右内边距（轮播、阅读器、移动端页头除外：
+   轮播自带边距、阅读器是 Teleported 抽屉无布局盒、页头要自己算 16px/8px 内边距） */
+.campus-page > *:not(.campus-carousel):not(.article-reader-drawer):not(.campus-appbar) {
   padding-left: 0;
   padding-right: 0;
 }
@@ -580,20 +828,260 @@ onMounted(() => {
   padding-bottom: 32px;
 }
 
+/* ===== Page Hero Header =====
+   本页是一级 Tab（底部导航「校园资讯」），不用 SubPageHeader（带返回箭头、仅移动端）。
+   白底通栏：横向铺满整个内容区（抵消 .campus-page 的左右内边距），
+   去掉圆角、边框与阴影 —— 只靠「白 vs 浅蓝背景」分层，最干净。
+   版式对齐参考稿：左侧一个大号粗体标题，右侧一枚纯黑线性图标，中间大量留白；
+   图标不做胶囊底、不带文字，纯粹靠点击热区（32×32）保证可点性。 */
+.campus-hero-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* 横向铺满：负外边距吃掉父级左右内边距（桌面 24px / 移动 16px，见下方 @media 覆盖）。
+     上边 -12px 同样抵消页面 padding-top —— 不抵消的话白条上方会留一条背景色缝隙，通栏就不成立。
+     不写 width —— 负外边距 + flex 子项的默认 stretch 已能撑满，
+     显式 width 在移动端 column flex 下与 flex-shrink 叠加容易溢出。 */
+  margin: -12px -24px 16px;
+  background: #fff;
+  padding: 18px 24px;
+  box-sizing: border-box;
+}
+/* 标题区做成按钮：点标题即刷新。重置浏览器默认按钮样式，保持纯文字观感 */
+.hero-head-text {
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.hero-head-text:disabled { cursor: default; }
+/* 只在键盘聚焦时显示焦点环：鼠标点标题不该出现一圈蓝框 */
+.hero-head-text:focus-visible { outline: 2px solid #409eff; outline-offset: 3px; }
+.hero-head-text h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #111827;
+  /* 参考稿的字距略紧，粗体大字收紧一点更整 */
+  letter-spacing: -.2px;
+  line-height: 1.2;
+  transition: color .18s ease;
+}
+.hero-head-text:hover:not(:disabled) h2 { color: #409eff; }
+/* 搜索：纯图标按钮，无底无边。命中区 32×32（视觉 22px 图标 + 内边距），
+   保证触摸目标够大而不显笨重 */
+.hero-head-search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  color: #111827;
+  font-size: 22px;
+  cursor: pointer;
+  transition: color .18s ease, background .18s ease;
+}
+.hero-head-search:hover { color: #409eff; background: #f3f7fd; }
+.hero-head-search:focus-visible { outline: 2px solid #409eff; outline-offset: 2px; }
+
+/* ===== 移动端品牌头牌（吸顶）=====
+   为什么是一条渐变蓝：移动端（≤767px）StudentLayout 会把顶部蓝条整个隐藏，这页是首个
+   内容页，没有它整页会「没有头」；把品牌色补回来（渐变基色与桌面 topbar 同一族）。
+   视觉配方：135° 品牌蓝渐变 + 右上柔光 + 斜向高光 + 内高光/外投影；**矩形通栏、无圆角**，
+   上下边直接切齐内容区，像一条真正的 App 品牌栏而不是一张卡片。
+   文字只有一枚 22px/800 标题（不放副标题、不放小字）；右侧只留一枚磨砂方角搜索按钮。
+   吸顶说明：本页滚动容器就是 .campus-page（overflow-y:auto），position:sticky 相对它生效；
+   z-index 压过下方卡片（含 v-tilt 的 hover 抬升）。
+   通栏：负外边距吃掉 .campus-page 移动端的 16px 左右内边距；上内边距为 0（见 @media 覆盖），
+   否则吸顶时页头上方会漏出滚动容器的 8px 内边距缝。 */
+.campus-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  min-height: 60px;
+  box-sizing: border-box;
+  margin: 0 -16px 14px;
+  padding: 10px 12px 10px 20px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 150% at 92% -30%, rgba(255, 255, 255, .34) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(135deg, #1d4ed8 0%, #2563eb 52%, #3b82f6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 6px 16px rgba(29, 78, 216, .18);
+  color: #fff;
+}
+/* 右上柔光：让纯色条有「光从右上打进来」的层次 */
+.campus-appbar::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -78px;
+  right: -54px;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .30) 0%, rgba(255, 255, 255, 0) 68%);
+  pointer-events: none;
+}
+/* 左下斜向高光：一道克制的斜光，打破纯渐变的平 */
+.campus-appbar::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -18%;
+  bottom: -104px;
+  width: 260px;
+  height: 150px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .13) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: rotate(-12deg);
+  pointer-events: none;
+}
+/* 标题区：3px 白色竖条 + 22px/800 标题。
+   竖条不是随手加的装饰 —— 本页区块标题（.section-title）和卡片标题都是「3px 蓝竖条 + 粗体」
+   的语言，头牌把它翻成白色，页头与内容区才是同一套排版；图标按钮只用方角磨砂块，
+   不抢标题的视觉权重。 */
+.appbar-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+}
+.appbar-title::before {
+  content: "";
+  flex-shrink: 0;
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .75);
+}
+.appbar-title h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  /* 中文大标题给一点字距更「设计」；行高压紧，矩形栏里上下留白才均匀 */
+  letter-spacing: .5px;
+  line-height: 1.2;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(11, 34, 84, .22);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.appbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* 磨砂方角搜索按钮（36×36）：玻璃质感靠半透明白底 + 描边 + blur */
+.appbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: background .2s var(--tui-ease), border-color .2s var(--tui-ease),
+    transform .12s var(--tui-ease);
+}
+.appbar-btn:hover { background: rgba(255, 255, 255, .24); border-color: rgba(255, 255, 255, .32); }
+.appbar-btn:active { transform: scale(.93); background: rgba(255, 255, 255, .3); }
+.appbar-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ===== Search Dialog ===== */
+.search-hot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.search-hot-label { font-size: 12px; color: #9aa5b1; }
+.search-hot-tag { cursor: pointer; }
+.search-block { margin-top: 16px; }
+.search-block-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #5a6673;
+  margin-bottom: 8px;
+}
+.search-hit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px dashed #ebeef5;
+  font-size: 13px;
+  color: #42505f;
+  text-decoration: none;
+  cursor: pointer;
+}
+.search-hit:last-child { border-bottom: none; }
+.search-hit:hover .search-hit-title { color: #409eff; }
+.search-hit-static { cursor: default; }
+.search-hit-static:hover .search-hit-title { color: #42505f; }
+.search-hit-source {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #7a8694;
+  background: #f2f5f9;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.search-hit-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color .18s ease;
+}
+.search-hit-date { flex-shrink: 0; font-size: 11px; color: #9aa5b1; }
+.search-empty { margin: 6px 0 0; font-size: 12px; color: #b4bcc8; }
+
 /* ===== Section ===== */
 .campus-section { margin-bottom: 24px; }
+/* 区块标题与卡片标题（.card-title）同一口径：15px/700 + 3px 蓝色竖条 + 8px 内距。
+   原先这里用 4px 圆角小竖条 + 16px/600，与页内「通知公告 / 专业分院 / 图书馆公告」
+   等卡片标题两种观感，故统一。 */
 .section-title {
-  font-size: 16px; font-weight: 600; color: #1a1a2e;
-  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  font-size: 15px; font-weight: 700; color: #1a1a2e;
+  border-left: 3px solid #409eff; padding-left: 8px;
+  display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
 }
-.section-between { justify-content: space-between; }
-.sec-dot { width: 4px; height: 16px; background: #409eff; border-radius: 2px; flex-shrink: 0; }
 .section-tag {
   font-size: 11px; color: #999; background: #f5f7fa;
   padding: 2px 10px; border-radius: 10px; font-weight: 400;
 }
 
 /* ===== Entry Grid ===== */
+.entry-card { display: block; }
+.entry-chip { display: block; }
 .entry-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -613,12 +1101,15 @@ onMounted(() => {
 .entry-item:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(64,158,255,.15);
-  border-color: #409eff;
+  border-color: var(--entry-color, #409eff);
 }
+/* 桌面端：--entry-color（由 getEntryColor 注入，中性深灰 #4E5969）直接落在图标上，克制、让位于内容区；
+   移动端的图标配色改由「瓷片」承担，见文末移动端块 */
 .entry-icon {
   font-size: 28px;
-  color: #409eff;
+  color: var(--entry-color, #409eff);
   margin-bottom: 8px;
+  transition: color .2s ease;
 }
 .entry-item p {
   font-size: 13px;
@@ -842,7 +1333,16 @@ onMounted(() => {
    原先 auto-fill minmax(280px,1fr) 在 1200px 容器里每行放 4 个，7 = 4 + 3，
    最后一行拖着 3 张卡留白；改成 4 列 = 4 + 3、2 列 = 4 + 2 + 1，
    行尾恒有卡片占位，不再出现"最后一张卡孤零零占一行"的空档。 */
+/* 「专业分院」是 .campus-page 的直接子元素，被上面那条
+   `.campus-page > * { padding-left/right: 0 }` 抹掉了左右内边距 ——
+   而它内部的 .card-head 并不自带内边距，结果是标题贴着卡片左边缘，
+   与嵌在 .campus-duo-lib 里、保住了 .campus-card 的 16px 18px 的
+   「图书馆公告」标题不齐。
+   只补 .card-head 的左右内边距（而非整个 section）：.card-body 自己已有
+   20px 左右内边距，若加在 section 上会叠加成 38px，桌面端学院网格会内缩。
+   移动端列表块 .college-m-list 另在 ≤767px 块内对齐（见该处）。 */
 .campus-card-college { margin-bottom: 22px; }
+.campus-card-college > .card-head { padding-left: 18px; padding-right: 18px; }
 .card-body { padding: 14px 20px 16px; }
 .college-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .college-card {
@@ -1060,11 +1560,14 @@ onMounted(() => {
 @media (max-width: 767px) {
   /* 移动端页面改纵向 flex：支持按 order 调换区块顺序。
      图书馆公告区（⑤：绵城印象在移动端隐藏）排到专业分院之前 ——
-     这两块本就是页面最后的两个 section，order 1/2 与其他区块（默认 0）不冲突 */
-  .campus-page { padding: 8px 16px 0; display: flex; flex-direction: column; }
+     这两块本就是页面最后的两个 section，order 1/2 与其他区块（默认 0）不冲突。
+     上内边距为 0：页头要吸顶，滚动容器的上内边距会变成吸顶后的漏缝（见 .campus-appbar 注释） */
+  .campus-page { padding: 0 16px 0; display: flex; flex-direction: column; }
   .campus-page > section { flex-shrink: 0; }
   .campus-duo-lib { order: 1; }
   .campus-card-college { order: 2; flex: none; }
+  /* 页头：移动端整块换成 .campus-appbar（吸顶 AppBar，基础样式区定义），
+     .campus-hero-head 只在桌面渲染，因此这里不再需要任何移动端覆盖 */
   /* 移动端顶部：教学动态图文轮播（占原轮播的第一屏位置，点按进对应动态）——
      容器观感对齐轮播形态（圆角 + 轻阴影），标题压两行防止长标题糊满整图 */
   .campus-jxdt-hero {
@@ -1111,10 +1614,34 @@ onMounted(() => {
   .jxdt-date-row { gap: 10px; padding: 6px 0; border-bottom: 1px dashed #ebeef5; }
   .jxdt-date-row:last-child { border-bottom: none; }
   .jxdt-date-text { flex-shrink: 0; font-size: 12px; color: #7a8694; width: 45px; text-align: center; }
-  .entry-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .entry-item { padding: 12px 8px; }
-  .entry-icon { font-size: 24px; }
-  .entry-item p { font-size: 12px; }
+  /* 移动端：教务系统入口改「瓷片宫格」（2026-10 改版）
+     —— 6 个入口收进一张白卡，成为「系统模块」；图标坐在浅蓝瓷片里，不再是一堆灰图标漂在白底上。
+        6 个瓷片**完全同一个口径**（同底色 / 同图标色 / 同尺寸）：宫格里出现「一块实心 + 五块浅色」
+        会被读成「当前选中项」，语义是错的；主次只保留「首位顺序 + 标题字重 600」这点差异。
+        手机没有 hover，改按压缩放。 */
+  .entry-card {
+    background: #fff; border: 1px solid #edf1f7; border-radius: 16px;
+    padding: 7px 4px; box-shadow: 0 2px 8px rgba(16, 32, 64, .045);
+  }
+  .entry-grid { grid-template-columns: repeat(3, 1fr); gap: 0; }
+  .entry-item {
+    display: flex; flex-direction: column; align-items: center;
+    background: transparent; border: 0; border-radius: 12px;
+    padding: 10px 2px; box-shadow: none;
+  }
+  .entry-item:hover { transform: none; box-shadow: none; }
+  .entry-item:active { background: #f4f9ff; transform: scale(.97); }
+  .entry-chip {
+    width: 44px; height: 44px; border-radius: 15px; margin-bottom: 8px;
+    background: #edf5ff; display: grid; place-items: center; flex-shrink: 0;
+  }
+  .entry-chip .entry-icon { font-size: 22px; margin-bottom: 0; color: #3c8bea; }
+  .entry-item p {
+    font-size: 12px; font-weight: 500; line-height: 1.3; max-width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .entry-item.is-primary p { font-weight: 600; }
+  .entry-external { display: none; }
   .college-body-pc { display: none; }
   .college-body-m { display: block; }
   /* 移动端：极简列表（2026-10 改版）—— 一整张白卡 + 行间发丝线，
@@ -1123,6 +1650,10 @@ onMounted(() => {
   .campus-card-college .section-tag { display: none; }
   .college-m-list {
     margin-top: 10px;
+    /* 标题行因 .card-head 补了 18px 左内边距，列表块随之对齐同一左基线，
+       否则标题缩进而列表贴边，整块会显得错位 */
+    margin-left: 18px;
+    margin-right: 18px;
     background: #fff;
     border: 1px solid #eef2f7;
     border-radius: 12px;
