@@ -68,6 +68,8 @@ export interface LeaveRequestOut {
   return_confirmed?: boolean
   return_confirmed_at?: string | null
   created_at: string
+  /** 审批处理时间（审批 / 销假会刷新），台账按它倒序排 */
+  updated_at?: string
 }
 
 export interface CrisisAlert {

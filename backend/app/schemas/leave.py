@@ -22,6 +22,8 @@ class LeaveRequestOut(BaseModel):
     return_confirmed: bool = False
     return_confirmed_at: str | None = None
     created_at: str
+    # 审批处理时间（审批/销假动作会刷新 updated_at），台账按它倒序排
+    updated_at: str = ""
 
     model_config = ConfigDict(from_attributes=True)
 

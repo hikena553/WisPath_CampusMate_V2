@@ -36,26 +36,63 @@ def create_ticket(req: TicketCreate, user: User = Depends(get_current_user), db:
 @router.get("/tickets", response_model=list[TicketOut])
 def list_tickets(
     status: str | None = None,
+    scope: str = Query("queue", description="审批视角：queue=共享待办队列 / mine=我受理的"),
     student_id: int | None = Query(None, description="按申请学生过滤，闭环用"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = db.query(ServiceTicket)
     if user.role in (UserRole.TEACHER, UserRole.ADMIN):
-        # 审批视角：待审批队列（含中间态 PROCESSING），先到先审
-        query = query.filter(ServiceTicket.status.in_([s.value for s in _APPROVABLE_STATUSES]))
         if status:
-            if status not in [s.value for s in _APPROVABLE_STATUSES]:
-                raise HTTPException(status_code=400, detail="审批视角仅支持查询待审批工单")
+            # 显式指定状态：待办理用于办理，终态（approved / rejected）用于审批留痕回看
+            if status not in {s.value for s in TicketStatus}:
+                raise HTTPException(status_code=400, detail="status 取值不合法")
             query = query.filter(ServiceTicket.status == status)
+        else:
+            # 不带状态时是「共享待办队列」（含中间态 PROCESSING），先到先审
+            query = query.filter(ServiceTicket.status.in_([s.value for s in _APPROVABLE_STATUSES]))
+        if scope == "mine":
+            # 我受理的：责任人是我（受理动作把 approver 落给我）——参考 osTicket「My Tickets」/ Zammad Owner
+            query = query.filter(ServiceTicket.approver_id == user.id)
+        elif scope != "queue":
+            raise HTTPException(status_code=400, detail="scope 仅支持 queue / mine")
         if student_id is not None:
             query = query.filter(ServiceTicket.applicant_id == student_id)
-        return query.order_by(ServiceTicket.created_at.asc()).all()
+        # 待办按提交时间先到先审；终态按提交时间倒序，最近处理的排前面
+        order = ServiceTicket.created_at.asc() if status is None else ServiceTicket.created_at.desc()
+        return query.order_by(order).all()
     # 学生/其他视角：仅本人申请记录
     query = query.filter(ServiceTicket.applicant_id == user.id)
     if status:
         query = query.filter(ServiceTicket.status == status)
     return query.order_by(ServiceTicket.created_at.desc()).all()
+
+
+@router.put("/tickets/{ticket_id}/claim", response_model=TicketOut)
+def claim_ticket(ticket_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """受理（认领）工单：待受理 → 处理中，责任人落到受理人名下。
+
+    对应成熟服务台的责任人模型（osTicket Agent/Assignee、Zammad Ticket Owner、
+    FreeScout Assignee）：先认领再办理，队列里其他人能看到「谁在处理」，
+    避免同一条申请被多人重复处理。
+    """
+    if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="仅教师/管理员可受理工单")
+    ticket = db.query(ServiceTicket).filter(ServiceTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="工单不存在")
+    if ticket.status in TERMINAL_TICKET_STATUSES:
+        raise HTTPException(status_code=400, detail="工单已办结，终态不可再受理")
+    if ticket.status not in _APPROVABLE_STATUSES:
+        raise HTTPException(status_code=400, detail="当前工单状态不可受理")
+    if ticket.approver_id and ticket.approver_id != user.id:
+        raise HTTPException(status_code=400, detail=f"工单已由 {ticket.approver_name or '他人'} 受理")
+    ticket.status = TicketStatus.PROCESSING
+    ticket.approver_id = user.id
+    ticket.approver_name = user.name
+    db.commit()
+    db.refresh(ticket)
+    return ticket
 
 
 @router.put("/tickets/{ticket_id}/approve")
