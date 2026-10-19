@@ -1,5 +1,13 @@
 <template>
-  <div ref="pageEl" class="schedule-page" :class="{ 'has-subpage': isMobile && activeTab !== 'home' }">
+  <div ref="pageEl" class="schedule-page" :class="{ 'has-subpage': isMobile && activeTab !== 'home' }"
+      @touchstart.passive="pull.onStart"
+      @touchmove="pull.onMove"
+      @touchend="pull.onEnd"
+      @touchcancel="pull.onCancel"
+    >
+    <!-- 移动端下拉刷新：吉祥物指示器（与教师端首页 / 学生工作台共用同一模块） -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+
     <!-- ===== 移动端：驾驶舱主页（成长总览 + 内置学业功能区，子页面入口） =====
          主页**刻意放在 <Transition> 之外**：这样它永远收不到 enter/leave 类，
          任何时刻都不会有动画 —— 进子页时被子页盖住，返回时子页滑走即露出主页。
@@ -8,6 +16,7 @@
          桌面端不渲染本块（!isMobile），由下面的 .content-row 承载两栏布局。 -->
     <div v-if="isMobile && activeTab === 'home'" class="dashboard-home">
       <GrowthDashboard
+        ref="dashboardRef"
         :courses="courses"
         :current-week="currentWeek"
         :period-times="periodTimes"
@@ -927,6 +936,8 @@ import type { GrowthRecord } from '@/types'
 import { renderMarkdown } from '@/utils/markdown'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
 import GrowthDashboard from '@/components/growth/GrowthDashboard.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
 use([LineChart, BarChart, PieChart, RadarChart, GridComponent, TooltipComponent, MarkLineComponent, LegendComponent, RadarComponent, CanvasRenderer])
 
@@ -966,6 +977,9 @@ const subpageTransitionName = computed(() => (isMobile.value ? 'subpage' : ''))
     （子页滑入时若沿用主页的滚动位置，新页会显示在中段，观感突兀） */
 const pageEl = ref<HTMLElement | null>(null)
 function resetPageScroll() { if (pageEl.value) pageEl.value.scrollTop = 0 }
+
+// 下拉刷新（移动端）：手势逻辑与吉祥物指示器与教师端首页 / 学生工作台共用同一模块
+const dashboardRef = ref<InstanceType<typeof GrowthDashboard> | null>(null)
 
 function openSubPage(tab: string) {
   if (activeTab.value === tab) return
@@ -1582,6 +1596,42 @@ onMounted(() => {
   scheduleSubPagePrefetch()
 })
 
+/**
+ * 下拉刷新：重拉课程（驾驶舱 Hero / 课表的数据源）、驾驶舱首页看板与当前页签数据。
+ * 各加载器自带幂等守卫（只加载一次），这里绕过守卫直接取最新数据，缓存同步刷新。
+ */
+async function refreshAll() {
+  const all = (await fetchCourses().catch(() => null)) as Course[] | null
+  if (all) {
+    studentDataCache.courses = all
+    allCourses.value = all
+    scheduleReady.value = true
+    computeWeekBase()
+  }
+  if (activeTab.value === 'grades') {
+    const [gradeList, examList] = await Promise.all([
+      getGrades().catch(() => [] as any),
+      getExams().catch(() => [] as any),
+    ])
+    grades.value = gradeList as Grade[]
+    exams.value = examList as Exam[]
+  } else if (activeTab.value === 'growth') {
+    const [p, recordList, projectList] = await Promise.all([
+      getGrowthProfile().catch(() => null),
+      getGrowthRecords().catch(() => [] as any),
+      getProjects().catch(() => [] as any),
+    ])
+    if (p) profile.value = p
+    growthRecords.value = recordList as any
+    projects.value = projectList as any
+  } else {
+    await dashboardRef.value?.refresh()
+  }
+}
+
+// 下拉刷新：桌面端不响应手势；指示器复用消息页的吉祥物起跳动画
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+
 /** 页签切换时补拉该页签的数据（每个页签只请求一次） */
 watch(activeTab, (tab) => {
   void ensureTabData(tab)
@@ -1707,6 +1757,8 @@ watch(() => route.query.tab, (val) => {
   overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none;
   /* 整屏推入/推出过渡：离场元素转绝对定位后的对齐基准（随移动端媒体查询同步覆盖） */
   position: relative; --sp-pad-t: 12px; --sp-pad-x: 16px;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 .schedule-page::-webkit-scrollbar { display: none; }
 

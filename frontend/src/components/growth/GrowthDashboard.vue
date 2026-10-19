@@ -483,6 +483,12 @@ async function loadTodayTasks() {
 }
 
 onMounted(() => { loadOverview(); loadDiscover(); loadTodayTasks() })
+
+/** 下拉刷新（父组件驾驶舱首页调用）：重拉总览 / AI 主动发现 / 今日任务，同步刷新缓存 */
+async function refresh() {
+  await Promise.all([loadOverview(), loadDiscover(), loadTodayTasks()])
+}
+defineExpose({ refresh })
 </script>
 
 <style scoped>

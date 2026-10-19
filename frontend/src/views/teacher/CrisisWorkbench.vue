@@ -1,4 +1,4 @@
-﻿<template>
+﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="心理预警工作台" sub="风险处置台 · 发现 → 干预 → 随访 → 闭环" fallback="/teacher">
       <template #right>
@@ -9,16 +9,175 @@
     </SubPageHeader>
 
     <div class="tui-content">
-      <!-- 桌面端页头（移动端由 SubPageHeader 承担标题，避免重复） -->
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">心理预警工作台</h2>
-          <p class="tui-header-sub">风险处置台：发现 → 干预 → 随访 → 闭环（v3.0 实施文档 §4）</p>
-        </div>
-        <div class="tui-header-actions">
-          <el-button type="primary" round :icon="Refresh" :loading="loading" @click="loadAlerts">刷新</el-button>
-        </div>
-      </header>
+      <!-- 桌面端特色头部：风险语义色 + 处置态势指标（移动端由 SubPageHeader 承担标题） -->
+      <TuiPageHero
+        v-if="!isMobile"
+        title="心理预警工作台"
+        sub="风险处置台：发现 → 干预 → 随访 → 闭环"
+        :icon="WarningFilled"
+        tone="danger"
+      >
+        <div class="tui-hero-metric is-accent"><b>{{ unresolved.length }}</b><span>待处置</span></div>
+        <div class="tui-hero-metric"><b>{{ highRisk.length }}</b><span>高危未闭环</span></div>
+        <div class="tui-hero-metric"><b>{{ followingUp }}</b><span>随访中</span></div>
+        <el-button text circle aria-label="刷新" :loading="loading" @click="loadAlerts">
+          <el-icon :size="18"><Refresh /></el-icon>
+        </el-button>
+      </TuiPageHero>
+
+      <!-- ===================== 桌面端骨架：处置态势带 + 三列泳道看板 =====================
+           为什么把「风险态势 / 闭环进度」压成一条态势带：这两段都是全局汇总，
+           纵向堆叠会占满首屏且与其它页面长相雷同；横向铺开后首屏即可读完全局态势，
+           纵向空间让给下方的处置动作（泳道看板）。 -->
+      <template v-if="!isMobile">
+        <!-- ① 处置态势带：环形待处置量 + 四等级分布 + 四步闭环计数，横向一行铺开 -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><WarningFilled /></el-icon>处置态势</h3>
+            <div class="tui-section-extra">
+              <span class="wb-total">高危未闭环 {{ highRisk.length }} · 已到期 {{ followUpDue.length }} · 共 {{ alerts.length }} 条</span>
+            </div>
+          </div>
+          <div class="wb-band">
+            <!-- 环形：待处置量（复用 .tui-ring，--pct = 待处置占比） -->
+            <div class="wb-band-ring">
+              <span class="tui-ring is-danger" :style="{ '--pct': alerts.length ? unresolved.length / alerts.length : 0 }">
+                <span class="tui-ring-num">{{ unresolved.length }}</span>
+              </span>
+              <span class="wb-ring-cap">待处置</span>
+            </div>
+            <!-- 四等级分布（复用 .wb-level） -->
+            <div class="wb-levels">
+              <div class="wb-level lv-danger">
+                <span class="wb-level-num">{{ dist.severe }}</span>
+                <span class="wb-level-label">高危</span>
+              </div>
+              <div class="wb-level lv-warn">
+                <span class="wb-level-num">{{ dist.moderate }}</span>
+                <span class="wb-level-label">中度</span>
+              </div>
+              <div class="wb-level lv-brand">
+                <span class="wb-level-num">{{ dist.mild }}</span>
+                <span class="wb-level-label">轻度</span>
+              </div>
+              <div class="wb-level lv-muted">
+                <span class="wb-level-num">{{ dist.other }}</span>
+                <span class="wb-level-label">正常 / 其它</span>
+              </div>
+            </div>
+            <!-- 四步闭环计数（复用 .wb-step，横向链路） -->
+            <div class="wb-steps wb-band-steps">
+              <div v-for="s in steps" :key="s.key" class="wb-step" :class="`step-${s.key}`">
+                <span class="wb-step-icon"><el-icon :size="16"><component :is="s.icon" /></el-icon></span>
+                <span class="wb-step-num">{{ s.count }}</span>
+                <span class="wb-step-label">{{ s.label }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ② 预警清单：三列泳道看板（待处置 / 随访中 / 已闭环） -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><List /></el-icon>预警清单</h3>
+            <div class="tui-section-extra"><span class="wb-total">{{ filtered.length }} 条</span></div>
+          </div>
+
+          <!-- 筛选：沿用 filter ref 与分段控件，放在态势带之下、泳道之上 -->
+          <div class="tui-seg wb-seg">
+            <button type="button" class="tui-seg-item" :class="{ active: filter === 'all' }" @click="filter = 'all'">全部</button>
+            <button type="button" class="tui-seg-item" :class="{ active: filter === 'unresolved' }" @click="filter = 'unresolved'">待处置</button>
+            <button type="button" class="tui-seg-item" :class="{ active: filter === 'follow_up' }" @click="filter = 'follow_up'">待随访</button>
+            <button type="button" class="tui-seg-item" :class="{ active: filter === 'resolved' }" @click="filter = 'resolved'">已闭环</button>
+          </div>
+
+          <!-- 闭环：从学生详情跳来，仅看该学生的预警 -->
+          <div v-if="studentFilter" class="wb-scope">
+            <span class="wb-scope-text">仅看：{{ studentFilterName }}</span>
+            <button type="button" class="wb-scope-clear" @click="clearStudentFilter">
+              查看全部预警<el-icon :size="12"><Close /></el-icon>
+            </button>
+          </div>
+
+          <div v-loading="loading" class="wb-lanes">
+            <div v-for="lane in lanes" :key="lane.key" class="wb-lane" :class="`lane-${lane.key}`">
+              <div class="wb-lane-head">
+                <span class="wb-lane-title">{{ lane.label }}</span>
+                <span class="wb-lane-count">{{ lane.items.length }}</span>
+              </div>
+              <div class="wb-lane-body">
+                <article v-for="row in lane.items" :key="row.id" class="wb-lc" :class="`lv-${row.level}`">
+                  <div class="wb-lc-head">
+                    <span class="stu-avatar">{{ row.student_name.slice(0, 1) }}</span>
+                    <span class="wb-lc-name">{{ row.student_name }}</span>
+                    <el-tag :type="levelTagType(row.level)" size="small" effect="dark">{{ levelText(row.level) }}</el-tag>
+                  </div>
+                  <p class="wb-lc-summary tui-ellipsis-2">{{ row.summary }}</p>
+                  <div class="wb-lc-meta">
+                    <span>发现 {{ formatTime(row.created_at) }}</span>
+                    <template v-if="row.follow_up_date">
+                      <span class="tui-meta-sep">·</span>
+                      <span :class="{ 'fu-due': isFollowUpDue(row) }">随访 {{ row.follow_up_date }}</span>
+                    </template>
+                    <template v-else>
+                      <span class="tui-meta-sep">·</span>
+                      <span>未排随访</span>
+                    </template>
+                  </div>
+                  <!-- 处置时限进度：复用 deadlinePct / daysUntil 与 .tui-progress -->
+                  <div v-if="row.follow_up_date && !row.resolved" class="wb-lc-dl">
+                    <div class="tui-progress">
+                      <div class="tui-progress-track">
+                        <span
+                          class="tui-progress-fill"
+                          :class="daysUntil(row.follow_up_date) <= 0 ? 'is-danger' : daysUntil(row.follow_up_date) <= 3 ? 'is-warn' : ''"
+                          :style="{ '--pct': deadlinePct(daysUntil(row.follow_up_date)) / 100 }"
+                        />
+                      </div>
+                      <span class="tui-progress-text">{{ deadlineLabel(daysUntil(row.follow_up_date)) }}</span>
+                    </div>
+                  </div>
+                  <div v-if="row.intervention_type" class="wb-lc-note">
+                    <el-tag size="small" type="success" effect="light">{{ row.intervention_type }}</el-tag>
+                    <span class="note-text tui-ellipsis-2">{{ row.intervention_note || '未填写备注' }}</span>
+                  </div>
+                  <!-- 卡片底部操作：沿用原有事件与弹窗，逻辑不变 -->
+                  <div class="wb-lc-ops">
+                    <el-button size="small" type="primary" :disabled="row.resolved" @click="openIntervene(row)">干预处置</el-button>
+                    <el-button size="small" text type="success" :disabled="row.resolved" @click="handleResolve(row)">标记闭环</el-button>
+                    <el-button size="small" text @click="gotoStudent(row)">查看档案</el-button>
+                  </div>
+                </article>
+
+                <!-- 空泳道：复用 .tui-empty -->
+                <div v-if="!lane.items.length" class="tui-empty wb-lane-empty">
+                  <span class="tui-empty-icon"><el-icon :size="26"><WarningFilled /></el-icon></span>
+                  <span class="tui-empty-title">该泳道暂无</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分页保留在泳道下方：泳道按 paged 切片分列，翻页真实生效 -->
+          <div v-if="filtered.length" class="pagination-wrapper">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[10, 20, 50]"
+              :total="filtered.length"
+              :pager-count="5"
+              small
+              background
+              layout="total, prev, pager, next"
+              @size-change="handleSizeChange"
+              @current-change="handlePageChange"
+            />
+          </div>
+        </section>
+      </template>
+
+      <!-- ===================== 移动端：完全保留原有纵向结构（类名 / 顺序不变） ===================== -->
+      <template v-if="isMobile">
 
       <!-- ① 风险态势：分布环 + 四等级（单行排布） -->
       <section class="tui-section">
@@ -90,11 +249,15 @@
               <span class="wb-dl-name">{{ d.name }}</span>
               <span class="wb-dl-date" :class="{ 'is-due': d.days <= 0 }">{{ deadlineLabel(d.days) }} · {{ d.date }}</span>
             </div>
-            <div class="wb-dl-bar">
-              <i
-                :class="d.days <= 0 ? 'bar-danger' : d.days <= 3 ? 'bar-warn' : 'bar-brand'"
-                :style="{ width: deadlinePct(d.days) + '%' }"
-              ></i>
+            <!-- 时限进度条：复用教师端统一样式构件（--pct 驱动宽度，语义色走修饰类） -->
+            <div class="tui-progress">
+              <div class="tui-progress-track">
+                <span
+                  class="tui-progress-fill"
+                  :class="d.days <= 0 ? 'is-danger' : d.days <= 3 ? 'is-warn' : ''"
+                  :style="{ '--pct': deadlinePct(d.days) / 100 }"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -181,71 +344,6 @@
           </div>
         </template>
 
-        <!-- 桌面端：表格 -->
-        <el-table v-if="!isMobile" v-loading="loading" :data="paged" class="wb-table">
-          <el-table-column label="学生" min-width="120">
-            <template #default="{ row }">
-              <div class="stu-cell">
-                <span class="stu-avatar">{{ row.student_name.slice(0, 1) }}</span>
-                <span class="stu-name">{{ row.student_name }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="等级" width="90">
-            <template #default="{ row }">
-              <el-tag :type="levelTagType(row.level)" size="small" effect="dark">{{ levelText(row.level) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="created_at" label="预警时间" width="150">
-            <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-          </el-table-column>
-          <el-table-column label="风险摘要" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.summary }}</template>
-          </el-table-column>
-          <el-table-column label="处置记录" min-width="180" show-overflow-tooltip>
-            <template #default="{ row }">
-              <template v-if="row.intervention_type">
-                <el-tag size="small" type="success" effect="light" style="margin-right:4px">{{ row.intervention_type }}</el-tag>
-                <span class="note-text">{{ row.intervention_note || '未填写备注' }}</span>
-              </template>
-              <span v-else class="note-text muted">尚未干预</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100">
-            <template #default="{ row }">
-              <el-tag :type="row.resolved ? 'success' : 'warning'" size="small" effect="plain">
-                {{ row.resolved ? '已闭环' : '待处置' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="随访" width="130">
-            <template #default="{ row }">
-              <template v-if="row.follow_up_date">
-                <span :class="{ 'fu-due': isFollowUpDue(row) }">
-                  {{ row.follow_up_date }}{{ isFollowUpDue(row) ? ' · 已到期' : '' }}
-                </span>
-              </template>
-              <span v-else class="note-text muted">未设置</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="220" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" type="primary" :disabled="row.resolved" @click="openIntervene(row)">
-                干预处置
-              </el-button>
-              <el-button size="small" text type="success" :disabled="row.resolved" @click="handleResolve(row)">标记闭环</el-button>
-              <el-button size="small" text @click="gotoStudent(row)">查看档案</el-button>
-            </template>
-          </el-table-column>
-          <template #empty>
-            <div class="tui-empty">
-              <span class="tui-empty-icon"><el-icon :size="26"><WarningFilled /></el-icon></span>
-              <span class="tui-empty-title">暂无预警记录</span>
-              <span class="tui-empty-desc">当前筛选条件下没有预警，切换筛选或稍后刷新</span>
-            </div>
-          </template>
-        </el-table>
-
         <div v-if="filtered.length" class="pagination-wrapper">
           <el-pagination
             v-model:current-page="currentPage"
@@ -261,6 +359,7 @@
           />
         </div>
       </section>
+      </template>
 
       <!-- 干预弹窗 -->
       <el-dialog
@@ -323,6 +422,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import {
   Refresh,
@@ -503,6 +603,18 @@ function handlePageChange() {
 watch([filter, studentFilter], () => { currentPage.value = 1 })
 watch(() => filtered.value.length, () => { currentPage.value = 1 })
 
+/** 三列泳道看板：待处置（未闭环且未排随访）/ 随访中（未闭环且已排随访）/ 已闭环。
+ *  泳道取自 paged（当前分页切片）而非全量 filtered：这样保留下方的分页仍然真实生效，
+ *  避免出现「翻了页但看板没变化」的假分页；每列头部条数即当前页该列条数。 */
+const lanes = computed(() => {
+  const rows = paged.value
+  return [
+    { key: 'todo', label: '待处置', items: rows.filter((a) => !a.resolved && !a.follow_up_date) },
+    { key: 'follow', label: '随访中', items: rows.filter((a) => !a.resolved && !!a.follow_up_date) },
+    { key: 'closed', label: '已闭环', items: rows.filter((a) => a.resolved) },
+  ]
+})
+
 /** 清除学生维度的闭环过滤，回到全部预警 */
 function clearStudentFilter() {
   const q = { ...route.query }
@@ -601,6 +713,117 @@ onMounted(loadAlerts)
 
 <style scoped>
 .wb-total { font-size: 11.5px; color: var(--tui-text-quiet); }
+
+/* ===== 桌面端 处置态势带：环形 + 四等级 + 四步闭环，横向一行铺开 =====
+   三列用「自适应网格」而非纵向堆叠：环/等级/步骤各占一列，首屏一屏读完全局态势。 */
+.wb-band {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 14px;
+  align-items: center;
+}
+.wb-band-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.wb-band-steps { flex: 1; }
+
+/* ===== 桌面端 三列泳道看板 ===== */
+.wb-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.wb-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  min-height: 120px;
+  border: 1px solid var(--tui-border);
+  /* 顶部一条语义色细线做状态强调：待处置=红 / 随访中=琥珀 / 已闭环=绿 */
+  border-top: 3px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface-muted);
+}
+.wb-lane.lane-todo { border-top-color: var(--tui-danger); }
+.wb-lane.lane-follow { border-top-color: var(--tui-warn); }
+.wb-lane.lane-closed { border-top-color: var(--tui-success); }
+.wb-lane-head { display: flex; align-items: center; gap: 7px; }
+.wb-lane-title { font-size: 12.5px; font-weight: 600; color: var(--tui-text); }
+.wb-lane-count {
+  margin-left: auto;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--tui-surface-sunken);
+  color: var(--tui-text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.wb-lane-body { display: flex; flex-direction: column; gap: 8px; }
+
+/* 泳道内的小卡：左侧按等级色带 + 发丝描边 + 极轻投影 */
+.wb-lc {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid var(--tui-border);
+  border-left: 3px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface);
+  box-shadow: var(--tui-shadow-1);
+}
+.wb-lc.lv-severe { border-left-color: var(--tui-danger); }
+.wb-lc.lv-moderate { border-left-color: var(--tui-warn); }
+.wb-lc.lv-mild { border-left-color: var(--tui-brand); }
+.wb-lc.lv-normal { border-left-color: var(--tui-success); }
+.wb-lc-head { display: flex; align-items: center; gap: 7px; }
+.wb-lc-name { font-size: 13px; font-weight: 600; color: var(--tui-text); }
+.wb-lc-head .el-tag { margin-left: auto; }
+.wb-lc-summary {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--tui-text-tertiary);
+}
+.wb-lc-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+}
+.wb-lc-dl { margin-top: 1px; }
+.wb-lc-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--tui-text-secondary);
+}
+.wb-lc-ops {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.wb-lc-ops .el-button + .el-button { margin-left: 0; }
+
+/* 空泳道：沿用 .tui-empty，仅收紧留白，避免三列大空块压垮看板 */
+.wb-lane-empty { padding: 18px 10px; gap: 6px; }
+.wb-lane-empty .tui-empty-icon { width: 40px; height: 40px; }
 
 /* ===== 风险态势：分布环 + 四等级「单行」排布 =====
    原实现桌面端是 2×2 网格、移动端竖排，导致整块高达 3 行；现统一压成一行：
@@ -737,17 +960,6 @@ onMounted(loadAlerts)
 .wb-dl-name { font-size: 12.5px; font-weight: 600; color: var(--tui-text); }
 .wb-dl-date { font-size: 11px; color: var(--tui-text-quiet); }
 .wb-dl-date.is-due { color: var(--tui-danger); font-weight: 600; }
-.wb-dl-bar {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--tui-surface-sunken);
-  overflow: hidden;
-}
-.wb-dl-bar > i { display: block; height: 100%; border-radius: 999px; }
-.bar-danger { background: var(--tui-danger); }
-.bar-warn { background: var(--tui-warn); }
-.bar-brand { background: var(--tui-brand); }
-
 /* ===== 预警清单 ===== */
 .wb-seg { margin-bottom: 10px; }
 .wb-table {

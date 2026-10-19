@@ -3,15 +3,19 @@
     <SubPageHeader title="AI 主动洞察" sub="主动发现 · 置信度 · 周报" fallback="/teacher" />
 
     <div class="tui-content">
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">AI 主动洞察</h2>
-          <p class="tui-header-sub">绵小城为你整理的班级信号与建议联系对象，逐条处置后即转为跟进任务</p>
-        </div>
-        <div class="tui-header-actions">
-          <el-button round :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
-        </div>
-      </header>
+      <!-- 桌面端特色头部：洞察语义色 + 数据分析图标。
+           本页下方「洞察指标」网格已承载四项指标，头部不重复挂数字。 -->
+      <TuiPageHero
+        v-if="!isMobile"
+        title="AI 主动洞察"
+        sub="绵小城为你整理的班级信号与建议联系对象，逐条处置后即转为跟进任务"
+        :icon="DataAnalysis"
+        tone="violet"
+      >
+        <el-button text circle aria-label="刷新" :loading="loading" @click="load">
+          <el-icon :size="18"><Refresh /></el-icon>
+        </el-button>
+      </TuiPageHero>
 
       <!-- 洞察指标网格 -->
       <section class="tui-section">
@@ -174,6 +178,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Calendar, DataAnalysis, InfoFilled, MagicStick, Refresh, User } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'

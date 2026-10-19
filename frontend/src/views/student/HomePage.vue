@@ -21,7 +21,7 @@
       </div>
     </div>
     <div class="chat-main">
-      <ChatShell />
+      <ChatShell pull-refresh />
     </div>
   </div>
 </template>

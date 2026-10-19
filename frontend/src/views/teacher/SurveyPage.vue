@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="tui-page">
     <SubPageHeader
       title="问卷中心"
@@ -7,15 +7,19 @@
     />
 
     <div class="tui-content">
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">问卷中心</h2>
-          <p class="tui-header-sub">匿名收集反馈，只出聚合结果，不回溯个人</p>
-        </div>
-        <div class="tui-header-actions">
-          <el-button size="small" type="primary" :icon="Plus" @click="createVisible = true">发起问卷</el-button>
-        </div>
-      </header>
+      <!-- 桌面端特色头部：问卷语义色 + 编辑图标；右侧是本页的回收概况与发起入口 -->
+      <TuiPageHero
+        v-if="!isMobile"
+        title="问卷中心"
+        sub="匿名收集反馈，只出聚合结果，不回溯个人"
+        :icon="EditPen"
+        tone="cyan"
+      >
+        <div class="tui-hero-metric is-accent"><b>{{ openSurveys.length }}</b><span>进行中</span></div>
+        <div class="tui-hero-metric"><b>{{ mySurveys.length }}</b><span>我发起的</span></div>
+        <div class="tui-hero-metric"><b>{{ overall.rate }}%</b><span>回收率</span></div>
+        <el-button size="small" type="primary" :icon="Plus" @click="createVisible = true">发起问卷</el-button>
+      </TuiPageHero>
 
       <!-- 移动端高频操作 -->
       <div v-if="isMobile" class="tui-actions sv-topbar">
@@ -294,6 +298,7 @@ import {
 import { getTeachers } from '@/api/user'
 import { getStudents } from '@/api/teacher'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import SurveyCreateDialog from '@/components/teacher/survey/SurveyCreateDialog.vue'
 import SurveyFillDialog from '@/components/teacher/survey/SurveyFillDialog.vue'

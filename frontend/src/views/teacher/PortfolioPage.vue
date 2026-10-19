@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="tui-page">
     <SubPageHeader
       title="学生成长档案"
@@ -7,16 +7,18 @@
     />
 
     <div class="tui-content">
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">学生成长档案</h2>
-          <p class="tui-header-sub">选择学生查看其成长徽章与成长轨迹，同步维护你的育人档案</p>
-        </div>
-        <div class="tui-header-actions">
-          <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
-          <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
-        </div>
-      </header>
+      <!-- 桌面端特色头部：档案语义色 + 收藏图标；右侧保留本页专属的导出与建档入口 -->
+      <TuiPageHero
+        v-if="!isMobile"
+        title="学生成长档案"
+        sub="选择学生查看其成长徽章与成长轨迹，同步维护你的育人档案"
+        :icon="Collection"
+        tone="violet"
+      >
+        <div class="tui-hero-metric is-accent"><b>{{ students.length }}</b><span>名下学生</span></div>
+        <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
+        <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
+      </TuiPageHero>
 
       <!-- 移动端高频操作 -->
       <div v-if="isMobile" class="tui-actions pf-topbar">
@@ -274,6 +276,7 @@ import { getStudents, type StudentSummary } from '@/api/teacher'
 import { getGrowthRecords } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import PortfolioItemCard from '@/components/teacher/portfolio/PortfolioItemCard.vue'
 import PortfolioItemDialog from '@/components/teacher/portfolio/PortfolioItemDialog.vue'
 

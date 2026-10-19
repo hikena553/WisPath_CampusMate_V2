@@ -87,7 +87,10 @@
       </template>
     </div>
 
-    <div class="messages" ref="msgRef" :class="{ scrolling: store.messages.length > 0 }" @scroll="onMessagesScroll" @wheel="onMessagesWheel" @touchstart.passive="onMessagesTouchStart" @touchmove.passive="onMessagesTouchMove">
+    <div class="messages" ref="msgRef" :class="{ scrolling: store.messages.length > 0 }" @scroll="onMessagesScroll" @wheel="onMessagesWheel" @touchstart.passive="onMessagesTouchStart" @touchmove="onMessagesTouchMove" @touchend="pull.onEnd" @touchcancel="pull.onCancel">
+
+      <!-- 移动端下拉刷新：吉祥物指示器（与消息页共用同一模块），撑开的高度即下拉位移 -->
+      <PullRefreshIndicator v-if="pullRefreshEnabled" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
       <!-- Welcome Screen -->
       <div v-if="store.messages.length === 0" class="welcome">
@@ -368,6 +371,8 @@ import {
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import MianCharacter from './MianCharacter.vue'
 import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
@@ -385,7 +390,7 @@ const essenceEnabled = ref(false)
 const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
-const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false })
+const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean; pullRefresh?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false, pullRefresh: false })
 const emit = defineEmits<{ toggleSidebar: []; phoneCall: [] }>()
 const showVoiceCall = ref(false)
 const voiceConvId = ref<number | null>(null)
@@ -447,6 +452,36 @@ const rootRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
 const previewImage = ref('')
+
+/**
+ * 移动端下拉刷新（由外层 ChatShell 通过 pull-refresh 开启，如学生端首页）：
+ * 指示器与手势统一来自公共下拉刷新模块，这里只负责"拉什么"——无会话时刷新会话列表，
+ * 否则按服务器最新结果重载当前会话消息。
+ */
+const pullRefreshEnabled = computed(() => props.pullRefresh && props.showMenuButton)
+
+async function refreshFromPull() {
+  if (loading.value) return
+  const cid = convStore.activeId
+  if (!cid) {
+    await convStore.fetchList().catch(() => {})
+    return
+  }
+  await convStore.fetchMessages(cid)
+  store.replaceMessages(
+    convStore.messages.map(m => ({
+      id: m.id.toString(),
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+    })),
+  )
+  convStore.fetchList()
+}
+
+const pull = usePullRefresh(refreshFromPull, {
+  enabled: () => pullRefreshEnabled.value,
+})
 const speech = useSpeechRecognition()
 const recorder = useMediaRecorder()
 const editingOriginal = ref<string | null>(null)
@@ -1116,10 +1151,12 @@ function onMessagesWheel(e: WheelEvent) {
 let touchStartY = 0
 function onMessagesTouchStart(e: TouchEvent) {
   touchStartY = e.touches[0]?.clientY ?? 0
+  pull.onStart(e)
 }
 
-/** 用户主动上翻（手指向下拖拽 = 内容上移看历史）→ 暂停自动跟随 */
+/** 用户主动上翻（手指向下拖拽 = 内容上移看历史）→ 暂停自动跟随；顶部继续下拉则交给下拉刷新 */
 function onMessagesTouchMove(e: TouchEvent) {
+  pull.onMove(e)
   const y = e.touches[0]?.clientY ?? 0
   if (y - touchStartY > 6 && listScrollable()) atBottom.value = false
 }
@@ -1193,6 +1230,19 @@ onUnmounted(() => {
   stopStickLoop()
   window.removeEventListener('resize', handleViewportResize)
 })
+
+/**
+ * 供外部入口（教师端桌面桌宠的快捷指令）直接发一条消息。
+ * 复用面板内同一套发送链路，保证流式回包、自动滚动、落库行为完全一致。
+ */
+async function sendText(text: string) {
+  const t = text.trim()
+  if (!t || loading.value) return
+  input.value = t
+  await send()
+}
+
+defineExpose({ sendText })
 </script>
 
 <style scoped>
@@ -1208,7 +1258,7 @@ onUnmounted(() => {
 /* ── Messages Area ── */
 /* flex-basis:0 + grow:1 占满剩余空间；shrink:0 让输入框长高时不压缩消息区。
    否则消息区被压缩、其内容锚在顶部，欢迎语就会被顶上去。 */
-.messages { flex: 1 0 0%; overflow: hidden; padding: 0; min-height: 0; }
+.messages { flex: 1 0 0%; overflow: hidden; padding: 0; min-height: 0; overscroll-behavior-y: contain; }
 .messages.scrolling { overflow-y: auto; padding: 12px 0; scroll-behavior: auto; }
 .messages.scrolling::-webkit-scrollbar { width: 4px; }
 .messages.scrolling::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }

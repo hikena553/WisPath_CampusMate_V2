@@ -1,18 +1,296 @@
-﻿<template>
+﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="人文关怀中心" sub="关怀温度 · 家访台账 · 正向激励" fallback="/teacher" />
 
     <div class="tui-content">
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">人文关怀中心</h2>
-          <p class="tui-header-sub">让关心有温度、有记录：关怀温度 · 家访台账 · 正向激励</p>
-        </div>
-        <div class="tui-header-actions">
-          <el-button size="small" round :icon="Refresh" :loading="genLoading" @click="handleGenerate">自动生成</el-button>
-        </div>
-      </header>
+      <!-- 桌面端特色头部：关怀语义色 + 太阳图标；右侧挂本月三类台账的条数 -->
+      <TuiPageHero
+        v-if="!isMobile"
+        title="人文关怀中心"
+        sub="让关心有温度、有记录：关怀温度 · 家访台账 · 正向激励"
+        :icon="Sunny"
+        tone="success"
+      >
+        <div class="tui-hero-metric is-accent"><b>{{ overview.event_count }}</b><span>关怀事项</span></div>
+        <div class="tui-hero-metric"><b>{{ overview.visit_count }}</b><span>家访</span></div>
+        <div class="tui-hero-metric"><b>{{ overview.praise_count }}</b><span>正向激励</span></div>
+        <el-button size="small" round :icon="Refresh" :loading="genLoading" @click="handleGenerate">自动生成</el-button>
+      </TuiPageHero>
 
+      <!-- 桌面端专属骨架：三列台账卡片流 + 顶部横向概览带。
+           为什么这样改：本页核心是「三类关怀台账并行」，三列同屏比 Tab 切换更接近台账看板；
+           温度块抽成横跨三列的概览带，先给全局体感，再逐列处理明细。 -->
+      <template v-if="!isMobile">
+        <!-- 横向概览带：温度百分比 + 温度进度条 + 待回访提醒 + 温度等级 -->
+        <section
+          class="cc-band"
+          title="温度由本月「关怀事项 + 家访 + 激励」数量综合推算，待处理事项越多温度越低；用来提示哪些学生需要多一分关心。"
+        >
+          <div class="cc-band-temp">
+            <span class="cc-band-label">本月关怀温度</span>
+            <span class="cc-temp-num">{{ careScore }}<i>%</i></span>
+          </div>
+          <div class="tui-progress-track cc-band-bar">
+            <span class="tui-progress-fill" :style="{ '--pct': careScore / 100, background: tempColor }" />
+          </div>
+          <div class="cc-remind cc-band-remind" :class="remindTone">
+            <el-icon><Bell /></el-icon>
+            <span class="cc-remind-text">
+              <template v-if="pendingCount || followUpCount">
+                待回访提醒：<b>{{ pendingCount }}</b> 项关怀事项待处理<template v-if="followUpCount">，<b>{{ followUpCount }}</b> 条家访待跟进</template>
+              </template>
+              <template v-else>本月关怀事项均已跟进，暂无待回访</template>
+            </span>
+            <button v-if="pendingCount || followUpCount" class="cc-remind-go" type="button" @click="goFollowUp">去处理</button>
+          </div>
+          <span class="cc-temp-level" :class="`lv-${tempLevel.tone}`">{{ tempLevel.label }}</span>
+        </section>
+
+        <!-- 闭环聚焦条：与移动端同一份逻辑，桌面端保留上下文提示 -->
+        <div v-if="studentFocus" class="cc-focus">
+          <el-icon :size="14"><User /></el-icon>
+          <span class="cc-focus-text">已聚焦学生「{{ studentFocus.name || '该生' }}」，仅显示其关怀记录</span>
+          <button class="cc-focus-link" type="button" @click="gotoStudent">成长档案</button>
+          <button class="cc-focus-clear" type="button" @click="clearStudentFocus">清除</button>
+        </div>
+
+        <!-- 三列台账卡片流：关怀事项 / 家访台账 / 正向激励，等宽并排、各自分页与限高滚动 -->
+        <div ref="boardRef" class="cc-board">
+          <!-- 第一列：关怀事项 -->
+          <section class="tui-section cc-col cc-col-events">
+            <div class="tui-section-head">
+              <h3><el-icon><ChatDotRound /></el-icon>关怀事项</h3>
+              <div class="tui-section-extra">
+                <span class="cc-count">{{ shownEvents.length }} 条</span>
+                <el-button class="cc-add" size="small" :icon="Plus" @click="eventVisible = true">新增</el-button>
+              </div>
+            </div>
+            <div class="cc-col-body tui-scroll-hidden">
+              <div v-if="!shownEvents.length" class="tui-empty">
+                <span class="tui-empty-icon"><el-icon :size="22"><Calendar /></el-icon></span>
+                <span class="tui-empty-title">本月暂无关怀事项</span>
+                <span class="tui-empty-desc">点「自动生成」或手动新增一条</span>
+              </div>
+              <div v-else class="cc-tl">
+                <div v-for="e in pagedEvents" :key="e.id" class="cc-tl-item">
+                  <span class="cc-tl-node" :class="`tone-${eventTone(e.event_type)}`"><el-icon><ChatDotRound /></el-icon></span>
+                  <div class="cc-tl-card">
+                    <div class="cc-tl-top">
+                      <span class="tui-tag" :class="tagClass(e.event_type)">{{ CARE_EVENT_LABEL[e.event_type] }}</span>
+                      <span class="cc-tl-title">{{ e.title }}</span>
+                      <el-tag v-if="e.auto_generated" size="small" effect="plain" round>自动</el-tag>
+                    </div>
+                    <div class="cc-tl-meta">
+                      <span v-if="e.student_name">{{ e.student_name }}</span>
+                      <span>{{ e.event_date }}</span>
+                      <button class="cc-link cc-link-danger" @click="removeEvent(e)">删除</button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="shownEvents.length > pageSizeEvents" class="pagination-wrapper">
+                  <el-pagination
+                    v-model:current-page="pageEvents"
+                    v-model:page-size="pageSizeEvents"
+                    :page-sizes="[10, 20, 50]"
+                    :total="shownEvents.length"
+                    :pager-count="5"
+                    small
+                    background
+                    layout="total, prev, pager, next"
+                    @size-change="handleEventsSizeChange"
+                    @current-change="handleEventsCurrentChange"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 第二列：家访台账 -->
+          <section class="tui-section cc-col cc-col-visits">
+            <div class="tui-section-head">
+              <h3><el-icon><HomeFilled /></el-icon>家访台账</h3>
+              <div class="tui-section-extra">
+                <span class="cc-count">{{ shownVisits.length }} 条</span>
+                <el-button class="cc-add" size="small" :icon="Plus" @click="visitVisible = true">新增</el-button>
+              </div>
+            </div>
+            <div class="cc-col-body tui-scroll-hidden">
+              <div v-if="!shownVisits.length" class="tui-empty">
+                <span class="tui-empty-icon"><el-icon :size="22"><HomeFilled /></el-icon></span>
+                <span class="tui-empty-title">暂无家访记录</span>
+                <span class="tui-empty-desc">记录每次家访与沟通，形成可追溯的台账</span>
+              </div>
+              <div v-else class="cc-tl">
+                <div v-for="v in pagedVisits" :key="v.id" class="cc-tl-item">
+                  <span class="cc-tl-node tone-brand"><el-icon><HomeFilled /></el-icon></span>
+                  <div class="cc-tl-card">
+                    <div class="cc-tl-top">
+                      <span class="tui-tag tui-tag-brand">{{ VISIT_METHOD_LABEL[v.method] }}</span>
+                      <span class="cc-tl-title">{{ v.student_name }}</span>
+                      <span class="cc-tl-date">{{ v.visit_date }}</span>
+                    </div>
+                    <div class="cc-tl-body">{{ v.content }}</div>
+                    <div v-if="v.follow_up" class="cc-tl-follow">后续：{{ v.follow_up }}</div>
+                    <div class="cc-tl-meta">
+                      <button class="cc-link cc-link-danger" @click="removeVisit(v)">删除</button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="shownVisits.length > pageSizeVisits" class="pagination-wrapper">
+                  <el-pagination
+                    v-model:current-page="pageVisits"
+                    v-model:page-size="pageSizeVisits"
+                    :page-sizes="[10, 20, 50]"
+                    :total="shownVisits.length"
+                    :pager-count="5"
+                    small
+                    background
+                    layout="total, prev, pager, next"
+                    @size-change="handleVisitsSizeChange"
+                    @current-change="handleVisitsCurrentChange"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 第三列：正向激励 -->
+          <section class="tui-section cc-col cc-col-praises">
+            <div class="tui-section-head">
+              <h3><el-icon><Star /></el-icon>正向激励</h3>
+              <div class="tui-section-extra">
+                <span class="cc-count">{{ shownPraises.length }} 条</span>
+                <el-button class="cc-add" size="small" :icon="Plus" @click="praiseVisible = true">新增</el-button>
+              </div>
+            </div>
+            <div class="cc-col-body tui-scroll-hidden">
+              <div v-if="!shownPraises.length" class="tui-empty">
+                <span class="tui-empty-icon"><el-icon :size="22"><Star /></el-icon></span>
+                <span class="tui-empty-title">暂无激励记录</span>
+                <span class="tui-empty-desc">及时表扬与发放徽章，让正向反馈被看见</span>
+              </div>
+              <div v-else class="cc-tl">
+                <div v-for="p in pagedPraises" :key="p.id" class="cc-tl-item">
+                  <span class="cc-tl-node tone-success"><el-icon><Star /></el-icon></span>
+                  <div class="cc-tl-card">
+                    <div class="cc-tl-top">
+                      <span class="tui-tag tui-tag-success">{{ p.badge_name || PRAISE_TYPE_LABEL[p.praise_type] }}</span>
+                      <span class="cc-tl-title">{{ p.student_name }}</span>
+                      <span class="cc-tl-date">{{ p.occurred_on }}</span>
+                    </div>
+                    <div class="cc-tl-body">{{ p.reason }}</div>
+                    <div class="cc-tl-meta">
+                      <button class="cc-link cc-link-danger" @click="removePraise(p)">删除</button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="shownPraises.length > pageSizePraises" class="pagination-wrapper">
+                  <el-pagination
+                    v-model:current-page="pagePraises"
+                    v-model:page-size="pageSizePraises"
+                    :page-sizes="[10, 20, 50]"
+                    :total="shownPraises.length"
+                    :pager-count="5"
+                    small
+                    background
+                    layout="total, prev, pager, next"
+                    @size-change="handlePraisesSizeChange"
+                    @current-change="handlePraisesCurrentChange"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 关怀日历：月度网格无法塞进窄列，桌面端独占一行保留（功能不删） -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><Calendar /></el-icon>关怀日历</h3>
+            <div class="tui-section-extra">
+              <el-button text circle @click="shiftMonth(-1)"><el-icon><ArrowLeft /></el-icon></el-button>
+              <span class="cc-cal-title">{{ calYear }} 年 {{ calMonth }} 月</span>
+              <el-button text circle @click="shiftMonth(1)"><el-icon><ArrowRight /></el-icon></el-button>
+            </div>
+          </div>
+          <div class="tui-section-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>按天查看本月关怀安排；点「自动生成」可按学生生日、困难情况与学业预警自动铺排事项。</span>
+          </div>
+          <div class="cc-week">
+            <span v-for="w in WEEK_LABELS" :key="w">{{ w }}</span>
+          </div>
+          <div class="cc-grid">
+            <div v-for="(cell, i) in calendarCells" :key="i" class="cc-cell"
+              :class="{ muted: !cell.inMonth, today: cell.isToday }">
+              <div class="cc-cell-top">
+                <span class="cc-day">{{ cell.day }}</span>
+                <span v-if="cell.events.length" class="cc-dot-count">{{ cell.events.length }}</span>
+              </div>
+              <div class="cc-cell-events">
+                <span v-for="e in cell.events.slice(0, 2)" :key="e.id" class="cc-chip"
+                  :class="`tone-${eventTone(e.event_type)}`"
+                  :title="e.title">{{ e.title }}</span>
+                <span v-if="cell.events.length > 2" class="cc-more">+{{ cell.events.length - 2 }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 求助受理：独立的帮扶闭环，不属三类台账，桌面端保留为独立分区 -->
+        <section class="tui-section">
+          <div class="tui-section-head">
+            <h3><el-icon><ChatDotRound /></el-icon>求助受理</h3>
+            <div class="tui-section-extra">
+              <span class="cc-count">{{ shownHelp.length }} 条</span>
+              <el-button class="cc-add" size="small" :icon="Refresh" @click="loadHelp">刷新</el-button>
+            </div>
+          </div>
+          <div class="tui-section-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>学生提交的求助会汇总到这里；「待受理」请尽快响应，回复即形成帮扶闭环。匿名求助不显示学生姓名，但仍可正常回复。</span>
+          </div>
+          <div class="cc-help-stats">
+            <button type="button" class="cc-help-stat" :class="{ on: helpStatusFilter === '' }" @click="helpStatusFilter = ''">
+              <b>{{ helpOverview.total }}</b><span>全部</span>
+            </button>
+            <button type="button" class="cc-help-stat" :class="{ on: helpStatusFilter === 'pending' }" @click="helpStatusFilter = 'pending'">
+              <b>{{ helpOverview.pending }}</b><span>待受理</span>
+            </button>
+            <button type="button" class="cc-help-stat" :class="{ on: helpStatusFilter === 'processing' }" @click="helpStatusFilter = 'processing'">
+              <b>{{ helpOverview.processing }}</b><span>帮扶中</span>
+            </button>
+            <button type="button" class="cc-help-stat" :class="{ on: helpStatusFilter === 'resolved' }" @click="helpStatusFilter = 'resolved'">
+              <b>{{ helpOverview.resolved }}</b><span>已帮助</span>
+            </button>
+          </div>
+          <div v-if="!shownHelp.length" class="tui-empty">
+            <span class="tui-empty-icon"><el-icon :size="24"><ChatDotRound /></el-icon></span>
+            <span class="tui-empty-title">暂无求助</span>
+            <span class="tui-empty-desc">学生提交求助后会出现在这里</span>
+          </div>
+          <div v-else class="cc-help-list">
+            <div v-for="h in shownHelp" :key="h.id" class="cc-help-item" :class="`st-${h.status}`">
+              <div class="cc-help-top">
+                <span class="cc-help-name">{{ h.anonymous ? '匿名同学' : (h.student_name || '学生') }}</span>
+                <span class="tui-tag" :class="helpCatClass(h.category)">{{ HELP_CATEGORY_LABEL[h.category] }}</span>
+                <span class="cc-help-status" :class="`st-${h.status}`">{{ HELP_STATUS_LABEL[h.status] }}</span>
+                <span class="cc-help-time">{{ (h.created_at || '').slice(5, 16) }}</span>
+              </div>
+              <div class="cc-help-body">{{ h.content }}</div>
+              <div v-if="h.reply" class="cc-help-reply">
+                <span class="cc-help-reply-label">我的回复</span>
+                <span class="cc-help-reply-text">{{ h.reply }}</span>
+              </div>
+              <div class="cc-help-meta">
+                <button v-if="!h.anonymous && h.student_id" class="cc-link" @click="gotoStudentById(h.student_id)">成长档案</button>
+                <button class="cc-link cc-help-do" @click="openReply(h)">{{ h.reply ? '再次回复' : '受理并回复' }}</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </template>
+      <template v-else>
       <!-- 移动端高频操作：自动生成；求助受理随对应分区头部 -->
       <div v-if="isMobile" class="tui-actions cc-mobile-ops">
         <el-button size="small" round :icon="Refresh" :loading="genLoading" @click="handleGenerate">自动生成</el-button>
@@ -32,8 +310,8 @@
         </div>
         <div class="cc-temp">
           <span class="cc-temp-num">{{ careScore }}<i>%</i></span>
-          <div class="cc-temp-track">
-            <span class="cc-temp-fill" :style="{ width: careScore + '%', background: tempColor }" />
+          <div class="tui-progress-track">
+            <span class="tui-progress-fill" :style="{ '--pct': careScore / 100, background: tempColor }" />
           </div>
         </div>
         <div class="cc-remind" :class="remindTone">
@@ -314,6 +592,7 @@
           </div>
         </section>
       </template>
+      </template>
 
       <CareEventDialog v-model="eventVisible" @saved="loadAll" />
       <HomeVisitDialog v-model="visitVisible" @saved="loadAll" />
@@ -375,6 +654,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import {
   deleteCareEvent, deleteHomeVisit, deletePraise, generateCareEvents, getCareEvents,
@@ -460,6 +740,8 @@ function clearStudentFocus() {
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
 const tab = ref('calendar')
+/** 桌面端三列台账看板的容器引用：供「去处理」滚动定位（移动端为 null） */
+const boardRef = ref<HTMLElement | null>(null)
 const today = new Date()
 const calYear = ref(today.getFullYear())
 const calMonth = ref(today.getMonth() + 1)
@@ -540,6 +822,8 @@ const remindTone = computed(() => (pendingCount.value || followUpCount.value ? '
 
 function goFollowUp() {
   tab.value = pendingCount.value > 0 ? 'calendar' : 'visits'
+  // 桌面端三列台账常显、无 Tab 可切，把「去处理」落点改为滚动到台账看板，两端按钮口径一致
+  boardRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 /** 事项色调：统一走令牌，避免散色 */
@@ -736,12 +1020,10 @@ onMounted(() => {
 
 .cc-temp { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .cc-temp-num {
-  flex-shrink: 0; font-size: 20px; font-weight: 700; line-height: 1;
+  flex-shrink: 0; font-size: var(--tui-fs-num); font-weight: 700; line-height: 1;
   color: var(--tui-text); font-variant-numeric: tabular-nums;
 }
 .cc-temp-num i { font-size: 11px; font-style: normal; color: var(--tui-text-quiet); margin-left: 1px; }
-.cc-temp-track { flex: 1; height: 10px; border-radius: 999px; background: var(--tui-surface-sunken); overflow: hidden; }
-.cc-temp-fill { display: block; height: 100%; border-radius: 999px; transition: width 0.4s ease; }
 
 /* 待回访提醒条 */
 .cc-remind {
@@ -899,6 +1181,69 @@ onMounted(() => {
 .cc-reply-field { display: flex; flex-direction: column; gap: 7px; }
 .cc-reply-label { font-size: 12.5px; font-weight: 600; color: var(--tui-text-secondary); }
 .cc-reply-label .req { color: var(--tui-danger); margin-left: 2px; }
+
+/* ===== 桌面端三列台账看板（仅 v-if="!isMobile" 渲染，移动端零影响） ===== */
+/* 横向概览带：把原「本月关怀温度」分区压成一条横带，横跨三列置于顶部 */
+.cc-band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+  overflow: hidden;
+}
+/* 左缘语义色细线，与页面 hero（success）呼应，保持本页色彩身份一致 */
+.cc-band::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--tui-success);
+}
+.cc-band-temp { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
+.cc-band-label { font-size: 11px; color: var(--tui-text-quiet); }
+.cc-band-bar { flex: 0 1 300px; min-width: 120px; }
+.cc-band-remind { flex: 1 1 auto; min-width: 200px; }
+.cc-band .cc-temp-level { flex-shrink: 0; }
+
+/* 三列并排：等宽列；grid 默认 stretch 让三列可视高度对齐 */
+.cc-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+
+/* 列卡：复用 .tui-section 外壳，叠加「顶部语义色细线 + 纵向 flex」（列头固定、列体滚动） */
+.cc-col {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  position: relative;
+  overflow: hidden;
+}
+.cc-col::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0; height: 2px;
+}
+.cc-col-events::before { background: var(--tui-brand); }
+/* 家访列用 warn 色：家访的「后续计划」会进入待回访提醒（warn 语义），色彩可解释 */
+.cc-col-visits::before { background: var(--tui-warn); }
+.cc-col-praises::before { background: var(--tui-success); }
+
+/* 列体：限高 + 内部滚动，长列表在列内滑动，三列可视高度一致 */
+.cc-col-body {
+  flex: 1;
+  max-height: 480px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
 @media (max-width: 767px) {
   .cc-mobile-ops .el-button { flex: 1; min-height: 40px; margin-left: 0 !important; }

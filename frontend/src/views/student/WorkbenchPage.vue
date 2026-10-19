@@ -1,6 +1,12 @@
 <template>
-  <div class="workbench-page">
-    <!-- 头部欢迎区 -->
+  <div
+    class="workbench-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
+    <!-- 头部欢迎区（不参与下拉位移） -->
     <div class="workbench-header">
       <div class="header-bg-deco"></div>
       <div class="header-main">
@@ -15,6 +21,9 @@
         <img :src="siteMascot" :alt="siteName" class="header-mascot" />
       </div>
     </div>
+
+    <!-- 移动端下拉刷新：吉祥物指示器（与教师端首页 / 消息页共用同一模块） -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <!-- 我的事务 -->
     <div class="section-card">
@@ -440,6 +449,18 @@
               <DtIcon name="arrow" :size="16" class="tutor-entry-arrow" />
             </div>
 
+            <!-- 文件：跨会话文件汇总（各聊天里发送过的文件 / 图片 / 语音） -->
+            <div class="tutor-entry" @click="openSharedFiles">
+              <div class="tutor-entry-avatar">
+                <span class="notice-entry-avatar"><DtIcon name="file" :size="20" /></span>
+              </div>
+              <div class="tutor-entry-info">
+                <div class="tutor-entry-name">文件</div>
+                <div class="tutor-entry-desc">各聊天里发送过的文件、图片与语音</div>
+              </div>
+              <DtIcon name="arrow" :size="16" class="tutor-entry-arrow" />
+            </div>
+
             <!-- 辅导员入口 -->
             <div v-if="auth.user?.tutor_id" class="tutor-entry" @click="startTutorChat">
               <div class="tutor-entry-avatar">
@@ -509,10 +530,12 @@
                 <DtIcon name="empty" :size="48" style="color: var(--dt-text-quiet);" />
                 <span>暂无消息，发送第一条消息吧</span>
               </div>
-              <div v-for="msg in tutorMessages" :key="msg.id" :class="['chat-msg', msg.sender_id === auth.user?.id ? 'mine' : 'theirs']">
-                <div class="chat-msg-bubble">{{ msg.content }}</div>
-                <div class="chat-msg-time">{{ formatDate(msg.created_at) }}</div>
-              </div>
+              <template v-for="item in tutorTimeline" :key="item.type === 'date' ? 'd-' + item.date : item.msg.id">
+                <div v-if="item.type === 'date'" class="chat-date-separator"><span>{{ item.label }}</span></div>
+                <div v-else :class="['chat-msg', item.msg.sender_id === auth.user?.id ? 'mine' : 'theirs']">
+                  <div class="chat-msg-bubble">{{ item.msg.content }}</div>
+                </div>
+              </template>
             </div>
             <div class="chat-input-bar">
               <div class="chat-input-container">
@@ -544,15 +567,13 @@
                 <DtIcon name="empty" :size="44" style="color: var(--dt-text-quiet);" />
                 <span>暂无消息，发送第一条消息吧</span>
               </div>
-              <div
-                v-for="msg in groupMessages"
-                :key="msg.id"
-                :class="['chat-msg', msg.sender_id === auth.user?.id ? 'mine' : 'theirs']"
-              >
-                <div v-if="msg.sender_id !== auth.user?.id" class="chat-msg-sender">{{ msg.sender_name }}</div>
-                <div class="chat-msg-bubble">{{ msg.content }}</div>
-                <div class="chat-msg-time">{{ formatDate(msg.created_at) }}</div>
-              </div>
+              <template v-for="item in groupTimeline" :key="item.type === 'date' ? 'd-' + item.date : item.msg.id">
+                <div v-if="item.type === 'date'" class="chat-date-separator"><span>{{ item.label }}</span></div>
+                <div v-else :class="['chat-msg', item.msg.sender_id === auth.user?.id ? 'mine' : 'theirs']">
+                  <div v-if="item.msg.sender_id !== auth.user?.id" class="chat-msg-sender">{{ item.msg.sender_name }}</div>
+                  <div class="chat-msg-bubble">{{ item.msg.content }}</div>
+                </div>
+              </template>
             </div>
             <div class="chat-input-bar">
               <div class="chat-input-container">
@@ -598,6 +619,58 @@
                   <span class="notif-content">{{ n.content }}</span>
                 </span>
               </button>
+            </template>
+          </div>
+
+          <!-- 文件：跨会话文件汇总（各聊天里发送过的文件 / 图片 / 语音） -->
+          <div v-if="currentPage === 'files'" class="files-page">
+            <div class="files-head">
+              <el-input v-model="fileKeyword" placeholder="搜索文件名" size="small" clearable @input="onFileSearch">
+                <template #prefix><el-icon><Search /></el-icon></template>
+              </el-input>
+              <div class="files-filter">
+                <button
+                  v-for="f in FILE_TYPE_FILTERS"
+                  :key="f.key"
+                  type="button"
+                  class="files-filter-item"
+                  :class="{ active: fileTypeFilter === f.key }"
+                  @click="setFileTypeFilter(f.key)"
+                >{{ f.label }}</button>
+              </div>
+            </div>
+
+            <div v-if="filesLoading" class="empty-messages">
+              <el-icon class="is-loading" :size="22"><Loading /></el-icon>
+              <span>加载中…</span>
+            </div>
+            <div v-else-if="!sharedFiles.length" class="empty-messages">
+              <DtIcon name="file" :size="44" style="color: var(--dt-text-quiet);" />
+              <span>{{ fileKeyword.trim() ? '未找到匹配的文件' : '暂无聊天文件' }}</span>
+            </div>
+            <template v-else>
+              <div v-for="f in sharedFiles" :key="f.id" class="file-row" @click="openSharedFile(f)">
+                <span class="file-row-thumb" :class="'t-' + f.file_type">
+                  <img v-if="f.file_type === 'image'" :src="f.url" alt="" loading="lazy" />
+                  <el-icon v-else :size="18">
+                    <Microphone v-if="f.file_type === 'voice'" />
+                    <Document v-else />
+                  </el-icon>
+                </span>
+                <span class="file-row-main">
+                  <span class="file-row-name">
+                    <template v-if="f.file_type === 'voice'">语音消息 · {{ f.duration || 1 }}″</template>
+                    <template v-else>{{ f.name || '未命名文件' }}</template>
+                  </span>
+                  <span class="file-row-meta">
+                    <span class="file-row-source" @click.stop="openFileSession(f)">
+                      {{ f.is_group ? '群 · ' : '' }}{{ f.session_name || '会话' }}
+                    </span>
+                    <span>{{ f.sender_name }}</span>
+                    <span>{{ formatDate(f.created_at) }}</span>
+                  </span>
+                </span>
+              </div>
             </template>
           </div>
         </div>
@@ -679,7 +752,7 @@ import { createLeave, getMyLeaves, deleteLeave } from '@/api/leave'
 import { createTicket, getTickets, cancelTicket } from '@/api/service'
 import { getLostFoundItems, createLostFoundItem, getLostFoundItem } from '@/api/lostFound'
 import { getMyMaterials } from '@/api/material'
-import { getConversations } from '@/api/messages'
+import { getConversations, getSharedFiles, type SharedFile } from '@/api/messages'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 // 群聊：扫码入群后学生端可在消息中心查看与发言
 import {
@@ -701,14 +774,19 @@ import ButlerChat from '@/components/butler/ButlerChat.vue'
 import DtIcon from '@/components/common/DtIcon.vue'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useButlerPreview } from '@/composables/useButlerPreview'
+// 下拉刷新（移动端）：手势逻辑与吉祥物指示器与教师端首页 / 消息页共用同一模块
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading
+  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading, Microphone
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { isMobile } = useResponsive()
 
 // 吉祥物与站点名称取自站点配置：管理端变更后学生端同步
 const { siteMascot, siteName, agentName } = useSiteConfig()
@@ -776,6 +854,7 @@ const pageTitle = computed(() => {
     lostfound: '失物招领',
     messages: '消息中心',
     notifications: '通知',
+    files: '文件',
     allRecords: '全部申请',
     announcements: '班级公告'
   }
@@ -877,6 +956,75 @@ async function loadNotifUnread() {
   } catch { /* 网络异常时保持 0，不影响页面 */ }
 }
 
+/* ===== 文件：跨会话文件汇总（各聊天里发送过的文件 / 图片 / 语音，服务端聚合） ===== */
+const sharedFiles = ref<SharedFile[]>([])
+const filesLoading = ref(false)
+const fileKeyword = ref('')
+const fileTypeFilter = ref<'' | 'file' | 'image' | 'voice'>('')
+let fileSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+const FILE_TYPE_FILTERS = [
+  { key: '' as const, label: '全部' },
+  { key: 'image' as const, label: '图片' },
+  { key: 'file' as const, label: '文档' },
+  { key: 'voice' as const, label: '语音' },
+]
+
+async function openSharedFiles() {
+  currentPage.value = 'files'
+  await loadSharedFiles()
+}
+
+async function loadSharedFiles() {
+  if (filesLoading.value) return
+  filesLoading.value = true
+  try {
+    const params: { keyword?: string; file_type?: string } = {}
+    const kw = fileKeyword.value.trim()
+    if (kw) params.keyword = kw
+    if (fileTypeFilter.value) params.file_type = fileTypeFilter.value
+    const res = await getSharedFiles(params)
+    sharedFiles.value = res.items || []
+  } catch {
+    sharedFiles.value = []
+  } finally {
+    filesLoading.value = false
+  }
+}
+
+function onFileSearch() {
+  if (fileSearchTimer) clearTimeout(fileSearchTimer)
+  fileSearchTimer = setTimeout(() => { void loadSharedFiles() }, 300)
+}
+
+function setFileTypeFilter(key: '' | 'file' | 'image' | 'voice') {
+  fileTypeFilter.value = key
+  loadSharedFiles()
+}
+
+/** 打开文件：图片新窗口预览，其余直接下载 */
+function openSharedFile(f: SharedFile) {
+  const a = document.createElement('a')
+  a.href = f.url
+  a.rel = 'noopener'
+  if (f.file_type === 'image') a.target = '_blank'
+  else a.download = f.name || '文件'
+  a.click()
+}
+
+/** 点击来源会话 → 跳到对应聊天 */
+async function openFileSession(f: SharedFile) {
+  const targetId = Number(f.session_key.slice(2))
+  if (f.is_group) {
+    const g = myGroups.value.find((x) => x.id === targetId)
+    if (!g) { ElMessage.info('该群聊已不在你的群列表中'); return }
+    await openGroupChat(g)
+  } else {
+    currentPage.value = 'tutor'
+    await loadTutorChat(targetId)
+  }
+}
+
 async function openNotifications() {
   currentPage.value = 'notifications'
   notifLoading.value = true
@@ -973,11 +1121,47 @@ function getStatusType(status: string) {
   return m[status] || 'info'
 }
 
+// 时间解析：后端返回的是「无时区的 UTC 时间串」（如 2025-10-16T02:30:00），
+// 直接 new Date() 会被当成本地时间而整体偏移；与教师端消息页保持一致，
+// 无时区后缀则补 Z 按 UTC 解析，再以本地时区展示。
+function parseTime(iso: string): Date {
+  return new Date(iso + (iso.includes('Z') || iso.includes('+') ? '' : 'Z'))
+}
+
 function formatDate(iso: string) {
   if (!iso) return ''
-  const d = new Date(iso)
+  const d = parseTime(iso)
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+
+// 聊天时间线：按「本地日期」在消息之间插入日期分隔线（与教师端消息页一致），
+// 消息本身不再逐条显示时间，时间归属由分隔线表达。
+function getDateStr(t: string) { const d = parseTime(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` }
+function getDateLabel(t: string) {
+  const date = parseTime(t); const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diff = Math.round((today.getTime() - target.getTime()) / 86400000)
+  if (diff === 0) return '今天'
+  if (diff === 1) return '昨天'
+  if (diff === 2) return '前天'
+  if (diff < 7) return `${diff}天前`
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+function buildTimeline(list: any[]) {
+  const items: Array<{ type: 'date'; date: string; label: string } | { type: 'msg'; msg: any }> = []
+  let lastDate = ''
+  for (const m of list) {
+    const d = getDateStr(m.created_at)
+    if (d !== lastDate) { items.push({ type: 'date', date: d, label: getDateLabel(m.created_at) }); lastDate = d }
+    items.push({ type: 'msg', msg: m })
+  }
+  return items
+}
+
+const tutorTimeline = computed(() => buildTimeline(tutorMessages.value))
+const groupTimeline = computed(() => buildTimeline(groupMessages.value))
 
 function formFieldLabel(k: string) {
   const m: Record<string, string> = { leave_type: '请假类型', start_date: '开始日期', end_date: '结束日期', dormitory_building: '宿舍楼', dormitory_room: '宿舍号', parent_proof: '家长证明', certificate_type: '证明类型', quantity: '份数', project_type: '项目类型', advisor: '指导老师', team_members: '团队成员', budget: '预算', project_name: '项目名称' }
@@ -1384,6 +1568,19 @@ onMounted(() => {
   void loadMyGroups()
   announcePolling.start()
 })
+
+/** 下拉刷新：并行重拉工作台数据（事务 / 材料 / 未读 / 管家摘要 / 群组），静默更新不触发加载态 */
+async function refreshAll() {
+  await Promise.all([
+    loadData(),
+    refreshButlerPreview(),
+    loadNotifUnread(),
+    loadMyGroups(),
+  ]).catch(() => {})
+}
+
+// 下拉刷新（移动端）：桌面端不响应手势；指示器复用消息页的吉祥物起跳动画
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
@@ -1391,6 +1588,8 @@ onMounted(() => {
   height: 100%;
   overflow-y: auto;
   background: #f5f7fa;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 
 /* 头部 */
@@ -1493,7 +1692,8 @@ onMounted(() => {
   position: relative;
 }
 
-.workbench-header + .section-card {
+/* 首张卡片上移压住头部下沿（下拉刷新指示器是无高度的一层，需一并写进相邻选择器） */
+.workbench-header + .ptr-ind + .section-card {
   margin-top: -12px;
 }
 
@@ -2605,6 +2805,109 @@ onMounted(() => {
   overflow: hidden;
 }
 
+/* ===== 文件页：跨会话文件汇总 ===== */
+.files-page {
+  background: var(--dt-surface);
+  border-radius: var(--dt-radius);
+  overflow: hidden;
+}
+
+.files-head {
+  padding: 12px 16px 0;
+}
+
+.files-filter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 14px 0 12px;
+}
+
+.files-filter-item {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--dt-fill-2, #f2f3f5);
+  color: var(--dt-text-tertiary);
+}
+
+.files-filter-item.active {
+  background: var(--dt-primary-soft);
+  color: var(--dt-primary-strong);
+  font-weight: 600;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.file-row:active {
+  background: var(--dt-surface-press, #f5f6f7);
+}
+
+.file-row-thumb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--dt-fill-2, #f2f3f5);
+  color: var(--dt-primary-strong);
+}
+
+.file-row-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-row-thumb.t-voice {
+  color: var(--dt-success);
+}
+
+.file-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dt-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--dt-text-quiet);
+}
+
+.file-row-source {
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--dt-primary-strong);
+}
+
 /* 消息列表 */
 .messages-list {
   max-height: 60vh;
@@ -2826,11 +3129,19 @@ onMounted(() => {
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-.chat-msg-time {
+/* 日期分隔线：与教师端消息页一致的胶囊样式（消息本身不再逐条显示时间） */
+.chat-date-separator {
+  text-align: center;
+  margin: 8px 0;
+}
+
+.chat-date-separator span {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 999px;
   font-size: 11px;
-  color: #999;
-  margin-top: 4px;
-  padding: 0 4px;
+  color: var(--dt-text-quiet);
+  background: var(--dt-surface);
 }
 
 /* 聊天输入栏 */

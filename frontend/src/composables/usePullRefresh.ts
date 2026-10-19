@@ -1,8 +1,19 @@
 /**
  * 移动端下拉刷新（touch 手势）
  *
- * 用法：把 onStart / onMove / onEnd / onCancel 绑到滚动容器的 touch 事件上，
- * 容器用 scrollStyle 跟随手指位移，容器上方的指示器用 indicatorStyle 撑开高度。
+ * 用法：把 onStart / onMove / onEnd / onCancel 绑到**真正滚动**的容器上（touchmove 不能加 `.passive`），
+ * 容器内放 `PullRefreshIndicator`：指示器自身高度即下拉位移，其下方内容随之整体下移。
+ * 手势逻辑与指示器动画由模块统一提供，各页面只需选好滚动容器：
+ *
+ *   <div class="x-scroll" @touchstart.passive="pull.onStart" @touchmove="pull.onMove"
+ *     @touchend="pull.onEnd" @touchcancel="pull.onCancel">
+ *     <header class="x-head">...</header>                              <!-- 有吸顶头才需要 -->
+ *     <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+ *     ...列表内容...
+ *   </div>
+ *
+ * 固定头部约定：页面若有吸顶头（如教师端首页的 HomeTopBanner），指示器必须放在**头部之后**。
+ * 指示器靠自身高度把后续内容下推，头部留在流程原位 → 吸顶头在下拉过程中保持不动。
  *
  * 约定：
  * - 只在容器 scrollTop === 0 且手指向下拖时接管手势，其余情况原样交还原生滚动；
@@ -29,6 +40,20 @@ const MIN_SPIN = 420
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * 触摸是否落在固定定位的浮层内（不含滚动容器自身）。
+ * 首页的「去安排」任务子页、聊天页的语音浮层等都是 `position: fixed` 的整屏子页，
+ * 它们 DOM 上仍是滚动容器的后代会冒泡上来，但有自己的滚动，不能被下拉刷新接管。
+ */
+function insideFixedLayer(target: EventTarget | null, container: HTMLElement): boolean {
+  let el = target instanceof HTMLElement ? target : null
+  while (el && el !== container) {
+    if (getComputedStyle(el).position === 'fixed') return true
+    el = el.parentElement
+  }
+  return false
+}
+
 export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, options: PullRefreshOptions = {}) {
   const threshold = options.threshold ?? 56
   const max = options.max ?? 88
@@ -43,13 +68,8 @@ export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, opti
   /** 已拉过阈值：松手即刷新（页面用它触发吉祥物起跳） */
   const ready = computed(() => distance.value >= threshold)
 
-  const scrollStyle = computed<CSSProperties>(() => {
-    if (!distance.value) return {}
-    return {
-      transform: `translateY(${distance.value}px)`,
-      transition: dragging.value ? 'none' : `transform ${SETTLE}`,
-    }
-  })
+  /** 指示器是否需要起跳：拉过阈值或刷新中 */
+  const active = computed(() => ready.value || refreshing.value)
 
   const indicatorStyle = computed<CSSProperties>(() => ({
     height: `${distance.value}px`,
@@ -60,6 +80,8 @@ export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, opti
     if (refreshing.value) return
     if (options.enabled && !options.enabled()) return
     const el = e.currentTarget as HTMLElement
+    // 页面内可能叠着固定浮层（如首页任务子页、聊天页语音浮层）：浮层自带滚动，不参与下拉刷新
+    if (insideFixedLayer(e.target, el)) return
     if (el.scrollTop > 0) return
     startY = e.touches[0].clientY
     tracking = true
@@ -109,5 +131,5 @@ export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, opti
     distance.value = 0
   }
 
-  return reactive({ ready, refreshing, scrollStyle, indicatorStyle, onStart, onMove, onEnd, onCancel })
+  return reactive({ ready, refreshing, active, indicatorStyle, onStart, onMove, onEnd, onCancel })
 }

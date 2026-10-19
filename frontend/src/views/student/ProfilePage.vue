@@ -3,131 +3,158 @@
     <!-- 主页面 -->
     <transition :name="slideDirection">
       <div v-if="!currentPage" key="main" class="profile-page">
-        <!-- 背景图区域 -->
-        <div class="profile-banner" @click="openPage('banner')">
-          <img v-if="bannerUrl" :src="bannerUrl" class="banner-img" />
-          <div v-else class="banner-default" :style="{ background: bannerGradient }"></div>
-          <div class="banner-overlay"></div>
-          <div class="banner-edit-hint">
-            <el-icon><Camera /></el-icon>
-            <span>更换背景</span>
-          </div>
-        </div>
+        <!-- 个人中心头部（抖音范式）：封面铺满整行，身份信息以暗色渐变压底后「悬浮」在背景之上 -->
+        <section class="pf-hero" :style="heroBannerStyle">
+          <div class="pf-hero-scrim"></div>
 
-        <!-- 头部信息卡片 -->
-        <div class="profile-header" @click="openPage('profile')">
-          <el-avatar :size="54" :src="auth.user?.avatar || ''" class="header-avatar">
-            {{ auth.userName?.[0] }}
-          </el-avatar>
-          <div class="header-info">
-            <div class="header-name">{{ auth.userName }}</div>
-            <div class="header-id">{{ auth.user?.username }}</div>
-          </div>
-          <el-icon class="header-arrow"><ArrowRight /></el-icon>
-        </div>
+          <button type="button" class="pf-hero-edit" @click="openPage('banner')">
+            <el-icon :size="13"><Camera /></el-icon>
+            更换背景
+          </button>
 
-        <!-- 个人成长展示 -->
-        <div class="section-card">
-          <div class="section-header">
-            <div class="section-title">个人成长</div>
-            <div class="section-more" @click="router.push('/student/growth')">查看详情</div>
-          </div>
-          <div class="growth-summary">
-            <div class="growth-item">
-              <div class="growth-value">{{ growthStats.awards || 0 }}</div>
-              <div class="growth-label">成长记录</div>
-            </div>
-            <div class="growth-item">
-              <div class="growth-value">{{ growthStats.skills || 0 }}</div>
-              <div class="growth-label">技能标签</div>
-            </div>
-            <div class="growth-item">
-              <div class="growth-value">{{ growthStats.projects || 0 }}</div>
-              <div class="growth-label">项目经历</div>
-            </div>
-          </div>
-
-          <!-- 成长画像：完整度 + 技能/兴趣 + 目标入口 -->
-          <div class="growth-profile-block">
-            <div class="profile-line">
-              <div class="profile-line-label">
-                <el-icon :size="14"><Calendar /></el-icon>
-                <span>成长画像完整度</span>
+          <div class="pf-hero-cast" @click="openPage('profile')">
+            <el-avatar :size="64" :src="auth.user?.avatar || ''" class="pf-avatar">
+              {{ auth.userName?.[0] }}
+            </el-avatar>
+            <div class="pf-cast-main">
+              <div class="pf-cast-name-row">
+                <h2 class="pf-cast-name">{{ auth.userName }}</h2>
+                <span class="pf-cast-role">学生</span>
               </div>
-              <span class="profile-line-value">{{ imageComplete }}%</span>
+              <p class="pf-cast-sub">
+                学号：{{ auth.user?.username || '—' }}
+                <span class="pf-cast-sep">·</span>{{ auth.user?.college || '未设置学院' }}
+              </p>
             </div>
-            <el-progress :percentage="imageComplete" :stroke-width="8" :show-text="false" :color="imageComplete === 100 ? '#67c23a' : '#409eff'" class="profile-progress" />
-            <div class="profile-tip" v-if="imageComplete < 100">
-              完善技能、兴趣与目标后，AI 将为你提供更精准的成长建议
-            </div>
-            <div class="profile-tip" v-else>
-              画像已完整，AI 服务已全面开启
-            </div>
+            <span class="pf-cast-btn">
+              编辑资料
+              <el-icon :size="12"><ArrowRight /></el-icon>
+            </span>
+          </div>
 
-            <div v-if="(growthProfile?.skills?.length || 0) > 0 || (growthProfile?.interests?.length || 0) > 0" class="profile-tags">
-              <el-tag v-for="s in (growthProfile?.skills || [])" :key="'s' + s" size="small" type="primary" effect="light" class="profile-tag">{{ s }}</el-tag>
-              <el-tag v-for="i in (growthProfile?.interests || [])" :key="'i' + i" size="small" type="success" effect="plain" class="profile-tag">{{ i }}</el-tag>
+          <div class="pf-hero-stats">
+            <div class="pf-hero-stat">
+              <b>{{ growthStats.awards || 0 }}</b>
+              <span>成长记录</span>
             </div>
+            <i class="pf-hero-stat-sep"></i>
+            <div class="pf-hero-stat">
+              <b>{{ imageComplete }}%</b>
+              <span>画像完整度</span>
+            </div>
+          </div>
+        </section>
 
-            <div class="profile-goal-row">
-              <div class="profile-goal-text">
-                <el-icon :size="14"><FolderOpened /></el-icon>
-                <span>发展目标 {{ goalCount }} 个</span>
+        <!-- 内容面板：圆角上浮压住封面底边，形成「悬浮于背景之上」的层次 -->
+        <div class="pf-body">
+          <!-- 个人成长 -->
+          <section class="pf-section">
+            <div class="pf-section-head">
+              <h3 class="pf-section-title">个人成长</h3>
+              <button type="button" class="pf-section-more" @click="router.push('/student/growth')">
+                查看详情
+                <el-icon :size="12"><ArrowRight /></el-icon>
+              </button>
+            </div>
+            <div class="pf-section-body">
+              <div class="growth-summary">
+                <div class="growth-item">
+                  <div class="growth-value">{{ growthStats.awards || 0 }}</div>
+                  <div class="growth-label">成长记录</div>
+                </div>
+                <div class="growth-item">
+                  <div class="growth-value">{{ growthStats.skills || 0 }}</div>
+                  <div class="growth-label">技能标签</div>
+                </div>
+                <div class="growth-item">
+                  <div class="growth-value">{{ growthStats.projects || 0 }}</div>
+                  <div class="growth-label">项目经历</div>
+                </div>
               </div>
-              <el-button size="small" type="primary" plain @click="router.push('/student/plan')">去制定计划</el-button>
-            </div>
-          </div>
-        </div>
 
-        <!-- 客服与帮助 -->
-        <div class="section-card">
-          <div class="section-header">
-            <div class="section-title">客服与帮助</div>
-          </div>
-          <div class="menu-list">
-            <div class="menu-item" @click="openPage('feedback')">
-              <el-icon :size="18"><ChatDotRound /></el-icon>
-              <span class="menu-label">意见反馈</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-            <div class="menu-item" @click="openPage('help')">
-              <el-icon :size="18"><QuestionFilled /></el-icon>
-              <span class="menu-label">使用帮助</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-          </div>
-        </div>
+              <!-- 成长画像：完整度 + 技能/兴趣 + 目标入口 -->
+              <div class="growth-profile-block">
+                <div class="profile-line">
+                  <div class="profile-line-label">
+                    <el-icon :size="14"><Calendar /></el-icon>
+                    <span>成长画像完整度</span>
+                  </div>
+                  <span class="profile-line-value">{{ imageComplete }}%</span>
+                </div>
+                <el-progress
+                  :percentage="imageComplete"
+                  :stroke-width="8"
+                  :show-text="false"
+                  :color="imageComplete === 100 ? 'var(--tui-success)' : 'var(--tui-brand)'"
+                  class="profile-progress"
+                />
+                <div class="profile-tip" v-if="imageComplete < 100">
+                  完善技能、兴趣与目标后，AI 将为你提供更精准的成长建议
+                </div>
+                <div class="profile-tip" v-else>
+                  画像已完整，AI 服务已全面开启
+                </div>
 
-        <!-- 设置与隐私 -->
-        <div class="section-card">
-          <div class="section-header">
-            <div class="section-title">设置与隐私</div>
-          </div>
-          <div class="menu-list">
-            <div class="menu-item" @click="openPage('password')">
-              <el-icon :size="18"><Lock /></el-icon>
-              <span class="menu-label">修改密码</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-            <div class="menu-item" @click="openPage('theme')">
-              <el-icon :size="18"><Sunny /></el-icon>
-              <span class="menu-label">主题设置</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-            <div class="menu-item" @click="openPage('about')">
-              <el-icon :size="18"><InfoFilled /></el-icon>
-              <span class="menu-label">关于{{ agentName }}</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-            <div class="menu-item" @click="logout">
-              <el-icon :size="18"><SwitchButton /></el-icon>
-              <span class="menu-label">退出登录</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-          </div>
-        </div>
+                <div v-if="(growthProfile?.skills?.length || 0) > 0 || (growthProfile?.interests?.length || 0) > 0" class="profile-tags">
+                  <span v-for="s in (growthProfile?.skills || [])" :key="'s' + s" class="profile-tag is-skill">{{ s }}</span>
+                  <span v-for="i in (growthProfile?.interests || [])" :key="'i' + i" class="profile-tag">{{ i }}</span>
+                </div>
 
-        <div style="height: 80px;"></div>
+                <div class="profile-goal-row">
+                  <div class="profile-goal-text">
+                    <el-icon :size="14"><FolderOpened /></el-icon>
+                    <span>发展目标 {{ goalCount }} 个</span>
+                  </div>
+                  <button type="button" class="profile-goal-btn" @click="router.push('/student/plan')">去制定计划</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 客服与帮助：分组内嵌列表（抖音设置页 / Vant CellGroup 范式） -->
+          <section class="pf-section">
+            <h3 class="pf-section-title">客服与帮助</h3>
+            <div class="pf-list">
+              <button type="button" class="pf-row" @click="openPage('feedback')">
+                <span class="pf-row-icon is-violet"><el-icon :size="17"><ChatDotRound /></el-icon></span>
+                <span class="pf-row-label">意见反馈</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="openPage('help')">
+                <span class="pf-row-icon is-cyan"><el-icon :size="17"><QuestionFilled /></el-icon></span>
+                <span class="pf-row-label">使用帮助</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </section>
+
+          <!-- 设置与隐私 -->
+          <section class="pf-section">
+            <h3 class="pf-section-title">设置与隐私</h3>
+            <div class="pf-list">
+              <button type="button" class="pf-row" @click="openPage('password')">
+                <span class="pf-row-icon is-violet"><el-icon :size="17"><Lock /></el-icon></span>
+                <span class="pf-row-label">修改密码</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="openPage('theme')">
+                <span class="pf-row-icon is-warn"><el-icon :size="17"><Sunny /></el-icon></span>
+                <span class="pf-row-label">主题设置</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="openPage('about')">
+                <span class="pf-row-icon"><el-icon :size="17"><InfoFilled /></el-icon></span>
+                <span class="pf-row-label">关于{{ agentName }}</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="logout">
+                <span class="pf-row-icon is-danger"><el-icon :size="17"><SwitchButton /></el-icon></span>
+                <span class="pf-row-label">退出登录</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </section>
+        </div>
       </div>
     </transition>
 
@@ -143,69 +170,42 @@
           <div class="sub-page-placeholder"></div>
         </div>
 
-        <!-- 个人资料 -->
-        <div v-if="currentPage === 'profile'" class="sub-page-content">
-          <!-- 头像设置 -->
-          <div class="form-group">
-            <div class="form-group-title">头像设置</div>
-            <div class="avatar-row">
-              <el-avatar :size="88" :src="profileForm.avatar" shape="square" class="profile-avatar">
-                {{ profileForm.name?.[0] || '?' }}
-              </el-avatar>
-              <div class="avatar-actions">
-                <el-button type="primary" plain size="small" @click="triggerAvatarInput">
-                  <el-icon style="margin-right:4px"><Camera /></el-icon>更换头像
-                </el-button>
-                <div class="avatar-tip">支持 JPG/PNG，上传后将自动裁剪为正方形</div>
-              </div>
-              <input ref="avatarInputRef" type="file" accept="image/*" style="display:none" @change="onAvatarSelect" />
+        <!-- 账号与安全（抖音设置页范式）：只读展示 + 点按行弹窗编辑，不再铺一屏输入框 -->
+        <div v-if="currentPage === 'profile'" class="sub-page-content set-page">
+          <!-- 头像：抖音「编辑资料」里的一行，右侧直接显示当前头像 -->
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="triggerAvatarInput">
+                <span class="set-row-label">头像</span>
+                <span class="set-row-value">
+                  <el-avatar :size="28" :src="profileForm.avatar" shape="square" class="set-row-avatar">
+                    {{ profileForm.name?.[0] || '?' }}
+                  </el-avatar>
+                </span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
             </div>
+            <input ref="avatarInputRef" type="file" accept="image/*" style="display:none" @change="onAvatarSelect" />
           </div>
 
-          <!-- 基本信息 -->
-          <div class="form-group">
-            <div class="form-group-title">基本信息</div>
-            <el-form :model="profileForm" label-width="70px" class="sub-form">
-              <el-form-item label="学号"><el-input :model-value="profileForm.username" disabled /></el-form-item>
-              <el-form-item label="姓名"><el-input :model-value="profileForm.name" disabled /></el-form-item>
-              <el-form-item label="学院"><el-input :model-value="profileForm.college" disabled /></el-form-item>
-              <el-form-item label="班级"><el-input v-model="profileForm.className" placeholder="请输入班级" /></el-form-item>
-            </el-form>
-          </div>
-
-          <!-- 个人信息 -->
-          <div class="form-group">
-            <div class="form-group-title">个人信息</div>
-            <el-form :model="profileForm" label-width="70px" class="sub-form">
-              <el-form-item label="性别">
-                <el-select v-model="profileForm.gender" placeholder="请选择" style="width:100%">
-                  <el-option label="男" value="男" /><el-option label="女" value="女" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="年龄">
-                <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" />
-              </el-form-item>
-              <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="请输入籍贯" /></el-form-item>
-              <el-form-item label="政治面貌">
-                <el-select v-model="profileForm.political_status" placeholder="请选择" style="width:100%">
-                  <el-option label="群众" value="群众" /><el-option label="共青团员" value="共青团员" />
-                  <el-option label="中共预备党员" value="中共预备党员" /><el-option label="中共党员" value="中共党员" />
-                </el-select>
-              </el-form-item>
-            </el-form>
-          </div>
-
-          <!-- 联系方式 -->
-          <div class="form-group">
-            <div class="form-group-title">联系方式</div>
-            <el-form :model="profileForm" label-width="70px" class="sub-form">
-              <el-form-item label="联系电话"><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
-              <el-form-item label="辅导员">
-                <el-select v-model="profileForm.tutor_id" placeholder="搜索选择辅导员" filterable style="width:100%">
-                  <el-option v-for="t in teachers" :key="t.id" :label="`${t.name}（${t.username}）`" :value="t.id" />
-                </el-select>
-              </el-form-item>
-            </el-form>
+          <div v-for="g in accGroups" :key="g.title" class="set-group">
+            <div class="set-group-title">{{ g.title }}</div>
+            <div class="set-list">
+              <button
+                v-for="f in g.fields"
+                :key="f.key"
+                type="button"
+                class="set-row"
+                :class="{ 'is-readonly': f.readonly }"
+                @click="openFieldEdit(f)"
+              >
+                <span class="set-row-label">{{ f.label }}</span>
+                <span class="set-row-value" :class="{ 'is-empty': !fieldValue(f) }">
+                  {{ fieldValue(f) || (f.readonly ? '—' : '未设置') }}
+                </span>
+                <el-icon v-if="!f.readonly" class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
           </div>
 
           <div class="sub-page-footer">
@@ -369,38 +369,91 @@
           </div>
         </div>
 
-        <!-- 背景设置 -->
-        <div v-if="currentPage === 'banner'" class="sub-page-content">
-          <div class="banner-setting">
-            <div class="banner-section-title">预设背景</div>
-            <div class="preset-grid">
-              <div
-                v-for="preset in presetBanners"
-                :key="preset.id"
-                class="preset-item"
-                :class="{ active: !bannerUrl && bannerGradient === preset.color }"
-                :style="{ background: preset.color }"
-                @click="selectPresetBanner(preset.color)"
-              ></div>
-            </div>
-            
-            <div class="banner-section-title" style="margin-top: 24px;">自定义图片</div>
-            <div class="upload-area" @click="triggerBannerUpload">
-              <el-icon :size="24"><Picture /></el-icon>
-              <span>点击上传图片</span>
-              <span class="upload-hint">支持 JPG、PNG，最大 5MB</span>
-            </div>
-            
-            <div v-if="bannerUrl" class="current-banner">
-              <div class="banner-section-title">当前背景</div>
-              <img :src="bannerUrl" class="current-banner-preview" />
-              <el-button size="small" @click="resetBanner" style="margin-top: 12px;">恢复默认</el-button>
+        <!-- 更换背景（抖音背景选择器范式）：顶部实时预览 + 背景宫格，点选即时生效 -->
+        <div v-if="currentPage === 'banner'" class="sub-page-content set-page">
+          <div class="set-group">
+            <div class="set-group-title">当前背景</div>
+            <div class="bg-preview" :style="heroBannerStyle">
+              <div class="bg-preview-scrim"></div>
+              <div class="bg-preview-cast">
+                <el-avatar :size="40" :src="auth.user?.avatar || ''" class="bg-preview-avatar">
+                  {{ auth.userName?.[0] }}
+                </el-avatar>
+                <div>
+                  <div class="bg-preview-name">{{ auth.userName }}</div>
+                  <div class="bg-preview-sub">学号：{{ auth.user?.username || '—' }}</div>
+                </div>
+              </div>
             </div>
           </div>
+
+          <div class="set-group">
+            <div class="set-group-title">选择背景</div>
+            <div class="bg-grid">
+              <button
+                v-for="preset in presetBanners"
+                :key="preset.id"
+                type="button"
+                class="bg-cell"
+                :class="{ 'is-active': !bannerUrl && bannerGradient === preset.color }"
+                :style="{ background: preset.color }"
+                @click="selectPresetBanner(preset.color)"
+              >
+                <span v-if="!bannerUrl && bannerGradient === preset.color" class="bg-cell-check">
+                  <el-icon :size="11"><Check /></el-icon>
+                </span>
+              </button>
+              <button type="button" class="bg-cell bg-cell-upload" @click="triggerBannerUpload">
+                <el-icon :size="18"><Plus /></el-icon>
+                <span>从相册选择</span>
+              </button>
+            </div>
+            <p class="bg-hint">自定义背景支持 JPG / PNG，最大 5MB</p>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="resetBanner">
+                <span class="set-row-label">恢复默认背景</span>
+                <span class="set-row-value">使用系统预设渐变</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
           <input ref="bannerInputRef" type="file" accept="image/*" style="display:none" @change="handleBannerUpload" />
         </div>
       </div>
     </transition>
+
+    <!-- 账号与安全：字段编辑弹窗（抖音「点按设置项 → 就地编辑」范式） -->
+    <el-dialog
+      v-model="editVisible"
+      :title="editField ? `修改${editField.label}` : ''"
+      width="86%"
+      align-center
+    >
+      <el-input
+        v-if="editField && editField.type === 'text'"
+        v-model="editValue"
+        :placeholder="editField.placeholder || '请输入'"
+        clearable
+      />
+      <el-input-number
+        v-else-if="editField && editField.type === 'number'"
+        v-model="editValue"
+        :min="1"
+        :max="120"
+        style="width:100%"
+      />
+      <el-select v-else v-model="editValue" placeholder="请选择" filterable style="width:100%">
+        <el-option v-for="o in editField?.options || []" :key="o.value" :label="o.label" :value="o.value" />
+      </el-select>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmFieldEdit">确定</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 头像裁剪 -->
     <el-dialog v-model="avatarCropVisible" title="裁剪头像" width="420px" :close-on-click-modal="false" @opened="onAvatarCropOpened">
@@ -430,7 +483,7 @@ import { getGoals } from '@/api/plan'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
-  ChatDotRound, QuestionFilled, Camera, Picture, Calendar, FolderOpened
+  ChatDotRound, QuestionFilled, Camera, Calendar, FolderOpened, Check, Plus
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -519,6 +572,94 @@ const profileForm = reactive({
   hometown: '', phone: '', tutor_id: null as number | null,
   className: '', political_status: '', avatar: ''
 })
+
+/** 身份背景（移动端 .pf-hero / .bg-preview 共用）：优先用已上传图片，否则用预设渐变 */
+const heroBannerStyle = computed(() =>
+  bannerUrl.value ? { backgroundImage: `url(${bannerUrl.value})` } : { background: bannerGradient.value }
+)
+
+/**
+ * 账号与安全：字段描述表（抖音设置项范式）。
+ * 页面只读展示「左侧标签 + 右侧值 + 箭头」，点按行弹出编辑弹窗；
+ * 用 computed 而非常量，是为了让「辅导员」的可选项跟随 teachers 异步加载。
+ */
+interface AccField {
+  key: string
+  label: string
+  type: 'text' | 'select' | 'number'
+  options?: { label: string; value: string | number }[]
+  placeholder?: string
+  readonly?: boolean
+}
+
+const accGroups = computed<{ title: string; fields: AccField[] }[]>(() => [
+  {
+    title: '账号信息',
+    fields: [
+      { key: 'username', label: '学号', type: 'text', readonly: true },
+      { key: 'name', label: '姓名', type: 'text', readonly: true },
+      { key: 'college', label: '学院', type: 'text', readonly: true },
+      { key: 'className', label: '班级', type: 'text', placeholder: '请输入班级' },
+    ],
+  },
+  {
+    title: '个人资料',
+    fields: [
+      {
+        key: 'gender', label: '性别', type: 'select',
+        options: [{ label: '男', value: '男' }, { label: '女', value: '女' }],
+      },
+      { key: 'age', label: '年龄', type: 'number' },
+      { key: 'hometown', label: '籍贯', type: 'text', placeholder: '请输入籍贯' },
+      {
+        key: 'political_status', label: '政治面貌', type: 'select',
+        options: [
+          { label: '群众', value: '群众' },
+          { label: '共青团员', value: '共青团员' },
+          { label: '中共预备党员', value: '中共预备党员' },
+          { label: '中共党员', value: '中共党员' },
+        ],
+      },
+    ],
+  },
+  {
+    title: '联系方式',
+    fields: [
+      { key: 'phone', label: '联系电话', type: 'text', placeholder: '请输入手机号' },
+      {
+        key: 'tutor_id', label: '辅导员', type: 'select',
+        options: teachers.value.map((t: any) => ({ label: `${t.name}（${t.username}）`, value: t.id })),
+      },
+    ],
+  },
+])
+
+const editVisible = ref(false)
+const editField = ref<AccField | null>(null)
+const editValue = ref<any>('')
+
+/** 行右侧展示的文本：下拉项显示选项文案，空值由模板回退为占位文案 */
+function fieldValue(f: AccField): string {
+  const v = (profileForm as any)[f.key]
+  if (v === null || v === undefined || v === '') return ''
+  if (f.type === 'select') return f.options?.find((o) => o.value === v)?.label || String(v)
+  return String(v)
+}
+
+function openFieldEdit(f: AccField) {
+  if (f.readonly) return
+  editField.value = f
+  editValue.value = (profileForm as any)[f.key] ?? ''
+  editVisible.value = true
+}
+
+function confirmFieldEdit() {
+  const f = editField.value
+  if (!f) return
+  ;(profileForm as any)[f.key] = f.type === 'number' ? Number(editValue.value) || 1 : editValue.value
+  editVisible.value = false
+}
+
 const feedbackForm = reactive({ type: 'other', title: '', content: '', contact: '' })
 const feedbackList = ref<any[]>([])
 const loadingFeedback = ref(false)
@@ -526,7 +667,7 @@ const loadingFeedback = ref(false)
 // 页面标题
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
-    profile: '个人资料',
+    profile: '账号与安全',
     password: '修改密码',
     feedback: '意见反馈',
     help: '使用帮助',
@@ -851,13 +992,14 @@ onMounted(async () => {
   transform: translateX(100%);
 }
 
-/* 主页面 */
+/* 主页面：封面通栏铺满，页内边距交由内容面板（.pf-body）承担 */
 .profile-page {
-  height: 100%;
-  overflow-y: auto;
-  background: #f5f7fa;
   position: absolute;
   width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--tui-bg);
+  padding: 0;
 }
 
 /* 子页面 */
@@ -867,7 +1009,7 @@ onMounted(async () => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: #f5f7fa;
+  background: var(--tui-bg);
   display: flex;
   flex-direction: column;
   z-index: 10;
@@ -925,32 +1067,7 @@ onMounted(async () => {
   padding-left: 4px;
 }
 
-/* 头像设置 */
-.avatar-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px 14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-.profile-avatar {
-  flex-shrink: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  font-size: 32px;
-}
-.avatar-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
-}
-.avatar-tip {
-  font-size: 12px;
-  color: #999;
-}
+/* 头像裁剪容器 */
 .crop-container {
   max-height: 320px;
   overflow: hidden;
@@ -1043,111 +1160,232 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-/* 背景图 */
-.profile-banner {
+/* ===== 个人中心头部（抖音范式）：封面通栏 + 身份悬浮于背景之上 ===== */
+.pf-hero {
   position: relative;
-  height: 120px;
-  overflow: hidden;
-  cursor: pointer;
-}
-.banner-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.banner-default {
-  width: 100%;
-  height: 100%;
-}
-.banner-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(transparent, #f5f7fa);
-}
-.banner-edit-hint {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
   display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 212px;
+  padding: 14px 16px 30px;
+  background-color: #d8dee6;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+/* 自下而上的暗色压底：白字在任意背景图/渐变上都可读，同时把封面「压」成背景层 */
+.pf-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 16, 0.06) 0%,
+    rgba(10, 12, 16, 0.16) 44%,
+    rgba(10, 12, 16, 0.68) 100%
+  );
+}
+.pf-hero-edit {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 1;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 12px;
-  background: rgba(0,0,0,0.5);
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.32);
   color: #fff;
-  border-radius: 16px;
+  font-family: inherit;
   font-size: 12px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 2;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
 }
-.profile-banner:hover .banner-edit-hint {
-  opacity: 1;
-}
+.pf-hero-edit:active { background: rgba(10, 12, 16, 0.48); }
 
-/* 头部信息 */
-.profile-header {
+.pf-hero-cast {
   position: relative;
-  margin: -28px 16px 14px;
-  padding: 14px 16px;
-  background: #fff;
-  border-radius: 16px;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  gap: 12px;
   cursor: pointer;
+}
+.pf-avatar {
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
+}
+.pf-cast-main { flex: 1; min-width: 0; }
+.pf-cast-name-row { display: flex; align-items: center; gap: 7px; }
+.pf-cast-name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-cast-role {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.pf-cast-sub {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.84);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-cast-sep { margin: 0 6px; color: rgba(255, 255, 255, 0.5); }
+.pf-cast-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.pf-hero-stats {
+  position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 16px;
+  padding-left: 2px;
 }
-.header-avatar {
-  border: 3px solid #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  font-size: 20px;
-}
-.header-info { flex: 1; }
-.header-name {
+.pf-hero-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pf-hero-stat b {
   font-size: 17px;
   font-weight: 700;
-  color: #1a1a1a;
+  line-height: 1.1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.header-id {
-  font-size: 12px;
-  color: #999;
-  margin-top: 3px;
-}
-.header-arrow {
-  color: #ccc;
-  font-size: 16px;
-}
+.pf-hero-stat span { font-size: 11px; color: rgba(255, 255, 255, 0.72); }
+.pf-hero-stat-sep { width: 1px; height: 24px; background: rgba(255, 255, 255, 0.24); }
 
-/* 区域卡片 */
-.section-card {
-  margin: 12px 16px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+/* ===== 内容面板：圆角上浮，压住封面底边，形成「悬浮于背景之上」的层次 ===== */
+.pf-body {
+  position: relative;
+  z-index: 2;
+  margin-top: -16px;
+  padding: 14px 12px 16px;
+  border-radius: 20px 20px 0 0;
+  background: var(--tui-bg);
 }
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+.pf-body .pf-section:first-child { margin-top: 0; }
+
+/* ===== 分区卡片 + 内嵌列表行 ===== */
+.pf-section {
+  margin-top: 12px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+  overflow: hidden;
 }
-.section-title {
-  font-size: 14px;
+.pf-section-title {
+  margin: 0;
+  padding: 12px 14px 0;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #1a1a1a;
+  letter-spacing: 0.3px;
+  color: var(--tui-text-quiet);
 }
-.section-more {
-  font-size: 12px;
-  color: #999;
+.pf-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+.pf-section-head .pf-section-title { padding: 0; }
+.pf-section-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   cursor: pointer;
 }
+.pf-section-more:active { color: var(--tui-text-secondary); }
+.pf-section-body { padding: 10px 14px 14px; }
 
-/* 成长统计 */
+.pf-list { display: flex; flex-direction: column; }
+.pf-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid var(--tui-border);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-row:last-child { border-bottom: none; }
+.pf-row:active { background: var(--tui-surface-muted); }
+.pf-row-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--tui-radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand);
+  box-shadow: inset 0 0 0 1px rgba(15, 17, 21, 0.03);
+}
+.pf-row-icon.is-cyan { background: #ecfeff; color: #0891b2; }
+.pf-row-icon.is-violet { background: #f4f3ff; color: #6941c6; }
+.pf-row-icon.is-warn { background: var(--tui-warn-soft); color: #f79009; }
+.pf-row-icon.is-danger { background: var(--tui-danger-soft); color: var(--tui-danger); }
+.pf-row-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--tui-text);
+}
+.pf-row-arrow { color: #cbd0d8; flex-shrink: 0; }
+
+/* ===== 个人成长 ===== */
 .growth-summary {
   display: flex;
   justify-content: space-around;
@@ -1156,19 +1394,18 @@ onMounted(async () => {
 .growth-value {
   font-size: 20px;
   font-weight: 700;
-  color: #409eff;
+  color: var(--tui-text);
+  font-variant-numeric: tabular-nums;
 }
 .growth-label {
-  font-size: 12px;
-  color: #999;
-  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+  margin-top: 3px;
 }
-
-/* 成长画像块 */
 .growth-profile-block {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tui-border);
 }
 .profile-line {
   display: flex;
@@ -1180,18 +1417,19 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: #666;
+  font-size: 12.5px;
+  color: var(--tui-text-secondary);
 }
 .profile-line-value {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #409eff;
+  color: var(--tui-brand);
+  font-variant-numeric: tabular-nums;
 }
 .profile-progress { margin-bottom: 8px; }
 .profile-tip {
-  font-size: 12px;
-  color: #999;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   margin-bottom: 10px;
 }
 .profile-tags {
@@ -1199,6 +1437,22 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 12px;
+}
+.profile-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--tui-border);
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-tertiary);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.profile-tag.is-skill {
+  border-color: transparent;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
 }
 .profile-goal-row {
   display: flex;
@@ -1209,93 +1463,180 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: #666;
+  font-size: 12.5px;
+  color: var(--tui-text-secondary);
 }
+.profile-goal-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.profile-goal-btn:active { background: #e0ecff; }
 
-/* 菜单列表 */
-.menu-list {
-  display: flex;
-  flex-direction: column;
+/* ===== 设置项列表（抖音设置页范式）：左标签 + 右值 + 箭头 ===== */
+.set-page .set-group { margin-bottom: 12px; }
+.set-page .set-group-title {
+  margin: 0 0 8px 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--tui-text-quiet);
 }
-.menu-item {
+.set-page .set-list {
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+  overflow: hidden;
+}
+.set-page .set-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 0;
-  border-bottom: 1px solid #f5f5f5;
+  width: 100%;
+  padding: 13px 14px;
+  border: none;
+  border-bottom: 1px solid var(--tui-border);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
   cursor: pointer;
-  color: #333;
 }
-.menu-item:last-child { border-bottom: none; }
-.menu-item:active { background: #f5f7fa; }
-.menu-label {
+.set-page .set-row:last-child { border-bottom: none; }
+.set-page .set-row:active { background: var(--tui-surface-muted); }
+.set-page .set-row.is-readonly { cursor: default; }
+.set-page .set-row.is-readonly:active { background: transparent; }
+.set-page .set-row-label {
+  flex-shrink: 0;
+  font-size: 13.5px;
+  color: var(--tui-text);
+}
+.set-page .set-row-value {
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+  text-align: right;
+  font-size: 13px;
+  color: var(--tui-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.menu-arrow {
-  color: #ccc;
-  font-size: 14px;
+.set-page .set-row-value.is-empty { color: var(--tui-text-quiet); }
+.set-page .set-row-arrow { color: #cbd0d8; flex-shrink: 0; }
+.set-page .set-row-avatar {
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-tertiary);
+  font-size: 12px;
 }
 
-/* 背景设置 */
-.banner-setting {
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px;
+/* ===== 更换背景（抖音背景选择器范式）：实时预览 + 背景宫格 ===== */
+.set-page .bg-preview {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: 152px;
+  padding: 14px;
+  border-radius: var(--tui-radius);
+  background-color: #d8dee6;
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--tui-shadow-1);
+  overflow: hidden;
 }
-.banner-section-title {
+.set-page .bg-preview-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 16, 0.04) 0%,
+    rgba(10, 12, 16, 0.18) 45%,
+    rgba(10, 12, 16, 0.64) 100%
+  );
+}
+.set-page .bg-preview-cast {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.set-page .bg-preview-avatar {
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.set-page .bg-preview-name {
   font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
 }
-.preset-grid {
+.set-page .bg-preview-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.82);
+}
+.set-page .bg-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
-.preset-item {
-  height: 60px;
-  border-radius: 8px;
+.set-page .bg-cell {
+  position: relative;
+  height: 62px;
+  padding: 0;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-sm);
+  background-color: var(--tui-surface-muted);
+  background-size: cover;
+  background-position: center;
   cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s;
+  overflow: hidden;
 }
-.preset-item:hover { transform: scale(1.02); }
-.preset-item.active {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64,158,255,0.3);
+.set-page .bg-cell.is-active {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--tui-brand);
 }
-.upload-area {
+.set-page .bg-cell-check {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--tui-brand);
+  color: #fff;
+}
+.set-page .bg-cell-upload {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 24px;
-  border: 2px dashed #e4e7ed;
-  border-radius: 8px;
-  cursor: pointer;
-  color: #999;
-  transition: all 0.2s;
+  gap: 4px;
+  border-style: dashed;
+  color: var(--tui-text-tertiary);
+  font-size: 11.5px;
 }
-.upload-area:hover {
-  border-color: #409eff;
-  color: #409eff;
-}
-.upload-hint {
-  font-size: 12px;
-  color: #ccc;
-}
-.current-banner {
-  margin-top: 16px;
-}
-.current-banner-preview {
-  width: 100%;
-  height: 88px;
-  object-fit: cover;
-  border-radius: 8px;
+.set-page .bg-cell-upload:active { background: var(--tui-surface-sunken); }
+.set-page .bg-hint {
+  margin: 8px 2px 0;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
 }
 
 /* 主题设置 */
@@ -1462,73 +1803,6 @@ onMounted(async () => {
   color: #666;
   line-height: 1.8;
   padding-left: 12px;
-}
-
-/* 背景设置 */
-.banner-setting {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px 14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-.banner-section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 12px;
-}
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.preset-item {
-  height: 58px;
-  border-radius: 12px;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.preset-item:hover { 
-  transform: scale(1.03);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.preset-item.active {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64,158,255,0.3);
-}
-.upload-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 32px;
-  border: 2px dashed #e4e7ed;
-  border-radius: 12px;
-  cursor: pointer;
-  color: #999;
-  transition: all 0.2s;
-}
-.upload-area:hover {
-  border-color: #409eff;
-  color: #409eff;
-  background: rgba(64,158,255,0.02);
-}
-.upload-hint {
-  font-size: 12px;
-  color: #ccc;
-}
-.current-banner {
-  margin-top: 16px;
-}
-.current-banner-preview {
-  width: 100%;
-  height: 88px;
-  object-fit: cover;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 /* 反馈列表 */

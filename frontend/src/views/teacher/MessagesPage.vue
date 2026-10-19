@@ -7,15 +7,25 @@
       </button>
       <div class="msg-appbar-title">{{ mobileViewTitle }}</div>
       <div class="msg-appbar-actions">
-        <button
+        <el-dropdown
           v-if="mobileView === 'messages'"
-          class="msg-appbar-btn"
-          type="button"
-          aria-label="发起会话"
-          @click="showAddFriend = true"
+          trigger="click"
+          @command="handleHeaderAction"
         >
-          <DtIcon name="plus" :size="20" />
-        </button>
+          <button class="msg-appbar-btn" type="button" aria-label="更多操作">
+            <DtIcon name="plus" :size="20" />
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="createGroup">
+                <el-icon><ChatRound /></el-icon> 创建群聊
+              </el-dropdown-item>
+              <el-dropdown-item command="addFriend">
+                <el-icon><User /></el-icon> 发起会话
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <button
           v-if="hasUnread"
           class="msg-appbar-btn"
@@ -52,6 +62,16 @@
           <span class="header-title">消息</span>
         </div>
         <div class="header-right">
+          <!-- 桌面端刷新：移动端用下拉手势，鼠标端补一个按钮走同一条刷新链路 -->
+          <button
+            type="button"
+            class="header-icon-btn"
+            :class="{ 'is-busy': sidebarRefreshing }"
+            title="刷新列表"
+            @click="onHeaderRefresh"
+          >
+            <DtIcon name="refresh" :size="18" class="header-icon" />
+          </button>
           <button
             type="button"
             class="header-icon-btn"
@@ -82,16 +102,13 @@
         </div>
       </div>
 
-      <div class="ptr-host">
-        <div class="ptr-ind" :style="sidebarPull.indicatorStyle" aria-hidden="true">
-          <img class="ptr-mascot" :class="{ jumping: sidebarPull.ready || sidebarPull.refreshing }"
-            :src="siteMascot" alt="" />
-        </div>
-      <div class="sidebar-scroll" :style="sidebarPull.scrollStyle"
+      <div class="sidebar-scroll"
         @touchstart.passive="sidebarPull.onStart"
         @touchmove="sidebarPull.onMove"
         @touchend="sidebarPull.onEnd"
         @touchcancel="sidebarPull.onCancel">
+        <!-- 移动端下拉刷新：吉祥物指示器（公共模块，与首页共用同一套动画） -->
+        <PullRefreshIndicator :indicator-style="sidebarPull.indicatorStyle" :active="sidebarPull.active" />
         <!-- ============ 视图一：消息（会话列表） ============ -->
         <template v-if="mobileView === 'messages'">
         <div class="sidebar-search">
@@ -254,7 +271,7 @@
               clearable
               @input="onContactSearch"
             >
-              <template #prefix><el-icon><Search /></el-icon></template>
+              <template #prefix><DtIcon name="search" :size="15" /></template>
             </el-input>
           </div>
 
@@ -284,6 +301,27 @@
           </div>
 
           <template v-else>
+            <!-- 最近联系人：聊过天的人自动进入通讯录，可一键发起会话 -->
+            <template v-if="recentContacts.length">
+              <div class="addr-section-head">
+                <span class="addr-section-title">最近联系人</span>
+                <span class="addr-section-count">{{ recentContacts.length }} 人</span>
+              </div>
+              <button
+                v-for="c in recentContacts"
+                :key="c.id"
+                type="button"
+                class="addr-row"
+                @click="startChatWith(c)"
+              >
+                <el-avatar :size="38" :src="c.avatar || undefined">{{ c.name[0] }}</el-avatar>
+                <span class="addr-row-main">
+                  <span class="addr-row-name">{{ c.name }}</span>
+                  <span class="addr-row-sub">{{ c.online ? '在线' : '离线' }}</span>
+                </span>
+              </button>
+            </template>
+
             <!-- 我的学生 -->
             <div class="addr-section-head">
               <span class="addr-section-title">我的学生</span>
@@ -421,14 +459,14 @@
             <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
           </div>
           <div v-else-if="!sharedFiles.length" class="empty-state">
-            <el-icon :size="40" style="color: var(--tui-text-quiet);"><FolderOpened /></el-icon>
+            <DtIcon name="empty" :size="40" style="color: var(--tui-text-quiet);" />
             <span>{{ fileKeyword.trim() ? '未找到匹配的文件' : '暂无聊天文件' }}</span>
           </div>
           <div v-else class="file-list">
             <div v-for="f in sharedFiles" :key="f.id" class="file-item" @click="openSharedFile(f)">
               <div class="file-thumb" :class="'t-' + f.file_type">
                 <img v-if="f.file_type === 'image'" :src="f.url" alt="" loading="lazy" />
-                <el-icon v-else :size="20"><component :is="fileTypeIcon(f.file_type)" /></el-icon>
+                <el-icon v-else :size="18"><component :is="fileTypeIcon(f.file_type)" /></el-icon>
               </div>
               <div class="file-body">
                 <div class="file-name">
@@ -496,7 +534,6 @@
           </button>
         </template>
       </div>
-      </div><!-- /.ptr-host -->
     </div>
 
     <!-- 聊天区域 -->
@@ -563,13 +600,7 @@
         <ButlerChat v-if="activeType === 'butler'" role="teacher" />
 
         <template v-else>
-        <div class="ptr-host">
-          <div class="ptr-ind" :style="chatPull.indicatorStyle" aria-hidden="true">
-            <img class="ptr-mascot" :class="{ jumping: chatPull.ready || chatPull.refreshing }"
-              :src="siteMascot" alt="" />
-          </div>
         <div class="msg-list" ref="msgListRef"
-          :style="chatPull.scrollStyle"
           @touchstart.passive="chatPull.onStart"
           @touchmove="chatPull.onMove"
           @touchend="chatPull.onEnd"
@@ -578,6 +609,8 @@
           @dragleave="onDragLeave"
           @drop.prevent="onDrop"
           @paste="onPaste">
+          <!-- 移动端下拉刷新：吉祥物指示器（公共模块，与首页共用同一套动画） -->
+          <PullRefreshIndicator :indicator-style="chatPull.indicatorStyle" :active="chatPull.active" />
           <!-- 拖拽遮罩 -->
           <Transition name="fade">
             <div v-if="dragOver" class="drag-overlay">
@@ -630,7 +663,6 @@
                   <!-- 文本消息 -->
                   <div v-else class="bubble-text">{{ item.msg.content }}</div>
                 </div>
-                <div class="bubble-time">{{ formatTime(item.msg.created_at) }}</div>
               </div>
             </div>
           </template>
@@ -639,7 +671,6 @@
             <span>暂无聊天记录</span>
           </div>
         </div>
-        </div><!-- /.ptr-host -->
 
         <div class="msg-composer">
           <div class="msg-input-bar">
@@ -743,7 +774,7 @@
         <div class="add-friend-search-box">
           <el-input ref="addFriendInputRef" v-model="addFriendSearch" placeholder="输入学号、工号或姓名搜索"
             size="large" clearable @input="onAddFriendSearch">
-            <template #prefix><el-icon><Search /></el-icon></template>
+            <template #prefix><DtIcon name="search" :size="17" /></template>
           </el-input>
           <div class="add-friend-hint">
             <el-icon><InfoFilled /></el-icon>
@@ -787,8 +818,28 @@
         <div class="member-search-box" style="margin-top:14px">
           <el-input v-model="memberSearch" placeholder="搜索成员（学号/工号/姓名）" size="small"
             @input="searchMembersForGroup" clearable>
-            <template #prefix><el-icon><Search /></el-icon></template>
+            <template #prefix><DtIcon name="search" :size="15" /></template>
           </el-input>
+        </div>
+        <!-- 快速勾选：直接从通讯录（最近联系人）多选成员，免去逐个搜索 -->
+        <div v-if="!memberSearch.trim() && recentContacts.length" class="group-pick">
+          <div class="group-pick-head">
+            <span>最近联系人</span>
+            <span class="group-pick-hint">点击勾选</span>
+          </div>
+          <div class="group-pick-list">
+            <div
+              v-for="c in recentContacts"
+              :key="c.id"
+              class="group-pick-row"
+              :class="{ picked: isMemberSelected(c.id) }"
+              @click="toggleRecentContact(c)"
+            >
+              <el-checkbox :model-value="isMemberSelected(c.id)" class="group-pick-check" />
+              <el-avatar :size="30" :src="c.avatar || undefined">{{ c.name[0] }}</el-avatar>
+              <span class="group-pick-name">{{ c.name }}</span>
+            </div>
+          </div>
         </div>
         <div v-if="selectedMembers.length" class="selected-members">
           <el-tag v-for="m in selectedMembers" :key="m.id" closable @close="removeSelectedMember(m.id)">
@@ -815,7 +866,7 @@
     <!-- ============= 添加群成员弹窗 ============= -->
     <el-dialog v-model="showAddMember" class="dt-dialog-limit" title="邀请成员" width="480px" :fullscreen="isMobile" :close-on-click-modal="false">
       <el-input v-model="addMemberSearch" placeholder="搜索用户" clearable @input="searchMembersToAdd">
-        <template #prefix><el-icon><Search /></el-icon></template>
+        <template #prefix><DtIcon name="search" :size="15" /></template>
       </el-input>
       <div v-if="addMemberResults.length" class="add-member-results">
         <div v-for="u in addMemberResults" :key="u.id" class="add-member-item" @click="handleAddMember(u.id)">
@@ -897,7 +948,7 @@
           <!-- 邀请成员展开区 -->
           <div v-if="showManageInvite" class="manage-invite-box">
             <el-input v-model="manageInviteSearch" placeholder="搜索用户（学号/工号/姓名）" size="small" clearable @input="searchMembersForManage">
-              <template #prefix><el-icon><Search /></el-icon></template>
+              <template #prefix><DtIcon name="search" :size="15" /></template>
             </el-input>
             <div v-if="manageInviteResults.length" class="manage-invite-results">
               <div v-for="u in manageInviteResults" :key="u.id" class="manage-invite-item" @click="handleManageAddMember(u.id)">
@@ -1209,7 +1260,7 @@
           @change="onGroupFileSelect"
           accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt" />
         <div v-if="groupFiles.length === 0" class="gsp-empty-box">
-          <el-icon :size="40" color="var(--tui-text-quiet)"><FolderOpened /></el-icon>
+          <DtIcon name="empty" :size="40" style="color: var(--tui-text-quiet);" />
           <span>暂无群文件</span>
           <small>点击下方按钮上传第一个文件</small>
         </div>
@@ -1316,6 +1367,8 @@ import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useButlerPreview } from '@/composables/useButlerPreview'
 import { usePullRefresh } from '@/composables/usePullRefresh'
+// 下拉刷新指示器：教师端首页 / 学生端首页 / 消息页共用同一套吉祥物动画
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
 // 小绵管家：教师端与学生端共用的常驻会话（自动推送资讯 + 总结对话）
 import ButlerChat from '@/components/butler/ButlerChat.vue'
@@ -1326,10 +1379,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import Cropper from 'cropperjs'
 import QRCode from 'qrcode'
 import {
-  Search, User, UserFilled, ChatDotRound, ChatLineRound, ArrowLeft, Plus,
+  User, UserFilled, ChatDotRound, ChatLineRound, ArrowLeft, Plus,
   Bell, MoreFilled, Loading, InfoFilled, ChatRound, Menu, Stamp, Collection, Notebook,
   OfficeBuilding,
-  UploadFilled, Document, FolderOpened, Picture, Setting, WarningFilled, Delete, SwitchButton, Download, DocumentCopy,
+  UploadFilled, Document, Picture, Setting, WarningFilled, Delete, SwitchButton, Download, DocumentCopy,
   Microphone, EditPen, VideoPlay, VideoPause, View
 } from '@element-plus/icons-vue'
 
@@ -1577,6 +1630,14 @@ function addSelectedMember(u: UserSearchResult) {
 }
 function removeSelectedMember(id: number) {
   selectedMembers.value = selectedMembers.value.filter(m => m.id !== id)
+}
+function isMemberSelected(id: number) {
+  return selectedMembers.value.some(m => m.id === id)
+}
+/** 快速勾选：直接从通讯录（最近联系人）多选建群成员，免去逐个搜索 */
+function toggleRecentContact(c: RecentContact) {
+  if (isMemberSelected(c.id)) removeSelectedMember(c.id)
+  else addSelectedMember({ id: c.id, name: c.name, username: '', avatar: c.avatar, role: '' })
 }
 async function handleCreateGroup() {
   if (!newGroupName.value.trim()) return
@@ -2072,12 +2133,20 @@ const messageTimeline = computed(() => {
   return items
 })
 
-function getDateStr(t: string) { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` }
+// 时间解析：后端返回的是「无时区的 UTC 时间串」（如 2025-10-16T02:30:00），
+// 直接 new Date() 会被当成本地时间，导致日期分组/相对时间整体错位。
+// 这里统一补上 Z 按 UTC 解析，再以本地时区取年月日，日期分隔线才分得对。
+function parseTime(t: string): Date {
+  return new Date(t + (t.includes('Z') || t.includes('+') ? '' : 'Z'))
+}
+
+function getDateStr(t: string) { const d = parseTime(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` }
 function getDateLabel(t: string) {
-  const date = new Date(t); const now = new Date()
+  const date = parseTime(t); const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const diff = Math.floor((today.getTime() - target.getTime()) / 86400000)
+  // 两个本地零点相减：用 round 而非 floor，规避夏令时造成的 23/25 小时误差
+  const diff = Math.round((today.getTime() - target.getTime()) / 86400000)
   if (diff === 0) return '今天'
   if (diff === 1) return '昨天'
   if (diff === 2) return '前天'
@@ -2088,7 +2157,7 @@ function getDateLabel(t: string) {
 function formatTime(t: string | null) {
   if (!t) return ''
   try {
-    const date = new Date(t + (t.includes('Z') || t.includes('+') ? '' : 'Z'))
+    const date = parseTime(t)
     const now = new Date(); const diff = now.getTime() - date.getTime()
     const minutes = Math.floor(diff / 60000); const hours = Math.floor(diff / 3600000)
     const ts = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
@@ -2154,6 +2223,17 @@ const contactKeyword = ref('')
 const contactResults = ref<UserSearchResult[]>([])
 const contactSearching = ref(false)
 let contactTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 通讯录「最近联系人」：与我有会话往来的人自动进入通讯录，便于发起会话、快速建群 */
+interface RecentContact { id: number; name: string; avatar: string | null; online: boolean }
+const recentContacts = computed<RecentContact[]>(() =>
+  (conversations.value || []).map((c: any) => ({
+    id: c.user_id,
+    name: c.user_name,
+    avatar: c.user_avatar ?? null,
+    online: !!c.online,
+  }))
+)
 
 // 组织架构树：学院 → 专业 → 班级，均取自管理端「院系班级」配置
 const orgColleges = ref<College[]>([])
@@ -2770,6 +2850,18 @@ async function refreshChat() {
 const sidebarPull = usePullRefresh(refreshSidebar, { enabled: () => isMobile.value })
 const chatPull = usePullRefresh(refreshChat, { enabled: () => isMobile.value })
 
+/** 桌面端刷新按钮：与移动端下拉走同一条 refreshSidebar 链路，加一个忙碌态防重复点击 */
+const sidebarRefreshing = ref(false)
+async function onHeaderRefresh() {
+  if (sidebarRefreshing.value) return
+  sidebarRefreshing.value = true
+  try {
+    await refreshSidebar()
+  } finally {
+    sidebarRefreshing.value = false
+  }
+}
+
 onMounted(async () => {
   document.addEventListener('click', onGlobalClick)
   loadPins()
@@ -2844,30 +2936,19 @@ function onGlobalClick(e: MouseEvent) {
   border-radius: 8px; cursor: pointer;
 }
 .header-icon-btn:hover { background: var(--dt-hover); }
+/* 刷新按钮忙碌态：图标匀速自转，作为桌面端「正在刷新」的唯一反馈 */
+.header-icon-btn.is-busy { cursor: default; color: var(--tui-brand); }
+.header-icon-btn.is-busy .header-icon { animation: header-spin 0.9s linear infinite; }
+@keyframes header-spin { to { transform: rotate(360deg); } }
 .sidebar-search { padding: 10px 12px 6px; }
 .sidebar-search :deep(.el-input__wrapper) { border-radius: var(--tui-radius-sm); }
 .sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0 8px; overscroll-behavior-y: contain; }
 
-/* ===== 移动端下拉刷新（会话列表 / 聊天记录共用） ===== */
-.ptr-host { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.ptr-ind {
-  position: absolute; top: 0; left: 0; right: 0; height: 0;
-  display: flex; align-items: center; justify-content: center;
-  overflow: hidden; pointer-events: none; z-index: 5;
-}
-.ptr-mascot { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; display: block; }
-/* 拉过阈值 / 刷新中：吉祥物起跳（按压-腾空-落地），替代文字状态提示 */
-.ptr-mascot.jumping { animation: ptr-jump .7s ease-in-out infinite; }
-@keyframes ptr-jump {
-  0%, 100% { transform: translateY(0) scale(1, 1); }
-  22% { transform: translateY(-7px) scale(0.96, 1.05); }
-  55% { transform: translateY(0) scale(1.04, 0.95); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ptr-mascot.jumping { animation: none; }
-}
+/* ===== 移动端下拉刷新 ===== */
+/* 指示器（.ptr-ind / 吉祥物起跳）由公共模块 components/common/PullRefreshIndicator.vue 提供，
+   这里只需保证滚动容器（.sidebar-scroll / .msg-list）自身可滚并阻断原生下拉刷新 */
 
-.conv-item { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 11px 14px; cursor: pointer; transition: background .15s var(--tui-ease); border-left: 3px solid transparent; }
+.conv-item { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 9px 12px; cursor: pointer; transition: background .15s var(--tui-ease); border-left: 3px solid transparent; }
 .conv-item:hover { background: var(--tui-surface-muted); }
 .conv-item.active { background: var(--tui-brand-soft); border-left-color: var(--tui-brand); }
 .conv-avatar-wrapper { position: relative; flex-shrink: 0; line-height: 0; }
@@ -2882,7 +2963,7 @@ function onGlobalClick(e: MouseEvent) {
 .conv-avatar { flex-shrink: 0; }
 .conv-info { flex: 1; min-width: 0; }
 .conv-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.conv-name { font-size: 14.5px; font-weight: 600; color: var(--tui-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-name { font-size: 13.5px; font-weight: 600; color: var(--tui-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv-time { font-size: 11px; color: var(--tui-text-quiet); font-family: var(--mono); flex-shrink: 0; margin-left: auto; }
 .conv-bottom { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
 .conv-preview { font-size: 12.5px; color: var(--tui-text-quiet); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2949,7 +3030,7 @@ function onGlobalClick(e: MouseEvent) {
 .chat-name { font-size: 16.5px; font-weight: 600; color: var(--tui-text); }
 .chat-member-count { font-size: 11.5px; color: var(--tui-text-quiet); margin-top: 2px; }
 .msg-list { flex: 1; overflow-y: auto; padding: 20px; background: var(--dt-bg); overscroll-behavior-y: contain; }
-.date-separator { text-align: center; margin: 16px 0; }
+.date-separator { text-align: center; margin: 8px 0; }
 .date-separator span { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 11px; color: var(--tui-text-quiet); background: var(--tui-surface-sunken); }
 /* QQ 风消息行：头像 + 气泡 */
 .msg-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
@@ -2962,7 +3043,6 @@ function onGlobalClick(e: MouseEvent) {
 .bubble-text { padding: 9px 12px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
 .mine .bubble-text { background: var(--dt-primary); color: #fff; border-top-right-radius: 4px; }
 .theirs .bubble-text { background: var(--dt-surface); color: var(--dt-text); border-top-left-radius: 4px; box-shadow: var(--dt-shadow-1); }
-.bubble-time { font-size: 10.5px; color: var(--tui-text-quiet); font-family: var(--mono); margin-top: 4px; padding: 0 4px; }
 .chat-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 60px 0; color: var(--tui-text-quiet); font-size: 13px; }
 
 /* QQ 风输入区：表情 + 附件 + 胶囊输入框 / 按住说话 + 语音 + 发送 */
@@ -3050,7 +3130,7 @@ function onGlobalClick(e: MouseEvent) {
 }
 .emoji-cell {
   border: none; background: transparent; cursor: pointer;
-  font-size: 21px; line-height: 1; padding: 6px 0; border-radius: 8px;
+  font-size: var(--tui-fs-num); line-height: 1; padding: 6px 0; border-radius: 8px;
   transition: background .14s, transform .12s;
 }
 .emoji-cell:hover { background: var(--tui-surface-muted); }
@@ -3077,7 +3157,7 @@ function onGlobalClick(e: MouseEvent) {
   box-shadow: 0 12px 40px rgba(0,0,0,.28); backdrop-filter: blur(6px);
 }
 .record-overlay.cancel { background: rgba(190, 26, 26, .86); }
-.record-time { font-size: 26px; font-weight: 700; font-family: var(--mono); }
+.record-time { font-size: 22px; font-weight: 700; font-family: var(--mono); }
 .record-hint { font-size: 12px; opacity: .85; text-align: center; }
 
 .no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--tui-text-quiet); }
@@ -3095,10 +3175,10 @@ function onGlobalClick(e: MouseEvent) {
 }
 :deep(.el-dialog__header) {
   display: flex; align-items: center;
-  min-height: 52px; margin: 0; padding: 0 18px;
+  min-height: 46px; margin: 0; padding: 0 18px;
   border-bottom: 1px solid var(--tui-hairline);
 }
-:deep(.el-dialog__title) { font-size: 16.5px; font-weight: 600; color: var(--tui-text); letter-spacing: -0.2px; }
+:deep(.el-dialog__title) { font-size: 15px; font-weight: 600; color: var(--tui-text); letter-spacing: -0.2px; }
 :deep(.el-dialog__headerbtn) {
   width: 34px; height: 34px; top: 9px; right: 12px;
   border-radius: 50%; transition: background .15s var(--tui-ease);
@@ -3225,6 +3305,32 @@ function onGlobalClick(e: MouseEvent) {
 .add-friend-search-box { margin-bottom: 4px; }
 .create-group-form { }
 .member-search-box { margin-bottom: 4px; }
+
+/* ===== 发起群聊：通讯录「最近联系人」快速勾选 ===== */
+.group-pick { margin-top: 12px; }
+.group-pick-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--tui-text-secondary);
+}
+.group-pick-hint { font-weight: 400; font-size: 11.5px; color: var(--tui-text-quiet); }
+.group-pick-list {
+  max-height: 34vh; overflow-y: auto; overflow-x: hidden;
+  border: 1px solid var(--dt-divider); border-radius: var(--dt-radius);
+  background: var(--dt-surface);
+}
+.group-pick-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--dt-divider);
+  transition: background .15s var(--dt-ease);
+}
+.group-pick-row:last-child { border-bottom: none; }
+.group-pick-row:hover { background: var(--dt-hover); }
+.group-pick-row:active { background: var(--dt-surface-press); }
+.group-pick-row.picked { background: var(--tui-brand-soft); }
+.group-pick-check { pointer-events: none; margin-right: 0; }
+.group-pick-name { flex: 1; min-width: 0; font-size: 14px; color: var(--dt-text); }
 .add-friend-hint {
   display: flex; align-items: center; gap: 6px; margin-top: 10px;
   font-size: 11.5px; color: var(--tui-text-quiet);
@@ -3371,7 +3477,7 @@ function onGlobalClick(e: MouseEvent) {
 .msg-appbar-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 
 /* ==================== 桌面端视图切换 ==================== */
-.sidebar-seg { padding: 10px 12px 4px; }
+.sidebar-seg { padding: 8px 10px 2px; }
 .sidebar-seg .tui-seg { width: 100%; }
 .seg-count {
   margin-left: 4px; padding: 0 5px; border-radius: 999px;
@@ -3401,17 +3507,17 @@ function onGlobalClick(e: MouseEvent) {
 }
 .msg-drawer-head :deep(.el-avatar) { border-radius: 14px; background: var(--tui-brand-soft); color: var(--tui-brand-strong); flex-shrink: 0; }
 .msg-drawer-user { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.msg-drawer-name { font-size: 15.5px; font-weight: 600; color: var(--tui-text); }
+.msg-drawer-name { font-size: 14px; font-weight: 600; color: var(--tui-text); }
 .msg-drawer-sub {
   font-size: 11.5px; color: var(--tui-text-quiet);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .msg-drawer-nav { flex: 1; overflow-y: auto; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 2px; }
 .msg-drawer-item {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 12px; border: none; border-radius: var(--tui-radius-sm);
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px; border: none; border-radius: var(--tui-radius-sm);
   background: transparent; cursor: pointer; font-family: inherit; text-align: left;
-  color: var(--tui-text-secondary); font-size: 14.5px; font-weight: 500;
+  color: var(--tui-text-secondary); font-size: 13.5px; font-weight: 500;
   transition: background .15s var(--tui-ease), color .15s var(--tui-ease);
 }
 .msg-drawer-item:active { background: var(--tui-surface-muted); }
@@ -3426,34 +3532,34 @@ function onGlobalClick(e: MouseEvent) {
 .drawer-panel-enter-from, .drawer-panel-leave-to { transform: translateX(-100%); }
 
 /* ==================== 通讯录（钉钉列表行规范：56px 行高 + 发丝线） ==================== */
-.addr-section-head { display: flex; align-items: center; gap: 8px; padding: 16px 16px 8px; }
-.addr-section-title { font-size: 13px; font-weight: 600; color: var(--dt-text-tertiary); letter-spacing: .2px; }
-.addr-section-count { margin-left: auto; font-size: 12px; color: var(--dt-text-quiet); }
+.addr-section-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; }
+.addr-section-title { font-size: 12.5px; font-weight: 600; color: var(--dt-text-tertiary); letter-spacing: .2px; }
+.addr-section-count { margin-left: auto; font-size: 11.5px; color: var(--dt-text-quiet); }
 .addr-row {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  min-height: 56px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 50px; padding: 8px 14px;
   border: none; border-bottom: 1px solid var(--dt-divider);
   background: var(--dt-surface); cursor: pointer;
   font-family: inherit; text-align: left;
   transition: background .15s var(--dt-ease);
 }
 .addr-row:active { background: var(--dt-surface-press); }
-.addr-row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.addr-row-name { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--dt-text); }
+.addr-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.addr-row-name { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--dt-text); }
 .addr-row-sub {
-  font-size: 12.5px; color: var(--dt-text-tertiary);
+  font-size: 11.5px; color: var(--dt-text-tertiary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .addr-org-icon {
-  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--dt-radius-sm);
+  width: 32px; height: 32px; flex-shrink: 0; border-radius: var(--dt-radius-sm);
   display: flex; align-items: center; justify-content: center;
   background: var(--dt-primary-soft); color: var(--dt-primary-strong);
 }
-.addr-org-icon.major { width: 32px; height: 32px; background: var(--dt-primary-soft); color: var(--dt-primary-strong); }
-.addr-org-icon.klass { width: 30px; height: 30px; background: var(--dt-surface-sunken); color: var(--dt-text-secondary); }
-.addr-row-major { padding-left: 32px; }
-.addr-row-class { padding-left: 48px; }
-.addr-row-student { padding-left: 60px; background: var(--dt-surface-z1); }
+.addr-org-icon.major { width: 28px; height: 28px; background: var(--dt-primary-soft); color: var(--dt-primary-strong); }
+.addr-org-icon.klass { width: 26px; height: 26px; background: var(--dt-surface-sunken); color: var(--dt-text-secondary); }
+.addr-row-major { padding-left: 28px; }
+.addr-row-class { padding-left: 42px; }
+.addr-row-student { padding-left: 54px; background: var(--dt-surface-z1); }
 
 /* 组织架构树：层级缩进 + 每一级都有「导轨竖线 + 折角横线」，形成真正的树状层级 */
 .addr-row-org, .addr-row-major, .addr-row-class, .addr-row-student { position: relative; }
@@ -3469,9 +3575,9 @@ function onGlobalClick(e: MouseEvent) {
   content: ''; position: absolute; top: 50%; height: 1px; width: 12px;
   background: var(--dt-tree-line); pointer-events: none;
 }
-.addr-row-major::before, .addr-row-major::after { left: 20px; }
-.addr-row-class::before, .addr-row-class::after { left: 36px; }
-.addr-row-student::before, .addr-row-student::after { left: 48px; }
+.addr-row-major::before, .addr-row-major::after { left: 18px; }
+.addr-row-class::before, .addr-row-class::after { left: 32px; }
+.addr-row-student::before, .addr-row-student::after { left: 44px; }
 .addr-chevron {
   color: var(--dt-text-quiet);
   flex-shrink: 0;
@@ -3504,13 +3610,13 @@ function onGlobalClick(e: MouseEvent) {
 
 .file-list { padding: 0 8px 12px; }
 .file-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px; border-radius: 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px; border-radius: 9px; cursor: pointer;
   transition: background .15s;
 }
 .file-item:hover { background: var(--tui-surface-muted); }
 .file-thumb {
-  width: 38px; height: 38px; flex-shrink: 0; border-radius: 9px;
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
   background: var(--tui-surface-sunken); color: var(--tui-brand-strong);
   overflow: hidden;
@@ -3519,7 +3625,7 @@ function onGlobalClick(e: MouseEvent) {
 .file-thumb.t-voice { color: #079455; }
 .file-body { flex: 1; min-width: 0; }
 .file-name {
-  font-size: 13.5px; font-weight: 500; color: var(--tui-text);
+  font-size: 13px; font-weight: 500; color: var(--tui-text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .file-meta {
@@ -3547,8 +3653,8 @@ function onGlobalClick(e: MouseEvent) {
 }
 .notif-action-btn:disabled { color: var(--dt-text-quiet); cursor: default; }
 .notif-row {
-  display: flex; align-items: flex-start; gap: 12px; width: 100%;
-  min-height: 56px; padding: 12px 16px;
+  display: flex; align-items: flex-start; gap: 10px; width: 100%;
+  min-height: 50px; padding: 10px 14px;
   border: none; border-bottom: 1px solid var(--dt-divider);
   background: var(--dt-surface); cursor: pointer;
   font-family: inherit; text-align: left;
@@ -3557,17 +3663,17 @@ function onGlobalClick(e: MouseEvent) {
 .notif-row:last-child { border-bottom: none; }
 .notif-row:active { background: var(--dt-surface-press); }
 .notif-icon {
-  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--dt-radius-sm);
+  width: 32px; height: 32px; flex-shrink: 0; border-radius: var(--dt-radius-sm);
   display: flex; align-items: center; justify-content: center;
 }
-.notif-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.notif-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .notif-top { display: flex; align-items: baseline; gap: 8px; }
 .notif-title {
-  flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--dt-text);
+  flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--dt-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .notif-time { font-size: 11px; color: var(--dt-text-quiet); flex-shrink: 0; }
-.notif-content { font-size: 12.5px; line-height: 1.5; color: var(--dt-text-tertiary); }
+.notif-content { font-size: 11.5px; line-height: 1.5; color: var(--dt-text-tertiary); }
 .notif-row.unread .notif-content { color: var(--dt-text-secondary); }
 .notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dt-danger); flex-shrink: 0; margin-top: 7px; }
 
@@ -3710,7 +3816,7 @@ function onGlobalClick(e: MouseEvent) {
   width: 42px; height: 42px; border-radius: var(--dt-radius-sm); flex-shrink: 0;
   background: var(--dt-primary-soft); color: var(--dt-primary-strong);
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: 600;
+  font-size: 15px; font-weight: 600;
 }
 .gsp-qr-meta { min-width: 0; }
 .gsp-qr-name { font-size: 15px; font-weight: 600; color: var(--dt-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3827,4 +3933,43 @@ function onGlobalClick(e: MouseEvent) {
   display: flex; align-items: center; justify-content: center; gap: 6px;
 }
 .gsp-upload-btn:active { background: var(--dt-surface-press); }
+
+/* ==================== 移动端：还原本次「桌面侧边栏密度收紧」之前的原始尺寸 ====================
+   本次收紧（会话行 / 通讯录 / 文件 / 通知 / 侧边抽屉）是为桌面端左栏做的信息密度优化，
+   移动端不应受影响，故在此把原始数值还原回来。桌面端仍按收紧后的值渲染。 */
+@media (max-width: 767px) {
+  .conv-item { gap: 12px; min-height: 64px; padding: 11px 14px; }
+  .conv-name { font-size: 14.5px; }
+  .sidebar-seg { padding: 10px 12px 4px; }
+
+  .msg-drawer-name { font-size: 15.5px; }
+  .msg-drawer-item { gap: 12px; padding: 12px; font-size: 14.5px; }
+
+  .addr-section-head { padding: 16px 16px 8px; }
+  .addr-section-title { font-size: 13px; }
+  .addr-section-count { font-size: 12px; }
+  .addr-row { gap: 12px; min-height: 56px; padding: 10px 16px; }
+  .addr-row-main { gap: 3px; }
+  .addr-row-name { font-size: 15px; }
+  .addr-row-sub { font-size: 12.5px; }
+  .addr-org-icon { width: 36px; height: 36px; }
+  .addr-org-icon.major { width: 32px; height: 32px; }
+  .addr-org-icon.klass { width: 30px; height: 30px; }
+  .addr-row-major { padding-left: 32px; }
+  .addr-row-class { padding-left: 48px; }
+  .addr-row-student { padding-left: 60px; }
+  .addr-row-major::before, .addr-row-major::after { left: 20px; }
+  .addr-row-class::before, .addr-row-class::after { left: 36px; }
+  .addr-row-student::before, .addr-row-student::after { left: 48px; }
+
+  .file-item { gap: 10px; padding: 10px; border-radius: 10px; }
+  .file-thumb { width: 38px; height: 38px; }
+  .file-name { font-size: 13.5px; }
+
+  .notif-row { gap: 12px; min-height: 56px; padding: 12px 16px; }
+  .notif-icon { width: 36px; height: 36px; }
+  .notif-main { gap: 4px; }
+  .notif-title { font-size: 15px; }
+  .notif-content { font-size: 12.5px; }
+}
 </style>

@@ -4,12 +4,14 @@
     <SubPageHeader title="全部功能" sub="教师工作台功能总览" fallback="/teacher" />
 
     <div class="tui-content">
-      <header v-if="!isMobile" class="tui-header">
-        <div>
-          <h2 class="tui-header-title">全部功能</h2>
-          <p class="tui-header-sub">教师工作台的功能总览，点击直达对应子页面</p>
-        </div>
-      </header>
+      <!-- 桌面端特色头部：功能总览语义色 + 宫格图标 -->
+      <TuiPageHero
+        v-if="!isMobile"
+        title="全部功能"
+        sub="教师工作台的功能总览，点击直达对应子页面"
+        :icon="Grid"
+        tone="brand"
+      />
 
       <!-- 搜索：功能较多时按名称 / 说明快速定位 -->
       <div class="feat-search">
@@ -72,12 +74,13 @@
 import { computed, onMounted, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
 import { getDashboardStats, type DashboardStats } from '@/api/teacher'
 import {
-  ArrowRight, Bell, ChatDotRound, Collection, Connection, EditPen, InfoFilled,
+  ArrowRight, Bell, ChatDotRound, Collection, Connection, EditPen, Grid, InfoFilled,
   Notebook, Search, Stamp, Sunny, WarningFilled,
 } from '@element-plus/icons-vue'
 

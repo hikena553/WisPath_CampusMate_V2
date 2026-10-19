@@ -1,147 +1,210 @@
 <template>
-  <div class="profile-wrapper">
-    <!-- 主页面 -->
-    <transition :name="slideDirection">
+  <div class="profile-wrapper" :class="{ 'is-web': !isMobile }">
+    <!-- ===== 移动端主页面：封面头部（身份悬浮于背景之上）+ 分组菜单（桌面端改由左侧导航承担） ===== -->
+    <transition v-if="isMobile" :name="slideDirection">
       <div v-if="!currentPage" key="main" class="profile-page">
-        <!-- 背景图区域 -->
-        <div class="profile-banner" @click="openPage('banner')">
-          <img v-if="bannerUrl" :src="bannerUrl" class="banner-img" />
-          <div v-else class="banner-default" :style="{ background: bannerGradient }"></div>
-          <div class="banner-overlay"></div>
-          <div class="banner-edit-hint">
-            <el-icon><Camera /></el-icon>
-            <span>更换背景</span>
-          </div>
-        </div>
+        <!-- 个人中心头部（抖音范式）：封面铺满整行，身份信息以暗色渐变压底后「悬浮」在背景之上，
+             姓名 / 工号 / 学院与关键数据直接压在封面上，不再另立一张直白的白色卡片。 -->
+        <section class="pf-hero" :style="heroBannerStyle">
+          <div class="pf-hero-scrim"></div>
 
-        <!-- 头部信息卡片 -->
-        <div class="profile-header" @click="openPage('profile')">
-          <el-avatar :size="54" :src="auth.user?.avatar || ''" class="header-avatar">
-            {{ auth.userName?.[0] }}
-          </el-avatar>
-          <div class="header-info">
-            <div class="header-name">{{ auth.userName }}</div>
-            <div class="header-id">{{ auth.user?.username }}</div>
-          </div>
-          <el-icon class="header-arrow"><ArrowRight /></el-icon>
-        </div>
+          <button type="button" class="pf-hero-edit" @click="openPage('banner')">
+            <el-icon :size="13"><Camera /></el-icon>
+            更换背景
+          </button>
 
-        <!-- 客服与帮助 -->
-        <div class="section-card">
-          <div class="section-header">
-            <div class="section-title">客服与帮助</div>
-          </div>
-          <div class="menu-list">
-            <div class="menu-item" @click="openPage('announcements')">
-              <el-icon :size="18"><Bell /></el-icon>
-              <span class="menu-label">校园公告</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+          <div class="pf-hero-cast" @click="openPage('profile')">
+            <el-avatar :size="64" :src="auth.user?.avatar || ''" class="pf-avatar">
+              {{ auth.userName?.[0] }}
+            </el-avatar>
+            <div class="pf-cast-main">
+              <div class="pf-cast-name-row">
+                <h2 class="pf-cast-name">{{ auth.userName }}</h2>
+                <span class="pf-cast-role">教师</span>
+              </div>
+              <p class="pf-cast-sub">
+                工号：{{ auth.user?.username || '—' }}
+                <span class="pf-cast-sep">·</span>{{ auth.user?.college || '未设置学院' }}
+              </p>
             </div>
-            <div class="menu-item" @click="openPage('help')">
-              <el-icon :size="18"><QuestionFilled /></el-icon>
-              <span class="menu-label">使用帮助</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
+            <span class="pf-cast-btn">
+              编辑资料
+              <el-icon :size="12"><ArrowRight /></el-icon>
+            </span>
           </div>
-        </div>
 
-        <!-- 设置与隐私 -->
-        <div class="section-card">
-          <div class="section-header">
-            <div class="section-title">设置与隐私</div>
-          </div>
-          <div class="menu-list">
-            <div class="menu-item" @click="openPage('password')">
-              <el-icon :size="18"><Lock /></el-icon>
-              <span class="menu-label">修改密码</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+          <div class="pf-hero-stats">
+            <div class="pf-hero-stat">
+              <b>{{ profileForm.className || '—' }}</b>
+              <span>所带班级</span>
             </div>
-            <div class="menu-item" @click="openPage('theme')">
-              <el-icon :size="18"><Sunny /></el-icon>
-              <span class="menu-label">主题设置</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-            <div class="menu-item" @click="openPage('about')">
-              <el-icon :size="18"><InfoFilled /></el-icon>
-              <span class="menu-label">关于{{ agentName }}</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
-            </div>
-            <div class="menu-item" @click="logout">
-              <el-icon :size="18"><SwitchButton /></el-icon>
-              <span class="menu-label">退出登录</span>
-              <el-icon class="menu-arrow"><ArrowRight /></el-icon>
+            <i class="pf-hero-stat-sep"></i>
+            <div class="pf-hero-stat">
+              <b>{{ profileCompletion }}%</b>
+              <span>资料完整度</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div style="height: 80px;"></div>
+        <!-- 内容面板：圆角上浮压住封面底边，形成「悬浮于背景之上」的层次 -->
+        <div class="pf-body">
+          <!-- 客服与帮助：分组内嵌列表（抖音设置页 / Vant CellGroup 范式） -->
+          <section class="pf-section">
+            <h3 class="pf-section-title">客服与帮助</h3>
+            <div class="pf-list">
+              <button type="button" class="pf-row" @click="openPage('announcements')">
+                <span class="pf-row-icon"><el-icon :size="17"><Bell /></el-icon></span>
+                <span class="pf-row-label">校园公告</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="openPage('help')">
+                <span class="pf-row-icon is-cyan"><el-icon :size="17"><QuestionFilled /></el-icon></span>
+                <span class="pf-row-label">使用帮助</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </section>
+
+          <!-- 设置与隐私 -->
+          <section class="pf-section">
+            <h3 class="pf-section-title">设置与隐私</h3>
+            <div class="pf-list">
+              <button type="button" class="pf-row" @click="openPage('password')">
+                <span class="pf-row-icon is-violet"><el-icon :size="17"><Lock /></el-icon></span>
+                <span class="pf-row-label">修改密码</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="openPage('theme')">
+                <span class="pf-row-icon is-warn"><el-icon :size="17"><Sunny /></el-icon></span>
+                <span class="pf-row-label">主题设置</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="openPage('about')">
+                <span class="pf-row-icon"><el-icon :size="17"><InfoFilled /></el-icon></span>
+                <span class="pf-row-label">关于{{ agentName }}</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="pf-row" @click="logout">
+                <span class="pf-row-icon is-danger"><el-icon :size="17"><SwitchButton /></el-icon></span>
+                <span class="pf-row-label">退出登录</span>
+                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </section>
+        </div>
       </div>
     </transition>
 
-    <!-- 子页面 -->
-    <transition :name="slideDirection">
-      <div v-if="currentPage" key="sub" class="sub-page">
-        <!-- 子页面头部 -->
-        <div class="sub-page-header">
+    <!-- ===== 桌面端身份横幅：网页端的个人信息「名片」区 =====
+         与移动端「卡片堆叠」不同，桌面端用整行横幅承载背景图 + 头像 + 身份信息 + 关键信息胶囊，
+         它是页面的视觉锚点，也把「个人背景」从移动端的二级页面提升为第一屏可直接操作的能力。 -->
+    <section v-if="!isMobile" class="profile-hero">
+      <div class="hero-banner" :class="{ 'is-image': !!bannerUrl }" :style="heroBannerStyle">
+        <div class="hero-banner-veil"></div>
+        <button type="button" class="hero-banner-edit" @click="currentPage = 'banner'">
+          <el-icon :size="14"><Camera /></el-icon>
+          更换背景
+        </button>
+      </div>
+
+      <div class="hero-identity">
+        <el-avatar :size="76" :src="auth.user?.avatar || ''" class="hero-avatar">
+          {{ auth.userName?.[0] }}
+        </el-avatar>
+        <div class="hero-meta">
+          <div class="hero-name-row">
+            <h2 class="hero-name">{{ auth.userName }}</h2>
+            <span class="hero-role">教师</span>
+          </div>
+          <div class="hero-sub">
+            <span><el-icon :size="13"><User /></el-icon>工号 {{ auth.user?.username || '—' }}</span>
+            <span><el-icon :size="13"><School /></el-icon>{{ auth.user?.college || '未设置学院' }}</span>
+          </div>
+        </div>
+        <div class="hero-facts">
+          <div class="hero-fact">
+            <span class="hero-fact-num">{{ profileForm.className || '—' }}</span>
+            <span class="hero-fact-lb">所带班级</span>
+          </div>
+          <div class="hero-fact">
+            <span class="hero-fact-num">{{ profileCompletion }}%</span>
+            <span class="hero-fact-lb">资料完整度</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 桌面端主体：左侧导航 + 右侧内容 =====
+           .profile-body 不参与两端分支判断：它只做桌面端的行容器，
+           移动端以 display:contents 退化为「无盒子」，子元素仍按原样定位。 -->
+    <div class="profile-body">
+      <aside v-if="!isMobile" class="profile-side">
+        <nav v-for="g in desktopMenuGroups" :key="g.title" class="side-group">
+          <div class="side-group-title">{{ g.title }}</div>
+          <button
+            v-for="m in g.items"
+            :key="m.key"
+            type="button"
+            class="side-item"
+            :class="{ active: activeTab === m.key }"
+            @click="currentPage = m.key"
+          >
+            <el-icon :size="16"><component :is="m.icon" /></el-icon>
+            <span class="side-item-label">{{ m.label }}</span>
+          </button>
+        </nav>
+
+        <button type="button" class="side-item side-item-danger" @click="logout">
+          <el-icon :size="16"><SwitchButton /></el-icon>
+          <span class="side-item-label">退出登录</span>
+        </button>
+      </aside>
+
+      <!-- ===== 内容区：移动端走整页切换，桌面端常驻右侧内容栏 ===== -->
+      <transition :name="isMobile ? slideDirection : ''">
+      <div v-if="activeTab" :key="activeTab" :class="isMobile ? 'sub-page' : 'profile-main'">
+        <!-- 移动端子页返回栏（桌面端由左侧导航承担切换） -->
+        <div v-if="isMobile" class="sub-page-header">
           <el-button text circle class="back-btn" @click="closePage">
             <el-icon :size="20"><ArrowLeft /></el-icon>
           </el-button>
           <div class="sub-page-title">{{ pageTitle }}</div>
           <div class="sub-page-placeholder"></div>
         </div>
+        <div v-else class="web-head">
+          <h2 class="web-head-title">{{ pageTitle }}</h2>
+          <p class="web-head-sub">{{ pageSubtitle }}</p>
+        </div>
 
-        <!-- 个人资料 -->
-        <div v-if="currentPage === 'profile'" class="sub-page-content">
-          <!-- 基本信息 -->
-          <div class="form-group">
-            <div class="form-group-title">基本信息</div>
-            <el-form :model="profileForm" label-width="70px" class="sub-form">
-              <el-form-item label="工号"><el-input :model-value="profileForm.username" disabled /></el-form-item>
-              <el-form-item label="姓名"><el-input :model-value="profileForm.name" disabled /></el-form-item>
-              <el-form-item label="学院"><el-input :model-value="profileForm.college" disabled /></el-form-item>
-              <el-form-item label="所带班级"><el-input v-model="profileForm.className" placeholder="请输入所带班级" /></el-form-item>
-            </el-form>
-          </div>
-
-          <!-- 个人信息 -->
-          <div class="form-group">
-            <div class="form-group-title">个人信息</div>
-            <el-form :model="profileForm" label-width="70px" class="sub-form">
-              <el-form-item label="性别">
-                <el-select v-model="profileForm.gender" placeholder="请选择" style="width:100%">
-                  <el-option label="男" value="男" /><el-option label="女" value="女" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="年龄">
-                <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" />
-              </el-form-item>
-              <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="请输入籍贯" /></el-form-item>
-              <el-form-item label="政治面貌">
-                <el-select v-model="profileForm.political_status" placeholder="请选择" style="width:100%">
-                  <el-option label="群众" value="群众" /><el-option label="共青团员" value="共青团员" />
-                  <el-option label="中共预备党员" value="中共预备党员" /><el-option label="中共党员" value="中共党员" />
-                </el-select>
-              </el-form-item>
-            </el-form>
-          </div>
-
-          <!-- 联系方式 -->
-          <div class="form-group">
-            <div class="form-group-title">联系方式</div>
-            <el-form :model="profileForm" label-width="70px" class="sub-form">
-              <el-form-item label="联系电话"><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
-              <el-form-item label="职称"><el-input v-model="profileForm.title" placeholder="请输入职称" /></el-form-item>
-              <el-form-item label="所属单位"><el-input v-model="profileForm.department" placeholder="请输入所属单位" /></el-form-item>
-            </el-form>
+        <!-- 账号与安全（抖音设置页范式）：只读展示 + 点按行弹窗编辑，不再铺一屏输入框 -->
+        <div v-if="activeTab === 'profile'" class="sub-page-content set-page">
+          <div v-for="g in accGroups" :key="g.title" class="set-group">
+            <div class="set-group-title">{{ g.title }}</div>
+            <div class="set-list">
+              <button
+                v-for="f in g.fields"
+                :key="f.key"
+                type="button"
+                class="set-row"
+                :class="{ 'is-readonly': f.readonly }"
+                @click="openFieldEdit(f)"
+              >
+                <span class="set-row-label">{{ f.label }}</span>
+                <span class="set-row-value" :class="{ 'is-empty': !fieldValue(f) }">
+                  {{ fieldValue(f) || (f.readonly ? '—' : '未设置') }}
+                </span>
+                <el-icon v-if="!f.readonly" class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
           </div>
 
           <div class="sub-page-footer">
-            <el-button type="primary" @click="handleSaveProfile" :loading="saving" style="width:100%">保存</el-button>
+            <el-button type="primary" class="footer-btn" @click="handleSaveProfile" :loading="saving">保存</el-button>
           </div>
         </div>
 
         <!-- 修改密码 -->
-        <div v-if="currentPage === 'password'" class="sub-page-content">
+        <div v-if="activeTab === 'password'" class="sub-page-content">
           <el-form :model="passwordForm" label-width="80px" class="sub-form">
             <el-form-item label="旧密码" required>
               <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
@@ -160,12 +223,12 @@
             </el-form-item>
           </el-form>
           <div class="sub-page-footer">
-            <el-button type="primary" @click="handleChangePassword" :loading="changingPassword" style="width:100%">确定</el-button>
+            <el-button type="primary" class="footer-btn" @click="handleChangePassword" :loading="changingPassword">确定</el-button>
           </div>
         </div>
 
         <!-- 校园公告 -->
-        <div v-if="currentPage === 'announcements'" class="sub-page-content">
+        <div v-if="activeTab === 'announcements'" class="sub-page-content">
           <div v-loading="loadingAnnouncements" class="announcement-list">
             <div v-if="announcements.length === 0 && !loadingAnnouncements" class="empty-announcement">暂无校园公告</div>
             <a v-for="(item, index) in announcements" :key="'a' + index" :href="item.url || '#'" target="_blank" class="announcement-item">
@@ -176,7 +239,7 @@
         </div>
 
         <!-- 使用帮助 -->
-        <div v-if="currentPage === 'help'" class="sub-page-content">
+        <div v-if="activeTab === 'help'" class="sub-page-content">
           <div class="help-content">
             <div class="help-item">
               <div class="help-question">如何联系{{ agentName }}？</div>
@@ -202,7 +265,7 @@
         </div>
 
         <!-- 主题设置（仅浅色模式提示） -->
-        <div v-if="currentPage === 'theme'" class="sub-page-content">
+        <div v-if="activeTab === 'theme'" class="sub-page-content">
           <div class="theme-options">
             <div class="theme-option active">
               <div class="theme-preview light-preview"></div>
@@ -216,7 +279,7 @@
         </div>
 
         <!-- 关于绵小城 -->
-        <div v-if="currentPage === 'about'" class="sub-page-content">
+        <div v-if="activeTab === 'about'" class="sub-page-content">
           <!-- 头部信息 -->
           <div class="about-header">
             <img :src="siteLogo" class="about-logo" />
@@ -268,38 +331,92 @@
           </div>
         </div>
 
-        <!-- 背景设置 -->
-        <div v-if="currentPage === 'banner'" class="sub-page-content">
-          <div class="banner-setting">
-            <div class="banner-section-title">预设背景</div>
-            <div class="preset-grid">
-              <div
-                v-for="preset in presetBanners"
-                :key="preset.id"
-                class="preset-item"
-                :class="{ active: !bannerUrl && bannerGradient === preset.color }"
-                :style="{ background: preset.color }"
-                @click="selectPresetBanner(preset.color)"
-              ></div>
-            </div>
-            
-            <div class="banner-section-title" style="margin-top: 16px;">自定义图片</div>
-            <div class="upload-area" @click="triggerBannerUpload">
-              <el-icon :size="24"><Picture /></el-icon>
-              <span>点击上传图片</span>
-              <span class="upload-hint">支持 JPG、PNG，最大 5MB</span>
-            </div>
-            
-            <div v-if="bannerUrl" class="current-banner">
-              <div class="banner-section-title">当前背景</div>
-              <img :src="bannerUrl" class="current-banner-preview" />
-              <el-button size="small" @click="resetBanner" style="margin-top: 12px;">恢复默认</el-button>
+        <!-- 更换背景（抖音背景选择器范式）：顶部实时预览 + 背景宫格，点选即时生效 -->
+        <div v-if="activeTab === 'banner'" class="sub-page-content set-page">
+          <div class="set-group">
+            <div class="set-group-title">当前背景</div>
+            <div class="bg-preview" :style="heroBannerStyle">
+              <div class="bg-preview-scrim"></div>
+              <div class="bg-preview-cast">
+                <el-avatar :size="40" :src="auth.user?.avatar || ''" class="bg-preview-avatar">
+                  {{ auth.userName?.[0] }}
+                </el-avatar>
+                <div>
+                  <div class="bg-preview-name">{{ auth.userName }}</div>
+                  <div class="bg-preview-sub">工号：{{ auth.user?.username || '—' }}</div>
+                </div>
+              </div>
             </div>
           </div>
+
+          <div class="set-group">
+            <div class="set-group-title">选择背景</div>
+            <div class="bg-grid">
+              <button
+                v-for="preset in presetBanners"
+                :key="preset.id"
+                type="button"
+                class="bg-cell"
+                :class="{ 'is-active': !bannerUrl && bannerGradient === preset.color }"
+                :style="{ background: preset.color }"
+                @click="selectPresetBanner(preset.color)"
+              >
+                <span v-if="!bannerUrl && bannerGradient === preset.color" class="bg-cell-check">
+                  <el-icon :size="11"><Check /></el-icon>
+                </span>
+              </button>
+              <button type="button" class="bg-cell bg-cell-upload" @click="triggerBannerUpload">
+                <el-icon :size="18"><Plus /></el-icon>
+                <span>从相册选择</span>
+              </button>
+            </div>
+            <p class="bg-hint">自定义背景支持 JPG / PNG，最大 5MB</p>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="resetBanner">
+                <span class="set-row-label">恢复默认背景</span>
+                <span class="set-row-value">使用系统预设渐变</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
           <input ref="bannerInputRef" type="file" accept="image/*" style="display:none" @change="handleBannerUpload" />
         </div>
       </div>
     </transition>
+    </div>
+
+    <!-- 账号与安全：字段编辑弹窗（抖音「点按设置项 → 就地编辑」范式） -->
+    <el-dialog
+      v-model="editVisible"
+      :title="editField ? `修改${editField.label}` : ''"
+      :width="isMobile ? '86%' : '420px'"
+      align-center
+    >
+      <el-input
+        v-if="editField && editField.type === 'text'"
+        v-model="editValue"
+        :placeholder="editField.placeholder || '请输入'"
+        clearable
+      />
+      <el-input-number
+        v-else-if="editField && editField.type === 'number'"
+        v-model="editValue"
+        :min="1"
+        :max="120"
+        style="width:100%"
+      />
+      <el-select v-else v-model="editValue" placeholder="请选择" style="width:100%">
+        <el-option v-for="o in editField?.options || []" :key="o.value" :label="o.label" :value="o.value" />
+      </el-select>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmFieldEdit">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -313,13 +430,15 @@ import { uploadFile } from '@/api/upload'
 import { getAnnouncements } from '@/api/campus'
 import type { Announcement } from '@/types'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useResponsive } from '@/composables/useResponsive'
 import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
-  QuestionFilled, Bell, Camera, Picture
+  QuestionFilled, Bell, Camera, Picture, User, School, Check, Plus
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { isMobile } = useResponsive()
 
 // 关于页品牌信息与站点配置同源
 const { siteName, siteLogo, agentName } = useSiteConfig()
@@ -372,14 +491,112 @@ const profileForm = reactive({
   title: '', department: ''
 })
 
+/**
+ * 账号与安全：字段描述表（抖音设置项范式）。
+ * 页面只读展示「左侧标签 + 右侧值 + 箭头」，点按行弹出编辑弹窗，
+ * 避免把 8 个输入框一次性铺在页面上。
+ */
+interface AccField {
+  key: string
+  label: string
+  type: 'text' | 'select' | 'number'
+  options?: { label: string; value: string }[]
+  placeholder?: string
+  readonly?: boolean
+}
+
+const accGroups: { title: string; fields: AccField[] }[] = [
+  {
+    title: '账号信息',
+    fields: [
+      { key: 'username', label: '工号', type: 'text', readonly: true },
+      { key: 'name', label: '姓名', type: 'text', readonly: true },
+      { key: 'college', label: '学院', type: 'text', readonly: true },
+      { key: 'className', label: '所带班级', type: 'text', placeholder: '请输入所带班级' },
+    ],
+  },
+  {
+    title: '个人资料',
+    fields: [
+      {
+        key: 'gender', label: '性别', type: 'select',
+        options: [{ label: '男', value: '男' }, { label: '女', value: '女' }],
+      },
+      { key: 'age', label: '年龄', type: 'number' },
+      { key: 'hometown', label: '籍贯', type: 'text', placeholder: '请输入籍贯' },
+      {
+        key: 'political_status', label: '政治面貌', type: 'select',
+        options: [
+          { label: '群众', value: '群众' },
+          { label: '共青团员', value: '共青团员' },
+          { label: '中共预备党员', value: '中共预备党员' },
+          { label: '中共党员', value: '中共党员' },
+        ],
+      },
+    ],
+  },
+  {
+    title: '联系方式',
+    fields: [
+      { key: 'phone', label: '联系电话', type: 'text', placeholder: '请输入手机号' },
+      { key: 'title', label: '职称', type: 'text', placeholder: '请输入职称' },
+      { key: 'department', label: '所属单位', type: 'text', placeholder: '请输入所属单位' },
+    ],
+  },
+]
+
+const editVisible = ref(false)
+const editField = ref<AccField | null>(null)
+const editValue = ref<any>('')
+
+/** 行右侧展示的文本：下拉项显示选项文案，空值由模板回退为占位文案 */
+function fieldValue(f: AccField): string {
+  const v = (profileForm as any)[f.key]
+  if (v === null || v === undefined || v === '') return ''
+  if (f.type === 'select') return f.options?.find((o) => o.value === v)?.label || String(v)
+  return String(v)
+}
+
+function openFieldEdit(f: AccField) {
+  if (f.readonly) return
+  editField.value = f
+  editValue.value = (profileForm as any)[f.key] ?? ''
+  editVisible.value = true
+}
+
+function confirmFieldEdit() {
+  const f = editField.value
+  if (!f) return
+  ;(profileForm as any)[f.key] = f.type === 'number' ? Number(editValue.value) || 1 : editValue.value
+  editVisible.value = false
+}
+
 // 校园公告
 const announcements = ref<Announcement[]>([])
 const loadingAnnouncements = ref(false)
 
+/** 身份背景（移动端 .pf-hero 与桌面端横幅共用）：优先用已上传图片，否则用预设渐变 */
+const heroBannerStyle = computed(() =>
+  bannerUrl.value ? { backgroundImage: `url(${bannerUrl.value})` } : { background: bannerGradient.value }
+)
+
+/** 资料完整度：桌面端身份横幅里的一个轻量进度指标，驱动用户补齐联系方式 */
+const profileCompletion = computed(() => {
+  const fields = [
+    profileForm.className, profileForm.gender, profileForm.hometown,
+    profileForm.phone, profileForm.political_status, profileForm.title, profileForm.department,
+  ]
+  const filled = fields.filter((v) => v !== '' && v !== null && v !== undefined).length
+  return Math.round((filled / fields.length) * 100)
+})
+
+/** 桌面端当前内容页：未选择时默认落在「账号与安全」，符合设置页的常规范式 */
+const activeTab = computed(() => currentPage.value || (isMobile.value ? '' : 'profile'))
+
 // 页面标题
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
-    profile: '个人资料',
+    profile: '账号与安全',
     password: '修改密码',
     announcements: '校园公告',
     help: '使用帮助',
@@ -387,27 +604,67 @@ const pageTitle = computed(() => {
     about: `关于${agentName.value}`,
     banner: '更换背景'
   }
-  return titles[currentPage.value || ''] || ''
+  return titles[activeTab.value] || ''
 })
+
+/** 桌面端内容区副标题：说明该分组做什么，替代移动端的整页标题感 */
+const pageSubtitle = computed(() => {
+  const subs: Record<string, string> = {
+    profile: '管理账号信息与登录安全，保存后即时生效',
+    password: '定期更换密码可提升账号安全性',
+    banner: '选择预设渐变或上传图片，作为个人中心顶栏背景',
+    announcements: '来自学校的通知与公告，点击可在新窗口查看详情',
+    help: `关于${agentName.value}的常见用法与快捷指令说明`,
+    theme: '当前系统仅支持浅色模式',
+    about: '产品信息、技术架构与开发团队',
+  }
+  return subs[activeTab.value] || ''
+})
+
+/**
+ * 桌面端左侧菜单：桌面改用语网页端的「左导航 + 右内容」设置页结构，
+ * 取代移动端「整页推入 + 返回」的交互；退出登录是动作项，单独渲染在菜单底部。
+ */
+const desktopMenuGroups = [
+  {
+    title: '账号',
+    items: [
+      { key: 'profile', label: '账号与安全', icon: User },
+      { key: 'password', label: '修改密码', icon: Lock },
+      { key: 'banner', label: '个人背景', icon: Picture },
+    ],
+  },
+  {
+    title: '帮助与设置',
+    items: [
+      { key: 'announcements', label: '校园公告', icon: Bell },
+      { key: 'help', label: '使用帮助', icon: QuestionFilled },
+      { key: 'theme', label: '主题设置', icon: Sunny },
+      { key: 'about', label: `关于${agentName.value}`, icon: InfoFilled },
+    ],
+  },
+]
+
+/** 用当前登录用户回填个人资料表单 */
+function fillProfileForm() {
+  const u = auth.user
+  if (!u) return
+  profileForm.username = u.username
+  profileForm.name = u.name
+  profileForm.college = u.college || ''
+  profileForm.gender = u.gender || ''
+  profileForm.age = u.age ?? 18
+  profileForm.hometown = u.hometown || ''
+  profileForm.phone = u.phone || ''
+  profileForm.className = (u as any).class_name || ''
+  profileForm.political_status = (u as any).political_status || ''
+  profileForm.title = (u as any).title || ''
+  profileForm.department = (u as any).department || ''
+}
 
 // 打开子页面
 function openPage(page: string) {
-  if (page === 'profile') {
-    const u = auth.user
-    if (u) {
-      profileForm.username = u.username
-      profileForm.name = u.name
-      profileForm.college = u.college || ''
-      profileForm.gender = u.gender || ''
-      profileForm.age = u.age ?? 18
-      profileForm.hometown = u.hometown || ''
-      profileForm.phone = u.phone || ''
-      profileForm.className = (u as any).class_name || ''
-      profileForm.political_status = (u as any).political_status || ''
-      profileForm.title = (u as any).title || ''
-      profileForm.department = (u as any).department || ''
-    }
-  }
+  if (page === 'profile') fillProfileForm()
   slideDirection.value = 'slide-left'
   currentPage.value = page
 }
@@ -528,6 +785,8 @@ async function loadAnnouncements() {
 onMounted(() => {
   refreshCaptcha()
   loadAnnouncements()
+  // 身份名片（移动端与桌面端）都要展示「所带班级 / 资料完整度」，故挂载即回填表单
+  fillProfileForm()
 })
 </script>
 
@@ -537,6 +796,256 @@ onMounted(() => {
   height: 100%;
   overflow: hidden;
 }
+
+/* ===== 桌面端：身份横幅 + 左导航 + 右内容的网页设置页布局 ===== */
+.profile-wrapper.is-web {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px 0;
+  background: #f5f7fa;
+  overflow: hidden;
+}
+
+/* 移动端：行容器退化为无盒子，子元素（子页）仍相对 .profile-wrapper 定位 */
+.profile-body { display: contents; }
+
+/* ===== 身份横幅：整行名片，含背景图 + 头像 + 身份 + 关键信息 ===== */
+.profile-hero {
+  flex: 0 0 auto;
+  background: #fff;
+  border: 1px solid #f0f1f3;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.hero-banner {
+  position: relative;
+  height: 132px;
+  background-size: cover;
+  background-position: center;
+}
+.hero-banner-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 17, 21, 0.06) 0%, rgba(15, 17, 21, 0.28) 100%);
+}
+.hero-banner-edit {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  background: rgba(15, 17, 21, 0.34);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.hero-banner-edit:hover { background: rgba(15, 17, 21, 0.5); }
+
+.hero-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px 16px;
+  margin-top: -34px;
+}
+.hero-avatar {
+  border: 4px solid #fff;
+  background: #eff4ff;
+  color: #1d4ed8;
+  font-size: 26px;
+  font-weight: 600;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(15, 17, 21, 0.12);
+}
+.hero-meta { flex: 1; min-width: 0; padding-top: 34px; }
+.hero-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #101828;
+}
+.hero-role {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #eff4ff;
+  color: #1d4ed8;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.hero-sub {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 5px;
+  font-size: 12.5px;
+  color: #667085;
+}
+.hero-sub > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hero-facts {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding-top: 34px;
+  flex-shrink: 0;
+}
+.hero-fact {
+  min-width: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #f9fafb;
+  border: 1px solid #f2f4f7;
+}
+.hero-fact-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: #101828;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-fact-lb {
+  font-size: 11px;
+  color: #98a2b3;
+}
+
+/* ===== 主体：左导航 + 右内容，占满横幅以下的剩余高度 ===== */
+.profile-wrapper.is-web .profile-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 14px;
+  padding-bottom: 16px;
+}
+
+.profile-side {
+  flex: 0 0 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 12px;
+  background: #fff;
+  border: 1px solid #f0f1f3;
+  border-radius: 14px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.profile-side::-webkit-scrollbar { display: none; width: 0; }
+
+.side-group { display: flex; flex-direction: column; gap: 2px; }
+.side-group-title {
+  padding: 0 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #98a2b3;
+}
+
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #475467;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.side-item:hover { background: #f6f7f9; color: #101828; }
+.side-item.active {
+  background: #eff4ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.side-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-item-danger { color: #b42318; margin-top: auto; }
+.side-item-danger:hover { background: #fef3f2; color: #912018; }
+
+/* 右侧内容栏：常驻不滑动，滚动交给内部 */
+.profile-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #f0f1f3;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.web-head {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #f2f4f7;
+  flex-shrink: 0;
+}
+.web-head-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #101828;
+}
+.web-head-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #98a2b3;
+}
+
+/* 桌面端把移动端子页的绝对定位改成正常的文档流 */
+.profile-wrapper.is-web .sub-page-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+  background: #fff;
+  scrollbar-width: none;
+}
+.profile-wrapper.is-web .sub-page-content::-webkit-scrollbar { display: none; width: 0; }
+
+/* 按钮改为常规宽度，不再整行拉伸 */
+.profile-wrapper.is-web .sub-page-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding: 14px 0 0;
+  background: transparent;
+  border-top: 1px solid #f2f4f7;
+  margin-top: 16px;
+}
+.footer-btn { min-width: 96px; }
+@media (max-width: 767px) {
+  .footer-btn { width: 100%; }
+}
+
+/* 桌面端表单区域宽度受控，避免输入框横跨整页 */
+.profile-wrapper.is-web .sub-form { max-width: 520px; }
 
 /* 滑动动画 */
 .slide-left-enter-active,
@@ -559,13 +1068,14 @@ onMounted(() => {
   transform: translateX(100%);
 }
 
-/* 主页面 */
+/* 主页面：封面通栏铺满，页内边距交由内容面板（.pf-body）承担 */
 .profile-page {
-  height: 100%;
-  overflow-y: auto;
-  background: #f5f7fa;
   position: absolute;
   width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--tui-bg);
+  padding: 0;
 }
 
 /* 子页面 */
@@ -575,7 +1085,7 @@ onMounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: #f5f7fa;
+  background: var(--tui-bg);
   display: flex;
   flex-direction: column;
   z-index: 10;
@@ -618,19 +1128,6 @@ onMounted(() => {
   border-radius: 12px;
   padding: 12px 10px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-
-/* 表单分组 */
-.form-group {
-  margin-bottom: 12px;
-}
-
-.form-group-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #999;
-  margin-bottom: 8px;
-  padding-left: 4px;
 }
 
 /* 验证码 */
@@ -718,200 +1215,359 @@ onMounted(() => {
   font-weight: 500;
 }
 
-/* 背景图 */
-.profile-banner {
+/* ===== 个人中心头部（抖音范式）：封面通栏 + 身份悬浮于背景之上 ===== */
+.pf-hero {
   position: relative;
-  height: 120px;
-  overflow: hidden;
-  cursor: pointer;
-}
-.banner-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.banner-default {
-  width: 100%;
-  height: 100%;
-}
-.banner-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(transparent, #f5f7fa);
-}
-.banner-edit-hint {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  background: rgba(0,0,0,0.5);
-  color: #fff;
-  border-radius: 16px;
-  font-size: 12px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 2;
-}
-.profile-banner:hover .banner-edit-hint {
-  opacity: 1;
-}
-
-/* 头部信息 */
-.profile-header {
-  position: relative;
-  margin: -28px 16px 14px;
-  padding: 14px 16px;
-  background: #fff;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  cursor: pointer;
-  z-index: 1;
-}
-.header-avatar {
-  border: 3px solid #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  font-size: 20px;
-}
-.header-info { flex: 1; }
-.header-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: #1a1a1a;
-}
-.header-id {
-  font-size: 12px;
-  color: #999;
-  margin-top: 3px;
-}
-.header-arrow {
-  color: #ccc;
-  font-size: 16px;
-}
-
-/* 区域卡片 */
-.section-card {
-  margin: 12px 16px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-}
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-.section-more {
-  font-size: 12px;
-  color: #999;
-  cursor: pointer;
-}
-
-/* 菜单列表 */
-.menu-list {
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
+  min-height: 212px;
+  padding: 14px 16px 30px;
+  background-color: #d8dee6;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
 }
-.menu-item {
+/* 自下而上的暗色压底：白字在任意背景图/渐变上都可读，同时把封面「压」成背景层 */
+.pf-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 16, 0.06) 0%,
+    rgba(10, 12, 16, 0.16) 44%,
+    rgba(10, 12, 16, 0.68) 100%
+  );
+}
+.pf-hero-edit {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.32);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.pf-hero-edit:active { background: rgba(10, 12, 16, 0.48); }
+
+.pf-hero-cast {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 0;
-  border-bottom: 1px solid #f5f5f5;
   cursor: pointer;
-  color: #333;
 }
-.menu-item:last-child { border-bottom: none; }
-.menu-item:active { background: #f5f7fa; }
-.menu-label {
-  flex: 1;
-  font-size: 14px;
+.pf-avatar {
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
 }
-.menu-arrow {
-  color: #ccc;
-  font-size: 14px;
+.pf-cast-main { flex: 1; min-width: 0; }
+.pf-cast-name-row { display: flex; align-items: center; gap: 7px; }
+.pf-cast-name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-cast-role {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.pf-cast-sub {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.84);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-cast-sep { margin: 0 6px; color: rgba(255, 255, 255, 0.5); }
+.pf-cast-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
 }
 
-/* 背景设置 */
-.banner-setting {
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+.pf-hero-stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 16px;
+  padding-left: 2px;
 }
-.banner-section-title {
-  font-size: 13px;
+.pf-hero-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pf-hero-stat b {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-hero-stat span { font-size: 11px; color: rgba(255, 255, 255, 0.72); }
+.pf-hero-stat-sep { width: 1px; height: 24px; background: rgba(255, 255, 255, 0.24); }
+
+/* ===== 内容面板：圆角上浮，压住封面底边，形成「悬浮于背景之上」的层次 ===== */
+.pf-body {
+  position: relative;
+  z-index: 2;
+  margin-top: -16px;
+  padding: 14px 12px 16px;
+  border-radius: 20px 20px 0 0;
+  background: var(--tui-bg);
+}
+.pf-body .pf-section:first-child { margin-top: 0; }
+
+/* ===== 分组卡片 + 内嵌列表行 ===== */
+.pf-section {
+  margin-top: 12px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+  overflow: hidden;
+}
+.pf-section-title {
+  margin: 0;
+  padding: 12px 14px 0;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+  color: var(--tui-text-quiet);
 }
-.preset-grid {
+.pf-list { display: flex; flex-direction: column; }
+.pf-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid var(--tui-border);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-row:last-child { border-bottom: none; }
+.pf-row:active { background: var(--tui-surface-muted); }
+.pf-row-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--tui-radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand);
+  box-shadow: inset 0 0 0 1px rgba(15, 17, 21, 0.03);
+}
+.pf-row-icon.is-cyan { background: #ecfeff; color: #0891b2; }
+.pf-row-icon.is-violet { background: #f4f3ff; color: #6941c6; }
+.pf-row-icon.is-warn { background: var(--tui-warn-soft); color: #f79009; }
+.pf-row-icon.is-danger { background: var(--tui-danger-soft); color: var(--tui-danger); }
+.pf-row-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--tui-text);
+}
+.pf-row-arrow { color: #cbd0d8; flex-shrink: 0; }
+
+/* ===== 设置项列表（抖音设置页范式）：左标签 + 右值 + 箭头 ===== */
+.set-page .set-group { margin-bottom: 12px; }
+.set-page .set-group-title {
+  margin: 0 0 8px 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--tui-text-quiet);
+}
+.set-page .set-list {
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+  overflow: hidden;
+}
+.set-page .set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  border: none;
+  border-bottom: 1px solid var(--tui-border);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.set-page .set-row:last-child { border-bottom: none; }
+.set-page .set-row:active { background: var(--tui-surface-muted); }
+.set-page .set-row.is-readonly { cursor: default; }
+.set-page .set-row.is-readonly:active { background: transparent; }
+.set-page .set-row-label {
+  flex-shrink: 0;
+  font-size: 13.5px;
+  color: var(--tui-text);
+}
+.set-page .set-row-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 13px;
+  color: var(--tui-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-page .set-row-value.is-empty { color: var(--tui-text-quiet); }
+.set-page .set-row-arrow { color: #cbd0d8; flex-shrink: 0; }
+
+/* ===== 更换背景（抖音背景选择器范式）：实时预览 + 背景宫格 ===== */
+.set-page .bg-preview {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: 152px;
+  padding: 14px;
+  border-radius: var(--tui-radius);
+  background-color: #d8dee6;
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--tui-shadow-1);
+  overflow: hidden;
+}
+.set-page .bg-preview-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 16, 0.04) 0%,
+    rgba(10, 12, 16, 0.18) 45%,
+    rgba(10, 12, 16, 0.64) 100%
+  );
+}
+.set-page .bg-preview-cast {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.set-page .bg-preview-avatar {
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.set-page .bg-preview-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+.set-page .bg-preview-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.82);
+}
+.set-page .bg-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
-.preset-item {
-  height: 50px;
-  border-radius: 10px;
+.set-page .bg-cell {
+  position: relative;
+  height: 62px;
+  padding: 0;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-sm);
+  background-color: var(--tui-surface-muted);
+  background-size: cover;
+  background-position: center;
   cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  overflow: hidden;
 }
-.preset-item:hover { 
-  transform: scale(1.03);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+.set-page .bg-cell.is-active {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--tui-brand);
 }
-.preset-item.active {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64,158,255,0.3);
+.set-page .bg-cell-check {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--tui-brand);
+  color: #fff;
 }
-.upload-area {
+.set-page .bg-cell-upload {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 20px;
-  border: 2px dashed #e4e7ed;
-  border-radius: 10px;
-  cursor: pointer;
-  color: #999;
-  transition: all 0.2s;
+  gap: 4px;
+  border-style: dashed;
+  color: var(--tui-text-tertiary);
+  font-size: 11.5px;
 }
-.upload-area:hover {
-  border-color: #409eff;
-  color: #409eff;
-  background: rgba(64,158,255,0.02);
-}
-.upload-hint {
-  font-size: 12px;
-  color: #ccc;
-}
-.current-banner {
-  margin-top: 12px;
-}
-.current-banner-preview {
-  width: 100%;
-  height: 88px;
-  object-fit: cover;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+.set-page .bg-cell-upload:active { background: var(--tui-surface-sunken); }
+.set-page .bg-hint {
+  margin: 8px 2px 0;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
 }
 
 /* 主题设置 */
