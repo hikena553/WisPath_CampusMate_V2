@@ -1,4 +1,4 @@
-﻿﻿<template>
+﻿﻿﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="人文关怀中心" sub="关怀温度 · 家访台账 · 正向激励" fallback="/teacher" />
 
