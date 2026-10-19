@@ -16,6 +16,9 @@ _SENSITIVE_KEYS = {
     "dashscope_api_key",
     "embedding_api_key",
     "xqe_password",
+    # 微信小程序：AppSecret 与代码上传密钥均按敏感字段加密存储
+    "wechat_mp_appsecret",
+    "wechat_mp_upload_key",
 }
 
 # 加密值前缀

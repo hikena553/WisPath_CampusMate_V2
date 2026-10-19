@@ -22,6 +22,7 @@ from app.api.organization import router as organization_router
 from app.api.notification import router as notification_router
 from app.api.feedback import router as feedback_router
 from app.api.setting import router as setting_router
+from app.api.wechat_mp import router as wechat_mp_router
 from app.api.grade_analysis import router as grade_analysis_router
 from app.api.profile import router as profile_router
 from app.api.lost_found import router as lost_found_router
@@ -71,6 +72,7 @@ ROUTERS = [
     notification_router,
     feedback_router,
     setting_router,
+    wechat_mp_router,
     grade_analysis_router,
     profile_router,
     lost_found_router,
