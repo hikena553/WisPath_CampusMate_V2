@@ -190,11 +190,19 @@ function logout() {
   overflow: hidden;
 }
 
-/* 移动(App)模式：宽屏下模拟手机容器，居中限宽 */
-.app-mobile {
-  max-width: 440px;
-  margin: 0 auto;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
+/* 移动(App)模式：宽屏下模拟手机容器，居中限宽。
+   注意这两个条件是「且」：
+   - 视口够宽（≥600px）：否则真机上容器被限到 440px 后撑不满屏幕，
+     两侧会露出 .app-shell 的浅蓝渐变底，加上下面那圈大投影，
+     看上去就是页面四周浮着一圈蓝黑边框；
+   - 视口是移动布局（isMobile，由 .app-mobile 类保证）。
+   真机（常见 360~430px）两个条件不同时成立，因此容器铺满全屏、无描边无投影。 */
+@media (min-width: 600px) {
+  .app-mobile {
+    max-width: 440px;
+    margin: 0 auto;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
+  }
 }
 
 /* 底部导航同样限宽居中，贴合手机容器 */
@@ -204,6 +212,13 @@ function logout() {
   margin: 0 auto;
   left: 0;
   right: 0;
+}
+
+/* 真机全屏时容器铺满，`.app-shell` 的浅蓝渐变会在卡片四周透出来一圈 —— 那正是
+   「页面外一圈蓝边」的另一半。移动布局下把它改成纯白：页面白卡与屏边之间是白色留白，
+   不是蓝色留白。宽屏预览（≥600px）仍保留渐变，让居中的手机容器浮起来。 */
+@media (max-width: 599px) {
+  .app-shell { background: #fff; }
 }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;

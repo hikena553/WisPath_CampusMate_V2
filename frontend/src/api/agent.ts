@@ -69,10 +69,8 @@ export async function sendChatMessage(
 
       try {
         const parsed = JSON.parse(data)
-        console.log('[SSE] event:', eventType, 'data length:', typeof parsed === 'string' ? parsed.length : 'non-string')
         switch (eventType) {
           case 'reasoning':
-            console.log('[SSE] reasoning content:', parsed.substring(0, 100))
             onReasoning(parsed)
             break
           case 'suggestions':

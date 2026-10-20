@@ -539,7 +539,6 @@ const convItems = computed<ConvItem[]>(() => {
   items.sort((a, b) =>
     (b.last_message_time || '').localeCompare(a.last_message_time || '')
   )
-  console.log('[DEBUG] convItems:', items.map(i => ({ name: i.name, unread: i.unread_count })))
   return items
 })
 
@@ -828,7 +827,6 @@ function goBack() {
 
 // 打开会话
 async function openChat(item: ConvItem) {
-  console.log('[DEBUG] openChat:', item)
   activeId.value = item.id
   activeName.value = item.name
   activeType.value = item._type
@@ -838,38 +836,28 @@ async function openChat(item: ConvItem) {
   try {
     if (item._type === 'single') {
       messages.value = await getMessages(item.id)
-      console.log('[DEBUG] markRead for user:', item.id)
-      const markResult = await markRead(item.id)
-      console.log('[DEBUG] markRead result:', markResult)
-      console.log('[DEBUG] loadConversations after markRead')
+      await markRead(item.id)
       const freshConvs = await getConversations()
-      console.log('[DEBUG] freshConvs:', JSON.stringify(freshConvs))
       // 强制更新响应式数据
       conversations.value = [...freshConvs]
       await nextTick()
       emit('read')
       // 从最新的会话列表中获取名字
       const latestConv = conversations.value.find((c: any) => c.user_id === item.id)
-      console.log('[DEBUG] latestConv:', latestConv)
       if (latestConv) {
         activeName.value = latestConv.user_name
       }
     } else {
       messages.value = await getGroupMessages(item.id)
       currentGroup.value = await getGroup(item.id)
-      console.log('[DEBUG] markGroupRead for group:', item.id)
-      const markResult = await markGroupRead(item.id)
-      console.log('[DEBUG] markGroupRead result:', markResult)
-      console.log('[DEBUG] loadGroups after markGroupRead')
+      await markGroupRead(item.id)
       const freshGroups = await getGroups()
-      console.log('[DEBUG] freshGroups:', JSON.stringify(freshGroups))
       // 强制更新响应式数据
       groups.value = [...freshGroups]
       await nextTick()
       emit('read')
       // 从最新的群组列表中获取名字
       const latestGroup = groups.value.find(g => g.id === item.id)
-      console.log('[DEBUG] latestGroup:', latestGroup)
       if (latestGroup) {
         activeName.value = latestGroup.name
       } else if (currentGroup.value) {
@@ -877,7 +865,7 @@ async function openChat(item: ConvItem) {
       }
     }
     scrollToBottom()
-  } catch (e) { console.error('[DEBUG] openChat error:', e) }
+  } catch (e) { console.error('打开会话失败:', e) }
 }
 
 // 发送
@@ -1029,16 +1017,14 @@ function disconnectWs() { if (ws) { ws.close(); ws = null } }
 async function loadConversations() {
   try {
     const data = await getConversations()
-    console.log('[DEBUG] loadConversations:', data)
     conversations.value = data
-  } catch (e) { console.error('[DEBUG] loadConversations error:', e) }
+  } catch (e) { console.error('加载会话列表失败:', e) }
 }
 async function loadGroups() {
   try {
     const data = await getGroups()
-    console.log('[DEBUG] loadGroups:', data)
     groups.value = data
-  } catch (e) { console.error('[DEBUG] loadGroups error:', e) }
+  } catch (e) { console.error('加载群组列表失败:', e) }
 }
 
 function formatTime(t: string | null) {

@@ -33,9 +33,12 @@ from app.services.crisis_service import detect_crisis_keywords
 logger = logging.getLogger(__name__)
 
 # ===== 语音通话诊断日志 =====
-# 单独落盘（backend/logs/voice-call.log），完整记录 STT 文本、逐段 TTS 结果、
+# 单独落盘（backend/logs/voice-call.log），记录 STT 文本、逐段 TTS 结果、
 # LLM 分片统计与异常，便于定位"播报中断 / 文字异常"等问题，可直接提供该文件排障。
+# 只写 WARNING 及以上：逐句的 [PHRASE] enqueue / DEBUG 细节会把日志刷满、把真正的
+# 报错淹掉；需要深挖时再把文件句柄的级别临时调到 DEBUG 即可（见 _ensure_voice_file_log）。
 _VOICE_LOG_PATH = Path(__file__).resolve().parent.parent.parent / "logs" / "voice-call.log"
+_VOICE_LOG_LEVEL = logging.WARNING
 
 
 def _ensure_voice_file_log() -> None:
@@ -48,9 +51,10 @@ def _ensure_voice_file_log() -> None:
             _VOICE_LOG_PATH, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8",
         )
         fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-        fh.setLevel(logging.DEBUG)
+        fh.setLevel(_VOICE_LOG_LEVEL)
         logger.addHandler(fh)
-        logger.setLevel(logging.DEBUG)
+        if logger.level == logging.NOTSET or logger.level > logging.DEBUG:
+            logger.setLevel(logging.DEBUG)
     except Exception:
         logger.exception("语音诊断日志文件初始化失败（不影响功能）")
 

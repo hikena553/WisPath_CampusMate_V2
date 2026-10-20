@@ -40,13 +40,34 @@ instance.interceptors.response.use(
     if (err.response?.status === 403 && !cfg?.skipAuthRedirect) {
       const detail = err.response?.data?.detail
       const message = typeof detail === 'string' && detail ? detail : '权限不足'
-      ElMessage.error(message)
+      notifyError(message)
       return Promise.reject(err)
     }
-    
+
+    // 5xx / 网络错误：在这里统一弹一次，调用方只负责 console.error 记录，
+    // 不再各自 ElMessage.error（避免同一次失败重复弹窗，也避免把正常空数据当错误）。
+    const status = err.response?.status as number | undefined
+    if (status && status >= 500 && !cfg?.skipAuthRedirect) {
+      notifyError('服务器开小差了，请稍后重试')
+    } else if (!err.response && err.code !== 'ERR_CANCELED') {
+      notifyError('网络连接失败，请检查网络后重试')
+    }
+
     return Promise.reject(err)
   }
 )
+
+/** 错误提示节流：同一文案 3 秒内只弹一次，防止并发请求同时失败时消息堆满屏幕 */
+const NOTIFY_INTERVAL_MS = 3000
+const lastNotifiedAt = new Map<string, number>()
+
+function notifyError(message: string) {
+  const now = Date.now()
+  const last = lastNotifiedAt.get(message) ?? 0
+  if (now - last < NOTIFY_INTERVAL_MS) return
+  lastNotifiedAt.set(message, now)
+  ElMessage.error(message)
+}
 
 const request = {
   get<T = unknown>(url: string, config?: AppRequestConfig): Promise<T> {

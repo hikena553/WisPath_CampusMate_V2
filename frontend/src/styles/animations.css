@@ -233,7 +233,12 @@
    新页像一张卡片从下方浮起并放大到位：scale(.94) + 上移 16px + 投影 → 铺满，
    旧页作为底下的卡片略微缩小（scale .97）并淡出，形成「抽换卡片」的层次感。
    旧页绝对定位脱离文档流，因此新旧同时在场也不会互相挤压（此前的叠页问题即源于两页都在流内）；
-   离场页 pointer-events:none，动画期间不会挡住新页的点击。 */
+   离场页 pointer-events:none，动画期间不会挡住新页的点击。
+
+   移动端（≤767px）不跑这套动画：手机上页面本来就是铺满整屏的，缩放 + 移动
+   会露出 .main-area 底下的浅蓝底色（#f5faff / app-shell 渐变），在视觉上表现为
+   「页面四周浮着一圈蓝边」；而且 .page-card-enter-active 把背景写死成 #f5faff，
+   会把页面自身的白底盖掉。移动端直接用 opacity 淡入淡出，只做透明度、不动几何。 */
 .page-card-enter-active {
   position: relative !important;
   z-index: 2 !important;
@@ -257,6 +262,22 @@
   will-change: transform, opacity;
 }
 .page-card-leave-to { transform: scale(0.97) !important; opacity: 0 !important; }
+
+/* 移动端：只淡入淡出，不缩放、不带背景色、不投影 —— 避免露出外层底色形成「蓝边」 */
+@media (max-width: 767px) {
+  .page-card-enter-active {
+    background: transparent;
+    transition: opacity 0.18s ease !important;
+    will-change: opacity;
+  }
+  .page-card-enter-from {
+    transform: none !important;
+    opacity: 0 !important;
+    box-shadow: none !important;
+  }
+  .page-card-leave-active { transition: opacity 0.12s ease !important; }
+  .page-card-leave-to { transform: none !important; opacity: 0 !important; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .page-card-leave-active, .page-card-enter-active { transition: none !important; }
