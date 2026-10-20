@@ -1452,7 +1452,6 @@ async function loadAnalysis() {
       batch.map(async (leave) => {
         try {
           const result = await analyzeLeave(leave.id)
-          console.log('[AI分析]', leave.id, result)
           return { id: leave.id, result }
         } catch (e) {
           console.error('[AI分析失败]', leave.id, e)
