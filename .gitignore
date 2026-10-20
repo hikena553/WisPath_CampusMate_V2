@@ -87,6 +87,9 @@ backend/uploads/
 backend/static/uploads/
 uploads/
 
+# 微信小程序部署：后端自动生成的 web-view 壳小程序工程与上传密钥，属运行时产物
+backend/wechat_mp_build/
+
 # Backend logs
 backend/logs/
 logs/

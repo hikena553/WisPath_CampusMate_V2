@@ -225,8 +225,11 @@ def approval_stats(
     ids = _scoped_student_ids(user, db)
     if student_id is not None:
         ids = [student_id] if (ids is None or student_id in ids) else []
+    # 办事工单的待审队列是全教师共享的（先到先审），统计口径必须与队列一致：
+    # 否则导师从共享队列里通过/驳回了工单，统计数字却不动，看起来像统计坏了。
+    ticket_ids = None if (student_id is None and ids is not None) else ids
     leaves = _rows(LeaveRequest, LeaveRequest.student_id, ids)
-    tickets = _rows(ServiceTicket, ServiceTicket.applicant_id, ids)
+    tickets = _rows(ServiceTicket, ServiceTicket.applicant_id, ticket_ids)
     materials = _rows(MaterialArchive, MaterialArchive.student_id, ids)
 
     def _status(r):

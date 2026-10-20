@@ -1,4 +1,4 @@
-﻿﻿<template>
+﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="审批管理" :sub="totalPending + ' 条待处理'" fallback="/teacher">
       <template #right>
@@ -28,13 +28,14 @@
            作为进入具体待办前的一条横向概览——先看流程走到哪一步、当前聚焦的是谁，
            再决定去处理哪一类待办。移动端仍沿用下方原位节点，不受影响。 -->
       <div v-if="!isMobile" class="ap-band">
+        <!-- 链路四步都带真实数据（近 FLOW_DAYS 天口径）：提交 → 受理归类 → 审批 → 归档留痕 -->
         <ol class="tui-steps h ap-lifecycle">
           <li class="tui-step is-done">
             <span class="tui-step-dot"><el-icon :size="11"><Check /></el-icon></span>
             <span class="tui-step-line" />
             <div class="tui-step-body">
               <div class="tui-step-title">提交</div>
-              <div class="tui-step-desc">学生发起请假 / 办事申请</div>
+              <div class="tui-step-desc">近 {{ FLOW_DAYS }} 天提交 {{ stats?.total ?? 0 }} 条</div>
             </div>
           </li>
           <li class="tui-step is-done">
@@ -42,7 +43,7 @@
             <span class="tui-step-line" />
             <div class="tui-step-body">
               <div class="tui-step-title">受理</div>
-              <div class="tui-step-desc">自动归类到请假 / 办事 / 材料</div>
+              <div class="tui-step-desc">{{ flowKindSummary }}</div>
             </div>
           </li>
           <li class="tui-step" :class="totalPending ? 'is-current' : 'is-done'">
@@ -64,7 +65,7 @@
             <span class="tui-step-line" />
             <div class="tui-step-body">
               <div class="tui-step-title">归档</div>
-              <div class="tui-step-desc">结果即时推送并留痕</div>
+              <div class="tui-step-desc">通过 {{ stats?.approved ?? 0 }} · 拒绝 {{ stats?.rejected ?? 0 }}</div>
             </div>
           </li>
         </ol>
@@ -127,7 +128,7 @@
           <span class="tui-step-line" />
           <div class="tui-step-body">
             <div class="tui-step-title">提交</div>
-            <div class="tui-step-desc">学生发起请假 / 办事申请</div>
+            <div class="tui-step-desc">近 {{ FLOW_DAYS }} 天提交 {{ stats?.total ?? 0 }} 条</div>
           </div>
         </li>
         <li class="tui-step is-done">
@@ -135,7 +136,7 @@
           <span class="tui-step-line" />
           <div class="tui-step-body">
             <div class="tui-step-title">受理</div>
-            <div class="tui-step-desc">自动归类到请假 / 办事 / 材料</div>
+            <div class="tui-step-desc">{{ flowKindSummary }}</div>
           </div>
         </li>
         <li class="tui-step" :class="totalPending ? 'is-current' : 'is-done'">
@@ -157,7 +158,7 @@
           <span class="tui-step-line" />
           <div class="tui-step-body">
             <div class="tui-step-title">归档</div>
-            <div class="tui-step-desc">结果即时推送并留痕</div>
+            <div class="tui-step-desc">通过 {{ stats?.approved ?? 0 }} · 拒绝 {{ stats?.rejected ?? 0 }}</div>
           </div>
         </li>
       </ol>
@@ -227,51 +228,57 @@
               </div>
             </article>
           </div>
-          <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="isMobile && paginatedPendingLeaves.length">
-            <div class="mobile-card" v-for="row in paginatedPendingLeaves" :key="row.id">
-              <div class="mobile-card-header">
-                <span class="mobile-card-student">{{ row.student_name }}</span>
-                <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+          <!-- 移动端卡片叠层：一次聚焦一张，左右滑动切换，下一条在叠层里预览 -->
+          <ApprovalCardStack
+            v-if="isMobile && pendingLeaves.length"
+            :items="pendingLeaves"
+            end-hint="已经是最后一条待批请假了"
+          >
+            <template #default="{ row }">
+              <div class="mobile-card">
+                <div class="mobile-card-header">
+                  <span class="mobile-card-student">{{ row.student_name }}</span>
+                  <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+                </div>
+                <div class="mobile-card-body">
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">日期</span>
+                    <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
+                  </div>
+                  <div class="mobile-card-row" v-if="row.reason">
+                    <span class="mobile-card-label">原因</span>
+                    <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
+                  </div>
+                  <div class="mobile-card-row" v-if="analysisMap[row.id]">
+                    <span class="mobile-card-label">AI 分析</span>
+                    <span class="mobile-card-value">
+                      <el-tag :type="analysisMap[row.id].suggestion === 'approve' ? 'success' : 'danger'" size="small" effect="plain">
+                        {{ analysisMap[row.id].suggestion === 'approve' ? '建议通过' : '建议拒绝' }}
+                      </el-tag>
+                      <span class="mobile-ai-reason">{{ analysisMap[row.id].reason }}</span>
+                    </span>
+                  </div>
+                  <div class="mobile-card-row" v-else>
+                    <span class="mobile-card-label">AI 分析</span>
+                    <span class="mobile-card-value">
+                      <el-tag type="info" size="small" effect="plain" class="analyzing-tag">
+                        <el-icon class="is-loading"><Loading /></el-icon> 分析中
+                      </el-tag>
+                    </span>
+                  </div>
+                </div>
+                <div class="mobile-card-actions">
+                  <el-button type="success" size="small" @click="handleApprove(row)">
+                    <el-icon><Check /></el-icon> 通过
+                  </el-button>
+                  <el-button type="danger" size="small" plain @click="showReject(row)">
+                    <el-icon><Close /></el-icon> 拒绝
+                  </el-button>
+                </div>
               </div>
-              <div class="mobile-card-body">
-                <div class="mobile-card-row">
-                  <span class="mobile-card-label">日期</span>
-                  <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
-                </div>
-                <div class="mobile-card-row" v-if="row.reason">
-                  <span class="mobile-card-label">原因</span>
-                  <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
-                </div>
-                <div class="mobile-card-row" v-if="analysisMap[row.id]">
-                  <span class="mobile-card-label">AI 分析</span>
-                  <span class="mobile-card-value">
-                    <el-tag :type="analysisMap[row.id].suggestion === 'approve' ? 'success' : 'danger'" size="small" effect="plain">
-                      {{ analysisMap[row.id].suggestion === 'approve' ? '建议通过' : '建议拒绝' }}
-                    </el-tag>
-                    <span class="mobile-ai-reason">{{ analysisMap[row.id].reason }}</span>
-                  </span>
-                </div>
-                <div class="mobile-card-row" v-else>
-                  <span class="mobile-card-label">AI 分析</span>
-                  <span class="mobile-card-value">
-                    <el-tag type="info" size="small" effect="plain" class="analyzing-tag">
-                      <el-icon class="is-loading"><Loading /></el-icon> 分析中
-                    </el-tag>
-                  </span>
-                </div>
-              </div>
-              <div class="mobile-card-actions">
-                <el-button type="success" size="small" @click="handleApprove(row)">
-                  <el-icon><Check /></el-icon> 通过
-                </el-button>
-                <el-button type="danger" size="small" plain @click="showReject(row)">
-                  <el-icon><Close /></el-icon> 拒绝
-                </el-button>
-              </div>
-            </div>
-          </div>
-          <div class="pagination-wrapper" v-if="pendingLeaves.length > pageSizeLeaves">
+            </template>
+          </ApprovalCardStack>
+          <div class="pagination-wrapper" v-if="!isMobile && pendingLeaves.length > pageSizeLeaves">
             <el-pagination
               v-model:current-page="currentPageLeaves"
               v-model:page-size="pageSizeLeaves"
@@ -296,14 +303,22 @@
           <div class="section-header">
             <h3><el-icon><Tickets /></el-icon> 办事申请</h3>
             <el-tag v-if="pendingTickets.length" type="warning" effect="light" size="small">
-              {{ pendingTickets.length }} 条待批
+              {{ pendingTickets.length }} 条{{ ticketScope === 'mine' ? '我受理' : '待批' }}
             </el-tag>
-            <el-tag v-else type="success" effect="light" size="small">已处理完</el-tag>
+            <el-tag v-else type="success" effect="light" size="small">
+              {{ ticketScope === 'mine' ? '我暂无在办' : '已处理完' }}
+            </el-tag>
           </div>
           <div class="tui-section-hint">
             <el-icon><InfoFilled /></el-icon>
-            <span>办事申请 = 学生提交的<b>在校 / 在读证明、成绩单、项目立项、反馈</b>等事项。办理前请先点「详情」核对申请人、事由与附件；通过后由对应科室出证，拒绝须写明理由。</span>
+            <span>办事申请走<b>共享队列、先到先审</b>：先点「受理」认领（受理人落到你名下，队列里其他人能看到是谁在处理），再核对申请人 / 事由 / 附件；通过后由对应科室出证，拒绝须写明理由。<b>学生请假走「请假申请」流程</b>（销假闭环在那里），不再从本队列提交。</span>
           </div>
+          <TuiSegmented
+            v-model="ticketScope"
+            class="ap-ticket-scope"
+            :options="ticketScopeOptions"
+            @update:model-value="() => loadData()"
+          />
 
           <!-- 桌面端卡片网格：申请人 / 事项类型 / 事由 / 附件 / 时间 全部收进单张卡片，
                操作按钮固定在卡片底部，扫读与决策都在视线内完成 -->
@@ -317,6 +332,10 @@
               <div class="ap-card-title">{{ row.title }}</div>
               <div class="ap-card-meta">
                 <span class="ap-card-kv"><el-icon><Clock /></el-icon>{{ row.created_at ? row.created_at.slice(5, 16) : '—' }}</span>
+                <span v-if="row.approver_name" class="ap-card-kv">
+                  <el-icon><User /></el-icon>{{ row.approver_name }} 受理
+                </span>
+                <el-button v-else size="small" text type="primary" @click="handleClaim(row)">受理</el-button>
                 <span v-if="row.attachments && row.attachments.length" class="ap-attach">
                   <el-icon><Paperclip /></el-icon>{{ row.attachments.length }}
                 </span>
@@ -331,38 +350,51 @@
             </article>
           </div>
 
-          <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="isMobile && paginatedPendingTickets.length">
-            <div class="mobile-card" v-for="row in paginatedPendingTickets" :key="row.id">
-              <div class="mobile-card-header">
-                <span class="mobile-card-student">{{ row.title }}</span>
-                <el-tag size="small" effect="plain">{{ ticketTypeLabel(row.type) }}</el-tag>
-              </div>
-              <div class="mobile-card-body">
-                <div class="mobile-card-row">
-                  <span class="mobile-card-label">申请人</span>
-                  <span class="mobile-card-value">
-                    {{ row.applicant_name || '—' }}<template v-if="row.applicant_no"> · {{ row.applicant_no }}</template>
-                  </span>
+          <!-- 移动端卡片叠层：一次聚焦一张，左右滑动切换，下一条在叠层里预览 -->
+          <ApprovalCardStack
+            v-if="isMobile && pendingTickets.length"
+            :items="pendingTickets"
+            end-hint="已经是最后一条待批申请了"
+          >
+            <template #default="{ row }">
+              <div class="mobile-card">
+                <div class="mobile-card-header">
+                  <span class="mobile-card-student">{{ row.title }}</span>
+                  <el-tag size="small" effect="plain">{{ ticketTypeLabel(row.type) }}</el-tag>
                 </div>
-                <div class="mobile-card-row" v-if="row.content">
-                  <span class="mobile-card-label">事由</span>
-                  <span class="mobile-card-value mobile-card-reason">{{ row.content }}</span>
+                <div class="mobile-card-body">
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">申请人</span>
+                    <span class="mobile-card-value">
+                      {{ row.applicant_name || '—' }}<template v-if="row.applicant_no"> · {{ row.applicant_no }}</template>
+                    </span>
+                  </div>
+                  <div class="mobile-card-row" v-if="row.content">
+                    <span class="mobile-card-label">事由</span>
+                    <span class="mobile-card-value mobile-card-reason">{{ row.content }}</span>
+                  </div>
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">提交</span>
+                    <span class="mobile-card-value">{{ row.created_at ? row.created_at.slice(0, 16) : '—' }}</span>
+                  </div>
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">受理人</span>
+                    <span class="mobile-card-value">
+                      {{ row.approver_name || '待受理' }}
+                      <el-button v-if="!row.approver_name" size="small" text type="primary" @click="handleClaim(row)">我来受理</el-button>
+                    </span>
+                  </div>
                 </div>
-                <div class="mobile-card-row">
-                  <span class="mobile-card-label">提交</span>
-                  <span class="mobile-card-value">{{ row.created_at ? row.created_at.slice(0, 16) : '—' }}</span>
+                <div class="mobile-card-actions">
+                  <el-button size="small" @click="openTicketDetail(row)"><el-icon><View /></el-icon>详情</el-button>
+                  <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">通过</el-button>
+                  <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">拒绝</el-button>
                 </div>
               </div>
-              <div class="mobile-card-actions">
-                <el-button size="small" @click="openTicketDetail(row)"><el-icon><View /></el-icon>详情</el-button>
-                <el-button type="success" size="small" @click="showTicketReview(row, 'approve')">通过</el-button>
-                <el-button type="danger" size="small" plain @click="showTicketReview(row, 'reject')">拒绝</el-button>
-              </div>
-            </div>
-          </div>
+            </template>
+          </ApprovalCardStack>
 
-          <div class="pagination-wrapper" v-if="pendingTickets.length > pageSizeTickets">
+          <div class="pagination-wrapper" v-if="!isMobile && pendingTickets.length > pageSizeTickets">
             <el-pagination
               v-model:current-page="currentPageTickets"
               v-model:page-size="pageSizeTickets"
@@ -417,33 +449,39 @@
               </div>
             </article>
           </div>
-          <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="isMobile && pendingMaterials.length">
-            <div class="mobile-card" v-for="row in pendingMaterials" :key="row.id">
-              <div class="mobile-card-header">
-                <span class="mobile-card-student">{{ row.applicant_name }}</span>
-                <el-tag size="small" effect="plain">材料档案</el-tag>
-              </div>
-              <div class="mobile-card-body">
-                <div class="mobile-card-row">
-                  <span class="mobile-card-label">材料</span>
-                  <span class="mobile-card-value">{{ row.title }}</span>
+          <!-- 移动端卡片叠层：一次聚焦一张，左右滑动切换，下一条在叠层里预览 -->
+          <ApprovalCardStack
+            v-if="isMobile && pendingMaterials.length"
+            :items="pendingMaterials"
+            end-hint="已经是最后一条待归档材料了"
+          >
+            <template #default="{ row }">
+              <div class="mobile-card">
+                <div class="mobile-card-header">
+                  <span class="mobile-card-student">{{ row.applicant_name }}</span>
+                  <el-tag size="small" effect="plain">材料档案</el-tag>
                 </div>
-                <div class="mobile-card-row">
-                  <span class="mobile-card-label">提交时间</span>
-                  <span class="mobile-card-value">{{ row.created_at ? row.created_at.slice(0, 16) : '' }}</span>
+                <div class="mobile-card-body">
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">材料</span>
+                    <span class="mobile-card-value">{{ row.title }}</span>
+                  </div>
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">提交时间</span>
+                    <span class="mobile-card-value">{{ row.created_at ? row.created_at.slice(0, 16) : '' }}</span>
+                  </div>
+                </div>
+                <div class="mobile-card-actions">
+                  <el-button type="success" size="small" @click="handleMaterialApprove(row.id)">
+                    <el-icon><Check /></el-icon> 通过
+                  </el-button>
+                  <el-button type="danger" size="small" plain @click="handleMaterialReject(row.id)">
+                    <el-icon><Close /></el-icon> 驳回
+                  </el-button>
                 </div>
               </div>
-              <div class="mobile-card-actions">
-                <el-button type="success" size="small" @click="handleMaterialApprove(row.id)">
-                  <el-icon><Check /></el-icon> 通过
-                </el-button>
-                <el-button type="danger" size="small" plain @click="handleMaterialReject(row.id)">
-                  <el-icon><Close /></el-icon> 驳回
-                </el-button>
-              </div>
-            </div>
-          </div>
+            </template>
+          </ApprovalCardStack>
           <div v-else-if="!pendingMaterials.length" class="tui-empty">
             <span class="tui-empty-icon"><el-icon :size="24"><FolderOpened /></el-icon></span>
             <span class="tui-empty-title">暂无待归档材料</span>
@@ -453,192 +491,277 @@
       </template>
 
       <template v-else-if="activeTab === 'approved'">
+        <!-- 统一台账：请假与办事申请合成一份数据，不再按事项类别分区 -->
         <div class="section-card">
           <div class="section-header">
-            <h3><el-icon><CircleCheck /></el-icon> 已通过请假</h3>
-            <el-tag v-if="approvedLeaves.length" type="info" effect="light" size="small">{{ approvedLeaves.length }} 条</el-tag>
+            <h3><el-icon><CircleCheck /></el-icon> 已通过</h3>
+            <el-tag v-if="approvedRows.length" type="info" effect="light" size="small">{{ approvedRows.length }} 条</el-tag>
           </div>
           <div class="tui-section-hint success">
             <el-icon><InfoFilled /></el-icon>
-            <span>学生返校后请点「确认返校」完成销假闭环；未及时销假的记录会在统计中计为「待销假」。</span>
+            <span>通过后结果已推送学生；请假的记录请点「确认返校」完成销假闭环，未及时销假的计为「待销假」。</span>
           </div>
           <!-- 桌面端表格 -->
           <div class="desktop-table" v-if="!isMobile">
-            <el-table :data="paginatedApprovedLeaves" v-if="approvedLeaves.length" style="width:100%"
+            <el-table :data="paginatedApprovedRows" v-if="approvedRows.length" style="width:100%"
               :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
-              <el-table-column prop="student_name" label="学生" width="100" />
-              <el-table-column prop="leave_type" label="类型" width="90">
+              <el-table-column label="学生 / 申请人" width="150">
                 <template #default="{ row }">
-                  <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+                  {{ row.who }}<template v-if="row.meta"> · {{ row.meta }}</template>
                 </template>
               </el-table-column>
-              <el-table-column prop="start_date" label="开始日期" width="110" />
-              <el-table-column prop="end_date" label="结束日期" width="110" />
-              <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
-              <el-table-column label="销假" width="90">
+              <el-table-column label="类型" width="90">
                 <template #default="{ row }">
-                  <el-tag v-if="row.return_confirmed" type="success" size="small" effect="plain">已销假</el-tag>
-                  <el-tag v-else type="warning" size="small" effect="plain">待销假</el-tag>
+                  <el-tag size="small" effect="plain">{{ row.typeLabel }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="120" fixed="right">
+              <el-table-column prop="title" label="事项" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="desc" label="事由" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="note" label="审批意见" min-width="140" show-overflow-tooltip />
+              <el-table-column label="处理时间" width="120">
+                <template #default="{ row }">{{ row.time }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="90">
                 <template #default="{ row }">
-                  <el-button v-if="!row.return_confirmed" type="primary" size="small" @click="handleConfirmReturn(row)">
-                    确认返校
-                  </el-button>
+                  <el-tag :type="row.statusType" size="small" effect="plain">{{ row.statusLabel }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="110" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.leave && !row.leave.return_confirmed"
+                    type="primary"
+                    size="small"
+                    @click="handleConfirmReturn(row.leave)"
+                  >确认返校</el-button>
+                  <el-button
+                    v-else-if="row.ticket"
+                    type="primary"
+                    size="small"
+                    text
+                    @click="openTicketDetail(row.ticket)"
+                  >详情</el-button>
                   <span v-else class="closed-hint">已闭环</span>
                 </template>
               </el-table-column>
             </el-table>
           </div>
-          <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="isMobile && paginatedApprovedLeaves.length">
-            <div class="mobile-card" v-for="row in paginatedApprovedLeaves" :key="row.id">
-              <div class="mobile-card-header">
-                <span class="mobile-card-student">{{ row.student_name }}</span>
-                <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
-              </div>
-              <div class="mobile-card-body">
-                <div class="mobile-card-row">
-                  <span class="mobile-card-label">日期</span>
-                  <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
+          <!-- 移动端卡片叠层：按页翻牌，下一条在叠层里预览 -->
+          <ApprovalCardStack
+            v-if="isMobile && paginatedApprovedRows.length"
+            :key="currentPageApproved"
+            :items="paginatedApprovedRows"
+            :show-bar="false"
+            end-hint="本页已到最后一条，可翻页继续"
+          >
+            <template #default="{ row }">
+              <div class="mobile-card">
+                <div class="mobile-card-header">
+                  <span class="mobile-card-student">{{ row.who }}</span>
+                  <el-tag size="small" effect="plain">{{ row.typeLabel }}</el-tag>
                 </div>
-                <div class="mobile-card-row" v-if="row.reason">
-                  <span class="mobile-card-label">原因</span>
-                  <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
+                <div class="mobile-card-body">
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">事项</span>
+                    <span class="mobile-card-value">{{ row.title }}</span>
+                  </div>
+                  <div class="mobile-card-row" v-if="row.desc">
+                    <span class="mobile-card-label">事由</span>
+                    <span class="mobile-card-value mobile-card-reason">{{ row.desc }}</span>
+                  </div>
+                  <div class="mobile-card-row" v-if="row.note">
+                    <span class="mobile-card-label">审批意见</span>
+                    <span class="mobile-card-value mobile-card-reason">{{ row.note }}</span>
+                  </div>
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">处理时间</span>
+                    <span class="mobile-card-value">{{ row.time }}</span>
+                  </div>
+                </div>
+                <div class="mobile-card-footer">
+                  <el-tag :type="row.statusType" size="small" effect="plain">{{ row.statusLabel }}</el-tag>
+                  <el-button
+                    v-if="row.leave && !row.leave.return_confirmed"
+                    type="primary"
+                    size="small"
+                    @click="handleConfirmReturn(row.leave)"
+                  >确认返校</el-button>
+                  <el-button
+                    v-else-if="row.ticket"
+                    type="primary"
+                    size="small"
+                    @click="openTicketDetail(row.ticket)"
+                  >详情</el-button>
                 </div>
               </div>
-              <div class="mobile-card-footer">
-                <el-tag v-if="row.return_confirmed" type="success" size="small" effect="plain">已销假</el-tag>
-                <el-tag v-else type="warning" size="small" effect="plain">待销假</el-tag>
-                <el-button v-if="!row.return_confirmed" type="primary" size="small" @click="handleConfirmReturn(row)">
-                  确认返校
-                </el-button>
-              </div>
-            </div>
-          </div>
-          <div class="pagination-wrapper" v-if="approvedLeaves.length > pageSizeApprovedLeaves">
+            </template>
+          </ApprovalCardStack>
+          <div class="pagination-wrapper" v-if="approvedRows.length > pageSizeApproved">
             <el-pagination
-              v-model:current-page="currentPageApprovedLeaves"
-              v-model:page-size="pageSizeApprovedLeaves"
+              v-model:current-page="currentPageApproved"
+              v-model:page-size="pageSizeApproved"
               :page-sizes="[10, 20, 50]"
-              :total="approvedLeaves.length"
+              :total="approvedRows.length"
               :pager-count="5"
               small
               background
               layout="total, prev, pager, next"
-              @size-change="handleApprovedLeaveSizeChange"
-              @current-change="handleApprovedLeaveCurrentChange"
+              @size-change="handleApprovedSizeChange"
+              @current-change="handleApprovedCurrentChange"
             />
           </div>
-          <div v-else-if="!approvedLeaves.length" class="tui-empty">
+          <div v-else-if="!approvedRows.length" class="tui-empty">
             <span class="tui-empty-icon"><el-icon :size="24"><CircleCheck /></el-icon></span>
-            <span class="tui-empty-title">暂无已通过请假</span>
-            <span class="tui-empty-desc">审批通过的请假记录会归档到这里</span>
+            <span class="tui-empty-title">暂无已通过记录</span>
+            <span class="tui-empty-desc">审批通过的请假与办事申请都会归档到这里</span>
           </div>
         </div>
       </template>
 
       <template v-else-if="activeTab === 'rejected'">
+        <!-- 统一台账：与「已通过」同口径，请假与办事申请合成一份数据 -->
         <div class="section-card">
           <div class="section-header">
-            <h3><el-icon><CircleClose /></el-icon> 已拒绝请假</h3>
-            <el-tag v-if="rejectedLeaves.length" type="info" effect="light" size="small">{{ rejectedLeaves.length }} 条</el-tag>
+            <h3><el-icon><CircleClose /></el-icon> 已拒绝</h3>
+            <el-tag v-if="rejectedRows.length" type="info" effect="light" size="small">{{ rejectedRows.length }} 条</el-tag>
           </div>
           <div class="tui-section-hint danger">
             <el-icon><InfoFilled /></el-icon>
-            <span>拒绝记录保留「拒绝理由」并已推送学生；若学生补充材料后可重新提交，不占用本次拒绝次数。</span>
+            <span>「拒绝理由」已推送学生；学生补充材料后可重新提交，不占用本次拒绝次数。</span>
           </div>
           <!-- 桌面端表格 -->
           <div class="desktop-table" v-if="!isMobile">
-            <el-table :data="paginatedRejectedLeaves" v-if="rejectedLeaves.length" style="width:100%"
+            <el-table :data="paginatedRejectedRows" v-if="rejectedRows.length" style="width:100%"
               :header-cell-style="{ background: '#f8faff', color: '#333', fontWeight: 600 }">
-              <el-table-column prop="student_name" label="学生" width="100" />
-              <el-table-column prop="leave_type" label="类型" width="90">
+              <el-table-column label="学生 / 申请人" width="150">
                 <template #default="{ row }">
-                  <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+                  {{ row.who }}<template v-if="row.meta"> · {{ row.meta }}</template>
                 </template>
               </el-table-column>
-              <el-table-column prop="start_date" label="开始日期" width="110" />
-              <el-table-column prop="end_date" label="结束日期" width="110" />
-              <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="reject_reason" label="拒绝理由" min-width="140" show-overflow-tooltip />
+              <el-table-column label="类型" width="90">
+                <template #default="{ row }">
+                  <el-tag size="small" effect="plain">{{ row.typeLabel }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="title" label="事项" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="desc" label="事由" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="note" label="拒绝理由" min-width="140" show-overflow-tooltip />
+              <el-table-column label="处理时间" width="120">
+                <template #default="{ row }">{{ row.time }}</template>
+              </el-table-column>
               <el-table-column label="状态" width="90">
-                <template #default>
-                  <el-tag type="danger" size="small" effect="dark">已拒绝</el-tag>
+                <template #default="{ row }">
+                  <el-tag :type="row.statusType" size="small" effect="plain">{{ row.statusLabel }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="90" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.ticket"
+                    type="primary"
+                    size="small"
+                    text
+                    @click="openTicketDetail(row.ticket)"
+                  >详情</el-button>
+                  <span v-else class="closed-hint">—</span>
                 </template>
               </el-table-column>
             </el-table>
           </div>
-          <!-- 移动端卡片 -->
-          <div class="mobile-cards" v-if="isMobile && paginatedRejectedLeaves.length">
-            <div class="mobile-card" v-for="row in paginatedRejectedLeaves" :key="row.id">
-              <div class="mobile-card-header">
-                <span class="mobile-card-student">{{ row.student_name }}</span>
-                <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
-              </div>
-              <div class="mobile-card-body">
-                <div class="mobile-card-row">
-                  <span class="mobile-card-label">日期</span>
-                  <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
+          <!-- 移动端卡片叠层：按页翻牌，下一条在叠层里预览 -->
+          <ApprovalCardStack
+            v-if="isMobile && paginatedRejectedRows.length"
+            :key="currentPageRejected"
+            :items="paginatedRejectedRows"
+            :show-bar="false"
+            end-hint="本页已到最后一条，可翻页继续"
+          >
+            <template #default="{ row }">
+              <div class="mobile-card">
+                <div class="mobile-card-header">
+                  <span class="mobile-card-student">{{ row.who }}</span>
+                  <el-tag size="small" effect="plain">{{ row.typeLabel }}</el-tag>
                 </div>
-                <div class="mobile-card-row" v-if="row.reason">
-                  <span class="mobile-card-label">原因</span>
-                  <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
+                <div class="mobile-card-body">
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">事项</span>
+                    <span class="mobile-card-value">{{ row.title }}</span>
+                  </div>
+                  <div class="mobile-card-row" v-if="row.desc">
+                    <span class="mobile-card-label">事由</span>
+                    <span class="mobile-card-value mobile-card-reason">{{ row.desc }}</span>
+                  </div>
+                  <div class="mobile-card-row" v-if="row.note">
+                    <span class="mobile-card-label">拒绝理由</span>
+                    <span class="mobile-card-value mobile-card-reason">{{ row.note }}</span>
+                  </div>
+                  <div class="mobile-card-row">
+                    <span class="mobile-card-label">处理时间</span>
+                    <span class="mobile-card-value">{{ row.time }}</span>
+                  </div>
                 </div>
-                <div class="mobile-card-row" v-if="row.reject_reason">
-                  <span class="mobile-card-label">拒绝理由</span>
-                  <span class="mobile-card-value mobile-card-reason">{{ row.reject_reason }}</span>
+                <div class="mobile-card-footer">
+                  <el-tag :type="row.statusType" size="small" effect="plain">{{ row.statusLabel }}</el-tag>
+                  <el-button
+                    v-if="row.ticket"
+                    type="primary"
+                    size="small"
+                    @click="openTicketDetail(row.ticket)"
+                  >详情</el-button>
                 </div>
               </div>
-              <div class="mobile-card-footer">
-                <el-tag type="danger" size="small" effect="dark">已拒绝</el-tag>
-              </div>
-            </div>
-          </div>
-          <div class="pagination-wrapper" v-if="rejectedLeaves.length > pageSizeRejectedLeaves">
+            </template>
+          </ApprovalCardStack>
+          <div class="pagination-wrapper" v-if="rejectedRows.length > pageSizeRejected">
             <el-pagination
-              v-model:current-page="currentPageRejectedLeaves"
-              v-model:page-size="pageSizeRejectedLeaves"
+              v-model:current-page="currentPageRejected"
+              v-model:page-size="pageSizeRejected"
               :page-sizes="[10, 20, 50]"
-              :total="rejectedLeaves.length"
+              :total="rejectedRows.length"
               :pager-count="5"
               small
               background
               layout="total, prev, pager, next"
-              @size-change="handleRejectedLeaveSizeChange"
-              @current-change="handleRejectedLeaveCurrentChange"
+              @size-change="handleRejectedSizeChange"
+              @current-change="handleRejectedCurrentChange"
             />
           </div>
-          <div v-else-if="!rejectedLeaves.length" class="tui-empty">
+          <div v-else-if="!rejectedRows.length" class="tui-empty">
             <span class="tui-empty-icon"><el-icon :size="24"><CircleClose /></el-icon></span>
-            <span class="tui-empty-title">暂无已拒绝请假</span>
-            <span class="tui-empty-desc">被拒绝的请假会连同理由归档到这里</span>
+            <span class="tui-empty-title">暂无已拒绝记录</span>
+            <span class="tui-empty-desc">被拒绝的请假与办事申请都会连同理由归档到这里</span>
           </div>
         </div>
       </template>
 
       <template v-else-if="activeTab === 'stats'">
-        <div class="tui-stat-row ap-overview">
-          <div class="stat-box">
-            <span class="stat-num">{{ leaveStats.total }}</span>
-            <span class="stat-label">总申请</span>
+        <!-- 审批总览：统一口径，不按事项类别细分 -->
+        <div class="section-card">
+          <div class="section-header">
+            <h3><el-icon><DataAnalysis /></el-icon> 审批总览</h3>
+            <el-tag type="info" effect="light" size="small">近 {{ FLOW_DAYS }} 天</el-tag>
           </div>
-          <div class="stat-box">
-            <span class="stat-num ok">{{ leaveStats.approved }}</span>
-            <span class="stat-label">已通过</span>
+          <div class="tui-section-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>闭环口径：<b>提交</b> → <b>受理</b> → <b>审批</b>（通过 / 拒绝）→ <b>归档</b>（结果回推学生并留痕）。</span>
           </div>
-          <div class="stat-box">
-            <span class="stat-num warn">{{ leaveStats.pending }}</span>
-            <span class="stat-label">待审批</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-num danger">{{ leaveStats.rejected }}</span>
-            <span class="stat-label">已拒绝</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-num purple">{{ leaveStats.awaiting_return }}</span>
-            <span class="stat-label">待销假</span>
+          <div class="tui-stat-row ap-overview">
+            <div class="stat-box">
+              <span class="stat-num">{{ stats?.total ?? 0 }}</span>
+              <span class="stat-label">提交总量</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-num warn">{{ stats?.pending ?? 0 }}</span>
+              <span class="stat-label">待处理</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-num ok">{{ stats?.approved ?? 0 }}</span>
+              <span class="stat-label">已通过</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-num danger">{{ stats?.rejected ?? 0 }}</span>
+              <span class="stat-label">已拒绝</span>
+            </div>
           </div>
         </div>
 
@@ -710,9 +833,10 @@
       class="ap-dialog"
     >
       <div v-if="ticketDetailTarget" class="ap-detail">
-        <div class="tui-section-hint">
+        <div class="tui-section-hint" :class="{ success: !isTicketReviewable(ticketDetailTarget.status) }">
           <el-icon><InfoFilled /></el-icon>
-          <span>请核对申请人、事由与附件后再决定；通过后由对应科室出证，拒绝须写明理由并会推送学生。</span>
+          <span v-if="isTicketReviewable(ticketDetailTarget.status)">请核对申请人、事由与附件后再决定；通过后由对应科室出证，拒绝须写明理由并会推送学生。</span>
+          <span v-else>该申请已审批完成，终态不可再变更；以下为留痕信息，附件可直接打开查看。</span>
         </div>
 
         <div class="ap-detail-head">
@@ -757,13 +881,13 @@
       <template #footer>
         <el-button @click="ticketDetailVisible = false">关闭</el-button>
         <el-button
-          v-if="ticketDetailTarget"
+          v-if="ticketDetailTarget && isTicketReviewable(ticketDetailTarget.status)"
           type="danger"
           plain
           @click="reviewFromDetail(ticketDetailTarget, 'reject')"
         >拒绝申请</el-button>
         <el-button
-          v-if="ticketDetailTarget"
+          v-if="ticketDetailTarget && isTicketReviewable(ticketDetailTarget.status)"
           type="success"
           @click="reviewFromDetail(ticketDetailTarget, 'approve')"
         >通过申请</el-button>
@@ -859,14 +983,15 @@ import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
+import ApprovalCardStack from '@/components/teacher/ui/ApprovalCardStack.vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose, Stamp,
   InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, Refresh, User,
-  View, Paperclip, Clock
+  View, Paperclip, Clock, DataAnalysis
 } from '@element-plus/icons-vue'
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
-import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
+import { getTickets, approveTicket as approveTicketApi, claimTicket } from '@/api/service'
 import { getApprovalPending, reviewApproval, getApprovalStats, type ApprovalItem, type ApprovalStats } from '@/api/approval'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
 import { useResponsive } from '@/composables/useResponsive'
@@ -894,12 +1019,21 @@ function clearStudentFilter() {
 }
 
 const activeTab = ref('pending')
+
+/** 办事工单视图：共享队列（先到先审）/ 我受理的（责任人是我）——对齐成熟工单系统的 Queue / My tickets */
+const ticketScope = ref<'queue' | 'mine'>('queue')
+const ticketScopeOptions = [
+  { value: 'queue', label: '共享队列' },
+  { value: 'mine', label: '我受理的' },
+]
 const pendingLeaves = ref<LeaveRequestOut[]>([])
 const pendingTickets = ref<ServiceTicket[]>([])
 const pendingMaterials = ref<ApprovalItem[]>([])
 const stats = ref<ApprovalStats | null>(null)
 const approvedLeaves = ref<LeaveRequestOut[]>([])
+const approvedTickets = ref<ServiceTicket[]>([])
 const rejectedLeaves = ref<LeaveRequestOut[]>([])
+const rejectedTickets = ref<ServiceTicket[]>([])
 const leaveStats = ref<LeaveStats>({
   total: 0, approved: 0, rejected: 0, pending: 0, awaiting_return: 0,
   by_type: [], by_class: [],
@@ -929,15 +1063,31 @@ const pageSizeLeaves = ref(10)
 const currentPageTickets = ref(1)
 const pageSizeTickets = ref(10)
 
-// 已通过请假分页相关状态
-const currentPageApprovedLeaves = ref(1)
-const pageSizeApprovedLeaves = ref(10)
-
-// 已拒绝请假分页相关状态
-const currentPageRejectedLeaves = ref(1)
-const pageSizeRejectedLeaves = ref(10)
+// 已通过 / 已拒绝台账分页相关状态（统一台账，不区分事项类别）
+const currentPageApproved = ref(1)
+const pageSizeApproved = ref(10)
+const currentPageRejected = ref(1)
+const pageSizeRejected = ref(10)
 
 const totalPending = computed(() => pendingLeaves.value.length + pendingTickets.value.length + pendingMaterials.value.length)
+
+/** 审批流程统计口径（天）：链路条与统计页共用，避免两处天数各写一个 */
+const FLOW_DAYS = 30
+
+/** 三类事项的流程分布：受理环节要说明「自动归类到哪几类、各多少」 */
+const flowKinds = computed(() => {
+  const k = stats.value?.by_kind
+  return [
+    { key: 'leave', label: '请假申请', short: '请假', count: k?.leave?.count ?? 0, pending: k?.leave?.pending ?? 0 },
+    { key: 'ticket', label: '办事工单', short: '办事', count: k?.ticket?.count ?? 0, pending: k?.ticket?.pending ?? 0 },
+    { key: 'material', label: '材料档案', short: '材料', count: k?.material?.count ?? 0, pending: k?.material?.pending ?? 0 },
+  ]
+})
+
+/** 受理环节的一句话归类结果 */
+const flowKindSummary = computed(() =>
+  flowKinds.value.map((k) => `${k.short} ${k.count}`).join(' · '),
+)
 
 /** 桌面端类别 Tab：id 与各分区锚点一一对应（'' 代表「全部」），点击复用 jumpTo() 的分段与定位逻辑 */
 const categoryTabs = computed(() => [
@@ -950,8 +1100,8 @@ const categoryTabs = computed(() => [
 /** 分段控件选项：与 activeTab 取值一一对应，count 为对应待处理数量 */
 const tabOptions = computed(() => [
   { value: 'pending', label: '待审批', count: totalPending.value },
-  { value: 'approved', label: '已通过', count: approvedLeaves.value.length || undefined },
-  { value: 'rejected', label: '已拒绝', count: rejectedLeaves.value.length || undefined },
+  { value: 'approved', label: '已通过', count: approvedRows.value.length || undefined },
+  { value: 'rejected', label: '已拒绝', count: rejectedRows.value.length || undefined },
   { value: 'stats', label: '统计' },
 ])
 
@@ -967,16 +1117,115 @@ const paginatedPendingTickets = computed(() => {
   return pendingTickets.value.slice(start, end)
 })
 
-const paginatedApprovedLeaves = computed(() => {
-  const start = (currentPageApprovedLeaves.value - 1) * pageSizeApprovedLeaves.value
-  const end = start + pageSizeApprovedLeaves.value
-  return approvedLeaves.value.slice(start, end)
+/** 统一台账行：请假与办事申请归一到同一套字段，列表不再按事项类别分区 */
+interface LedgerRow {
+  key: string
+  who: string
+  meta: string
+  typeLabel: string
+  /** 事项：请假=起止日期，办事=事项标题 */
+  title: string
+  /** 事由：请假=原因，办事=事由说明 */
+  desc: string
+  /** 结果说明：请假=拒绝理由，办事=审批意见 */
+  note: string
+  time: string
+  statusLabel: string
+  statusType: 'success' | 'warning' | 'danger'
+  /** 时间戳，仅用于统一台账排序 */
+  sortAt: string
+  leave?: LeaveRequestOut
+  ticket?: ServiceTicket
+}
+
+/** 台账时间：优先取「处理时间」——刚审批完的记录才能排在最前面；
+    历史数据只有创建时间时退回创建时间 */
+function ledgerTime(updated?: string | null, created?: string | null) {
+  const raw = updated || created || ''
+  return raw ? raw.slice(0, 16) : '—'
+}
+
+/** 台账排序键：处理时间优先 */
+function ledgerSortAt(updated?: string | null, created?: string | null) {
+  return updated || created || ''
+}
+
+/** 已通过台账：请假 + 办事申请，按处理时间倒序（刚办完的排最前） */
+const approvedRows = computed<LedgerRow[]>(() =>
+  [
+    ...approvedLeaves.value.map((l) => ({
+      key: `leave-${l.id}`,
+      who: l.student_name,
+      meta: '',
+      typeLabel: typeLabel(l.leave_type),
+      title: `${l.start_date} ~ ${l.end_date}`,
+      desc: l.reason || '',
+      note: '',
+      time: ledgerTime(l.updated_at, l.created_at),
+      statusLabel: l.return_confirmed ? '已销假' : '待销假',
+      statusType: l.return_confirmed ? ('success' as const) : ('warning' as const),
+      sortAt: ledgerSortAt(l.updated_at, l.created_at),
+      leave: l,
+    })),
+    ...approvedTickets.value.map((t) => ({
+      key: `ticket-${t.id}`,
+      who: t.applicant_name || '—',
+      meta: t.applicant_no || '',
+      typeLabel: ticketTypeLabel(t.type),
+      title: t.title || '—',
+      desc: t.content || '',
+      note: t.review_comment || '',
+      time: ledgerTime(t.updated_at, t.created_at),
+      statusLabel: '已通过',
+      statusType: 'success' as const,
+      sortAt: ledgerSortAt(t.updated_at, t.created_at),
+      ticket: t,
+    })),
+  ].sort((a, b) => (a.sortAt < b.sortAt ? 1 : a.sortAt > b.sortAt ? -1 : 0)),
+)
+
+/** 已拒绝台账：同口径，拒绝理由统一放在 note */
+const rejectedRows = computed<LedgerRow[]>(() =>
+  [
+    ...rejectedLeaves.value.map((l) => ({
+      key: `leave-${l.id}`,
+      who: l.student_name,
+      meta: '',
+      typeLabel: typeLabel(l.leave_type),
+      title: `${l.start_date} ~ ${l.end_date}`,
+      desc: l.reason || '',
+      note: l.reject_reason || '',
+      time: ledgerTime(l.updated_at, l.created_at),
+      statusLabel: '已拒绝',
+      statusType: 'danger' as const,
+      sortAt: ledgerSortAt(l.updated_at, l.created_at),
+      leave: l,
+    })),
+    ...rejectedTickets.value.map((t) => ({
+      key: `ticket-${t.id}`,
+      who: t.applicant_name || '—',
+      meta: t.applicant_no || '',
+      typeLabel: ticketTypeLabel(t.type),
+      title: t.title || '—',
+      desc: t.content || '',
+      note: t.review_comment || '',
+      time: ledgerTime(t.updated_at, t.created_at),
+      statusLabel: '已拒绝',
+      statusType: 'danger' as const,
+      sortAt: ledgerSortAt(t.updated_at, t.created_at),
+      ticket: t,
+    })),
+  ].sort((a, b) => (a.sortAt < b.sortAt ? 1 : a.sortAt > b.sortAt ? -1 : 0)),
+)
+
+const paginatedApprovedRows = computed(() => {
+  const start = (currentPageApproved.value - 1) * pageSizeApproved.value
+  return approvedRows.value.slice(start, start + pageSizeApproved.value)
 })
 
-const paginatedRejectedLeaves = computed(() => {
-  const start = (currentPageRejectedLeaves.value - 1) * pageSizeRejectedLeaves.value
-  const end = start + pageSizeRejectedLeaves.value
-  return rejectedLeaves.value.slice(start, end)
+const paginatedRejectedRows = computed(() => {
+  const start = (currentPageRejected.value - 1) * pageSizeRejected.value
+  return rejectedRows.value.slice(start, start + pageSizeRejected.value)
 })
 
 function handleLeaveSizeChange() {
@@ -995,19 +1244,19 @@ function handleTicketCurrentChange() {
   // 页码变化时自动更新表格数据
 }
 
-function handleApprovedLeaveSizeChange() {
-  currentPageApprovedLeaves.value = 1
+function handleApprovedSizeChange() {
+  currentPageApproved.value = 1
 }
 
-function handleApprovedLeaveCurrentChange() {
+function handleApprovedCurrentChange() {
   // 页码变化时自动更新表格数据
 }
 
-function handleRejectedLeaveSizeChange() {
-  currentPageRejectedLeaves.value = 1
+function handleRejectedSizeChange() {
+  currentPageRejected.value = 1
 }
 
-function handleRejectedLeaveCurrentChange() {
+function handleRejectedCurrentChange() {
   // 页码变化时自动更新表格数据
 }
 
@@ -1016,9 +1265,10 @@ function typeLabel(t: string) {
   return map[t] || t
 }
 
-/** 办事申请类型标签（与后端 ServiceTicket.type 对齐：leave / certificate / project / feedback） */
+/** 办事申请类型标签（与后端 ServiceTicket.type 对齐：leave / certificate / project / feedback）
+    注意：leave 是历史遗留的「补假申请」事项，标签用「补假」避免和「请假申请」混为一谈 */
 const ticketTypeMap: Record<string, string> = {
-  leave: '请假',
+  leave: '补假',
   certificate: '证明',
   project: '项目',
   feedback: '反馈',
@@ -1028,15 +1278,21 @@ function ticketTypeLabel(t?: string) {
   return ticketTypeMap[t] || t
 }
 
-/** 办事申请状态标签 */
+/** 办事工单状态标签：对齐成熟工单系统的生命周期
+    （待受理 → 处理中「已认领」→ 已通过 / 已驳回，后两者为办结终态） */
 const ticketStatusMap: Record<string, string> = {
-  pending: '待处理',
+  pending: '待受理',
   processing: '处理中',
   approved: '已通过',
-  rejected: '已拒绝',
+  rejected: '已驳回',
 }
 function ticketStatusLabel(s?: string) {
   return s ? ticketStatusMap[s] || s : '—'
+}
+
+/** 只有待审批 / 处理中的工单能再操作：终态（已通过 / 已拒绝）详情里不再给「通过 / 拒绝」 */
+function isTicketReviewable(s?: string) {
+  return s === 'pending' || s === 'processing'
 }
 
 /** 办事申请表单字段中文名（form_data 的 key → 中文） */
@@ -1101,7 +1357,7 @@ async function loadData() {
       loadAnalysis()
     } catch {}
     try {
-      pendingTickets.value = (await getTickets({ student_id: sid }))
+      pendingTickets.value = (await getTickets({ scope: ticketScope.value, student_id: sid }))
         .filter((t: ServiceTicket) => (t.status === 'pending' || t.status === 'processing') && byStudent(undefined, t.applicant_name))
     } catch {}
     try {
@@ -1110,8 +1366,18 @@ async function loadData() {
     } catch { pendingMaterials.value = [] }
   } else if (activeTab.value === 'approved') {
     try { approvedLeaves.value = (await getAllLeaves('approved', sid)).filter((l) => byStudent(l.student_id, l.student_name)) } catch {}
+    // 闭环：审批通过的办事申请同样要留痕在「已通过」，否则通过后就查不到了
+    try {
+      approvedTickets.value = (await getTickets({ status: 'approved', student_id: sid }))
+        .filter((t: ServiceTicket) => byStudent(undefined, t.applicant_name))
+    } catch { approvedTickets.value = [] }
   } else if (activeTab.value === 'rejected') {
     try { rejectedLeaves.value = (await getAllLeaves('rejected', sid)).filter((l) => byStudent(l.student_id, l.student_name)) } catch {}
+    // 闭环：被拒绝的办事申请同样要留痕在「已拒绝」
+    try {
+      rejectedTickets.value = (await getTickets({ status: 'rejected', student_id: sid }))
+        .filter((t: ServiceTicket) => byStudent(undefined, t.applicant_name))
+    } catch { rejectedTickets.value = [] }
   } else if (activeTab.value === 'stats') {
     await loadLeaveStats()
   }
@@ -1136,7 +1402,7 @@ async function handleConfirmReturn(row: LeaveRequestOut) {
 }
 
 async function loadStats() {
-  try { stats.value = await getApprovalStats(30, studentFilter.value?.id || undefined) } catch { stats.value = null }
+  try { stats.value = await getApprovalStats(FLOW_DAYS, studentFilter.value?.id || undefined) } catch { stats.value = null }
 }
 
 async function handleMaterialApprove(id: number) {
@@ -1226,6 +1492,18 @@ async function confirmReject() {
     rejectVisible.value = false
     loadData()
   } catch { ElMessage.error('操作失败') }
+}
+
+/** 受理（认领）工单：把责任人落到自己名下，队列里其他人能看到「谁在处理」 */
+async function handleClaim(row: ServiceTicket) {
+  try {
+    await claimTicket(row.id)
+    ElMessage.success('已受理，开始处理')
+    loadData()
+  } catch {
+    ElMessage.error('受理失败，可能已被他人受理')
+    loadData()
+  }
 }
 
 function showTicketReview(row: ServiceTicket, action: 'approve' | 'reject') {
@@ -1510,9 +1788,8 @@ onMounted(() => {
 
 .closed-hint { font-size: 12px; color: #98a2b3; }
 
-/* ========== 移动端卡片列表（对齐 tui 规范：白卡 + 发丝边 + 去边框感） ========== */
-.mobile-cards { display: flex; flex-direction: column; gap: 10px; }
-
+/* ========== 移动端卡片（对齐 tui 规范：白卡 + 发丝边 + 去边框感）
+   叠层切换由 ApprovalCardStack 组件负责，这里只管单张卡片的样式 ========== */
 .mobile-card {
   display: flex;
   flex-direction: column;
@@ -1675,6 +1952,9 @@ onMounted(() => {
 }
 /* Element Plus 会给相邻按钮加左外边距，这里统一改由 gap 控制间距 */
 .ap-card-actions :deep(.el-button + .el-button) { margin-left: 0; }
+
+/* ========== 办事工单视图切换（共享队列 / 我受理的）========== */
+.ap-ticket-scope { margin-bottom: 10px; }
 
 /* ========== 移动端响应式 ========== */
 @media (max-width: 767px) {

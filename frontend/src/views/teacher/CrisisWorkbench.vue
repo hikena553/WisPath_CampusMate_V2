@@ -1,4 +1,4 @@
-﻿﻿<template>
+﻿﻿﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="心理预警工作台" sub="风险处置台 · 发现 → 干预 → 随访 → 闭环" fallback="/teacher">
       <template #right>

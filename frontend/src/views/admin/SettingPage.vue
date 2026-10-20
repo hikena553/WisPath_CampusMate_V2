@@ -51,6 +51,14 @@
             effect="light"
             round
           >{{ voiceKeyConfigured ? '可用' : '待配置' }}</el-tag>
+          <el-tag
+            v-else-if="g.key === 'wechat'"
+            class="nav-status"
+            :type="wechatMpReady ? 'success' : 'info'"
+            size="small"
+            effect="light"
+            round
+          >{{ wechatMpReady ? '已配置' : '待配置' }}</el-tag>
         </div>
       </aside>
 
@@ -547,6 +555,122 @@
             </el-button>
           </div>
         </section>
+
+        <!-- ============ 微信小程序 ============ -->
+        <section id="sec-wechat" class="setting-section">
+          <div class="section-header">
+            <div class="section-header-icon green"><el-icon><Smartphone /></el-icon></div>
+            <div class="section-header-info">
+              <div class="section-title">
+                微信小程序
+                <el-tag v-if="wechatMpReady" type="success" size="small" effect="light" round>已配置</el-tag>
+                <el-tag v-else type="warning" size="small" effect="light" round>待配置</el-tag>
+              </div>
+              <div class="section-desc">填写小程序 AppID 与密钥，确认后一键把移动端 H5 部署进你的微信小程序（web-view 壳 + miniprogram-ci 上传）</div>
+            </div>
+          </div>
+
+          <!-- 部署链路 -->
+          <div class="pipe-wrap">
+            <div class="pipe-head">
+              <div class="pipe-head-title"><el-icon><Plug /></el-icon> 部署链路</div>
+              <div class="pipe-head-tip">填写密钥 → 校验凭据（微信 cgi-bin/token）→ 生成小程序工程 → 上传代码（生成体验版）</div>
+            </div>
+            <div class="wechat-flow">
+              <template v-for="(node, i) in WECHAT_FLOW" :key="node.title">
+                <div class="wechat-flow-node" :class="{ done: node.done() }">
+                  <div class="wechat-flow-title">{{ node.title }}</div>
+                  <div class="wechat-flow-desc">{{ node.desc }}</div>
+                </div>
+                <span v-if="i < WECHAT_FLOW.length - 1" class="wechat-flow-arrow">→</span>
+              </template>
+            </div>
+          </div>
+
+          <div class="setting-list">
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">小程序 AppID <span class="required">*</span></div>
+                <div class="setting-desc">在 mp.weixin.qq.com → 开发管理 → 开发设置 中获取，wx 开头</div>
+              </div>
+              <el-input v-model="settingsMap['wechat_mp_appid']" placeholder="wx1234567890abcdef" style="width: 300px" />
+            </div>
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">小程序 AppSecret <span class="required">*</span></div>
+                <div class="setting-desc">敏感信息，加密存储、脱敏回显；点击输入框可直接输入新值覆盖（用于校验凭据与获取 access_token）</div>
+              </div>
+              <el-input
+                v-model="settingsMap['wechat_mp_appsecret']"
+                type="password"
+                show-password
+                placeholder="请输入小程序 AppSecret"
+                style="width: 300px"
+                @focus="onSensitiveFocus('wechat_mp_appsecret')"
+                @blur="restoreSensitiveOnBlur('wechat_mp_appsecret')"
+              />
+            </div>
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">移动端 H5 站点地址 <span class="required">*</span></div>
+                <div class="setting-desc">小程序通过 web-view 承载的移动端入口（必须 https，域名需在小程序后台配置为「业务域名」）</div>
+              </div>
+              <el-input v-model="settingsMap['wechat_mp_h5_url']" placeholder="https://your-domain.com/" style="width: 360px" />
+            </div>
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">代码上传密钥</div>
+                <div class="setting-desc">
+                  可选。自动上传所需：在小程序后台下载 <span class="mono-text">private.&lt;appid&gt;.key</span> 的内容粘贴于此，
+                  并把后端出口 IP 加入其 IP 白名单；不填写则仅生成工程，可用微信开发者工具手动上传。
+                </div>
+              </div>
+              <el-input
+                v-model="settingsMap['wechat_mp_upload_key']"
+                type="textarea"
+                :rows="3"
+                placeholder="-----BEGIN PRIVATE KEY----- ... -----END PRIVATE KEY-----"
+                style="width: 380px"
+                @focus="onSensitiveFocus('wechat_mp_upload_key')"
+                @blur="restoreSensitiveOnBlur('wechat_mp_upload_key')"
+              />
+            </div>
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">版本号 / 备注</div>
+                <div class="setting-desc">上传体验版时使用的版本号与描述</div>
+              </div>
+              <div class="wechat-version">
+                <el-input v-model="deployVersion" placeholder="1.0.0" style="width: 140px" />
+                <el-input v-model="deployDesc" placeholder="管理端一键部署" style="width: 220px" />
+              </div>
+            </div>
+          </div>
+
+          <div class="ai-actions">
+            <el-button type="primary" :loading="savingWechat" @click="handleSaveWechat">
+              <el-icon><Check /></el-icon> 保存并校验
+            </el-button>
+            <el-button :loading="deployingWechat" @click="handleDeployWechat">
+              <el-icon><Upload /></el-icon> 部署到小程序
+            </el-button>
+            <el-button :loading="wechatInfoLoading" @click="loadWechatMpInfo">
+              <el-icon><RefreshCw /></el-icon> 刷新状态
+            </el-button>
+          </div>
+
+          <!-- 部署步骤结果 -->
+          <div v-if="wechatSteps.length" class="wechat-steps">
+            <div v-for="s in wechatSteps" :key="s.key" class="wechat-step" :class="`st-${s.status}`">
+              <el-icon><component :is="stepIcon(s.status)" /></el-icon>
+              <div class="wechat-step-body">
+                <div class="wechat-step-title">{{ s.title }}</div>
+                <div class="wechat-step-msg">{{ s.message }}</div>
+                <pre v-if="s.output" class="wechat-step-output">{{ s.output }}</pre>
+              </div>
+            </div>
+          </div>
+        </section>
         </template>
       </div>
     </div>
@@ -558,12 +682,13 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import {
   Settings, MessageSquare, TriangleAlert, Check, RefreshCw, Plug, Image,
   Sparkles, Upload, Mic, Monitor, Headphones, Play, CircleCheck,
-  Clock, Info,
+  Clock, Info, Smartphone,
 } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import {
   getSettings, batchUpdateSettings, generateBrandingImages, uploadBrandingImage,
   getVoicePipelineInfo, testTtsPreview, type Setting as SettingType, type VoicePipelineInfo, type VoiceGroup,
+  getWechatMpInfo, verifyWechatMp, deployWechatMp, type WechatMpInfo, type WechatMpStep,
 } from '@/api/setting'
 import { getCrisisConfig } from '@/api/crisis'
 import { refreshSiteConfig } from '@/composables/useSiteConfig'
@@ -586,6 +711,7 @@ const groups = [
   { key: 'alert', icon: TriangleAlert, label: '危机预警', desc: '敏感词与通知' },
   { key: 'brand', icon: Image, label: '品牌设计', desc: 'Logo 与吉祥物' },
   { key: 'voice', icon: Mic, label: '语音与 TTS', desc: '通话链路与音色' },
+  { key: 'wechat', icon: Smartphone, label: '微信小程序', desc: '密钥与一键部署' },
 ]
 const sectionKeys = groups.map(g => g.key)
 
@@ -756,7 +882,10 @@ const aiConfigured = computed(() => {
 // ===== 敏感字段（掩码值）处理 =====
 // 接口对敏感 Key 仅返回掩码（sk-s****MRig），页面直接明文显示以便确认"已回显"；
 // 点击输入框时自动清空，可直接输入新 Key 覆盖；未输入则失焦恢复原掩码。
-const _MASKED_KEYS = new Set(['llm_api_key', 'dashscope_api_key', 'embedding_api_key', 'xqe_password'])
+const _MASKED_KEYS = new Set([
+  'llm_api_key', 'dashscope_api_key', 'embedding_api_key', 'xqe_password',
+  'wechat_mp_appsecret', 'wechat_mp_upload_key',
+])
 
 function isMaskedValue(v?: string): boolean {
   return !!v && v.includes('****')
@@ -922,6 +1051,103 @@ async function loadVoiceInfo() {
   }
 }
 
+// ===== 微信小程序部署 =====
+const wechatInfo = ref<WechatMpInfo | null>(null)
+const wechatInfoLoading = ref(false)
+const savingWechat = ref(false)
+const deployingWechat = ref(false)
+const wechatSteps = ref<WechatMpStep[]>([])
+const deployVersion = ref('1.0.0')
+const deployDesc = ref('管理端一键部署')
+
+const wechatMpReady = computed(
+  () => !!(settingsMap['wechat_mp_appid'] && settingsMap['wechat_mp_appsecret'] && settingsMap['wechat_mp_h5_url']),
+)
+
+// 部署链路四步：done() 决定节点是否点亮
+const WECHAT_FLOW = [
+  { title: '配置密钥', desc: 'AppID / AppSecret / H5', done: () => wechatMpReady.value },
+  { title: '校验凭据', desc: '微信 cgi-bin/token', done: () => !!wechatInfo.value?.appsecret_configured },
+  { title: '生成工程', desc: 'web-view 壳小程序', done: () => !!wechatInfo.value?.project_generated },
+  { title: '上传代码', desc: 'miniprogram-ci → 体验版', done: () => !!wechatInfo.value?.upload_key_configured },
+]
+
+function stepIcon(status: WechatMpStep['status']) {
+  return status === 'ok' ? CircleCheck : status === 'pending' ? Clock : TriangleAlert
+}
+
+async function loadWechatMpInfo() {
+  wechatInfoLoading.value = true
+  try {
+    wechatInfo.value = await getWechatMpInfo()
+  } catch (error) {
+    console.error('加载微信小程序配置失败:', error)
+  } finally {
+    wechatInfoLoading.value = false
+  }
+}
+
+// 保存并校验：先落库（未修改的敏感字段不提交），再真实调用微信接口校验凭据
+async function handleSaveWechat() {
+  if (!settingsMap['wechat_mp_appid']?.trim()) {
+    ElMessage.warning('请填写小程序 AppID')
+    return
+  }
+  if (!settingsMap['wechat_mp_h5_url']?.trim()) {
+    ElMessage.warning('请填写移动端 H5 站点地址')
+    return
+  }
+  savingWechat.value = true
+  try {
+    const payload = stripMaskedKeys({
+      wechat_mp_appid: settingsMap['wechat_mp_appid'] || '',
+      wechat_mp_appsecret: settingsMap['wechat_mp_appsecret'] || '',
+      wechat_mp_h5_url: settingsMap['wechat_mp_h5_url'] || '',
+      wechat_mp_upload_key: settingsMap['wechat_mp_upload_key'] || '',
+    })
+    await batchUpdateSettings(payload)
+    await loadWechatMpInfo()
+    const res = await verifyWechatMp({
+      appid: settingsMap['wechat_mp_appid'],
+      appsecret: settingsMap['wechat_mp_appsecret'],
+    })
+    if (res.ok) {
+      ElMessage.success(`配置已保存，校验通过：${res.hint}`)
+    } else {
+      ElMessage.error(`配置已保存，但校验未通过：${res.hint}`)
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || '保存失败')
+  } finally {
+    savingWechat.value = false
+  }
+}
+
+// 一键部署：校验凭据 → 生成小程序工程 → 上传代码，逐步回显
+async function handleDeployWechat() {
+  deployingWechat.value = true
+  wechatSteps.value = []
+  try {
+    const res = await deployWechatMp({
+      version: deployVersion.value,
+      desc: deployDesc.value,
+      upload: true,
+    })
+    wechatSteps.value = res.steps || []
+    await loadWechatMpInfo()
+    if (res.ok) {
+      ElMessage.success('部署链路已完成')
+    } else {
+      const stuck = (res.steps || []).find(s => s.status !== 'ok')
+      ElMessage.warning(stuck ? `部署未完成：${stuck.message}` : '部署未完成')
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || '部署失败')
+  } finally {
+    deployingWechat.value = false
+  }
+}
+
 async function handleVoicePreview() {
   if (!previewText.value.trim()) {
     ElMessage.warning('请输入试听文本')
@@ -1068,7 +1294,7 @@ async function loadSettings() {
 }
 
 async function loadAll() {
-  await Promise.all([loadSettings(), loadVoiceInfo()])
+  await Promise.all([loadSettings(), loadVoiceInfo(), loadWechatMpInfo()])
 }
 
 function validateBasicSettings(): boolean {
@@ -1857,6 +2083,83 @@ onMounted(() => {
   cursor: pointer;
 }
 
+/* ===== 微信小程序部署 ===== */
+.wechat-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wechat-flow-node {
+  flex: 1;
+  min-width: 130px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e8ebf1;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.wechat-flow-node.done {
+  border-color: #67c23a;
+  box-shadow: 0 0 0 1px rgba(103, 194, 58, 0.25);
+}
+.wechat-flow-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2b3445;
+  margin-bottom: 2px;
+}
+.wechat-flow-node.done .wechat-flow-title { color: #3f8f28; }
+.wechat-flow-desc {
+  font-size: 10px;
+  color: #8a93a6;
+  line-height: 1.4;
+}
+.wechat-flow-arrow {
+  color: #c0c6d2;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.wechat-version {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.wechat-steps {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wechat-step {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e8ebf1;
+  background: #fafbfd;
+}
+.wechat-step.st-ok { border-color: #cbe8bd; background: #f4fbf1; color: #3f8f28; }
+.wechat-step.st-pending { border-color: #f3e2b8; background: #fdf9ef; color: #b7791f; }
+.wechat-step.st-failed { border-color: #f3c5c5; background: #fdf3f3; color: #c0392b; }
+.wechat-step-body { flex: 1; min-width: 0; }
+.wechat-step-title { font-size: 12px; font-weight: 700; color: #2b3445; margin-bottom: 2px; }
+.wechat-step-msg { font-size: 12px; color: #5b6472; line-height: 1.5; word-break: break-all; }
+.wechat-step-output {
+  margin: 6px 0 0;
+  padding: 8px;
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #1c1f2b;
+  color: #cfd6e4;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 /* ===== 响应式 ===== */
 @media (max-width: 900px) {
   .setting-body {
@@ -2003,4 +2306,19 @@ html.dark .mono-text {
   color: #79bbff;
   background: rgba(64, 158, 255, 0.14);
 }
+html.dark .wechat-flow-node {
+  background: #20232f;
+  border-color: #33384a;
+}
+html.dark .wechat-flow-title { color: #e8eaf0; }
+html.dark .wechat-flow-node.done { border-color: #4c8f3a; }
+html.dark .wechat-flow-node.done .wechat-flow-title { color: #81c784; }
+html.dark .wechat-flow-desc { color: #7a8296; }
+html.dark .wechat-flow-arrow { color: #4a5062; }
+html.dark .wechat-step { background: #1a1d28; border-color: #2a2e3d; }
+html.dark .wechat-step.st-ok { background: rgba(103, 194, 58, 0.1); border-color: rgba(103, 194, 58, 0.35); }
+html.dark .wechat-step.st-pending { background: rgba(230, 162, 60, 0.1); border-color: rgba(230, 162, 60, 0.35); }
+html.dark .wechat-step.st-failed { background: rgba(245, 108, 108, 0.1); border-color: rgba(245, 108, 108, 0.35); }
+html.dark .wechat-step-title { color: #e8eaf0; }
+html.dark .wechat-step-msg { color: #a0a8b8; }
 </style>

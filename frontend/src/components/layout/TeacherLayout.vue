@@ -1,48 +1,37 @@
 <template>
   <div class="app-shell" :class="{ 'app-mobile': isMobile }">
-    <header v-if="!isMobile" class="topbar">
-      <div class="topbar-left" style="cursor:pointer" @click="goTo('/teacher')">
-        <img :src="siteLogo" class="topbar-badge" />
-        <span class="logo">{{ siteName }}</span>
-        <span class="logo-divider"></span>
-        <span class="motto">博学、笃行、严谨、创新</span>
-      </div>
-      <div class="topbar-right">
-        <el-tooltip :content="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'" placement="bottom">
-          <el-button text circle @click="toggleSidebar">
-            <el-icon :size="18"><Fold v-if="!sidebarCollapsed" /><Expand v-else /></el-icon>
-          </el-button>
-        </el-tooltip>
-      </div>
-    </header>
-    <!-- 系统公告：管理端下发的站点公告，各端同步展示 -->
-    <SiteAnnouncementBar />
-    <div class="body-area">
-      <aside v-if="!isMobile" class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+    <!-- ============ 桌面端（>=768px）============
+         对齐管理端（AdminLayout）的工作台外壳规范：
+         深色渐变侧边栏（可折叠）+ 白色顶栏（面包屑 + 时钟）+ 多页签 + 内容区 -->
+    <template v-if="!isMobile">
+      <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+        <div class="sidebar-brand" style="cursor:pointer" @click="goTo('/teacher')">
+          <img :src="siteLogo" class="brand-logo" />
+          <div class="brand-text sidebar-text">
+            <span class="brand-name">{{ siteName }}</span>
+            <span class="brand-motto">智慧校园 · 教师端</span>
+          </div>
+        </div>
         <nav class="sidebar-nav">
           <template v-for="g in navGroups" :key="g.title">
-            <div v-if="!sidebarCollapsed" class="nav-group-title">{{ g.title }}</div>
+            <div class="nav-group-label sidebar-text">{{ g.title }}</div>
             <!-- 单个 v-for 保持声明顺序；弹窗型项用 button，其余用 router-link -->
             <template v-for="item in g.items" :key="item.path">
-              <button
-                v-if="item.dialog"
-                type="button"
-                class="nav-item"
-                :class="{ active: route.path === item.path }"
-                @click="openDialog(item)"
-              >
-                <el-icon :size="18"><component :is="item.icon" /></el-icon>
-                <span v-if="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
+              <button v-if="item.dialog" type="button" class="nav-item" @click="openDialog(item)">
+                <el-tooltip v-if="sidebarCollapsed" :content="item.label" placement="right">
+                  <el-icon :size="20"><component :is="item.icon" /></el-icon>
+                </el-tooltip>
+                <el-icon v-else :size="20"><component :is="item.icon" /></el-icon>
+                <span class="nav-label sidebar-text">{{ item.label }}</span>
               </button>
-              <router-link
-                v-else
-                :to="item.path"
-                class="nav-item"
-                :class="{ active: isActive(item) }"
-              >
-                <img v-if="item.iconImg" :src="item.iconImg" class="nav-icon-img" alt="" />
-                <el-icon v-else :size="18"><component :is="item.icon" /></el-icon>
-                <span v-if="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
+              <router-link v-else :to="item.path" class="nav-item" :class="{ active: isActive(item) }">
+                <el-tooltip v-if="sidebarCollapsed" :content="item.label" placement="right">
+                  <img v-if="item.iconImg" :src="item.iconImg" class="nav-icon-img" alt="" />
+                  <el-icon v-else :size="20"><component :is="item.icon" /></el-icon>
+                </el-tooltip>
+                <img v-else-if="item.iconImg" :src="item.iconImg" class="nav-icon-img" alt="" />
+                <el-icon v-else :size="20"><component :is="item.icon" /></el-icon>
+                <span class="nav-label sidebar-text">{{ item.label }}</span>
                 <el-badge
                   v-if="item.badge && unreadCount > 0"
                   :value="unreadCount"
@@ -57,10 +46,10 @@
         <div class="sidebar-footer">
           <el-dropdown trigger="click" placement="top-start">
             <div class="teacher-info">
-              <el-avatar :size="sidebarCollapsed ? 32 : 40" :src="auth.user?.avatar || ''">
+              <el-avatar :size="sidebarCollapsed ? 32 : 36" :src="auth.user?.avatar || ''">
                 {{ auth.userName?.[0] }}
               </el-avatar>
-              <div v-if="!sidebarCollapsed" class="teacher-detail">
+              <div class="teacher-detail sidebar-text">
                 <span class="teacher-name">{{ auth.userName }}</span>
                 <span class="teacher-college">{{ auth.user?.college || '未知学院' }}</span>
               </div>
@@ -76,24 +65,78 @@
           </el-dropdown>
         </div>
       </aside>
-      <!-- teacher-scope 仅桌面端挂载：它是「桌面端密度规范」的作用域开关。
-           移动端不挂，页面仍走原有的 .tui-page 规则，保证移动端 UI 不被桌面改造影响。 -->
-      <main class="main-area" :class="{ 'teacher-scope': !isMobile, 'has-bottom-bar': isMobile }">
+
+      <div class="main-column">
+        <header class="topbar">
+          <div class="topbar-left">
+            <el-tooltip :content="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'" placement="bottom">
+              <el-button text circle class="sidebar-toggle-btn" @click="toggleSidebar">
+                <span class="toggle-icon" :class="{ collapsed: sidebarCollapsed }">
+                  <el-icon :size="18" class="toggle-ic fold-ic"><PanelLeftClose /></el-icon>
+                  <el-icon :size="18" class="toggle-ic expand-ic"><PanelLeftOpen /></el-icon>
+                </span>
+              </el-button>
+            </el-tooltip>
+            <el-breadcrumb separator="/" class="topbar-breadcrumb">
+              <el-breadcrumb-item :to="{ path: '/teacher' }">首页</el-breadcrumb-item>
+              <el-breadcrumb-item v-if="currentTitle && currentTitle !== '首页'">{{ currentTitle }}</el-breadcrumb-item>
+            </el-breadcrumb>
+          </div>
+          <div class="topbar-right">
+            <span class="topbar-clock">{{ now }}</span>
+          </div>
+        </header>
+
+        <!-- 多页签：与管理端一致，已打开的页面在此切换/关闭 -->
+        <div class="tabs-bar">
+          <div class="tabs-scroll">
+            <div
+              v-for="tab in tabs"
+              :key="tab.path"
+              class="tab-item"
+              :class="{ active: route.path === tab.path }"
+              @click="goTo(tab.path)"
+            >
+              <span class="tab-dot"></span>
+              <span class="tab-label">{{ tab.label }}</span>
+              <el-icon v-if="tabs.length > 1" class="tab-close" :size="12" @click.stop="closeTab(tab.path)">
+                <Close />
+              </el-icon>
+            </div>
+          </div>
+        </div>
+
+        <!-- 系统公告：管理端下发的站点公告，各端同步展示 -->
+        <SiteAnnouncementBar />
+
+        <!-- teacher-scope：桌面端密度 / 组件规范的作用域开关 -->
+        <main class="main-area teacher-scope">
+          <router-view v-slot="{ Component }">
+            <keep-alive :include="cachedNames">
+              <component :is="Component" />
+            </keep-alive>
+          </router-view>
+        </main>
+      </div>
+    </template>
+
+    <!-- ============ 移动端（<768px）：保持原有布局不变（公告条 + 主区 + 底部页签） ============ -->
+    <template v-else>
+      <SiteAnnouncementBar />
+      <main class="main-area has-bottom-bar">
         <router-view v-slot="{ Component }">
           <keep-alive :include="cachedNames">
             <component :is="Component" />
           </keep-alive>
         </router-view>
       </main>
-    </div>
-
-    <MobileTabBar
-      v-if="isMobile"
-      :items="mobileNavItems"
-      :active-key="activeNavKey"
-      :unread-count="unreadCount"
-      @select="handleNavSelect"
-    />
+      <MobileTabBar
+        :items="mobileNavItems"
+        :active-key="activeNavKey"
+        :unread-count="unreadCount"
+        @select="handleNavSelect"
+      />
+    </template>
 
     <!-- 桌面桌宠：不跳转智能体页即可对话并驱动智能体执行功能。
          1) 挂在布局层而非页面内 —— 与 HomePage 的 .home-dashboard 是兄弟关系，
@@ -209,8 +252,10 @@ import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, User, Message, Notebook,
   List, Stamp, WarningFilled, Bell, ChatDotRound, Sunny,
-  SwitchButton, CameraFilled, Fold, Expand
+  SwitchButton, CameraFilled, Close
 } from '@element-plus/icons-vue'
+// 桌面端折叠按钮图标：与管理端（AdminLayout）保持同一套线性图标
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -368,6 +413,57 @@ function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
+// ===== 多页签（对齐管理端）=====
+// 桌面端以页签承载「已打开」的教师端页面；首页常驻，其余进入即追加。
+// 「个人中心」在桌面端是弹窗（见下方 watch），不产生页签。
+interface TabItem { path: string; label: string }
+const allNav = navGroups.flatMap((g) => g.items)
+const tabs = ref<TabItem[]>([{ path: '/teacher', label: '首页' }])
+
+/** 顶栏面包屑 / 页签标题：路由 meta.title 优先，其次按侧边栏归属项取名 */
+const currentTitle = computed(() => {
+  const metaTitle = route.meta.title as string | undefined
+  if (metaTitle) return metaTitle
+  const p = route.path
+  const owner = SUB_ROUTE_PARENT[p]
+  if (owner) return allNav.find((i) => i.path === owner)?.label || ''
+  return allNav.find((i) => i.path === p)?.label || ''
+})
+
+watch(
+  () => route.path,
+  (p) => {
+    if (!p.startsWith('/teacher') || p === '/teacher/profile') return
+    if (!tabs.value.some((t) => t.path === p)) {
+      tabs.value.push({ path: p, label: currentTitle.value || p })
+    }
+    if (tabs.value.length > 10) tabs.value.shift()
+  },
+  { immediate: true }
+)
+
+function closeTab(path: string) {
+  const idx = tabs.value.findIndex((t) => t.path === path)
+  if (idx === -1) return
+  tabs.value.splice(idx, 1)
+  if (route.path === path) {
+    const next = tabs.value[idx - 1] || tabs.value[idx] || tabs.value[tabs.value.length - 1]
+    router.push(next ? next.path : '/teacher')
+  }
+}
+
+// ===== 顶栏时钟 =====
+const now = ref('')
+let clockTimer: number | undefined
+function updateClock() {
+  const d = new Date()
+  now.value = `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+onMounted(() => {
+  updateClock()
+  clockTimer = window.setInterval(updateClock, 30000)
+})
+
 /**
  * dialog 型导航项：桌面端就地打开弹窗，不跳整页路由。
  * 目前只有「个人中心」，复用已有的资料弹窗（含头像裁剪与修改密码）。
@@ -406,7 +502,10 @@ watch(
 prefetchDashboardData()
 
 onMounted(() => { startUnreadWatch() })
-onUnmounted(() => { stopUnreadWatch() })
+onUnmounted(() => {
+  stopUnreadWatch()
+  if (clockTimer) window.clearInterval(clockTimer)
+})
 
 function goTo(path: string) { router.push(path) }
 
@@ -513,15 +612,21 @@ async function handleSaveProfile() {
 body { overflow: hidden; margin: 0; background-color: #0f172a; }
 </style>
 <style scoped>
+/* ============================================================
+   教师端外壳：对齐管理端（AdminLayout）设计规范
+   · 桌面端：深色渐变侧边栏（可折叠 216 → 64）+ 白色顶栏（折叠按钮/面包屑/时钟）
+     + 多页签 + 内容区（.main-area.teacher-scope）
+   · 移动端（.app-mobile）：保持原有手机容器行为，仅主区 + 底部页签
+   ============================================================ */
 .app-shell {
   display: flex;
-  flex-direction: column;
   height: 100vh;
-  background: #f5f6f8;
+  background: #f4f6fa;
 }
 
 /* 移动(App)模式：宽屏下模拟手机容器，居中限宽，交互限制在窄屏内 */
 .app-mobile {
+  flex-direction: column;
   max-width: 440px;
   margin: 0 auto;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
@@ -536,37 +641,107 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
   right: 0;
 }
 
-/* ===== Topbar：白底 + 细分割线（克制、主流的企业后台观感） ===== */
+/* ===== 右侧主列：顶栏 → 页签 → 内容区 ===== */
+.main-column { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* ===== Topbar：白底 + 细分割线（与管理端同款高度与阴影） ===== */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; height: 56px;
+  padding: 0 16px; height: 52px; flex-shrink: 0; z-index: 100;
   background: #ffffff;
-  border-bottom: 1px solid #eaecf0;
-  flex-shrink: 0; z-index: 100;
+  border-bottom: 1px solid #eef2f7;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
 }
-.topbar-left { display: flex; align-items: center; gap: 8px; position: relative; z-index: 101; }
-.topbar-badge { height: 28px; width: 28px; border-radius: 8px; object-fit: contain; }
-.logo { font-size: 16px; font-weight: 700; color: #101828; letter-spacing: 0.2px; }
-.logo-divider { width: 1px; height: 18px; background: #eaecf0; margin: 0 6px; }
-.motto {
-  font-size: 13px; font-weight: 500;
-  color: #667085;
-  letter-spacing: 1px;
+.topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.topbar-right { display: flex; align-items: center; gap: 12px; color: #64748b; font-size: 13px; white-space: nowrap; }
+:deep(.topbar-left .el-button) { color: #475569; }
+.topbar-breadcrumb { font-size: 13px; }
+
+/* 折叠按钮图标动画：折叠/展开两个图标交叉淡入淡出（对齐管理端） */
+.sidebar-toggle-btn { flex-shrink: 0; }
+.toggle-icon {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
 }
-.topbar-right { display: flex; align-items: center; gap: 4px; }
+.toggle-ic {
+  position: absolute; top: 50%; left: 50%; margin: -9px 0 0 -9px;
+  transition: opacity 0.18s ease, transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.fold-ic { opacity: 1; transform: rotate(0deg); }
+.expand-ic { opacity: 0; transform: rotate(-90deg); }
+.toggle-icon.collapsed .fold-ic { opacity: 0; transform: rotate(90deg); }
+.toggle-icon.collapsed .expand-ic { opacity: 1; transform: rotate(0deg); }
 
-/* ===== Body ===== */
-.body-area { display: flex; flex: 1; min-height: 0; }
+/* ===== 多页签 ===== */
+.tabs-bar {
+  flex-shrink: 0; background: #ffffff;
+  border-bottom: 1px solid #eef2f7;
+  padding: 6px 12px 0;
+}
+.tabs-scroll { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 6px; }
+.tabs-scroll::-webkit-scrollbar { display: none; }
+.tab-item {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; color: #64748b; user-select: none;
+  border: 1px solid transparent; background: transparent;
+  transition: all 0.15s ease;
+}
+.tab-item:hover { background: #f1f5f9; color: #334155; }
+.tab-item.active {
+  background: #eff6ff; color: #2563eb; font-weight: 600;
+  border-color: #dbeafe;
+}
+.tab-dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; transition: background 0.15s; }
+.tab-item.active .tab-dot { background: #3b82f6; }
+.tab-label { white-space: nowrap; }
+.tab-close { border-radius: 50%; color: #94a3b8; }
+.tab-close:hover { background: #e2e8f0; color: #334155; }
 
-/* ===== Sidebar：白底 + 职能分组 + 浅底选中态（对齐主流后台侧边栏） ===== */
+/* ===== Sidebar：深色渐变 + 职能分组 + 品牌色选中态（对齐管理端） ===== */
 .sidebar {
   width: 216px; flex-shrink: 0; display: flex; flex-direction: column;
-  background: #ffffff;
-  border-right: 1px solid #eaecf0;
-  transition: width 0.2s ease;
+  background: linear-gradient(180deg, #0f172a 0%, #0b1222 100%);
+  border-right: 1px solid rgba(148, 163, 184, 0.08);
+  transition: width 0.26s cubic-bezier(0.33, 1, 0.68, 1);
   overflow: hidden;
+  z-index: 10;
 }
 .sidebar.collapsed { width: 64px; }
+
+/* 折叠时文字平滑淡出：只做水平方向（宽度 + 透明度）过渡，
+   不引入高度/上下间距的纵向过渡，保证折叠时侧栏内容不上下跳动。 */
+.sidebar-text {
+  transition:
+    opacity 0.2s ease 0.15s,
+    width 0.26s cubic-bezier(0.33, 1, 0.68, 1) 0.1s;
+}
+.sidebar.collapsed .sidebar-text {
+  transition:
+    opacity 0.1s ease 0s,
+    width 0.26s cubic-bezier(0.33, 1, 0.68, 1) 0s;
+}
+
+.sidebar-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px; flex-shrink: 0; white-space: nowrap;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+.sidebar.collapsed .sidebar-brand {
+  justify-content: center; gap: 0; padding: 14px 0;
+  transition: padding 0.26s cubic-bezier(0.33, 1, 0.68, 1), gap 0.26s;
+}
+.brand-logo { height: 34px; width: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.brand-text { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.sidebar.collapsed .brand-text { width: 0; opacity: 0; }
+.brand-name {
+  font-size: 15px; font-weight: 700; color: #f1f5f9;
+  letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.brand-motto {
+  font-size: 11px; color: rgba(148, 163, 184, 0.7);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .sidebar-nav {
   flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 2px;
@@ -577,78 +752,73 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 }
 .sidebar-nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
-/* ===== 分组标题：从「一行灰字」升级为真正的分组头 =====
-   之前三个分组标题只是三行同样大小的灰色文字，组与组之间没有分隔，
-   11 项导航连成一片、看不出层次。现在给标题加一条向右延伸的发丝线，
-   并拉开组与组的间距，让「工作 / 班级 / 我的」成为清晰的三段。 */
-.nav-group-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 8px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: #98a2b3;
-  white-space: nowrap;
+/* 分组标题：小号大写标签 + 向右延伸的发丝线，让「工作 / 班级 / 我的」成为清晰三段 */
+.nav-group-label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 10px 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: 1.2px;
+  color: rgba(148, 163, 184, 0.55);
+  white-space: nowrap; overflow: hidden;
 }
-.nav-group-title::after {
-  content: '';
-  flex: 1;
-  min-width: 10px;
-  height: 1px;
-  background: #eef0f3;
+.nav-group-label::after {
+  content: ''; flex: 1; min-width: 8px; height: 1px;
+  background: rgba(148, 163, 184, 0.14);
 }
-.nav-group-title:first-child { padding-top: 4px; }
+.nav-group-label:first-child { padding-top: 6px; }
+/* 折叠态仅淡出文字（高度不变），避免内容向上跳动 */
+.sidebar.collapsed .nav-group-label { opacity: 0; }
 
-/* 导航项：a 与 button 两种宿主必须完全同款。
-   原生 button 自带边框、灰底、系统字体与居中，若不在基类里抹平，
-   「个人中心」（弹窗入口，用 button）就会与其余 router-link 项长得不一样。 */
+/* 导航项：a 与 button 两种宿主必须完全同款（原生 button 自带边框/灰底/居中） */
 .nav-item {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%;
-  min-height: 36px;
-  padding: 7px 10px; border-radius: 9px;
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; min-height: 36px;
+  padding: 8px 11px; border-radius: 8px;
   border: none; background: transparent;
   font-family: inherit; font-size: 13.5px; font-weight: 500;
   text-align: left; cursor: pointer;
-  text-decoration: none; color: #475467;
+  text-decoration: none; color: rgba(203, 213, 225, 0.78);
   transition: background 0.15s ease, color 0.15s ease;
   position: relative; white-space: nowrap;
 }
-.sidebar.collapsed .nav-item { justify-content: center; padding: 8px; }
-.nav-item:hover { background: #f6f7f9; color: #101828; }
-.nav-item.active { background: #eff4ff; color: #1d4ed8; font-weight: 600; }
-.nav-item.active::before {
-  content: '';
-  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  width: 3px; height: 18px; border-radius: 0 3px 3px 0;
-  background: #2563eb;
+.sidebar.collapsed .nav-item {
+  justify-content: center; gap: 0; padding: 8px;
+  transition: background 0.15s ease, color 0.15s ease, gap 0.26s cubic-bezier(0.33, 1, 0.68, 1);
 }
-.nav-item.active .el-icon { color: #1d4ed8; }
-.nav-label { flex: 1; }
+.nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+.nav-item.active { background: rgba(59, 130, 246, 0.2); color: #ffffff; font-weight: 600; }
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 22%; bottom: 22%; width: 3px;
+  border-radius: 0 3px 3px 0; background: #60a5fa;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.8);
+}
+.nav-item.active .el-icon { color: #93c5fd; }
+.nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.sidebar.collapsed .nav-label { flex: 0 1 0px; width: 0; opacity: 0; }
 /* 侧边栏品牌图标（绵小城形象）：与 el-icon 统一 18px 视觉尺寸 */
 .nav-icon-img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
 .nav-badge { position: absolute; top: 4px; right: 6px; }
+.sidebar.collapsed .nav-badge { top: 2px; right: 2px; }
 
 /* ===== Sidebar Footer ===== */
 .sidebar-footer {
-  padding: 10px; border-top: 1px solid #eaecf0;
+  padding: 10px 12px 14px; flex-shrink: 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
 }
-/* 底部账号块与导航项左右对齐（同为 10px 内边距），头像与文字间距收紧到 10px */
 .teacher-info {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: 9px; cursor: pointer;
-  transition: background 0.15s;
+  padding: 8px; border-radius: 8px; cursor: pointer;
+  transition: background 0.15s, gap 0.26s cubic-bezier(0.33, 1, 0.68, 1), padding 0.26s cubic-bezier(0.33, 1, 0.68, 1);
+  white-space: nowrap;
 }
-.sidebar.collapsed .teacher-info { justify-content: center; padding: 10px 0; }
-.teacher-info:hover { background: var(--hover-bg); }
-.teacher-detail { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.teacher-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.teacher-college { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar.collapsed .teacher-info { justify-content: center; gap: 0; padding: 8px 0; }
+.teacher-info:hover { background: rgba(255, 255, 255, 0.06); }
+.teacher-detail { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
+.sidebar.collapsed .teacher-detail { width: 0; opacity: 0; }
+.teacher-name { font-size: 13px; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.teacher-college { font-size: 11px; color: rgba(148, 163, 184, 0.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===== Main ===== */
-.main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .main-area.has-bottom-bar { padding-bottom: 56px; }
 
 /* ===== Profile Dialog ===== */
@@ -664,8 +834,6 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 }
 .avatar-upload-wrap:hover .avatar-overlay { opacity: 1; }
 .crop-container { max-height: 360px; overflow: hidden; }
-:deep(.topbar-right .el-button) { color: #667085; }
-:deep(.topbar-right .el-button:hover) { color: #101828; background: #f2f4f7; }
 
 /* 移动端五页签：中间绵小城凸起，其余等分（主流移动端底部栏布局） */
 :deep(.mobile-tab-bar .tab-item) { flex: 1; }

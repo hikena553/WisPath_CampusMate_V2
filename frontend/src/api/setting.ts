@@ -109,3 +109,56 @@ export function getVoicePipelineInfo() {
 export function testTtsPreview(payload: { text: string; voice?: string }) {
   return request.post<{ audio_base64: string; voice: string; model: string; chars: number }>('/settings/tts/test', payload)
 }
+
+// ===== 微信小程序部署 =====
+
+/** 配置完备度与工程生成状态 */
+export interface WechatMpInfo {
+  appid_configured: boolean
+  appsecret_configured: boolean
+  h5_url_configured: boolean
+  upload_key_configured: boolean
+  appid: string
+  h5_url: string
+  /** 后端是否具备 Node/npm（决定能否自动执行 miniprogram-ci 上传） */
+  node_available: boolean
+  project_generated: boolean
+  generated_at?: string | null
+}
+
+export interface WechatMpVerifyResult {
+  ok: boolean
+  errcode: number | null
+  errmsg: string
+  /** 面向管理员的中文提示 */
+  hint: string
+  expires_in: number
+}
+
+export interface WechatMpStep {
+  key: string
+  title: string
+  status: 'ok' | 'pending' | 'failed'
+  message: string
+  output?: string
+}
+
+export interface WechatMpDeployResult {
+  ok: boolean
+  steps: WechatMpStep[]
+}
+
+// 获取微信小程序配置状态
+export function getWechatMpInfo() {
+  return request.get<WechatMpInfo>('/settings/wechat-mp/info')
+}
+
+// 校验 AppID / AppSecret（可传页面当前填写值，未保存先校验）
+export function verifyWechatMp(payload?: { appid?: string; appsecret?: string }) {
+  return request.post<WechatMpVerifyResult>('/settings/wechat-mp/verify', payload || {})
+}
+
+// 一键部署：校验凭据 → 生成工程 → 上传代码
+export function deployWechatMp(payload?: { version?: string; desc?: string; upload?: boolean }) {
+  return request.post<WechatMpDeployResult>('/settings/wechat-mp/deploy', payload || {})
+}

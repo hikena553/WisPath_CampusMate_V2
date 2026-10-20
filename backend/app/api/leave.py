@@ -76,6 +76,7 @@ def _to_out(r: LeaveRequest, student_name: str = "") -> LeaveRequestOut:
         return_confirmed=bool(r.return_confirmed),
         return_confirmed_at=r.return_confirmed_at.isoformat() if r.return_confirmed_at else None,
         created_at=r.created_at.isoformat() if r.created_at else "",
+        updated_at=r.updated_at.isoformat() if r.updated_at else "",
     )
 
 

@@ -1406,3 +1406,128 @@ button.tui-stat:active { transform: scale(0.98); }
   font-size: 11px;
   color: var(--tui-text-quiet);
 }
+
+/* =========================================================================
+   ▼ v5 桌面端 · 对齐管理端设计规范
+   作用域 .main-area.teacher-scope —— 该 class 由 TeacherLayout 仅在桌面端挂载，
+   移动端不挂载，因此以下规则对移动端零影响。
+   -------------------------------------------------------------------------
+   对齐内容（来自 components/layout/AdminLayout.vue 与 styles/admin-components.css）：
+   1) 工作台度量：内容本色 #f4f6fa、白卡 12px 圆角 / #eef0f4 发丝描边 / 轻投影
+   2) 内容区留白 24 / 28（管理端 .page-container 同款）
+   3) 表格：浅灰渐变表头 + 舒适行高 + 圆角外框
+   4) 按钮：主按钮渐变底 + hover 上浮（沿用教师端品牌蓝，避免两端蓝不统一）
+   5) 表单 / 标签：8px 控件圆角、6px 标签圆角
+   6) 桌面页头：与管理端 .page-header 同语言的「标题 + 副标题 + 右侧操作」
+   注意：教师端品牌色（--tui-brand #2563eb）保持不变，仅对齐版式与交互处理，
+        以免与管理端各自的语义色体系互相污染。
+   ========================================================================= */
+
+/* ---------- 1) 工作台度量 ---------- */
+.main-area.teacher-scope {
+  --tui-bg: #f4f6fa;
+  --tui-border: #eef0f4;
+  --tui-border-strong: #e4e7ee;
+  --tui-surface-muted: #f7f8fb;
+  --tui-surface-sunken: #eff1f6;
+  --tui-radius-xs: 8px;
+  --tui-radius-sm: 10px;
+  --tui-radius: 12px;
+  --tui-radius-lg: 16px;
+  --tui-shadow-1: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --tui-shadow-2: 0 8px 24px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.05);
+}
+
+/* ---------- 2) 内容区留白（对齐管理端 .page-container） ---------- */
+.main-area.teacher-scope .tui-content {
+  padding: 24px 28px 40px;
+  max-width: none;
+}
+/* 自建骨架页：统一左右留白与页底色，消除与管理端并排时的错位感 */
+.main-area.teacher-scope .home-dashboard { padding: 0 28px 24px; }
+.main-area.teacher-scope .students-page { padding: 0 28px 24px; background: var(--tui-bg); }
+.main-area.teacher-scope .profile-wrapper.is-web { padding: 20px 28px 0; background: var(--tui-bg); }
+
+/* 桌面返回行（SubPageHeader）与顶栏面包屑重复，桌面端隐藏，交由顶栏统一承载 */
+.main-area.teacher-scope .tui-back-row { display: none; }
+
+/* 页头吸顶：负外边距需与新留白（24 / 28）一致，否则滚动内容会从四周缝隙透出 */
+@media (min-width: 768px) {
+  .main-area.teacher-scope .tui-page > .tui-content > .tui-header {
+    margin: -24px -28px 4px;
+    padding: 24px 28px 14px;
+  }
+}
+
+/* ---------- 3) 白卡：12px 圆角 + 发丝描边 + 轻投影 ---------- */
+.main-area.teacher-scope :is(.tui-card, .tui-section, .tui-list, .tui-stat, .tui-hero, .tp-side-card, .growth-band, .quick-pill, .analysis-card, .section-card) {
+  border-color: var(--tui-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow-1);
+}
+.main-area.teacher-scope .tui-card-head,
+.main-area.teacher-scope .tui-section-head h3 { color: #333a4d; font-weight: 600; }
+
+/* ---------- 4) 表格：浅灰渐变表头 + 舒适行高（同 admin-components.css） ---------- */
+.main-area.teacher-scope .el-table {
+  --el-table-border-color: var(--tui-border);
+  --el-table-header-bg-color: transparent;
+  --el-table-row-hover-bg-color: #f6f9ff;
+  --el-table-current-row-bg-color: #eef4ff;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  overflow: hidden;
+  font-size: 13.5px;
+  box-shadow: var(--tui-shadow-1);
+}
+.main-area.teacher-scope .el-table th.el-table__cell {
+  background: linear-gradient(180deg, #f7f8fb 0%, #f3f5f9 100%);
+  color: #454a57;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  border-bottom: 1px solid var(--tui-border);
+  padding: 12px 0;
+}
+.main-area.teacher-scope .el-table td.el-table__cell {
+  padding: 11px 0;
+  border-bottom: 1px solid #f4f6f9;
+}
+.main-area.teacher-scope .el-table tbody tr:last-child td.el-table__cell { border-bottom: none; }
+
+/* ---------- 5) 按钮：主按钮渐变底 + hover 上浮（处理方式对齐管理端） ---------- */
+.main-area.teacher-scope .el-button { border-radius: 8px; font-weight: 500; }
+.main-area.teacher-scope .el-button--primary {
+  background: linear-gradient(135deg, var(--tui-brand) 0%, var(--tui-brand-strong) 100%);
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.24);
+}
+.main-area.teacher-scope .el-button--primary:hover:not(.is-disabled):not(.is-loading) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.32);
+}
+.main-area.teacher-scope .el-button--primary:active { transform: translateY(0); }
+
+/* ---------- 6) 表单 / 标签 ---------- */
+.main-area.teacher-scope .el-input__wrapper,
+.main-area.teacher-scope .el-select__wrapper,
+.main-area.teacher-scope .el-textarea__inner { border-radius: 8px; }
+.main-area.teacher-scope .el-tag { border-radius: 6px; font-weight: 500; }
+
+/* ---------- 7) 首页页头：与管理端 .page-header 同语言（标题 + 副标题 + 右侧操作） ---------- */
+.main-area.teacher-scope .hm-head-sticky {
+  background: var(--tui-bg);
+  margin: 0 -28px;
+  padding: 20px 28px 0;
+}
+.main-area.teacher-scope .hm-head-desk {
+  padding: 0 0 14px;
+  border: none;
+  border-bottom: 1px solid var(--tui-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.main-area.teacher-scope .hm-head-desk .hm-head-title { font-size: 20px; color: #1f2d3d; }
+.main-area.teacher-scope .hm-head-desk .hm-head-meta { color: var(--tui-text-quiet); }
+.main-area.teacher-scope .hm-sync-hint { background: var(--tui-surface-muted); border-color: var(--tui-border); }
