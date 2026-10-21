@@ -3,6 +3,7 @@
 每个来源独立 try/except 容错，单个失败不阻塞整体；按 URL 去重入库，并做条数裁剪。
 """
 import logging
+import ipaddress
 import re
 import socket
 import ssl
@@ -10,6 +11,7 @@ import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
+from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -36,6 +38,58 @@ PER_SOURCE_LIMIT = {"papers": 200, "opensource": 60, "agents": 60, "news": 120,
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"
 FEED_UPDATED_KEYS = ("updated_at", "pushed_at", "updated")
+
+# ==================== 资讯源地址安全校验（防 SSRF） ====================
+
+_PRIVATE_HOST_EXACT = {"localhost"}
+_PRIVATE_HOST_SUFFIXES = (".localhost", ".local", ".internal", ".lan")
+
+
+def _is_private_ip(ip) -> bool:
+    return bool(
+        ip.is_private or ip.is_loopback or ip.is_link_local
+        or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+    )
+
+
+def _is_disallowed_host(host: str) -> bool:
+    h = (host or "").strip().strip("[]").lower()
+    if not h:
+        return True
+    if h in _PRIVATE_HOST_EXACT or h.endswith(_PRIVATE_HOST_SUFFIXES):
+        return True
+    try:
+        return _is_private_ip(ipaddress.ip_address(h))
+    except ValueError:
+        return False  # 域名，交由下一步 DNS 校验
+
+
+def validate_source_url(url: str) -> None:
+    """校验资讯源地址：仅 http/https，且目标不得为本机/内网地址。
+
+    防 SSRF：字面 IP 直接判定；域名在解析成功时判定解析结果，
+    解析失败则放行（真正的抓取失败由抓取流程容错处理）。
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("仅支持 http/https 协议的资讯源地址")
+    host = parsed.hostname
+    if not host:
+        raise ValueError("URL 无效，缺少域名")
+    if _is_disallowed_host(host):
+        raise ValueError("不允许配置本机/内网地址作为资讯源")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if _is_private_ip(ip):
+            raise ValueError("不允许配置解析到内网地址的资讯源")
+
 
 # ==================== 底层 HTTP ====================
 

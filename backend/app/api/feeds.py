@@ -148,6 +148,11 @@ def create_source(
     host = urlparse(body.url).hostname
     if not host:
         raise HTTPException(400, "URL 无效，缺少域名")
+    from app.services.feed_ingest import validate_source_url
+    try:
+        validate_source_url(body.url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     dup = (db.query(FeedSource)
            .filter(FeedSource.kind == body.kind, FeedSource.url == body.url)
            .first())
@@ -181,6 +186,11 @@ def update_source(
     if body.enabled is not None:
         src.enabled = body.enabled
     if body.url is not None:
+        from app.services.feed_ingest import validate_source_url
+        try:
+            validate_source_url(body.url)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
         src.url = body.url
     if body.query is not None:
         src.query = body.query
