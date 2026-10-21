@@ -19,7 +19,8 @@ def test_upload_rate_limit_429(api, login_token, monkeypatch):
     """上传限流 20 次/分：非法扩展名请求同样计数（限流在文件校验之前）。"""
     _enable_rate_limit(monkeypatch)
     login = login_token()
-    files = {"file": ("a.txt", b"plain text not allowed")}
+    # .exe 不在 ALLOWED_TYPES 白名单内，扩展名校验会先于限流后的其它逻辑返回 400
+    files = {"file": ("a.exe", b"plain text not allowed")}
 
     for _ in range(20):
         resp = api.post("/api/upload", files=files, headers=login["headers"])
