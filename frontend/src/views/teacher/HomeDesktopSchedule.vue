@@ -188,30 +188,39 @@ function formatDate(dateStr: string) {
 </script>
 
 <style scoped>
+/* 卡头：与首页其它卡片同一套语言（22px 图标块 + 14px/600 标题） */
 .section-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #1a1a2e;
-  margin-bottom: 6px;
+  color: #2b3245;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
+  gap: 8px;
 }
-.section-title:hover {
-  opacity: 0.7;
+.section-title .el-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, #2563eb 12%, #fff);
+  color: #2563eb;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 .schedule-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 16px;
 }
 .schedule-section, .announcements-section {
-  background: #fff;
-  border-radius: 10px;
-  padding: 14px;
-  border: 1px solid rgba(0,0,0,0.04);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius);
+  box-shadow: none;
+  padding: 16px;
 }
 .calendar-wrapper {
   margin-bottom: 10px;
@@ -236,7 +245,7 @@ function formatDate(dateStr: string) {
 }
 .cal-table th {
   font-size: 11px;
-  color: #999;
+  color: var(--tui-text-quiet);
   font-weight: 500;
   padding: 4px 0;
   text-align: center;
@@ -249,14 +258,14 @@ function formatDate(dateStr: string) {
   height: 32px;
 }
 .cal-table td:hover {
-  background: rgba(91,141,239,0.06);
+  background: var(--tui-surface-muted);
 }
 .cal-other { opacity: 0.25; pointer-events: none; }
 .cal-past { opacity: 0.4; cursor: default; }
 .cal-past:hover { background: transparent !important; }
-.cal-past .cal-day-num { color: #ccc; }
+.cal-past .cal-day-num { color: var(--tui-text-quiet); }
 .cal-today .cal-day-num {
-  background: #5b8def;
+  background: var(--tui-brand);
   color: #fff;
   display: inline-block;
   width: 22px;
@@ -265,7 +274,12 @@ function formatDate(dateStr: string) {
   border-radius: 50%;
   font-weight: 600;
 }
-.cal-day-num { font-size: 12px; font-weight: 500; }
+.cal-day-num {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tui-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
 .cal-dots {
   display: flex;
   justify-content: center;
@@ -277,22 +291,22 @@ function formatDate(dateStr: string) {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #f56c6c;
+  background: #d92d20;
   display: inline-block;
 }
 .dot-schedule {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #67c23a;
+  background: #12b76a;
   display: inline-block;
 }
 .cal-legend {
-  font-size: 10px;
-  color: #999;
+  font-size: 11px;
+  color: var(--tui-text-quiet);
   display: flex;
   gap: 10px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .cal-legend span {
   display: flex;
@@ -315,7 +329,7 @@ function formatDate(dateStr: string) {
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--tui-border);
 }
 .announcement-item:last-child {
   border-bottom: none;
@@ -326,15 +340,16 @@ function formatDate(dateStr: string) {
 }
 .announcement-title {
   font-size: 13px;
-  color: #333;
+  color: var(--tui-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .announcement-date {
   font-size: 11px;
-  color: #999;
+  color: var(--tui-text-quiet);
   margin-top: 1px;
+  font-variant-numeric: tabular-nums;
 }
 .attach-link {
   text-decoration: none;
@@ -345,7 +360,7 @@ function formatDate(dateStr: string) {
 }
 .empty-tip-small {
   text-align: center;
-  color: #bbb;
+  color: var(--tui-text-quiet);
   padding: 14px 0;
   font-size: 12px;
 }

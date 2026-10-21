@@ -117,10 +117,11 @@ defineExpose({ reload: load })
 
 <style scoped>
 .wb-card {
-  background: #fff;
-  border: 1px solid #f0f1f3;
-  border-radius: 14px;
-  padding: 16px 18px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius);
+  padding: 16px;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -130,6 +131,7 @@ defineExpose({ reload: load })
 .wb-head {
   display: flex;
   align-items: center;
+  gap: 10px;
   justify-content: space-between;
 }
 .wb-title {
@@ -138,14 +140,28 @@ defineExpose({ reload: load })
   gap: 7px;
   font-size: 14px;
   font-weight: 600;
-  color: #101828;
+  color: #2b3245;
 }
-.wb-ic { color: #2563eb; }
-.wb-ic.purple { color: #7c3aed; }
+.wb-ic {
+  color: #2563eb;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.wb-ic.purple {
+  background: color-mix(in srgb, #7c3aed 12%, #fff);
+  color: #7c3aed;
+}
 .wb-range {
   font-size: 11.5px;
   font-weight: 400;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
+  font-variant-numeric: tabular-nums;
 }
 .wb-more {
   display: inline-flex;
@@ -154,12 +170,12 @@ defineExpose({ reload: load })
   border: none;
   background: none;
   padding: 0;
-  font-size: 12px;
-  color: #667085;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   cursor: pointer;
   font-family: inherit;
 }
-.wb-more:hover { color: #2563eb; }
+.wb-more:hover { color: var(--tui-brand); }
 
 .wk-list {
   display: flex;
@@ -177,17 +193,17 @@ defineExpose({ reload: load })
   display: flex;
   align-items: baseline;
   gap: 5px;
-  width: 66px;
+  width: 58px;
   flex-shrink: 0;
 }
 .wk-week {
   font-size: 12px;
-  color: #667085;
+  color: var(--tui-text-secondary);
 }
 .wk-row.today .wk-week { color: #2563eb; font-weight: 600; }
 .wk-day {
   font-size: 12px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 .wk-items {
   display: flex;
@@ -197,14 +213,14 @@ defineExpose({ reload: load })
 }
 .wk-none {
   font-size: 12px;
-  color: #d0d5dd;
+  color: var(--tui-text-quiet);
 }
 .wk-chip {
   font-size: 11.5px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #f2f4f7;
-  color: #475467;
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-secondary);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

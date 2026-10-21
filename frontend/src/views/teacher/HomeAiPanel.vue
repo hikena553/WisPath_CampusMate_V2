@@ -82,10 +82,11 @@ function goInsights() {
   flex-direction: column;
   gap: 12px;
   margin-bottom: 14px;
-  padding: 16px 18px;
-  background: #fff;
-  border: 1px solid #f0f1f3;
-  border-radius: 14px;
+  padding: 16px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius);
+  box-shadow: none;
 }
 
 /* ===== 头部 ===== */
@@ -101,11 +102,11 @@ function goInsights() {
 .ai-title {
   font-size: 14px;
   font-weight: 600;
-  color: #101828;
+  color: #2b3245;
 }
 .ai-sub {
-  font-size: 12px;
-  color: #98a2b3;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -127,10 +128,10 @@ function goInsights() {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #667085;
+  color: var(--tui-text-quiet);
   cursor: pointer;
 }
-.ai-icon-btn:hover { background: #f2f3f5; color: #2563eb; }
+.ai-icon-btn:hover { background: var(--tui-surface-muted); color: var(--tui-brand); }
 .ai-icon-btn:disabled { color: #b6bcc5; cursor: default; }
 .ai-icon-btn:disabled:hover { background: transparent; }
 .ai-go {
@@ -140,12 +141,12 @@ function goInsights() {
   border: none;
   background: none;
   padding: 0;
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: inherit;
-  color: #667085;
+  color: var(--tui-text-quiet);
   cursor: pointer;
 }
-.ai-go:hover { color: #2563eb; }
+.ai-go:hover { color: var(--tui-brand); }
 
 /* ===== 关键数据 ===== */
 .ai-metrics {

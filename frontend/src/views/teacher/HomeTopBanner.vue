@@ -14,12 +14,16 @@
       <img :src="siteMascot" :alt="siteName" class="hm-head-mascot" />
     </section>
 
-    <!-- 桌面端：整页唯一的页头（问候 + 日期 + 页面级操作），不再另设标题栏 -->
+    <!-- 桌面端：整页唯一的页头（问候 + 教师身份 + 日期 + 页面级操作），不再另设标题栏 -->
     <section v-else class="hm-head hm-head-desk">
       <div class="hm-head-main">
         <h2 class="hm-head-title">{{ greeting }}，{{ userName }}</h2>
         <p class="hm-head-meta">
-          <span class="hm-dot"></span>{{ siteName }} · 教师端
+          <span class="hm-dot"></span>{{ siteName }} · 教师工作台
+          <template v-if="identity">
+            <span class="hm-sep">·</span>
+            <span class="hm-identity">{{ identity }}</span>
+          </template>
           <span class="hm-sep">·</span>{{ todayStr }}
         </p>
       </div>
@@ -49,6 +53,8 @@ defineProps<{
   userName: string
   greeting: string
   todayStr: string
+  /** 教师身份（学院 · 职称 · 所带班级）：教师端专属，来自登录态真实字段 */
+  identity?: string
 }>()
 </script>
 
@@ -109,6 +115,8 @@ defineProps<{
   flex-shrink: 0;
 }
 .hm-sep { color: #cbd0d8; }
+/* 教师身份：教师端专属标识，比元信息稍重一档，便于一眼读到「我是谁、带哪个班」 */
+.hm-identity { color: #344054; font-weight: 500; }
 .hm-head-mascot {
   width: 46px;
   height: 46px;

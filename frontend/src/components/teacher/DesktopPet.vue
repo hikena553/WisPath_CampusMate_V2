@@ -9,7 +9,12 @@
     :class="{ expanded, dragging }"
   >
     <Transition name="pet-fade">
-      <div v-if="expanded" class="desk-pet-panel" :style="panelStyle">
+      <div
+        v-if="expanded"
+        class="desk-pet-panel"
+        :style="panelStyle"
+        @pointerdown="onPanelPointerDown"
+      >
         <PetChatPanel @close="collapse" />
       </div>
     </Transition>
@@ -44,6 +49,8 @@ const PET_SIZE = 56
 const PANEL_W = 360
 const PANEL_H = 520
 const EDGE = 10
+/** 面板与桌宠之间的间隙（同 px 单位，供贴靠计算使用） */
+const GAP = 8
 
 const expanded = ref(false)
 const dragging = ref(false)
@@ -51,6 +58,8 @@ const pos = ref({ x: 0, y: 0 })
 
 let dragOrigin = { x: 0, y: 0, left: 0, top: 0 }
 let moved = false
+/** 本次拖拽的起点：吉祥物本体（顺带负责展开/收起）或面板标题栏 */
+let dragSource: 'handle' | 'panel' = 'handle'
 
 /** 可用范围钳制：避开左侧 216px 侧边栏与底部安全区，防止桌宠跑到屏幕外 */
 function clamp(x: number, y: number) {
@@ -63,17 +72,27 @@ function clamp(x: number, y: number) {
 }
 
 /**
- * 面板贴靠策略：默认浮在吉祥物上方、右对齐。
- * 视口空间不足时自动翻转（上方不够 → 改到下方；右侧不够 → 改到左侧），避免面板被裁切。
+ * 面板贴靠策略：默认浮在吉祥物上方、右对齐，并保证整块面板始终落在视口内。
+ * - 纵向：桌宠上方放得下面板就放上方；上方不够才改到下方；两侧都不够时取空间较大的一侧，
+ *   再把面板整体钳制回视口（宁可压住桌宠，也不能把面板推到屏幕外）。
+ * - 横向：默认右对齐（面板向左侧展开，不会越出右边界）；只有左侧也放不下时才改为左对齐。
  */
 const panelStyle = computed(() => {
-  const roomAbove = pos.value.y >= PANEL_H + 64
-  const roomRight = pos.value.x + PANEL_W <= window.innerWidth - EDGE
+  const spaceAbove = pos.value.y - EDGE
+  const spaceBelow = window.innerHeight - (pos.value.y + PET_SIZE) - EDGE
+  const placeAbove = spaceAbove >= PANEL_H + GAP || spaceAbove >= spaceBelow
+  const wanted = pos.value.y + (placeAbove ? -(PANEL_H + GAP) : PET_SIZE + GAP)
+  const minY = EDGE
+  const maxY = window.innerHeight - EDGE - PANEL_H
+  // 视口比面板还矮时贴顶显示（maxY < minY），否则钳回视口内
+  const top = (maxY < minY ? minY : Math.min(Math.max(wanted, minY), maxY)) - pos.value.y
+
+  const placeLeft = pos.value.x + PET_SIZE - PANEL_W >= EDGE
   return {
-    top: roomAbove ? 'auto' : '64px',
-    bottom: roomAbove ? '64px' : 'auto',
-    right: roomRight ? '0' : 'auto',
-    left: roomRight ? 'auto' : '0',
+    top: `${top}px`,
+    bottom: 'auto',
+    right: placeLeft ? '0' : 'auto',
+    left: placeLeft ? 'auto' : '0',
   }
 })
 
@@ -106,6 +125,24 @@ function collapse() {
 function onPointerDown(e: PointerEvent) {
   // 只响应主键，避免右键菜单误拖
   if (e.button !== 0) return
+  dragSource = 'handle'
+  beginDrag(e)
+}
+
+/**
+ * 面板标题栏同样作为拖拽手柄：悬浮窗打开后，用户抓的是「窗口」而不是吉祥物，
+ * 只让 56px 的吉祥物本体可拖会让人以为整个悬浮窗不能移动
+ * （面板盖住吉祥物时更是无处可拖）。这里只放行标题栏，收起按钮等控件照常点击。
+ */
+function onPanelPointerDown(e: PointerEvent) {
+  if (e.button !== 0) return
+  const el = e.target as HTMLElement | null
+  if (!el?.closest('.pet-head') || el.closest('button')) return
+  dragSource = 'panel'
+  beginDrag(e)
+}
+
+function beginDrag(e: PointerEvent) {
   dragging.value = false
   moved = false
   dragOrigin = { x: e.clientX, y: e.clientY, left: pos.value.x, top: pos.value.y }
@@ -134,7 +171,8 @@ function onPointerUp(e: PointerEvent) {
   dragging.value = false
   if (moved) {
     localStorage.setItem(POS_KEY, JSON.stringify(pos.value))
-  } else {
+  } else if (dragSource === 'handle') {
+    // 只有点击吉祥物本体才切换展开/收起；拖标题栏但没移动时不触发任何动作
     toggle()
   }
 }

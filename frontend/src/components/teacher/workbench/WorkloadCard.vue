@@ -87,10 +87,11 @@ defineExpose({ reload: load })
 
 <style scoped>
 .wb-card {
-  background: #fff;
-  border: 1px solid #f0f1f3;
-  border-radius: 14px;
-  padding: 16px 18px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius);
+  padding: 16px;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   gap: 11px;
@@ -100,6 +101,7 @@ defineExpose({ reload: load })
 .wb-head {
   display: flex;
   align-items: center;
+  gap: 10px;
   justify-content: space-between;
 }
 .wb-title {
@@ -108,10 +110,23 @@ defineExpose({ reload: load })
   gap: 7px;
   font-size: 14px;
   font-weight: 600;
-  color: #101828;
+  color: #2b3245;
 }
-.wb-ic { color: #2563eb; }
-.wb-ic.green { color: #079455; }
+.wb-ic {
+  color: #2563eb;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.wb-ic.green {
+  background: color-mix(in srgb, #079455 12%, #fff);
+  color: #079455;
+}
 .wb-more {
   display: inline-flex;
   align-items: center;
@@ -119,12 +134,12 @@ defineExpose({ reload: load })
   border: none;
   background: none;
   padding: 0;
-  font-size: 12px;
-  color: #667085;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   cursor: pointer;
   font-family: inherit;
 }
-.wb-more:hover { color: #2563eb; }
+.wb-more:hover { color: var(--tui-brand); }
 
 .wl-hero {
   display: flex;
@@ -136,10 +151,11 @@ defineExpose({ reload: load })
   font-weight: 700;
   color: #101828;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .wl-total-lb {
   font-size: 12px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 
 .wl-bar {
@@ -147,7 +163,7 @@ defineExpose({ reload: load })
   height: 8px;
   border-radius: 999px;
   overflow: hidden;
-  background: #f2f4f7;
+  background: var(--tui-surface-muted);
 }
 .wl-seg { display: block; height: 100%; }
 .seg-care { background: #f04438; }
@@ -164,7 +180,7 @@ defineExpose({ reload: load })
   align-items: center;
   gap: 5px;
   font-size: 11.5px;
-  color: #667085;
+  color: var(--tui-text-secondary);
 }
 .wl-lg .dot {
   width: 7px;
@@ -182,7 +198,7 @@ defineExpose({ reload: load })
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #f9fafb;
+  background: var(--tui-surface-muted);
   border-radius: 10px;
   padding: 8px 10px;
 }
@@ -191,12 +207,13 @@ defineExpose({ reload: load })
   font-weight: 700;
   color: #101828;
   line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 .wl-mv.ok { color: #079455; }
 .wl-mv.warn { color: #b54708; }
 .wl-mv.purple { color: #6941c6; }
 .wl-ml {
   font-size: 11px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 </style>

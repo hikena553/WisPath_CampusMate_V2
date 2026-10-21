@@ -162,10 +162,12 @@ defineExpose({ reload: load })
 
 <style scoped>
 .tf-card {
-  background: #fff;
-  border: 1px solid #f0f1f3;
-  border-radius: 14px;
-  padding: 16px 18px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius);
+  box-shadow: none;
+  padding: 16px;
+  /* 移动端首页直接把这张卡插在文档流里，需要自带下间距；桌面端由 .dash-cell 统一归零 */
   margin-bottom: 14px;
   display: flex;
   flex-direction: column;
@@ -180,22 +182,31 @@ defineExpose({ reload: load })
 }
 .tf-title {
   display: flex;
-  align-items: baseline;
-  gap: 7px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 .tf-title > span:nth-child(2) {
   font-size: 14px;
   font-weight: 600;
-  color: #101828;
+  color: #2b3245;
 }
+/* 卡头图标块：22×22 圆角色块（与本周计划 / 工作量 / 成长带同一套卡头语言） */
 .tf-ic {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, #2563eb 12%, #fff);
   color: #2563eb;
-  align-self: center;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 .tf-title-sub {
-  font-size: 12px;
-  color: #98a2b3;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -207,17 +218,17 @@ defineExpose({ reload: load })
   border: none;
   background: none;
   padding: 0;
-  font-size: 12px;
-  color: #667085;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
   cursor: pointer;
   font-family: inherit;
   flex-shrink: 0;
 }
-.tf-more:hover { color: #2563eb; }
+.tf-more:hover { color: var(--tui-brand); }
 
 .tf-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .tf-metric {
@@ -225,26 +236,28 @@ defineExpose({ reload: load })
   flex-direction: column;
   gap: 2px;
   align-items: flex-start;
-  background: #f9fafb;
+  min-width: 0;
+  background: var(--tui-surface-muted);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--tui-radius-xs);
   padding: 9px 12px;
   cursor: pointer;
   font-family: inherit;
   text-align: left;
 }
-.tf-metric:hover { background: #f2f4f7; }
+.tf-metric:hover { background: var(--tui-surface-sunken); }
 .tf-num {
   font-size: 20px;
-  font-weight: 700;
-  color: #101828;
+  font-weight: 600;
+  color: var(--tui-text);
   line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 .tf-num.danger { color: #d92d20; }
 .tf-num.warn { color: #b54708; }
 .tf-lb {
   font-size: 11.5px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 
 /* 本周推进进度行 */
@@ -256,12 +269,12 @@ defineExpose({ reload: load })
 .tf-rate-lb {
   flex-shrink: 0;
   font-size: 11.5px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
 }
 .tf-rate-val {
   flex-shrink: 0;
   font-size: 11.5px;
-  color: #667085;
+  color: var(--tui-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -272,7 +285,7 @@ defineExpose({ reload: load })
 }
 .tf-empty {
   font-size: 12.5px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
   padding: 6px 0;
 }
 .tf-item {
@@ -281,14 +294,14 @@ defineExpose({ reload: load })
   gap: 8px;
   width: 100%;
   padding: 7px 9px;
-  border-radius: 9px;
-  background: #fcfcfd;
-  border: 1px solid #f2f4f7;
+  border-radius: var(--tui-radius-xs);
+  background: var(--tui-surface-muted);
+  border: 1px solid var(--tui-border);
   cursor: pointer;
   font-family: inherit;
   text-align: left;
 }
-.tf-item:hover { border-color: #d0d5dd; }
+.tf-item:hover { border-color: var(--tui-brand); }
 .tf-tag {
   flex-shrink: 0;
   font-size: 11px;
@@ -302,19 +315,19 @@ defineExpose({ reload: load })
 .tf-tag.is-leave { background: #fffaeb; color: #b54708; }
 .tf-item-title {
   font-size: 12.5px;
-  color: #344054;
+  color: var(--tui-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tf-item-sub {
   font-size: 11.5px;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
   flex-shrink: 0;
 }
 .tf-arrow {
   margin-left: auto;
-  color: #98a2b3;
+  color: var(--tui-text-quiet);
   flex-shrink: 0;
 }
 </style>

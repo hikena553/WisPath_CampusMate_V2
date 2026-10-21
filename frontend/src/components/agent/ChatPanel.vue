@@ -1250,7 +1250,9 @@ defineExpose({ sendText })
   position: relative;
   display: flex; 
   flex-direction: column; 
-  height: 100vh; 
+  /* 整页对话区按视口高度撑满；管理端/教师端桌面端会把 --ui-zoom 置为 0.9，
+     缩放后 100vh 只剩 90%，这里换算回局部高度，避免底部留白（学生端 --ui-zoom 为 1，等价原值） */
+  height: calc(100vh / var(--ui-zoom)); 
   background: linear-gradient(180deg, #f0f8ff 0%, #fafcff 40%, #fff 100%); 
   overflow: hidden;
 }

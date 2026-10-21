@@ -9,7 +9,7 @@
           <img :src="siteLogo" class="brand-logo" />
           <div class="brand-text sidebar-text">
             <span class="brand-name">{{ siteName }}</span>
-            <span class="brand-motto">智慧校园 · 教师端</span>
+            <span class="brand-motto">教师工作台</span>
           </div>
         </div>
         <nav class="sidebar-nav">
@@ -83,6 +83,13 @@
             </el-breadcrumb>
           </div>
           <div class="topbar-right">
+            <!-- 教师身份胶囊：教师端专属（管理端是「管理员」、学生端是「学生」，都没有这一行） -->
+            <el-tooltip v-if="teacherIdentity" :content="teacherIdentity" placement="bottom">
+              <span class="topbar-identity">
+                <el-icon :size="14"><School /></el-icon>
+                <span class="topbar-identity-text">{{ teacherIdentity }}</span>
+              </span>
+            </el-tooltip>
             <span class="topbar-clock">{{ now }}</span>
           </div>
         </header>
@@ -252,7 +259,7 @@ import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, User, Message, Notebook,
   List, Stamp, WarningFilled, Bell, ChatDotRound, Sunny,
-  SwitchButton, CameraFilled, Close
+  SwitchButton, CameraFilled, Close, School
 } from '@element-plus/icons-vue'
 // 桌面端折叠按钮图标：与管理端（AdminLayout）保持同一套线性图标
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
@@ -336,7 +343,7 @@ const SUB_ROUTE_PARENT: Record<string, string> = {
  */
 const navGroups: { title: string; items: NavItem[] }[] = [
   {
-    title: '工作',
+    title: '教学工作',
     items: [
       { path: '/teacher', label: '首页', icon: HomeFilled },
       { path: '/teacher/tasks', label: '任务清单', icon: List },
@@ -346,7 +353,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
     ],
   },
   {
-    title: '班级',
+    title: '班级育人',
     items: [
       { path: '/teacher/students', label: '学生档案', icon: Notebook },
       { path: '/teacher/announcement', label: '班级公告', icon: Bell },
@@ -355,7 +362,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
     ],
   },
   {
-    title: '我的',
+    title: '我的工作台',
     items: [
       { path: '/teacher/agent', label: siteName.value, iconImg: siteLogo.value },
       { path: '/teacher/profile', label: '个人中心', icon: User, dialog: 'profile' },
@@ -462,6 +469,20 @@ function updateClock() {
 onMounted(() => {
   updateClock()
   clockTimer = window.setInterval(updateClock, 30000)
+})
+
+/**
+ * 教师身份胶囊：由登录态真实字段拼装（学院 · 职称 · 所带班级）。
+ * 这是教师端与其它两端口最直接的视觉区分 —— 打开工作台第一眼就知道「我是谁、带哪个班」。
+ */
+const teacherIdentity = computed(() => {
+  const u = auth.user
+  if (!u) return ''
+  const parts: string[] = []
+  if (u.college) parts.push(u.college)
+  if (u.title) parts.push(u.title)
+  if (u.class_name) parts.push(`所带 ${u.class_name}`)
+  return parts.join(' · ')
 })
 
 /**
@@ -654,6 +675,21 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .topbar-right { display: flex; align-items: center; gap: 12px; color: #64748b; font-size: 13px; white-space: nowrap; }
+/* 教师身份胶囊：教师端专属标识，克制扁平（1px 描边 + 浅底，无投影） */
+.topbar-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  max-width: 340px;
+  padding: 0 10px;
+  border: 1px solid #e6e8ec;
+  border-radius: 6px;
+  background: #f7f8fb;
+  color: #475467;
+  font-size: 12.5px;
+}
+.topbar-identity-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :deep(.topbar-left .el-button) { color: #475569; }
 .topbar-breadcrumb { font-size: 13px; }
 
@@ -837,4 +873,15 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 
 /* 移动端五页签：中间绵小城凸起，其余等分（主流移动端底部栏布局） */
 :deep(.mobile-tab-bar .tab-item) { flex: 1; }
+
+/* ===== 网页端（桌面）整体密度：侧边栏 + 内容区按 90% 呈现 =====
+   与管理端同款：只缩两侧两列而非 .app-shell 本体，
+   避免定高外壳出现底部留白，也让桌宠等布局层浮动件保持像素坐标一致。
+   页面内部按视口/像素自行计算的组件用 --ui-zoom 换算（见 theme.css 说明）。
+   移动端（<768px 的 App 外壳）不缩放。 */
+@media (min-width: 1024px) {
+  .app-shell { --ui-zoom: 0.9; }
+  .sidebar,
+  .main-column { zoom: var(--ui-zoom); }
+}
 </style>

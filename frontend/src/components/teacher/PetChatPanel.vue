@@ -18,6 +18,7 @@
         size="small"
         placeholder="新对话"
         class="pet-conv-select"
+        popper-class="pet-select-dropdown"
         @change="onSelect"
       >
         <el-option
@@ -130,6 +131,9 @@ onMounted(() => {
   flex-direction: column;
   width: 360px;
   height: 520px;
+  /* 面板自身的字号基准：小窗外是浏览器默认 16px，
+     Element Plus 的选择器等组件会继承它，在 11~13px 的小窗里显得明显偏大 */
+  font-size: 12.5px;
   background: #fff;
   border: 1px solid var(--tui-border-strong);
   border-radius: var(--tui-radius);
@@ -144,6 +148,10 @@ onMounted(() => {
   padding: 8px 10px;
   border-bottom: 1px solid var(--tui-hairline);
   flex-shrink: 0;
+  /* 标题栏即悬浮窗拖拽手柄（指针事件由 DesktopPet 处理）：
+     给出「可拖动」的鼠标形态，并屏蔽触摸滚动，保证触屏上也能拖动面板 */
+  cursor: move;
+  touch-action: none;
 }
 .pet-head-logo { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
 .pet-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -163,6 +171,9 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .pet-conv-select { flex: 1; min-width: 0; }
+/* 选择器内部再显式收一次：占位文案与展开箭头都要跟小窗同级（12.5px / 12px） */
+.pet-conv :deep(.el-select__wrapper) { min-height: 24px; font-size: 12.5px; padding: 0 8px; }
+.pet-conv :deep(.el-select__caret) { font-size: 12px; }
 .pet-conv-new {
   flex-shrink: 0;
   height: 24px; padding: 0 8px;
@@ -192,13 +203,75 @@ onMounted(() => {
 
 .pet-body { flex: 1; min-height: 0; overflow: hidden; }
 
-/* ChatPanel 原本为整页设计（height:100vh），塞进 360×520 小窗需收敛尺寸；
-   所有覆盖都限定在 .pet-body 内，不影响智能体页面里的原样渲染。 */
+/* ── 小窗适配 ──────────────────────────────────────────────
+   ChatPanel 是按整页设计的：消息行左右各留 140px、正文 14~15px、图标按钮 32~34px、
+   欢迎语整体上移 -80px。直接塞进 360×520 的桌宠面板会横向溢出（气泡被裁）、
+   欢迎语顶部被裁掉。这里把整页尺度统一收敛到小窗尺度。
+   覆盖全部限定在 .pet-body 内，不影响智能体页面里的原样渲染。 */
 .pet-body :deep(.chat-modern) { height: 100%; }
-.pet-body :deep(.welcome-content) { padding: 18px 14px; }
-.pet-body :deep(.ai-character .mc-img) { width: 92px; height: 92px; }
-.pet-body :deep(.welcome-greeting h1) { font-size: 16px; }
-.pet-body :deep(.welcome-greeting p) { font-size: 12px; margin-bottom: 14px; }
-.pet-body :deep(.input-bar) { padding: 8px 10px; }
+
+/* 欢迎语：去掉整页的负外边距与超大吉祥物，避免小窗里被顶部裁掉 */
+.pet-body :deep(.welcome-content) { padding: 8px 12px; margin: 0 auto; max-width: none; }
+.pet-body :deep(.welcome-glow) { width: 260px; height: 260px; }
+.pet-body :deep(.ai-character .mc-scene) { width: 92px; height: 96px; }
+.pet-body :deep(.ai-character .mc-glow) { width: 76px; height: 76px; }
+.pet-body :deep(.ai-character .mc-img) { width: 76px; height: 76px; }
+.pet-body :deep(.welcome-greeting h1) { font-size: 14px; }
+.pet-body :deep(.welcome-greeting p) { font-size: 11px; margin-bottom: 6px; }
+
+/* 消息区：整页的 140px 左右缩进 + 760px 限宽会把气泡挤出 360px 可视区 */
+.pet-body :deep(.msg-row),
+.pet-body :deep(.msg-row.user) {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0 10px;
+  gap: 6px;
+}
+.pet-body :deep(.msg-bubble-col) { max-width: 92%; }
+.pet-body :deep(.msg-row.assistant .msg-bubble-col) { width: 92%; }
+.pet-body :deep(.bubble) { font-size: 13px; padding: 8px 11px; border-radius: 14px; }
+.pet-body :deep(.bubble-image img) { max-width: 100%; }
+.pet-body :deep(.thinking-bubble) { padding: 8px 12px; }
+.pet-body :deep(.msg-code-block) { font-size: 12px; padding: 8px; }
+.pet-body :deep(.msg-table) { font-size: 12px; }
+.pet-body :deep(.msg-th),
+.pet-body :deep(.msg-td) { padding: 4px 6px; }
 .pet-body :deep(.messages.scrolling) { padding: 8px 0; }
+
+/* 为你推荐 / 回到最新：贴着小窗宽度排布。
+   整页里推荐区是绝对定位（贴在输入栏正上方），在 300px 高的消息区里会悬空压住欢迎语；
+   小窗里改为正常占位（消息区下方、输入栏上方），互不遮挡。 */
+.pet-body :deep(.recommend-bar) { position: static; flex-shrink: 0; padding: 0 10px 6px; }
+.pet-body :deep(.recommend-title) { font-size: 11px; padding-left: 4px; margin-bottom: 3px; max-width: none; }
+.pet-body :deep(.recommend-list) { max-width: none; padding-left: 4px; gap: 3px; }
+.pet-body :deep(.recommend-item) { font-size: 11.5px; padding: 3px 9px; }
+.pet-body :deep(.scroll-bottom-btn) { height: 26px; padding: 0 10px; font-size: 11px; }
+
+/* 输入栏：正文、图标与按钮统一收小，保证一行放得下全部操作 */
+.pet-body :deep(.input-bar) { padding: 6px 8px; }
+.pet-body :deep(.input-container) { max-width: none; border-radius: 16px; padding: 4px 10px; }
+.pet-body :deep(.chat-textarea) { font-size: 13px; max-height: 96px; padding: 5px 4px 0; }
+.pet-body :deep(.char-counter) { font-size: 10px; }
+.pet-body :deep(.input-actions) { gap: 4px; }
+.pet-body :deep(.toggle-btn) { padding: 4px 8px; font-size: 11px; gap: 4px; }
+.pet-body :deep(.toggle-icon),
+.pet-body :deep(.deep-think-icon),
+.pet-body :deep(.essence-icon) { width: 12px; height: 12px; }
+.pet-body :deep(.action-icon-btn) { width: 26px; height: 26px; }
+/* el-icon 的 size 是内联 font-size，需 !important 才能随小窗收小 */
+.pet-body :deep(.action-icon-btn .el-icon),
+.pet-body :deep(.send-btn .el-icon) { font-size: 15px !important; }
+.pet-body :deep(.send-btn) { width: 28px; height: 28px; }
+
+/* 待发送文件预览：小窗里右上方不再占据半屏 */
+.pet-body :deep(.pending-files-corner) { top: 2px; right: 2px; padding: 6px; gap: 4px; }
+</style>
+
+<!-- 会话下拉弹层：teleport 到 body，上面的作用域样式够不到，
+     这里只靠 popper-class 限定在桌宠面板的这一个选择器上。
+     Element Plus 默认 14px 字号 / 34px 行高，在 360px 宽的小窗里偏大。 -->
+<style>
+.pet-select-dropdown .el-select-dropdown__item { height: 28px; line-height: 28px; font-size: 12.5px; padding: 0 12px; }
+.pet-select-dropdown .el-select-dropdown__empty { padding: 8px 0; font-size: 12px; }
 </style>

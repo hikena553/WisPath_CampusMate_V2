@@ -1408,34 +1408,35 @@ button.tui-stat:active { transform: scale(0.98); }
 }
 
 /* =========================================================================
-   ▼ v5 桌面端 · 对齐管理端设计规范
+   ▼ v5 桌面端 · 对齐管理端 + 卡片体系（逆向还原高星开源项目）
    作用域 .main-area.teacher-scope —— 该 class 由 TeacherLayout 仅在桌面端挂载，
    移动端不挂载，因此以下规则对移动端零影响。
    -------------------------------------------------------------------------
-   对齐内容（来自 components/layout/AdminLayout.vue 与 styles/admin-components.css）：
-   1) 工作台度量：内容本色 #f4f6fa、白卡 12px 圆角 / #eef0f4 发丝描边 / 轻投影
-   2) 内容区留白 24 / 28（管理端 .page-container 同款）
-   3) 表格：浅灰渐变表头 + 舒适行高 + 圆角外框
-   4) 按钮：主按钮渐变底 + hover 上浮（沿用教师端品牌蓝，避免两端蓝不统一）
-   5) 表单 / 标签：8px 控件圆角、6px 标签圆角
-   6) 桌面页头：与管理端 .page-header 同语言的「标题 + 副标题 + 右侧操作」
-   注意：教师端品牌色（--tui-brand #2563eb）保持不变，仅对齐版式与交互处理，
-        以免与管理端各自的语义色体系互相污染。
+   来源与取舍见 .trae/documents/教师端桌面卡片设计契约.md：
+   · 外壳/表格/按钮/留白 ← 管理端 components/layout/AdminLayout.vue + styles/admin-components.css
+   · 卡片度量 ← GitHub 高星项目逆向还原（三家以上交叉一致的取值）：
+       Ant Design（Card 大圆角 8、栅格 gutter 16、内边距 24）
+       Ant Design Pro / ProComponents（ProCard 栅格间距 24、StatisticCard 指标卡范式）
+       Arco Design（描边优先于阴影）
+       shadcn-ui（rounded-xl 12px + border + shadow-sm，内部节奏 24px）
+       vben / PureAdmin（可点击卡片 hover：上浮 2px + 阴影升一档）
+   · 教师端品牌色（--tui-brand #2563eb）保持不变，只对齐版式与交互处理
    ========================================================================= */
 
-/* ---------- 1) 工作台度量 ---------- */
+/* ---------- 1) 工作台度量（简约扁平：8px 圆角 / 淡描边 / 零投影） ---------- */
 .main-area.teacher-scope {
   --tui-bg: #f4f6fa;
-  --tui-border: #eef0f4;
-  --tui-border-strong: #e4e7ee;
+  --tui-border: #eaecef;
+  --tui-border-strong: #e6e8ec;
   --tui-surface-muted: #f7f8fb;
   --tui-surface-sunken: #eff1f6;
-  --tui-radius-xs: 8px;
-  --tui-radius-sm: 10px;
-  --tui-radius: 12px;
-  --tui-radius-lg: 16px;
-  --tui-shadow-1: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.04);
-  --tui-shadow-2: 0 8px 24px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.05);
+  --tui-radius-xs: 6px;
+  --tui-radius-sm: 8px;
+  --tui-radius: 8px;
+  --tui-radius-lg: 12px;
+  /* 扁平皮肤：静态层不用投影，阴影只留给真正浮起的层（弹窗 / 下拉 / 浮层） */
+  --tui-shadow-1: none;
+  --tui-shadow-2: 0 2px 8px rgba(16, 24, 40, 0.06);
 }
 
 /* ---------- 2) 内容区留白（对齐管理端 .page-container） ---------- */
@@ -1459,16 +1460,114 @@ button.tui-stat:active { transform: scale(0.98); }
   }
 }
 
-/* ---------- 3) 白卡：12px 圆角 + 发丝描边 + 轻投影 ---------- */
-.main-area.teacher-scope :is(.tui-card, .tui-section, .tui-list, .tui-stat, .tui-hero, .tp-side-card, .growth-band, .quick-pill, .analysis-card, .section-card) {
-  border-color: var(--tui-border);
+/* ---------- 3) 卡片体系：简约扁平（仿「中转站」面板 / Semi-Flat） ----------
+   观感目标：像 one-api / new-api 一类 API 中转站面板 —— 白底 + 1px 极淡描边 + 零投影，
+   层级靠留白与发丝线表达，而不是靠投影与渐变；阴影只留给真正浮起的层。
+   度量来源（多源交叉一致）：
+     · 卡片：1px 淡描边 + 8px 圆角 + 16px 内边距，几乎不用阴影
+       （hermes-webui DESIGN.md：shadows are reserved for popovers/dropdowns/dialogs；
+        interface-design system-template：0.5px faint border / 16px padding / 8px radius）
+     · 控件圆角 4–6px（trycompai/crm design.md：controls rounded-sm 4px / md 5px）
+     · SAP Fiori Card：1px 描边 + 4px 圆角 + shadow0 —— 同样「描边优先、零投影」
+   与上一版的差别：圆角 12→8、内边距 20→16、投影 1 档→0 档、数字 28/700→24/600。 */
+.main-area.teacher-scope :is(.tui-card, .tui-section, .tui-list, .tui-stat, .tui-hero, .tp-side-card, .growth-band, .analysis-card, .section-card) {
+  border: 1px solid var(--tui-border-strong);
   border-radius: var(--tui-radius);
-  box-shadow: var(--tui-shadow-1);
+  background: var(--tui-surface);
+  box-shadow: none;
 }
-.main-area.teacher-scope .tui-card-head,
-.main-area.teacher-scope .tui-section-head h3 { color: #333a4d; font-weight: 600; }
 
-/* ---------- 4) 表格：浅灰渐变表头 + 舒适行高（同 admin-components.css） ---------- */
+/* 内边距统一 16px：扁平风格靠留白分层，不靠投影 */
+.main-area.teacher-scope .tui-card-pad { padding: 16px; }
+.main-area.teacher-scope .tui-card-body { padding: 16px; }
+.main-area.teacher-scope .tui-stat { padding: 14px 16px; }
+.main-area.teacher-scope .tui-section { padding: 16px; }
+.main-area.teacher-scope .tui-row { padding: 13px 16px; }
+.main-area.teacher-scope .tui-section-head { margin-bottom: 12px; }
+
+/* 卡头：标题行 + 发丝分割线（中转站面板最典型的卡头形态） */
+.main-area.teacher-scope .tui-card-head {
+  padding: 14px 16px;
+  font-size: 15px;
+  border-bottom: 1px solid var(--tui-border);
+}
+.main-area.teacher-scope .tui-card-desc { padding: 12px 16px 0; }
+/* 卡头自带下边框，内容区不再额外加间距 */
+.main-area.teacher-scope .tui-card-head + .tui-grid-nav,
+.main-area.teacher-scope .tui-card-head + .tui-card-body { margin-top: 0; }
+
+/* 标题体系：15px / 600 / #2b3245 */
+.main-area.teacher-scope .tui-card-head,
+.main-area.teacher-scope .tui-section-head h3 { color: #2b3245; font-weight: 600; }
+.main-area.teacher-scope .tui-card-head-icon { width: 22px; height: 22px; border-radius: 6px; }
+
+/* 指标数字：24px / 600（扁平风格不用 700 的厚重感） */
+.main-area.teacher-scope :is(.tui-stat-num, .tui-hero-metric b) {
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* 可点击卡片 hover：只加深描边（无位移、无投影 —— 简约风格的克制反馈）。
+   注：首页「快捷入口」已改为深色能力操作台（见 HomePage.vue 的 .quick-deck），
+   刻意不走这套浅色扁平口径，因此不在此列。 */
+.main-area.teacher-scope :is(button.tui-stat, .analysis-card) {
+  transition: border-color 0.16s var(--tui-ease), background-color 0.16s var(--tui-ease);
+}
+.main-area.teacher-scope :is(button.tui-stat, .analysis-card):hover {
+  transform: none;
+  border-color: var(--tui-brand);
+  box-shadow: none;
+}
+
+/* 模块签名：左缘 3px 语义色条（比顶线更克制，也更像面板的分组标记） */
+.main-area.teacher-scope :is(.tui-card, .tui-section).is-accent {
+  position: relative;
+  overflow: hidden;
+}
+.main-area.teacher-scope :is(.tui-card, .tui-section).is-accent::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent, var(--tui-brand));
+}
+
+/* ---------- 4) 间距体系（契约 §5：直接回应「上下卡片间距太小」） ----------
+   同组 16px（Ant Row gutter=16） / 跨区块 20–24px（ProCard gutter=24） / 栅格 20px */
+.main-area.teacher-scope .tui-stack,
+.main-area.teacher-scope .tui-groups { gap: 16px; }
+.main-area.teacher-scope .tui-section { margin-bottom: 20px; }
+.main-area.teacher-scope .tui-section:last-child { margin-bottom: 0; }
+.main-area.teacher-scope .tui-group-title { margin: 20px 2px 10px; }
+.main-area.teacher-scope .tui-stat-row { gap: 16px; margin-bottom: 16px; }
+
+/* 自建骨架页的卡片墙同样按契约收紧间距（学生档案的便当格/卡片墙原为 8px，最挤） */
+.main-area.teacher-scope .students-page .bento { gap: 14px; margin-bottom: 20px; }
+.main-area.teacher-scope .students-page .bento-tile {
+  padding: 14px 16px;
+  border-radius: var(--tui-radius);
+  border-color: var(--tui-border-strong);
+  box-shadow: none;
+}
+.main-area.teacher-scope .students-page .analytics-section { margin-bottom: 20px; }
+.main-area.teacher-scope .students-page .student-grid { gap: 16px; }
+.main-area.teacher-scope .students-page .student-card {
+  padding: 16px;
+  border-radius: var(--tui-radius);
+  border-color: var(--tui-border-strong);
+  box-shadow: none;
+}
+/* 个人中心 / 审批页的分区卡：内边距对齐扁平口径的 16px */
+.main-area.teacher-scope .section-card { padding: 16px; }
+
+/* 桌面页头（TuiPageHero）：扁平页头带，16px 内边距 + 16px 下间距 */
+.main-area.teacher-scope .tui-hero { padding: 16px; margin-bottom: 16px; }
+
+/* ---------- 5) 表格：浅灰渐变表头 + 舒适行高（同 admin-components.css） ---------- */
 .main-area.teacher-scope .el-table {
   --el-table-border-color: var(--tui-border);
   --el-table-header-bg-color: transparent;
@@ -1481,7 +1580,8 @@ button.tui-stat:active { transform: scale(0.98); }
   box-shadow: var(--tui-shadow-1);
 }
 .main-area.teacher-scope .el-table th.el-table__cell {
-  background: linear-gradient(180deg, #f7f8fb 0%, #f3f5f9 100%);
+  /* 扁平表头：纯浅灰底（不上渐变，与「中转站」面板的表格观感一致） */
+  background: #fafbfc;
   color: #454a57;
   font-weight: 600;
   font-size: 13px;
@@ -1495,26 +1595,28 @@ button.tui-stat:active { transform: scale(0.98); }
 }
 .main-area.teacher-scope .el-table tbody tr:last-child td.el-table__cell { border-bottom: none; }
 
-/* ---------- 5) 按钮：主按钮渐变底 + hover 上浮（处理方式对齐管理端） ---------- */
-.main-area.teacher-scope .el-button { border-radius: 8px; font-weight: 500; }
-.main-area.teacher-scope .el-button--primary {
-  background: linear-gradient(135deg, var(--tui-brand) 0%, var(--tui-brand-strong) 100%);
-  border-color: transparent;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.24);
+/* ---------- 6) 按钮：扁平实心（无渐变、无投影，控件圆角 6px） ---------- */
+.main-area.teacher-scope .el-button { border-radius: 6px; font-weight: 500; }
+.main-area.teacher-scope .el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
+  background: var(--tui-brand);
+  border-color: var(--tui-brand);
+  box-shadow: none;
 }
-.main-area.teacher-scope .el-button--primary:hover:not(.is-disabled):not(.is-loading) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.32);
+.main-area.teacher-scope .el-button--primary:not(.is-link):not(.is-text):not(.is-plain):hover:not(.is-disabled):not(.is-loading) {
+  background: var(--tui-brand-strong);
+  border-color: var(--tui-brand-strong);
+  transform: none;
+  box-shadow: none;
 }
-.main-area.teacher-scope .el-button--primary:active { transform: translateY(0); }
+.main-area.teacher-scope .el-button--primary:not(.is-link):not(.is-text):not(.is-plain):active { transform: translateY(0); }
 
-/* ---------- 6) 表单 / 标签 ---------- */
+/* ---------- 7) 表单 / 标签（控件 6px、标签 4px —— 简约风格的控件圆角） ---------- */
 .main-area.teacher-scope .el-input__wrapper,
 .main-area.teacher-scope .el-select__wrapper,
-.main-area.teacher-scope .el-textarea__inner { border-radius: 8px; }
-.main-area.teacher-scope .el-tag { border-radius: 6px; font-weight: 500; }
+.main-area.teacher-scope .el-textarea__inner { border-radius: 6px; }
+.main-area.teacher-scope .el-tag { border-radius: 4px; font-weight: 500; }
 
-/* ---------- 7) 首页页头：与管理端 .page-header 同语言（标题 + 副标题 + 右侧操作） ---------- */
+/* ---------- 8) 首页页头：与管理端 .page-header 同语言（标题 + 副标题 + 右侧操作） ---------- */
 .main-area.teacher-scope .hm-head-sticky {
   background: var(--tui-bg);
   margin: 0 -28px;
@@ -1531,3 +1633,162 @@ button.tui-stat:active { transform: scale(0.98); }
 .main-area.teacher-scope .hm-head-desk .hm-head-title { font-size: 20px; color: #1f2d3d; }
 .main-area.teacher-scope .hm-head-desk .hm-head-meta { color: var(--tui-text-quiet); }
 .main-area.teacher-scope .hm-sync-hint { background: var(--tui-surface-muted); border-color: var(--tui-border); }
+
+/* =========================================================================
+   ▼ v6 趣味教师进度构件（教师端专属 · 契约 §4）
+   -------------------------------------------------------------------------
+   设计意图：教师端此前的「进度」只有冷冰冰的百分比，缺少推进感与成就感。
+   本组构件把真实业务数据翻译成「等级 → 成长值 → 里程碑 → 成就徽章」的推进叙事，
+   全部数值由现有接口字段派生（换算说明必须一起展示，不允许出现无来源的数字）。
+   构件只在 teacher-ui.css 定义一次，页面不重复实现；移动端同样可用（无 JS 分支）。
+   ========================================================================= */
+
+/* ---------- 1) 等级徽章：等级 + 称号，色由 --lv-c1/--lv-c2 决定 ---------- */
+.tui-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 7px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--lv-c1, #2563eb) 0%, var(--lv-c2, #6941c6) 100%);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--lv-c1, #2563eb) 32%, transparent);
+  white-space: nowrap;
+}
+.tui-level-ic {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 10px;
+}
+.tui-level.is-quiet {
+  color: var(--tui-text-tertiary);
+  background: var(--tui-surface-sunken);
+  box-shadow: none;
+}
+
+/* ---------- 2) 成长值进度条：当前成长值 → 下一等级 ---------- */
+.tui-xp { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.tui-xp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--tui-text-quiet);
+}
+.tui-xp-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--tui-text);
+  font-variant-numeric: tabular-nums;
+}
+.tui-xp-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--tui-surface-sunken);
+  overflow: hidden;
+}
+.tui-xp-fill {
+  display: block;
+  height: 100%;
+  width: calc(var(--pct, 0) * 100%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--xp-c1, #2563eb) 0%, var(--xp-c2, #7f56d9) 100%);
+  transition: width 0.45s var(--tui-ease);
+}
+.tui-xp-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 3) 成就徽章墙：真实阈值解锁，未解锁灰化 ---------- */
+.tui-badge-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 12px;
+}
+.tui-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px 12px;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius);
+  background: var(--tui-surface);
+  text-align: center;
+  transition: transform 0.2s var(--tui-ease), box-shadow 0.2s var(--tui-ease);
+}
+.tui-badge:not(.is-locked):hover {
+  transform: translateY(-2px);
+  box-shadow: var(--tui-shadow-2);
+}
+.tui-badge-ic {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--badge-soft, #eff4ff);
+  color: var(--badge-color, #2563eb);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--badge-color, #2563eb) 14%, transparent);
+}
+.tui-badge-name { font-size: 12.5px; font-weight: 600; color: var(--tui-text); }
+.tui-badge-desc { font-size: 11px; line-height: 1.4; color: var(--tui-text-quiet); }
+.tui-badge.is-locked { opacity: 0.5; }
+.tui-badge.is-locked .tui-badge-ic {
+  background: var(--tui-surface-sunken);
+  color: #b6bcc5;
+  box-shadow: none;
+}
+/* 解锁瞬间的一次性高亮（尊重系统「减弱动效」） */
+.tui-badge.is-unlocked-new .tui-badge-ic { animation: tui-badge-pop 0.5s var(--tui-ease); }
+@keyframes tui-badge-pop {
+  0% { transform: scale(0.86); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- 4) 完成度环增强：大号环 + 中心两行（数字 / 单位） ---------- */
+.tui-ring-lg { width: 104px; height: 104px; }
+.tui-ring-lg::after { inset: 8px; }
+.tui-ring-lg .tui-ring-num { font-size: 24px; line-height: 1.05; }
+.tui-ring-center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.tui-ring-cap {
+  position: relative;
+  z-index: 1;
+  font-size: 10.5px;
+  color: var(--tui-text-quiet);
+}
+
+/* ---------- 5) 进度区块骨架：左环 · 中成长值 · 右徽章（组件里只放业务 DOM） ---------- */
+.tui-progress-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+@media (max-width: 767px) {
+  .tui-progress-hero { grid-template-columns: 1fr; gap: 16px; justify-items: center; text-align: center; }
+}
