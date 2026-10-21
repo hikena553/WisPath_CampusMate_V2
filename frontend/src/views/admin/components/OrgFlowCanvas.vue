@@ -125,6 +125,13 @@ const stageRef = ref<HTMLElement | null>(null)
 const zoom = ref(1)
 const panning = ref(false)
 const panOrigin = { x: 0, y: 0, sl: 0, st: 0 }
+/** 页面密度缩放比（管理端桌面端为 0.9）：把指针的视觉位移换算成容器内的滚动量 */
+let panZoomK = 1
+
+function readUiZoom(el: HTMLElement) {
+  const v = parseFloat(getComputedStyle(el).getPropertyValue('--ui-zoom'))
+  return Number.isFinite(v) && v > 0 ? v : 1
+}
 
 const zoomPercent = computed(() => Math.round(zoom.value * 100))
 const sizerStyle = computed(() => ({
@@ -189,6 +196,7 @@ function onMouseDown(e: MouseEvent) {
   const stage = stageRef.value
   if (!stage) return
   panning.value = true
+  panZoomK = readUiZoom(stage)
   panOrigin.x = e.clientX
   panOrigin.y = e.clientY
   panOrigin.sl = stage.scrollLeft
@@ -200,8 +208,9 @@ function onMouseDown(e: MouseEvent) {
 function onPanMove(e: MouseEvent) {
   const stage = stageRef.value
   if (!stage) return
-  stage.scrollLeft = panOrigin.sl - (e.clientX - panOrigin.x)
-  stage.scrollTop = panOrigin.st - (e.clientY - panOrigin.y)
+  // scrollLeft/Top 是容器局部像素，而指针位移是视觉像素，缩放时需要换算，否则拖拽「不跟手」
+  stage.scrollLeft = panOrigin.sl - (e.clientX - panOrigin.x) / panZoomK
+  stage.scrollTop = panOrigin.st - (e.clientY - panOrigin.y) / panZoomK
 }
 
 function onPanEnd() {

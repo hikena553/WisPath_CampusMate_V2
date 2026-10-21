@@ -139,10 +139,14 @@ function runLayout() {
     .map(w => ({ text: w.word, value: w.count, size: sizeFor(w.count) }))
 
   if (layout) layout.stop()
-  // 布局尺寸跟随容器实际大小：词越大、图越大，不再被固定基准缩小
+  // 布局尺寸跟随容器实际大小：词越大、图越大，不再被固定基准缩小。
+  // 取视觉尺寸（getBoundingClientRect）而非 clientWidth/clientHeight：
+  // 后者在页面密度缩放下是局部像素，会和指针坐标（视觉像素）差一个 --ui-zoom 倍率，
+  // 导致悬停命中检测整体偏移。
   const stage = stageEl.value
-  const lw = stage ? Math.max(300, stage.clientWidth) : LAYOUT_W
-  const lh = stage ? Math.max(200, stage.clientHeight) : LAYOUT_H
+  const box = stage?.getBoundingClientRect()
+  const lw = box ? Math.max(300, Math.round(box.width)) : LAYOUT_W
+  const lh = box ? Math.max(200, Math.round(box.height)) : LAYOUT_H
   layout = cloud()
     .size([lw, lh])
     .words(cloudWords)
@@ -313,15 +317,16 @@ function onDblClick() {
 /* ---------- 尺寸 ---------- */
 function resize() {
   if (!canvas || !stageEl.value) return
-  const w = stageEl.value.clientWidth
-  const h = stageEl.value.clientHeight
+  // 用视觉尺寸（与指针坐标同尺度，见 layoutCloud 注释）；画布 CSS 宽高交给
+  // .wc-canvas 的 100%，两种缩放下都与容器严格等宽高，且位图密度不变（不糊）
+  const box = stageEl.value.getBoundingClientRect()
+  const w = Math.round(box.width)
+  const h = Math.round(box.height)
   if (!w || !h) return
   W = w
   H = h
   canvas.width = Math.round(w * DPR)
   canvas.height = Math.round(h * DPR)
-  canvas.style.width = `${w}px`
-  canvas.style.height = `${h}px`
   baseScale = Math.min(w / LAYOUT_W, h / LAYOUT_H) * 0.95
   render()
 }
@@ -506,6 +511,9 @@ onBeforeUnmount(() => {
 .wc-tip {
   position: fixed;
   z-index: 3000;
+  /* 气泡位置由 JS 按指针坐标（视觉像素）写入 left/top；页面密度缩放下
+     局部像素与视觉像素差一个 --ui-zoom 倍率，这里抵消，保证气泡落在指针旁且不缩小 */
+  zoom: calc(1 / var(--ui-zoom));
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.12s ease;

@@ -115,7 +115,7 @@ import {
   House, Library, TriangleAlert,
   User, Users, Building2,
   CalendarDays, MessageSquare, Settings,
-  LogOut, PanelLeftClose, PanelLeftOpen, X, Boxes
+  LogOut, PanelLeftClose, PanelLeftOpen, X, Boxes, Rss, Activity
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -140,6 +140,7 @@ onMounted(() => { void loadSiteConfig(true) })
 const ADMIN_PAGE_LOADERS: Array<() => Promise<unknown>> = [
   () => import('@/views/admin/HomePage.vue'),
   () => import('@/views/admin/KnowledgePage.vue'),
+  () => import('@/views/admin/FeedSourcesPage.vue'),
   () => import('@/views/admin/ReferenceLibraryPage.vue'),
   () => import('@/views/admin/CrisisMonitorPage.vue'),
   () => import('@/views/admin/TeachersPage.vue'),
@@ -147,6 +148,7 @@ const ADMIN_PAGE_LOADERS: Array<() => Promise<unknown>> = [
   () => import('@/views/admin/OrganizationsPage.vue'),
   () => import('@/views/admin/CourseSchedulePage.vue'),
   () => import('@/views/admin/FeedbackPage.vue'),
+  () => import('@/views/admin/SystemMonitorPage.vue'),
   () => import('@/views/admin/SettingPage.vue'),
 ]
 
@@ -213,6 +215,7 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/admin', label: '首页', icon: House },
       { path: '/admin/knowledge', label: '知识库', icon: Library },
+      { path: '/admin/feeds', label: '资讯管理', icon: Rss },
       { path: '/admin/references', label: '开源参考复用', icon: Boxes },
       { path: '/admin/crisis', label: '危机预警', icon: TriangleAlert },
     ],
@@ -230,6 +233,7 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/admin/courses', label: '课程表管理', icon: CalendarDays },
       { path: '/admin/feedbacks', label: '反馈管理', icon: MessageSquare },
+      { path: '/admin/system', label: '系统监控', icon: Activity },
       { path: '/admin/settings', label: '系统设置', icon: Settings },
     ],
   },
@@ -542,5 +546,17 @@ body { overflow: hidden; margin: 0; }
   .brand-logo { height: 30px; width: 30px; }
   .topbar-clock { display: none; }
   .page-container > :deep(div) { padding: 12px 12px; }
+}
+
+/* ===== 网页端（桌面）整体密度：侧边栏 + 内容区按 90% 呈现 =====
+   只缩两侧两列而非 .app-shell 本体，好处是：
+   1) 定高的 .app-shell（height:100vh）不需要补偿，不会底部留白；
+   2) 挂在布局层、但不在内容区的浮动件（如桌宠）不受影响，像素坐标与指针坐标仍一致。
+   页面内部按视口/像素自行计算的组件用 --ui-zoom 换算（见 theme.css 说明）。
+   ≤1023px（平板/手机）不缩放，移动端行为完全不变。 */
+@media (min-width: 1024px) {
+  .app-shell { --ui-zoom: 0.9; }
+  .sidebar,
+  .main-column { zoom: var(--ui-zoom); }
 }
 </style>

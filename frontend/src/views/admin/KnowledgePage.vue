@@ -10,8 +10,9 @@
           :before-upload="handleUpload"
           accept=".pdf,.docx,.txt"
         >
-          <el-button type="success">上传文档</el-button>
+          <el-button type="success">上传外部文件</el-button>
         </el-upload>
+        <el-button type="warning" :icon="Link2" @click="showUrlDialog">新增网络数据源</el-button>
       </div>
     </div>
 
@@ -52,7 +53,14 @@
           {{ indexStatus ? indexStatus.qa_count + indexStatus.document_count : '—' }}
         </div>
         <div class="card-desc">
-          问答对 {{ indexStatus?.qa_count ?? 0 }} 条 · 文档 {{ indexStatus?.document_count ?? 0 }} 份
+          问答对 {{ indexStatus?.qa_count ?? 0 }} 条 · 数据源 {{ indexStatus?.document_count ?? 0 }} 个
+        </div>
+      </div>
+      <div class="index-card">
+        <div class="card-label">外部数据源</div>
+        <div class="card-value">{{ sourceStats?.total ?? '—' }}</div>
+        <div class="card-desc">
+          外部文件 {{ sourceStats?.file_count ?? 0 }} 个 · 网络数据位置 {{ sourceStats?.url_count ?? 0 }} 个
         </div>
       </div>
       </template>
@@ -166,18 +174,43 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="文档管理" name="docs">
+      <el-tab-pane label="外部数据源" name="docs">
+        <div class="source-tip-bar">
+          <el-tag size="small" type="success" effect="plain">外部文件 {{ sourceStats?.file_count ?? 0 }}</el-tag>
+          <el-tag size="small" type="warning" effect="plain">网络数据位置 {{ sourceStats?.url_count ?? 0 }}</el-tag>
+          <span class="source-tip-text">
+            项目需引进的外部数据源：上传的外部文件 + 需读取的网络数据位置，入库后统一参与 RAG 检索
+          </span>
+        </div>
         <el-table :data="paginatedDocuments" style="width: 100%">
-          <el-table-column prop="filename" label="文件名" min-width="200" />
-          <el-table-column prop="file_type" label="类型" width="100" />
-          <el-table-column prop="status" label="状态" width="120">
+          <el-table-column prop="filename" label="数据源名称" min-width="180" show-overflow-tooltip />
+          <el-table-column label="来源类型" width="130">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.source_type === 'url' ? 'warning' : 'success'" effect="light">
+                {{ row.source_type === 'url' ? '网络数据位置' : '外部文件' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="来源位置" min-width="240" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-link
+                v-if="row.source_url"
+                type="primary"
+                :href="row.source_url"
+                target="_blank"
+                :underline="false"
+              >{{ row.source_url }}</el-link>
+              <span v-else class="src-file-loc">{{ (row.file_type || '').toUpperCase() }} 上传文件</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
               <el-tag :type="row.status === 'completed' ? 'success' : row.status === 'failed' ? 'danger' : 'warning'">
                 {{ row.status === 'completed' ? '已完成' : row.status === 'failed' ? '失败' : '处理中' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="chunk_count" label="分块数" width="100" />
+          <el-table-column prop="chunk_count" label="分块数" width="90" />
           <el-table-column label="向量化进度" width="180">
             <template #default="{ row }">
               <template v-if="row.chunk_count">
@@ -196,10 +229,20 @@
               <span v-else class="vec-cell">—</span>
             </template>
           </el-table-column>
-          <el-table-column prop="created_at" label="上传时间" width="180" />
-          <el-table-column label="操作" width="80" fixed="right">
+          <el-table-column prop="created_at" label="入库时间" width="180" />
+          <el-table-column label="操作" width="130" fixed="right">
             <template #default="{ row }">
               <div class="table-actions">
+                <el-tooltip v-if="row.source_type === 'url'" content="重新抓取" placement="top">
+                  <el-button
+                    class="action-btn edit"
+                    circle
+                    :loading="refetchingId === row.id"
+                    @click="refetchDoc(row)"
+                  >
+                    <el-icon><RefreshCw /></el-icon>
+                  </el-button>
+                </el-tooltip>
                 <el-popconfirm title="确定删除吗？" @confirm="deleteDoc(row.id)">
                   <template #reference>
                     <el-tooltip content="删除" placement="top">
@@ -328,25 +371,50 @@
         <el-button type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 新增网络数据源对话框 -->
+    <el-dialog v-model="urlDialogVisible" title="新增网络数据源" width="620px">
+      <el-alert
+        type="info"
+        :closable="false"
+        title="填写项目需要引进的网络数据位置（如官网政策页、外部资料页），系统会抓取正文、分块并入库，供 RAG 检索使用。"
+        style="margin-bottom:14px"
+      />
+      <el-form :model="urlForm" label-width="90px">
+        <el-form-item label="数据源名称">
+          <el-input v-model="urlForm.title" placeholder="可选，默认使用地址作为名称" />
+        </el-form-item>
+        <el-form-item label="数据位置" required>
+          <el-input v-model="urlForm.url" placeholder="https://example.edu.cn/policy" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="urlDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="urlSubmitting" @click="handleAddUrl">抓取并入库</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, RefreshCw, Sparkles, Info, PenLine, Trash2 } from 'lucide-vue-next'
+import { Search, RefreshCw, Sparkles, Info, PenLine, Trash2, Link2 } from 'lucide-vue-next'
 import {
   getKnowledgeList, createKnowledgeItem, updateKnowledgeItem, deleteKnowledgeItem,
   uploadDocument, getDocumentList, deleteDocument,
   reindexKnowledge, getKnowledgeIndexStatus,
   getEmbeddingConfig, saveEmbeddingConfig,
+  getExternalSourceStats, addKnowledgeUrlSource, refetchDocument,
   type KnowledgeItem, type DocumentInfo, type KnowledgeIndexStatus, type EmbeddingConfig,
+  type ExternalSourceStats,
 } from '@/api/admin'
 import { searchKnowledgeRaw, type KnowledgeHit, type KnowledgeSearchMeta } from '@/api/knowledge'
 
 const activeTab = ref('qa')
 const items = ref<KnowledgeItem[]>([])
 const documents = ref<DocumentInfo[]>([])
+const sourceStats = ref<ExternalSourceStats | null>(null)
 const categoryFilter = ref('')
 const searchText = ref('')
 const dialogVisible = ref(false)
@@ -539,6 +607,60 @@ async function loadDocuments() {
   }
 }
 
+async function loadSourceStats() {
+  try {
+    sourceStats.value = await getExternalSourceStats()
+  } catch (error) {
+    console.error('加载数据源统计失败:', error)
+  }
+}
+
+// 新增网络数据源（外部数据位置入库）
+const urlDialogVisible = ref(false)
+const urlSubmitting = ref(false)
+const urlForm = ref({ url: '', title: '' })
+const refetchingId = ref<number | null>(null)
+
+function showUrlDialog() {
+  urlForm.value = { url: '', title: '' }
+  urlDialogVisible.value = true
+}
+
+async function handleAddUrl() {
+  const url = urlForm.value.url.trim()
+  if (!url) {
+    ElMessage.warning('请填写数据源地址')
+    return
+  }
+  urlSubmitting.value = true
+  try {
+    const res = await addKnowledgeUrlSource({ url, title: urlForm.value.title.trim() || undefined })
+    ElMessage.success(`已入库：${res.chunk_count} 个分块`)
+    urlDialogVisible.value = false
+    loadDocuments()
+    loadSourceStats()
+    loadIndexStatus()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || '数据源入库失败')
+  } finally {
+    urlSubmitting.value = false
+  }
+}
+
+async function refetchDoc(row: DocumentInfo) {
+  refetchingId.value = row.id
+  try {
+    const res = await refetchDocument(row.id)
+    ElMessage.success(`重新抓取完成：${res.chunk_count} 个分块`)
+    loadDocuments()
+    loadSourceStats()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || '重新抓取失败')
+  } finally {
+    refetchingId.value = null
+  }
+}
+
 function showAddDialog() {
   editingId.value = null
   formData.value = { category: '', question: '', answer: '', tags: '' }
@@ -597,6 +719,7 @@ async function handleUpload(file: File) {
     await uploadDocument(file)
     ElMessage.success('上传成功')
     loadDocuments()
+    loadSourceStats()
     loadIndexStatus()
   } catch (error) {
     console.error('上传失败:', error)
@@ -610,6 +733,7 @@ async function deleteDoc(id: number) {
     await deleteDocument(id)
     ElMessage.success('删除成功')
     loadDocuments()
+    loadSourceStats()
     loadIndexStatus()
   } catch (error) {
     console.error('删除失败:', error)
@@ -620,6 +744,7 @@ async function deleteDoc(id: number) {
 onMounted(() => {
   loadItems()
   loadDocuments()
+  loadSourceStats()
   loadIndexStatus()
   loadEmbedConfig()
 })
@@ -765,6 +890,20 @@ onMounted(() => {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+
+.source-tip-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f8faff;
+  border: 1px dashed #dbe4f7;
+  border-radius: 8px;
+}
+.source-tip-text { font-size: 12.5px; color: #6b7280; }
+.src-file-loc { font-size: 12.5px; color: #6b7280; }
 
 .pagination-wrapper {
   display: flex;

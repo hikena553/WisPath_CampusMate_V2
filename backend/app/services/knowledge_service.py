@@ -510,6 +510,111 @@ def get_all_documents(db: Session) -> list[Document]:
     return db.query(Document).order_by(Document.created_at.desc()).all()
 
 
+# ---------- 外部数据源：网络数据位置（URL）引进知识库 ----------
+
+_URL_TIMEOUT = 20
+_URL_TEXT_LIMIT = 200_000  # 单页最多提取的字符数，控制入库体积
+_URL_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+
+
+def fetch_url_text(url: str) -> str:
+    """抓取网络数据位置并提取正文纯文本（HTML 去脚本/样式/导航，其余按原文本）。
+
+    供知识库将「需要引进的外部数据源」直接落库；网络/格式异常抛出 ValueError，
+    由接口层转换为 4xx/5xx。
+    """
+    url = (url or "").strip()
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("网络数据源地址需以 http:// 或 https:// 开头")
+    try:
+        import httpx
+
+        resp = httpx.get(
+            url,
+            timeout=_URL_TIMEOUT,
+            follow_redirects=True,
+            headers={"User-Agent": _URL_UA},
+        )
+        resp.raise_for_status()
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(f"数据源抓取失败：{e}") from e
+
+    ctype = (resp.headers.get("content-type") or "").lower()
+    body = resp.text
+    if "html" in ctype or body.lstrip()[:1] == "<":
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(body, "html.parser")
+        for tag in soup(["script", "style", "noscript", "nav", "footer", "header"]):
+            tag.decompose()
+        text = "\n".join(
+            line.strip() for line in soup.get_text("\n").splitlines() if line.strip()
+        )
+    else:
+        text = body
+
+    return text[:_URL_TEXT_LIMIT]
+
+
+def create_url_document(db: Session, url: str, title: str | None, uploaded_by: int) -> Document:
+    """把网络数据位置引入知识库：抓取正文 → 分块 → 落库并建立向量索引。"""
+    text = fetch_url_text(url)
+    chunks = _split_text(text)
+    if not chunks:
+        raise ValueError("未从该网络数据源提取到有效内容")
+
+    doc = Document(
+        filename=(title or url).strip()[:255],
+        file_type="url",
+        file_path="",
+        source_url=url.strip()[:700],
+        source_type="url",
+        status="processing",
+        uploaded_by=uploaded_by,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    save_chunks(db, doc.id, chunks)
+    return doc
+
+
+def refetch_url_document(db: Session, doc_id: int) -> Document:
+    """重新抓取网络数据源：清空旧分块后按最新内容重建。"""
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise ValueError("数据源不存在")
+    if doc.source_type != "url" or not doc.source_url:
+        raise ValueError("仅网络数据源支持重新抓取")
+
+    text = fetch_url_text(doc.source_url)
+    chunks = _split_text(text)
+    if not chunks:
+        raise ValueError("重新抓取未提取到有效内容")
+
+    db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).delete()
+    db.commit()
+    save_chunks(db, doc_id, chunks)
+    db.refresh(doc)
+    return doc
+
+
+def get_source_stats(db: Session) -> dict:
+    """外部数据源统计：文件/网络来源数量、分块与向量化覆盖率。"""
+    total = db.query(Document).count()
+    url_count = db.query(Document).filter(Document.source_type == "url").count()
+    return {
+        "total": total,
+        "file_count": total - url_count,
+        "url_count": url_count,
+    }
+
+
 def get_embedded_counts(db: Session, doc_ids: list[int]) -> dict[int, int]:
     """统计各文档已建立向量索引的分块数量"""
     if not doc_ids:
@@ -534,7 +639,8 @@ def delete_document(db: Session, doc_id: int) -> bool:
 
     db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).delete()
 
-    if os.path.exists(doc.file_path):
+    # 网络数据源无本地文件（file_path 为空），仅上传文件才删除磁盘文件
+    if doc.file_path and os.path.exists(doc.file_path):
         os.remove(doc.file_path)
 
     db.delete(doc)

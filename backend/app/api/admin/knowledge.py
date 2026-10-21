@@ -8,7 +8,7 @@ from app.core.crypto import encrypt_value
 from app.models.user import User, UserRole
 from app.schemas.admin import (
     KnowledgeItemCreate, KnowledgeItemUpdate, KnowledgeItemOut,
-    DocumentOut,
+    DocumentOut, KnowledgeUrlSourceCreate, ExternalSourceStats,
 )
 from app.services import knowledge_service
 from app.api.admin.common import PaginatedResponse, _xqe_get, _xqe_set
@@ -130,6 +130,7 @@ def list_documents(
     user: User = Depends(require_role(UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
+    """外部数据源列表：上传的外部文件 + 网络数据位置（URL），含向量化进度。"""
     docs = knowledge_service.get_all_documents(db)
     embedded_counts = knowledge_service.get_embedded_counts(db, [d.id for d in docs])
     return [DocumentOut(
@@ -139,8 +140,60 @@ def list_documents(
         status=d.status,
         chunk_count=d.chunk_count,
         embedded_count=embedded_counts.get(d.id, 0),
+        source_type=d.source_type or "file",
+        source_url=d.source_url,
         created_at=d.created_at.isoformat() if d.created_at else None,
     ) for d in docs]
+
+
+@router.get("/knowledge/source-stats", response_model=ExternalSourceStats)
+def source_stats(
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """外部数据源统计（文件来源 / 网络来源数量）。"""
+    return ExternalSourceStats(**knowledge_service.get_source_stats(db))
+
+
+@router.post("/knowledge/sources/url")
+def create_url_source(
+    data: KnowledgeUrlSourceCreate,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """新增网络数据源：抓取指定 URL 正文并存入知识库（自动分块 + 向量化）。"""
+    url = (data.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="请填写数据源地址")
+    try:
+        doc = knowledge_service.create_url_document(db, url, data.title, user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"数据源入库失败: {e}")
+    return {
+        "message": "网络数据源已入库",
+        "document_id": doc.id,
+        "chunk_count": doc.chunk_count,
+        "source_url": doc.source_url,
+    }
+
+
+@router.post("/knowledge/documents/{doc_id}/refetch")
+def refetch_url_source(
+    doc_id: int,
+    user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """重新抓取网络数据源：按最新页面内容重建分块与向量索引。"""
+    try:
+        doc = knowledge_service.refetch_url_document(db, doc_id)
+    except ValueError as e:
+        status = 404 if "不存在" in str(e) else 400
+        raise HTTPException(status_code=status, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"重新抓取失败: {e}")
+    return {"message": "重新抓取完成", "document_id": doc.id, "chunk_count": doc.chunk_count}
 
 
 @router.post("/knowledge/reindex")

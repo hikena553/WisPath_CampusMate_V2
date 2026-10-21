@@ -96,6 +96,7 @@ const router = createRouter({
       children: [
         { path: '', meta: { title: '首页' }, component: () => import('@/views/admin/HomePage.vue') },
         { path: 'knowledge', meta: { title: '知识库' }, component: () => import('@/views/admin/KnowledgePage.vue') },
+        { path: 'feeds', name: 'admin-feeds', meta: { title: '资讯管理' }, component: () => import('@/views/admin/FeedSourcesPage.vue') },
         { path: 'references', name: 'admin-references', meta: { title: '开源参考复用' }, component: () => import('@/views/admin/ReferenceLibraryPage.vue') },
         { path: 'teachers', meta: { title: '教师管理' }, component: () => import('@/views/admin/TeachersPage.vue') },
         { path: 'students', meta: { title: '学生管理' }, component: () => import('@/views/admin/StudentsPage.vue') },
@@ -103,6 +104,7 @@ const router = createRouter({
         { path: 'courses', meta: { title: '课程表管理' }, component: () => import('@/views/admin/CourseSchedulePage.vue') },
         { path: 'crisis', name: 'admin-crisis', meta: { title: '危机预警' }, component: () => import('@/views/admin/CrisisMonitorPage.vue') },
         { path: 'feedbacks', meta: { title: '反馈管理' }, component: () => import('@/views/admin/FeedbackPage.vue') },
+        { path: 'system', name: 'admin-system', meta: { title: '系统监控' }, component: () => import('@/views/admin/SystemMonitorPage.vue') },
         { path: 'settings', meta: { title: '系统设置' }, component: () => import('@/views/admin/SettingPage.vue') },
       ],
     },

@@ -79,7 +79,7 @@
         <div class="panel">
           <div class="panel-head">
             <span class="panel-title"><i></i>每日资讯速览</span>
-            <span class="panel-note">每 30 分钟自动抓取</span>
+            <button type="button" class="panel-more" @click="router.push('/admin/feeds')">资讯管理 »</button>
           </div>
           <div class="panel-body feed-body">
             <div v-if="feedList.length" class="feed">

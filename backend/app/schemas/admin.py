@@ -32,9 +32,24 @@ class DocumentOut(BaseModel):
     status: str
     chunk_count: int
     embedded_count: int = 0
+    source_type: str = "file"      # file=上传文件 / url=网络数据源
+    source_url: str | None = None  # 网络数据源地址
     created_at: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class KnowledgeUrlSourceCreate(BaseModel):
+    """新增网络数据源（把外部数据位置引进知识库）"""
+
+    url: str
+    title: str | None = None
+
+
+class ExternalSourceStats(BaseModel):
+    total: int = 0
+    file_count: int = 0
+    url_count: int = 0
 
 
 class TeacherCreate(BaseModel):

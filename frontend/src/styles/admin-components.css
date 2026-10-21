@@ -236,18 +236,20 @@
   transition: all 0.2s ease;
 }
 
-.main-area .el-button--primary {
+/* 仅作用于「实心」主按钮。link/text/plain 变体必须放行，
+   否则会被灌入蓝色实心底，而文字仍是品牌蓝，导致「编辑 / 撤销」这类文字型按钮看不清。 */
+.main-area .el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
   background: linear-gradient(135deg, #409eff 0%, #3377ff 100%);
   border-color: transparent;
   box-shadow: 0 2px 6px rgba(64, 158, 255, 0.28);
 }
 
-.main-area .el-button--primary:hover {
+.main-area .el-button--primary:not(.is-link):not(.is-text):not(.is-plain):hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.36);
 }
 
-.main-area .el-button--primary:active {
+.main-area .el-button--primary:not(.is-link):not(.is-text):not(.is-plain):active {
   transform: translateY(0);
 }
 
