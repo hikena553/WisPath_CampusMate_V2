@@ -1,8 +1,9 @@
 """execute_tool 收口：按工具名分发到各域 handler，统一限流 + 结果脱敏。"""
 
 from app.core.database import SessionLocal
-from app.models.user import User
+from app.models.user import User, UserRole
 
+from .definitions import TEACHER_TOOL_DEFINITIONS, TOOL_DEFINITIONS
 from .community import (
     _create_community_post,
     _query_community_posts,
@@ -63,9 +64,24 @@ from .teacher import (
 
 
 
+# 按角色可调用的工具名集合（由工具定义推导，避免手工维护两处清单）
+_STUDENT_TOOL_NAMES = {t["function"]["name"] for t in TOOL_DEFINITIONS}
+_TEACHER_TOOL_NAMES = {t["function"]["name"] for t in TEACHER_TOOL_DEFINITIONS}
+
+
 async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = None) -> dict:
     if not _check_tool_rate_limit(user.id):
         return {"error": "工具调用过于频繁，请稍后再试"}
+
+    # 未知工具：直接拒绝（保持既有语义，先于角色门控）
+    if name not in _STUDENT_TOOL_NAMES and name not in _TEACHER_TOOL_NAMES:
+        return {"error": f"未知工具: {name}"}
+
+    # 角色门控（纵深防御）：学生仅可调用学生端工具，教师/管理员仅可调用教师端工具。
+    # 与 agent_service.chat 下发工具列表的口径保持一致，防止模型/Prompt 注入越权调用。
+    allowed = _STUDENT_TOOL_NAMES if user.role == UserRole.STUDENT else _TEACHER_TOOL_NAMES
+    if name not in allowed:
+        return {"error": f"无权调用工具: {name}"}
 
     db = SessionLocal()
     try:

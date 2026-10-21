@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -15,17 +15,26 @@ from app.services.scoring import get_cohort_percentile, get_trajectory, get_risk
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 
+def _assert_student_visible(db: Session, user: User, student_id: int) -> None:
+    """画像数据归属校验：管理员可查全部；学生仅本人；教师仅名下学生。"""
+    if user.role == UserRole.ADMIN:
+        return
+    if user.role == UserRole.STUDENT:
+        if user.id != student_id:
+            raise HTTPException(status_code=403, detail="无权查看")
+        return
+    student = db.query(User).filter(User.id == student_id, User.tutor_id == user.id).first()
+    if not student:
+        raise HTTPException(status_code=403, detail="无权查看该学生画像")
+
+
 @router.get("/student/{student_id}", response_model=ProfileSnapshotOut | None)
 def get_student_profile(
     student_id: int,
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    if user.role != UserRole.ADMIN and user.role == UserRole.TEACHER:
-        student = db.query(User).filter(User.id == student_id, User.tutor_id == user.id).first()
-        if not student:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=403, detail="无权查看该学生画像")
+    _assert_student_visible(db, user, student_id)
     return get_latest_profile(db, student_id)
 
 
@@ -35,9 +44,7 @@ def get_student_trends(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if user.role == UserRole.STUDENT and user.id != student_id:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="无权查看")
+    _assert_student_visible(db, user, student_id)
     history = get_profile_history(db, student_id, limit=30)
     trends = [
         ProfileTrendPoint(
@@ -59,6 +66,7 @@ def get_student_cohort(
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
+    _assert_student_visible(db, user, student_id)
     cohort = get_cohort_percentile(db, student_id)
     comparisons = [
         CohortComparison(dimension=k, student_score=0, cohort_avg=0, percentile=v)
@@ -73,6 +81,7 @@ def get_student_risk_indicators(
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
+    _assert_student_visible(db, user, student_id)
     return get_risk_indicators(db, student_id)
 
 
@@ -82,6 +91,7 @@ def get_student_trajectory(
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
+    _assert_student_visible(db, user, student_id)
     return get_trajectory(db, student_id)
 
 

@@ -165,12 +165,20 @@ def _ensure_running(instance: WorkflowInstance) -> None:
         raise ValueError(f"流程已{instance.status.value}，无法继续操作")
 
 
-def _ensure_operator(db: Session, instance: WorkflowInstance, actor: User) -> None:
-    """审批人校验：管理员放行；否则需为发起人本人或教师角色。"""
+def _ensure_operator(
+    db: Session,
+    instance: WorkflowInstance,
+    actor: User,
+    current_node: dict | None = None,
+) -> None:
+    """审批人校验：管理员放行；否则需为发起人本人或教师角色，且须匹配当前节点的审批角色。"""
     if actor.role == UserRole.ADMIN or actor.id == instance.initiator_id:
         return
     if actor.role != UserRole.TEACHER:
         raise ValueError("无权操作该流程")
+    node_role = (current_node or {}).get("approver_role")
+    if node_role and node_role != actor.role.value:
+        raise ValueError("当前节点非本人角色可审批")
 
 
 def get_instance(db: Session, instance_id: int) -> WorkflowInstance | None:
@@ -180,10 +188,10 @@ def get_instance(db: Session, instance_id: int) -> WorkflowInstance | None:
 def approve(db: Session, instance: WorkflowInstance, actor: User, comment: str = "") -> WorkflowInstance:
     """通过当前节点：推进到下一节点，若已是最后一个节点则流程通过。"""
     _ensure_running(instance)
-    _ensure_operator(db, instance, actor)
     defn = get_def(db, instance.def_id)
     nodes = _load_nodes(defn) if defn else []
     current = nodes[instance.current_index] if instance.current_index < len(nodes) else None
+    _ensure_operator(db, instance, actor, current)
 
     _append_history(
         instance,
@@ -208,10 +216,10 @@ def approve(db: Session, instance: WorkflowInstance, actor: User, comment: str =
 
 def reject(db: Session, instance: WorkflowInstance, actor: User, comment: str = "") -> WorkflowInstance:
     _ensure_running(instance)
-    _ensure_operator(db, instance, actor)
     defn = get_def(db, instance.def_id)
     nodes = _load_nodes(defn) if defn else []
     current = nodes[instance.current_index] if instance.current_index < len(nodes) else None
+    _ensure_operator(db, instance, actor, current)
 
     instance.status = WorkflowStatus.REJECTED
     _append_history(

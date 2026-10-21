@@ -61,9 +61,16 @@ def get_grade_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """获取成绩分析（学生本人、教师或管理员）"""
+    """获取成绩分析（学生本人、名下学生教师或管理员）"""
     if current_user.role == UserRole.STUDENT and current_user.id != student_id:
         raise HTTPException(status_code=403, detail="无权访问他人成绩")
+    # 教师只能查看名下学生的成绩
+    if current_user.role == UserRole.TEACHER:
+        student = db.query(User).filter(
+            User.id == student_id, User.tutor_id == current_user.id
+        ).first()
+        if not student:
+            raise HTTPException(status_code=403, detail="无权访问该学生成绩")
     
     # 获取所有成绩
     grades = db.query(Grade).filter(Grade.student_id == student_id).all()
@@ -235,15 +242,17 @@ def get_class_grade_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _ = class_id  # TODO: 实现按 class_id 过滤，当前使用 tutor_id
-    """获取班级成绩分析（教师或管理员）"""
+    """获取班级成绩分析（教师或管理员）：按班级过滤，教师仅限名下学生。"""
     if current_user.role == UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="无权访问")
-    
-    # 获取班级学生
-    students = db.query(User).filter(
-        User.tutor_id == current_user.id if current_user.role == UserRole.TEACHER else True
-    ).all()
+
+    query = db.query(User).filter(
+        User.role == UserRole.STUDENT,
+        User.class_group_id == class_id,
+    )
+    if current_user.role == UserRole.TEACHER:
+        query = query.filter(User.tutor_id == current_user.id)
+    students = query.all()
     
     student_ids = [s.id for s in students]
     

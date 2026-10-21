@@ -213,5 +213,7 @@ def get_log_share_link(
     log = guardian_service.get_log(db, log_id)
     if not log:
         raise HTTPException(status_code=404, detail="沟通记录不存在")
+    if user.role != UserRole.ADMIN and log.teacher_id != user.id:
+        raise HTTPException(status_code=403, detail="无权查看该记录的分享链接")
     links = guardian_service.list_links_for_logs(db, [log_id])
     return links.get(log_id)

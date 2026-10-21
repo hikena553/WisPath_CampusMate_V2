@@ -128,4 +128,6 @@ def survey_result(
     survey = peer_survey_service.get_survey(db, survey_id)
     if not survey:
         raise HTTPException(status_code=404, detail="问卷不存在")
+    if user.role != UserRole.ADMIN and survey.created_by != user.id:
+        raise HTTPException(status_code=403, detail="只能查看本人创建的问卷结果")
     return peer_survey_service.aggregate(db, survey, target_teacher_id=target_teacher_id)

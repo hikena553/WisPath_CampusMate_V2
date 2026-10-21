@@ -329,6 +329,9 @@ async def analyze_leave(id: int, user: User = Depends(require_role(UserRole.TEAC
     if not leave:
         raise HTTPException(status_code=404, detail="请假申请不存在")
     student = db.query(User).filter(User.id == leave.student_id).first()
+    # 归属校验：教师只能分析名下学生的请假
+    if user.role != UserRole.ADMIN and (not student or student.tutor_id != user.id):
+        raise HTTPException(status_code=403, detail="无权分析该请假申请")
     prompt = build_leave_analysis_prompt(
         student_name=student.name if student else "未知",
         leave_type=safe_enum_val(leave.leave_type),

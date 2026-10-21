@@ -205,6 +205,9 @@ def _analyze_leave(db: Session, args: dict, user: User) -> dict:
     if not leave:
         return {"success": False, "message": "请假申请不存在"}
     student = db.query(User).filter(User.id == leave.student_id).first()
+    # 权限检查：只能分析自己名下学生的请假（与 _approve_leave 保持一致）
+    if user.role != UserRole.ADMIN and (not student or student.tutor_id != user.id):
+        return {"success": False, "message": "无权分析该请假（该学生不在你名下）"}
     type_names = {"competition": "比赛", "sick": "病假", "personal": "事假", "other": "其他"}
     return {
         "type": "leave",

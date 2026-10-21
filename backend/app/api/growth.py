@@ -116,9 +116,15 @@ def create_record(req: GrowthRecordCreate, db: Session = Depends(get_db), curren
     if current_user.role == UserRole.STUDENT:
         student_id = current_user.id
     else:
-        # 教师和管理员可以为任何学生创建记录，但必须提供student_id
+        # 教师和管理员必须提供 student_id；教师仅可为自己名下学生创建记录
         if req.student_id is None:
             raise HTTPException(status_code=400, detail="教师和管理员必须提供student_id")
+        if current_user.role == UserRole.TEACHER:
+            student = db.query(User).filter(
+                User.id == req.student_id, User.tutor_id == current_user.id
+            ).first()
+            if not student:
+                raise HTTPException(status_code=403, detail="无权为非名下学生创建记录")
         student_id = req.student_id
     
     record_data = req.model_dump()
