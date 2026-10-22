@@ -18,10 +18,17 @@ export interface ApprovalByKind {
 }
 
 export interface ApprovalStats {
+  /** 全量口径（兼容旧字段） */
   total: number
   pending: number
   approved: number
   rejected: number
+  /** 近 N 天口径：提交量 / 通过量 / 驳回量 */
+  submitted: number
+  /** 已受理（工单处理中） */
+  accepted: number
+  approved_window: number
+  rejected_window: number
   by_kind: Record<string, ApprovalByKind>
   trend: Array<{ day: string; count: number }>
 }

@@ -1,7 +1,6 @@
 """统一审批门面（OA 门面）：聚合多类申请的待审、统一审核、数据统计。
 教师审核自己学生（tutor_id）的申请，管理员审核全部。
 """
-from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,12 +8,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_role
+from app.core.deps import require_role
 from app.models.user import User, UserRole
 from app.models.leave import LeaveRequest, LeaveStatus
 from app.models.service import ServiceTicket, TicketStatus
 from app.models.material import MaterialArchive, MaterialStatus
 from app.models.notification import NotificationType
+from app.services import approval_service
 
 router = APIRouter(prefix="/api/approval", tags=["统一审批"])
 
@@ -27,12 +27,10 @@ class ReviewRequest(BaseModel):
     reject_reason: str | None = None
 
 
-def _scoped_student_ids(user: User, db: Session) -> list[int]:
-    """教师返回所带学生 id，管理员返回 None（表示全部）。"""
-    if user.role == UserRole.ADMIN:
-        return None
-    ids = [s.id for s in db.query(User).filter(User.tutor_id == user.id).all()]
-    return ids or []
+# 数据级可见性收敛（本人所带学生）统一由 service 实现，api 层只做装配。
+# 保留 (user, db) 的既有调用签名，避免改动 api 内多处调用点。
+def _scoped_student_ids(user: User, db: Session) -> list[int] | None:
+    return approval_service.scoped_student_ids(db, user)
 
 
 def _leave_items(user: User, db: Session, status: str | None, student_id: int | None = None):
@@ -213,73 +211,10 @@ def approval_stats(
     user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    """数据统计：总量/待处理/通过/驳回，按类型分布，近 N 天趋势。"""
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
+    """数据统计（薄路由）：口径与聚合全部在 services/approval_service.py。
 
-    def _rows(model, fk_column, ids):
-        q = db.query(model)
-        if ids is not None:
-            q = q.filter(fk_column.in_(ids))
-        return q.all()
-
-    ids = _scoped_student_ids(user, db)
-    if student_id is not None:
-        ids = [student_id] if (ids is None or student_id in ids) else []
-    # 办事工单的待审队列是全教师共享的（先到先审），统计口径必须与队列一致：
-    # 否则导师从共享队列里通过/驳回了工单，统计数字却不动，看起来像统计坏了。
-    ticket_ids = None if (student_id is None and ids is not None) else ids
-    leaves = _rows(LeaveRequest, LeaveRequest.student_id, ids)
-    tickets = _rows(ServiceTicket, ServiceTicket.applicant_id, ticket_ids)
-    materials = _rows(MaterialArchive, MaterialArchive.student_id, ids)
-
-    def _status(r):
-        return r.status.value if hasattr(r.status, "value") else str(r.status)
-
-    counts = {"leave": {s: 0 for s in STATUS_ACTIVE}, "ticket": {s: 0 for s in STATUS_ACTIVE}, "material": {s: 0 for s in STATUS_ACTIVE}}
-    for r in leaves:
-        counts["leave"][_status(r) if _status(r) in STATUS_ACTIVE else "pending"] += 1
-    for r in tickets:
-        counts["ticket"][_status(r) if _status(r) in STATUS_ACTIVE else "pending"] += 1
-    for r in materials:
-        counts["material"][_status(r) if _status(r) in STATUS_ACTIVE else "pending"] += 1
-
-    by_kind = {k: sum(v.values()) for k, v in counts.items()}
-    total = sum(by_kind.values())
-    pending_total = counts["leave"]["pending"] + counts["ticket"]["pending"] + counts["material"]["pending"]
-    approved_total = counts["leave"]["approved"] + counts["ticket"]["approved"] + counts["material"]["approved"]
-    rejected_total = counts["leave"]["rejected"] + counts["ticket"]["rejected"] + counts["material"]["rejected"]
-
-    # 近 N 天趋势（按天统计提交量）
-    from collections import defaultdict
-    def _naive(dt):
-        return dt.replace(tzinfo=None) if dt and dt.tzinfo else dt
-    trend = defaultdict(int)
-    for r in leaves:
-        d = _naive(r.created_at)
-        if d and d >= since:
-            trend[d.strftime("%m-%d")] += 1
-    for r in tickets:
-        d = _naive(r.created_at)
-        if d and d >= since:
-            trend[d.strftime("%m-%d")] += 1
-    for r in materials:
-        d = _naive(r.created_at)
-        if d and d >= since:
-            trend[d.strftime("%m-%d")] += 1
-    trend_list = [
-        {"day": (since + timedelta(days=i)).strftime("%m-%d"), "count": trend[(since + timedelta(days=i)).strftime("%m-%d")]}
-        for i in range(days)
-    ]
-
-    return {
-        "total": total,
-        "pending": pending_total,
-        "approved": approved_total,
-        "rejected": rejected_total,
-        "by_kind": {
-            "leave": {"label": "请假申请", "count": by_kind["leave"], "pending": counts["leave"]["pending"]},
-            "ticket": {"label": "办事工单", "count": by_kind["ticket"], "pending": counts["ticket"]["pending"]},
-            "material": {"label": "材料档案", "count": by_kind["material"], "pending": counts["material"]["pending"]},
-        },
-        "trend": trend_list,
-    }
+    返回：总量/待处理/通过/驳回（全量口径，兼容旧字段）+ 近 N 天口径
+    （submitted 提交 / approved_window 通过 / rejected_window 驳回）+ accepted（已受理），
+    供审批页流程条（提交 → 受理 → 审批 → 归档）动态展示。
+    """
+    return approval_service.stats(db, user, days=days, student_id=student_id)
