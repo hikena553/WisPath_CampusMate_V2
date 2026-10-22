@@ -13,13 +13,38 @@
 
 ```
 backend/ml/
-├── architectures.py     # FaceExpressionNet（深度可分离 CNN）+ 通道对齐官方 manifest
-├── config.py            # 全部超参数（TrainingConfig）
-├── dataset.py           # FER2013 下载/解析 + 数据增强
-├── metrics.py           # 混淆矩阵 / P-R-F1 / Top-k（纯 numpy）
-├── artifacts.py         # 曲线图、混淆矩阵图、指标 JSON、报告落盘
-├── train.py             # 训练主流程（含早停、分组学习率、AMP、微调）
-└── runs/<run_id>/       # 每次训练的产物
+├── 核心训练
+│   ├── architectures.py   # FaceExpressionNet（深度可分离 CNN）+ 通道对齐官方 manifest
+│   ├── backbones.py       # 迁移学习骨干（mobilenet_v3 / efficientnet_b0 / resnet18）
+│   ├── config.py          # 全部超参数（TrainingConfig）
+│   ├── dataset.py         # FER2013 / RAF-DB 解析 + 数据增强
+│   ├── losses.py          # Focal / 标签平滑等损失
+│   ├── metrics.py         # 混淆矩阵 / P-R-F1 / Top-k（纯 numpy）
+│   ├── artifacts.py       # 曲线图、混淆矩阵图、指标 JSON、报告落盘
+│   └── train.py           # 训练主流程（含早停、分组学习率、AMP、微调）
+├── 训练配方
+│   └── configs/*.json     # improved / strong / transfer / rafmix* 等实验配置
+├── 数据集构建
+│   ├── ferplus.py         # FER+ 标签清洗与合并集
+│   ├── real_fer.py        # 真实场景测试集（FER/RAF）
+│   ├── remote_parquet.py  # 远程 parquet 分片读取（AffectNet 演示）
+│   ├── face_detect_data.py# 合成人脸检测训练数据
+│   ├── wider_to_yolo.py   # WIDER FACE → YOLO 格式
+│   └── train_yolo_face.py # 人脸检测器（YOLOv8n 单类）训练
+├── 评估与分析（一次性实验脚本）
+│   ├── eval_checkpoints.py / eval_extra.py / eval_blend.py
+│   ├── ensemble.py        # 多模型加权集成
+│   ├── faceapi_eval.py    # 与 face-api.js 同口径对比
+│   ├── smoother_eval.py / error_analysis.py / denoise.py
+│   └── face_pipeline.py   # 检测+分类串联链路
+├── 浏览器端验证
+│   ├── e2e_emotion.py     # 端到端回放（file / realtime）
+│   ├── make_selftest.py   # 生成自测样本
+│   └── fake_camera.py     # 合成摄像头测试流
+├── export_onnx.py         # 导出前端运行时 ONNX（产物在 frontend/public/models/）
+├── requirements-train.txt
+├── runs/<run_id>/         # 训练/评估产物（生成物，不入库，见 .gitignore）
+└── data/                  # FER2013 / RAF-DB / FER+ / AffectNet / 检测数据（生成物，不入库）
 ```
 
 ## 环境
