@@ -16,6 +16,14 @@
       </div>
       <div class="appbar-actions">
         <button
+          v-if="isGuestMode()"
+          type="button"
+          class="appbar-login"
+          @click="goLogin"
+        >
+          登录
+        </button>
+        <button
           type="button"
           class="appbar-btn"
           aria-label="搜索校园资讯"
@@ -105,6 +113,9 @@
             <span class="search-hit-title">{{ h.question || h.content || '未命名' }}</span>
           </div>
         </template>
+        <p v-else-if="isGuestMode()" class="search-empty">
+          知识库检索需要登录，<a href="javascript:;" @click.prevent="promptLogin('检索全校知识库')">去登录</a>
+        </p>
         <p v-else class="search-empty">知识库中也没有找到相关内容</p>
       </div>
     </el-dialog>
@@ -409,15 +420,33 @@ import {
   SetUp, Histogram, HomeFilled, OfficeBuilding, Search, Message
 } from '@element-plus/icons-vue'
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
+import { isGuestMode } from '@/utils/guest'
+import { promptLogin } from '@/utils/loginGate'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const auth = useAuthStore()
+
+/** 游客回登录页：清掉游客标记后进入登录页（与布局顶栏的登录入口保持同一行为） */
+function goLogin() {
+  auth.exitGuest()
+  router.push({ path: '/login', query: { reason: 'login' } })
+}
 
 const vTilt = tilt
 const isMobile = ref(window.innerWidth <= 767)
 window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 767 })
 
-/** 站内阅读器：点击资讯在应用内打开（移动端全屏抽屉），不跳出应用 */
+/** 站内阅读器：点击资讯在应用内打开（移动端全屏抽屉），不跳出应用。
+    站内阅读需要登录态，游客点击时先引导登录。 */
 const readerRef = ref<InstanceType<typeof ArticleReader> | null>(null)
 function openArticle(url: string, title?: string) {
   if (!url) return
+  if (isGuestMode()) {
+    void promptLogin('阅读资讯全文')
+    return
+  }
   readerRef.value?.open(url, title)
 }
 
@@ -758,6 +787,8 @@ async function runSearch() {
     // 本页已命中，不再打后端：既省一次检索，也避免两段结果互相干扰
     return
   }
+  // 游客没有知识库检索权限：只展示本页资讯的本地搜索结果
+  if (isGuestMode()) return
   knowledgeLoading.value = true
   try {
     knowledgeHits.value = await searchKnowledge(keyword)
@@ -1390,6 +1421,22 @@ onMounted(() => {
 .appbar-btn:active { transform: scale(.93); background: rgba(255, 255, 255, .3); }
 .appbar-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
+/* 游客专属：页头内的登录入口（移动端顶栏被隐藏，没有它游客会找不到回登录页的路径） */
+.appbar-login {
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: #111111;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.appbar-login:active { transform: scale(.95); }
+
 /* ===== Search Dialog ===== */
 .search-hot {
   display: flex;
@@ -1440,6 +1487,8 @@ onMounted(() => {
 }
 .search-hit-date { flex-shrink: 0; font-size: 11px; color: #9aa5b1; }
 .search-empty { margin: 6px 0 0; font-size: 12px; color: #b4bcc8; }
+.search-empty a { color: #2f6ef2; text-decoration: none; }
+.search-empty a:hover { text-decoration: underline; }
 
 /* ===== Section ===== */
 .campus-section { margin-bottom: 24px; }

@@ -4,16 +4,16 @@
     <transition v-if="isMobile" :name="slideDirection">
       <div v-if="!currentPage" key="main" class="profile-page">
         <!-- 个人中心头部：抖音范式封面 —— 顶部悬浮操作、头像压住封面下边缘、姓名与工号贴在封面右下 -->
-        <section class="pf-hero" :style="heroBannerStyle">
+        <section class="pf-hero" :class="{ 'is-photo': !!bannerUrl }" :style="heroBannerStyle" @click="openPage('banner')">
           <div class="pf-hero-scrim"></div>
 
           <div class="pf-hero-top">
-            <button type="button" class="pf-top-pill" @click="openPage('banner')">
+            <button type="button" class="pf-top-pill" @click.stop="openPage('banner')">
               <el-icon :size="13"><Camera /></el-icon>
               更换背景
             </button>
             <span class="pf-top-icons">
-              <button type="button" class="pf-top-icon" title="校园公告" @click="openPage('announcements')">
+              <button type="button" class="pf-top-icon" title="校园公告" @click.stop="openPage('announcements')">
                 <el-icon :size="16"><Bell /></el-icon>
               </button>
             </span>
@@ -29,7 +29,7 @@
           </div>
 
           <!-- 头像压住封面与内容区的交界线；右下角「+」即编辑资料入口 -->
-          <button type="button" class="pf-hero-avatar" title="编辑资料" @click="openPage('profile')">
+          <button type="button" class="pf-hero-avatar" title="编辑资料" @click.stop="openPage('profile')">
             <el-avatar :size="82" :src="auth.user?.avatar || ''" class="pf-avatar">
               {{ auth.userName?.[0] }}
             </el-avatar>
@@ -473,7 +473,7 @@
         <div v-if="activeTab === 'banner'" class="sub-page-content set-page">
           <div class="set-group">
             <div class="set-group-title">当前背景</div>
-            <div class="bg-preview" :style="heroBannerStyle">
+            <div class="bg-preview" :class="{ 'is-photo': !!bannerUrl }" :style="heroBannerStyle">
               <div class="bg-preview-scrim"></div>
               <div class="bg-preview-cast">
                 <el-avatar :size="40" :src="auth.user?.avatar || ''" class="bg-preview-avatar">
@@ -568,6 +568,8 @@ import { uploadFile } from '@/api/upload'
 import { getAnnouncements } from '@/api/campus'
 import type { Announcement } from '@/types'
 import { getMyBadgeWall, type BadgeWall as BadgeWallData } from '@/api/badge'
+import { syncQuickAccount } from '@/utils/quickLogin'
+import { confirmLogout } from '@/utils/logout'
 import { getDashboardStats, getClassStats, type DashboardStats, type ClassStats, type ClassEvaluation } from '@/api/teacher'
 import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
 import { getApprovalStats, type ApprovalStats } from '@/api/approval'
@@ -622,18 +624,27 @@ async function refreshBadges() {
 const savedBanner = localStorage.getItem('profileBanner') || ''
 const bannerUrl = ref(savedBanner ? savedBanner + (savedBanner.includes('?') ? '&' : '?') + '_t=' + Date.now() : '')
 const bannerInputRef = ref<HTMLInputElement>()
-const DEFAULT_GRADIENT = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-const bannerGradient = ref(localStorage.getItem('profileBannerColor') || DEFAULT_GRADIENT)
+const DEFAULT_GRADIENT =
+  'radial-gradient(circle at 84% 14%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 10% 86%, rgba(129,161,255,0.28) 0%, rgba(129,161,255,0) 44%), linear-gradient(135deg, #eef4ff 0%, #d8e5ff 100%)'
 
-// 预设背景图
+/**
+ * 预设背景：浅色底 + 少量柔光圆点修饰。
+ * 每项为多层 background：先铺两处柔光（白色高光 + 一抹同色系淡彩），再叠浅色渐变。
+ * 因底色为浅色，封面文字改用深色（自定义背景图仍走深色压底 + 白字）。
+ */
 const presetBanners = [
-  { id: 'gradient1', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-  { id: 'gradient2', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-  { id: 'gradient3', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-  { id: 'gradient4', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
-  { id: 'gradient5', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-  { id: 'gradient6', color: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)' },
+  { id: 'gradient1', color: 'radial-gradient(circle at 84% 14%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 10% 86%, rgba(129,161,255,0.28) 0%, rgba(129,161,255,0) 44%), linear-gradient(135deg, #eef4ff 0%, #d8e5ff 100%)' },
+  { id: 'gradient2', color: 'radial-gradient(circle at 80% 18%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 14% 84%, rgba(52,211,153,0.22) 0%, rgba(52,211,153,0) 44%), linear-gradient(135deg, #eefaf3 0%, #d5f2e3 100%)' },
+  { id: 'gradient3', color: 'radial-gradient(circle at 82% 16%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 12% 86%, rgba(244,114,182,0.20) 0%, rgba(244,114,182,0) 44%), linear-gradient(135deg, #fff1f5 0%, #ffdfe9 100%)' },
+  { id: 'gradient4', color: 'radial-gradient(circle at 80% 16%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 14% 86%, rgba(251,191,36,0.20) 0%, rgba(251,191,36,0) 44%), linear-gradient(135deg, #fff7ec 0%, #ffe8cc 100%)' },
+  { id: 'gradient5', color: 'radial-gradient(circle at 82% 18%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 12% 84%, rgba(167,139,250,0.22) 0%, rgba(167,139,250,0) 44%), linear-gradient(135deg, #f6f2ff 0%, #e6dfff 100%)' },
+  { id: 'gradient6', color: 'radial-gradient(circle at 80% 16%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 14% 86%, rgba(148,163,184,0.22) 0%, rgba(148,163,184,0) 44%), linear-gradient(135deg, #f3f6fa 0%, #e2e9f1 100%)' },
 ]
+
+// 旧的深色渐变已下线：存量值不在预设列表内时回落到默认浅色背景
+const presetColors = presetBanners.map((p) => p.color)
+const savedGradient = localStorage.getItem('profileBannerColor') || ''
+const bannerGradient = ref(presetColors.includes(savedGradient) ? savedGradient : DEFAULT_GRADIENT)
 
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '', captcha: '' })
 const captchaCode = ref('')
@@ -653,7 +664,7 @@ function refreshCaptcha() {
 
 const profileForm = reactive({
   username: '', name: '', college: '', gender: '', age: 18,
-  hometown: '', phone: '', className: '', political_status: '',
+  hometown: '', phone: '', qq: '', className: '', political_status: '',
   title: '', department: '', signature: ''
 })
 
@@ -705,7 +716,8 @@ const accGroups: { title: string; fields: AccField[] }[] = [
   {
     title: '联系方式',
     fields: [
-      { key: 'phone', label: '联系电话', type: 'text', placeholder: '请输入手机号' },
+      { key: 'phone', label: '联系电话', type: 'text', placeholder: '绑定后可用手机号一键登录' },
+      { key: 'qq', label: 'QQ', type: 'text', placeholder: '绑定后可用 QQ 一键登录' },
       { key: 'title', label: '职称', type: 'text', placeholder: '请输入职称' },
       { key: 'department', label: '所属单位', type: 'text', placeholder: '请输入所属单位' },
     ],
@@ -833,6 +845,7 @@ function fillProfileForm() {
   profileForm.age = u.age ?? 18
   profileForm.hometown = u.hometown || ''
   profileForm.phone = u.phone || ''
+  profileForm.qq = u.qq || ''
   profileForm.className = (u as any).class_name || ''
   profileForm.political_status = (u as any).political_status || ''
   profileForm.title = (u as any).title || ''
@@ -906,7 +919,7 @@ function resetBanner() {
   ElMessage.success('已恢复默认背景')
 }
 
-function logout() { auth.logout(); router.push('/') }
+function logout() { confirmLogout() }
 
 async function handleChangePassword() {
   if (!passwordForm.old_password || !passwordForm.new_password || !passwordForm.confirm_password) {
@@ -937,6 +950,7 @@ async function handleSaveProfile() {
     const updated = await updateProfile({
       gender: profileForm.gender || null, age: profileForm.age || null,
       hometown: profileForm.hometown || null, phone: profileForm.phone || null,
+      qq: profileForm.qq || null,
       class_name: profileForm.className || null,
       political_status: profileForm.political_status || null,
       title: profileForm.title || null,
@@ -944,6 +958,8 @@ async function handleSaveProfile() {
       signature: profileForm.signature || null,
     })
     auth.updateUser(updated as any)
+    // 绑定/解绑手机号、QQ 后刷新本设备一键登录凭证
+    await syncQuickAccount(updated as any)
     ElMessage.success('保存成功')
     closePage()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '保存失败') }
@@ -1595,11 +1611,15 @@ onMounted(() => {
   background-color: #d8dee6;
   background-size: cover;
   background-position: center;
+  cursor: pointer;
 }
-/* 自下而上的暗色压底：白字在任意背景图/渐变上都可读，同时把封面「压」成背景层 */
+/* 暗色压底仅在自定义背景图时叠加（保证白字可读）；浅色预设背景不加压底 */
 .pf-hero-scrim {
   position: absolute;
   inset: 0;
+  background: none;
+}
+.pf-hero.is-photo .pf-hero-scrim {
   background: linear-gradient(
     180deg,
     rgba(10, 12, 16, 0.08) 0%,
@@ -1619,16 +1639,22 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   padding: 5px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(16, 24, 40, 0.08);
   border-radius: 999px;
-  background: rgba(10, 12, 16, 0.3);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.72);
+  color: #344054;
   font-family: inherit;
   font-size: 11.5px;
   cursor: pointer;
   backdrop-filter: blur(6px);
 }
-.pf-top-pill:active { background: rgba(10, 12, 16, 0.46); }
+.pf-top-pill:active { background: rgba(255, 255, 255, 0.9); }
+.pf-hero.is-photo .pf-top-pill {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(10, 12, 16, 0.3);
+  color: #fff;
+}
+.pf-hero.is-photo .pf-top-pill:active { background: rgba(10, 12, 16, 0.46); }
 .pf-top-icons { display: inline-flex; align-items: center; gap: 8px; }
 .pf-top-icon {
   width: 30px;
@@ -1638,12 +1664,17 @@ onMounted(() => {
   justify-content: center;
   border: none;
   border-radius: 50%;
-  background: rgba(10, 12, 16, 0.3);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.72);
+  color: #344054;
   cursor: pointer;
   backdrop-filter: blur(6px);
 }
-.pf-top-icon:active { background: rgba(10, 12, 16, 0.46); }
+.pf-top-icon:active { background: rgba(255, 255, 255, 0.9); }
+.pf-hero.is-photo .pf-top-icon {
+  background: rgba(10, 12, 16, 0.3);
+  color: #fff;
+}
+.pf-hero.is-photo .pf-top-icon:active { background: rgba(10, 12, 16, 0.46); }
 
 /* 姓名 / 身份：贴在封面右下，给左侧头像让出空间 */
 .pf-hero-id {
@@ -1659,8 +1690,7 @@ onMounted(() => {
   font-size: 19px;
   font-weight: 700;
   line-height: 1.2;
-  color: #fff;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
+  color: #101828;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1669,9 +1699,9 @@ onMounted(() => {
   flex-shrink: 0;
   padding: 1px 7px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  border: 1px solid rgba(16, 24, 40, 0.1);
+  background: rgba(255, 255, 255, 0.66);
+  color: #475467;
   font-size: 10.5px;
   font-weight: 600;
 }
@@ -1690,11 +1720,22 @@ onMounted(() => {
 .pf-cast-sub {
   margin: 5px 0 0;
   font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.8);
+  color: #667085;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 自定义背景图：压深文字并复原白色样式，保证在任意照片上都清晰 */
+.pf-hero.is-photo .pf-cast-name {
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
+}
+.pf-hero.is-photo .pf-cast-role {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.pf-hero.is-photo .pf-cast-sub { color: rgba(255, 255, 255, 0.8); }
 
 /* 头像：跨在封面与内容面板的交界线上 */
 .pf-hero-avatar {
@@ -2107,6 +2148,9 @@ onMounted(() => {
 .set-page .bg-preview-scrim {
   position: absolute;
   inset: 0;
+  background: none;
+}
+.set-page .bg-preview.is-photo .bg-preview-scrim {
   background: linear-gradient(
     180deg,
     rgba(10, 12, 16, 0.04) 0%,
@@ -2125,22 +2169,27 @@ onMounted(() => {
 .set-page .bg-preview-avatar {
   flex-shrink: 0;
   border: 2px solid rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.5);
+  color: #344054;
   font-size: 15px;
   font-weight: 600;
 }
+.set-page .bg-preview.is-photo .bg-preview-avatar { color: #fff; }
 .set-page .bg-preview-name {
   font-size: 14px;
   font-weight: 700;
+  color: #101828;
+}
+.set-page .bg-preview.is-photo .bg-preview-name {
   color: #fff;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
 }
 .set-page .bg-preview-sub {
   margin-top: 2px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.82);
+  color: #667085;
 }
+.set-page .bg-preview.is-photo .bg-preview-sub { color: rgba(255, 255, 255, 0.82); }
 .set-page .bg-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

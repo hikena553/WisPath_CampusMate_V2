@@ -1,7 +1,7 @@
 <template>
   <div class="app-shell" :class="{ 'app-mobile': isMobile }">
     <header class="topbar" :class="{ 'topbar-mobile': isMobile }">
-      <div class="topbar-left" style="cursor:pointer" @click="goTo('/student')">
+      <div class="topbar-left" style="cursor:pointer" @click="goHome">
         <img src="/images/校徽_圆形.png" class="topbar-badge" />
         <span class="logo">绵小城</span>
         <template v-if="!isMobile">
@@ -11,32 +11,35 @@
       </div>
       <div class="topbar-nav">
         <template v-if="!isMobile">
-          <div class="nav-item" :class="{ 'nav-active': route.path === '/student' }" @click="goTo('/student')">
+          <div class="nav-item" :class="{ 'nav-active': route.path === '/student' }" @click="navTo('/student', '和绵小城对话')">
             <el-icon :size="16"><ChatDotRound /></el-icon>
             <span>绵小城</span>
           </div>
-          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/campus') }" @click="goTo('/student/campus')">
+          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/campus') }" @click="navTo('/student/campus', '浏览校园资讯')">
             <el-icon :size="16"><PictureFilled /></el-icon>
             <span>校园资讯</span>
           </div>
-          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/schedule') || route.path.startsWith('/student/growth') || route.path.startsWith('/student/grade') || route.path.startsWith('/student/plan') || route.path.startsWith('/student/portfolio') }" @click="goTo('/student/schedule')">
+          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/schedule') || route.path.startsWith('/student/growth') || route.path.startsWith('/student/grade') || route.path.startsWith('/student/plan') || route.path.startsWith('/student/portfolio') }" @click="navTo('/student/schedule', '进入学业驾驶舱')">
             <el-icon :size="16"><Odometer /></el-icon>
             <span>驾驶舱</span>
           </div>
-          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/workbench') || route.path.startsWith('/student/service') || route.path.startsWith('/student/resources') || route.path.startsWith('/student/community') || route.path.startsWith('/student/feedback') }" @click="goTo('/student/workbench')" style="position:relative">
+          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/workbench') || route.path.startsWith('/student/service') || route.path.startsWith('/student/resources') || route.path.startsWith('/student/community') || route.path.startsWith('/student/feedback') }" @click="navTo('/student/workbench', '使用工作台办事')" style="position:relative">
             <el-icon :size="16"><Grid /></el-icon>
             <span>工作台</span>
             <el-badge v-if="unreadCount" is-dot class="contact-badge" title="点击清除未读提示" @click.stop="clearUnread" />
           </div>
-          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/profile') }" @click="goTo('/student/profile')">
+          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/profile') }" @click="navTo('/student/profile', '进入个人中心')">
             <el-icon :size="16"><User /></el-icon>
             <span>个人中心</span>
           </div>
         </template>
       </div>
       <div class="topbar-right">
+        <button v-if="auth.guest" type="button" class="guest-login-btn" @click="goLogin">
+          登录<span v-if="!isMobile"> / 解锁全部功能</span>
+        </button>
         <template v-if="!isMobile">
-          <el-dropdown trigger="click">
+          <el-dropdown v-if="!auth.guest" trigger="click">
             <span class="user-btn">
               <el-avatar :size="28" :src="auth.user?.avatar || ''">{{ auth.userName?.[0] }}</el-avatar>
               <span class="user-name">{{ auth.userName }}</span>
@@ -94,6 +97,8 @@ import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import UserHomepage from '@/components/profile/UserHomepage.vue'
 import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
 import { useBadgeAward } from '@/composables/useBadgeAward'
+import { promptLogin } from '@/utils/loginGate'
+import { confirmLogout } from '@/utils/logout'
 
 const router = useRouter()
 const route = useRoute()
@@ -144,8 +149,30 @@ const activeNavKey = computed(() => {
   return 'agent'
 })
 
-function handleNavSelect(item: { route: string }) {
-  router.push(item.route)
+function handleNavSelect(item: { route: string; label?: string }) {
+  if (item.route.startsWith('/student/campus')) {
+    router.push(item.route)
+    return
+  }
+  void navTo(item.route, item.label ? `进入${item.label}` : '使用该功能')
+}
+
+/** 游客点按受限入口：先提示登录，同意后回登录页；登录用户正常跳转 */
+async function navTo(path: string, feature: string) {
+  if (auth.guest && !path.startsWith('/student/campus')) {
+    await promptLogin(feature)
+    return
+  }
+  router.push(path)
+}
+
+function goHome() {
+  router.push(auth.guest ? '/student/campus' : '/student')
+}
+
+function goLogin() {
+  auth.exitGuest()
+  router.push({ path: '/login', query: { reason: 'login' } })
 }
 
 /**
@@ -178,6 +205,8 @@ function warmDashboardCache() {
 }
 
 onMounted(() => {
+  // 游客只浏览公开内容，跳过所有需要登录态的请求（未读/勋章/数据预热）
+  if (auth.guest) return
   startUnreadWatch()
   // 勋章结算放在首屏请求之后，避免与页面自身的数据请求抢占带宽
   window.setTimeout(() => { void syncBadgeAwards() }, 900)
@@ -193,8 +222,7 @@ onUnmounted(() => {
 function goTo(path: string) { router.push(path) }
 
 function logout() {
-  auth.logout()
-  router.push('/')
+  confirmLogout()
 }
 </script>
 
@@ -284,6 +312,17 @@ function logout() {
 .main-area.has-bottom-bar { padding-bottom: 56px; }
 
 .contact-badge { position: absolute; top: 2px; right: 2px; }
+.guest-login-btn {
+  border: 1px solid rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+.guest-login-btn:hover { background: rgba(255,255,255,0.22); }
 :deep(.topbar-right .el-button) { color: rgba(255,255,255,0.85); }
 :deep(.topbar-right .el-button:hover) { color: #ffffff; background: rgba(255,255,255,0.2); }
 :deep(.topbar-right .el-divider--vertical) { border-color: rgba(255,255,255,0.3); }

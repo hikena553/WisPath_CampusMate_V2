@@ -28,6 +28,7 @@ class User(Base):
     title: Mapped[str | None] = mapped_column(String(50))
     hometown: Mapped[str | None] = mapped_column(String(100))
     phone: Mapped[str | None] = mapped_column(String(20))
+    qq: Mapped[str | None] = mapped_column(String(20), comment="绑定的 QQ 号，用于一键登录")
     department: Mapped[str | None] = mapped_column(String(100))
     age: Mapped[int | None] = mapped_column(Integer)
     class_name: Mapped[str | None] = mapped_column(String(50), default=None, comment="班级")

@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios'
 import { getToken, removeToken } from './token'
+import { isGuestMode } from './guest'
 import { ElMessage } from 'element-plus'
 
 /** 应用层请求配置：skipAuthRedirect 用于公开接口，避免未登录场景被全局 401 处理踢出登录 */
@@ -29,8 +30,20 @@ instance.interceptors.response.use(
   },
   (err) => {
     const cfg = err.config as AppRequestConfig | undefined
+    // 公开页（登录 / 欢迎 / 找回密码 / 改密 / 家长分享）上的 401 交给路由守卫处理，
+    // 不做全局硬跳转，否则未登录访问这些页面会被瞬间踢回 /login
+    const publicPaths = ['/login', '/welcome', '/forgot-password', '/change-password', '/share/']
+    const onPublicPage = publicPaths.some(
+      (p) => window.location.pathname === p || window.location.pathname.startsWith(p)
+    )
     // 公开接口（如站点品牌）不应触发全局登出跳转，失败由调用方自行兜底
-    if (err.response?.status === 401 && !cfg?.skipAuthRedirect && !window.location.pathname.startsWith('/login')) {
+    // 游客只在公开页面浏览：401 不应触发全局登出跳转，由页面自行降级/引导登录
+    if (
+      err.response?.status === 401 &&
+      !cfg?.skipAuthRedirect &&
+      !isGuestMode() &&
+      !onPublicPage
+    ) {
       removeToken()
       window.location.href = '/login'
       return Promise.reject(err)

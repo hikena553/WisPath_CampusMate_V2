@@ -167,6 +167,7 @@ import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import DesktopPet from '@/components/teacher/DesktopPet.vue'
 import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
+import { confirmLogout } from '@/utils/logout'
 import {
   HomeFilled, User, Message, Notebook,
   List, Stamp, WarningFilled, Bell, ChatDotRound, Sunny,
@@ -407,8 +408,7 @@ onUnmounted(() => {
 function goTo(path: string) { router.push(path) }
 
 function logout() {
-  auth.logout()
-  router.push('/')
+  confirmLogout()
 }
 
 /** 打开个人中心整页（桌面端不再是弹窗） */

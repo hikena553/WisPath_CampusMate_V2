@@ -193,6 +193,45 @@ export function resetPassword(userId: number) {
   return request.post<{ message: string }>(`/admin/reset-password/${userId}`)
 }
 
+// ===== 密码重置申请（忘记密码） =====
+export interface PasswordResetRequestItem {
+  id: number
+  user_id: number
+  username: string
+  name: string
+  contact: string
+  reason: string | null
+  status: 'pending' | 'reset' | 'rejected'
+  admin_note: string | null
+  created_at: string
+  handled_at: string | null
+}
+
+export interface PasswordResetRequestList {
+  items: PasswordResetRequestItem[]
+  total: number
+  pending: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export function getPasswordResetRequests(params?: { status?: string } & PaginationParams) {
+  return request.get<PasswordResetRequestList>('/admin/password-reset-requests', { params })
+}
+
+export function approvePasswordReset(id: number) {
+  return request.post<{ message: string; initial_password: string }>(
+    `/admin/password-reset-requests/${id}/approve`
+  )
+}
+
+export function rejectPasswordReset(id: number, note?: string) {
+  return request.post<{ message: string }>(`/admin/password-reset-requests/${id}/reject`, null, {
+    params: { note },
+  })
+}
+
 // 数据导入导出
 export function exportData(role: 'student' | 'teacher') {
   return request.get('/admin/export', { params: { role }, responseType: 'blob' })

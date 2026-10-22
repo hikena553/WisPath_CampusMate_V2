@@ -1,14 +1,19 @@
 <template>
-  <transition name="pwd-reminder">
-    <div v-if="visible" class="pwd-reminder">
-      <span class="pwd-reminder-icon">
-        <el-icon :size="15"><InfoFilled /></el-icon>
-      </span>
-      <span class="pwd-reminder-text">你的账号仍在使用初始密码，建议尽快修改</span>
-      <el-button size="small" class="pwd-reminder-action" @click="showDialog = true">
-        立即修改
-      </el-button>
-      <el-button link size="small" class="pwd-reminder-later" @click="dismiss">暂不提醒</el-button>
+  <transition name="pwd-banner">
+    <div
+      v-if="visible"
+      class="pwd-banner"
+      @mouseenter="pauseAutoDismiss"
+      @mouseleave="resumeAutoDismiss"
+      @touchstart="pauseAutoDismiss"
+    >
+      <span class="pwd-banner-text">你仍在使用初始密码</span>
+      <button type="button" class="pwd-banner-action" @click="openDialog">去修改</button>
+      <button type="button" class="pwd-banner-close" aria-label="关闭提醒" @click="dismiss">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
     </div>
   </transition>
 
@@ -19,29 +24,38 @@
 /**
  * 初始密码提醒（非阻断）
  *
- * 后端不再拦截未改密用户（原 EnforcePasswordChangeMiddleware 已移除），
- * 这里只做一次轻量提示：悬浮卡片 + 一键打开改密弹窗。
- * 「暂不提醒」按用户持久化，避免每次刷新都打扰；改密成功后密码标记翻转，提醒自动消失。
- * 视觉沿用项目主题变量（theme.css）：卡片底色/边框/阴影/文字色均随浅色与深色主题切换。
+ * 顶部细条：单行文案 + 行内「去修改」+ 关闭，安静地挂在页面上方。
+ * 无人操作时 12 秒自动收起，并在本次会话内不再出现（sessionStorage），
+ * 避免每次路由切换都弹；手动关闭则按用户长期记住（localStorage）。
+ * 改密成功后密码标记翻转，提醒自动消失。
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { InfoFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import ChangePasswordDialog from './ChangePasswordDialog.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
 
+/** 无人操作自动收起的时间 */
+const AUTO_DISMISS_MS = 12_000
+
 const showDialog = ref(false)
-/** 计数触发 dismissed 重算（localStorage 不是响应式的） */
+/** 计数触发本地存储标记重算（storage 不是响应式的） */
 const dismissedTick = ref(0)
+const autoDismissedTick = ref(0)
 
 const dismissKey = computed(() => (auth.user?.id ? `pwd_reminder_dismissed:${auth.user.id}` : ''))
+const autoDismissKey = computed(() => (auth.user?.id ? `pwd_reminder_auto_hidden:${auth.user.id}` : ''))
 
 const dismissed = computed(() => {
   void dismissedTick.value
   return !!dismissKey.value && localStorage.getItem(dismissKey.value) === '1'
+})
+
+const autoHidden = computed(() => {
+  void autoDismissedTick.value
+  return !!autoDismissKey.value && sessionStorage.getItem(autoDismissKey.value) === '1'
 })
 
 const visible = computed(() => {
@@ -49,110 +63,167 @@ const visible = computed(() => {
   return (
     auth.user?.password_changed === false &&
     !dismissed.value &&
+    !autoHidden.value &&
     !path.startsWith('/login') &&
     !path.startsWith('/change-password')
   )
 })
 
+let autoTimer: number | undefined
+
+function stopAutoDismiss() {
+  if (autoTimer) {
+    window.clearTimeout(autoTimer)
+    autoTimer = undefined
+  }
+}
+
+function startAutoDismiss() {
+  stopAutoDismiss()
+  autoTimer = window.setTimeout(() => {
+    if (autoDismissKey.value) sessionStorage.setItem(autoDismissKey.value, '1')
+    autoDismissedTick.value += 1
+  }, AUTO_DISMISS_MS)
+}
+
+function pauseAutoDismiss() {
+  stopAutoDismiss()
+}
+
+function resumeAutoDismiss() {
+  if (visible.value && !showDialog.value) startAutoDismiss()
+}
+
+/** 长期关闭：本设备不再提醒 */
 function dismiss() {
   if (dismissKey.value) localStorage.setItem(dismissKey.value, '1')
   dismissedTick.value += 1
+  stopAutoDismiss()
 }
+
+/** 点击「去修改」后不再重复打扰，改密弹窗接管后续流程 */
+function openDialog() {
+  showDialog.value = true
+  if (autoDismissKey.value) sessionStorage.setItem(autoDismissKey.value, '1')
+  autoDismissedTick.value += 1
+  stopAutoDismiss()
+}
+
+watch(visible, (value) => {
+  if (value) startAutoDismiss()
+  else stopAutoDismiss()
+})
+
+onMounted(() => {
+  if (visible.value) startAutoDismiss()
+})
+
+onBeforeUnmount(stopAutoDismiss)
 </script>
 
 <style scoped>
-.pwd-reminder {
+/* 普通提示条：白底浅边、圆角悬浮在顶部居中，样式接近系统/开源项目的轻提示 */
+.pwd-banner {
   position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
   left: 50%;
-  bottom: 76px; /* 高于移动端底部导航（56px + 安全区） */
   transform: translateX(-50%);
-  z-index: 1500;
+  z-index: 1900;
   display: flex;
   align-items: center;
   gap: 10px;
+  width: max-content;
   max-width: calc(100vw - 32px);
-  padding: 10px 12px 10px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  /* 主题阴影 + 一点与顶栏同源的蓝色浮起，避免白底卡片贴在白页面上看不清 */
-  box-shadow: var(--shadow-xl), 0 2px 12px rgba(29, 78, 216, 0.08);
-  backdrop-filter: blur(10px);
+  height: 44px;
+  padding: 0 8px 0 14px;
+  box-sizing: border-box;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #111111;
+  box-shadow: 0 6px 20px rgba(17, 17, 17, 0.08), 0 1px 3px rgba(17, 17, 17, 0.04);
 }
 
-/* 图标底座：沿用主题里的警示色，浅色/深色下都不刺眼 */
-.pwd-reminder-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  color: var(--accent-orange);
-  background: rgba(230, 162, 60, 0.12);
-}
-
-.pwd-reminder-text {
+.pwd-banner-text {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   line-height: 1.4;
-  color: var(--text-primary);
+  letter-spacing: 0.2px;
+  color: #3d3d43;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* 主操作：站内统一的主色渐变按钮（同 TeacherLayout / ChatPanel）
-   选择器带上父级类名，确保压过 Element Plus 的 .el-button--small 尺寸规则 */
-.pwd-reminder .pwd-reminder-action {
+/* 普通文字链接式的操作，不抢视觉 */
+.pwd-banner-action {
   flex-shrink: 0;
-  height: 30px;
-  padding: 0 14px;
+  height: 28px;
+  padding: 0 6px;
   border: none;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #fff;
-  background: linear-gradient(135deg, #409eff, #337ecc);
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.28);
-  --el-button-bg-color: transparent;
-  --el-button-border-color: transparent;
-  --el-button-hover-bg-color: transparent;
-  --el-button-hover-border-color: transparent;
-  --el-button-active-bg-color: transparent;
-  --el-button-hover-text-color: #fff;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: transparent;
+  color: #111111;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.5);
+  border-radius: 0;
+  transition: opacity 0.18s ease;
 }
 
-.pwd-reminder .pwd-reminder-action:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(64, 158, 255, 0.35);
+.pwd-banner-action:hover {
+  opacity: 0.6;
 }
 
-.pwd-reminder .pwd-reminder-later {
+.pwd-banner-close {
   flex-shrink: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #9a9aa0;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
-.pwd-reminder .pwd-reminder-later:hover {
-  color: var(--accent-blue);
+.pwd-banner-close:hover {
+  color: #111111;
+  background: rgba(17, 17, 17, 0.05);
 }
 
+/* 桌面端：让出顶栏高度。transform 用于水平居中，动画需在此一并声明 */
 @media (min-width: 769px) {
-  .pwd-reminder {
-    bottom: 28px;
+  .pwd-banner {
+    top: calc(52px + 12px);
+    min-width: 300px;
   }
 }
 
-.pwd-reminder-enter-active,
-.pwd-reminder-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+.pwd-banner-enter-active,
+.pwd-banner-leave-active {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
 }
 
-.pwd-reminder-enter-from,
-.pwd-reminder-leave-to {
+.pwd-banner-enter-from,
+.pwd-banner-leave-to {
+  transform: translateX(-50%) translateY(-10px);
   opacity: 0;
-  transform: translate(-50%, 8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwd-banner-enter-active,
+  .pwd-banner-leave-active {
+    transition: opacity 0.2s ease;
+  }
+  .pwd-banner-enter-from,
+  .pwd-banner-leave-to {
+    transform: translateX(-50%);
+  }
 }
 </style>

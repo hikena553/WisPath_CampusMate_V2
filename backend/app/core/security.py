@@ -62,6 +62,36 @@ def is_token_revoked(token: str) -> bool:
     return exp > time.time()
 
 
+QUICK_LOGIN_EXPIRE_DAYS = 90
+
+
+def create_quick_token(user_id: int, password_hash: str) -> str:
+    """签发长期「本设备一键登录」凭证。
+
+    凭证与当前密码散列前 8 位绑定：改密后旧凭证自然失效，避免长期凭证被滥用。
+    """
+    expire = datetime.now(timezone.utc) + timedelta(days=QUICK_LOGIN_EXPIRE_DAYS)
+    payload = {
+        "sub": str(user_id),
+        "purpose": "quick_login",
+        "ph": password_hash[:8],
+        "jti": secrets.token_hex(16),
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_quick_token(token: str) -> dict | None:
+    """解析一键登录凭证，仅接受 purpose=quick_login 的 JWT。"""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.JWTError:
+        return None
+    if payload.get("purpose") != "quick_login":
+        return None
+    return payload
+
+
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
