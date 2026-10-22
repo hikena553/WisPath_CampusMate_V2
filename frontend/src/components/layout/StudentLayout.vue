@@ -68,6 +68,12 @@
 
     <!-- 移动端底部导航栏 -->
     <MobileTabBar v-if="isMobile" :items="mobileNavItems" :active-key="activeNavKey" @select="handleNavSelect" />
+
+    <!-- 个人主页浮层：消息中心 / 社区等入口调用 openUserHomepage() 即拉起，全端共用一份 -->
+    <UserHomepage />
+
+    <!-- 勋章奖励动画：进入应用时结算一次，新解锁的勋章在此播放获得动画 -->
+    <BadgeAwardOverlay :badge="currentAward" :remaining="awardRemaining" @next="consume" @skip="skipAll" />
   </div>
 </template>
 
@@ -85,6 +91,9 @@ import type { Course } from '@/types'
 import { ChatDotRound, PictureFilled, Grid, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
+import UserHomepage from '@/components/profile/UserHomepage.vue'
+import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
+import { useBadgeAward } from '@/composables/useBadgeAward'
 
 const router = useRouter()
 const route = useRoute()
@@ -150,6 +159,12 @@ const {
   clearAll: clearUnread,
 } = useUnreadSummary()
 
+/**
+ * 勋章结算与奖励动画：布局层只负责「进应用时结算一次」，
+ * 动画本身由 BadgeAwardOverlay 渲染，因此切到任何页面都能看到获得动画。
+ */
+const { currentAward, awardRemaining, sync: syncBadgeAwards, consume, skipAll } = useBadgeAward()
+
 // 驾驶舱首屏数据预热：布局常驻，登录后空闲时先把课程/画像/AI 主动发现/待办灌入模块级缓存，
 // 这样首次切到驾驶舱也能首帧渲染真实内容，不会出现「骨架 → 内容」的高度跳变（卡片抽搐）
 let warmTimer: number | undefined
@@ -164,6 +179,8 @@ function warmDashboardCache() {
 
 onMounted(() => {
   startUnreadWatch()
+  // 勋章结算放在首屏请求之后，避免与页面自身的数据请求抢占带宽
+  window.setTimeout(() => { void syncBadgeAwards() }, 900)
   // 延迟 1.2s 让当前页首屏请求先走，再后台预热
   warmTimer = window.setTimeout(warmDashboardCache, 1200)
 })

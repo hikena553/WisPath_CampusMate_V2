@@ -18,6 +18,8 @@ export interface UserInfo {
   department?: string | null
   class_name?: string | null
   password_changed?: boolean
+  /** 个性签名：个人中心可编辑，他人点开个人主页时展示 */
+  signature?: string | null
 }
 
 export interface LoginRequest {

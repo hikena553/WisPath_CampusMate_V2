@@ -15,32 +15,22 @@
         <nav class="sidebar-nav">
           <template v-for="g in navGroups" :key="g.title">
             <div class="nav-group-label sidebar-text">{{ g.title }}</div>
-            <!-- 单个 v-for 保持声明顺序；弹窗型项用 button，其余用 router-link -->
-            <template v-for="item in g.items" :key="item.path">
-              <button v-if="item.dialog" type="button" class="nav-item" @click="openDialog(item)">
-                <el-tooltip v-if="sidebarCollapsed" :content="item.label" placement="right">
-                  <el-icon :size="20"><component :is="item.icon" /></el-icon>
-                </el-tooltip>
-                <el-icon v-else :size="20"><component :is="item.icon" /></el-icon>
-                <span class="nav-label sidebar-text">{{ item.label }}</span>
-              </button>
-              <router-link v-else :to="item.path" class="nav-item" :class="{ active: isActive(item) }">
-                <el-tooltip v-if="sidebarCollapsed" :content="item.label" placement="right">
-                  <img v-if="item.iconImg" :src="item.iconImg" class="nav-icon-img" alt="" />
-                  <el-icon v-else :size="20"><component :is="item.icon" /></el-icon>
-                </el-tooltip>
-                <img v-else-if="item.iconImg" :src="item.iconImg" class="nav-icon-img" alt="" />
-                <el-icon v-else :size="20"><component :is="item.icon" /></el-icon>
-                <span class="nav-label sidebar-text">{{ item.label }}</span>
-                <el-badge
-                  v-if="item.badge && unreadCount > 0"
-                  :value="unreadCount"
-                  class="nav-badge"
-                  title="点击清除未读提示"
-                  @click.stop.prevent="clearUnread"
-                />
-              </router-link>
-            </template>
+            <!-- 全部导航项均为路由跳转（个人中心已由弹窗改为整页，不再是 dialog 型） -->
+            <router-link v-for="item in g.items" :key="item.path" :to="item.path" class="nav-item" :class="{ active: isActive(item) }">
+              <el-tooltip v-if="sidebarCollapsed" :content="item.label" placement="right">
+                <el-icon :size="20"><component :is="item.icon" /></el-icon>
+              </el-tooltip>
+              <el-icon v-else :size="20"><component :is="item.icon" /></el-icon>
+              <span class="nav-label sidebar-text">{{ item.label }}</span>
+              <el-badge
+                v-if="item.badge && unreadCount > 0"
+                :value="unreadCount"
+                :type="urgentUnread > 0 ? 'danger' : 'primary'"
+                class="nav-badge"
+                title="点击清除未读提示"
+                @click.stop.prevent="clearUnread"
+              />
+            </router-link>
           </template>
         </nav>
         <div class="sidebar-footer">
@@ -55,8 +45,8 @@
               </div>
             </div>
             <template #dropdown>
-              <el-dropdown-item @click="openProfile">
-                <el-icon style="margin-right:6px"><User /></el-icon>个人资料
+              <el-dropdown-item @click="goProfilePage">
+                <el-icon style="margin-right:6px"><User /></el-icon>个人中心
               </el-dropdown-item>
               <el-dropdown-item divided @click="logout">
                 <el-icon style="margin-right:6px"><SwitchButton /></el-icon>退出登录
@@ -153,104 +143,25 @@
          3) v-if="!isMobile" —— 移动端已有底部「绵小城」页签作为同等入口。 -->
     <DesktopPet v-if="!isMobile && route.path !== '/teacher/agent'" />
 
-    <!-- 个人中心弹窗：桌面端低频设置不再占用整页，改为就地弹窗处理 -->
-    <el-dialog v-model="showProfile" title="个人中心" width="800px" :close-on-click-modal="false">
-      <div class="profile-layout">
-        <div class="profile-avatar-col">
-          <div class="avatar-upload-wrap" @click="triggerFileInput">
-            <el-avatar :size="120" :src="profileForm.avatar" shape="square" class="profile-avatar">
-              {{ profileForm.name?.[0] || '?' }}
-            </el-avatar>
-            <div class="avatar-overlay">
-              <el-icon :size="24"><CameraFilled /></el-icon>
-              <span>更换头像</span>
-            </div>
-          </div>
-          <input ref="fileInputRef" type="file" accept="image/*" style="display:none" @change="onFileSelect" />
-        </div>
-        <div class="profile-form-col">
-          <el-form :model="profileForm" label-width="90px">
-            <el-row :gutter="12">
-              <el-col :span="12">
-                <el-form-item label="工号"><el-input v-model="profileForm.username" disabled /></el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="姓名"><el-input v-model="profileForm.name" disabled /></el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="性别" required>
-                  <el-select v-model="profileForm.gender" placeholder="请选择性别" style="width:100%">
-                    <el-option label="男" value="男" />
-                    <el-option label="女" value="女" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="年龄">
-                  <el-input-number v-model="profileForm.age" :min="1" :max="120" style="width:100%" placeholder="1-120" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item label="学院"><el-input v-model="profileForm.college" disabled /></el-form-item>
-            <el-form-item label="班级"><el-input v-model="profileForm.class_name" placeholder="请输入所带班级" /></el-form-item>
-            <el-row :gutter="12">
-              <el-col :span="12">
-                <el-form-item label="职称"><el-input v-model="profileForm.title" placeholder="请输入职称/职务" /></el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="所属单位"><el-input v-model="profileForm.department" placeholder="请输入所属单位" /></el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="12">
-              <el-col :span="12">
-                <el-form-item label="籍贯"><el-input v-model="profileForm.hometown" placeholder="请输入籍贯" /></el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="联系电话" required><el-input v-model="profileForm.phone" placeholder="请输入手机号" /></el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </div>
-      </div>
-      <template #footer>
-        <div style="display: flex; justify-content: space-between; width: 100%">
-          <el-button type="warning" @click="showChangePassword = true">修改密码</el-button>
-          <div>
-            <el-button @click="showProfile = false">取消</el-button>
-            <el-button type="primary" @click="handleSaveProfile" :loading="saving">保存</el-button>
-          </div>
-        </div>
-      </template>
-    </el-dialog>
+    <!-- 个人中心已改为整页（/teacher/profile），此处不再提供弹窗形态 -->
 
-    <el-dialog v-model="showCrop" title="裁剪头像" width="420px" :close-on-click-modal="false" @opened="onCropDialogOpened">
-      <div class="crop-container">
-        <img ref="cropImgRef" style="max-width:100%;display:block" />
-      </div>
-      <template #footer>
-        <el-button @click="cancelCrop">取消</el-button>
-        <el-button type="primary" @click="handleCropConfirm">确认裁剪</el-button>
-      </template>
-    </el-dialog>
+    <!-- 个人主页浮层：消息中心 / 通讯录点开某人即拉起，全端共用一份 -->
+    <UserHomepage />
 
-    <!-- 改密对话框统一走公共组件（管理端同款），避免校验规则各处漂移 -->
-    <ChangePasswordDialog v-model="showChangePassword" />
+    <!-- 勋章奖励动画：进入应用时结算一次，新解锁的勋章在此播放获得动画 -->
+    <BadgeAwardOverlay :badge="currentAward" :remaining="awardRemaining" @next="consume" @skip="skipAll" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted, type Component } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
-import { updateProfile } from '@/api/user'
-import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
-import { uploadFile } from '@/api/upload'
+import UserHomepage from '@/components/profile/UserHomepage.vue'
+import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
+import { useBadgeAward } from '@/composables/useBadgeAward'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
-import { ElMessage } from 'element-plus'
-import Cropper from 'cropperjs'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import DesktopPet from '@/components/teacher/DesktopPet.vue'
@@ -259,7 +170,7 @@ import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import {
   HomeFilled, User, Message, Notebook,
   List, Stamp, WarningFilled, Bell, ChatDotRound, Sunny,
-  SwitchButton, CameraFilled, Close, School
+  SwitchButton, Close, School
 } from '@element-plus/icons-vue'
 // 桌面端折叠按钮图标：与管理端（AdminLayout）保持同一套线性图标
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
@@ -284,23 +195,20 @@ onMounted(() => { void loadSiteConfig(true) })
 const cachedNames = ['teacher-home', 'teacher-students']
 
 const sidebarCollapsed = ref(false)
-const showProfile = ref(false)
-const saving = ref(false)
-const fileInputRef = ref<HTMLInputElement>()
-const showCrop = ref(false)
-const cropImgRef = ref<HTMLImageElement>()
-let cropper: Cropper | null = null
-let pendingImageSrc = ''
 /**
  * 全局未读提示（导航红点）：单聊 + 群聊 + 站内通知三路汇总，WS 实时 + 5s 轮询兜底。
  * 此前只统计了单聊未读，导致群消息与站内通知到达时完全没有提示。
  */
 const {
   total: unreadCount,
+  urgentUnread,
   start: startUnreadWatch,
   stop: stopUnreadWatch,
   clearAll: clearUnread,
 } = useUnreadSummary()
+
+/** 勋章结算 + 奖励动画队列（布局层触发，全端可见） */
+const { currentAward, awardRemaining, sync: syncBadgeAwards, consume, skipAll } = useBadgeAward()
 
 const { isMobile } = useResponsive()
 
@@ -314,8 +222,6 @@ interface NavItem {
   icon?: Component
   iconImg?: string
   badge?: boolean
-  /** 点击后打开弹窗而不是跳路由（仅桌面端侧边栏生效） */
-  dialog?: 'profile'
 }
 
 /**
@@ -331,15 +237,15 @@ const SUB_ROUTE_PARENT: Record<string, string> = {
 }
 
 /**
- * 桌面端侧边栏导航：按「工作 / 班级 / 我的」三组共 11 项。
+ * 桌面端侧边栏导航：按「工作 / 班级 / 我的」三组共 10 项。
  *
  * 顺序按教师的日常动线重排：先「工作」组（首页 → 今日要办 → 待批 → 预警 → 消息），
  * 这一组是每天必走的处理流；再把与学生/班级相关的四页收进「班级」组
  * （学生档案 → 班级公告 → 家校沟通 → 人文关怀），它是查阅与留痕类；
- * 最后「我的」组放智能体与个人中心。
+ * 最后「我的」组只放个人中心（绵小城已由桌面悬浮窗承载，不再单列）。
  *
- * 「个人中心」在桌面端不再跳整页路由，而是打开弹窗（见 dialog 字段），
- * 避免为低频设置占用一个整页；移动端仍走 /teacher/profile 页面（底部页签）。
+ * 「个人中心」是普通整页路由（/teacher/profile），与其它导航项一致；
+ * 低频设置不再使用弹窗形态，避免「同一个个人中心既有弹窗又有整页」两套入口。
  */
 const navGroups: { title: string; items: NavItem[] }[] = [
   {
@@ -364,8 +270,9 @@ const navGroups: { title: string; items: NavItem[] }[] = [
   {
     title: '我的工作台',
     items: [
-      { path: '/teacher/agent', label: siteName.value, iconImg: siteLogo.value },
-      { path: '/teacher/profile', label: '个人中心', icon: User, dialog: 'profile' },
+      // 绵小城（智能体）不再占用侧边栏项：桌面端已有悬浮窗（DesktopPet）承载同一能力，
+      // 侧边栏保留会与之重复；移动端底部页签仍保留该入口。
+      { path: '/teacher/profile', label: '个人中心', icon: User },
     ],
   },
 ]
@@ -421,8 +328,7 @@ function toggleSidebar() {
 }
 
 // ===== 多页签（对齐管理端）=====
-// 桌面端以页签承载「已打开」的教师端页面；首页常驻，其余进入即追加。
-// 「个人中心」在桌面端是弹窗（见下方 watch），不产生页签。
+// 桌面端以页签承载「已打开」的教师端页面；首页常驻，其余进入即追加（个人中心同样是整页，也占页签）。
 interface TabItem { path: string; label: string }
 const allNav = navGroups.flatMap((g) => g.items)
 const tabs = ref<TabItem[]>([{ path: '/teacher', label: '首页' }])
@@ -440,7 +346,7 @@ const currentTitle = computed(() => {
 watch(
   () => route.path,
   (p) => {
-    if (!p.startsWith('/teacher') || p === '/teacher/profile') return
+    if (!p.startsWith('/teacher')) return
     if (!tabs.value.some((t) => t.path === p)) {
       tabs.value.push({ path: p, label: currentTitle.value || p })
     }
@@ -485,44 +391,14 @@ const teacherIdentity = computed(() => {
   return parts.join(' · ')
 })
 
-/**
- * dialog 型导航项：桌面端就地打开弹窗，不跳整页路由。
- * 目前只有「个人中心」，复用已有的资料弹窗（含头像裁剪与修改密码）。
- */
-function openDialog(item: NavItem) {
-  if (item.dialog === 'profile') openProfile()
-}
-
-// 必须声明在下方 watch({ immediate: true }) 之前：该 watch 在 setup 阶段就会调用
-// openProfile()，而 openProfile 会读写 profileForm，声明靠后会命中 TDZ 报错
-// （Cannot access 'profileForm' before initialization），导致整个布局渲染失败。
-const profileForm = reactive({
-  username: '', name: '', college: '',
-  avatar: '', gender: '', age: 30, title: '', hometown: '', phone: '', department: '',
-  class_name: '',
-})
-
-/**
- * 桌面端把 /teacher/profile 收敛成弹窗：
- * 无论是深链直达还是旧书签，都打开弹窗并把地址替换回首页，
- * 避免「同一个个人中心既有整页又有弹窗」两套入口。
- * 移动端不处理——底部页签仍需要这个整页。
- */
-watch(
-  () => route.path,
-  (p) => {
-    if (p === '/teacher/profile' && !isMobile.value) {
-      openProfile()
-      router.replace('/teacher')
-    }
-  },
-  { immediate: true }
-)
-
 // 布局创建时立即启动预加载（比 onMounted 更早，确保子页面 setup 阶段缓存已就绪）
 prefetchDashboardData()
 
-onMounted(() => { startUnreadWatch() })
+onMounted(() => {
+  startUnreadWatch()
+  // 勋章结算延后于首屏请求，避免抢占带宽
+  window.setTimeout(() => { void syncBadgeAwards() }, 900)
+})
 onUnmounted(() => {
   stopUnreadWatch()
   if (clockTimer) window.clearInterval(clockTimer)
@@ -535,97 +411,9 @@ function logout() {
   router.push('/')
 }
 
-const showChangePassword = ref(false)
-
-function openProfile() {
-  const u = auth.user
-  if (!u) return
-  profileForm.username = u.username
-  profileForm.name = u.name
-  profileForm.college = u.college || ''
-  profileForm.avatar = u.avatar || ''
-  profileForm.gender = u.gender || ''
-  profileForm.age = u.age ?? 30
-  profileForm.title = u.title || ''
-  profileForm.hometown = u.hometown || ''
-  profileForm.phone = u.phone || ''
-  profileForm.department = u.department || ''
-  profileForm.class_name = u.class_name || ''
-  showProfile.value = true
-}
-
-function triggerFileInput() {
-  fileInputRef.value?.click()
-}
-
-function onFileSelect(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input?.files?.[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = (ev) => {
-    pendingImageSrc = ev.target?.result as string
-    showCrop.value = true
-  }
-  reader.readAsDataURL(file)
-  input.value = ''
-}
-
-function onCropDialogOpened() {
-  const img = cropImgRef.value
-  if (!img || !pendingImageSrc) return
-  img.src = pendingImageSrc
-  const start = () => {
-    if (cropper) { cropper.destroy(); cropper = null }
-    cropper = new Cropper(img, { aspectRatio: 1, viewMode: 1, dragMode: 'move', minCropBoxWidth: 100 })
-  }
-  if (img.complete) { start() } else { img.onload = start }
-}
-
-function cancelCrop() {
-  showCrop.value = false
-  if (cropper) { cropper.destroy(); cropper = null }
-}
-
-async function handleCropConfirm() {
-  if (!cropper) return
-  const canvas = cropper.getCroppedCanvas({ width: 200, height: 200 })
-  if (!canvas) { ElMessage.error('裁剪失败'); return }
-  const blob = await new Promise<Blob | null>((r) => canvas.toBlob((b) => r(b), 'image/jpeg', 0.9))
-  if (!blob) { ElMessage.error('裁剪失败'); return }
-  const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
-  try {
-    const result: any = await uploadFile(file)
-    profileForm.avatar = result.url
-    showCrop.value = false
-    if (cropper) { cropper.destroy(); cropper = null }
-    ElMessage.success('头像已上传')
-  } catch {
-    ElMessage.error('头像上传失败')
-  }
-}
-
-async function handleSaveProfile() {
-  saving.value = true
-  try {
-    const updated = await updateProfile({
-      avatar: profileForm.avatar || null,
-      gender: profileForm.gender || null,
-      age: profileForm.age || null,
-      title: profileForm.title || null,
-      hometown: profileForm.hometown || null,
-      phone: profileForm.phone || null,
-      department: profileForm.department || null,
-      class_name: profileForm.class_name || null,
-    })
-    auth.updateUser(updated as any)
-    ElMessage.success('保存成功')
-    showProfile.value = false
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '保存失败')
-  } finally {
-    saving.value = false
-  }
+/** 打开个人中心整页（桌面端不再是弹窗） */
+function goProfilePage() {
+  router.push('/teacher/profile')
 }
 </script>
 
@@ -857,30 +645,17 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 .main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .main-area.has-bottom-bar { padding-bottom: 56px; }
 
-/* ===== Profile Dialog ===== */
-.profile-layout { display: flex; gap: 28px; }
-.profile-avatar-col { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; padding-top: 12px; }
-.avatar-upload-wrap { position: relative; cursor: pointer; border-radius: 8px; overflow: hidden; width: 120px; height: 120px; }
-.avatar-upload-wrap .profile-avatar { width: 120px !important; height: 120px !important; font-size: 40px; }
-.avatar-overlay {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 6px;
-  background: rgba(0,0,0,0.5); color: #fff; font-size: 13px;
-  opacity: 0; transition: opacity 0.2s;
-}
-.avatar-upload-wrap:hover .avatar-overlay { opacity: 1; }
-.crop-container { max-height: 360px; overflow: hidden; }
-
-/* 移动端五页签：中间绵小城凸起，其余等分（主流移动端底部栏布局） */
+/* ===== 移动端五页签：中间绵小城凸起，其余等分（主流移动端底部栏布局） ===== */
 :deep(.mobile-tab-bar .tab-item) { flex: 1; }
 
-/* ===== 网页端（桌面）整体密度：侧边栏 + 内容区按 90% 呈现 =====
-   与管理端同款：只缩两侧两列而非 .app-shell 本体，
+/* ===== 网页端（桌面）整体大小：教师端按 100% 呈现（不再整体缩到 90%） =====
+   与管理端同款机制：只缩两侧两列而非 .app-shell 本体，
    避免定高外壳出现底部留白，也让桌宠等布局层浮动件保持像素坐标一致。
-   页面内部按视口/像素自行计算的组件用 --ui-zoom 换算（见 theme.css 说明）。
-   移动端（<768px 的 App 外壳）不缩放。 */
+   注意 --ui-zoom 不只是样式变量：页面内按视口/像素自行计算的组件
+   （整屏对话面板、画布、浮层气泡）会用它换算，必须与下方 zoom 取同一值。
+   想再整体放大/缩小，只改这一个数字即可。 */
 @media (min-width: 1024px) {
-  .app-shell { --ui-zoom: 0.9; }
+  .app-shell { --ui-zoom: 1; }
   .sidebar,
   .main-column { zoom: var(--ui-zoom); }
 }

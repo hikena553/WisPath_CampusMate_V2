@@ -76,7 +76,7 @@ def current_identity(user: User = Depends(get_current_user)):
 
 @router.put("/profile")
 def update_profile(data: ProfileUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    for field in ("avatar", "gender", "political_status", "title", "hometown", "phone", "department", "class_name", "age"):
+    for field in ("avatar", "gender", "political_status", "title", "hometown", "phone", "department", "class_name", "age", "signature"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(user, field, val)

@@ -1,159 +1,181 @@
-<template>
+﻿<template>
   <div class="profile-wrapper">
     <!-- 主页面 -->
     <transition :name="slideDirection">
       <div v-if="!currentPage" key="main" class="profile-page">
-        <!-- 个人中心头部（抖音范式）：封面铺满整行，身份信息以暗色渐变压底后「悬浮」在背景之上 -->
+        <!-- 个人中心头部：抖音范式封面 —— 顶部悬浮操作、头像压住封面下边缘、姓名与学号贴在封面右下 -->
         <section class="pf-hero" :style="heroBannerStyle">
           <div class="pf-hero-scrim"></div>
 
-          <button type="button" class="pf-hero-edit" @click="openPage('banner')">
-            <el-icon :size="13"><Camera /></el-icon>
-            更换背景
-          </button>
-
-          <div class="pf-hero-cast" @click="openPage('profile')">
-            <el-avatar :size="64" :src="auth.user?.avatar || ''" class="pf-avatar">
-              {{ auth.userName?.[0] }}
-            </el-avatar>
-            <div class="pf-cast-main">
-              <div class="pf-cast-name-row">
-                <h2 class="pf-cast-name">{{ auth.userName }}</h2>
-                <span class="pf-cast-role">学生</span>
-              </div>
-              <p class="pf-cast-sub">
-                学号：{{ auth.user?.username || '—' }}
-                <span class="pf-cast-sep">·</span>{{ auth.user?.college || '未设置学院' }}
-              </p>
-            </div>
-            <span class="pf-cast-btn">
-              编辑资料
-              <el-icon :size="12"><ArrowRight /></el-icon>
+          <div class="pf-hero-top">
+            <button type="button" class="pf-top-pill" @click="openPage('banner')">
+              <el-icon :size="13"><Camera /></el-icon>
+              更换背景
+            </button>
+            <span class="pf-top-icons">
+              <button type="button" class="pf-top-icon" title="成长档案" @click="router.push('/student/growth')">
+                <el-icon :size="16"><TrendCharts /></el-icon>
+              </button>
             </span>
           </div>
 
-          <div class="pf-hero-stats">
-            <div class="pf-hero-stat">
-              <b>{{ growthStats.awards || 0 }}</b>
-              <span>成长记录</span>
+          <div class="pf-hero-id">
+            <div class="pf-hero-id-row">
+              <h2 class="pf-cast-name">{{ auth.userName }}</h2>
+              <span class="pf-cast-role">学生</span>
+              <span v-if="badgeWall" class="pf-lv-chip">Lv.{{ badgeWall.level.level }}</span>
             </div>
-            <i class="pf-hero-stat-sep"></i>
-            <div class="pf-hero-stat">
-              <b>{{ imageComplete }}%</b>
-              <span>画像完整度</span>
-            </div>
+            <p class="pf-cast-sub">学号：{{ auth.user?.username || '—' }}</p>
           </div>
+
+          <!-- 头像压住封面与内容区的交界线；右下角「+」即编辑资料入口 -->
+          <button type="button" class="pf-hero-avatar" title="编辑资料" @click="openPage('profile')">
+            <el-avatar :size="82" :src="auth.user?.avatar || ''" class="pf-avatar">
+              {{ auth.userName?.[0] }}
+            </el-avatar>
+            <span class="pf-avatar-edit"><el-icon :size="13"><Plus /></el-icon></span>
+          </button>
         </section>
 
         <!-- 内容面板：圆角上浮压住封面底边，形成「悬浮于背景之上」的层次 -->
         <div class="pf-body">
-          <!-- 个人成长 -->
-          <section class="pf-section">
-            <div class="pf-section-head">
-              <h3 class="pf-section-title">个人成长</h3>
-              <button type="button" class="pf-section-more" @click="router.push('/student/growth')">
-                查看详情
-                <el-icon :size="12"><ArrowRight /></el-icon>
+          <!-- 数据行 + 编辑资料（对应参考图「关注 / 粉丝 … + 编辑主页」） -->
+          <div class="pf-profile-top">
+            <!-- 勋章条：贴在头像右侧的留白里（QQ 资料卡的等级 + 勋章串），用图标填空而不是留空 -->
+            <div v-if="badgeWall" class="pf-badge-strip">
+              <span class="pf-badge-strip-icons">
+                <span
+                  v-for="b in earnedBadgePreview"
+                  :key="b.code"
+                  class="pf-badge-mini"
+                  :class="`tier-${b.tier}`"
+                  :title="b.name"
+                ><i>{{ b.icon }}</i></span>
+                <span v-if="!earnedBadgePreview.length" class="pf-badge-empty">还没有点亮勋章</span>
+              </span>
+              <button type="button" class="pf-badge-pill" @click="openPage('badges')">
+                勋章 {{ badgeWall.earned.length }} 枚
+                <el-icon :size="11"><ArrowRight /></el-icon>
               </button>
             </div>
-            <div class="pf-section-body">
-              <div class="growth-summary">
-                <div class="growth-item">
-                  <div class="growth-value">{{ growthStats.awards || 0 }}</div>
-                  <div class="growth-label">成长记录</div>
-                </div>
-                <div class="growth-item">
-                  <div class="growth-value">{{ growthStats.skills || 0 }}</div>
-                  <div class="growth-label">技能标签</div>
-                </div>
-                <div class="growth-item">
-                  <div class="growth-value">{{ growthStats.projects || 0 }}</div>
-                  <div class="growth-label">项目经历</div>
-                </div>
+
+            <div class="pf-stat-row">
+              <div class="pf-stat">
+                <b>{{ growthStats.awards || 0 }}</b>
+                <span>成长记录</span>
               </div>
-
-              <!-- 成长画像：完整度 + 技能/兴趣 + 目标入口 -->
-              <div class="growth-profile-block">
-                <div class="profile-line">
-                  <div class="profile-line-label">
-                    <el-icon :size="14"><Calendar /></el-icon>
-                    <span>成长画像完整度</span>
-                  </div>
-                  <span class="profile-line-value">{{ imageComplete }}%</span>
-                </div>
-                <el-progress
-                  :percentage="imageComplete"
-                  :stroke-width="8"
-                  :show-text="false"
-                  :color="imageComplete === 100 ? 'var(--tui-success)' : 'var(--tui-brand)'"
-                  class="profile-progress"
-                />
-                <div class="profile-tip" v-if="imageComplete < 100">
-                  完善技能、兴趣与目标后，AI 将为你提供更精准的成长建议
-                </div>
-                <div class="profile-tip" v-else>
-                  画像已完整，AI 服务已全面开启
-                </div>
-
-                <div v-if="(growthProfile?.skills?.length || 0) > 0 || (growthProfile?.interests?.length || 0) > 0" class="profile-tags">
-                  <span v-for="s in (growthProfile?.skills || [])" :key="'s' + s" class="profile-tag is-skill">{{ s }}</span>
-                  <span v-for="i in (growthProfile?.interests || [])" :key="'i' + i" class="profile-tag">{{ i }}</span>
-                </div>
-
-                <div class="profile-goal-row">
-                  <div class="profile-goal-text">
-                    <el-icon :size="14"><FolderOpened /></el-icon>
-                    <span>发展目标 {{ goalCount }} 个</span>
-                  </div>
-                  <button type="button" class="profile-goal-btn" @click="router.push('/student/plan')">去制定计划</button>
-                </div>
+              <div class="pf-stat">
+                <b>{{ growthStats.skills || 0 }}</b>
+                <span>技能标签</span>
               </div>
+              <div class="pf-stat">
+                <b>{{ growthStats.projects || 0 }}</b>
+                <span>项目经历</span>
+              </div>
+              <div class="pf-stat">
+                <b>{{ goalCount }}</b>
+                <span>发展目标</span>
+              </div>
+              <button type="button" class="pf-edit-btn" @click="openPage('profile')">编辑资料</button>
             </div>
-          </section>
 
-          <!-- 客服与帮助：分组内嵌列表（抖音设置页 / Vant CellGroup 范式） -->
+            <button type="button" class="pf-bio" :class="{ 'is-empty': !auth.user?.signature }" @click="openPage('profile')">
+              {{ auth.user?.signature || '还没有个性签名，点这里填写' }}
+            </button>
+
+            <div class="pf-tags">
+              <span v-if="auth.user?.college" class="pf-tag">{{ auth.user.college }}</span>
+              <span class="pf-tag">画像完整度 {{ imageComplete }}%</span>
+            </div>
+
+            <!-- 快捷入口行：横向滑动，一屏放不下时左右滑（勋章已移到头像右侧的勋章条） -->
+            <nav class="pf-quick">
+              <button type="button" class="pf-quick-item" @click="openPage('profile')">
+                <span class="pf-quick-icon"><el-icon :size="21"><User /></el-icon></span>
+                <span class="pf-quick-label">我的资料</span>
+              </button>
+              <button type="button" class="pf-quick-item" @click="router.push('/student/growth')">
+                <span class="pf-quick-icon"><el-icon :size="21"><TrendCharts /></el-icon></span>
+                <span class="pf-quick-label">成长档案</span>
+              </button>
+              <button type="button" class="pf-quick-item" @click="router.push('/student/plan')">
+                <span class="pf-quick-icon"><el-icon :size="21"><Calendar /></el-icon></span>
+                <span class="pf-quick-label">学习计划</span>
+              </button>
+              <button type="button" class="pf-quick-item" @click="router.push('/student/portfolio')">
+                <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
+                <span class="pf-quick-label">我的作品集</span>
+              </button>
+              <button type="button" class="pf-quick-item" @click="router.push('/student/resources')">
+                <span class="pf-quick-icon"><el-icon :size="21"><Collection /></el-icon></span>
+                <span class="pf-quick-label">AI资源空间</span>
+              </button>
+              <button type="button" class="pf-quick-item" @click="router.push('/student/community')">
+                <span class="pf-quick-icon"><el-icon :size="21"><ChatDotRound /></el-icon></span>
+                <span class="pf-quick-label">交流社区</span>
+              </button>
+              <button type="button" class="pf-quick-item" @click="openPage('theme')">
+                <span class="pf-quick-icon"><el-icon :size="21"><Sunny /></el-icon></span>
+                <span class="pf-quick-label">主题设置</span>
+              </button>
+              <button type="button" class="pf-quick-item" @click="openPage('help')">
+                <span class="pf-quick-icon"><el-icon :size="21"><QuestionFilled /></el-icon></span>
+                <span class="pf-quick-label">使用帮助</span>
+              </button>
+            </nav>
+          </div>
+
+          <!-- 客服与帮助 -->
+          <h3 class="pf-section-title">客服与帮助</h3>
           <section class="pf-section">
-            <h3 class="pf-section-title">客服与帮助</h3>
             <div class="pf-list">
               <button type="button" class="pf-row" @click="openPage('feedback')">
                 <span class="pf-row-icon is-violet"><el-icon :size="17"><ChatDotRound /></el-icon></span>
                 <span class="pf-row-label">意见反馈</span>
+                <span class="pf-row-hint">帮助我们改进</span>
                 <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
               <button type="button" class="pf-row" @click="openPage('help')">
                 <span class="pf-row-icon is-cyan"><el-icon :size="17"><QuestionFilled /></el-icon></span>
                 <span class="pf-row-label">使用帮助</span>
+                <span class="pf-row-hint">新手引导</span>
                 <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
             </div>
           </section>
 
           <!-- 设置与隐私 -->
+          <h3 class="pf-section-title">设置与隐私</h3>
           <section class="pf-section">
-            <h3 class="pf-section-title">设置与隐私</h3>
             <div class="pf-list">
               <button type="button" class="pf-row" @click="openPage('password')">
                 <span class="pf-row-icon is-violet"><el-icon :size="17"><Lock /></el-icon></span>
                 <span class="pf-row-label">修改密码</span>
+                <span class="pf-row-hint">定期更换更安全</span>
                 <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
               <button type="button" class="pf-row" @click="openPage('theme')">
                 <span class="pf-row-icon is-warn"><el-icon :size="17"><Sunny /></el-icon></span>
                 <span class="pf-row-label">主题设置</span>
+                <span class="pf-row-hint">{{ currentTheme === 'dark' ? '深色' : '浅色' }}</span>
                 <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
               <button type="button" class="pf-row" @click="openPage('about')">
                 <span class="pf-row-icon"><el-icon :size="17"><InfoFilled /></el-icon></span>
                 <span class="pf-row-label">关于{{ agentName }}</span>
+                <span class="pf-row-hint">v1.0.0</span>
                 <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
               <button type="button" class="pf-row" @click="logout">
                 <span class="pf-row-icon is-danger"><el-icon :size="17"><SwitchButton /></el-icon></span>
                 <span class="pf-row-label">退出登录</span>
+                <span class="pf-row-hint">学号 {{ auth.user?.username || '—' }}</span>
                 <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
             </div>
           </section>
+
+          <p class="pf-foot-note">{{ agentName }} · 智慧校园服务平台 v1.0.0</p>
         </div>
       </div>
     </transition>
@@ -211,6 +233,17 @@
           <div class="sub-page-footer">
             <el-button type="primary" @click="handleSaveProfile" :loading="saving" style="width:100%">保存</el-button>
           </div>
+        </div>
+
+        <!-- 我的勋章：完整勋章墙（等级 + 已获得 + 待解锁进度） -->
+        <div v-if="currentPage === 'badges'" class="sub-page-content">
+          <BadgeWall
+            v-if="badgeWall"
+            :earned="badgeWall.earned"
+            :locked="badgeWall.locked"
+            :level="badgeWall.level"
+          />
+          <div v-else class="badge-placeholder">勋章数据加载中…</div>
         </div>
 
         <!-- 修改密码 -->
@@ -480,10 +513,14 @@ import { createFeedback, getFeedbacks } from '@/api/feedback'
 import { uploadFile } from '@/api/upload'
 import { getGrowthProfile, getProjects, type GrowthProfile } from '@/api/growth'
 import { getGoals } from '@/api/plan'
+import { getMyBadgeWall, type BadgeWall as BadgeWallData } from '@/api/badge'
+import BadgeWall from '@/components/profile/BadgeWall.vue'
+import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
-  ChatDotRound, QuestionFilled, Camera, Calendar, FolderOpened, Check, Plus
+  ChatDotRound, QuestionFilled, Camera, Check, Plus,
+  User, TrendCharts, Calendar, FolderOpened, Collection
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -552,6 +589,23 @@ async function loadGrowth() {
   } catch { /* ignore */ }
 }
 
+// 勋章墙（等级 / 已获得 / 待解锁进度）
+const badgeWall = ref<BadgeWallData | null>(null)
+
+/** 勋章条只陈列前 5 枚已点亮勋章，超出走勋章墙 */
+const earnedBadgePreview = computed(() => (badgeWall.value?.earned ?? []).slice(0, 5))
+
+/**
+ * 结算 + 拉取勋章墙：先让后端按最新使用数据结算（可能解锁新勋章，由布局层的
+ * 奖励动画队列播放），再取回完整勋章墙。两者顺序不能颠倒，否则新勋章会缺席。
+ */
+async function refreshBadges() {
+  try {
+    await syncBadgeAwards()
+    badgeWall.value = await getMyBadgeWall()
+  } catch { /* 拉取失败保持原样 */ }
+}
+
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '', captcha: '' })
 const captchaCode = ref('')
 
@@ -570,7 +624,7 @@ function refreshCaptcha() {
 const profileForm = reactive({
   username: '', name: '', college: '', gender: '', age: 18,
   hometown: '', phone: '', tutor_id: null as number | null,
-  className: '', political_status: '', avatar: ''
+  className: '', political_status: '', avatar: '', signature: ''
 })
 
 /** 身份背景（移动端 .pf-hero / .bg-preview 共用）：优先用已上传图片，否则用预设渐变 */
@@ -605,6 +659,7 @@ const accGroups = computed<{ title: string; fields: AccField[] }[]>(() => [
   {
     title: '个人资料',
     fields: [
+      { key: 'signature', label: '个性签名', type: 'text', placeholder: '一句话介绍自己，展示在个人主页' },
       {
         key: 'gender', label: '性别', type: 'select',
         options: [{ label: '男', value: '男' }, { label: '女', value: '女' }],
@@ -668,6 +723,7 @@ const loadingFeedback = ref(false)
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     profile: '账号与安全',
+    badges: '我的勋章',
     password: '修改密码',
     feedback: '意见反馈',
     help: '使用帮助',
@@ -694,6 +750,7 @@ function openPage(page: string) {
       profileForm.className = (u as any).class_name || ''
       profileForm.political_status = (u as any).political_status || ''
       profileForm.avatar = (u as any).avatar || ''
+      profileForm.signature = (u as any).signature || ''
     }
   }
   slideDirection.value = 'slide-left'
@@ -888,6 +945,7 @@ async function handleSaveProfile() {
       class_name: profileForm.className || null,
       political_status: profileForm.political_status || null,
       avatar: profileForm.avatar || null,
+      signature: profileForm.signature || null,
     })
     auth.updateUser(updated as any)
     ElMessage.success('保存成功')
@@ -955,10 +1013,11 @@ onMounted(async () => {
   refreshCaptcha()
   loadFeedbacks()
   loadGrowth()
+  refreshBadges()
   applyTheme('light')
   // 支持外部跳转直达子页（如工作台"意见反馈"入口）
   const page = route.query.page as string | undefined
-  if (page && ['profile', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
+  if (page && ['profile', 'badges', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
     openPage(page)
   }
 })
@@ -1160,18 +1219,14 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-/* ===== 个人中心头部（抖音范式）：封面通栏 + 身份悬浮于背景之上 ===== */
+/* ===== 个人中心头部（抖音范式）：封面通栏、顶部悬浮操作、头像压住封面下边缘 ===== */
 .pf-hero {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 212px;
-  padding: 14px 16px 30px;
+  min-height: 178px;
+  padding: 10px 16px 0;
   background-color: #d8dee6;
   background-size: cover;
   background-position: center;
-  overflow: hidden;
 }
 /* 自下而上的暗色压底：白字在任意背景图/渐变上都可读，同时把封面「压」成背景层 */
 .pf-hero-scrim {
@@ -1179,154 +1234,373 @@ onMounted(async () => {
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(10, 12, 16, 0.06) 0%,
-    rgba(10, 12, 16, 0.16) 44%,
-    rgba(10, 12, 16, 0.68) 100%
+    rgba(10, 12, 16, 0.08) 0%,
+    rgba(10, 12, 16, 0.16) 40%,
+    rgba(10, 12, 16, 0.62) 100%
   );
 }
-.pf-hero-edit {
-  position: absolute;
-  right: 14px;
-  top: 14px;
-  z-index: 1;
+.pf-hero-top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pf-top-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 5px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 999px;
-  background: rgba(10, 12, 16, 0.32);
+  background: rgba(10, 12, 16, 0.3);
   color: #fff;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   cursor: pointer;
   backdrop-filter: blur(6px);
 }
-.pf-hero-edit:active { background: rgba(10, 12, 16, 0.48); }
-
-.pf-hero-cast {
-  position: relative;
-  z-index: 1;
-  display: flex;
+.pf-top-pill:active { background: rgba(10, 12, 16, 0.46); }
+.pf-top-icons { display: inline-flex; align-items: center; gap: 8px; }
+.pf-top-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  cursor: pointer;
-}
-.pf-avatar {
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.22);
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(10, 12, 16, 0.3);
   color: #fff;
-  font-size: 22px;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
 }
-.pf-cast-main { flex: 1; min-width: 0; }
-.pf-cast-name-row { display: flex; align-items: center; gap: 7px; }
+.pf-top-icon:active { background: rgba(10, 12, 16, 0.46); }
+
+/* 姓名 / 身份：贴在封面右下，给左侧头像让出空间 */
+.pf-hero-id {
+  position: absolute;
+  z-index: 2;
+  left: 106px;
+  right: 16px;
+  bottom: 18px;
+}
+.pf-hero-id-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .pf-cast-name {
   margin: 0;
   font-size: 19px;
   font-weight: 700;
+  line-height: 1.2;
   color: #fff;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.32);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .pf-cast-role {
   flex-shrink: 0;
-  padding: 1px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.34);
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
+}
+/* 等级徽标：QQ 把等级牌挂在昵称右侧，这里沿用同一位置关系 */
+.pf-lv-chip {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+  color: #4a2f04;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.26);
 }
 .pf-cast-sub {
   margin: 5px 0 0;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.84);
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.8);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pf-cast-sep { margin: 0 6px; color: rgba(255, 255, 255, 0.5); }
-.pf-cast-btn {
-  flex-shrink: 0;
+
+/* 头像：跨在封面与内容面板的交界线上 */
+.pf-hero-avatar {
+  position: absolute;
+  z-index: 3;
+  left: 14px;
+  bottom: -26px;
+  width: 86px;
+  height: 86px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.pf-avatar {
+  border: 3px solid var(--tui-surface);
+  background: linear-gradient(135deg, #7d6cf2, #5747cc);
+  color: #fff;
+  font-size: 28px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+.pf-avatar-edit {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  justify-content: center;
+  border: 2px solid var(--tui-surface);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #34d058, #16a34a);
   color: #fff;
+}
+.badge-placeholder {
+  padding: 14px 4px;
   font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  backdrop-filter: blur(8px);
+  color: var(--tui-text-quiet);
+  text-align: center;
 }
 
-.pf-hero-stats {
+/* 数据 / 简介 / 标签 / 快捷入口：参考图里头像下方的白色信息区 */
+.pf-profile-top {
   position: relative;
-  z-index: 1;
+  background: var(--tui-surface);
+  border-radius: 20px 20px 0 0;
+  padding: 50px 16px 10px;
+}
+/* 勋章条：头像右侧的留白带，等级牌 + 勋章小图标串 + 勋章墙入口（QQ 资料卡样式） */
+.pf-badge-strip {
+  position: absolute;
+  top: 12px;
+  left: 108px;
+  right: 16px;
+  height: 26px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  margin-top: 16px;
-  padding-left: 2px;
+  gap: 8px;
 }
-.pf-hero-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.pf-hero-stat b {
-  font-size: 17px;
+.pf-badge-strip-icons {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+.pf-badge-mini {
+  flex-shrink: 0;
+  width: 23px;
+  height: 23px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fff7e6;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.32);
+  font-size: 12px;
+  line-height: 1;
+}
+.pf-badge-mini.tier-silver { background: #f3f5f8; box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4); }
+.pf-badge-mini.tier-gold { background: linear-gradient(135deg, #ffefc2, #f7bf45); box-shadow: 0 0 0 1px rgba(214, 158, 46, 0.5); }
+.pf-badge-mini.tier-diamond { background: linear-gradient(135deg, #e0f2ff, #93c5fd); box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.42); }
+.pf-badge-mini i { font-style: normal; }
+.pf-badge-empty {
+  font-size: 10.5px;
+  color: var(--tui-text-quiet);
+  white-space: nowrap;
+}
+.pf-badge-pill {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ffefc2, #f8c65a);
+  color: #7a4a06;
+  font-family: inherit;
+  font-size: 10.5px;
   font-weight: 700;
-  line-height: 1.1;
-  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pf-badge-pill:active { filter: brightness(0.96); }
+.pf-stat-row { display: flex; align-items: center; gap: 4px; }
+.pf-stat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.pf-stat b {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.2px;
+  color: var(--tui-text);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
-  max-width: 132px;
+}
+.pf-stat b i {
+  margin-left: 1px;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--tui-text-quiet);
+}
+.pf-stat span {
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--tui-text-tertiary);
+  white-space: nowrap;
+}
+.pf-edit-btn {
+  flex-shrink: 0;
+  height: 32px;
+  margin-left: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--tui-border-strong);
+  border-radius: 7px;
+  background: var(--tui-surface);
+  color: var(--tui-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pf-edit-btn:active { background: var(--tui-surface-muted); }
+
+.pf-bio {
+  display: block;
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--tui-text);
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
 }
-.pf-hero-stat span { font-size: 11px; color: rgba(255, 255, 255, 0.72); }
-.pf-hero-stat-sep { width: 1px; height: 24px; background: rgba(255, 255, 255, 0.24); }
+.pf-bio.is-empty { color: var(--tui-text-quiet); }
 
-/* ===== 内容面板：圆角上浮，压住封面底边，形成「悬浮于背景之上」的层次 ===== */
+.pf-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+.pf-tag {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--tui-surface-sunken);
+  color: var(--tui-text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* 快捷入口：单行横向滑动，超出屏幕的功能靠左右滑查看 */
+.pf-quick {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 12px 16px 6px;
+  border-top: 1px solid var(--tui-border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.pf-quick::-webkit-scrollbar { display: none; }
+.pf-quick-item {
+  flex: 0 0 62px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  color: var(--tui-text);
+  cursor: pointer;
+}
+.pf-quick-item:active { opacity: 0.6; }
+.pf-quick-icon { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.pf-quick-dot {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fa5151;
+}
+.pf-quick-label {
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--tui-text-secondary);
+  white-space: nowrap;
+}
+
+/* ===== 内容面板：圆角上浮，压住封面底边，形成「悬浮于背景之上」的层次 =====
+   面板内边距为 0：分组通铺到两侧，靠灰底/白底色差分块（微信、QQ 设置页的做法），
+   不用带圆角与阴影的卡片。 */
 .pf-body {
   position: relative;
   z-index: 2;
   margin-top: -16px;
-  padding: 14px 12px 16px;
+  padding: 0 0 16px;
   border-radius: 20px 20px 0 0;
   background: var(--tui-bg);
 }
 .pf-body .pf-section:first-child { margin-top: 0; }
 
-/* ===== 分区卡片 + 内嵌列表行 ===== */
+/* ===== 分组：白底行组，无圆角/无边框/无阴影 ===== */
 .pf-section {
-  margin-top: 12px;
+  margin: 0 0 10px;
   background: var(--tui-surface);
-  border: 1px solid var(--tui-border);
-  border-radius: var(--tui-radius);
-  box-shadow: var(--tui-shadow-1);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
 }
+/* 组标签坐在灰色底上（微信/QQ 设置页的小标题位置） */
 .pf-section-title {
   margin: 0;
-  padding: 12px 14px 0;
+  padding: 12px 16px 6px;
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.3px;
-  color: var(--tui-text-quiet);
+  color: #8b929e;
 }
 .pf-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 14px 0;
+  padding: 14px 16px 6px;
 }
 .pf-section-head .pf-section-title { padding: 0; }
 .pf-section-more {
@@ -1342,15 +1616,15 @@ onMounted(async () => {
   cursor: pointer;
 }
 .pf-section-more:active { color: var(--tui-text-secondary); }
-.pf-section-body { padding: 10px 14px 14px; }
+.pf-section-body { padding: 12px 16px 14px; }
 
 .pf-list { display: flex; flex-direction: column; }
 .pf-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 16px;
   border: none;
   border-bottom: 1px solid var(--tui-border);
   background: transparent;
@@ -1362,8 +1636,8 @@ onMounted(async () => {
 .pf-row:active { background: var(--tui-surface-muted); }
 .pf-row-icon {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--tui-radius-sm);
   display: inline-flex;
   align-items: center;
@@ -1384,115 +1658,40 @@ onMounted(async () => {
   color: var(--tui-text);
 }
 .pf-row-arrow { color: #cbd0d8; flex-shrink: 0; }
-
-/* ===== 个人成长 ===== */
-.growth-summary {
-  display: flex;
-  justify-content: space-around;
-}
-.growth-item { text-align: center; }
-.growth-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--tui-text);
-  font-variant-numeric: tabular-nums;
-}
-.growth-label {
+/* 右侧状态说明：把行内大段空白填成有效信息，而不是留空 */
+.pf-row-hint {
+  flex-shrink: 0;
+  max-width: 46%;
   font-size: 11.5px;
   color: var(--tui-text-quiet);
-  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.growth-profile-block {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--tui-border);
-}
-.profile-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.profile-line-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  color: var(--tui-text-secondary);
-}
-.profile-line-value {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--tui-brand);
-  font-variant-numeric: tabular-nums;
-}
-.profile-progress { margin-bottom: 8px; }
-.profile-tip {
-  font-size: 11.5px;
+/* 页脚说明：收住列表下方的灰底空白，避免页面尾部大段留白 */
+.pf-foot-note {
+  margin: 6px 0 0;
+  padding: 4px 16px 0;
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.2px;
   color: var(--tui-text-quiet);
-  margin-bottom: 10px;
 }
-.profile-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-.profile-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--tui-border);
-  background: var(--tui-surface-muted);
-  color: var(--tui-text-tertiary);
-  font-size: 11.5px;
-  font-weight: 500;
-}
-.profile-tag.is-skill {
-  border-color: transparent;
-  background: var(--tui-brand-soft);
-  color: var(--tui-brand-strong);
-}
-.profile-goal-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.profile-goal-text {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  color: var(--tui-text-secondary);
-}
-.profile-goal-btn {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 999px;
-  background: var(--tui-brand-soft);
-  color: var(--tui-brand-strong);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.profile-goal-btn:active { background: #e0ecff; }
 
 /* ===== 设置项列表（抖音设置页范式）：左标签 + 右值 + 箭头 ===== */
-.set-page .set-group { margin-bottom: 12px; }
+.set-page .set-group { margin-bottom: 10px; }
 .set-page .set-group-title {
-  margin: 0 0 8px 2px;
+  margin: 0 0 6px 16px;
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.3px;
-  color: var(--tui-text-quiet);
+  color: #8b929e;
 }
 .set-page .set-list {
   background: var(--tui-surface);
-  border: 1px solid var(--tui-border);
-  border-radius: var(--tui-radius);
-  box-shadow: var(--tui-shadow-1);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 .set-page .set-row {
@@ -1500,7 +1699,7 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 13px 14px;
+  padding: 13px 16px;
   border: none;
   border-bottom: 1px solid var(--tui-border);
   background: transparent;

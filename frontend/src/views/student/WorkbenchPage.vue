@@ -167,13 +167,30 @@
           <div v-else class="sub-page-placeholder"></div>
         </div>
 
-        <!-- 聊天页面显示简洁头部 -->
+        <!-- 聊天页面显示简洁头部（单聊的「进对方主页」入口固定在右上角，与 QQ 一致） -->
         <div v-if="isChatMode" class="chat-header">
           <el-button text circle class="back-btn" @click="closePage">
             <el-icon :size="20"><ArrowLeft /></el-icon>
           </el-button>
-          <div class="chat-header-title">{{ chatHeaderTitle }}</div>
-          <div class="chat-header-placeholder"></div>
+          <div class="chat-header-title">
+            <el-avatar
+              v-if="currentPage === 'tutor'"
+              :size="26"
+              :src="chatPartnerAvatar || undefined"
+              class="chat-header-avatar"
+            >{{ chatPartnerName?.[0] }}</el-avatar>
+            <span class="chat-header-name">{{ chatHeaderTitle }}</span>
+          </div>
+          <button
+            v-if="currentPage === 'tutor' && tutorIdRef"
+            type="button"
+            class="chat-header-action"
+            title="查看对方主页"
+            @click="openUserHomepage(tutorIdRef || 0)"
+          >
+            <el-icon :size="19"><Postcard /></el-icon>
+          </button>
+          <div v-else class="chat-header-placeholder"></div>
         </div>
 
         <div :class="['sub-page-content', { 'chat-content': isChatMode }]">
@@ -461,10 +478,28 @@
               <DtIcon name="arrow" :size="16" class="tutor-entry-arrow" />
             </div>
 
+            <!-- 我的关怀：教师端「人文关怀」的学生侧闭环（激励 / 关怀记录 / 家访记录） -->
+            <div class="tutor-entry" @click="router.push('/student/care')">
+              <div class="tutor-entry-avatar">
+                <span class="notice-entry-avatar"><DtIcon name="heart" :size="20" /></span>
+              </div>
+              <div class="tutor-entry-info">
+                <div class="tutor-entry-name">我的关怀</div>
+                <div class="tutor-entry-desc">老师给的激励、关怀记录与家访留痕</div>
+              </div>
+              <DtIcon name="arrow" :size="16" class="tutor-entry-arrow" />
+            </div>
+
             <!-- 辅导员入口 -->
             <div v-if="auth.user?.tutor_id" class="tutor-entry" @click="startTutorChat">
               <div class="tutor-entry-avatar">
-                <el-avatar :size="48" style="background: linear-gradient(135deg, #67c23a 0%, #529b2e 100%); color: #fff; font-weight: 600;">导</el-avatar>
+                <el-avatar
+                  :size="48"
+                  class="entry-avatar-clickable"
+                  title="查看辅导员主页"
+                  @click.stop="openUserHomepage(auth.user?.tutor_id || 0)"
+                  style="background: linear-gradient(135deg, #67c23a 0%, #529b2e 100%); color: #fff; font-weight: 600;"
+                >导</el-avatar>
               </div>
               <div class="tutor-entry-info">
                 <div class="tutor-entry-name">我的辅导员</div>
@@ -482,7 +517,7 @@
               <div class="messages-list">
                 <div v-for="g in myGroups" :key="g.id" class="message-item" @click="openGroupChat(g)">
                   <div class="message-avatar">
-                    <el-avatar :size="48" shape="square" :src="g.avatar || undefined">{{ g.name?.[0] }}</el-avatar>
+                    <el-avatar :size="48" :src="g.avatar || undefined">{{ g.name?.[0] }}</el-avatar>
                     <div v-if="g.unread_count" class="message-unread">{{ g.unread_count > 99 ? '99+' : g.unread_count }}</div>
                   </div>
                   <div class="message-info">
@@ -508,7 +543,13 @@
               </div>
               <div v-for="conv in conversationList" :key="conv.user_id" class="message-item" @click="openConversation(conv)">
                 <div class="message-avatar">
-                  <el-avatar :size="48" :src="conv.user_avatar || ''">{{ conv.user_name?.[0] }}</el-avatar>
+                  <el-avatar
+                    :size="48"
+                    :src="conv.user_avatar || ''"
+                    class="entry-avatar-clickable"
+                    title="查看个人主页"
+                    @click.stop="openUserHomepage(conv.user_id)"
+                  >{{ conv.user_name?.[0] }}</el-avatar>
                   <div v-if="conv.unread_count" class="message-unread">{{ conv.unread_count > 99 ? '99+' : conv.unread_count }}</div>
                   <span v-if="isOnline(conv.user_id)" class="message-online-dot" title="在线" />
                 </div>
@@ -745,7 +786,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { createLeave, getMyLeaves, deleteLeave } from '@/api/leave'
@@ -772,6 +813,7 @@ import UploadBtn from '@/components/upload/UploadBtn.vue'
 import ButlerChat from '@/components/butler/ButlerChat.vue'
 // 钉钉风格图标（对齐钉钉设计的组件图案）
 import DtIcon from '@/components/common/DtIcon.vue'
+import { openUserHomepage } from '@/composables/useUserHomepage'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useButlerPreview } from '@/composables/useButlerPreview'
 // 下拉刷新（移动端）：手势逻辑与吉祥物指示器与教师端首页 / 消息页共用同一模块
@@ -781,10 +823,11 @@ import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading, Microphone
+  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading, Microphone, Postcard
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
 
@@ -868,6 +911,13 @@ const chatPartnerName = computed(() => {
     if (conv) return conv.user_name
   }
   return '辅导员'
+})
+
+/** 单聊头部头像：优先取会话里的头像，落不到就交给 el-avatar 的姓名首字兜底 */
+const chatPartnerAvatar = computed(() => {
+  if (!tutorIdRef.value) return ''
+  const conv = conversationList.value.find(c => c.user_id === tutorIdRef.value)
+  return conv?.user_avatar || ''
 })
 
 const chatTextareaRef = ref<HTMLTextAreaElement>()
@@ -1332,7 +1382,7 @@ async function checkUnreadAnnouncements() {
   } catch { return }
   announceUnread.value = count
   if (count > 0 && items.length > 0) {
-    showAnnounceAlert(count, items)
+    showAnnounceAlert(items)
   }
 }
 
@@ -1341,31 +1391,57 @@ function announceUrgencyLabel(u: string) {
   return map[u] || '普通'
 }
 
-function showAnnounceAlert(count: number, items: any[]) {
-  const msg = items.slice(0, 5).map((a: any) => `[${announceUrgencyLabel(a.urgency)}] ${a.title}`).join('\n')
-  ElMessageBox.alert(msg, count > 5 ? `您有 ${count} 条未读公告` : '未读公告提醒', {
+function showAnnounceAlert(items: any[]) {
+  // 分级提醒：普通公告只计红点不弹窗；重要 → 非阻塞提示；紧急 → 阻塞式强提醒（置顶）
+  const notable = items.filter((a: any) => a.urgency !== 'normal')
+  if (!notable.length) return
+  const sorted = [...notable].sort(
+    (a: any, b: any) => (a.urgency === 'urgent' ? 0 : 1) - (b.urgency === 'urgent' ? 0 : 1)
+  )
+  const urgentCount = sorted.filter((a: any) => a.urgency === 'urgent').length
+  if (!urgentCount) {
+    // 仅重要：轻提示 + 红点，不打断操作
+    ElMessage.warning({
+      message: `辅导员发布了 ${sorted.length} 条重要公告，可前往「班级公告」查看`,
+      duration: 6000,
+    })
+    return
+  }
+  const msg = sorted.slice(0, 5).map((a: any) => `[${announceUrgencyLabel(a.urgency)}] ${a.title}`).join('\n')
+  ElMessageBox.alert(msg, `紧急公告（${urgentCount} 条）`, {
     confirmButtonText: '查看公告',
-    type: 'info',
+    type: 'warning',
     dangerouslyUseHTMLString: false,
   }).then(() => {
     currentPage.value = 'announcements'
   }).catch(() => {})
 }
 
-/** 停留期间轮询：未读数比上次增加时弹"新公告"提示 */
+/** 停留期间轮询：未读数增加时按级别分级提醒（紧急阻塞 / 重要轻提示 / 普通仅红点） */
 let lastAnnounceUnread = 0
 const announcePolling = usePolling(async () => {
   try {
     const { count } = await getUnreadCount()
     if (count > lastAnnounceUnread) {
       announceUnread.value = count
-      ElMessageBox.alert(`辅导员发布了 ${count - lastAnnounceUnread} 条新公告`, '新公告提醒', {
-        confirmButtonText: '查看公告',
-        type: 'info',
-        dangerouslyUseHTMLString: false,
-      }).then(() => {
-        currentPage.value = 'announcements'
-      }).catch(() => {})
+      const items = (await getStudentAnnouncements(true).catch(() => [])) as any[]
+      const notable = items.filter((a: any) => a.urgency !== 'normal')
+      const urgent = notable.filter((a: any) => a.urgency === 'urgent')
+      if (urgent.length) {
+        ElMessageBox.alert(
+          urgent.map((a: any) => `【${a.title}】`).join('\n'),
+          '紧急公告',
+          { confirmButtonText: '查看公告', type: 'warning', dangerouslyUseHTMLString: false }
+        ).then(() => {
+          currentPage.value = 'announcements'
+        }).catch(() => {})
+      } else if (notable.length) {
+        ElMessage.warning({
+          message: `辅导员发布了 ${notable.length} 条重要公告`,
+          duration: 6000,
+        })
+      }
+      // 普通公告：只更新红点计数，不打断
     } else {
       announceUnread.value = count
     }
@@ -1567,7 +1643,27 @@ onMounted(() => {
   void loadNotifUnread()
   void loadMyGroups()
   announcePolling.start()
+  // 从他人个人主页的「发消息 / 加为好友」跳转而来：直接进消息中心并打开会话，可带预填草稿
+  openFromHomepageQuery()
 })
+
+/**
+ * 打开发起自他人个人主页的会话：已在工作台时再次跳转不会重挂载组件（同路由只换 query），
+ * 因此除 onMounted 外还需要 watch 兜底。
+ */
+function openFromHomepageQuery() {
+  const chatId = Number(route.query.chat || 0)
+  if (!chatId) return
+  currentPage.value = 'messages'
+  openConversation({ user_id: chatId, user_name: (route.query.chatName as string) || '' })
+  if (route.query.draft) tutorNewMsg.value = String(route.query.draft)
+  router.replace({ query: {} })
+}
+
+watch(
+  () => route.query.chat,
+  (v) => { if (v) openFromHomepageQuery() },
+)
 
 /** 下拉刷新：并行重拉工作台数据（事务 / 材料 / 未读 / 管家摘要 / 群组），静默更新不触发加载态 */
 async function refreshAll() {
@@ -2949,6 +3045,10 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   flex-shrink: 0;
 }
 
+/* 可点击头像：消息中心会话 / 辅导员头像点开个人主页 */
+.entry-avatar-clickable { cursor: pointer; }
+.entry-avatar-clickable:active { transform: scale(0.96); }
+
 .message-unread {
   position: absolute;
   top: -2px;
@@ -3048,7 +3148,38 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   color: #1a1a1a;
   text-align: center;
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
 }
+.chat-header-avatar {
+  flex-shrink: 0;
+  background: var(--dt-primary-soft, #eff6ff);
+  color: var(--dt-primary-strong, #1d4ed8);
+  font-size: 12px;
+}
+.chat-header-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 右上角的「进对方主页」入口（QQ 逻辑：资料卡入口固定在头部右侧） */
+.chat-header-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+}
+.chat-header-action:active { background: #f2f3f5; }
 
 .chat-header-placeholder {
   width: 36px;

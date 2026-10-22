@@ -55,10 +55,18 @@
       <div v-if="!posts.length" class="empty-tip">暂无帖子，来发布第一条吧</div>
       <div v-for="p in posts" :key="p.id" class="post-card" @click="openDetail(p.id)">
         <div class="post-head">
-          <el-avatar :size="28" :src="p.author_avatar || undefined" class="post-avatar">
+          <el-avatar
+            :size="28"
+            :src="p.author_avatar || undefined"
+            class="post-avatar author-avatar-clickable"
+            title="查看个人主页"
+            @click.stop="openUserHomepage(p.student_id)"
+          >
             {{ (p.author_name || '学').slice(0, 1) }}
           </el-avatar>
-          <span class="post-author">{{ p.author_name || '同学' }}</span>
+          <span class="post-author author-name-clickable" @click.stop="openUserHomepage(p.student_id)">
+            {{ p.author_name || '同学' }}
+          </span>
           <el-tag size="small" effect="plain" round class="post-cat">{{ p.category }}</el-tag>
           <span class="post-time">{{ formatTime(p.created_at) }}</span>
         </div>
@@ -111,11 +119,20 @@
       <div class="detail-box">
         <div class="detail-top">
           <div class="detail-head">
-            <el-avatar :size="34" :src="detailPost?.author_avatar || undefined">
+            <el-avatar
+              :size="34"
+              :src="detailPost?.author_avatar || undefined"
+              class="author-avatar-clickable"
+              title="查看个人主页"
+              @click.stop="openUserHomepage(detailPost?.student_id || 0)"
+            >
               {{ (detailPost?.author_name || '学').slice(0, 1) }}
             </el-avatar>
             <div class="detail-author">
-              <div class="author-name">{{ detailPost?.author_name || '同学' }}</div>
+              <div
+                class="author-name author-name-clickable"
+                @click.stop="openUserHomepage(detailPost?.student_id || 0)"
+              >{{ detailPost?.author_name || '同学' }}</div>
               <div class="author-time">{{ formatTime(detailPost?.created_at) }} · {{ detailPost?.category }}</div>
             </div>
             <el-button size="small" text type="danger" v-if="detailPost?.student_id === myId" @click="removeDetailPost">删除</el-button>
@@ -141,12 +158,20 @@
           <div class="comment-head">评论 ({{ comments.length }})</div>
           <div v-if="!comments.length" class="empty-tip">暂无评论，来抢沙发吧</div>
           <div v-for="c in comments" :key="c.id" class="comment-item">
-            <el-avatar :size="26" :src="c.author_avatar || undefined" class="comment-avatar">
+            <el-avatar
+              :size="26"
+              :src="c.author_avatar || undefined"
+              class="comment-avatar author-avatar-clickable"
+              title="查看个人主页"
+              @click.stop="openUserHomepage(c.student_id)"
+            >
               {{ (c.author_name || '学').slice(0, 1) }}
             </el-avatar>
             <div class="comment-body">
               <div class="comment-meta">
-                <span class="comment-author">{{ c.author_name || '同学' }}</span>
+                <span class="comment-author author-name-clickable" @click.stop="openUserHomepage(c.student_id)">
+                  {{ c.author_name || '同学' }}
+                </span>
                 <span class="comment-time">{{ formatTime(c.created_at) }}</span>
                 <el-button v-if="c.student_id === myId" size="small" text type="danger" class="comment-del" @click="removeComment(c)">删除</el-button>
               </div>
@@ -174,6 +199,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, View, ChatLineRound, Star, StarFilled } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import { openUserHomepage } from '@/composables/useUserHomepage'
 import {
   getPosts, getPost, createPost, deletePost,
   toggleLike, getComments, createComment, deleteComment, getHotPosts,
@@ -396,6 +422,11 @@ async function removeDetailPost() {
 .post-head { display: flex; align-items: center; gap: 8px; }
 .post-avatar { flex-shrink: 0; }
 .post-author { font-size: 12px; color: #666; font-weight: 600; }
+/* 作者头像 / 昵称 → 个人主页入口（点卡片其余区域仍是打开帖子详情） */
+.author-avatar-clickable { cursor: pointer; }
+.author-avatar-clickable:active { transform: scale(0.94); }
+.author-name-clickable { cursor: pointer; }
+.author-name-clickable:hover { color: #409eff; }
 .post-cat { flex-shrink: 0; color: #409eff; }
 .post-time { margin-left: auto; font-size: 11px; color: #bbb; }
 .post-title { margin-top: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; }

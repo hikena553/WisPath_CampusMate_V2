@@ -30,6 +30,7 @@ class UserInfo(BaseModel):
     age: int | None = None
     tutor_id: int | None = None
     password_changed: bool = False
+    signature: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +51,7 @@ class ProfileUpdate(BaseModel):
     department: str | None = None
     class_name: str | None = None
     age: int | None = None
+    signature: str | None = None
 
 
 class SkillsUpdate(BaseModel):

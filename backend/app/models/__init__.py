@@ -58,3 +58,4 @@ from app.models.help_request import HelpRequest, HelpRequestStatus
 from app.models.learning_event import LearningEvent
 from app.models.workflow import WorkflowDef, WorkflowInstance, WorkflowStatus
 from app.models.reference import OpenSourceReference
+from app.models.badge import UserBadge
