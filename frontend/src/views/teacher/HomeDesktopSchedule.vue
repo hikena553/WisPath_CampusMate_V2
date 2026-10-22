@@ -48,6 +48,26 @@
     <!-- 右侧：公告（Tab切换） -->
     <div class="announcements-section">
       <el-tabs v-model="activeAnnouncementTab" class="announcement-tabs">
+        <el-tab-pane label="校园公告" name="campus">
+          <div class="announcement-list">
+            <div v-if="campusLoading && campusAnnouncements.length === 0" class="empty-tip-small">加载中…</div>
+            <div v-else-if="campusAnnouncements.length === 0" class="empty-tip-small">暂无校园公告</div>
+            <a
+              v-for="(n, idx) in campusAnnouncements"
+              :key="idx"
+              :href="n.url || '#'"
+              target="_blank"
+              rel="noopener"
+              class="announcement-item campus-item"
+            >
+              <div class="announcement-content">
+                <div class="announcement-title">{{ n.title }}</div>
+                <div class="announcement-date">{{ n.date || '—' }}</div>
+              </div>
+              <el-icon class="campus-link-icon"><TopRight /></el-icon>
+            </a>
+          </div>
+        </el-tab-pane>
         <el-tab-pane label="班级公告" name="class">
           <div class="tab-header">
             <el-button type="primary" size="small" @click="emit('create')">发布公告</el-button>
@@ -76,11 +96,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Calendar, DArrowRight } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Calendar, DArrowRight, TopRight } from '@element-plus/icons-vue'
+import { getAnnouncements } from '@/api/campus'
 import type { ScheduleItem } from '@/api/teacher'
 import type { AnnouncementItem } from '@/api/announcement'
-import type { LeaveRequestOut } from '@/types'
+import type { Announcement, LeaveRequestOut } from '@/types'
 
 interface CalDay {
   num: number
@@ -171,7 +192,37 @@ const calWeeks = computed(() => {
   return weeks
 })
 
-const activeAnnouncementTab = ref('class')
+const activeAnnouncementTab = ref('campus')
+
+// ── 校园公告：教务处通知公告（后端爬取 + 5 分钟缓存，前端定时拉取做动态更新）──
+const CAMPUS_REFRESH_MS = 5 * 60 * 1000
+
+const campusAnnouncements = ref<Announcement[]>([])
+const campusLoading = ref(false)
+let campusTimer: ReturnType<typeof setInterval> | null = null
+
+async function loadCampusAnnouncements() {
+  campusLoading.value = true
+  try {
+    const list = await getAnnouncements()
+    // 按时间降序，无日期的排在末尾；列表区固定高度，靠内滚动查看其余条目
+    campusAnnouncements.value = [...list].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  } catch {
+    // 抓取失败时保留上一次结果，不打断首页其它卡片
+  } finally {
+    campusLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadCampusAnnouncements()
+  campusTimer = setInterval(loadCampusAnnouncements, CAMPUS_REFRESH_MS)
+})
+
+onUnmounted(() => {
+  if (campusTimer) clearInterval(campusTimer)
+  campusTimer = null
+})
 
 const urgencyMap: Record<string, { type: string; label: string }> = {
   normal: { type: '', label: '普通' },
@@ -212,7 +263,8 @@ function formatDate(dateStr: string) {
 }
 .schedule-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,1fr)：栅格轨道不取子项的最小内容宽度，长标题不会把某一列撑宽压到邻列 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
 }
 .schedule-section, .announcements-section {
@@ -221,6 +273,16 @@ function formatDate(dateStr: string) {
   border-radius: var(--tui-radius);
   box-shadow: none;
   padding: 16px;
+}
+/* 公告卡片高度由左侧日历（同行更高的卡片）撑定，卡片本身不随条目多少增高，
+   内部列表区固定分配剩余高度并自行滚动 —— 切 Tab / 条目刷新都不改变卡片大小。 */
+.announcements-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* 网格子项默认 min-width:auto：长公告标题（nowrap）的最小内容宽度会把本列撑宽、
+     越过栅格压到右侧卡片上（表现为 UI 交叉 + 切 Tab 变宽）。置 0 后宽度只由栅格决定。 */
+  min-width: 0;
 }
 .calendar-wrapper {
   margin-bottom: 10px;
@@ -314,7 +376,26 @@ function formatDate(dateStr: string) {
   gap: 3px;
 }
 .announcement-tabs {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
+  /* 沿 flex 链一路放开最小宽度，避免长标题把卡片撑宽 */
+  min-width: 0;
+}
+.announcement-tabs :deep(.el-tabs__content) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.announcement-tabs :deep(.el-tab-pane) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  /* 内容区高度下限（两个 Tab 一致）：卡片尺寸不随切换 Tab、条目多少而变化 */
+  min-height: 200px;
+  min-width: 0;
 }
 .tab-header {
   display: flex;
@@ -322,7 +403,22 @@ function formatDate(dateStr: string) {
   margin-bottom: 6px;
 }
 .announcement-list {
-  min-height: 140px;
+  /* height:0 + flex-grow：列表自身不给卡片贡献高度（卡片高度仍由同行日历撑定），
+     只在内容区剩余空间里伸展；超出部分在卡片内滚动。 */
+  flex: 1 1 auto;
+  height: 0;
+  min-height: 0;
+  min-width: 0;
+  /* 只纵向滚动：overflow-y 非 visible 会把 overflow-x 也算成 auto，
+     必须显式 hidden，否则长标题会横向滚出卡片、压到右侧卡片上 */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 隐藏侧边滚动条（仍可滚动/触控滑动） */
+  scrollbar-width: none;
+}
+.announcement-list::-webkit-scrollbar {
+  display: none;
 }
 .announcement-item {
   display: flex;
@@ -333,6 +429,18 @@ function formatDate(dateStr: string) {
 }
 .announcement-item:last-child {
   border-bottom: none;
+}
+.campus-item {
+  text-decoration: none;
+  color: inherit;
+}
+.campus-item:hover .announcement-title {
+  color: var(--tui-brand);
+}
+.campus-link-icon {
+  font-size: 12px;
+  color: var(--tui-text-quiet);
+  flex-shrink: 0;
 }
 .announcement-content {
   flex: 1;

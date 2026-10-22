@@ -211,6 +211,20 @@ export function importData(role: 'student' | 'teacher', file: File) {
   return request.post<ImportResult>(`/admin/import?role=${role}`, formData)
 }
 
+// 任务下发：管理员指派任务给教师，自动进入该教师的日程任务清单
+export interface AdminTaskCreate {
+  teacher_id: number
+  title: string
+  detail?: string | null
+  priority?: 'high' | 'mid' | 'low'
+  remind_at?: string | null
+  due_at?: string | null
+}
+
+export function dispatchTeacherTask(data: AdminTaskCreate) {
+  return request.post('/admin/tasks', data)
+}
+
 export interface DashboardStats {
   teacher_count: number
   student_count: number

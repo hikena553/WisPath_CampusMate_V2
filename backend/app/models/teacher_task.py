@@ -18,6 +18,8 @@ class TaskSourceType(str, enum.Enum):
     CARE_PLAN = "care_plan"
     ALERT = "alert"
     MANUAL = "manual"
+    # 管理员下发：由管理端指派给教师，自动进入该教师的日程任务
+    ADMIN = "admin"
 
 
 class TaskStatus(str, enum.Enum):
@@ -26,6 +28,14 @@ class TaskStatus(str, enum.Enum):
     CARED = "cared"
     DONE = "done"
     EXPIRED = "expired"
+
+
+class TaskPriority(str, enum.Enum):
+    """任务优先级：教师显式设定，用于清单分组与提醒强度。"""
+
+    HIGH = "high"
+    MID = "mid"
+    LOW = "low"
 
 
 # 允许的状态流转：防止前端/接口把任务改成非法状态
@@ -59,6 +69,12 @@ class TeacherTask(Base):
     status: Mapped[TaskStatus] = mapped_column(
         SAEnum(TaskStatus), default=TaskStatus.PENDING, index=True
     )
+    # 优先级：教师可显式调整；系统自动生成的任务默认中优先级
+    priority: Mapped[TaskPriority] = mapped_column(
+        SAEnum(TaskPriority), default=TaskPriority.MID, index=True
+    )
+    # 提醒日：与 due_at（截止）分离，用于「今天要提醒我处理」的显式提示
+    remind_at: Mapped[date | None] = mapped_column(Date, default=None)
     due_at: Mapped[date | None] = mapped_column(Date, default=None)
     done_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

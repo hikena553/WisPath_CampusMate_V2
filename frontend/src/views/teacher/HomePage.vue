@@ -260,7 +260,7 @@ import {
   UserFilled,
   WarningFilled as WarnIcon,
   Grid, Stamp, Bell, Collection, EditPen, Sunny, Connection,
-  ArrowRight, Refresh, TrendCharts,
+  ArrowRight, Refresh, TrendCharts, Clock,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
@@ -270,6 +270,7 @@ import { getPendingLeaves } from '@/api/leave'
 import { getDashboardStats, getTeacherSchedules, updateTeacherSchedule, deleteTeacherSchedule, getOverdueSchedules, suggestContacts, getTeacherGrowthStats, getClassEvaluation } from '@/api/teacher'
 import type { DashboardStats, ScheduleItem, ScheduleUrgency, ContactSuggestion, GrowthStats, ClassEvaluation } from '@/api/teacher'
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
+import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
@@ -319,6 +320,14 @@ async function loadAiDecisions() {
   }
 }
 const pendingLeaves = ref<LeaveRequestOut[]>([])
+// 任务汇总：桌面端页头指标带里的「逾期未办 / 今日到期」取这份数字
+const taskSummary = ref<TeacherTaskSummary>({
+  pending: 0,
+  overdue: 0,
+  today: 0,
+  done_this_week: 0,
+  total: 0,
+})
 const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
 // 移动端「去安排」任务管理子页
@@ -341,12 +350,14 @@ function initFromCache() {
   const cachedSchedules = getCachedData<ScheduleItem[]>('teacher-schedules')
   const cachedMyAnn = getCachedData<AnnouncementItem[]>('teacher-announcements')
   const cachedOverdue = getCachedData<ScheduleItem[]>('overdue-schedules')
+  const cachedTaskSummary = getCachedData<TeacherTaskSummary>('teacher-task-summary')
   if (cachedStats) stats.value = cachedStats
   if (cachedAlerts) alerts.value = cachedAlerts
   if (cachedPendingLeaves) pendingLeaves.value = cachedPendingLeaves
   if (cachedSchedules) schedules.value = cachedSchedules
   if (cachedMyAnn) myAnnouncements.value = cachedMyAnn
   if (cachedOverdue) overdueSchedules.value = cachedOverdue
+  if (cachedTaskSummary) taskSummary.value = cachedTaskSummary
   // 只要任意缓存有数据，就标记为 ready，避免显示加载占位符
   if (cachedStats || cachedAlerts || cachedPendingLeaves || cachedSchedules || cachedMyAnn) {
     dataReady.value = true
@@ -393,9 +404,11 @@ const statCards = computed(() => [
   },
 ])
 
-// 概览 KPI（桌面端）：主控台指标带的四格。
+// 概览 KPI（桌面端）：主控台指标带的指标格。
 // ratio / hint 一律由真实统计派生（已闭环数、占比），没有分母的指标不画假进度。
 // 字段口径与 HomeKpiCards 的 KpiCard 一致：桌面端不再各占一张卡，而是铺进主控台。
+// 「逾期未办 / 今日到期 / 待批请假」同属「我今天的待办数字」：桌面端统一收敛到这条
+// 指标带（下方「今日重点」卡只留事项清单），一处一个数字，不再上下两块数字带重复。
 interface HeroMetric {
   label: string
   value: number
@@ -425,6 +438,14 @@ const statCardsDesktop = computed<HeroMetric[]>(() => {
       color: '#d92d20', icon: WarnIcon, link: '/teacher/crisis',
       ratio: alertTotal ? severe / alertTotal : 0,
       hint: `占预警 ${alertTotal ? Math.round((severe / alertTotal) * 100) : 0}%`,
+    },
+    {
+      label: '逾期未办', value: taskSummary.value.overdue,
+      color: '#d92d20', icon: WarnIcon, link: '/teacher/tasks?filter=overdue',
+    },
+    {
+      label: '今日到期', value: taskSummary.value.today,
+      color: '#1d4ed8', icon: Clock, link: '/teacher/tasks?filter=today',
     },
     {
       label: '待批请假', value: stats.value.pending_leave_count,
@@ -683,21 +704,25 @@ async function loadData() {
     s: getCachedData<DashboardStats>('dashboard-stats'),
     a: getCachedData<CrisisAlert[]>('alerts'),
     pl: getCachedData<LeaveRequestOut[]>('pending-leaves'),
+    ts: getCachedData<TeacherTaskSummary>('teacher-task-summary'),
   }
   // 立即使用缓存数据（如果有的话），消除加载等待
   if (cached.s) stats.value = cached.s
   if (cached.a) alerts.value = cached.a
   if (cached.pl) pendingLeaves.value = cached.pl
+  if (cached.ts) taskSummary.value = cached.ts
 
   // 并行刷新最新数据（静默更新，不触发加载状态）
-  const [s, a, pl] = await Promise.all([
+  const [s, a, pl, ts] = await Promise.all([
     getDashboardStats().catch(() => stats.value),
     getAlerts(undefined).catch(() => alerts.value),
     getPendingLeaves().catch(() => pendingLeaves.value),
+    getTeacherTaskSummary().catch(() => taskSummary.value),
   ])
   stats.value = s
   alerts.value = a
   pendingLeaves.value = pl
+  taskSummary.value = ts
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -906,45 +931,15 @@ onUnmounted(() => {
 .dash-cols,
 .dash-cell { flex-shrink: 0; }
 
-/* ===== 主控台（深色）：墨面玻璃，而不是一条平涂色带 =====
-   层次靠三层叠出来：① 斜向深墨渐变打底 ② 右上/左下两朵极淡的同色系辉光（蓝 → 青）
-   ③ 顶缘一道两端渐隐的亮缝 + 底部柔和外投影，让面板从页底色上「浮」起来。
-   颜色克制：只有一个色相家族，语义色只出现在指标小图标与占比微条上。 */
+/* ===== 主控台：并入浅色卡体系（白底 + 细描边 + 零投影），与页面其他区块统一。
+   装饰全部去掉：不留渐变、辉光、亮缝与投影，靠留白与层级区分。 */
 .hero-deck {
   position: relative;
-  overflow: hidden;
   margin-bottom: 20px;
   padding: 18px 22px 16px;
   border-radius: var(--tui-radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background:
-    /* 斜向一道极淡的玻璃反光（放在最上层背景里，不盖住内容） */
-    linear-gradient(
-      112deg,
-      rgba(255, 255, 255, 0) 34%,
-      rgba(255, 255, 255, 0.05) 47%,
-      rgba(255, 255, 255, 0) 62%
-    ),
-    radial-gradient(118% 165% at 92% -22%, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0) 56%),
-    radial-gradient(90% 130% at 4% 122%, rgba(6, 182, 212, 0.16) 0%, rgba(6, 182, 212, 0) 62%),
-    linear-gradient(135deg, #1b2438 0%, #151d30 46%, #0f1524 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 18px 40px -30px rgba(15, 23, 42, 0.7);
-}
-/* 顶缘亮缝：两端渐隐，比整条三色线安静得多，但仍交代「光从上面来」 */
-.hero-deck::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(147, 197, 253, 0.5) 26%,
-    rgba(147, 197, 253, 0.5) 64%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  border: 1px solid var(--tui-border-strong);
+  background: var(--tui-surface);
 }
 
 .hero-top {
@@ -959,13 +954,7 @@ onUnmounted(() => {
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  /* 白 → 淡蓝的极浅渐变字：比纯白多一点通透感，又不跳色 */
-  color: #f2f6ff;
-  background: linear-gradient(94deg, #ffffff 0%, #d7e6ff 82%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  width: fit-content;
+  color: var(--tui-text);
 }
 .hero-meta {
   display: flex;
@@ -973,7 +962,7 @@ onUnmounted(() => {
   gap: 8px;
   margin: 0;
   font-size: 12px;
-  color: rgba(226, 234, 255, 0.62);
+  color: var(--tui-text-tertiary);
   min-width: 0;
 }
 .hero-meta-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -981,11 +970,10 @@ onUnmounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #60a5fa 0%, #22d3ee 100%);
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
+  background: var(--tui-brand);
   flex-shrink: 0;
 }
-.hero-sep { color: rgba(226, 234, 255, 0.28); }
+.hero-sep { color: var(--tui-text-quiet); }
 
 .hero-actions {
   display: flex;
@@ -999,18 +987,17 @@ onUnmounted(() => {
   gap: 5px;
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--tui-border-strong);
+  background: var(--tui-surface-muted);
   font-size: 11.5px;
-  color: rgba(232, 238, 255, 0.78);
+  color: var(--tui-text-tertiary);
   white-space: nowrap;
 }
 .hero-sync-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #12b76a;
-  box-shadow: 0 0 0 2px rgba(18, 183, 106, 0.16);
+  background: var(--tui-success);
   flex-shrink: 0;
 }
 .hero-refresh {
@@ -1021,70 +1008,51 @@ onUnmounted(() => {
   justify-content: center;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(232, 238, 255, 0.86);
+  border: 1px solid var(--tui-border-strong);
+  background: var(--tui-surface);
+  color: var(--tui-text-tertiary);
   cursor: pointer;
+  transition: border-color 0.16s var(--tui-ease), background-color 0.16s var(--tui-ease);
 }
-.hero-refresh:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.hero-refresh:hover:not(:disabled) { background: var(--tui-surface-muted); color: var(--tui-text); }
 .hero-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-.hero-refresh:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+.hero-refresh:focus-visible { outline: 2px solid var(--tui-brand); outline-offset: 2px; }
 
-/* 指标带：四格等宽；与问候区之间的分割线也做成两端渐隐，避免深色面上出现硬边 */
+/* 指标带：四格等宽，各自成卡（浅底 + 发丝描边 + 圆角），靠间距分隔而非分隔线 */
 .hero-metrics {
-  position: relative;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* 六格：班级 / 安全 / 今日待办三组各两格，一屏一行看完「今天什么状况」 */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
   margin-top: 16px;
-  padding-top: 2px;
 }
-.hero-metrics::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.12) 14%,
-    rgba(255, 255, 255, 0.12) 86%,
-    rgba(255, 255, 255, 0) 100%
-  );
+/* 窄桌面折成 3×2，避免每格过窄导致占比微条与说明被挤掉 */
+@media (max-width: 1280px) {
+  .hero-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 .hero-metric {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 14px 18px 10px;
-  border: none;
-  background: none;
+  padding: 12px 14px;
+  border: 1px solid var(--tui-border-strong);
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface-muted);
+  box-shadow: var(--tui-shadow-1);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   min-width: 0;
+  transition: border-color 0.16s var(--tui-ease), background-color 0.16s var(--tui-ease);
 }
-.hero-metric + .hero-metric::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 12px;
-  width: 1px;
-  /* 竖向分隔同样两端渐隐，四格之间是「光缝」而不是表格线 */
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.14) 30%,
-    rgba(255, 255, 255, 0.14) 70%,
-    rgba(255, 255, 255, 0) 100%
-  );
+/* 卡片反馈沿用全站口径：只加深描边，不做位移与投影 */
+.hero-metric:hover {
+  background: var(--tui-surface);
+  border-color: #d0d5dd;
 }
-.hero-metric:first-child { padding-left: 2px; }
-.hero-metric:hover { background: rgba(255, 255, 255, 0.04); }
-.hero-metric:hover .hero-metric-label { color: rgba(226, 234, 255, 0.92); }
+.hero-metric:hover .hero-metric-label { color: var(--tui-text); }
 .hero-metric:focus-visible {
-  outline: 2px solid rgba(226, 234, 255, 0.6);
+  outline: 2px solid var(--tui-brand);
   outline-offset: -2px;
 }
 .hero-metric-head {
@@ -1097,10 +1065,10 @@ onUnmounted(() => {
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: var(--tui-text);
   font-variant-numeric: tabular-nums;
 }
-/* 指标小图标：按各自语义色淡淡染一层（深色面上的识别锚点），hover 时更亮 */
+/* 指标小图标：语义色淡底 + 同色图标，作为四格之间的识别锚点 */
 .hero-metric-ic {
   width: 22px;
   height: 22px;
@@ -1108,19 +1076,19 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--c) 26%, transparent);
-  color: color-mix(in srgb, var(--c) 52%, #fff);
+  background: color-mix(in srgb, var(--c) 12%, #fff);
+  color: var(--c);
   flex-shrink: 0;
 }
 .hero-metric-label {
   font-size: 12.5px;
-  color: rgba(226, 234, 255, 0.72);
+  color: var(--tui-text-secondary);
 }
 .hero-metric-hint {
   /* 没有 hint 的指标也占一行，四格底线对齐 */
   min-height: 14px;
   font-size: 11px;
-  color: rgba(226, 234, 255, 0.45);
+  color: var(--tui-text-quiet);
   font-variant-numeric: tabular-nums;
 }
 .hero-meter {
@@ -1128,14 +1096,14 @@ onUnmounted(() => {
   height: 3px;
   margin-top: 2px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--tui-surface-sunken);
   overflow: hidden;
 }
 .hero-meter > i {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--c) 66%, #fff);
+  background: var(--c);
 }
 
 /* ===== 学生成长与学业带（结构层）：并入浅色卡体系（白底 + 细描边 + 零投影） ===== */
@@ -1278,8 +1246,31 @@ onUnmounted(() => {
 /* ≤1279px：主区 + 定宽辅栏并排会把日程表压垮（日历 7 列网格需要宽度），
    整页退化为单列，阅读顺序不变：工作流 → 辅栏 → 数据带 → 复盘层 */
 @media (max-width: 1279px) {
-  .dash-cols { flex-direction: column; }
+  /* align-items 必须由 row 模式的 flex-start 改成 stretch：
+     切成 column 后 flex-start 会让子列按内容收缩（实测只剩半屏宽、右侧留一大片空白） */
+  .dash-cols {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .dash-col-side { flex: 1 1 auto; width: 100%; }
+}
+
+/* ≤1023px：中窄桌面区间（768~1023 仍走桌面骨架，且无 0.9 缩放，
+   可用宽度只有 ~500~750px）——把「横向铺满」的定列网格降列，
+   否则四格指标卡与五列成果条会被压扁、文字被迫换行 */
+@media (max-width: 1023px) {
+  /* 主控台指标带：4 列 → 2×2 */
+  .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* 成长数据带：左（成果条）+ 右（学业关键值）改上下排布，分隔线由竖线改横线 */
+  .growth-body { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .growth-eval {
+    padding-left: 0;
+    padding-top: 16px;
+    border-left: none;
+    border-top: 1px solid var(--tui-border);
+  }
+  /* 五列成果条 → 三列，类目与数值不再挤在一行 */
+  .growth-bars { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .feat-all {

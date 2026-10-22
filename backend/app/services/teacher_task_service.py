@@ -6,11 +6,13 @@
 import logging
 from datetime import date, datetime, timedelta
 
+from sqlalchemy import and_, case, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.teacher_task import (
     ALLOWED_TRANSITIONS,
+    TaskPriority,
     TaskSourceType,
     TaskStatus,
     TeacherTask,
@@ -41,6 +43,15 @@ def _status(value: str | TaskStatus | None) -> TaskStatus:
         return TaskStatus.PENDING
 
 
+def _priority(value: str | TaskPriority | None) -> TaskPriority:
+    if isinstance(value, TaskPriority):
+        return value
+    try:
+        return TaskPriority(value) if value else TaskPriority.MID
+    except ValueError:
+        return TaskPriority.MID
+
+
 def _naive_now() -> datetime:
     """统一使用 naive 本地时间，避免与 naive 字段比较时抛 TypeError。"""
     return datetime.now()
@@ -49,6 +60,14 @@ def _naive_now() -> datetime:
 def _serialize(task: TeacherTask, student_name: str = "") -> dict:
     today = date.today()
     overdue = bool(task.due_at and task.due_at < today and task.status in _OPEN_STATUSES)
+    # 提醒判定：显式 remind_at 到期，或（未设提醒时）截止日就是今天
+    remind_due = bool(
+        task.status in _OPEN_STATUSES
+        and (
+            (task.remind_at is not None and task.remind_at <= today)
+            or (task.remind_at is None and task.due_at == today)
+        )
+    )
     return {
         "id": task.id,
         "teacher_id": task.teacher_id,
@@ -60,6 +79,9 @@ def _serialize(task: TeacherTask, student_name: str = "") -> dict:
         "detail": task.detail,
         "rule_code": task.rule_code,
         "status": task.status.value if task.status else "pending",
+        "priority": task.priority.value if task.priority else "mid",
+        "remind_at": task.remind_at,
+        "remind_due": remind_due,
         "due_at": task.due_at,
         "overdue": overdue,
         "done_at": task.done_at.isoformat() if task.done_at else None,
@@ -78,9 +100,12 @@ def create_task(
     source_type: str | TaskSourceType = TaskSourceType.MANUAL,
     source_id: int | None = None,
     rule_code: str | None = None,
+    priority: str | TaskPriority = TaskPriority.MID,
+    remind_at: date | None = None,
 ) -> TeacherTask:
     """建任务（幂等）：同一 (source_type, source_id, teacher_id) 已存在时直接返回旧任务。"""
     stype = _source_type(source_type)
+    prio = _priority(priority)
 
     if source_id is not None:
         existing = (
@@ -110,6 +135,8 @@ def create_task(
         title=title,
         detail=detail,
         student_id=student_id,
+        priority=prio,
+        remind_at=remind_at,
         due_at=due_at,
         source_type=stype,
         source_id=source_id,
@@ -135,8 +162,12 @@ def create_task(
 
 
 def bulk_upsert_from_suggestions(db: Session, teacher_id: int, suggestions: list[dict]) -> int:
-    """把 AI 推荐联系的学生批量落为跟进任务，返回新建数量。"""
+    """把 AI 推荐联系的学生批量落为跟进任务，返回新建数量。
+
+    同时给出「对应的日期」：截止与提醒默认落在明天，直接进入任务日程视图。
+    """
     created = 0
+    due = date.today() + timedelta(days=1)
     for item in suggestions:
         student_id = item.get("student_id")
         if student_id is None:
@@ -157,6 +188,9 @@ def bulk_upsert_from_suggestions(db: Session, teacher_id: int, suggestions: list
             title=f"跟进联系：{name}",
             detail=item.get("reason"),
             student_id=student_id,
+            due_at=due,
+            remind_at=due,
+            priority=TaskPriority.MID,
             source_type=TaskSourceType.AI_SUGGEST,
             source_id=student_id,
         )
@@ -179,6 +213,7 @@ def list_tasks(
     *,
     status: str | None = None,
     source_type: str | None = None,
+    priority: str | None = None,
     due: str | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -189,16 +224,33 @@ def list_tasks(
         query = query.filter(TeacherTask.status == _status(status))
     if source_type:
         query = query.filter(TeacherTask.source_type == _source_type(source_type))
+    if priority:
+        query = query.filter(TeacherTask.priority == _priority(priority))
     if due == "overdue":
         query = query.filter(TeacherTask.due_at < date.today(), TeacherTask.status.in_(_OPEN_STATUSES))
     elif due == "today":
         query = query.filter(TeacherTask.due_at == date.today(), TeacherTask.status.in_(_OPEN_STATUSES))
+    elif due == "remind":
+        # 提醒日 <= 今天（未设提醒日时按截止日=今天兜底），仅未办结
+        query = query.filter(
+            TeacherTask.status.in_(_OPEN_STATUSES),
+            or_(
+                and_(TeacherTask.remind_at.is_not(None), TeacherTask.remind_at <= date.today()),
+                and_(TeacherTask.remind_at.is_(None), TeacherTask.due_at == date.today()),
+            ),
+        )
 
     total = query.count()
     tasks = (
-        # due_at 可为空：MySQL 不支持 NULLS LAST，改用 is_(None) 升序把空值排到最后
+        # 排序：优先未办结 → 优先级高在前 → 逾期优先 → 提醒/截止日临近 → 新建在前。
+        # MySQL 不支持 NULLS LAST，故用 is_(None) 升序把空值排到最后。
         query.order_by(
             TeacherTask.status.asc(),
+            case(
+                (TeacherTask.priority == TaskPriority.HIGH, 0),
+                (TeacherTask.priority == TaskPriority.MID, 1),
+                else_=2,
+            ),
             TeacherTask.due_at.is_(None),
             TeacherTask.due_at.asc(),
             TeacherTask.id.desc(),
@@ -238,12 +290,24 @@ def update_task(db: Session, task: TeacherTask, payload: dict) -> TeacherTask:
         task.title = payload["title"]
     if "detail" in payload:
         task.detail = payload["detail"]
+    if "student_id" in payload:
+        task.student_id = payload["student_id"]
+    if payload.get("priority") is not None:
+        task.priority = _priority(payload["priority"])
+    if "remind_at" in payload:
+        task.remind_at = payload["remind_at"]
     if "due_at" in payload:
         task.due_at = payload["due_at"]
 
     db.commit()
     db.refresh(task)
     return task
+
+
+def delete_task(db: Session, task: TeacherTask) -> None:
+    """删除任务（硬删）：仅由 API 层校验归属后调用。"""
+    db.delete(task)
+    db.commit()
 
 
 def summary(db: Session, teacher_id: int) -> dict:
@@ -265,4 +329,14 @@ def summary(db: Session, teacher_id: int) -> dict:
             TeacherTask.done_at >= datetime.combine(week_start, datetime.min.time()),
         ).count(),
         "total": base.count(),
+        "high": base.filter(
+            TeacherTask.priority == TaskPriority.HIGH, TeacherTask.status.in_(_OPEN_STATUSES)
+        ).count(),
+        "remind_today": base.filter(
+            TeacherTask.status.in_(_OPEN_STATUSES),
+            or_(
+                and_(TeacherTask.remind_at.is_not(None), TeacherTask.remind_at <= today),
+                and_(TeacherTask.remind_at.is_(None), TeacherTask.due_at == today),
+            ),
+        ).count(),
     }

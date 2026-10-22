@@ -15,6 +15,7 @@ from app.api.admin.xique import router as _xique_router
 from app.api.admin.dashboard import router as _dashboard_router
 from app.api.admin.feeds import router as _feeds_router
 from app.api.admin.system import router as _system_router
+from app.api.admin.tasks import router as _tasks_router
 
 # 聚合路由：前缀只在这里声明一次；子 router 按原 admin.py 的顺序 include
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -25,5 +26,6 @@ router.include_router(_xique_router)
 router.include_router(_dashboard_router)
 router.include_router(_feeds_router)
 router.include_router(_system_router)
+router.include_router(_tasks_router)
 
 __all__ = ["router"]

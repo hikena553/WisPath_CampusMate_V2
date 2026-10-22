@@ -11,7 +11,10 @@
       </button>
     </div>
 
-    <div class="tf-metrics">
+    <!-- 指标带仅移动端：移动端概览 KPI 只放班级维度统计，个人待办数字落在这里；
+         桌面端这些数字已统一收敛到页头主控台的指标带（避免上下两块数字带重复），
+         卡片只保留事项清单本身。 -->
+    <div v-if="isMobile" class="tf-metrics">
       <button class="tf-metric" @click="emit('navigate', '/teacher/tasks?filter=overdue')">
         <span class="tf-num" :class="{ danger: summary.overdue > 0 }">{{ summary.overdue }}</span>
         <span class="tf-lb">逾期未办</span>
