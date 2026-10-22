@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.notification import Notification, NotificationType
+from app.models.announcement import UrgencyLevel
 
 router = APIRouter(prefix="/api/notifications", tags=["通知管理"])
 
@@ -20,6 +21,8 @@ class NotificationOut(BaseModel):
     content: str
     type: str
     is_read: bool
+    # 提醒级别：normal / important / urgent（学生端据此分级提醒）
+    level: str = "normal"
     link: Optional[str] = None
     related_id: Optional[int] = None
     sender_name: Optional[str] = None
@@ -31,6 +34,8 @@ class NotificationOut(BaseModel):
 class NotificationCount(BaseModel):
     total: int
     unread: int
+    # 未读的紧急通知数（用于导航强提醒）
+    urgent_unread: int = 0
 
 
 class MarkReadRequest(BaseModel):
@@ -71,6 +76,7 @@ def get_notifications(
             content=n.content,
             type=n.type.value if n.type else "system",
             is_read=n.is_read,
+            level=n.level.value if n.level else "normal",
             link=n.link,
             related_id=n.related_id,
             sender_name=sender_name,
@@ -91,7 +97,12 @@ def get_notification_count(
         Notification.user_id == current_user.id,
         Notification.is_read == False
     ).count()
-    return NotificationCount(total=total, unread=unread)
+    urgent_unread = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+        Notification.level == UrgencyLevel.URGENT,
+    ).count()
+    return NotificationCount(total=total, unread=unread, urgent_unread=urgent_unread)
 
 
 @router.put("/read")

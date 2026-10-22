@@ -13,7 +13,15 @@ from app.core.deps import get_current_user
 from app.models.user import User, UserRole
 from app.models.announcement import TeacherAnnouncement, AnnouncementRead, UrgencyLevel, TeacherSchedule
 from app.models.notification import NotificationType
-from app.schemas.announcement import AnnouncementOut, UnreadCountOut, ScheduleOut, ScheduleCreate, ScheduleUpdate
+from app.schemas.announcement import (
+    AnnouncementOut,
+    AnnouncementReachItem,
+    AnnouncementReachOut,
+    UnreadCountOut,
+    ScheduleOut,
+    ScheduleCreate,
+    ScheduleUpdate,
+)
 from app.services.notification_service import send_batch_notifications
 from app.utils.enum_helpers import safe_enum_val
 
@@ -94,6 +102,8 @@ async def create_announcement(
                 link="/student/workbench",
                 related_id=item.id,
                 sender_id=user.id,
+                # 紧急程度 → 提醒级别：学生端据此分级提醒（紧急强提醒 / 重要横幅 / 普通红点）
+                level=UrgencyLevel(urgency),
             )
         except Exception:
             logger.exception("公告发布后推送站内通知失败 announcement_id=%s", item.id)
@@ -103,6 +113,54 @@ async def create_announcement(
         title=item.title, content=item.content,
         urgency=safe_enum_val(item.urgency),
         attachment_url=item.attachment_url, created_at=item.created_at,
+    )
+
+
+@router.get("/api/teacher/announcements/reach", response_model=AnnouncementReachOut)
+def announcement_reach(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """公告触达回执：基于 AnnouncementRead 真实统计「已读 / 应读 / 触达率」。
+
+    此前页面里的触达率是按紧急程度估算的假数据，这里改为真实口径：
+    应读 = 名下学生数；已读 = announcement_reads 中该公告的去重学生数。
+    """
+    if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(403)
+    student_ids = [
+        row[0] for row in db.query(User.id).filter(
+            User.role == UserRole.STUDENT,
+            User.tutor_id == user.id,
+        ).all()
+    ]
+    items = db.query(TeacherAnnouncement).filter(
+        TeacherAnnouncement.teacher_id == user.id
+    ).order_by(TeacherAnnouncement.created_at.desc()).limit(10).all()
+
+    total_students = len(student_ids)
+    out_items: list[AnnouncementReachItem] = []
+    for a in items:
+        read = db.query(safunc.count(safunc.distinct(AnnouncementRead.student_id))).filter(
+            AnnouncementRead.announcement_id == a.id
+        ).scalar() or 0
+        rate = round(read / total_students * 100) if total_students else 0
+        out_items.append(AnnouncementReachItem(
+            announcement_id=a.id,
+            title=a.title,
+            urgency=safe_enum_val(a.urgency),
+            total=total_students,
+            read=int(read),
+            rate=int(rate),
+        ))
+    # 汇总按「所有公告的应读×条数」加权，避免把不同公告的读数简单相加导致 >100%
+    sum_total = total_students * len(out_items)
+    sum_read = sum(i.read for i in out_items)
+    return AnnouncementReachOut(
+        items=out_items,
+        total=sum_total,
+        read=sum_read,
+        rate=round(sum_read / sum_total * 100) if sum_total else 0,
     )
 
 

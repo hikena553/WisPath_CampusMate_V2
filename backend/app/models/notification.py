@@ -3,6 +3,7 @@ from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
+from app.models.announcement import UrgencyLevel
 import enum
 
 
@@ -24,6 +25,11 @@ class Notification(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[NotificationType] = mapped_column(Enum(NotificationType), default=NotificationType.SYSTEM)
+    # 提醒级别：驱动学生端「分级提醒」——紧急走强提醒（弹窗/横幅），重要走横幅，普通仅红点。
+    # 复用公告的 UrgencyLevel（normal/important/urgent），避免再造一套平行的权重枚举。
+    level: Mapped[UrgencyLevel] = mapped_column(
+        Enum(UrgencyLevel), default=UrgencyLevel.NORMAL, index=True
+    )
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     related_id: Mapped[int | None] = mapped_column(nullable=True)

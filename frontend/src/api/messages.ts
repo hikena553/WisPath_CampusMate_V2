@@ -58,6 +58,8 @@ export interface UnreadSummary {
   chat: number
   group: number
   notification: number
+  /** 紧急未读通知数（导航强提醒） */
+  urgent_unread?: number
   total: number
 }
 

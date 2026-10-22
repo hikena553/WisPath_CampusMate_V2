@@ -8,6 +8,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification, NotificationType
+from app.models.announcement import UrgencyLevel
 from app.models.sms import SmsLog
 from app.models.setting import SystemSetting
 from app.models.user import User
@@ -82,14 +83,19 @@ def send_notification(
     sender_id: Optional[int] = None,
     sms_template: Optional[str] = None,
     sms_content: Optional[str] = None,
+    level: UrgencyLevel = UrgencyLevel.NORMAL,
 ) -> Notification:
-    """统一发通知：站内 Notification + 可选短信。各类业务审批/进度推送请统一走此入口。"""
+    """统一发通知：站内 Notification + 可选短信。各类业务审批/进度推送请统一走此入口。
+
+    level 决定学生端的提醒强度：urgent（强提醒/弹窗）、important（横幅+红点）、normal（仅红点）。
+    """
     user = db.query(User).filter(User.id == user_id).first()
     notification = Notification(
         user_id=user_id,
         title=title,
         content=content,
         type=notification_type,
+        level=level,
         link=link,
         related_id=related_id,
         sender_id=sender_id,
@@ -118,8 +124,9 @@ def send_batch_notifications(
     link: Optional[str] = None,
     related_id: Optional[int] = None,
     sender_id: Optional[int] = None,
+    level: UrgencyLevel = UrgencyLevel.NORMAL,
 ):
-    """批量发站内通知（不逐条短信，避免刷屏）。"""
+    """批量发站内通知（不逐条短信，避免刷屏）。level 语义同 send_notification。"""
     rows = db.query(User).filter(User.id.in_(list(user_ids))).all()
     now_ids = {u.id for u in rows}
     for uid in now_ids:
@@ -128,6 +135,7 @@ def send_batch_notifications(
             title=title,
             content=content,
             type=notification_type,
+            level=level,
             link=link,
             related_id=related_id,
             sender_id=sender_id,
