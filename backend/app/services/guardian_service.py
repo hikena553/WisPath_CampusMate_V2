@@ -19,7 +19,7 @@ from app.models.guardian import (
     GuardianScene,
     GuardianShareLink,
 )
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.notification_service import send_sms
 
 logger = logging.getLogger(__name__)
@@ -257,6 +257,251 @@ def list_logs(
         _serialize_log(l, student_names.get(l.student_id, ""), guardian_names.get(l.guardian_id or -1, ""))
         for l in logs
     ]
+
+
+def _filtered_query(
+    db: Session,
+    teacher_id: int,
+    *,
+    student_id: int | None = None,
+    keyword: str | None = None,
+    scene: str | None = None,
+    channel: str | None = None,
+    status: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
+):
+    """按条件构造台账查询（分页 / 统计 / 导出共用，保证三种口径完全一致）。"""
+    query = db.query(GuardianContactLog).filter(
+        GuardianContactLog.teacher_id == teacher_id,
+        GuardianContactLog.is_deleted.is_(False),
+    )
+    if student_id is not None:
+        query = query.filter(GuardianContactLog.student_id == student_id)
+    if keyword:
+        query = query.filter(GuardianContactLog.content_summary.like(f"%{keyword.strip()}%"))
+    if scene:
+        query = query.filter(GuardianContactLog.scene == _scene(scene))
+    if channel:
+        query = query.filter(GuardianContactLog.channel == _channel(channel))
+    if status:
+        try:
+            query = query.filter(GuardianContactLog.status == GuardianContactStatus(status))
+        except ValueError:
+            pass
+    if start is not None:
+        query = query.filter(GuardianContactLog.created_at >= datetime.combine(start, datetime.min.time()))
+    if end is not None:
+        query = query.filter(GuardianContactLog.created_at <= datetime.combine(end, datetime.max.time()))
+    return query
+
+
+def list_logs_paged(
+    db: Session,
+    teacher_id: int,
+    *,
+    student_id: int | None = None,
+    keyword: str | None = None,
+    scene: str | None = None,
+    channel: str | None = None,
+    status: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """台账分页查询（服务端筛选 + 分页），返回 (items, total)。"""
+    query = _filtered_query(
+        db, teacher_id, student_id=student_id, keyword=keyword, scene=scene,
+        channel=channel, status=status, start=start, end=end,
+    )
+    total = query.count()
+    logs = (
+        query.order_by(GuardianContactLog.created_at.desc(), GuardianContactLog.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    student_names = _names(db, {l.student_id for l in logs})
+    guardian_ids = {l.guardian_id for l in logs if l.guardian_id}
+    guardian_names: dict[int, str] = {}
+    if guardian_ids:
+        rows = db.query(Guardian.id, Guardian.name).filter(Guardian.id.in_(guardian_ids)).all()
+        guardian_names = {row[0]: row[1] for row in rows}
+    items = [
+        _serialize_log(l, student_names.get(l.student_id, ""), guardian_names.get(l.guardian_id or -1, ""))
+        for l in logs
+    ]
+    return items, total
+
+
+def overview(db: Session, teacher_id: int, *, days: int = 30, student_id: int | None = None) -> dict:
+    """家校沟通聚合：总量、场景/渠道分布、近 N 天趋势、沟通最多的学生 Top5。
+
+    数据来源与台账完全同源（_filtered_query），避免「图表与列表对不上」。
+    """
+    since = date.today() - timedelta(days=days - 1)
+    scoped = _filtered_query(db, teacher_id, student_id=student_id)
+    logs = scoped.all()
+
+    contact_count = db.query(Guardian).filter(
+        Guardian.is_deleted.is_(False),
+        *( [Guardian.student_id == student_id] if student_id is not None else [] ),
+    ).count()
+    student_ids = {l.student_id for l in logs}
+
+    by_scene: dict[str, int] = {k: 0 for k in SCENE_LABELS}
+    by_channel: dict[str, int] = {"sms": 0, "report": 0, "link": 0, "note": 0}
+    for l in logs:
+        by_scene[l.scene.value if l.scene else "other"] = by_scene.get(l.scene.value if l.scene else "other", 0) + 1
+        ch = l.channel.value if l.channel else "note"
+        by_channel[ch] = by_channel.get(ch, 0) + 1
+
+    # 近 N 天趋势（按天）
+    trend_map: dict[str, int] = {}
+    for l in logs:
+        if l.created_at and l.created_at.date() >= since:
+            key = l.created_at.strftime("%m-%d")
+            trend_map[key] = trend_map.get(key, 0) + 1
+    trend = []
+    for i in range(days):
+        d = since + timedelta(days=i)
+        key = d.strftime("%m-%d")
+        trend.append({"day": key, "count": trend_map.get(key, 0)})
+
+    # 沟通最多的学生 Top5
+    per_student: dict[int, int] = {}
+    for l in logs:
+        per_student[l.student_id] = per_student.get(l.student_id, 0) + 1
+    top_ids = sorted(per_student.items(), key=lambda kv: kv[1], reverse=True)[:5]
+    names = _names(db, {sid for sid, _ in top_ids})
+    top_students = [
+        {"student_id": sid, "student_name": names.get(sid, ""), "count": cnt}
+        for sid, cnt in top_ids
+    ]
+
+    sms_logs = db.query(GuardianContactLog).filter(
+        GuardianContactLog.teacher_id == teacher_id,
+        GuardianContactLog.is_deleted.is_(False),
+        GuardianContactLog.channel == GuardianChannel.SMS,
+    ).count()
+
+    return {
+        "totals": {
+            "students": len(student_ids),
+            "contacts": contact_count,
+            "logs": len(logs),
+            "sms": sms_logs,
+        },
+        "by_scene": [
+            {"key": k, "label": SCENE_LABELS[k], "count": v} for k, v in by_scene.items()
+        ],
+        "by_channel": [
+            {"key": k, "label": {"sms": "短信", "report": "报告", "link": "链接", "note": "留痕"}[k], "count": v}
+            for k, v in by_channel.items()
+        ],
+        "trend": trend,
+        "top_students": top_students,
+    }
+
+
+def export_log_rows(
+    db: Session,
+    teacher_id: int,
+    *,
+    student_id: int | None = None,
+    keyword: str | None = None,
+    scene: str | None = None,
+    channel: str | None = None,
+    status: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
+) -> list[dict]:
+    """导出用行数据（与分页筛选同口径，最多 5000 行防止超大导出）。"""
+    items, _ = list_logs_paged(
+        db, teacher_id, student_id=student_id, keyword=keyword, scene=scene,
+        channel=channel, status=status, start=start, end=end, limit=5000, offset=0,
+    )
+    return items
+
+
+CHANNEL_FROM_LABEL = {"短信": "sms", "报告": "report", "链接": "link", "留痕": "note", "备注": "note"}
+SCENE_FROM_LABEL = {v: k for k, v in SCENE_LABELS.items()}
+
+
+def import_logs(db: Session, teacher_id: int, rows: list[dict]) -> dict:
+    """按 xlsx 解析结果批量导入沟通台账。
+
+    逐行校验：
+    - 学生必须存在且属于当前教师名下（学号或姓名匹配）；
+    - 内容摘要必填；
+    - 同一学生 + 同一内容摘要 + 同一日期视为重复，跳过（幂等，便于重复导入）。
+    """
+    created = 0
+    skipped: list[str] = []
+    errors: list[str] = []
+
+    for idx, row in enumerate(rows, start=2):  # 2 = 表头占第 1 行
+        username = str(row.get("username") or "").strip()
+        name = str(row.get("name") or "").strip()
+        summary = str(row.get("content_summary") or "").strip()
+        scene_label = str(row.get("scene") or "").strip()
+        channel_label = str(row.get("channel") or "").strip()
+        created_at_raw = str(row.get("created_at") or "").strip()
+
+        if not summary:
+            errors.append(f"第 {idx} 行：内容摘要为空，已跳过")
+            continue
+        if not username and not name:
+            errors.append(f"第 {idx} 行：缺少学号/姓名，无法匹配学生")
+            continue
+
+        q = db.query(User).filter(User.role == UserRole.STUDENT)
+        if teacher_id:
+            q = q.filter(User.tutor_id == teacher_id)
+        student = None
+        if username:
+            student = q.filter(User.username == username).first()
+        if student is None and name:
+            student = q.filter(User.name == name).first()
+        if student is None:
+            errors.append(f"第 {idx} 行：未匹配到名下学生（{username or name}）")
+            continue
+
+        # 去重：同学生 + 同摘要 + 同日期
+        dup_query = db.query(GuardianContactLog).filter(
+            GuardianContactLog.teacher_id == teacher_id,
+            GuardianContactLog.student_id == student.id,
+            GuardianContactLog.content_summary == summary,
+            GuardianContactLog.is_deleted.is_(False),
+        )
+        if dup_query.first():
+            skipped.append(f"第 {idx} 行：内容重复，已跳过")
+            continue
+
+        scene = SCENE_FROM_LABEL.get(scene_label, "other")
+        channel = CHANNEL_FROM_LABEL.get(channel_label, "note")
+        log = GuardianContactLog(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            scene=_scene(scene),
+            channel=_channel(channel),
+            status=GuardianContactStatus.SENT,
+            content_summary=summary,
+        )
+        if created_at_raw:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d"):
+                try:
+                    log.created_at = datetime.strptime(created_at_raw, fmt)
+                    break
+                except ValueError:
+                    continue
+        db.add(log)
+        created += 1
+
+    db.commit()
+    _audit("import_contact_logs", actor=teacher_id, created=created, skipped=len(skipped), errors=len(errors))
+    return {"created": created, "skipped": skipped, "errors": errors}
 
 
 def get_log(db: Session, log_id: int) -> GuardianContactLog | None:

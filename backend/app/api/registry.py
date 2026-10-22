@@ -42,12 +42,14 @@ from app.api.care_record import router as care_record_router
 from app.api.teacher_portfolio import router as teacher_portfolio_router
 from app.api.peer_survey import router as peer_survey_router
 from app.api.care_center import router as care_center_router
+from app.api.care_student import router as care_student_router
 from app.api.guardian import router as guardian_router
 from app.api.learning_event import router as learning_event_router
 from app.api.workflow import router as workflow_router
 from app.api.help_request import router as help_request_router
 from app.api.reference import router as reference_router
 from app.api.ml_training import router as ml_training_router
+from app.api.badge import router as badge_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -92,12 +94,14 @@ ROUTERS = [
     teacher_portfolio_router,
     peer_survey_router,
     care_center_router,
+    care_student_router,
     guardian_router,
     learning_event_router,
     workflow_router,
     help_request_router,
     reference_router,
     ml_training_router,
+    badge_router,
 ]
 
 

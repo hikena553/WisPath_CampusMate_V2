@@ -68,6 +68,14 @@
         <el-input v-model="form.follow_up" type="textarea" :rows="2" maxlength="300" show-word-limit
           placeholder="下一步要跟进什么（选填），例如：两周后电话回访家长" />
       </div>
+
+      <div class="hv-sync">
+        <div class="hv-sync-text">
+          <span class="hv-sync-title">同步到家校沟通台账</span>
+          <span class="hv-sync-desc">开启后，本次家访会以「日常关怀」场景写入家校沟通台账，便于统一留痕。</span>
+        </div>
+        <el-switch v-model="form.sync_to_guardian" />
+      </div>
     </div>
 
     <template #footer>
@@ -100,12 +108,14 @@ const form = reactive<{
   method: HomeVisitMethod
   content: string
   follow_up: string
+  sync_to_guardian: boolean
 }>({
   student_id: undefined,
   visit_date: new Date().toISOString().slice(0, 10),
   method: 'phone',
   content: '',
   follow_up: '',
+  sync_to_guardian: true,
 })
 
 const valid = computed(() => !!form.student_id && !!form.visit_date && form.content.trim().length > 0)
@@ -141,6 +151,7 @@ watch(
     form.method = 'phone'
     form.content = ''
     form.follow_up = ''
+    form.sync_to_guardian = true
     if (!students.value.length) {
       try {
         students.value = await getStudents()
@@ -161,6 +172,7 @@ async function submit() {
       method: form.method,
       content: form.content.trim(),
       follow_up: form.follow_up.trim() || null,
+      sync_to_guardian: form.sync_to_guardian,
     })
     ElMessage.success('已保存家访记录')
     emit('update:modelValue', false)
@@ -199,6 +211,20 @@ async function submit() {
   margin-bottom: 8px;
 }
 .hv-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.hv-sync {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--tui-surface-muted);
+  border: 1px solid var(--tui-border);
+}
+.hv-sync-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hv-sync-title { font-size: 12.5px; font-weight: 600; color: var(--tui-text-secondary); }
+.hv-sync-desc { font-size: 11px; line-height: 1.5; color: var(--tui-text-quiet); }
+.hv-sync :deep(.el-switch) { flex-shrink: 0; }
 @media (max-width: 767px) {
   .hv-grid2 { grid-template-columns: 1fr; }
 }

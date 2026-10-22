@@ -99,6 +99,72 @@ export function getContactLogs(studentId?: number) {
   return request.get<ContactLog[]>('/guardians/logs', { params: { student_id: studentId } })
 }
 
+export interface ContactLogQuery {
+  student_id?: number
+  keyword?: string
+  scene?: GuardianScene
+  channel?: GuardianChannel
+  status?: GuardianContactStatus
+  start?: string
+  end?: string
+  page?: number
+  page_size?: number
+}
+
+export interface ContactLogPage {
+  items: ContactLog[]
+  total: number
+}
+
+/** 台账分页查询（服务端筛选 + 分页，供页面台账区使用） */
+export function getContactLogsPaged(params: ContactLogQuery) {
+  return request.get<ContactLogPage>('/guardians/logs/page', { params })
+}
+
+export interface GuardianOverviewCountItem {
+  key: string
+  label: string
+  count: number
+}
+
+export interface GuardianOverview {
+  totals: { students: number; contacts: number; logs: number; sms: number }
+  by_scene: GuardianOverviewCountItem[]
+  by_channel: GuardianOverviewCountItem[]
+  trend: Array<{ day: string; count: number }>
+  top_students: Array<{ student_id: number; student_name: string; count: number }>
+}
+
+/** 家校沟通聚合（概览图表数据源，与台账筛选同口径） */
+export function getGuardianOverview(params: { days?: number; student_id?: number } = {}) {
+  return request.get<GuardianOverview>('/guardians/overview', { params })
+}
+
+/** 导出台账（xlsx blob） */
+export function exportContactLogs(params: ContactLogQuery = {}) {
+  return request.get<Blob>('/guardians/logs/export', { params, responseType: 'blob' })
+}
+
+/** 下载导入模板 */
+export function downloadContactLogTemplate() {
+  return request.get<Blob>('/guardians/logs/import-template', { responseType: 'blob' })
+}
+
+export interface ContactLogImportResult {
+  created: number
+  skipped: string[]
+  errors: string[]
+}
+
+/** 导入台账（xlsx） */
+export function importContactLogs(file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request.post<ContactLogImportResult>('/guardians/logs/import', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 export function createContactLog(data: {
   student_id: number
   guardian_id?: number | null

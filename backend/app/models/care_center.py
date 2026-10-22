@@ -35,6 +35,11 @@ class PraiseType(str, enum.Enum):
     BADGE = "badge"    # 徽章激励
 
 
+class FollowUpStatus(str, enum.Enum):
+    PENDING = "pending"  # 待回访
+    DONE = "done"        # 已回访
+
+
 class CareEvent(Base):
     __tablename__ = "care_events"
 
@@ -63,6 +68,10 @@ class HomeVisitRecord(Base):
     )
     content: Mapped[str] = mapped_column(Text)
     follow_up: Mapped[str | None] = mapped_column(Text, default=None)
+    follow_up_status: Mapped[FollowUpStatus] = mapped_column(
+        SAEnum(FollowUpStatus), default=FollowUpStatus.PENDING, index=True
+    )
+    follow_up_done_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 

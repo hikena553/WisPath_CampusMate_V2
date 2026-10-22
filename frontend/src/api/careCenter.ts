@@ -3,6 +3,8 @@ import request from '@/utils/request'
 export type CareEventType = 'birthday' | 'difficulty' | 'academic' | 'other'
 export type HomeVisitMethod = 'home' | 'phone' | 'video' | 'school' | 'other'
 export type PraiseType = 'praise' | 'badge'
+/** 家访回访状态：待回访 / 已回访 */
+export type FollowUpStatus = 'pending' | 'done'
 
 export interface CareEvent {
   id: number
@@ -26,6 +28,8 @@ export interface HomeVisit {
   method: HomeVisitMethod
   content: string
   follow_up: string | null
+  follow_up_status: FollowUpStatus
+  follow_up_done_at: string
   created_at: string
 }
 
@@ -46,7 +50,12 @@ export interface CareCenterOverview {
   event_count: number
   visit_count: number
   praise_count: number
+  /** 待回访家访数（status=pending） */
   pending_events: number
+  /** 未来（含今天）关怀事项数 */
+  upcoming_events: number
+  /** 已回访家访数（status=done） */
+  closed_visit_count: number
 }
 
 export const CARE_EVENT_LABEL: Record<CareEventType, string> = {
@@ -74,6 +83,11 @@ export const VISIT_METHOD_LABEL: Record<HomeVisitMethod, string> = {
 export const PRAISE_TYPE_LABEL: Record<PraiseType, string> = {
   praise: '表扬',
   badge: '徽章',
+}
+
+export const FOLLOW_UP_STATUS_LABEL: Record<FollowUpStatus, string> = {
+  pending: '待回访',
+  done: '已回访',
 }
 
 export function getCareOverview(month?: string) {
@@ -116,8 +130,17 @@ export function createHomeVisit(data: {
   method?: HomeVisitMethod
   content: string
   follow_up?: string | null
+  /** 是否同步到家校沟通台账（默认关） */
+  sync_to_guardian?: boolean
 }) {
   return request.post<HomeVisit>('/care-center/visits', data)
+}
+
+export function updateHomeVisit(
+  id: number,
+  data: { content?: string; follow_up?: string | null; follow_up_status?: FollowUpStatus }
+) {
+  return request.patch<HomeVisit>(`/care-center/visits/${id}`, data)
 }
 
 export function deleteHomeVisit(id: number) {

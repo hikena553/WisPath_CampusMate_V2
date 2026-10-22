@@ -13,6 +13,7 @@ from app.schemas.care_center import (
     CareEventOut,
     HomeVisitCreate,
     HomeVisitOut,
+    HomeVisitUpdate,
     PraiseCreate,
     PraiseOut,
 )
@@ -131,7 +132,28 @@ def create_visit(
         content=payload.content,
         method=payload.method,
         follow_up=payload.follow_up,
+        sync_to_guardian=payload.sync_to_guardian,
     )
+    return care_center_service.serialize_visit(db, record)
+
+
+@router.patch("/visits/{visit_id}", response_model=HomeVisitOut)
+def update_visit(
+    visit_id: int,
+    payload: HomeVisitUpdate,
+    user: User = Depends(_teacher_only),
+    db: Session = Depends(get_db),
+):
+    """更新家访记录（回访状态 / 后续计划 / 内容）。"""
+    record = care_center_service.update_visit(
+        db,
+        actor_id=user.id,
+        visit_id=visit_id,
+        payload=payload.model_dump(exclude_unset=True),
+        allow_any=user.role == UserRole.ADMIN,
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="家访记录不存在")
     return care_center_service.serialize_visit(db, record)
 
 
