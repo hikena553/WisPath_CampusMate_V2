@@ -48,9 +48,10 @@ html.dark {
   --sidebar-border: rgba(255,255,255,0.06);
 }
 
-/* ===== 网页端整体密度（管理端 / 教师端桌面端） =====
-   桌面端布局（AdminLayout / TeacherLayout）会把 --ui-zoom 置为 0.9，
-   侧边栏与内容区按 90% 呈现（等价浏览器缩放到 90%），让一屏容纳更多信息。
+/* ===== 网页端整体大小（管理端 / 教师端桌面端） =====
+   桌面端布局通过 --ui-zoom 控制侧边栏与内容区的整体呈现比例
+   （等价浏览器缩放到同一比例）：管理端置为 0.9 以便一屏容纳更多信息，
+   教师端为 1（不缩放）。
    默认 1：学生端、移动端不受影响。
    页面内按视口高度或像素自行计算尺寸的组件（整屏面板、画布、浮层气泡）
    用该变量换算，避免缩放后尺寸/坐标偏差。 */
@@ -300,3 +301,188 @@ html.dark .el-table tbody tr:hover > td {
 }
 
 
+
+/* ===== 全局提示条（ElMessage）：统一黑白极简，去掉绿/黄/红的彩色底 ===== */
+.el-message,
+.el-message--success,
+.el-message--warning,
+.el-message--info,
+.el-message--error {
+  --el-message-bg-color: var(--bg-card);
+  --el-message-border-color: rgba(17, 17, 17, 0.08);
+  --el-message-text-color: #111111;
+  --el-message-icon-color: #111111;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: 0 10px 28px rgba(17, 17, 17, 0.08), 0 2px 6px rgba(17, 17, 17, 0.04);
+}
+
+.el-message .el-message__content {
+  color: #111111;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.el-message .el-message__icon,
+.el-message .el-message__closeBtn {
+  color: #111111;
+}
+
+.el-message .el-message__closeBtn:hover {
+  color: #666666;
+}
+
+html.dark .el-message,
+html.dark .el-message--success,
+html.dark .el-message--warning,
+html.dark .el-message--info,
+html.dark .el-message--error {
+  --el-message-bg-color: #1e1e20;
+  --el-message-border-color: rgba(255, 255, 255, 0.1);
+  --el-message-text-color: #e8e8ea;
+  --el-message-icon-color: #e8e8ea;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+html.dark .el-message .el-message__content,
+html.dark .el-message .el-message__icon,
+html.dark .el-message .el-message__closeBtn {
+  color: #e8e8ea;
+}
+
+/* 顶栏下方的提示条（如登录成功）压在最上层，避免被侧边栏/桌宠遮挡 */
+.el-message {
+  z-index: 4000 !important;
+}
+
+/* ===== 退出登录确认框（ElMessageBox 二次确认）：极简卡片 =====
+   不使用 MessageBox 默认的「彩色警示图标 + 蓝色确定按钮 + 右上角 ×」，
+   改为「柔和红色徽章图标 + 居中标题/说明 + 等宽双按钮」，与全局黑白极简的
+   提示条（ElMessage）保持同一套视觉语言；文案与调用见 utils/logout.ts。 */
+.logout-confirm.el-message-box {
+  --el-messagebox-width: 320px;
+  --el-messagebox-border-radius: 18px;
+  --el-messagebox-box-shadow: 0 22px 56px rgba(17, 17, 17, 0.16), 0 2px 8px rgba(17, 17, 17, 0.04);
+  /* 归零默认内边距，由内容区与按钮区各自控制留白 */
+  --el-messagebox-padding-primary: 0;
+  /* 注意：必须用 min() 收窄，否则会覆盖掉 --el-messagebox-width 的 320px 上限，
+     卡片被撑到整屏宽（窄屏下还会因换行被顶到视口顶部，失去居中） */
+  max-width: min(320px, calc(100vw - 40px));
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+/* 内容区：图标徽章 + 标题 + 说明 */
+.logout-confirm .el-message-box__content {
+  padding: 26px 24px 0;
+}
+.logout-confirm .el-message-box__container {
+  display: block;
+  gap: 0;
+}
+.logout-confirm .logout-confirm__body {
+  text-align: center;
+}
+.logout-confirm .logout-confirm__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: rgba(245, 108, 108, 0.1);
+  color: var(--accent-red);
+}
+.logout-confirm .logout-confirm__icon svg {
+  width: 22px;
+  height: 22px;
+  vertical-align: middle;
+}
+.logout-confirm .logout-confirm__title {
+  margin: 14px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+.logout-confirm .logout-confirm__desc {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* 按钮区：等宽并排（替换默认的右对齐小按钮） */
+.logout-confirm .el-message-box__btns {
+  gap: 10px;
+  padding: 20px 24px 24px;
+}
+.logout-confirm .el-message-box__btns .el-button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 42px;
+  margin: 0;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+.logout-confirm .el-message-box__btns .el-button + .el-button {
+  margin-left: 0;
+}
+.logout-confirm .el-message-box__btns .logout-confirm__btn--cancel {
+  background: #f4f5f7;
+  color: #5c6269;
+}
+.logout-confirm .el-message-box__btns .logout-confirm__btn--cancel:hover {
+  background: #e8eaee;
+  color: #171a1d;
+}
+.logout-confirm .el-message-box__btns .logout-confirm__btn--cancel:active {
+  background: #dfe2e8;
+}
+.logout-confirm .el-message-box__btns .logout-confirm__btn--confirm {
+  background: var(--accent-red);
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(245, 108, 108, 0.26);
+}
+.logout-confirm .el-message-box__btns .logout-confirm__btn--confirm:hover {
+  background: #f05a5a;
+  color: #ffffff;
+}
+.logout-confirm .el-message-box__btns .logout-confirm__btn--confirm:active {
+  background: #e55454;
+}
+.logout-confirm .el-message-box__btns .el-button:active {
+  transform: scale(0.985);
+}
+.logout-confirm .el-message-box__btns .el-button:focus-visible {
+  outline: 2px solid rgba(17, 17, 17, 0.16);
+  outline-offset: 2px;
+}
+
+/* 深色模式：卡片/文字沿用主题变量，此处只覆盖写死的浅色值 */
+html.dark .logout-confirm.el-message-box {
+  --el-messagebox-box-shadow: 0 22px 56px rgba(0, 0, 0, 0.55);
+}
+html.dark .logout-confirm .logout-confirm__icon {
+  background: rgba(245, 108, 108, 0.16);
+}
+html.dark .logout-confirm .el-message-box__btns .logout-confirm__btn--cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a0a0a8;
+}
+html.dark .logout-confirm .el-message-box__btns .logout-confirm__btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8e8ea;
+}
+html.dark .logout-confirm .el-message-box__btns .logout-confirm__btn--cancel:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+html.dark .logout-confirm .el-message-box__btns .el-button:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.28);
+}

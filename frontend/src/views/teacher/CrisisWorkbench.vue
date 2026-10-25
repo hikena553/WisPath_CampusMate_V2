@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<template>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="心理预警工作台" sub="风险处置台 · 发现 → 干预 → 随访 → 闭环" fallback="/teacher">
       <template #right>
@@ -25,58 +25,14 @@
         </el-button>
       </TuiPageHero>
 
-      <!-- ===================== 桌面端骨架：处置态势带 + 三列泳道看板 =====================
-           为什么把「风险态势 / 闭环进度」压成一条态势带：这两段都是全局汇总，
-           纵向堆叠会占满首屏且与其它页面长相雷同；横向铺开后首屏即可读完全局态势，
-           纵向空间让给下方的处置动作（泳道看板）。 -->
+      <!-- ===================== 桌面端骨架：处置态势分析 + 三列泳道看板 =====================
+           态势区块（关键指标带 / 等级分布 / 处置阶段 / 趋势 / 处置时限 / 敏感词云）
+           统一交给 CrisisAnalytics 渲染（数据来自 /crisis/analytics 聚合接口），
+           首屏即可读完全局态势；纵向空间让给下方的处置动作（泳道看板）。 -->
       <template v-if="!isMobile">
-        <!-- ① 处置态势带：环形待处置量 + 四等级分布 + 四步闭环计数，横向一行铺开 -->
-        <section class="tui-section">
-          <div class="tui-section-head">
-            <h3><el-icon><WarningFilled /></el-icon>处置态势</h3>
-            <div class="tui-section-extra">
-              <span class="wb-total">高危未闭环 {{ highRisk.length }} · 已到期 {{ followUpDue.length }} · 共 {{ alerts.length }} 条</span>
-            </div>
-          </div>
-          <div class="wb-band">
-            <!-- 环形：待处置量（复用 .tui-ring，--pct = 待处置占比） -->
-            <div class="wb-band-ring">
-              <span class="tui-ring is-danger" :style="{ '--pct': alerts.length ? unresolved.length / alerts.length : 0 }">
-                <span class="tui-ring-num">{{ unresolved.length }}</span>
-              </span>
-              <span class="wb-ring-cap">待处置</span>
-            </div>
-            <!-- 四等级分布（复用 .wb-level） -->
-            <div class="wb-levels">
-              <div class="wb-level lv-danger">
-                <span class="wb-level-num">{{ dist.severe }}</span>
-                <span class="wb-level-label">高危</span>
-              </div>
-              <div class="wb-level lv-warn">
-                <span class="wb-level-num">{{ dist.moderate }}</span>
-                <span class="wb-level-label">中度</span>
-              </div>
-              <div class="wb-level lv-brand">
-                <span class="wb-level-num">{{ dist.mild }}</span>
-                <span class="wb-level-label">轻度</span>
-              </div>
-              <div class="wb-level lv-muted">
-                <span class="wb-level-num">{{ dist.other }}</span>
-                <span class="wb-level-label">正常 / 其它</span>
-              </div>
-            </div>
-            <!-- 四步闭环计数（复用 .wb-step，横向链路） -->
-            <div class="wb-steps wb-band-steps">
-              <div v-for="s in steps" :key="s.key" class="wb-step" :class="`step-${s.key}`">
-                <span class="wb-step-icon"><el-icon :size="16"><component :is="s.icon" /></el-icon></span>
-                <span class="wb-step-num">{{ s.count }}</span>
-                <span class="wb-step-label">{{ s.label }}</span>
-              </div>
-            </div>
-          </div>
-        </section>
+        <CrisisAnalytics :analytics="analytics" />
 
-        <!-- ② 预警清单：三列泳道看板（待处置 / 随访中 / 已闭环） -->
+        <!-- 预警清单：三列泳道看板（待处置 / 随访中 / 已闭环） -->
         <section class="tui-section">
           <div class="tui-section-head">
             <h3><el-icon><List /></el-icon>预警清单</h3>
@@ -176,64 +132,13 @@
         </section>
       </template>
 
-      <!-- ===================== 移动端：完全保留原有纵向结构（类名 / 顺序不变） ===================== -->
+      <!-- ===================== 移动端：态势分析 + 处置时限 + 预警清单（类名 / 顺序不变） ===================== -->
       <template v-if="isMobile">
 
-      <!-- ① 风险态势：分布环 + 四等级（单行排布） -->
-      <section class="tui-section">
-        <div class="tui-section-head">
-          <h3><el-icon><WarningFilled /></el-icon>风险态势</h3>
-          <div class="tui-section-extra"><span class="wb-total">高危未闭环 {{ highRisk.length }} · 共 {{ alerts.length }} 条</span></div>
-        </div>
-        <div class="tui-section-hint danger">
-          <el-icon><InfoFilled /></el-icon>
-          <span>一行速览：环形为待处置总量，右侧四档按等级分布（高危 / 中度 / 轻度 / 正常·其它），高危未闭环请优先处置。</span>
-        </div>
-        <div class="wb-situation">
-          <div class="wb-ring-wrap">
-            <span class="ring" :style="ringStyle"><span class="ring-mid">{{ unresolved.length }}</span></span>
-            <span class="wb-ring-cap">待处置</span>
-          </div>
-          <div class="wb-levels">
-            <div class="wb-level lv-danger">
-              <span class="wb-level-num">{{ dist.severe }}</span>
-              <span class="wb-level-label">高危</span>
-            </div>
-            <div class="wb-level lv-warn">
-              <span class="wb-level-num">{{ dist.moderate }}</span>
-              <span class="wb-level-label">中度</span>
-            </div>
-            <div class="wb-level lv-brand">
-              <span class="wb-level-num">{{ dist.mild }}</span>
-              <span class="wb-level-label">轻度</span>
-            </div>
-            <div class="wb-level lv-muted">
-              <span class="wb-level-num">{{ dist.other }}</span>
-              <span class="wb-level-label">正常 / 其它</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <!-- ① 处置态势：指标带 + 图表（移动端纵向堆叠）+ 处置时限 + 敏感词云 -->
+      <CrisisAnalytics :analytics="analytics" />
 
-      <!-- ② 闭环进度：处置步骤条 -->
-      <section class="tui-section">
-        <div class="tui-section-head">
-          <h3><el-icon><Connection /></el-icon>闭环进度</h3>
-        </div>
-        <div class="tui-section-hint success">
-          <el-icon><CircleCheckFilled /></el-icon>
-          <span>四步闭环：发现 → 干预 → 随访 → 闭环，下方数字为各阶段条数。</span>
-        </div>
-        <div class="wb-steps">
-          <div v-for="s in steps" :key="s.key" class="wb-step" :class="`step-${s.key}`">
-            <span class="wb-step-icon"><el-icon :size="16"><component :is="s.icon" /></el-icon></span>
-            <span class="wb-step-num">{{ s.count }}</span>
-            <span class="wb-step-label">{{ s.label }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- ③ 处置时限：时限进度条 -->
+      <!-- ② 处置时限：时限进度条 -->
       <section class="tui-section">
         <div class="tui-section-head">
           <h3><el-icon><AlarmClock /></el-icon>处置时限</h3>
@@ -268,7 +173,7 @@
         </div>
       </section>
 
-      <!-- ④ 预警清单：筛选 + 列表 + 分页 -->
+      <!-- ③ 预警清单：筛选 + 列表 + 分页 -->
       <section class="tui-section">
         <div class="tui-section-head">
           <h3><el-icon><List /></el-icon>预警清单</h3>
@@ -424,22 +329,20 @@ import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
+import CrisisAnalytics from '@/components/teacher/crisis/CrisisAnalytics.vue'
 import {
   Refresh,
   WarningFilled,
   Close,
   InfoFilled,
-  Connection,
-  CircleCheckFilled,
   AlarmClock,
   List,
-  FirstAidKit,
-  Calendar,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
-import { getAlerts, resolveAlert, interveneAlert } from '@/api/crisis'
+import { getAlerts, resolveAlert, interveneAlert, getCrisisAnalytics } from '@/api/crisis'
 import type { CrisisAlert } from '@/types'
+import type { CrisisAnalytics as CrisisAnalyticsData } from '@/api/crisis'
 
 const { isMobile } = useResponsive()
 
@@ -447,6 +350,8 @@ const route = useRoute()
 const router = useRouter()
 
 const alerts = ref<CrisisAlert[]>([])
+/** 聚合分析（等级分布 / 处置阶段 / 趋势 / 敏感词 / 时限），由后端 /crisis/analytics 统一计算 */
+const analytics = ref<CrisisAnalyticsData | null>(null)
 
 /** 来自学生详情的闭环参数：?student_id= 只看该学生，?alert_id= 直接打开该条处置 */
 const studentFilter = computed(() => Number(route.query.student_id) || null)
@@ -508,41 +413,7 @@ const aiDraft = computed(() => {
 
 const unresolved = computed(() => alerts.value.filter(a => !a.resolved))
 const highRisk = computed(() => alerts.value.filter(a => !a.resolved && a.level === 'severe'))
-const intervenedCount = computed(() => alerts.value.filter(a => a.intervention_type).length)
-const resolvedCount = computed(() => alerts.value.filter(a => a.resolved).length)
 const followingUp = computed(() => alerts.value.filter(a => !a.resolved && a.follow_up_date).length)
-
-/** 等级分布（驱动风险分布环 + 左侧色带等级卡） */
-const dist = computed(() => {
-  const severe = alerts.value.filter(a => a.level === 'severe').length
-  const moderate = alerts.value.filter(a => a.level === 'moderate').length
-  const mild = alerts.value.filter(a => a.level === 'mild').length
-  return {
-    severe,
-    moderate,
-    mild,
-    other: alerts.value.length - severe - moderate - mild,
-  }
-})
-
-/** 风险分布环：conic-gradient 纯 CSS，无新依赖 */
-const ringStyle = computed(() => {
-  const total = alerts.value.length || 1
-  const a = (dist.value.severe / total) * 100
-  const b = a + (dist.value.moderate / total) * 100
-  const c = b + (dist.value.mild / total) * 100
-  return {
-    background: `conic-gradient(var(--tui-danger) 0 ${a}%, var(--tui-warn) ${a}% ${b}%, var(--tui-brand) ${b}% ${c}%, var(--tui-surface-sunken) ${c}% 100%)`,
-  }
-})
-
-/** 处置步骤条 */
-const steps = computed(() => [
-  { key: 'found', label: '发现', count: alerts.value.length, icon: WarningFilled },
-  { key: 'intervene', label: '干预', count: intervenedCount.value, icon: FirstAidKit },
-  { key: 'follow', label: '随访', count: followingUp.value, icon: Calendar },
-  { key: 'closed', label: '闭环', count: resolvedCount.value, icon: CircleCheckFilled },
-])
 
 /** 随访日期已到期且未闭环 */
 function isFollowUpDue(row: CrisisAlert) {
@@ -646,6 +517,15 @@ function formatTime(t: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+/** 聚合分析：与列表并行拉取，失败时保留上一次数据、不阻塞预警清单 */
+async function loadAnalytics() {
+  try {
+    analytics.value = await getCrisisAnalytics()
+  } catch {
+    /* 静默：态势区块保持上一次数据或空态 */
+  }
+}
+
 async function loadAlerts() {
   loading.value = true
   try {
@@ -660,6 +540,7 @@ async function loadAlerts() {
   } finally {
     loading.value = false
   }
+  loadAnalytics()
 }
 
 function openIntervene(row: CrisisAlert) {
@@ -713,22 +594,6 @@ onMounted(loadAlerts)
 
 <style scoped>
 .wb-total { font-size: 11.5px; color: var(--tui-text-quiet); }
-
-/* ===== 桌面端 处置态势带：环形 + 四等级 + 四步闭环，横向一行铺开 =====
-   三列用「自适应网格」而非纵向堆叠：环/等级/步骤各占一列，首屏一屏读完全局态势。 */
-.wb-band {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.05fr);
-  gap: 14px;
-  align-items: center;
-}
-.wb-band-ring {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-}
-.wb-band-steps { flex: 1; }
 
 /* ===== 桌面端 三列泳道看板 ===== */
 .wb-lanes {
@@ -824,129 +689,6 @@ onMounted(loadAlerts)
 /* 空泳道：沿用 .tui-empty，仅收紧留白，避免三列大空块压垮看板 */
 .wb-lane-empty { padding: 18px 10px; gap: 6px; }
 .wb-lane-empty .tui-empty-icon { width: 40px; height: 40px; }
-
-/* ===== 风险态势：分布环 + 四等级「单行」排布 =====
-   原实现桌面端是 2×2 网格、移动端竖排，导致整块高达 3 行；现统一压成一行：
-   环形 + 4 个等宽等级卡（色带由左侧改为顶部，横向排列时更整齐）。 */
-.wb-situation {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
-.wb-ring-wrap {
-  flex: 0 0 62px;
-  width: 62px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-.ring {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-.ring::after {
-  content: '';
-  position: absolute;
-  inset: 7px;
-  border-radius: 50%;
-  background: var(--tui-surface);
-}
-.ring-mid {
-  position: relative;
-  z-index: 1;
-  font-size: 16px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--tui-text);
-}
-.wb-ring-cap { font-size: 10px; color: var(--tui-text-quiet); white-space: nowrap; }
-
-.wb-levels {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-.wb-level {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  min-width: 0;
-  padding: 8px 4px;
-  border-radius: var(--tui-radius-sm);
-  background: var(--tui-surface-muted);
-  border-top: 3px solid var(--tui-border-strong);
-}
-.wb-level.lv-danger { border-top-color: var(--tui-danger); background: var(--tui-danger-soft); }
-.wb-level.lv-warn { border-top-color: var(--tui-warn); background: var(--tui-warn-soft); }
-.wb-level.lv-brand { border-top-color: var(--tui-brand); background: var(--tui-brand-soft); }
-.wb-level.lv-muted { border-top-color: var(--tui-border-strong); }
-.wb-level-num {
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.15;
-  color: var(--tui-text);
-  font-variant-numeric: tabular-nums;
-}
-.wb-level-label {
-  font-size: 10.5px;
-  line-height: 1.2;
-  color: var(--tui-text-tertiary);
-  white-space: nowrap;
-}
-
-/* ===== 闭环进度：处置步骤条 ===== */
-.wb-steps { display: flex; align-items: flex-start; }
-.wb-step {
-  flex: 1;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-}
-.wb-step:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 15px;
-  left: 50%;
-  width: 100%;
-  height: 2px;
-  background: var(--tui-border-strong);
-  z-index: 0;
-}
-.wb-step-icon {
-  position: relative;
-  z-index: 1;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.wb-step.step-found .wb-step-icon { background: var(--tui-danger-soft); color: var(--tui-danger); }
-.wb-step.step-intervene .wb-step-icon { background: var(--tui-warn-soft); color: var(--tui-warn); }
-.wb-step.step-follow .wb-step-icon { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
-.wb-step.step-closed .wb-step-icon { background: var(--tui-success-soft); color: var(--tui-success); }
-.wb-step-num {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--tui-text);
-  font-variant-numeric: tabular-nums;
-}
-.wb-step-label { font-size: 11px; color: var(--tui-text-quiet); }
 
 /* ===== 处置时限：时限进度条 ===== */
 .wb-deadlines { display: flex; flex-direction: column; gap: 10px; }
@@ -1060,18 +802,4 @@ onMounted(loadAlerts)
   cursor: pointer;
 }
 .wb-scope-clear:hover { color: var(--tui-text); }
-
-@media (max-width: 767px) {
-  /* 风险态势保持「一行」：只收紧间距与尺寸，不再竖排堆叠 */
-  .wb-situation { gap: 6px; }
-  .wb-ring-wrap { flex: 0 0 52px; width: 52px; }
-  .ring { width: 48px; height: 48px; }
-  .ring::after { inset: 6px; }
-  .ring-mid { font-size: 14px; }
-  .wb-levels { gap: 4px; }
-  .wb-level { padding: 7px 2px; }
-  .wb-level-num { font-size: 15px; }
-  .wb-level-label { font-size: 10px; }
-  .wb-alert-meta { padding: 9px 13px 0; }
-}
 </style>

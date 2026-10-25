@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿<template>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="审批管理" :sub="totalPending + ' 条待处理'" fallback="/teacher">
       <template #right>
@@ -28,47 +28,8 @@
            作为进入具体待办前的一条横向概览——先看流程走到哪一步、当前聚焦的是谁，
            再决定去处理哪一类待办。移动端仍沿用下方原位节点，不受影响。 -->
       <div v-if="!isMobile" class="ap-band">
-        <!-- 链路四步都带真实数据（近 FLOW_DAYS 天口径）：提交 → 受理归类 → 审批 → 归档留痕 -->
-        <ol class="tui-steps h ap-lifecycle">
-          <li class="tui-step is-done">
-            <span class="tui-step-dot"><el-icon :size="11"><Check /></el-icon></span>
-            <span class="tui-step-line" />
-            <div class="tui-step-body">
-              <div class="tui-step-title">提交</div>
-              <div class="tui-step-desc">近 {{ FLOW_DAYS }} 天提交 {{ stats?.total ?? 0 }} 条</div>
-            </div>
-          </li>
-          <li class="tui-step is-done">
-            <span class="tui-step-dot"><el-icon :size="11"><Check /></el-icon></span>
-            <span class="tui-step-line" />
-            <div class="tui-step-body">
-              <div class="tui-step-title">受理</div>
-              <div class="tui-step-desc">{{ flowKindSummary }}</div>
-            </div>
-          </li>
-          <li class="tui-step" :class="totalPending ? 'is-current' : 'is-done'">
-            <span class="tui-step-dot">
-              <el-icon v-if="!totalPending" :size="11"><Check /></el-icon>
-              <template v-else>3</template>
-            </span>
-            <span class="tui-step-line" />
-            <div class="tui-step-body">
-              <div class="tui-step-title">审批</div>
-              <div class="tui-step-desc">{{ totalPending ? `当前待处理 ${totalPending} 条` : '已全部处理完毕' }}</div>
-            </div>
-          </li>
-          <li class="tui-step" :class="totalPending ? 'is-todo' : 'is-done'">
-            <span class="tui-step-dot">
-              <el-icon v-if="!totalPending" :size="11"><Check /></el-icon>
-              <template v-else>4</template>
-            </span>
-            <span class="tui-step-line" />
-            <div class="tui-step-body">
-              <div class="tui-step-title">归档</div>
-              <div class="tui-step-desc">通过 {{ stats?.approved ?? 0 }} · 拒绝 {{ stats?.rejected ?? 0 }}</div>
-            </div>
-          </li>
-        </ol>
+        <!-- 链路四步：数据全部来自 /api/approval/stats 的近 N 天口径与待处理量（无写死数字） -->
+        <TuiSteps class="ap-lifecycle" :steps="flowSteps" />
 
         <div v-if="studentFilter" class="ap-focus">
           <el-icon :size="14"><User /></el-icon>
@@ -122,46 +83,7 @@
       </div>
 
       <!-- 链路（移动端原位保留）：一条申请从提交到归档的全流程，当前阶段由待处理量实时点亮 -->
-      <ol v-if="isMobile" class="tui-steps h ap-lifecycle">
-        <li class="tui-step is-done">
-          <span class="tui-step-dot"><el-icon :size="11"><Check /></el-icon></span>
-          <span class="tui-step-line" />
-          <div class="tui-step-body">
-            <div class="tui-step-title">提交</div>
-            <div class="tui-step-desc">近 {{ FLOW_DAYS }} 天提交 {{ stats?.total ?? 0 }} 条</div>
-          </div>
-        </li>
-        <li class="tui-step is-done">
-          <span class="tui-step-dot"><el-icon :size="11"><Check /></el-icon></span>
-          <span class="tui-step-line" />
-          <div class="tui-step-body">
-            <div class="tui-step-title">受理</div>
-            <div class="tui-step-desc">{{ flowKindSummary }}</div>
-          </div>
-        </li>
-        <li class="tui-step" :class="totalPending ? 'is-current' : 'is-done'">
-          <span class="tui-step-dot">
-            <el-icon v-if="!totalPending" :size="11"><Check /></el-icon>
-            <template v-else>3</template>
-          </span>
-          <span class="tui-step-line" />
-          <div class="tui-step-body">
-            <div class="tui-step-title">审批</div>
-            <div class="tui-step-desc">{{ totalPending ? `当前待处理 ${totalPending} 条` : '已全部处理完毕' }}</div>
-          </div>
-        </li>
-        <li class="tui-step" :class="totalPending ? 'is-todo' : 'is-done'">
-          <span class="tui-step-dot">
-            <el-icon v-if="!totalPending" :size="11"><Check /></el-icon>
-            <template v-else>4</template>
-          </span>
-          <span class="tui-step-line" />
-          <div class="tui-step-body">
-            <div class="tui-step-title">归档</div>
-            <div class="tui-step-desc">通过 {{ stats?.approved ?? 0 }} · 拒绝 {{ stats?.rejected ?? 0 }}</div>
-          </div>
-        </li>
-      </ol>
+      <TuiSteps v-if="isMobile" class="ap-lifecycle" :steps="flowSteps" />
 
       <!-- 闭环（移动端原位保留）：从学生成长档案聚焦该生审批事项 -->
       <div v-if="isMobile && studentFilter" class="ap-focus">
@@ -982,6 +904,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
+import TuiSteps, { type TuiStepItem } from '@/components/common/TuiSteps.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import ApprovalCardStack from '@/components/teacher/ui/ApprovalCardStack.vue'
 import { ElMessage } from 'element-plus'
@@ -1074,20 +997,28 @@ const totalPending = computed(() => pendingLeaves.value.length + pendingTickets.
 /** 审批流程统计口径（天）：链路条与统计页共用，避免两处天数各写一个 */
 const FLOW_DAYS = 30
 
-/** 三类事项的流程分布：受理环节要说明「自动归类到哪几类、各多少」 */
-const flowKinds = computed(() => {
-  const k = stats.value?.by_kind
+/**
+ * 流程条五步（提交 → 受理 → 审批 → 归档 → 结束）。
+ * 全部取接口真实数据：submitted / accepted / approved_window / rejected_window 为近 FLOW_DAYS 天口径，
+ * 审批步用前端待处理合计（与列表、KPI 卡片同源），不再有任何写死数字。
+ * 归档后的「结束」表示本轮审批全部办结、流程终结，便于一眼看出是否还有在手事项。
+ */
+const flowSteps = computed<TuiStepItem[]>(() => {
+  const s = stats.value
+  const submitted = s?.submitted ?? 0
+  const accepted = s?.accepted ?? 0
+  const pending = totalPending.value
+  const approved = s?.approved_window ?? 0
+  const rejected = s?.rejected_window ?? 0
+  const archived = approved + rejected
   return [
-    { key: 'leave', label: '请假申请', short: '请假', count: k?.leave?.count ?? 0, pending: k?.leave?.pending ?? 0 },
-    { key: 'ticket', label: '办事工单', short: '办事', count: k?.ticket?.count ?? 0, pending: k?.ticket?.pending ?? 0 },
-    { key: 'material', label: '材料档案', short: '材料', count: k?.material?.count ?? 0, pending: k?.material?.pending ?? 0 },
+    { title: '提交', desc: `近 ${FLOW_DAYS} 天提交 ${submitted} 条`, state: submitted > 0 ? 'done' : 'todo' },
+    { title: '受理', desc: `已受理 ${accepted} 条`, state: accepted > 0 ? 'done' : (submitted > 0 ? 'current' : 'todo') },
+    { title: '审批', desc: pending ? `当前待处理 ${pending} 条` : '已全部处理完毕', state: pending ? 'current' : 'done' },
+    { title: '归档', desc: `近 ${FLOW_DAYS} 天通过 ${approved} · 驳回 ${rejected}`, state: pending ? 'todo' : (archived > 0 ? 'done' : 'todo') },
+    { title: '结束', desc: pending ? `还有 ${pending} 条未办结` : '本轮审批已结束', state: pending ? 'todo' : 'done' },
   ]
 })
-
-/** 受理环节的一句话归类结果 */
-const flowKindSummary = computed(() =>
-  flowKinds.value.map((k) => `${k.short} ${k.count}`).join(' · '),
-)
 
 /** 桌面端类别 Tab：id 与各分区锚点一一对应（'' 代表「全部」），点击复用 jumpTo() 的分段与定位逻辑 */
 const categoryTabs = computed(() => [

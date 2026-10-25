@@ -37,6 +37,16 @@ class HomeVisitCreate(BaseModel):
     method: str = "phone"
     content: str = Field(min_length=1)
     follow_up: str | None = None
+    # 可选：同步到家校沟通台账（默认关，保持向后兼容）
+    sync_to_guardian: bool = False
+
+
+class HomeVisitUpdate(BaseModel):
+    """家访记录更新：回访状态 / 后续计划 / 内容（局部更新，未传字段不动）。"""
+
+    content: str | None = Field(default=None, min_length=1)
+    follow_up: str | None = None
+    follow_up_status: str | None = None
 
 
 class HomeVisitOut(BaseModel):
@@ -48,6 +58,8 @@ class HomeVisitOut(BaseModel):
     method: str
     content: str
     follow_up: str | None = None
+    follow_up_status: str = "pending"
+    follow_up_done_at: str = ""
     created_at: str = ""
 
 
@@ -84,4 +96,45 @@ class CareCenterOverview(BaseModel):
     event_count: int = 0
     visit_count: int = 0
     praise_count: int = 0
+    # 待回访家访数（follow_up_status == pending），语义修正
     pending_events: int = 0
+    # 未来（含今天）的关怀事项数
+    upcoming_events: int = 0
+    # 已回访家访数（follow_up_status == done）
+    closed_visit_count: int = 0
+
+
+# ── 学生端「我的关怀」（只读） ────────────────────────────────
+
+
+class StudentCareSummary(BaseModel):
+    praises: int = 0
+    visits: int = 0
+    records: int = 0
+
+
+class StudentCarePraiseOut(BaseModel):
+    id: int
+    praise_type: str = "praise"
+    badge_name: str | None = None
+    reason: str = ""
+    occurred_on: date | None = None
+    teacher_name: str = ""
+
+
+class StudentCareRecordOut(BaseModel):
+    id: int
+    record_type: str = "care"
+    content: str = ""
+    created_at: str = ""
+    teacher_name: str = ""
+
+
+class StudentCareVisitOut(BaseModel):
+    id: int
+    visit_date: date
+    method: str = "phone"
+    content: str = ""
+    follow_up: str | None = None
+    follow_up_status: str = "pending"
+    teacher_name: str = ""

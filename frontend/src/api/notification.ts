@@ -6,6 +6,8 @@ export interface Notification {
   content: string
   type: string
   is_read: boolean
+  /** 提醒级别：normal / important / urgent（决定学生端提醒强度） */
+  level?: 'normal' | 'important' | 'urgent'
   link?: string
   related_id?: number
   sender_name?: string
@@ -15,6 +17,8 @@ export interface Notification {
 export interface NotificationCount {
   total: number
   unread: number
+  /** 未读的紧急通知数（导航强提醒用） */
+  urgent_unread?: number
 }
 
 // 获取通知列表

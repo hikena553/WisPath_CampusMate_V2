@@ -5,10 +5,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_role
 from app.models.user import User, UserRole
 from app.models.crisis import AIDialogSummary, InterventionType
-from app.schemas.crisis import AIDialogSummaryOut, CrisisResolve, CrisisInterveneIn
+from app.schemas.crisis import AIDialogSummaryOut, CrisisAnalyticsOut, CrisisResolve, CrisisInterveneIn
 from app.services import guardian_service
 from app.utils.enum_helpers import safe_enum_val
 
@@ -104,6 +104,23 @@ def _alert_out(db: Session, a: AIDialogSummary) -> AIDialogSummaryOut:
         resolved_at=a.resolved_at.isoformat() if a.resolved_at else None,
         follow_up_date=str(a.follow_up_date) if a.follow_up_date else None,
     )
+
+
+@router.get("/analytics", response_model=CrisisAnalyticsOut)
+def get_crisis_analytics(
+    days: int = 30,
+    top_n: int = 40,
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """心理预警聚合分析：等级分布 / 处置阶段 / 趋势 / 敏感词 / 处置时限。
+
+    教师仅统计自己名下学生的预警（User.tutor_id == user.id），管理员统计全部，
+    与列表接口 _filter_by_tutor 口径一致。
+    """
+    from app.services.crisis_service import analytics as crisis_analytics
+    teacher_id = None if user.role == UserRole.ADMIN else user.id
+    return crisis_analytics(db, teacher_id=teacher_id, days=days, top_n=top_n)
 
 
 @router.get("/follow-up-due", response_model=list[AIDialogSummaryOut])

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.learning_event import LearningEvent
 from app.models.setting import SystemSetting
-from app.models.teacher_task import TaskSourceType, TeacherTask
+from app.models.teacher_task import TaskPriority, TaskSourceType, TeacherTask
 from app.models.user import User, UserRole
 from app.services import learning_event_service, teacher_task_service
 
@@ -203,6 +203,60 @@ def scan(
         "created": created,
         "matched": matched,
     }
+
+
+def scan_for_teacher(db: Session, teacher_id: int, *, today: date | None = None) -> dict:
+    """教师范围的智能评估：只扫描该教师名下学生，命中规则即建任务（同日幂等）。
+
+    与全局 scan() 的区别：不写「每日一次」标记、不做全库扫描，供教师在任务清单页
+    主动点「智能生成」时即时评估使用；同一规则+同一学生+同一自然日仍只生成一次。
+    """
+    day = today or date.today()
+    rules = load_rules(db)
+
+    student_ids = [
+        row[0]
+        for row in db.query(User.id).filter(
+            User.role == UserRole.STUDENT,
+            User.tutor_id == teacher_id,
+        ).all()
+    ]
+
+    created = 0
+    matched: list[dict] = []
+    for student_id in student_ids:
+        student = db.query(User).filter(User.id == student_id).first()
+        if not student:
+            continue
+        for rule in rules:
+            value, hit = _evaluate(db, rule, student_id)
+            if not hit:
+                continue
+            if _already_created_today(
+                db, teacher_id=teacher_id, student_id=student_id, rule_code=rule["code"], day=day
+            ):
+                continue
+            label = rule.get("metric_label") or "指标"
+            due = day + timedelta(days=int(rule.get("due_in_days", 1)))
+            teacher_task_service.create_task(
+                db,
+                teacher_id=teacher_id,
+                title=f"{rule['name']}：{student.name}",
+                detail=f"{label}为 {value:g}，命中规则 {rule['code']}，请及时跟进",
+                student_id=student_id,
+                due_at=due,
+                # 提醒日 = 截止日：生成后即出现在日程视图的对应日期上
+                remind_at=due,
+                source_type=TaskSourceType.ALERT,
+                source_id=None,
+                rule_code=rule["code"],
+                priority=TaskPriority.HIGH,
+            )
+            created += 1
+            matched.append({"student_id": student_id, "student_name": student.name, "rule": rule["code"], "value": value})
+
+    logger.info("[ALERT-PIPELINE] teacher=%s scanned=%s created=%s", teacher_id, len(student_ids), created)
+    return {"date": day.isoformat(), "scanned": len(student_ids), "created": created, "matched": matched}
 
 
 def recent_alert_tasks(db: Session, teacher_id: int, days: int = 7, limit: int = 50) -> list[dict]:

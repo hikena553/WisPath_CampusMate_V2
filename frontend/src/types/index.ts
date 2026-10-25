@@ -15,9 +15,12 @@ export interface UserInfo {
   title?: string | null
   hometown?: string | null
   phone?: string | null
+  qq?: string | null
   department?: string | null
   class_name?: string | null
   password_changed?: boolean
+  /** 个性签名：个人中心可编辑，他人点开个人主页时展示 */
+  signature?: string | null
 }
 
 export interface LoginRequest {
@@ -29,6 +32,9 @@ export interface LoginResponse {
   access_token: string
   token_type: string
   user: UserInfo
+  /** 已绑定手机号/QQ 时下发的本设备一键登录凭证 */
+  quick_token?: string | null
+  quick_channels?: string[]
 }
 
 export interface ChatMessage {

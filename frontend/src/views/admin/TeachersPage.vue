@@ -58,7 +58,7 @@
           <el-tag type="primary">{{ row.student_count }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="110" fixed="right">
+      <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
           <div class="table-actions">
             <ActionButtons
@@ -67,6 +67,7 @@
               :show-view-students="true"
               @view-students="openDrawer(row)"
               @reset-success="loadTeachers"
+              @task-dispatched="loadTeachers"
             />
           </div>
         </template>

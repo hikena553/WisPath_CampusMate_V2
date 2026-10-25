@@ -1,9 +1,25 @@
 <template>
   <div class="tui-page">
-    <SubPageHeader title="家校沟通" sub="家长零账号可完整留痕" fallback="/teacher" />
+    <SubPageHeader title="家校沟通" sub="家长零账号可完整留痕" fallback="/teacher">
+      <!-- 移动端吸顶栏「更多」：导出 / 模板 / 导入（桌面端不渲染 #right，改由 TuiPageHero 承载） -->
+      <template #right>
+        <el-dropdown trigger="click" @command="onHeadCommand">
+          <button class="gp-more-btn" type="button" aria-label="更多操作">
+            <el-icon :size="18"><MoreFilled /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="export"><el-icon><Download /></el-icon>导出台账 Excel</el-dropdown-item>
+              <el-dropdown-item command="template"><el-icon><Document /></el-icon>下载导入模板</el-dropdown-item>
+              <el-dropdown-item command="import" divided><el-icon><Upload /></el-icon>导入台账 Excel</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </template>
+    </SubPageHeader>
 
     <div class="tui-content">
-      <!-- 桌面端特色头部：沟通语义色 + 会话图标；右侧保留本页专属的「学生选择器」 -->
+      <!-- 桌面端特色头部：沟通语义色 + 会话图标；右侧保留本页专属的「学生选择器 + 更多」 -->
       <TuiPageHero
         v-if="!isMobile"
         title="家校沟通"
@@ -11,19 +27,57 @@
         :icon="ChatDotRound"
         tone="violet"
       >
-        <el-select v-model="studentId" filterable placeholder="选择学生" class="gp-select" @change="onStudentChange">
-          <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />
+        <el-select
+          v-model="studentId"
+          filterable
+          remote
+          reserve-keyword
+          :remote-method="onStudentSearch"
+          :loading="studentSearching"
+          placeholder="按姓名 / 学号搜索学生"
+          class="gp-select"
+          @change="onStudentChange"
+        >
+          <el-option v-for="s in studentOptions" :key="s.id" :label="studentLabel(s)" :value="s.id" />
         </el-select>
+        <el-dropdown trigger="click" @command="onHeadCommand">
+          <el-button size="small" :icon="MoreFilled">更多</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="export"><el-icon><Download /></el-icon>导出台账 Excel</el-dropdown-item>
+              <el-dropdown-item command="template"><el-icon><Document /></el-icon>下载导入模板</el-dropdown-item>
+              <el-dropdown-item command="import" divided><el-icon><Upload /></el-icon>导入台账 Excel</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </TuiPageHero>
 
       <!-- 移动端整行学生选择 -->
       <div v-if="isMobile" class="tui-card gp-picker">
         <div class="tui-card-body">
-          <el-select v-model="studentId" filterable placeholder="选择学生" style="width: 100%" @change="onStudentChange">
-            <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />
+          <el-select
+            v-model="studentId"
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="onStudentSearch"
+            :loading="studentSearching"
+            placeholder="按姓名 / 学号搜索学生"
+            style="width: 100%"
+            @change="onStudentChange"
+          >
+            <el-option v-for="s in studentOptions" :key="s.id" :label="studentLabel(s)" :value="s.id" />
           </el-select>
         </div>
       </div>
+
+      <!-- 沟通概览（聚合数据与图表）：桌面端在主从分栏之上，移动端在同位置堆叠 -->
+      <GuardianOverviewPanel
+        :overview="overview"
+        :days="OVERVIEW_DAYS"
+        :student-name="currentStudent?.name || ''"
+        @focus="focusStudent"
+      />
 
       <div v-if="!studentId" class="tui-card">
         <div class="tui-empty">
@@ -92,7 +146,7 @@
           <div class="tui-section-head">
             <h3><el-icon><ChatDotRound /></el-icon>沟通台账时间轴</h3>
             <div class="tui-section-extra">
-              <span class="gp-count">{{ logs.length }} 条</span>
+              <span class="gp-count">{{ logTotal }} 条</span>
               <el-button size="small" :icon="Plus" @click="openLogCreate">记录沟通</el-button>
             </div>
           </div>
@@ -100,13 +154,45 @@
             <el-icon><InfoFilled /></el-icon>
             <span>每次沟通按时间倒序留痕，家长零账号也能通过只读链接查看；危机类记录不会生成分享链接。</span>
           </div>
+
+          <!-- 台账筛选工具条：关键词防抖 + 场景 / 渠道 / 状态 + 日期区间，全部服务端筛选 -->
+          <div class="tui-section-tools gp-tools">
+            <el-input
+              v-model="filters.keyword"
+              placeholder="搜索沟通内容 / 家长"
+              clearable
+              :prefix-icon="Search"
+              @input="onKeywordInput"
+            />
+            <el-select v-model="filters.scene" placeholder="场景" clearable @change="onFilterChange">
+              <el-option v-for="s in SCENE_OPTIONS" :key="s" :label="GUARDIAN_SCENE_LABEL[s]" :value="s" />
+            </el-select>
+            <el-select v-model="filters.channel" placeholder="渠道" clearable @change="onFilterChange">
+              <el-option v-for="c in CHANNEL_OPTIONS" :key="c" :label="GUARDIAN_CHANNEL_LABEL[c]" :value="c" />
+            </el-select>
+            <el-select v-model="filters.status" placeholder="状态" clearable @change="onFilterChange">
+              <el-option v-for="st in STATUS_OPTIONS" :key="st" :label="GUARDIAN_STATUS_LABEL[st]" :value="st" />
+            </el-select>
+            <el-date-picker
+              v-model="dateRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              class="gp-range"
+              @change="onFilterChange"
+            />
+            <button v-if="hasFilters" class="gp-link" @click="resetFilters">重置筛选</button>
+          </div>
+
           <div v-if="!logs.length" class="tui-empty">
             <span class="tui-empty-icon"><el-icon :size="24"><ChatDotRound /></el-icon></span>
-            <span class="tui-empty-title">暂无沟通记录</span>
+            <span class="tui-empty-title">{{ hasFilters ? '没有符合条件的记录' : '暂无沟通记录' }}</span>
             <span class="tui-empty-desc">每次沟通都留痕，家长零账号也能查看</span>
           </div>
           <div v-else class="gp-tl">
-            <div v-for="l in pagedLogs" :key="l.id" class="gp-tl-item">
+            <div v-for="l in logs" :key="l.id" class="gp-tl-item">
               <span class="gp-tl-node" :class="`tone-${channelTone(l.channel)}`">
                 <el-icon><component :is="CHANNEL_ICON[l.channel]" /></el-icon>
               </span>
@@ -137,12 +223,12 @@
                 </div>
               </div>
             </div>
-            <div v-if="logs.length > pageSizeLogs" class="pagination-wrapper">
+            <div v-if="logTotal > 0" class="pagination-wrapper">
               <el-pagination
                 v-model:current-page="pageLogs"
                 v-model:page-size="pageSizeLogs"
                 :page-sizes="[10, 20, 50]"
-                :total="logs.length"
+                :total="logTotal"
                 :pager-count="5"
                 small
                 background
@@ -208,7 +294,7 @@
           <div class="tui-section-head">
             <h3><el-icon><ChatDotRound /></el-icon>沟通台账时间轴</h3>
             <div class="tui-section-extra">
-              <span class="gp-count">{{ logs.length }} 条</span>
+              <span class="gp-count">{{ logTotal }} 条</span>
               <el-button size="small" :icon="Plus" @click="openLogCreate">记录沟通</el-button>
             </div>
           </div>
@@ -216,13 +302,44 @@
             <el-icon><InfoFilled /></el-icon>
             <span>每次沟通按时间倒序留痕，家长零账号也能通过只读链接查看；危机类记录不会生成分享链接。</span>
           </div>
+
+          <div class="tui-section-tools gp-tools">
+            <el-input
+              v-model="filters.keyword"
+              placeholder="搜索沟通内容 / 家长"
+              clearable
+              :prefix-icon="Search"
+              @input="onKeywordInput"
+            />
+            <el-select v-model="filters.scene" placeholder="场景" clearable @change="onFilterChange">
+              <el-option v-for="s in SCENE_OPTIONS" :key="s" :label="GUARDIAN_SCENE_LABEL[s]" :value="s" />
+            </el-select>
+            <el-select v-model="filters.channel" placeholder="渠道" clearable @change="onFilterChange">
+              <el-option v-for="c in CHANNEL_OPTIONS" :key="c" :label="GUARDIAN_CHANNEL_LABEL[c]" :value="c" />
+            </el-select>
+            <el-select v-model="filters.status" placeholder="状态" clearable @change="onFilterChange">
+              <el-option v-for="st in STATUS_OPTIONS" :key="st" :label="GUARDIAN_STATUS_LABEL[st]" :value="st" />
+            </el-select>
+            <el-date-picker
+              v-model="dateRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              class="gp-range"
+              @change="onFilterChange"
+            />
+            <button v-if="hasFilters" class="gp-link" @click="resetFilters">重置筛选</button>
+          </div>
+
           <div v-if="!logs.length" class="tui-empty">
             <span class="tui-empty-icon"><el-icon :size="24"><ChatDotRound /></el-icon></span>
-            <span class="tui-empty-title">暂无沟通记录</span>
+            <span class="tui-empty-title">{{ hasFilters ? '没有符合条件的记录' : '暂无沟通记录' }}</span>
             <span class="tui-empty-desc">每次沟通都留痕，家长零账号也能查看</span>
           </div>
           <div v-else class="gp-tl">
-            <div v-for="l in pagedLogs" :key="l.id" class="gp-tl-item">
+            <div v-for="l in logs" :key="l.id" class="gp-tl-item">
               <span class="gp-tl-node" :class="`tone-${channelTone(l.channel)}`">
                 <el-icon><component :is="CHANNEL_ICON[l.channel]" /></el-icon>
               </span>
@@ -253,12 +370,12 @@
                 </div>
               </div>
             </div>
-            <div v-if="logs.length > pageSizeLogs" class="pagination-wrapper">
+            <div v-if="logTotal > 0" class="pagination-wrapper">
               <el-pagination
                 v-model:current-page="pageLogs"
                 v-model:page-size="pageSizeLogs"
                 :page-sizes="[10, 20, 50]"
-                :total="logs.length"
+                :total="logTotal"
                 :pager-count="5"
                 small
                 background
@@ -290,33 +407,40 @@
         @saved="loadAll"
       />
     </div>
+
+    <!-- 导入台账用的隐藏文件选择器（页头「更多 → 导入台账 Excel」触发） -->
+    <input ref="importInput" class="gp-file-input" type="file" accept=".xlsx,.xls" @change="handleImportFile" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, type Component } from 'vue'
-import { ChatDotRound, ChatLineRound, Document, InfoFilled, Link, Lock, Message, Phone, Plus, User } from '@element-plus/icons-vue'
+import { computed, onMounted, reactive, ref, type Component } from 'vue'
+import {
+  ChatDotRound, ChatLineRound, Document, Download, InfoFilled, Link, Lock, Message,
+  MoreFilled, Phone, Plus, Search, Upload, User,
+} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 import {
-  createShareLink, deleteContactLog, deleteGuardian, getContactLogs, getGuardians,
-  getLogShareLink, revokeShareLink, GUARDIAN_CHANNEL_LABEL, GUARDIAN_SCENE_LABEL,
-  GUARDIAN_STATUS_LABEL,
+  createShareLink, deleteContactLog, deleteGuardian, downloadContactLogTemplate,
+  exportContactLogs, getContactLogsPaged, getGuardianOverview, getGuardians,
+  getLogShareLink, importContactLogs, revokeShareLink,
+  GUARDIAN_CHANNEL_LABEL, GUARDIAN_SCENE_LABEL, GUARDIAN_STATUS_LABEL,
   type ContactLog, type Guardian, type GuardianChannel, type GuardianContactStatus,
-  type GuardianScene, type ShareLink,
+  type GuardianOverview, type GuardianScene, type ShareLink,
 } from '@/api/guardian'
 import GuardianDialog from '@/components/teacher/guardian/GuardianDialog.vue'
 import ContactLogDialog from '@/components/teacher/guardian/ContactLogDialog.vue'
+import GuardianOverviewPanel from '@/components/teacher/guardian/GuardianOverview.vue'
 import { useRoute, useRouter } from 'vue-router'
 
 defineOptions({ name: 'teacher-guardian' })
 
-const { isMobile } = useResponsive()
-const route = useRoute()
-const router = useRouter()
+/** 概览统计窗口（天） */
+const OVERVIEW_DAYS = 30
 
 /** 沟通渠道 → 时间轴节点图标（统一 Element Plus 图标） */
 const CHANNEL_ICON: Record<GuardianChannel, Component> = {
@@ -326,14 +450,33 @@ const CHANNEL_ICON: Record<GuardianChannel, Component> = {
   note: ChatDotRound,
 }
 
-const students = ref<StudentSummary[]>([])
+const SCENE_OPTIONS: GuardianScene[] = ['leave', 'crisis', 'academic', 'care', 'other']
+const CHANNEL_OPTIONS: GuardianChannel[] = ['sms', 'report', 'link', 'note']
+const STATUS_OPTIONS: GuardianContactStatus[] = ['draft', 'sent', 'pending', 'failed']
+
+const { isMobile } = useResponsive()
+const route = useRoute()
+const router = useRouter()
+
+/* ===== 学生选择器（服务端搜索 + 300ms 防抖） ===== */
+const studentOptions = ref<StudentSummary[]>([])
+const studentSearching = ref(false)
+/** 当前聚焦学生的完整对象：保证搜索后 el-select 仍能回显姓名 */
+const selectedStudent = ref<StudentSummary | null>(null)
 const studentId = ref<number | undefined>(undefined)
+
 const guardians = ref<Guardian[]>([])
 const logs = ref<ContactLog[]>([])
+const logTotal = ref(0)
 const links = ref<Record<number, ShareLink>>({})
+const overview = ref<GuardianOverview | null>(null)
 
-/** 当前已选学生：为弹窗提供姓名 / 班级 / 近期预警上下文 */
-const currentStudent = computed(() => students.value.find((s) => s.id === studentId.value) || null)
+/** 当前已选学生：为弹窗 / 概览提供姓名 / 班级 / 近期预警上下文 */
+const currentStudent = computed<StudentSummary | null>(() => {
+  const hit = studentOptions.value.find((s) => s.id === studentId.value)
+  if (hit) return hit
+  return selectedStudent.value && selectedStudent.value.id === studentId.value ? selectedStudent.value : null
+})
 
 const guardianVisible = ref(false)
 const editingGuardian = ref<Guardian | null>(null)
@@ -345,14 +488,24 @@ const logPresetScene = ref<GuardianScene>('care')
 const logPresetChannel = ref<GuardianChannel>('note')
 const logPresetGuardianId = ref<number | undefined>(undefined)
 
-/* 分页（统一按契约第 2 节） */
+/* ===== 台账筛选 + 服务端分页 ===== */
+const filters = reactive<{
+  keyword: string
+  scene?: GuardianScene
+  channel?: GuardianChannel
+  status?: GuardianContactStatus
+}>({ keyword: '', scene: undefined, channel: undefined, status: undefined })
+const dateRange = ref<[string, string] | null>(null)
 const pageLogs = ref(1)
 const pageSizeLogs = ref(10)
-const pagedLogs = computed(() =>
-  logs.value.slice((pageLogs.value - 1) * pageSizeLogs.value, pageLogs.value * pageSizeLogs.value)
+
+const hasFilters = computed(() =>
+  Boolean(filters.keyword || filters.scene || filters.channel || filters.status || dateRange.value)
 )
-function handleLogsSizeChange() { pageLogs.value = 1 }
-function handleLogsCurrentChange() { /* v-model 已同步 */ }
+
+function studentLabel(s: StudentSummary) {
+  return s.username ? `${s.name} · ${s.username}` : s.name
+}
 
 function statusTag(status: GuardianContactStatus) {
   return status === 'sent' ? 'success' : status === 'pending' ? 'warning' : status === 'failed' ? 'danger' : 'info'
@@ -373,44 +526,39 @@ function avatarOf(name?: string) {
   return (name || '家').trim().charAt(0) || '家'
 }
 
-async function loadStudents() {
+/* ===== 学生搜索 ===== */
+let studentSearchTimer: ReturnType<typeof setTimeout> | undefined
+function onStudentSearch(keyword: string) {
+  if (studentSearchTimer) clearTimeout(studentSearchTimer)
+  studentSearchTimer = setTimeout(() => { void searchStudents(keyword) }, 300)
+}
+
+async function searchStudents(keyword: string) {
+  studentSearching.value = true
   try {
-    students.value = await getStudents()
-    // 闭环：从学生成长档案跳来时直接定位到该学生
-    const deepId = Number(route.query.student_id) || 0
-    const target = deepId ? students.value.find((s) => s.id === deepId) : undefined
-    if (target) {
-      studentId.value = target.id
-      await loadAll()
-    } else if (!studentId.value && students.value.length) {
-      studentId.value = students.value[0].id
-      await loadAll()
-    }
-    // 闭环：带上反馈事由时，落地即打开沟通记录并预填
-    if (route.query.content) {
-      logPresetContent.value = String(route.query.content)
-      logPresetScene.value = (String(route.query.scene || 'care') as GuardianScene)
-      logPresetChannel.value = 'note'
-      logPresetGuardianId.value = undefined
-      logVisible.value = true
-      router.replace({ path: '/teacher/guardian' })
-    }
+    const list = await getStudents(keyword || undefined)
+    // 保留当前聚焦学生，避免搜索词不含它时选择框丢失姓名回显
+    const cur = selectedStudent.value
+    studentOptions.value = cur && !list.some((s) => s.id === cur.id) ? [cur, ...list] : list
   } catch {
-    students.value = []
+    studentOptions.value = selectedStudent.value ? [selectedStudent.value] : []
+  } finally {
+    studentSearching.value = false
   }
 }
 
-async function loadAll() {
-  if (!studentId.value) return
-  const [g, l] = await Promise.allSettled([
-    getGuardians(studentId.value),
-    getContactLogs(studentId.value),
-  ])
-  guardians.value = g.status === 'fulfilled' ? g.value : []
-  logs.value = l.status === 'fulfilled' ? l.value : []
-  pageLogs.value = 1
+/* ===== 数据加载 ===== */
+async function loadGuardians() {
+  if (!studentId.value) { guardians.value = []; return }
+  try {
+    guardians.value = await getGuardians(studentId.value)
+  } catch {
+    guardians.value = []
+  }
+}
 
-  // 回显已有分享链接
+/** 回显当前页已有的分享链接（只查可见页，避免逐条全量请求） */
+async function loadLinks() {
   const map: Record<number, ShareLink> = {}
   await Promise.all(
     logs.value.map(async (log) => {
@@ -425,12 +573,111 @@ async function loadAll() {
   links.value = map
 }
 
-function onStudentChange() {
-  guardianVisible.value = false
-  logVisible.value = false
-  loadAll()
+/** 台账：服务端筛选 + 分页 */
+async function loadLogs() {
+  if (!studentId.value) { logs.value = []; logTotal.value = 0; links.value = {}; return }
+  const range = Array.isArray(dateRange.value) ? dateRange.value : []
+  try {
+    const res = await getContactLogsPaged({
+      student_id: studentId.value,
+      keyword: filters.keyword || undefined,
+      scene: filters.scene || undefined,
+      channel: filters.channel || undefined,
+      status: filters.status || undefined,
+      start: range[0] || undefined,
+      end: range[1] || undefined,
+      page: pageLogs.value,
+      page_size: pageSizeLogs.value,
+    })
+    logs.value = res.items
+    logTotal.value = res.total
+  } catch {
+    logs.value = []
+    logTotal.value = 0
+  }
+  await loadLinks()
 }
 
+/** 概览聚合：已选择学生时只看该生，未选择时看全部 */
+async function loadOverview() {
+  try {
+    overview.value = await getGuardianOverview({ days: OVERVIEW_DAYS, student_id: studentId.value })
+  } catch {
+    overview.value = null
+  }
+}
+
+async function loadAll() {
+  pageLogs.value = 1
+  await Promise.all([loadGuardians(), loadLogs(), loadOverview()])
+}
+
+/** 台账操作（删除 / 导入）后的局部刷新：不动联系人，避免整页抖动 */
+async function refreshLedger() {
+  await Promise.all([loadLogs(), loadOverview()])
+}
+
+/* ===== 学生切换 ===== */
+function onStudentChange() {
+  selectedStudent.value = studentOptions.value.find((s) => s.id === studentId.value) || null
+  guardianVisible.value = false
+  logVisible.value = false
+  void loadAll()
+}
+
+/** Top5 榜单点击：切换聚焦到该学生 */
+async function focusStudent(id: number, name: string) {
+  studentId.value = id
+  const known = studentOptions.value.find((s) => s.id === id)
+  if (known) {
+    selectedStudent.value = known
+  } else {
+    // 榜单只给出 id/姓名，用服务端搜索补齐完整对象（失败则退回空上下文）
+    try {
+      const list = await getStudents(name)
+      const hit = list.find((s) => s.id === id) || null
+      selectedStudent.value = hit
+      if (hit) studentOptions.value = [hit, ...studentOptions.value.filter((s) => s.id !== id)]
+    } catch {
+      selectedStudent.value = null
+    }
+  }
+  guardianVisible.value = false
+  logVisible.value = false
+  await loadAll()
+}
+
+/* ===== 筛选交互 ===== */
+let keywordTimer: ReturnType<typeof setTimeout> | undefined
+function onKeywordInput() {
+  if (keywordTimer) clearTimeout(keywordTimer)
+  keywordTimer = setTimeout(() => { pageLogs.value = 1; void loadLogs() }, 300)
+}
+
+function onFilterChange() {
+  pageLogs.value = 1
+  void loadLogs()
+}
+
+function resetFilters() {
+  filters.keyword = ''
+  filters.scene = undefined
+  filters.channel = undefined
+  filters.status = undefined
+  dateRange.value = null
+  onFilterChange()
+}
+
+function handleLogsSizeChange() {
+  pageLogs.value = 1
+  void loadLogs()
+}
+
+function handleLogsCurrentChange() {
+  void loadLogs()
+}
+
+/* ===== 弹窗 / 联系人操作 ===== */
 function openGuardianCreate() {
   editingGuardian.value = null
   guardianVisible.value = true
@@ -467,7 +714,7 @@ async function removeGuardian(g: Guardian) {
   }
   await deleteGuardian(g.id)
   ElMessage.success('已删除')
-  loadAll()
+  void loadAll()
 }
 
 async function makeLink(log: ContactLog) {
@@ -510,16 +757,145 @@ async function removeLog(log: ContactLog) {
   }
   await deleteContactLog(log.id)
   ElMessage.success('已删除')
-  loadAll()
+  void refreshLedger()
 }
 
-onMounted(loadStudents)
+/* ===== 导出 / 模板 / 导入 ===== */
+const importInput = ref<HTMLInputElement | null>(null)
+
+function onHeadCommand(cmd: string) {
+  if (cmd === 'export') void handleExport()
+  else if (cmd === 'template') void handleDownloadTemplate()
+  else if (cmd === 'import') importInput.value?.click()
+}
+
+/** 当前筛选条件（不含分页），导出与台账查询共用同一口径 */
+function buildFilterParams() {
+  const range = Array.isArray(dateRange.value) ? dateRange.value : []
+  return {
+    student_id: studentId.value,
+    keyword: filters.keyword || undefined,
+    scene: filters.scene || undefined,
+    channel: filters.channel || undefined,
+    status: filters.status || undefined,
+    start: range[0] || undefined,
+    end: range[1] || undefined,
+  }
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+async function handleExport() {
+  try {
+    const blob = await exportContactLogs(buildFilterParams())
+    saveBlob(blob, '家校沟通台账.xlsx')
+    ElMessage.success('台账已导出')
+  } catch {
+    ElMessage.error('导出失败')
+  }
+}
+
+async function handleDownloadTemplate() {
+  try {
+    const blob = await downloadContactLogTemplate()
+    saveBlob(blob, '家校沟通台账导入模板.xlsx')
+    ElMessage.success('模板已下载')
+  } catch {
+    ElMessage.error('模板下载失败')
+  }
+}
+
+function escapeHtml(text: string) {
+  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+}
+
+async function handleImportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const res = await importContactLogs(file)
+    await refreshLedger()
+    const parts = [`<b>成功导入 ${res.created} 条</b>`]
+    if (res.skipped.length) parts.push(`跳过 ${res.skipped.length} 条：<br/>${res.skipped.map(escapeHtml).join('<br/>')}`)
+    if (res.errors.length) parts.push(`失败 ${res.errors.length} 条：<br/>${res.errors.map(escapeHtml).join('<br/>')}`)
+    await ElMessageBox.alert(parts.join('<br/><br/>'), '导入结果', {
+      dangerouslyUseHTMLString: true,
+      type: res.errors.length ? 'warning' : 'success',
+      confirmButtonText: '知道了',
+    }).catch(() => { /* 用户关闭弹窗不视为失败 */ })
+    ElMessage.success(`导入完成：新增 ${res.created} 条`)
+  } catch {
+    ElMessage.error('导入失败，请检查文件格式')
+  }
+}
+
+/* ===== 初始化 ===== */
+async function initPage() {
+  try {
+    studentOptions.value = await getStudents()
+  } catch {
+    studentOptions.value = []
+  }
+
+  // 闭环：从学生成长档案跳来时直接定位到该学生
+  const deepId = Number(route.query.student_id) || 0
+  const target = deepId ? studentOptions.value.find((s) => s.id === deepId) : undefined
+  if (target) {
+    selectedStudent.value = target
+    studentId.value = target.id
+  } else if (!studentId.value && studentOptions.value.length) {
+    selectedStudent.value = studentOptions.value[0]
+    studentId.value = studentOptions.value[0].id
+  }
+
+  if (studentId.value) await loadAll()
+  else await loadOverview()
+
+  // 闭环：带上反馈事由时，落地即打开沟通记录并预填
+  if (route.query.content) {
+    logPresetContent.value = String(route.query.content)
+    logPresetScene.value = (String(route.query.scene || 'care') as GuardianScene)
+    logPresetChannel.value = 'note'
+    logPresetGuardianId.value = undefined
+    logVisible.value = true
+    router.replace({ path: '/teacher/guardian' })
+  }
+}
+
+onMounted(initPage)
 </script>
 
 <style scoped>
 .gp-picker { margin-bottom: 10px; }
-.gp-select { width: 220px; }
+.gp-select { width: 240px; }
 .gp-count { font-size: 11.5px; color: var(--tui-text-quiet); }
+.gp-file-input { display: none; }
+
+/* 移动端吸顶栏「更多」图标按钮 */
+.gp-more-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border: none; border-radius: 50%;
+  background: transparent; color: var(--tui-text); cursor: pointer;
+}
+.gp-more-btn:hover { background: rgba(15, 17, 21, 0.05); }
+
+/* 台账筛选工具条：日期区间需要更宽，单独指定 */
+.gp-tools { margin-bottom: 10px; }
+.gp-tools .gp-range { width: 240px; }
+@media (max-width: 767px) {
+  .gp-tools .gp-range { width: 100%; }
+}
 
 /* 家长联系人卡 */
 .gp-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

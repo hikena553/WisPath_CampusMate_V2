@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getUser, setUser, removeToken } from '@/utils/token'
+import { isGuestMode } from '@/utils/guest'
 import { getCurrentIdentity } from '@/api/auth'
 
 declare module 'vue-router' {
@@ -10,13 +11,23 @@ declare module 'vue-router' {
   }
 }
 
-const publicPaths = ['/login']
+const publicPaths = ['/login', '/welcome', '/forgot-password']
+
+/** 首次打开引导页的本地标记（与 WelcomePage.vue 保持一致） */
+const WELCOME_SEEN_KEY = 'mian02_welcome_seen'
+
+/** 免费使用（游客）可访问的对外开放页面：校园资讯为公开内容 */
+const guestAllowedPaths = ['/student/campus']
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/login' },
     { path: '/login', name: 'Login', component: () => import('@/views/login/LoginPage.vue') },
+    // 首次打开的产品介绍页（参考抖音 / 微信引导页），无需登录
+    { path: '/welcome', name: 'Welcome', component: () => import('@/views/login/WelcomePage.vue'), meta: { title: '认识绵小城' } },
+    // 忘记密码：身份核验后自动通知管理员重置
+    { path: '/forgot-password', name: 'ForgotPassword', component: () => import('@/views/login/ForgotPasswordPage.vue'), meta: { title: '找回密码' } },
     // 改密页：可独立访问的改密入口（站内提醒横幅走弹窗，本页供直接跳转/分享链接使用）
     {
       path: '/change-password',
@@ -58,6 +69,8 @@ const router = createRouter({
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },
         { path: 'community', name: 'student-community', component: () => import('@/views/student/CommunityView.vue'), meta: { keepAlive: false } },
         { path: 'emotion', name: 'student-emotion', component: () => import('@/views/student/EmotionTrashPage.vue'), meta: { keepAlive: false } },
+        // 我的关怀：教师端「人文关怀」的学生侧闭环（激励 / 关怀记录 / 家访记录）
+        { path: 'care', name: 'student-care', component: () => import('@/views/student/CarePage.vue'), meta: { keepAlive: false } },
         { path: 'my-requests', name: 'student-my-requests', component: () => import('@/views/student/MyRequestsPage.vue'), meta: { keepAlive: false } },
         { path: 'materials', name: 'student-materials', component: () => import('@/views/student/MaterialArchivePage.vue'), meta: { keepAlive: false } },
         { path: 'feedback', component: () => import('@/views/student/FeedbackPage.vue') },
@@ -100,6 +113,7 @@ const router = createRouter({
         { path: 'references', name: 'admin-references', meta: { title: '开源参考复用' }, component: () => import('@/views/admin/ReferenceLibraryPage.vue') },
         { path: 'teachers', meta: { title: '教师管理' }, component: () => import('@/views/admin/TeachersPage.vue') },
         { path: 'students', meta: { title: '学生管理' }, component: () => import('@/views/admin/StudentsPage.vue') },
+        { path: 'password-requests', name: 'admin-password-requests', meta: { title: '密码重置' }, component: () => import('@/views/admin/PasswordRequestsPage.vue') },
         { path: 'organizations', meta: { title: '院系班级' }, component: () => import('@/views/admin/OrganizationsPage.vue') },
         { path: 'courses', meta: { title: '课程表管理' }, component: () => import('@/views/admin/CourseSchedulePage.vue') },
         { path: 'crisis', name: 'admin-crisis', meta: { title: '危机预警' }, component: () => import('@/views/admin/CrisisMonitorPage.vue') },
@@ -132,10 +146,10 @@ async function ensureUser(): Promise<Record<string, unknown> | null> {
 }
 
 router.beforeEach(async (to) => {
-  // 会话权威探测：本地缓存命中直接返回；否则调 /api/auth/me 探活并回填。
-  // F3 后刷新页面内存态 token 为空，但 httpOnly Cookie 会自动随 /api/auth/me 携带，
-  // 因此以「能否拿到 user」为准判断登录态，而非内存 token。
-  const user = await ensureUser()
+  // 已缓存登录用户时忽略游客标记，避免多标签页残留标记把登录态误判成游客
+  const guest = isGuestMode() && !getUser()
+  // 游客没有登录凭证：跳过 /auth/me 探活，避免每次导航都打一次必然 401 的请求
+  const user = guest ? null : await ensureUser()
   const roleHome = (u: Record<string, unknown>) =>
     ({ teacher: '/teacher', admin: '/admin' } as Record<string, string>)[u.role as string] || '/student'
 
@@ -149,10 +163,28 @@ router.beforeEach(async (to) => {
     return true
   }
 
-  // 登录页：已登录按角色重定向，未登录放行
+  // 首次访问登录页：先展示产品介绍（已登录用户不受影响）
+  if (to.path === '/login' && !user) {
+    let seen = false
+    try {
+      seen = !!localStorage.getItem(WELCOME_SEEN_KEY)
+    } catch {
+      seen = true
+    }
+    if (!seen) return '/welcome'
+  }
+
+  // 登录页：已登录按角色重定向；游客可回登录页走账号密码/一键登录
   if (publicPaths.includes(to.path)) {
     if (!user) return
     return roleHome(user)
+  }
+
+  // 免费使用（游客）：仅放开对外开放页面，其余功能引导登录
+  if (guest) {
+    if (to.path === '/student') return '/student/campus'
+    if (guestAllowedPaths.some((p) => to.path.startsWith(p))) return true
+    return { path: '/login', query: { reason: 'login' } }
   }
 
   // 其余路由一律要求已登录

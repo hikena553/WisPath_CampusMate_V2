@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.message import Message, MessageSessionPin, MessageSessionHidden
 from app.models.group import Group, GroupMember, GroupMessage
 from app.models.notification import Notification
+from app.models.announcement import UrgencyLevel
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
 from app.services.session_hidden import hidden_watermarks, is_hidden, hide_session
 from app.services.ws_manager import manager
@@ -260,10 +261,17 @@ def get_unread_summary(user: User = Depends(get_current_user), db: Session = Dep
         Notification.user_id == user.id,
         Notification.is_read.is_(False),
     ).count()
+    # 紧急未读（通知 level=urgent）：导航徽标据此切换为强提醒（danger 色）
+    urgent_unread = db.query(Notification).filter(
+        Notification.user_id == user.id,
+        Notification.is_read.is_(False),
+        Notification.level == UrgencyLevel.URGENT,
+    ).count()
     return {
         "chat": chat,
         "group": group,
         "notification": notification,
+        "urgent_unread": urgent_unread,
         "total": chat + group + notification,
     }
 

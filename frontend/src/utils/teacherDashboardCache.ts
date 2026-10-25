@@ -8,6 +8,7 @@ import { getAlerts } from '@/api/crisis'
 import { getPendingLeaves } from '@/api/leave'
 import { getTeacherAnnouncements } from '@/api/announcement'
 import { getTeacherSchedules, getOverdueSchedules } from '@/api/teacher'
+import { getTeacherTaskSummary } from '@/api/teacherTask'
 
 interface CacheEntry<T> {
   data: T
@@ -39,6 +40,8 @@ export function prefetchDashboardData(): void {
     getTeacherAnnouncements().then(d => setCache('teacher-announcements', d)),
     getTeacherSchedules(year, month).then(d => setCache('teacher-schedules', d)),
     getOverdueSchedules().then(d => setCache('overdue-schedules', d)),
+    // 任务汇总：页头指标带与「今日重点」共用同一份数字，避免两处各拉一次
+    getTeacherTaskSummary().then(d => setCache('teacher-task-summary', d)),
   ]).then(() => {}).catch(() => {}).finally(() => {
     prefetchPromise = null
   })

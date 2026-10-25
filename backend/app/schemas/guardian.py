@@ -61,6 +61,41 @@ class ContactLogOut(BaseModel):
     created_at: str = ""
 
 
+class ContactLogPage(BaseModel):
+    """台账分页结果：items + total（服务端筛选 + 分页）。"""
+
+    items: list[ContactLogOut] = []
+    total: int = 0
+
+
+class OverviewCountItem(BaseModel):
+    key: str
+    label: str = ""
+    count: int = 0
+
+
+class OverviewTopStudent(BaseModel):
+    student_id: int
+    student_name: str = ""
+    count: int = 0
+
+
+class GuardianOverview(BaseModel):
+    """家校沟通聚合（图表数据源）：与台账筛选同口径。"""
+
+    totals: dict = {}
+    by_scene: list[OverviewCountItem] = []
+    by_channel: list[OverviewCountItem] = []
+    trend: list[dict] = []
+    top_students: list[OverviewTopStudent] = []
+
+
+class ContactLogImportResult(BaseModel):
+    created: int = 0
+    skipped: list[str] = []
+    errors: list[str] = []
+
+
 # ── 只读分享链接 ──────────────────────────────────────────────
 
 

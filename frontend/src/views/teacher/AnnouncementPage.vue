@@ -1,4 +1,4 @@
-﻿﻿<template>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
     <SubPageHeader title="班级公告" sub="发布与触达 · 一条不落传达到学生" fallback="/teacher" />
 
@@ -29,7 +29,7 @@
               <span class="tui-ring is-brand" :style="{ '--pct': reachRate / 100 }">
                 <span class="tui-ring-num">{{ reachRate }}%</span>
               </span>
-              <span class="an-band-cap">整体触达强度</span>
+              <span class="an-band-cap">整体触达率</span>
             </div>
             <!-- 图例（复用 .an-legend，此处在横向带内改为一行） -->
             <ul class="an-legend">
@@ -91,7 +91,7 @@
                 <p class="an-content tui-ellipsis-2">{{ a.content }}</p>
                 <div class="an-reachbar">
                   <div class="an-reachbar-head">
-                    <span>触达强度</span>
+                    <span>触达率<em v-if="reachDetail(a)" class="an-reach-detail">{{ reachDetail(a) }}</em></span>
                     <span>{{ reachOf(a) }}%</span>
                   </div>
                   <div class="an-reachbar-track">
@@ -136,12 +136,12 @@
         </div>
         <div class="tui-section-hint">
           <el-icon><InfoFilled /></el-icon>
-          <span>已读回执暂未接入，触达强度按公告紧急程度估算，仅用于提示推送优先级。</span>
+          <span>触达率 = 已读学生数 ÷ 应读学生数（真实回执）。紧急公告会置顶高亮，且在学生端触发更强的提醒。</span>
         </div>
         <div class="an-reach">
           <span class="ring" :style="reachRingStyle"><span class="ring-mid">{{ reachRate }}%</span></span>
           <div class="an-reach-info">
-            <div class="an-reach-cap">整体触达强度</div>
+            <div class="an-reach-cap">整体触达率</div>
             <ul class="an-legend">
               <li><i class="dot dot-danger"></i>紧急 {{ dist.urgent }}</li>
               <li><i class="dot dot-warn"></i>重要 {{ dist.important }}</li>
@@ -162,7 +162,7 @@
         </div>
         <div class="tui-section-hint">
           <el-icon><InfoFilled /></el-icon>
-          <span>紧急公告会置顶显示并高亮角标；下方进度条为按紧急程度估算的触达强度。</span>
+          <span>紧急公告会置顶显示并高亮角标；进度条为真实触达率（已读 ÷ 应读）。</span>
         </div>
 
         <div v-if="loading" class="tui-empty">
@@ -188,7 +188,7 @@
               <p class="an-content">{{ a.content }}</p>
               <div class="an-reachbar">
                 <div class="an-reachbar-head">
-                  <span>触达强度</span>
+                  <span>触达率<em v-if="reachDetail(a)" class="an-reach-detail">{{ reachDetail(a) }}</em></span>
                   <span>{{ reachOf(a) }}%</span>
                 </div>
                 <div class="an-reachbar-track">
@@ -280,8 +280,10 @@ import { useResponsive } from '@/composables/useResponsive'
 import {
   createAnnouncement,
   deleteAnnouncement,
+  getAnnouncementReach,
   getTeacherAnnouncements,
   type AnnouncementItem,
+  type AnnouncementReachItem,
 } from '@/api/announcement'
 
 defineOptions({ name: 'teacher-announcement' })
@@ -289,6 +291,8 @@ defineOptions({ name: 'teacher-announcement' })
 const { isMobile } = useResponsive()
 
 const items = ref<AnnouncementItem[]>([])
+/** 触达回执：announcement_id → { read, total, rate }（真实已读口径） */
+const reachMap = ref<Record<number, AnnouncementReachItem>>({})
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -332,9 +336,14 @@ function urgencyClass(u: AnnouncementItem['urgency']) {
 function urgencyBarClass(u: AnnouncementItem['urgency']) {
   return u === 'urgent' ? 'bar-danger' : u === 'important' ? 'bar-warn' : 'bar-brand'
 }
-/** 触达强度（估算）：暂无以读回执，按紧急程度映射推送强度 */
+/** 触达率（真实口径）：已读学生数 / 应读学生数，来自 /teacher/announcements/reach */
 function reachOf(a: AnnouncementItem) {
-  return a.urgency === 'urgent' ? 100 : a.urgency === 'important' ? 65 : 35
+  return reachMap.value[a.id]?.rate ?? 0
+}
+/** 触达明细文案：已读 / 应读（无数据时留空） */
+function reachDetail(a: AnnouncementItem) {
+  const r = reachMap.value[a.id]
+  return r ? `${r.read}/${r.total}` : ''
 }
 
 /** 迷你分布条宽度：某等级条数占全部公告的比例（无数据时给 0，避免 NaN） */
@@ -350,12 +359,13 @@ const dist = computed(() => {
   return { urgent, important, normal: items.value.length - urgent - important }
 })
 
-/** 整体触达强度（估算）：各公告触达强度按条数加权平均 */
+/** 整体触达率（真实口径）：所有公告的「已读 ÷ 应读」加权汇总 */
 const reachRate = computed(() => {
-  const total = items.value.length
-  if (!total) return 0
-  const score = dist.value.urgent * 100 + dist.value.important * 65 + dist.value.normal * 35
-  return Math.round(score / total)
+  const rows = items.value.map(a => reachMap.value[a.id]).filter(Boolean) as AnnouncementReachItem[]
+  const sumTotal = rows.reduce((s, r) => s + r.total, 0)
+  if (!sumTotal) return 0
+  const sumRead = rows.reduce((s, r) => s + r.read, 0)
+  return Math.round((sumRead / sumTotal) * 100)
 })
 const reachRingStyle = computed(() => ({
   background: `conic-gradient(var(--tui-brand) 0 ${reachRate.value}%, var(--tui-surface-sunken) ${reachRate.value}% 100%)`,
@@ -379,7 +389,15 @@ watch(() => items.value.length, () => { currentPage.value = 1 })
 async function load() {
   loading.value = true
   try {
-    items.value = await getTeacherAnnouncements()
+    // 公告列表与触达回执并发拉取；触达接口失败不影响列表展示
+    const [list, reach] = await Promise.all([
+      getTeacherAnnouncements(),
+      getAnnouncementReach().catch(() => null),
+    ])
+    items.value = list
+    const map: Record<number, AnnouncementReachItem> = {}
+    for (const r of reach?.items || []) map[r.announcement_id] = r
+    reachMap.value = map
   } catch {
     ElMessage.error('公告加载失败')
   } finally {
@@ -429,6 +447,8 @@ onMounted(load)
 
 <style scoped>
 .an-total { font-size: 11.5px; color: var(--tui-text-quiet); }
+/* 触达明细（已读/应读）：弱化小字，跟在「触达率」后 */
+.an-reach-detail { margin-left: 5px; font-style: normal; font-size: 10.5px; color: var(--tui-text-quiet); }
 
 /* ===== 桌面端 触达概览横向带：环形 + 图例 + 三条迷你分布条，横向一行铺开 ===== */
 .an-band {

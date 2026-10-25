@@ -41,3 +41,61 @@ export function interveneAlert(id: number, data: {
 export function getFollowUpDue() {
   return request.get<CrisisAlert[]>('/crisis/follow-up-due')
 }
+
+/* ============================ 工作台聚合分析 ============================ */
+
+export interface CrisisLevelDist {
+  severe: number
+  moderate: number
+  mild: number
+  normal: number
+}
+
+export interface CrisisStage {
+  found: number
+  intervened: number
+  following: number
+  closed: number
+}
+
+export interface CrisisTrendPoint {
+  /** MM-DD */
+  day: string
+  count: number
+}
+
+export interface CrisisKeyword {
+  word: string
+  count: number
+}
+
+export interface CrisisSlaItem {
+  id: number
+  student_name: string
+  summary: string
+  created_at: string
+}
+
+export interface CrisisSla {
+  /** 未闭环且创建超 24 小时 */
+  overdue: number
+  /** 未闭环且创建 12~24 小时 */
+  due_soon: number
+  items: CrisisSlaItem[]
+}
+
+export interface CrisisAnalytics {
+  level_dist: CrisisLevelDist
+  stage: CrisisStage
+  trend: CrisisTrendPoint[]
+  keywords: CrisisKeyword[]
+  sla: CrisisSla
+  total: number
+  unresolved: number
+  high_risk: number
+}
+
+/** 心理预警聚合分析：等级分布 / 处置阶段 / 趋势 / 敏感词 / 处置时限 */
+export function getCrisisAnalytics(days = 30, topN = 40) {
+  return request.get<CrisisAnalytics>('/crisis/analytics', { params: { days, top_n: topN } })
+}

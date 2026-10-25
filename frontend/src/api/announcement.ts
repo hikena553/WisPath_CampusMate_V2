@@ -26,6 +26,27 @@ export function deleteAnnouncement(id: number) {
   return request.delete(`/teacher/announcements/${id}`)
 }
 
+export interface AnnouncementReachItem {
+  announcement_id: number
+  title: string
+  urgency: 'normal' | 'important' | 'urgent'
+  total: number
+  read: number
+  rate: number
+}
+
+export interface AnnouncementReach {
+  items: AnnouncementReachItem[]
+  total: number
+  read: number
+  rate: number
+}
+
+/** 触达回执：真实已读/应读统计（替代按紧急程度估算的假数据） */
+export function getAnnouncementReach() {
+  return request.get<AnnouncementReach>('/teacher/announcements/reach')
+}
+
 // 学生端
 export function getStudentAnnouncements(unreadOnly = false) {
   return request.get<AnnouncementItem[]>('/student/announcements', {

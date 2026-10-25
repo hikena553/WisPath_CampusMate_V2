@@ -18,6 +18,8 @@ import { getToken } from '@/utils/token'
 const chat = ref(0)
 const group = ref(0)
 const notification = ref(0)
+/** 紧急未读通知数：存在时导航徽标切为强提醒（danger） */
+const urgentUnread = ref(0)
 const total = ref(0)
 
 // 在线状态：user_id → 是否在线。由「列表接口初值 + WebSocket presence 事件」共同维护，
@@ -36,6 +38,7 @@ async function refresh() {
     chat.value = s.chat || 0
     group.value = s.group || 0
     notification.value = s.notification || 0
+    urgentUnread.value = s.urgent_unread || 0
     total.value = s.total || 0
   } catch {
     /* 静默失败：保留上一次计数，避免网络抖动导致红点闪没 */
@@ -122,13 +125,14 @@ async function clearAll() {
     chat.value = 0
     group.value = 0
     notification.value = 0
+    urgentUnread.value = 0
     total.value = 0
   }
 }
 
 export function useUnreadSummary() {
   return {
-    chat, group, notification, total,
+    chat, group, notification, urgentUnread, total,
     refresh, start, stop, clearAll,
     onlineMap, presenceTick, isOnline, syncPresence,
   }

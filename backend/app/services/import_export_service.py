@@ -13,6 +13,8 @@ DEFAULT_PASSWORD = "123456"
 USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9]{4,20}$')
 # 手机号格式：11位数字
 PHONE_PATTERN = re.compile(r'^1[3-9]\d{9}$')
+# QQ 号格式：5-12位数字
+QQ_PATTERN = re.compile(r'^[0-9]{5,12}$')
 
 
 def validate_username(username: str) -> str | None:
@@ -40,6 +42,29 @@ def validate_phone(phone: str | None) -> str | None:
     return None
 
 
+def validate_qq(qq: str | None) -> str | None:
+    """校验 QQ 号：一键登录依赖该字段，格式错误直接拦在导入阶段"""
+    if qq and not QQ_PATTERN.match(qq):
+        return f"QQ 号格式无效: '{qq}'（应为5-12位数字）"
+    return None
+
+
+def validate_initial_password(password: str | None) -> str | None:
+    """校验爬取到的初始密码；留空则回落到默认密码 123456"""
+    if password and len(password) < 6:
+        return "初始密码至少 6 位"
+    return None
+
+
+def _cell_text(value) -> str | None:
+    """读取可选列：兼容 Excel 把纯数字密码写成 int/float 的情况"""
+    if value is None or value == "":
+        return None
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return str(value).strip() or None
+
+
 def validate_age(age: int | None, row_num: int) -> tuple[int | None, str | None]:
     """校验年龄，返回 (处理后的年龄, 错误信息)"""
     if age is None:
@@ -61,7 +86,7 @@ def export_users(db: Session, role: UserRole) -> bytes:
     ws.title = "用户数据"
 
     if role == UserRole.STUDENT:
-        headers = ["学号", "姓名", "学院", "班级", "性别", "年龄", "联系电话", "籍贯"]
+        headers = ["学号", "姓名", "学院", "班级", "性别", "年龄", "联系电话", "籍贯", "QQ"]
         ws.append(headers)
         users = db.query(User).filter(User.role == UserRole.STUDENT).all()
         for u in users:
@@ -74,9 +99,10 @@ def export_users(db: Session, role: UserRole) -> bytes:
                 u.age or "",
                 u.phone or "",
                 u.hometown or "",
+                u.qq or "",
             ])
     else:
-        headers = ["工号", "姓名", "学院", "性别", "年龄", "职称", "所属单位", "联系电话"]
+        headers = ["工号", "姓名", "学院", "性别", "年龄", "职称", "所属单位", "联系电话", "QQ"]
         ws.append(headers)
         users = db.query(User).filter(User.role == UserRole.TEACHER).all()
         for u in users:
@@ -89,6 +115,7 @@ def export_users(db: Session, role: UserRole) -> bytes:
                 u.title or "",
                 u.department or "",
                 u.phone or "",
+                u.qq or "",
             ])
 
     buffer = io.BytesIO()
@@ -131,6 +158,8 @@ def import_users(db: Session, role: UserRole, file_content: bytes) -> dict:
                 age = row[5] if len(row) > 5 and row[5] else None
                 phone = str(row[6]).strip() if len(row) > 6 and row[6] else None
                 hometown = str(row[7]).strip() if len(row) > 7 and row[7] else None
+                qq = str(row[8]).strip() if len(row) > 8 and row[8] else None
+                initial_password = _cell_text(row[9]) if len(row) > 9 else None
             else:
                 if len(row) < 2:
                     errors.append(f"第{i}行: 数据不完整（至少需要工号和姓名）")
@@ -143,6 +172,8 @@ def import_users(db: Session, role: UserRole, file_content: bytes) -> dict:
                 title = str(row[5]).strip() if len(row) > 5 and row[5] else None
                 department = str(row[6]).strip() if len(row) > 6 and row[6] else None
                 phone = str(row[7]).strip() if len(row) > 7 and row[7] else None
+                qq = str(row[8]).strip() if len(row) > 8 and row[8] else None
+                initial_password = _cell_text(row[9]) if len(row) > 9 else None
 
             # ====== 格式校验 ======
             err = validate_username(username)
@@ -156,6 +187,16 @@ def import_users(db: Session, role: UserRole, file_content: bytes) -> dict:
                 continue
 
             err = validate_phone(phone)
+            if err:
+                errors.append(f"第{i}行: {err}")
+                continue
+
+            err = validate_qq(qq)
+            if err:
+                errors.append(f"第{i}行: {err}")
+                continue
+
+            err = validate_initial_password(initial_password)
             if err:
                 errors.append(f"第{i}行: {err}")
                 continue
@@ -190,13 +231,14 @@ def import_users(db: Session, role: UserRole, file_content: bytes) -> dict:
 
             user = User(
                 username=username,
-                password_hash=hash_password(DEFAULT_PASSWORD),
+                password_hash=hash_password(initial_password or DEFAULT_PASSWORD),
                 name=name,
                 role=role,
                 college=college,
                 gender=gender,
                 age=age,
                 phone=phone,
+                qq=qq,
             )
 
             if role == UserRole.STUDENT:

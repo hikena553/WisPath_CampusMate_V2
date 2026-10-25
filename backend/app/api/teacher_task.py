@@ -9,12 +9,13 @@ from app.core.deps import require_role
 from app.models.teacher_task import TeacherTask
 from app.models.user import User, UserRole
 from app.schemas.teacher_task import (
+    TaskAutoGenResult,
     TeacherTaskCreate,
     TeacherTaskOut,
     TeacherTaskSummary,
     TeacherTaskUpdate,
 )
-from app.services import teacher_task_service
+from app.services import teacher_task_service, task_autogen_service
 
 logger = logging.getLogger(__name__)
 
@@ -29,18 +30,26 @@ def get_summary(user: User = Depends(_teacher_only), db: Session = Depends(get_d
     return teacher_task_service.summary(db, user.id)
 
 
+@router.post("/auto-generate", response_model=TaskAutoGenResult)
+def auto_generate(user: User = Depends(_teacher_only), db: Session = Depends(get_db)):
+    """智能生成：评估名下学生的待干预信号（学情规则 / 未闭环心理预警），
+    自动建为带截止日与提醒日的任务，直接进入任务清单的日程视图。"""
+    return task_autogen_service.auto_generate_for_teacher(db, user.id)
+
+
 @router.get("", response_model=list[TeacherTaskOut])
 def list_tasks(
     status: str | None = Query(default=None),
     source_type: str | None = Query(default=None),
-    due: str | None = Query(default=None, description="overdue / today"),
+    priority: str | None = Query(default=None, description="high / mid / low"),
+    due: str | None = Query(default=None, description="overdue / today / remind"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     user: User = Depends(_teacher_only),
     db: Session = Depends(get_db),
 ):
     items, _ = teacher_task_service.list_tasks(
-        db, user.id, status=status, source_type=source_type, due=due, limit=limit, offset=offset
+        db, user.id, status=status, source_type=source_type, priority=priority, due=due, limit=limit, offset=offset
     )
     return items
 
@@ -60,6 +69,8 @@ def create_task(
         due_at=payload.due_at,
         source_type=payload.source_type,
         source_id=payload.source_id,
+        priority=payload.priority,
+        remind_at=payload.remind_at,
     )
     return teacher_task_service.serialize_one(db, task)
 
@@ -79,3 +90,17 @@ def update_task(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return teacher_task_service.serialize_one(db, task)
+
+
+@router.delete("/{task_id}")
+def delete_task(
+    task_id: int,
+    user: User = Depends(_teacher_only),
+    db: Session = Depends(get_db),
+):
+    """删除任务：仅允许删除本人名下的任务。"""
+    task = teacher_task_service.get_task(db, task_id, user.id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    teacher_task_service.delete_task(db, task)
+    return {"message": "已删除"}

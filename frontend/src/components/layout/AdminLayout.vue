@@ -111,11 +111,12 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { confirmLogout } from '@/utils/logout'
 import {
   House, Library, TriangleAlert,
   User, Users, Building2,
   CalendarDays, MessageSquare, Settings,
-  LogOut, PanelLeftClose, PanelLeftOpen, X, Boxes, Rss, Activity
+  LogOut, PanelLeftClose, PanelLeftOpen, X, Boxes, Rss, Activity, KeyRound
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -232,6 +233,7 @@ const navGroups: NavGroup[] = [
     label: '系统管理',
     items: [
       { path: '/admin/courses', label: '课程表管理', icon: CalendarDays },
+      { path: '/admin/password-requests', label: '密码重置', icon: KeyRound },
       { path: '/admin/feedbacks', label: '反馈管理', icon: MessageSquare },
       { path: '/admin/system', label: '系统监控', icon: Activity },
       { path: '/admin/settings', label: '系统设置', icon: Settings },
@@ -246,8 +248,7 @@ function isActive(path: string) {
 function goTo(path: string) { router.push(path) }
 
 function logout() {
-  auth.logout()
-  router.push('/')
+  confirmLogout()
 }
 
 // ===== 多页签 =====

@@ -386,7 +386,8 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
             teacher_link = "/teacher/crisis" if action.action_type == "escalation" else "/teacher/students"
             for tutor in tutors:
                 if _notification_exists(db, tutor.id, action.title):
-                    logger.info("[主动触达] 48h 内重复通知已跳过 user_id=%s title=%s", tutor.id, action.title)
+                    # 48h 查重命中属正常路径，逐条记 INFO 会让全量扫描刷出上千行日志，降为 DEBUG
+                    logger.debug("[主动触达] 48h 内重复通知已跳过 user_id=%s title=%s", tutor.id, action.title)
                     continue
                 notif = Notification(
                     user_id=tutor.id,
@@ -401,7 +402,8 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
             return created
     elif action.action_type == "system_message":
         if _notification_exists(db, action.student_id, action.title):
-            logger.info("[主动触达] 48h 内重复通知已跳过 user_id=%s title=%s", action.student_id, action.title)
+            # 同上：查重命中是正常路径，逐条 INFO 会淹没控制台
+            logger.debug("[主动触达] 48h 内重复通知已跳过 user_id=%s title=%s", action.student_id, action.title)
             return False
         notif = Notification(
             user_id=action.student_id,

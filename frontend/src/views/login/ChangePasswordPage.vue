@@ -46,6 +46,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { changePassword } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import { confirmLogout } from '@/utils/logout'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -85,9 +86,8 @@ async function submit() {
   }
 }
 
-async function onLogout() {
-  await auth.logout()
-  router.replace('/login')
+function onLogout() {
+  confirmLogout()
 }
 </script>
 

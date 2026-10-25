@@ -3,12 +3,15 @@
     <div class="tui-section-head">
       <h3><el-icon><List /></el-icon>任务清单</h3>
       <div class="tui-section-extra">
-        <span class="tt-count">{{ tasks.length }} 条</span>
+        <span class="tt-count">{{ summary.total }} 条</span>
+        <el-button size="small" type="primary" class="tt-add" @click="openCreate">
+          <el-icon><Plus /></el-icon><span>新增</span>
+        </el-button>
       </div>
     </div>
     <div class="tui-section-hint">
       <el-icon><InfoFilled /></el-icon>
-      <span>按优先级分组：逾期为高优先、今日到期为中优先、其余为常规；勾选左侧方框即可办结任务。</span>
+      <span>按优先级分组：高优先在最上；带「已逾期 / 今日提醒」标记的任务请优先处理；勾选左侧方框即可办结。</span>
     </div>
 
     <!-- 筛选 chips -->
@@ -43,7 +46,7 @@
       <span class="tui-empty-desc">{{ emptyDesc }}</span>
     </div>
 
-    <!-- 分组清单 -->
+    <!-- 按优先级分组清单 -->
     <template v-else>
       <div v-for="g in groups" :key="g.key" class="tt-group">
         <div class="tt-group-head">
@@ -59,6 +62,8 @@
             @toggle-done="handleToggleDone"
             @update-status="handleUpdateStatus"
             @record-care="emit('record-care', $event)"
+            @edit="openEdit"
+            @delete="handleDelete"
           />
         </div>
       </div>
@@ -70,25 +75,30 @@
         {{ loading ? '加载中…' : '加载更多' }}
       </button>
     </div>
+
+    <TeacherTaskDialog v-model="dialogVisible" :task="editing" @saved="reload" />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { CircleCheck, InfoFilled, List } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { CircleCheck, InfoFilled, List, Plus } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  deleteTeacherTask,
   getTeacherTasks,
   getTeacherTaskSummary,
   updateTeacherTask,
+  type TaskPriority,
   type TaskStatus,
   type TeacherTask,
   type TeacherTaskSummary,
 } from '@/api/teacherTask'
 import TeacherTaskCard from './TeacherTaskCard.vue'
+import TeacherTaskDialog from './TeacherTaskDialog.vue'
 
 const props = defineProps<{
-  /** 初始筛选：all / overdue / today */
+  /** 初始筛选：all / overdue / today / remind / high */
   initialFilter?: string
 }>()
 
@@ -97,8 +107,7 @@ const emit = defineEmits<{
   changed: []
 }>()
 
-type FilterValue = 'all' | 'pending' | 'today' | 'contacted' | 'cared' | 'done' | 'overdue'
-type PriorityTier = 'high' | 'mid' | 'low'
+type FilterValue = 'all' | 'pending' | 'high' | 'today' | 'overdue' | 'remind' | 'contacted' | 'cared' | 'done'
 
 const PAGE_SIZE = 20
 const tasks = ref<TeacherTask[]>([])
@@ -107,13 +116,18 @@ const activeFilter = ref<FilterValue>((props.initialFilter as FilterValue) || 'a
 const offset = ref(0)
 const lastPageFull = ref(false)
 const summary = ref<TeacherTaskSummary>({
-  pending: 0, overdue: 0, today: 0, done_this_week: 0, total: 0,
+  pending: 0, overdue: 0, today: 0, done_this_week: 0, total: 0, high: 0, remind_today: 0,
 })
+
+const dialogVisible = ref(false)
+const editing = ref<TeacherTask | null>(null)
 
 const hasMore = computed(() => lastPageFull.value)
 
 const filters = computed(() => [
   { value: 'all' as const, label: '全部', count: summary.value.total },
+  { value: 'high' as const, label: '高优先级', count: summary.value.high ?? 0 },
+  { value: 'remind' as const, label: '今日提醒', count: summary.value.remind_today ?? 0 },
   { value: 'pending' as const, label: '待处理', count: summary.value.pending },
   { value: 'today' as const, label: '今日到期', count: summary.value.today },
   { value: 'overdue' as const, label: '已逾期', count: summary.value.overdue },
@@ -125,6 +139,8 @@ const filters = computed(() => [
 const emptyTitle = computed(() => {
   if (activeFilter.value === 'overdue') return '没有逾期任务'
   if (activeFilter.value === 'today') return '今天没有到期的任务'
+  if (activeFilter.value === 'remind') return '今天没有需要提醒的任务'
+  if (activeFilter.value === 'high') return '没有高优先级任务'
   if (activeFilter.value === 'done') return '还没有办结的任务'
   return '暂无待办任务'
 })
@@ -132,30 +148,20 @@ const emptyTitle = computed(() => {
 const emptyDesc = computed(() => {
   if (activeFilter.value === 'overdue') return '保持得很好，暂无需要紧急处理的任务'
   if (activeFilter.value === 'today') return '可提前处理待办，避免任务堆积到明天'
+  if (activeFilter.value === 'remind') return '设置了提醒日的任务会在当天出现在这里'
+  if (activeFilter.value === 'high') return '把需要优先处理的事项标为高优先级，避免遗漏'
   if (activeFilter.value === 'done') return '完成任务后会在这里留痕，便于回看本周推进'
-  return '新的跟进任务会由 AI 建议、预警等自动汇入'
+  return '点击右上角「新增」创建任务，或由 AI 建议、预警等自动汇入'
 })
 
-/** 优先级分层：逾期 → 高，今日到期 → 中，其余 → 低 */
-function tierOf(t: TeacherTask): PriorityTier {
-  if (t.overdue) return 'high'
-  if (t.due_at) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const due = new Date(t.due_at)
-    due.setHours(0, 0, 0, 0)
-    if (due.getTime() === today.getTime()) return 'mid'
-  }
-  return 'low'
-}
-
+/** 按优先级分组：高 / 中 / 低（逾期与提醒在卡片内有显式标记） */
 const groups = computed(() => {
-  const buckets: Record<PriorityTier, TeacherTask[]> = { high: [], mid: [], low: [] }
-  for (const t of tasks.value) buckets[tierOf(t)].push(t)
+  const buckets: Record<TaskPriority, TeacherTask[]> = { high: [], mid: [], low: [] }
+  for (const t of tasks.value) buckets[t.priority || 'mid'].push(t)
   return [
-    { key: 'high', label: '高优先级 · 逾期', tone: 'high' as const, items: buckets.high },
-    { key: 'mid', label: '中优先级 · 今日到期', tone: 'mid' as const, items: buckets.mid },
-    { key: 'low', label: '常规任务', tone: 'low' as const, items: buckets.low },
+    { key: 'high', label: '高优先级', tone: 'high' as const, items: buckets.high },
+    { key: 'mid', label: '中优先级', tone: 'mid' as const, items: buckets.mid },
+    { key: 'low', label: '低优先级', tone: 'low' as const, items: buckets.low },
   ].filter((g) => g.items.length > 0)
 })
 
@@ -163,6 +169,8 @@ function buildQuery(pageOffset: number) {
   const q: Record<string, unknown> = { limit: PAGE_SIZE, offset: pageOffset }
   if (activeFilter.value === 'overdue') q.due = 'overdue'
   else if (activeFilter.value === 'today') q.due = 'today'
+  else if (activeFilter.value === 'remind') q.due = 'remind'
+  else if (activeFilter.value === 'high') q.priority = 'high'
   else if (activeFilter.value !== 'all') q.status = activeFilter.value
   return q
 }
@@ -206,18 +214,10 @@ function loadMore() {
 
 async function handleUpdateStatus(task: TeacherTask, status: TaskStatus) {
   try {
-    const updated = await updateTeacherTask(task.id, { status })
-    const idx = tasks.value.findIndex((t) => t.id === task.id)
-    if (idx >= 0) {
-      // 当前筛选下状态不再匹配时移除该卡片，保持列表语义一致
-      const stillMatch =
-        activeFilter.value === 'all' ||
-        (activeFilter.value === 'overdue' && updated.overdue) ||
-        activeFilter.value === updated.status
-      if (stillMatch) tasks.value[idx] = updated
-      else tasks.value.splice(idx, 1)
-    }
-    await loadSummary()
+    await updateTeacherTask(task.id, { status })
+    // 筛选条件可能涉及 due/priority（逾期、今日到期、今日提醒、高优先级）等派生口径，
+    // 局部替换难以准确判断是否仍命中筛选，这里统一重载列表与概览，保证列表语义一致。
+    await reload()
     emit('changed')
     ElMessage.success(status === 'done' ? '任务已办结' : '任务已更新')
   } catch (e) {
@@ -231,6 +231,40 @@ function handleToggleDone(task: TeacherTask, done: boolean) {
   handleUpdateStatus(task, done ? 'done' : 'pending')
 }
 
+/** 新增任务 */
+function openCreate() {
+  editing.value = null
+  dialogVisible.value = true
+}
+
+/** 编辑任务 */
+function openEdit(task: TeacherTask) {
+  editing.value = task
+  dialogVisible.value = true
+}
+
+/** 删除任务（二次确认） */
+async function handleDelete(task: TeacherTask) {
+  try {
+    await ElMessageBox.confirm(`确定删除任务「${task.title}」吗？该操作不可撤销。`, '删除任务', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteTeacherTask(task.id)
+    ElMessage.success('任务已删除')
+    await reload()
+    emit('changed')
+  } catch (e) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '删除失败')
+  }
+}
+
 defineExpose({ reload })
 
 onMounted(reload)
@@ -239,6 +273,8 @@ onMounted(reload)
 <style scoped>
 .tt-list { gap: 0; }
 .tt-count { font-size: 11.5px; color: var(--tui-text-quiet); }
+/* 新增按钮：与条数同行右对齐，移动端同样可点 */
+.tt-add { margin-left: 10px; }
 
 /* 筛选 chips */
 .tt-filters {

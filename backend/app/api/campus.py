@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 
 _cache: dict[str, tuple[float, list]] = {}
 CACHE_TTL = 300  # 5 minutes
+# 校园公告一次返回条数：前端卡片固定高度内滚动展示，十余条足够覆盖近期公告
+ANNOUNCEMENT_LIMIT = 20
 
 
 def _get_cached(key: str):
@@ -96,6 +98,11 @@ async def list_gallery():
 
 @router.get("/announcements", response_model=list[AnnouncementOut])
 async def list_announcements():
+    """校园公告（教务处通知公告）：抓取整页列表，按时间降序取前若干条。
+
+    前端「校园公告」卡片在固定高度内滚动展示，因此这里多返回一些（十余条），
+    由前端展示靠前的几条、其余滚动查看。
+    """
     cached = _get_cached("announcements")
     if cached is not None:
         return cached
@@ -106,9 +113,11 @@ async def list_announcements():
             soup = BeautifulSoup(resp.text, "html.parser")
         from app.utils.announcement_parser import parse_announcement_list
         parsed = parse_announcement_list(resp.text)
-        items = [AnnouncementOut(title=p.title, date=p.date, url=p.url) for p in parsed]
-        _set_cache("announcements", items[:10])
-        return items[:10]
+        # 时间降序（无日期的排末尾）：页面顺序变化或缺日期时不丢最新公告
+        parsed.sort(key=lambda p: p.date or "", reverse=True)
+        items = [AnnouncementOut(title=p.title, date=p.date, url=p.url) for p in parsed[:ANNOUNCEMENT_LIMIT]]
+        _set_cache("announcements", items)
+        return items
     except Exception:
         return []
 
