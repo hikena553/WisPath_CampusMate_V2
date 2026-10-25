@@ -5,7 +5,9 @@
          「我要看这个」暗示，点它重取比多放一个按钮更省地方）。
          移动端（2026-10 改版，一比一复刻资讯流 App）：
            ① 白底页头：左侧 26px/700 黑色大标题，右侧两枚纯黑线性图标（搜索 / 通知）；
+              页头吸顶（sticky）：信息流往下滚时标题与两个入口始终留在顶部；
            ② 白底分类 Tab：选中项黑色粗体 + 3px 黑色下划线，其余灰色，可横向滑动；
+              紧跟在页头下方一起吸顶，滚到信息流深处也能直接换分类；
            ③ 信息流：17px 粗体标题两行 + 13px 灰色元信息，右侧大缩略图，
               行间 1px 浅灰分割线。
          移动端不提供手动刷新：由 10 分钟模块缓存 + 后端 5 分钟缓存兜住，重进页面即可重新取数。
@@ -27,7 +29,7 @@
           type="button"
           class="appbar-btn"
           aria-label="通知公告"
-          @click="switchTab('jwc_tzgg')"
+          @click="onTabClick('jwc_tzgg')"
         >
           <el-icon><Message /></el-icon>
         </button>
@@ -111,10 +113,12 @@
 
     <!-- 移动端分类 Tab：横向滑动、选中项黑色加粗 + 短下划线。
          与下方信息流共用同一份数据，切换只是换 filter，不重新请求。
-         吸顶说明：本页滚动容器是 .campus-page，这些区块要跟着页头一起吸住，
-         否则页头吸顶、Tab 滚走，分类切换就失去意义。
-         不放条数角标：7 个分类在 390px 宽下已接近满宽，再加数字会把「图书馆」
-         挤出首屏却看不到可滑动的暗示。 -->
+         滚动说明：页头与 Tab 一起吸顶（Tab 粘在页头下沿），滚到信息流任何位置都能
+         直接切分类；两者叠成一个白色顶栏，不会在信息流上方切出两条分离的悬浮条。
+         不放条数角标：6 个分类在 390px 宽下已接近满宽，再加数字会把「图书馆」
+         挤出首屏却看不到可滑动的暗示。
+         分类口径：移动端不展示「高教信息」（见 MOBILE_HIDDEN_SOURCES），
+         所以这里比桌面端卡片少一栏 —— 桌面端「高教信息」卡片保留不变。 -->
     <nav v-if="isMobile" class="campus-tabs" role="tablist" aria-label="资讯分类">
       <button
         v-for="t in mobileTabs"
@@ -124,102 +128,173 @@
         class="campus-tab"
         :class="{ 'is-active': activeTab === t.key }"
         :aria-selected="activeTab === t.key"
-        @click="switchTab(t.key)"
+        @click="onTabClick(t.key)"
       >
         {{ t.label }}
       </button>
     </nav>
 
-    <!-- 移动端大图轮播：**只在「全部」Tab 顶部**渲染（其余分类是纯信息流）。
-         图源 = 全部资讯里带 image_url 的最新条目（教学动态详情页抓到的主图），
-         按日期倒序最多 5 张；一张带图的都没有时回落到本地校园风光，避免首屏空一块。
-         点击进站内阅读器（与信息流一致），不跳出应用。
-         按住图片左右拖动即可切换（鼠标 / 触屏同一套 Pointer 事件逻辑）。
-         注意：拖动事件挂在 .hero-track（图片区域）上，**不是**外层 section ——
-         挂在外层的话，在标题或留白处按下也会拖着整块轮播平移，像是「整个组件可拖」。
-         切换分类时用 :key 重建，轮播计时归零、下次切回「全部」从第 1 张开始。 -->
-    <section
-      v-if="isMobile && heroSlides.length"
-      class="campus-hero-carousel"
-      :class="{ 'is-dragging': heroDragging, 'is-resetting': heroResettingTrack }"
-      :style="{ '--hero-drag-x': `${heroDragX}px` }"
+    <!-- 移动端卡片分页（三页轨道）
+         一次渲染「当前分类」和它左右两侧的邻居分类，三张卡片铺在同一条横向轨道上：
+         手指往左拖时整条轨道跟着走，右侧那一页从边缘同步进来，松手按位移 / 速度
+         吸附到最近一页（或回弹）。全程「跟手」，不会等到松手后才补动画。
+         邻居页只在拖动开始时挂载（pagerOpen），松手吸附完成后立即卸载，
+         页面高度回到当前分类自己的高度，不在底部留多余白区。
+         每页 = 一条分类的完整卡片：「全部」页含顶部大图轮播，其余是纯信息流。
+         轮播自己的拖动仍挂在 .hero-track 上，与分类翻页互不干扰（按压必须落在
+         .campus-feed 上才会启动分类拖动）。 -->
+    <div
+      v-if="isMobile"
+      ref="pagerRef"
+      class="campus-pager"
+      :class="{
+        'is-pager-dragging': pagerDragging,
+        'is-pager-resetting': pagerResetting,
+        'is-pager-open': pagerOpen,
+        'is-pager-animating': pagerAnimating,
+      }"
+      :style="{ transform: pagerTransform }"
+      @pointerdown="onPagerPointerDown"
+      @pointermove="onPagerPointerMove"
+      @pointerup="onPagerPointerUp"
+      @pointercancel="onPagerPointerCancel"
+      @click.capture="onPagerClickCapture"
+      @dragstart.prevent
     >
-      <!-- .hero-track 只承担两件事：接收 Pointer 事件、作为自绘指示点的定位参照。
-           它**不做位移** —— 位移交给内部的轮播容器（.el-carousel__container，也就是图片那一层），
-           这样卡片的圆角与边框始终不动，只有卡片里的图片跟着手指滑动。
-           事件绑在外层、位移作用在内层是刻意的：事件层不动，命中区域才稳定。 -->
-      <div
-        class="hero-track"
-        @pointerdown="onHeroPointerDown"
-        @pointermove="onHeroPointerMove"
-        @pointerup="onHeroPointerUp"
-        @pointercancel="onHeroPointerCancel"
-        @dragstart="onHeroSlideDragStart"
-      >
-        <el-carousel
-          ref="heroCarouselRef"
-          :key="activeTab"
-          :autoplay="heroAutoplay"
-          :interval="4200"
-          height="196px"
-          arrow="never"
-          indicator-position="none"
-          trigger="click"
-          @change="onHeroIndexChange"
+      <div v-for="entry in pagerPages" :key="entry.key" class="campus-pager-page">
+        <!-- 大图轮播：只在「全部」那一页的顶部渲染。
+             图源 = 全部资讯里带 image_url 的最新条目（教学动态详情页抓到的主图），
+             按日期倒序最多 5 张；一张带图的都没有时回落到本地校园风光，避免首屏空一块。
+             点击进站内阅读器（与信息流一致），不跳出应用。
+             按住图片左右拖动即可切换（鼠标 / 触屏同一套 Pointer 事件逻辑）。
+             注意：拖动事件挂在 .hero-track（图片区域）上，**不是**外层 section ——
+             挂在外层的话，在标题或留白处按下也会拖着整块轮播平移，像是「整个组件可拖」。 -->
+        <section
+          v-if="entry.slides.length"
+          class="campus-hero-carousel"
+          :class="{ 'is-dragging': heroDragging, 'is-resetting': heroResettingTrack }"
+          :style="{ '--hero-drag-x': `${heroDragX}px` }"
         >
-          <el-carousel-item v-for="s in heroSlides" :key="s.url">
-            <a
-              class="hero-slide"
-              :href="s.url || undefined"
-              @click="onHeroSlideClick($event, s)"
+          <!-- .hero-track 只承担两件事：接收 Pointer 事件、作为自绘指示点的定位参照。
+               它**不做位移** —— 位移交给内部的轮播容器（.el-carousel__container，也就是图片那一层），
+               这样卡片的圆角与边框始终不动，只有卡片里的图片跟着手指滑动。
+               事件绑在外层、位移作用在内层是刻意的：事件层不动，命中区域才稳定。 -->
+          <div
+            class="hero-track"
+            @pointerdown="onHeroPointerDown"
+            @pointermove="onHeroPointerMove"
+            @pointerup="onHeroPointerUp"
+            @pointercancel="onHeroPointerCancel"
+            @dragstart="onHeroSlideDragStart"
+          >
+            <!-- ref 用函数形式：轮播在 v-for 的页面里，最多只有一个（只有「全部」有图），
+                 用字符串 ref 会被当成数组，轮播的 next/prev 就取不到了。 -->
+            <el-carousel
+              :ref="setHeroCarouselRef"
+              :autoplay="heroAutoplay"
+              :interval="4200"
+              height="196px"
+              arrow="never"
+              indicator-position="none"
+              trigger="click"
+              @change="onHeroIndexChange"
             >
-              <img class="hero-slide-img" :src="s.image_url" alt="" loading="lazy" draggable="false" />
-              <div class="hero-slide-shade" />
-              <div class="hero-slide-caption">
-                <span class="hero-slide-tag">{{ s.tagLabel }}</span>
-                <h3 class="hero-slide-title">{{ s.title }}</h3>
-              </div>
-            </a>
-          </el-carousel-item>
-        </el-carousel>
-        <!-- 指示点：叠在图片底边内侧，属于卡片装饰，**不跟着图片一起位移**
-             （它在 .hero-track 里、不在位移层里）。用绝对定位定位，不参与轮播盒子尺寸。
-             纯装饰：pointer-events: none，不影响拖动与点击。 -->
-        <div class="hero-dots" aria-hidden="true">
-          <span
-            v-for="(s, i) in heroSlides"
-            :key="s.url + i"
-            class="hero-dot"
-            :class="{ 'is-active': i === heroIndex }"
-          />
-        </div>
-      </div>
-    </section>
-
-    <!-- 移动端信息流：标题两行 + 元信息行 + 右侧缩略图 + 行尾互动数 -->
-    <section v-if="isMobile" class="campus-feed">
-      <a
-        v-for="item in mobileFeed"
-        :key="item.url + item.title"
-        class="feed-item"
-        :href="item.url"
-        @click.prevent="openArticle(item.url, item.title)"
-      >
-        <div class="feed-body">
-          <h3 class="feed-title">{{ item.title }}</h3>
-          <div class="feed-meta">
-            <span class="feed-time">{{ item.timeLabel }}</span>
-            <span class="feed-dot">·</span>
-            <span class="feed-source">{{ item.sourceLabel }}</span>
+              <el-carousel-item v-for="s in entry.slides" :key="s.url">
+                <a
+                  class="hero-slide"
+                  :href="s.url || undefined"
+                  @click="onHeroSlideClick($event, s)"
+                >
+                  <img class="hero-slide-img" :src="s.image_url" alt="" loading="lazy" draggable="false" />
+                  <div class="hero-slide-shade" />
+                  <div class="hero-slide-caption">
+                    <span class="hero-slide-tag">{{ s.tagLabel }}</span>
+                    <h3 class="hero-slide-title">{{ s.title }}</h3>
+                  </div>
+                </a>
+              </el-carousel-item>
+            </el-carousel>
+            <!-- 指示点：叠在图片底边内侧，属于卡片装饰，**不跟着图片一起位移**
+                 （它在 .hero-track 里、不在位移层里）。用绝对定位定位，不参与轮播盒子尺寸。
+                 纯装饰：pointer-events: none，不影响拖动与点击。 -->
+            <div class="hero-dots" aria-hidden="true">
+              <span
+                v-for="(s, i) in entry.slides"
+                :key="s.url + i"
+                class="hero-dot"
+                :class="{ 'is-active': i === heroIndex }"
+              />
+            </div>
           </div>
-        </div>
-        <!-- 只有真的有图才渲染缩略图：参考稿无图条目是通栏标题，不留右侧空位 -->
-        <div v-if="item.image_url" class="feed-thumb">
-          <img :src="item.image_url" loading="lazy" alt="" />
-        </div>
-      </a>
-      <p v-if="!mobileFeed.length" class="feed-empty">该分类暂无内容</p>
-    </section>
+        </section>
+
+        <!-- 信息流：标题两行 + 元信息行 + 右侧缩略图 + 行尾互动数。
+             点整行进「资讯详情子页」（正文 + 评论 / 点赞 / 转发），不再直接跳站内阅读器 ——
+             只读阅读器留下了「读完了想说两句却说不了」的断点；详情子页把社区那一层补齐，
+             正文抓取仍复用后端同一套解析，只是多了一层互动。 -->
+        <section class="campus-feed">
+          <div
+            v-for="item in entry.items"
+            :key="item.url + item.title"
+            class="feed-item"
+            role="link"
+            tabindex="0"
+            @click="openDetail(item.url, item.title)"
+            @keydown.enter.prevent="openDetail(item.url, item.title)"
+          >
+            <div class="feed-body">
+              <h3 class="feed-title">{{ item.title }}</h3>
+              <div class="feed-meta">
+                <span class="feed-time">{{ item.timeLabel }}</span>
+                <span class="feed-dot">·</span>
+                <span class="feed-source">{{ item.sourceLabel }}</span>
+              </div>
+              <!-- 行尾互动数：评论 / 点赞 / 转发，论坛 / 微博信息流的标配。
+                   评论与转发仍进详情子页，但会直接把输入框聚焦 / 转发面板弹出（openDetail 的 from 参数），
+                   省掉「进去再点一次」；点赞则**就地**切换，不跳页 ——
+                   刷信息流时的点赞是高频轻动作，跳页会打断浏览。
+                   计数为 0 时不显示数字，只留图标，避免满屏 "0" 拉低信息密度。 -->
+              <div class="feed-acts">
+                <button
+                  type="button"
+                  class="feed-act"
+                  :aria-label="`评论 ${item.comment_count} 条`"
+                  @click.stop="openDetail(item.url, item.title, 'comment')"
+                >
+                  <el-icon><ChatDotRound /></el-icon>
+                  <span v-if="item.comment_count">{{ item.comment_count }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="feed-act"
+                  :class="{ 'is-liked': item.liked }"
+                  :aria-pressed="item.liked"
+                  aria-label="点赞"
+                  @click.stop="likeFromFeed(item)"
+                >
+                  <el-icon><StarFilled v-if="item.liked" /><Star v-else /></el-icon>
+                  <span v-if="item.like_count">{{ item.like_count }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="feed-act"
+                  :aria-label="`转发 ${item.repost_count} 次`"
+                  @click.stop="openDetail(item.url, item.title, 'repost')"
+                >
+                  <el-icon><Share /></el-icon>
+                  <span v-if="item.repost_count">{{ item.repost_count }}</span>
+                </button>
+              </div>
+            </div>
+            <!-- 只有真的有图才渲染缩略图：参考稿无图条目是通栏标题，不留右侧空位 -->
+            <div v-if="item.image_url" class="feed-thumb">
+              <img :src="item.image_url" loading="lazy" alt="" />
+            </div>
+          </div>
+          <p v-if="!entry.items.length" class="feed-empty">该分类暂无内容</p>
+        </section>
+      </div>
+    </div>
 
     <!-- 以下为桌面端版式（移动端整块隐藏：由上面的 Tab + 信息流替代） -->
     <template v-if="!isMobile">
@@ -390,23 +465,41 @@
          且整个页面的切换动画会失效。
          阅读器自己会 Teleport 抽屉到 body，放在这里不会影响布局。 -->
     <ArticleReader ref="readerRef" />
+
+    <!-- 资讯详情子页（移动端信息流点进一条资讯后的落地页）：
+         正文由 /api/campus/articles/detail 返回，附带评论 / 点赞 / 转发。
+         v-if 控制挂载：组件挂载即打开，卸载即关闭，不必手动管理 visible。 -->
+    <ArticleDetailPage
+      ref="detailRef"
+      v-if="detailTarget"
+      :article-url="detailTarget.url"
+      :title="detailTarget.title"
+      :source="detailTarget.source"
+      @close="closeDetail"
+      @updated="onDetailUpdated"
+      @read="onDetailRead"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { ElCarousel } from 'element-plus'
 import { getImpression } from '@/api/campus'
 import type { ImpressionItem } from '@/types'
 import { getCampusImpressionCache, setCampusImpressionCache } from '@/utils/studentDataCache'
 import { tilt } from '@/directives/tilt'
 import ArticleReader from '@/components/campus/ArticleReader.vue'
+import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
+import { getArticleInteractions, toggleArticleLike, type CampusArticleInteract } from '@/api/campus'
+import { ElMessage } from 'element-plus'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
   Document, Clock, Box, Van, ArrowRight,
   Notification, DataBoard,
   School, Collection,
-  SetUp, Histogram, HomeFilled, OfficeBuilding, Search, Message
+  SetUp, Histogram, HomeFilled, OfficeBuilding, Search, Message,
+  ChatDotRound, Star, StarFilled, Share
 } from '@element-plus/icons-vue'
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
 
@@ -416,6 +509,9 @@ window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 
 
 /** 站内阅读器：点击资讯在应用内打开（移动端全屏抽屉），不跳出应用 */
 const readerRef = ref<InstanceType<typeof ArticleReader> | null>(null)
+
+/** 资讯详情子页（移动端信息流 → 详情）：用于「点评论/转发直接落到对应面板」 */
+const detailRef = ref<InstanceType<typeof ArticleDetailPage> | null>(null)
 function openArticle(url: string, title?: string) {
   if (!url) return
   readerRef.value?.open(url, title)
@@ -730,10 +826,16 @@ function openSearch() {
  * 第一层：在本页已加载的资讯里按标题过滤。
  * 直接吃 impressionData（页面已渲染的那份数据），所以「搜得到 = 看得见」，
  * 不会出现搜索结果里有、页面上却找不到的割裂。
+ * 移动端额外剔除已下线栏目的条目（MOBILE_HIDDEN_SOURCES）：手机上没有「高教信息」的
+ * 列表可看，却能在搜索结果里点进去、且被标成「高教信息」，反而制造新的割裂。
+ * 桌面端信息流完整，搜索照旧覆盖全部栏目。
  */
 function filterNews(keyword: string): NewsHit[] {
   const kw = keyword.toLowerCase()
-  return impressionData.value
+  const pool = isMobile.value
+    ? impressionData.value.filter(i => !MOBILE_HIDDEN_SOURCES.includes(i.source))
+    : impressionData.value
+  return pool
     .filter(i => (i.title || '').toLowerCase().includes(kw))
     .map(i => ({
       title: i.title,
@@ -816,15 +918,16 @@ const carouselImages = computed(() => galleryImages)
 /**
  * 分类定义。key 直接复用后端的 source 取值，这样切 Tab 只是换一个 filter，
  * 不产生任何网络请求；'all' 为合并流。
- * 与桌面端卡片一一对应：教学动态 / 通知公告 / 高教信息 / 教学建设 / 学院动态 / 图书馆。
+ * 与桌面端卡片一一对应：教学动态 / 通知公告 / 教学建设 / 学院动态 / 图书馆。
+ * 「高教信息」不设 Tab：移动端信息流不展示该栏目的内容（见 itemsOfTab），
+ * 与桌面端「高教信息」卡片并列的只剩「教学建设」，那条桌面布局保持不变。
  */
-type FeedTabKey = 'all' | 'jwc_jxdt' | 'jwc_tzgg' | 'jwc_gjxx' | 'jwc_jxjs' | 'college_news' | 'library'
+type FeedTabKey = 'all' | 'jwc_jxdt' | 'jwc_tzgg' | 'jwc_jxjs' | 'college_news' | 'library'
 
 const FEED_TABS: { key: FeedTabKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'jwc_jxdt', label: '教学动态' },
   { key: 'jwc_tzgg', label: '通知公告' },
-  { key: 'jwc_gjxx', label: '高教信息' },
   { key: 'jwc_jxjs', label: '教学建设' },
   { key: 'college_news', label: '学院动态' },
   { key: 'library', label: '图书馆' },
@@ -832,9 +935,18 @@ const FEED_TABS: { key: FeedTabKey; label: string }[] = [
 
 const activeTab = ref<FeedTabKey>('all')
 
+/**
+ * 移动端信息流不展示的栏目（source 取值）。
+ * 「高教信息」（jwc_gjxx）已在移动端下线：分类 Tab 里没有它，
+ * 「全部」合并流里也要一并剔除，否则它会以「高教信息」的来源标签混在首屏，
+ * 用户既点不到对应分类、也找不到它在哪 —— 搜得到却翻不到，比不展示更困惑。
+ * 桌面端不受影响：桌面卡片直接读 impression.gjxx。
+ */
+const MOBILE_HIDDEN_SOURCES: string[] = ['jwc_gjxx']
+
 /** 某个分类下的条目（已去重 + 按日期倒序） */
 function itemsOfTab(key: FeedTabKey): ImpressionItem[] {
-  const all = impressionData.value
+  const all = impressionData.value.filter(i => !MOBILE_HIDDEN_SOURCES.includes(i.source))
   if (key === 'all') {
     // 合并流：入口项（系统入口）不是资讯，剔除；其余全部参与排序
     return deduplicateByTitle(all.filter(i => i.source !== 'jwc_entries')).sort(byDateDesc)
@@ -842,16 +954,295 @@ function itemsOfTab(key: FeedTabKey): ImpressionItem[] {
   return deduplicateByTitle(all.filter(i => i.source === key)).sort(byDateDesc)
 }
 
-/** Tab 列表（只含 key/label）：条数不放在 Tab 上 —— 7 个分类 × 数字会把「图书馆」挤出首屏 */
+/** Tab 列表（只含 key/label）：条数不放在 Tab 上 —— 6 个分类 × 数字会把「图书馆」挤出首屏 */
 const mobileTabs = computed(() => FEED_TABS)
 
-function switchTab(key: FeedTabKey) {
+/**
+ * 切换分类。
+ * @param smoothScroll 是否平滑滚回顶部：点 Tab / 页头通知按钮时为 true（默认）；
+ *                     卡片分页吸附换页时为 false —— 翻页动画期间再叠一段平滑长滚动会晃眼。
+ */
+function switchTab(key: FeedTabKey, smoothScroll = true) {
   activeTab.value = key
-  // 轮播随 activeTab 用 :key 重建，序号必须一起归零，否则指示点会停在上一次的位置
-  heroIndex.value = 0
   // 切分类后回到列表顶部：否则停在上一分类的滚动位置，看起来像「没反应」
   const scroller = document.querySelector('.campus-page')
-  if (scroller instanceof HTMLElement) scroller.scrollTo?.({ top: 0, behavior: 'smooth' })
+  if (scroller instanceof HTMLElement) {
+    scroller.scrollTo?.({ top: 0, behavior: smoothScroll ? 'smooth' : 'auto' })
+  }
+}
+
+/**
+ * 点 Tab / 页头通知入口切分类：先取消可能还在跑的卡片吸附动画。
+ * 否则吸附的 200ms 定时器会在稍后把分类再次切回滑动目标，盖掉用户这次点击。
+ */
+function onTabClick(key: FeedTabKey) {
+  cancelPagerMotion()
+  switchTab(key)
+}
+
+/** 中止轨道上的一切位移 / 定时器：把轨道瞬时归位、收起邻居，不再接后续动作 */
+function cancelPagerMotion() {
+  window.clearTimeout(pagerTimer)
+  pagerDrag = null
+  pagerAnimating.value = false
+  pagerDragging.value = false
+  pagerResetting.value = true
+  pagerOpen.value = false
+  pagerX.value = 0
+  requestAnimationFrame(() => {
+    void pagerRef.value?.offsetWidth
+    pagerResetting.value = false
+  })
+}
+
+/* ==================== 移动端：卡片分页（跟手切换分类） ==================== */
+
+/** 分页里的一页：某个分类的完整卡片（「全部」页额外带顶部大图轮播） */
+interface PagerPage {
+  key: FeedTabKey
+  label: string
+  items: FeedItem[]
+  slides: HeroSlide[]
+}
+
+/**
+ * 卡片分页：当前分类居中，左右各挂一页邻居，三张卡片排在同一条横向轨道上。
+ *   · 手指往左拖：整条轨道 1:1 跟着走，右侧邻居页从屏幕边缘同步进来 ——
+ *     不是松手后才补动画，拖动过程中就已经看得到下一页；
+ *   · 松手：位移超过阈值 / 快甩 → 吸附到相邻页；否则回弹归位；
+ *   · 吸附完成后：切换 activeTab、把轨道瞬时归零、卸载两侧邻居 —— 当前页始终是
+ *     轨道里同一个 DOM 节点（v-for :key 按分类），换页瞬间不重建页面、不会闪；
+ *   · 邻居页只在拖动开始时挂载，静止时只渲染当前页，页面高度不被邻居撑高；
+ *   · 首 / 尾分类没有对应方向的邻居：拖动改用 0.3 阻尼做「到头」反馈并回弹。
+ * 轮播区域不接分类手势（按压必须落在 .campus-feed 上），两套拖动互不干扰。
+ * 吸顶的页头 / Tab 保持不动，位移只作用于这条卡片轨道。
+ */
+const pagerRef = ref<HTMLElement | null>(null)
+/** 一页的宽度（px）：页宽 = 分页容器宽度，吸附位移与边界判断都按它算 */
+const pagerWidth = ref(0)
+/** 是否挂载左右邻居页（拖动开始 → 吸附完成） */
+const pagerOpen = ref(false)
+/** 轨道正在跟手（关过渡） */
+const pagerDragging = ref(false)
+/** 换页后瞬时归位（关过渡）：切数据与轨道归零必须在同一帧完成 */
+const pagerResetting = ref(false)
+/** 吸附 / 回弹动画进行中：不接新手势 */
+const pagerAnimating = ref(false)
+/** 轨道相对「当前页居中」的位移（px，向左为负） */
+const pagerX = ref(0)
+
+/** 进入拖动态的最小水平位移（px）：低于它算点击，不算滑动 */
+const PAGER_DRAG_THRESHOLD = 12
+/** 松手判定翻页的最小位移（px） */
+const PAGER_SWIPE_THRESHOLD = 56
+/** 速度阈值（px/ms）：快甩时即使位移不够也翻页 */
+const PAGER_FLING_VELOCITY = 0.35
+/** 吸附 / 回弹时长（ms），与样式里的 transform 过渡保持一致 */
+const PAGER_SLIDE_MS = 200
+
+function measurePagerWidth() {
+  if (pagerRef.value) pagerWidth.value = pagerRef.value.clientWidth
+}
+
+/** 轨道上要渲染的页：拖动时是 [上一页, 当前页, 下一页]，静止时只有当前页 */
+const pagerPages = computed<PagerPage[]>(() => {
+  const index = FEED_TABS.findIndex(t => t.key === activeTab.value)
+  const build = (i: number): PagerPage => ({
+    key: FEED_TABS[i].key,
+    label: FEED_TABS[i].label,
+    items: feedItemsOf(FEED_TABS[i].key),
+    slides: heroSlidesOf(FEED_TABS[i].key),
+  })
+  const pages: PagerPage[] = []
+  if (pagerOpen.value && index > 0) pages.push(build(index - 1))
+  pages.push(build(index))
+  if (pagerOpen.value && index < FEED_TABS.length - 1) pages.push(build(index + 1))
+  return pages
+})
+
+/** 当前页在渲染数组里的下标：0 = 最左，1 = 中间，2 = 最右 */
+const pagerAnchor = computed(() =>
+  Math.max(0, pagerPages.value.findIndex(p => p.key === activeTab.value)),
+)
+
+/**
+ * 轨道位移 = 「把当前页挪到中点」的基准偏移 + 手指位移。
+ * 收尾换页时 activeTab 变化会改变基准偏移，同时 pagerX 归零 —— 两者在同一次渲染里
+ * 相互抵消，画面上当前页仍停在原处，所以看不到跳动。
+ */
+const pagerTransform = computed(() => {
+  const offset = -pagerAnchor.value * pagerWidth.value + pagerX.value
+  return `translate3d(${offset}px, 0, 0)`
+})
+
+interface PagerDragState {
+  pointerId: number
+  startX: number
+  startY: number
+  lastX: number
+  lastTime: number
+  /** 已越过阈值、进入拖动 */
+  active: boolean
+  /** 已判定为纵向滚动，本次手势彻底放弃 */
+  locked: boolean
+}
+let pagerDrag: PagerDragState | null = null
+/** 上一次手势是滑动（而非轻点）：随后紧跟着的 click 要吞掉，否则一滑完就点进了文章 */
+let pagerSuppressClick = false
+let pagerTimer: number | undefined
+
+function onPagerPointerDown(e: PointerEvent) {
+  // 每次按下先复位：避免上一次滑动没产生 click 时，把下一次正常点击吞掉
+  pagerSuppressClick = false
+  if (!isMobile.value || pagerAnimating.value) return
+  // 只处理主键 / 单指；右键与双指不接管
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  if (!e.isPrimary) return
+  const target = e.target as HTMLElement | null
+  // 只从信息流上起手：轮播图片有自己的拖动；行内互动按钮优先当点击
+  if (!target?.closest('.campus-feed')) return
+  if (target.closest('button')) return
+  measurePagerWidth()
+  pagerDrag = {
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastTime: Date.now(),
+    active: false,
+    locked: false,
+  }
+}
+
+function onPagerPointerMove(e: PointerEvent) {
+  const d = pagerDrag
+  if (!d || d.pointerId !== e.pointerId || d.locked) return
+  const dx = e.clientX - d.startX
+  const dy = e.clientY - d.startY
+
+  // 未越过阈值：先定方向。纵向为主 → 交还页面滚动，本次手势放弃
+  if (!d.active) {
+    if (Math.abs(dy) > PAGER_DRAG_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+      d.locked = true
+      return
+    }
+    if (Math.abs(dx) <= PAGER_DRAG_THRESHOLD) return
+    d.active = true
+    // 邻居页与位移同一次渲染上屏：从第一帧起三张卡片就在轨道上
+    pagerOpen.value = true
+    pagerDragging.value = true
+    // 捕获指针：手指滑出列表区域也不丢 up 事件
+    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+  }
+
+  d.lastX = e.clientX
+  d.lastTime = Date.now()
+  const index = FEED_TABS.findIndex(t => t.key === activeTab.value)
+  const hasTarget = dx < 0 ? index < FEED_TABS.length - 1 : index > 0
+  // 1:1 跟手；已到首 / 尾分类时加重到 0.3，用更大的阻力暗示「这边没有了」
+  pagerX.value = hasTarget ? dx : dx * 0.3
+}
+
+function onPagerPointerUp(e: PointerEvent) {
+  const d = pagerDrag
+  pagerDrag = null
+  if (!d || d.pointerId !== e.pointerId) return
+
+  // 没进入拖动（轻点）或已判定为纵向滚动：直接归位，click 照常交给行 / 按钮
+  if (!d.active || d.locked) {
+    pagerX.value = 0
+    pagerDragging.value = false
+    return
+  }
+
+  // 滑动过：吞掉随后那次 click
+  pagerSuppressClick = true
+  window.setTimeout(() => { pagerSuppressClick = false }, 350)
+
+  const dx = e.clientX - d.startX
+  const dt = Math.max(1, Date.now() - d.lastTime)
+  const velocity = (e.clientX - d.lastX) / dt
+  const wantNext = dx < 0 && (Math.abs(dx) > PAGER_SWIPE_THRESHOLD || velocity < -PAGER_FLING_VELOCITY)
+  const wantPrev = dx > 0 && (Math.abs(dx) > PAGER_SWIPE_THRESHOLD || velocity > PAGER_FLING_VELOCITY)
+
+  const index = FEED_TABS.findIndex(t => t.key === activeTab.value)
+  const targetIndex = wantNext ? index + 1 : wantPrev ? index - 1 : -1
+
+  // 已到首 / 尾分类，或位移不够：回弹
+  if (targetIndex < 0 || targetIndex >= FEED_TABS.length) {
+    springBackPager()
+    return
+  }
+
+  snapPager(wantNext ? 'next' : 'prev', FEED_TABS[targetIndex].key)
+}
+
+/**
+ * 回弹：轨道滑回当前页，动画结束后收起邻居页。
+ * 邻居页卸载时当前页仍在原位，所以不会有任何位移。
+ */
+function springBackPager() {
+  pagerAnimating.value = true
+  pagerDragging.value = false
+  pagerX.value = 0
+  window.clearTimeout(pagerTimer)
+  pagerTimer = window.setTimeout(closePager, PAGER_SLIDE_MS + 20)
+}
+
+/**
+ * 吸附到相邻页：轨道滑到 ±页宽（此时邻居正好落在中位）。
+ * 动画结束后在同一帧里做三件事：切分类、把轨道归零、卸载邻居 ——
+ * 当前页始终是同一个 DOM 节点（:key 按分类），画面不重建、不闪。
+ */
+function snapPager(direction: 'next' | 'prev', key: FeedTabKey) {
+  const width = pagerWidth.value || pagerRef.value?.clientWidth || window.innerWidth || 320
+  pagerAnimating.value = true
+  pagerDragging.value = false
+  pagerX.value = direction === 'next' ? -width : width
+  window.clearTimeout(pagerTimer)
+  pagerTimer = window.setTimeout(() => {
+    pagerResetting.value = true
+    switchTab(key, false)
+    pagerOpen.value = false
+    pagerX.value = 0
+    requestAnimationFrame(() => {
+      // 强制结算归位后的这一帧，再恢复过渡，避免残留目标值再补一段动画
+      void pagerRef.value?.offsetWidth
+      pagerResetting.value = false
+      pagerAnimating.value = false
+    })
+  }, PAGER_SLIDE_MS + 20)
+}
+
+/** 收起邻居页：当前页仍在原位，卸载邻居不产生视觉位移 */
+function closePager() {
+  pagerResetting.value = true
+  pagerOpen.value = false
+  pagerX.value = 0
+  requestAnimationFrame(() => {
+    void pagerRef.value?.offsetWidth
+    pagerResetting.value = false
+    pagerAnimating.value = false
+  })
+}
+
+function onPagerPointerCancel() {
+  // 被系统打断（来电、手势返回、双指缩放）：回弹，不翻页
+  pagerDrag = null
+  if (!pagerOpen.value) {
+    pagerX.value = 0
+    pagerDragging.value = false
+    return
+  }
+  springBackPager()
+}
+
+/** 滑动结束后那一次 click 在此截停：不让它落到行（进详情）或按钮上 */
+function onPagerClickCapture(e: MouseEvent) {
+  if (!pagerSuppressClick) return
+  pagerSuppressClick = false
+  e.preventDefault()
+  e.stopPropagation()
 }
 
 /**
@@ -881,22 +1272,42 @@ interface FeedItem {
   image_url: string | null
   timeLabel: string
   sourceLabel: string
+  /** 来源栏目 key（jwc_jxdt / jwc_tzgg …）：详情页用它显示顶栏副标题与来源标签 */
+  source: string
+  like_count: number
+  comment_count: number
+  repost_count: number
+  liked: boolean
 }
 
 /**
- * 移动端信息流数据：当前分类 → 渲染项。
+ * 一条分类的完整信息流（含互动计数）。
  * 标题去掉「绵阳城市学院」等公共前缀 —— 移动端一行只有十几个字，
  * 前缀会把真正的信息挤到第二行甚至截断。
+ * 互动数字来自 interactionMap（默认 0）：没被任何同学互动过的文章不额外建记录，
+ * 所以「有计数」本身就是一条值得显示的信息。
+ * 卡片分页里每一页都走这里取数，口径与当前页完全一致。
  */
-const mobileFeed = computed<FeedItem[]>(() =>
-  itemsOfTab(activeTab.value).map(i => ({
-    title: removeCommonPrefix(i.title),
-    url: i.url,
-    image_url: i.image_url,
-    timeLabel: relativeTime(i.date),
-    sourceLabel: SOURCE_LABELS[i.source] || '资讯',
-  }))
-)
+function feedItemsOf(key: FeedTabKey): FeedItem[] {
+  return itemsOfTab(key).map(i => {
+    const s = interactionMap.value[i.url]
+    return {
+      title: removeCommonPrefix(i.title),
+      url: i.url,
+      image_url: i.image_url,
+      timeLabel: relativeTime(i.date),
+      sourceLabel: SOURCE_LABELS[i.source] || '资讯',
+      source: i.source,
+      like_count: s?.like_count ?? 0,
+      comment_count: s?.comment_count ?? 0,
+      repost_count: s?.repost_count ?? 0,
+      liked: s?.liked ?? false,
+    }
+  })
+}
+
+/** 当前分类的信息流（详情页取来源、页面渲染都读这一份） */
+const mobileFeed = computed<FeedItem[]>(() => feedItemsOf(activeTab.value))
 
 /* ==================== 移动端：大图轮播 ==================== */
 
@@ -922,8 +1333,7 @@ const HERO_FALLBACK_IMAGES = [
 const HERO_MAX = 5
 
 /**
- * 「全部」Tab 顶部的大图轮播数据。**只在 activeTab === 'all' 时渲染**，
- * 其余分类是纯信息流（用户要的是「在分类里翻资讯」，顶部再来一条大图会白占一屏）。
+ * 某个分类顶部的大图轮播数据。只有「全部」分类有图，其余分类返回空数组（纯信息流）。
  * 规则：
  *  ① 取全部资讯里**真带图**的条目（按日期倒序）—— 图与标题都来自资讯本身，
  *     点进去就是这篇资讯，这是最有价值的轮播形态；
@@ -931,9 +1341,9 @@ const HERO_MAX = 5
  *     标题用资讯标题，保证首屏不留一块空白，也不影响点击进阅读器。
  * 纯前端计算：切 Tab 不产生任何请求。
  */
-const heroSlides = computed<HeroSlide[]>(() => {
+function heroSlidesOf(key: FeedTabKey): HeroSlide[] {
   // 非「全部」分类：不渲染轮播（模板 v-if 已拦截，这里返回空数组兜底）
-  if (activeTab.value !== 'all') return []
+  if (key !== 'all') return []
 
   const items = itemsOfTab('all')
 
@@ -955,7 +1365,7 @@ const heroSlides = computed<HeroSlide[]>(() => {
     image_url: HERO_FALLBACK_IMAGES[idx % HERO_FALLBACK_IMAGES.length],
     tagLabel: SOURCE_LABELS[i.source] || '资讯',
   }))
-})
+}
 
 /** 轮播图点击：有 url 就进站内阅读器（兜底风光图也带资讯 url，同样可点） */
 function openHeroSlide(s: HeroSlide) {
@@ -983,6 +1393,17 @@ const heroIndex = ref(0)
 
 function onHeroIndexChange(index: number) {
   heroIndex.value = index
+}
+
+/**
+ * 函数式 ref：轮播渲染在分页的 v-for 页面里，字符串 ref 会被收成数组，
+ * next / prev 就取不到了；这里直接记住唯一的轮播实例（只有「全部」页有图）。
+ * 实例（重新）挂载时把指示点序号归零：轮播从第 1 张开始，点也要跟着归零。
+ */
+function setHeroCarouselRef(el: unknown) {
+  const inst = (el as InstanceType<typeof ElCarousel> | null) || null
+  if (inst && inst !== heroCarouselRef.value) heroIndex.value = 0
+  heroCarouselRef.value = inst
 }
 /** 拖动中实时的水平位移（px），模板里绑到轮播容器上做跟手偏移 */
 const heroDragX = ref(0)
@@ -1167,7 +1588,146 @@ function onHeroSlideDragStart(e: DragEvent) {
   e.preventDefault()
 }
 
+/* ==================== 移动端：资讯详情子页 / 互动计数 ==================== */
+
+/**
+ * 当前打开的文章（v-if 控制详情子页挂载）。
+ * from 记录入口来源：'comment' / 'repost' 是信息流行尾小按钮点的，
+ * 详情页打开后要直接把对应面板递到用户面前，省掉一次「再点一下」。
+ */
+const detailTarget = ref<{ url: string; title: string; source: string; from: 'row' | 'comment' | 'repost' } | null>(null)
+
+/**
+ * 互动计数表：url → 计数 + 当前用户是否点赞。
+ * 组件每次导航都会重建，所以这份表放在**模块级**作用域（与 impression 缓存同理），
+ * 返回列表时计数器不会闪回 0；详情页里的改动通过 onDetailUpdated 回写。
+ */
+const interactionMap = ref<Record<string, CampusArticleInteract>>({})
+
+/** 已在途的计数请求：切分类连续触发时只保留最后一次结果，避免旧响应覆盖新数据 */
+let interactionReqSeq = 0
+
+/**
+ * 拉取当前分类可见文章的互动计数。
+ * 用批量接口一次请求补齐整屏（/campus/interactions 接收 url 列表），
+ * 若逐条请求，一个分类 20 条就是 20 个请求 —— 这在手机上很容易把首屏拖成好几秒。
+ * 失败静默：计数只是附加信息，拿不到就按 0 显示，不能因此让资讯流报错。
+ */
+async function loadInteractions(urls: string[]) {
+  const targets = urls.filter(u => !!u)
+  if (!targets.length) return
+  const seq = ++interactionReqSeq
+  try {
+    const res = await getArticleInteractions(targets)
+    // 过期的响应直接丢弃：用户可能已经切到别的分类了
+    if (seq !== interactionReqSeq) return
+    interactionMap.value = { ...interactionMap.value, ...res }
+  } catch { /* 静默：计数拿不到不影响阅读 */ }
+}
+
+/** 详情页只回传计数字段（不含标题/来源），合并时与已有记录取并集 */
+type DetailUpdatedPayload = Pick<
+  CampusArticleInteract,
+  'url' | 'like_count' | 'comment_count' | 'repost_count' | 'view_count' | 'liked'
+>
+
+/** 把详情页回传的最新计数合并回信息流（点赞 / 评论 / 转发都会走这里） */
+function onDetailUpdated(payload: DetailUpdatedPayload) {
+  const prev = interactionMap.value[payload.url]
+  interactionMap.value = {
+    ...interactionMap.value,
+    [payload.url]: { ...(prev || {}), ...payload } as CampusArticleInteract,
+  }
+}
+
+/**
+ * 打开详情子页。
+ * - from = 'row'：整行点击，正常落到详情首屏；
+ * - from = 'comment' / 'repost'：信息流行尾的小按钮，详情页挂载后由 openAnd() 直接把
+ *   输入框聚焦 / 转发面板弹出来 —— 用户点「评论」的意图很明确，不该还要在详情里再点一次。
+ */
+function openDetail(url: string, title?: string, from: 'row' | 'comment' | 'repost' = 'row') {
+  if (!url) return
+  // 来源栏目从信息流项里取：详情页要用它显示顶栏副标题与来源标签
+  const source = mobileFeed.value.find(f => f.url === url)?.source || ''
+  detailTarget.value = { url, title: title || '', source, from }
+  if (from === 'row') return
+  const action = from
+  // 等 v-if 把子组件挂上去（下一帧），再让它执行打开后的动作
+  nextTick(() => {
+    if (detailTarget.value?.url === url) detailRef.value?.openAnd(url, action)
+  })
+}
+
+function closeDetail() {
+  detailTarget.value = null
+  interactionMap.value = { ...interactionMap.value }
+}
+
+/**
+ * 详情子页点「阅读全文」：正文不在详情页渲染，交给站内阅读器（ArticleReader）。
+ * 先关详情再开阅读器：两者都是整页覆盖层，同时挂载会互相抢 body 滚动锁与 z-index；
+ * 先收起讨论页、露出阅读器，视觉上是「讨论 → 阅读」的一次正常推进，不会叠层。
+ */
+function onDetailRead(url: string) {
+  const title = detailTarget.value?.title || ''
+  closeDetail()
+  nextTick(() => openArticle(url, title))
+}
+
+/**
+ * 信息流里直接点赞（不跳详情）：论坛信息流的肌肉记忆就是「刷着刷着点个赞」。
+ * 与详情页同一套乐观更新策略 —— 先改本地，失败回滚，计数以服务端返回为准。
+ */
+async function likeFromFeed(item: FeedItem) {
+  const prev = interactionMap.value[item.url]
+  const snapshot = {
+    liked: prev?.liked ?? false,
+    like_count: prev?.like_count ?? 0,
+  }
+  const nextLiked = !snapshot.liked
+  interactionMap.value = {
+    ...interactionMap.value,
+    [item.url]: {
+      ...(prev || { url: item.url, title: item.title, source: '', image_url: item.image_url, comment_count: item.comment_count, repost_count: item.repost_count, view_count: 0, updated_at: null }),
+      liked: nextLiked,
+      like_count: Math.max(0, snapshot.like_count + (nextLiked ? 1 : -1)),
+    } as CampusArticleInteract,
+  }
+  try {
+    const res = await toggleArticleLike(item.url)
+    const cur = interactionMap.value[item.url]
+    interactionMap.value = {
+      ...interactionMap.value,
+      [item.url]: { ...(cur as CampusArticleInteract), liked: res.liked, like_count: res.count },
+    }
+  } catch {
+    const cur = interactionMap.value[item.url]
+    interactionMap.value = {
+      ...interactionMap.value,
+      [item.url]: { ...(cur as CampusArticleInteract), ...snapshot },
+    }
+    ElMessage.error('点赞失败，请重试')
+  }
+}
+
+/**
+ * 为轨道上可见的页面（当前 + 拖动时挂载的邻居）补齐互动计数。
+ * 只为「正在渲染」的这批文章取数：邻居页一旦挂载，计数就不会在翻到它之后才跳出来。
+ * watch immediate 保证首屏（默认「全部」）也会拉，不用在 onMounted 里再写一遍。
+ */
+watch(
+  () => pagerPages.value.map(p => p.items.map(i => i.url).join(',')).join('|'),
+  () => {
+    if (!isMobile.value) return
+    void loadInteractions(pagerPages.value.flatMap(p => p.items.map(i => i.url)))
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
+  // 分页宽度要等 DOM 渲染完才能量：吸附位移、边界判断都按它算
+  void nextTick(measurePagerWidth)
   // 本页组件在每次导航时都会被重建（StudentLayout 未用 keep-alive），
   // 因此不能用「组件是否已挂载」来判断要不要加载，只能看模块级缓存：
   // - 命中缓存（10 分钟内已加载过）→ 直接复用，不发请求，页面首帧即真实内容，不闪；
@@ -1276,14 +1836,14 @@ onMounted(() => {
    视觉配方：135° 品牌蓝渐变 + 右上柔光 + 斜向高光 + 内高光/外投影；**矩形通栏、无圆角**，
    上下边直接切齐内容区，像一条真正的 App 品牌栏而不是一张卡片。
    文字只有一枚 22px/800 标题（不放副标题、不放小字）；右侧只留一枚磨砂方角搜索按钮。
-   移动端实际样式见文件底部 @media (max-width: 767px)：那里把本块改成白卡顶段且**不吸顶**；
-   基础样式保留 sticky 仅用于 >767px 时的极端情况（实际该宽度走桌面版式，不渲染此头牌）。
+   移动端实际样式见文件底部 @media (max-width: 767px)：那里把本块改成白卡顶段。
+   此处不设 sticky：本头牌只在移动端渲染，吸顶（sticky）由文末 @media 块统一接管
+   （桌面端走另一套 .campus-hero-head，根本不渲染此头牌）。
    z-index 压过下方卡片（含 v-tilt 的 hover 抬升）。
    通栏：负外边距吃掉 .campus-page 移动端的 16px 左右内边距；上内边距为 0（见 @media 覆盖），
-   否则页头上方会漏出滚动容器的 8px 内边距缝。 */
+   页头上沿直接贴住滚动容器顶边，吸顶时不会漏出一条背景色细缝。 */
 .campus-appbar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 30;
   isolation: isolate;
   display: flex;
@@ -1937,40 +2497,50 @@ onMounted(() => {
      信息流标题 17px/600 两行 · 元信息 13px · 缩略图 129×97 圆角 8px */
 @media (max-width: 767px) {
   /* 移动端页面改纵向 flex：桌面端卡片版式整块包在 <template v-if="!isMobile"> 里不渲染。
-     参考稿是「浅灰页面底 + 一块浮起的大白卡」：白卡左右各留约 24px 边距、
-     顶部留 8px、圆角 13px。所以这里把底色交回页面（移动端 StudentLayout 已是浅底），
-     白卡不写在此处 —— 由 .campus-appbar 起负责，见下。 */
+     底色交回页面（移动端 StudentLayout 已是浅底），白卡从页头开始：
+     页头改为通栏吸顶（左右不留边），Tab / 轮播 / 信息流仍是左右各 16px 的白卡。 */
   .campus-page {
-    padding: 8px 16px 0;
+    /* 顶部不再留 8px：页头已改成通栏吸顶，上沿要直接贴住滚动容器顶边，
+       否则吸顶瞬间上方会悬出一条背景色细缝 */
+    padding: 0 16px;
+    /* 页头高度：Tab 的吸顶偏移量必须与它严格相等，否则两层之间会漏出滚动内容 */
+    --campus-appbar-h: 56px;
     display: flex;
     flex-direction: column;
     background: transparent;
+    /* 卡片轨道左右各挂一页邻居，拖动时会平移出可视区：横向裁掉，避免撑出横向滚动条 */
+    overflow-x: hidden;
   }
   .campus-page > section, .campus-page > nav { flex-shrink: 0; }
 
-  /* ---------- 页头：浮起白卡的顶段 ----------
-     圆角与白底由页头承担（整张卡的上半），滚出视口时页头不再吸顶，
-     Tab 栏单独吸顶并补上圆角 —— 见 .campus-tabs。
-     padding 归零：标题与图标直接贴齐白卡边缘（左右不再留 16px 内边距）。
-     高度 84px → 56px：原值按参考稿的 375pt 宽度标定，实际渲染时
-     标题 26px 加满留白显得过高，压到 56px 后与下方 Tab 的疏密更接近参考稿。 */
+  /* ---------- 页头：吸顶 App Bar ----------
+     页头在整个信息流上方吸顶（sticky top:0）：越往下翻，标题与搜索 / 通知入口越要
+     随手可及 —— 这两枚图标是「找一条资讯」的入口，滚走后再让用户滚回顶部是反直觉的。
+     通栏：负外边距吃掉 .campus-page 的 16px 左右内边距，白底铺满整屏 ——
+     否则信息流从下方滚过时，页头两侧会露出半截文字。内边距相应内移 16px，
+     标题与图标仍与信息流左缘对齐。
+     圆角归零：吸顶后页头上沿贴着屏幕，保留 13px 圆角会在两个角上露出背后滚动的内容。
+     高度 56px（--campus-appbar-h）；标题与图标靠 align-items:center 垂直居中。
+     底部不画分割线：下方 Tab 也是吸顶的，两者要拼成一个完整的白色顶栏，
+     分割线统一放在顶栏最下沿（见 .campus-tabs）。 */
   .campus-appbar {
-    position: relative;
+    position: sticky;
+    top: 0;
     z-index: 30;
-    min-height: 56px;
-    margin: 0;
-    padding: 0;
+    min-height: var(--campus-appbar-h);
+    margin: 0 -16px;
+    padding: 0 16px;
     background: #fff;
     box-shadow: none;
-    border-radius: 13px 13px 0 0;
+    border-radius: 0;
     overflow: hidden;
     color: #1d2129;
   }
   /* 去掉基础样式里的渐变与右上柔光/斜向高光 */
   .campus-appbar::before,
   .campus-appbar::after { display: none; }
-  /* padding 归零后，标题与图标由基础样式的 align-items:center 在 min-height 高度里垂直居中 ——
-     「贴边」指左右贴齐白卡边缘，上下仍有留白，不会顶到卡边。 */
+  /* 页头左右内边距 16px：标题与信息流左缘对齐；标题与图标由基础样式的
+     align-items:center 在 min-height 高度里垂直居中。 */
   .appbar-title::before { display: none; }
   .appbar-title h1 {
     font-size: 26px;
@@ -1995,15 +2565,17 @@ onMounted(() => {
   .appbar-btn:hover { background: #f3f4f6; border-color: transparent; }
   .appbar-btn:active { transform: scale(.92); background: #eceef1; }
 
-  /* ---------- 分类 Tab ----------
-     是白卡的第二段（紧接页头，白底、左右内边距 20px 与页头标题对齐）；
-     16px，选中黑色 700 + 3px 黑色下划线（与文字等宽）。
-     单独吸顶：页头上滚出视口后，Tab 仍然吸在顶部，自己补上圆角，
-     否则白卡边会「切」在顶边。 */
+  /* ---------- 分类 Tab：吸顶在页头下沿 ----------
+     是白卡的第二段（紧接页头，白底）；15px，选中黑色 700 + 3px 黑色下划线（与文字等宽）。
+     吸顶偏移量 = 页头高度（--campus-appbar-h），两层无缝拼成一个白色顶栏；
+     滚到信息流任何位置都能直接切分类，不用先滚回顶部。
+     层级压在页头之下（30 > 25），但高于信息流里带 z-index 的轮播指示点（6）。
+     最下沿一条极浅分割线：白色顶栏与下方滚动内容之间留一个层级边界。
+     overflow-x 仍是 auto：吸顶不影响这一行自身的横向滑动。 */
   .campus-tabs {
     position: sticky;
-    top: 0;
-    z-index: 29;
+    top: var(--campus-appbar-h);
+    z-index: 25;
     display: flex;
     align-items: center;
     /* 参考稿分类之间留白很紧（「全部 / 热榜 / CS2」几乎贴着），22px 会撑得过宽，
@@ -2015,6 +2587,7 @@ onMounted(() => {
     margin: 0;
     padding: 8px 16px 10px;
     background: #fff;
+    box-shadow: 0 1px 0 #f0f1f3;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     border-bottom: 0;
@@ -2029,7 +2602,7 @@ onMounted(() => {
     padding: 0 0 8px;
     background: none;
     border: 0;
-    /* 参考稿 Tab 比标题小一号（标题 26、Tab 约 15），16px 会让一行放不下 7 个分类 */
+    /* 参考稿 Tab 比标题小一号（标题 26、Tab 约 15），16px 会让一行放不下 6 个分类 */
     font-size: 15px;
     font-weight: 400;
     color: #86909c;
@@ -2056,12 +2629,13 @@ onMounted(() => {
     background: #1d2129;
   }
 
-  /* ---------- 大图轮播（只在「全部」Tab 顶部渲染）----------
-     位次：Tab 之下、信息流之上，属于同一张白卡的中段 —— 白底不断开，
-     左右内边距与页头/Tab/信息流一致（16px），因此它自己留出内边距而不是通栏。
+  /* ---------- 大图轮播（只在「全部」那一页的顶部渲染）----------
+     位次：页内最上方，信息流之上，属于同一张白卡的上半段；
+     左右内边距在分页里被清零（见 .campus-pager … 的补平规则），图片铺满卡片宽度。
      版式：16:9 左右的圆角大图 + 底部黑色渐变 + 白色标题两行截断；
      指示点用条形（与桌面轮播的圆点区分：这里是信息流 App 的观感）。
-     不给左右箭头：手机上没有 hover，箭头会长期压在图上挡内容，按住拖动 + 自动轮播够用。 */
+     不给左右箭头：手机上没有 hover，箭头会长期压在图上挡内容，按住拖动 + 自动轮播够用。
+     分类翻页的横向位移由外层 .campus-pager 统一承担，轮播自身不再位移。 */
   .campus-hero-carousel {
     flex-shrink: 0;
     margin: 0;
@@ -2217,13 +2791,60 @@ onMounted(() => {
     overflow: hidden;
   }
 
-  /* ---------- 白卡主体：Tab 之后的全部内容 ----------
-     页头 / Tab / 信息流是**同一张白卡**的不同段：白底不中断、左右内边距一致。
+  /* ---------- 卡片分页轨道 ----------
+     三张卡片（上一页 / 当前页 / 下一页）首尾相接排在同一条横向轨道上：
+     手指往左拖时整条轨道跟着走，当前页跟手、右侧邻居页从边缘同步进来。
+     位移由 pagerX 驱动（模板内联 transform）；这里只管过渡与手势归属：
+       · 常态：200ms 过渡，用于吸附 / 回弹；
+       · 拖动中 / 换页归位：关掉过渡，位移严格跟手 / 瞬时归位；
+       · 横向溢出交给 .campus-page 的 overflow-x: hidden 裁切。 */
+  .campus-pager {
+    display: flex;
+    width: 100%;
+    flex-shrink: 0;
+    transition: transform 200ms cubic-bezier(.22, .61, .36, 1);
+    touch-action: pan-y;            /* 横向手势交给 Pointer 逻辑，纵向仍归页面滚动 */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .campus-pager.is-pager-dragging,
+  .campus-pager.is-pager-resetting {
+    transition: none;
+  }
+  .campus-pager.is-pager-dragging { will-change: transform; }
+  /* 吸附 / 回弹动画进行中不响应点按：避免落在还没停稳的邻居页上误开文章 */
+  .campus-pager.is-pager-animating { pointer-events: none; }
+  /* 拖动 / 吸附过程中整条轨道垫白：边界分类回弹时露出的边缘也是白卡，
+     不会闪出一条页面底色；收起邻居页后撤掉（当前页自带白底与圆角）。 */
+  .campus-pager.is-pager-open { background: #fff; }
+  /* 拖动中不保留按下态的压暗：滑动是切分类，不是「按住这一行」 */
+  .campus-pager.is-pager-dragging .feed-item:active { opacity: 1; }
+
+  /* 一张卡片 = 一个分类的完整内容：「全部」页是轮播 + 信息流，其余只有信息流。
+     flex: 0 0 100% 让每页正好占满一屏宽（100% 相对轨道自身宽度，轨道宽度 = 内容区宽）。
+     页容器自带白底与下圆角：邻居页比当前页矮时也能把卡片补齐，拖动时不会露底色。 */
+  .campus-pager-page {
+    flex: 0 0 100%;
+    width: 100%;
+    background: #fff;
+    border-radius: 0 0 13px 13px;
+  }
+
+  /* 分页里的轮播 / 信息流不再是 .campus-page 的直接子元素，
+     原先那条「直接子元素去掉左右内边距」的规则不再生效，这里补平：
+     内容仍贴齐卡片左右边缘（左右 16px 由页面容器负责，不在卡片内再缩进）。 */
+  .campus-pager .campus-hero-carousel,
+  .campus-pager .campus-feed {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* ---------- 白卡主体：Tab 之后的当前页 ----------
      信息流一直连到屏幕底部（padding-bottom 撑出白卡下沿）并补下圆角。 */
   .campus-feed {
+    display: flex;
+    flex-direction: column;
     background: #fff;
-    padding-left: 16px;
-    padding-right: 16px;
     margin: 0;
     padding-bottom: 24px;
     border-radius: 0 0 13px 13px;
@@ -2246,7 +2867,43 @@ onMounted(() => {
   }
   .feed-item:last-child { border-bottom: 0; }
   .feed-item:active { opacity: .62; }
+  /* 信息流行从 <a> 改成了 <div role="link">：行内要嵌评论/点赞/转发三个按钮，
+     按钮不能嵌套在 <a> 里（点击会被父链接吞掉，且 HTML 不允许交互元素嵌套）。
+     因此整行可点由 @click 承担，键盘可达由 tabindex + Enter 补上。 */
+  .feed-item { cursor: pointer; outline: none; }
+  .feed-item:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; border-radius: 8px; }
   .feed-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  /* 行尾互动：图标 + 数字，无底色无边框。热区用 padding 撑到 32px 高，
+     但**视觉**上只是 13px 小字，避免评论区数字抢走标题的视觉权重。
+     三个按钮之间的 gap 由 flex 控制，不写 margin，避免第一个按钮左侧多出一段空白。 */
+  .feed-acts {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    margin-top: -2px;
+  }
+  .feed-act {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    /* 负外边距把热区往四周扩出去，视觉位置不变但手指更好点 */
+    padding: 6px 2px;
+    margin: -6px -2px;
+    background: none;
+    border: 0;
+    font: inherit;
+    font-size: 13px;
+    line-height: 1;
+    color: #b2b2b2;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color .16s ease, transform .12s ease;
+  }
+  .feed-act .el-icon { font-size: 17px; }
+  .feed-act:active { transform: scale(.9); }
+  .feed-act:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 4px; }
+  /* 已点赞：品牌蓝实心图标，与详情页的点赞高亮同一色，用户能把两处的状态对上 */
+  .feed-act.is-liked { color: #2563eb; }
   .feed-title {
     margin: 0;
     font-size: 17px;

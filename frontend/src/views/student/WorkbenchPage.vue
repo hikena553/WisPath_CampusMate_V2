@@ -150,9 +150,19 @@
          主页面不动；返回时原路滑出），不再在本文件自带一份 slide-left 定义。 -->
     <transition name="subpage" :duration="320">
       <div v-if="currentPage" :class="['sub-page', { 'chat-mode': isChatMode }]">
-        <!-- 非聊天页面显示标准头部 -->
+        <!-- 非聊天页面显示标准头部（移动端消息中心：左侧改为唤起侧边抽屉） -->
         <div v-if="!isChatMode" class="sub-page-header">
-          <el-button text circle class="back-btn" @click="closePage">
+          <el-button
+            v-if="currentPage === 'messages' && isMobile"
+            text
+            circle
+            class="back-btn"
+            aria-label="打开侧边导航"
+            @click="msgDrawerOpen = true"
+          >
+            <DtIcon name="menu" :size="22" />
+          </el-button>
+          <el-button v-else text circle class="back-btn" @click="closePage">
             <el-icon :size="20"><ArrowLeft /></el-icon>
           </el-button>
           <div class="sub-page-title">{{ pageTitle }}</div>
@@ -419,6 +429,8 @@
 
           <!-- 消息中心 -->
           <div v-if="currentPage === 'messages'" class="messages-page">
+            <!-- 移动端：小绵管家 / 通知 / 文件 / 辅导员 收进侧边抽屉，页面只留会话列表 -->
+            <template v-if="!isMobile">
             <!-- 小绵管家：置顶常驻会话（自动推送最新资讯 / 总结对话） -->
             <div class="tutor-entry butler-entry" @click="openButler">
               <div class="tutor-entry-avatar">
@@ -472,6 +484,7 @@
               </div>
               <el-icon class="tutor-entry-arrow"><ArrowRight /></el-icon>
             </div>
+            </template>
 
             <!-- 群聊（已加入的群：扫码入群后出现在这里） -->
             <template v-if="myGroups.length">
@@ -522,6 +535,45 @@
               </div>
             </div>
           </div>
+
+          <!-- 移动端侧边抽屉（消息中心）：小绵管家 / 通知 / 文件 / 辅导员 -->
+          <Transition name="drawer-mask">
+            <div v-if="isMobile && msgDrawerOpen" class="msgs-drawer-mask" @click="msgDrawerOpen = false" />
+          </Transition>
+          <Transition name="drawer-panel">
+            <aside v-if="isMobile && msgDrawerOpen" class="msgs-drawer">
+              <div class="msgs-drawer-head">
+                <el-avatar :size="52" shape="square" :src="auth.user?.avatar || ''">
+                  {{ auth.userName?.[0] || '我' }}
+                </el-avatar>
+                <div class="msgs-drawer-user">
+                  <span class="msgs-drawer-name">{{ auth.userName || '同学' }}</span>
+                  <span class="msgs-drawer-sub">{{ siteName }}</span>
+                </div>
+              </div>
+              <nav class="msgs-drawer-nav">
+                <div class="msgs-drawer-section">消息中心</div>
+                <button type="button" class="msgs-drawer-item" @click="openButlerFromDrawer">
+                  <span class="msgs-drawer-icon"><DtIcon name="robot" :size="19" /></span>
+                  <span class="msgs-drawer-label">{{ agentName || '小绵' }}管家</span>
+                  <span class="msgs-drawer-tag">常驻</span>
+                </button>
+                <button type="button" class="msgs-drawer-item" @click="openNotificationsFromDrawer">
+                  <span class="msgs-drawer-icon"><DtIcon name="bell" :size="19" /></span>
+                  <span class="msgs-drawer-label">通知</span>
+                  <span v-if="notifUnread" class="msgs-drawer-count">{{ notifUnread > 99 ? '99+' : notifUnread }}</span>
+                </button>
+                <button type="button" class="msgs-drawer-item" @click="openSharedFilesFromDrawer">
+                  <span class="msgs-drawer-icon"><DtIcon name="file" :size="19" /></span>
+                  <span class="msgs-drawer-label">文件</span>
+                </button>
+                <button v-if="auth.user?.tutor_id" type="button" class="msgs-drawer-item" @click="startTutorChatFromDrawer">
+                  <span class="msgs-drawer-icon"><DtIcon name="contacts" :size="19" /></span>
+                  <span class="msgs-drawer-label">我的辅导员</span>
+                </button>
+              </nav>
+            </aside>
+          </Transition>
 
           <!-- 聊天页面 -->
           <div v-if="currentPage === 'tutor'" class="chat-page">
@@ -794,6 +846,8 @@ const { siteMascot, siteName, agentName } = useSiteConfig()
 const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
 const currentPage = ref<string | null>(null)
+// 移动端消息中心：侧边抽屉（小绵管家 / 通知 / 文件 / 辅导员 收进抽屉）
+const msgDrawerOpen = ref(false)
 const submitting = ref(false)
 const showDetail = ref(false)
 const currentDetail = ref<any>(null)
@@ -1212,7 +1266,29 @@ function openChat() {
 
 function openMessages() {
   currentPage.value = 'messages'
+  msgDrawerOpen.value = false
   loadConversations()
+}
+
+/* ===== 消息中心抽屉：先收起抽屉，再跳到视图或聊天 ===== */
+function openButlerFromDrawer() {
+  msgDrawerOpen.value = false
+  openButler()
+}
+
+function openNotificationsFromDrawer() {
+  msgDrawerOpen.value = false
+  void openNotifications()
+}
+
+function openSharedFilesFromDrawer() {
+  msgDrawerOpen.value = false
+  void openSharedFiles()
+}
+
+function startTutorChatFromDrawer() {
+  msgDrawerOpen.value = false
+  startTutorChat()
 }
 
 function openAllRecords() {
@@ -1302,6 +1378,7 @@ function goFeedback() {
 
 function closePage() {
   currentPage.value = null
+  msgDrawerOpen.value = false
   showDetail.value = false
   currentDetail.value = null
   lostfoundDetailVisible.value = false
@@ -2666,6 +2743,11 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   background: var(--dt-bg);
 }
 
+/* 移动端：以上入口统一收进侧边抽屉，页面本体只留会话列表 */
+@media (max-width: 767px) {
+  .messages-page .mcenter-section-head { background: var(--dt-bg); }
+}
+
 /* ===== 消息中心：分组小标题 / 群聊补充样式 ===== */
 .mcenter-section-head {
   display: flex;
@@ -3217,4 +3299,160 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 /* 子页滑动动画见 styles/animations.css 的 .subpage（全站唯一实现），
    此处不再重复定义 slide-left —— 原先本地那份与全局版本参数不同（0.3s ease 一致但
    方向语义、离场定位各写各的），是本次统一要消除的重复。 */
+
+/* ==================== 消息中心：移动端侧边抽屉（钉钉式） ====================
+   与教师端「消息」页保持同一套交互：左侧汉堡按钮唤起抽屉，抽屉内承接
+   小绵管家 / 通知 / 文件 / 辅导员 等二级入口，页面本体只保留会话列表。 */
+.msgs-drawer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 17, 21, 0.42);
+}
+
+.msgs-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 1201;
+  width: 78vw;
+  max-width: 302px;
+  display: flex;
+  flex-direction: column;
+  background: var(--dt-surface);
+  box-shadow: 0 12px 40px rgba(15, 17, 21, 0.24);
+}
+
+.msgs-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(20px + env(safe-area-inset-top)) 18px 18px;
+  background: var(--dt-surface);
+  border-bottom: 1px solid var(--dt-divider);
+}
+
+.msgs-drawer-head :deep(.el-avatar) {
+  border-radius: 14px;
+  background: var(--dt-primary-soft);
+  color: var(--dt-primary-strong);
+  flex-shrink: 0;
+}
+
+.msgs-drawer-user {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.msgs-drawer-name {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--dt-text);
+}
+
+.msgs-drawer-sub {
+  font-size: 12px;
+  color: var(--dt-text-quiet);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msgs-drawer-nav {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px calc(12px + env(safe-area-inset-bottom));
+}
+
+.msgs-drawer-section {
+  padding: 10px 10px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dt-text-quiet);
+  letter-spacing: .3px;
+}
+
+.msgs-drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--dt-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: var(--dt-text-secondary);
+  font-size: 14.5px;
+  font-weight: 500;
+  transition: background .15s ease, color .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.msgs-drawer-item:active {
+  background: var(--dt-surface-press);
+}
+
+.msgs-drawer-icon {
+  display: flex;
+  color: inherit;
+}
+
+.msgs-drawer-label {
+  flex: 1;
+}
+
+.msgs-drawer-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dt-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}
+
+.msgs-drawer-tag {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--dt-primary-soft);
+  color: var(--dt-primary-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.drawer-mask-enter-active,
+.drawer-mask-leave-active {
+  transition: opacity .22s ease;
+}
+
+.drawer-mask-enter-from,
+.drawer-mask-leave-to {
+  opacity: 0;
+}
+
+.drawer-panel-enter-active {
+  transition: transform .26s cubic-bezier(.22, .68, 0, 1);
+}
+
+.drawer-panel-leave-active {
+  transition: transform .2s ease-in;
+}
+
+.drawer-panel-enter-from,
+.drawer-panel-leave-to {
+  transform: translateX(-100%);
+}
 </style>

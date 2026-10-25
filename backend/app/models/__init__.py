@@ -1,5 +1,11 @@
 from app.models.user import User, UserRole
 from app.models.campus import CampusScenery, CampusImpressionItem
+from app.models.campus_social import (
+    CampusArticleSocial,
+    CampusArticleComment,
+    CampusArticleLike,
+    CampusArticleRepost,
+)
 from app.models.academic import College, Major, ClassGroup, Course, Semester, Grade, Exam
 from app.models.growth import GrowthRecord
 from app.models.service import ServiceTicket

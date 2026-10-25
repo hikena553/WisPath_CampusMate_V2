@@ -14,39 +14,26 @@
         @click.self="close"
       >
         <div class="reader-panel" :class="{ 'is-desktop': isDesktop }">
-          <!-- 头部：返回 / 标题 / 操作 -->
+          <!-- 头部：只有返回 + 标题。
+               刻意去掉两类东西：
+               ① 来源域名副标题（jwc.mycc.edu.cn 之类）—— 纯英文噪音，用户不关心；
+               ② 「在浏览器打开」外链按钮与「原页渲染」开关 —— 二者本质都是把用户
+                  推出应用去看校站原始网页，与本阅读器「把校内资讯收进 App 里读」的
+                  初衷相悖。正文由后端抓取并净化后在本页渲染，已经够看。
+               顶栏因此只承担一件事：告诉我这是哪篇、怎么回去。 -->
           <header class="reader-head">
             <button type="button" class="reader-nav" aria-label="返回" @click="close">
               <el-icon :size="19"><ArrowLeft /></el-icon>
             </button>
             <div class="reader-title-wrap">
               <div class="reader-title">{{ currentTitle || '校内资讯' }}</div>
-              <div class="reader-sub">{{ currentHost }}</div>
-            </div>
-            <div class="reader-actions">
-              <button
-                type="button"
-                class="reader-act"
-                :class="{ active: mode === 'embed' }"
-                :disabled="loading"
-                @click="toggleMode"
-              >
-                {{ mode === 'embed' ? '纯净正文' : '原页渲染' }}
-              </button>
-              <button type="button" class="reader-nav" aria-label="在浏览器打开" @click="openExternal(currentUrl)">
-                <el-icon :size="17"><TopRight /></el-icon>
-              </button>
             </div>
           </header>
 
-          <!-- 正文区 -->
-          <div class="reader-body" :class="{ 'is-doc': mode === 'article' && !loading && !error }">
-            <!-- 分支顺序严格沿用改造前：loading > error > embed > article > links。
-                 骨架屏与错误态都放在 Transition 之外：它们只在打开/换页/失败时出现，
-                 此时外层覆盖动画（整个面板滑入）正在播放，再叠一层内部滑动会重复发力。
-                 注意 error 必须排在 embed 之前（原实现如此）：否则「原页渲染」下
-                 iframe 反代失败（onMessage 写入 error）会落入正文/链接清单分支，
-                 错误提示被静默吞掉，用户看到的是空白或旧内容。 -->
+          <!-- 正文区：分支只剩 loading > error > 正文/链接清单。
+               骨架屏与错误态都放在 Transition 之外：它们只在打开/换页/失败时出现，
+               此时外层覆盖动画（整个面板滑入）正在播放，再叠一层内部滑动会重复发力。 -->
+          <div class="reader-body" :class="{ 'is-doc': !loading && !error }">
             <div v-if="loading" class="reader-doc">
               <div class="reader-skeleton">
                 <div class="sk-line w60" />
@@ -67,37 +54,14 @@
                   <button type="button" class="state-btn primary" @click="retry">
                     <el-icon :size="15"><Refresh /></el-icon> 重试
                   </button>
-                  <button
-                    v-if="mode === 'article'"
-                    type="button"
-                    class="state-btn"
-                    @click="toggleMode"
-                  >
-                    原页渲染
-                  </button>
-                  <button type="button" class="state-btn" @click="openExternal(currentUrl)">
-                    浏览器打开
-                  </button>
+
                 </div>
               </div>
             </div>
 
-            <!-- 原页渲染（iframe 反代，不透明源沙箱）：切模式用，不参与下钻动画
-                 （换 iframe 时原地替换即可，滑动反而像换了一页） -->
-            <iframe
-              v-else-if="mode === 'embed'"
-              :key="embedKey"
-              ref="iframeRef"
-              class="reader-frame"
-              :src="embedSrc"
-              sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-              referrerpolicy="no-referrer"
-              @load="onFrameLoad"
-            />
-
             <!-- 文档态（正文 / 链接清单）：按 currentUrl 作为一「子页」参与下钻动画。
                  一次下钻 = open() 改 currentUrl = 整块文档替换，滑动发生在「列表 → 文章」这一刻；
-                 切模式（toggleMode）与重试（retry）都不改 URL，key 不变 → 不会误播滑动。
+                 重试（retry）不改 URL，key 不变 → 不会误播滑动。
                  :duration 320 = CSS 0.3s + 20ms 余量，与外层覆盖动画同一时长。 -->
             <Transition v-else :name="drillTransitionName" :duration="drillTransitionName ? 320 : undefined">
               <div :key="drillKey" class="reader-doc">
@@ -114,7 +78,7 @@
                   <div v-if="!data?.links?.length" class="reader-state">
                     <el-icon :size="40" class="state-icon"><Document /></el-icon>
                     <p class="state-title">该页面没有可读正文</p>
-                    <p class="state-desc">可切换「原页渲染」查看原始排版，或在浏览器中打开。</p>
+                    <p class="state-desc">该页面暂时没有可读的内容，稍后再试试。</p>
                   </div>
                   <button
                     v-for="(l, i) in data?.links || []"
@@ -143,16 +107,20 @@
 /**
  * 校内资讯站内阅读器
  *
- * 学校站点设了 X-Frame-Options: SAMEORIGIN，无法直接内嵌；因此：
- * - 「纯净正文」：调用 /api/campus/reader，由后端代抓 + 白名单校验 + 正文净化后渲染；
- * - 「原页渲染」：内嵌 /api/campus/embed 反代页面，配 sandbox（不含 allow-same-origin）
- *   的不透明源，保留原版排版且拿不到应用的 Cookie / localStorage。
+ * 学校站点设了 X-Frame-Options: SAMEORIGIN，无法直接内嵌；因此调用 /api/campus/reader，
+ * 由后端代抓 + 白名单校验 + 正文净化后在本组件里渲染 —— 阅读全程留在应用内。
+ *
+ * 已移除的能力（有意为之）：
+ * - 「原页渲染」：内嵌 /api/campus/embed 反代页面。它本质是把校站原网页搬进来，
+ *   排版不可控、脚本全部要放行，且常见白屏（SPA 站点），维护成本高；
+ * - 「在浏览器打开」外链与来源域名副标题：都是把用户推出应用或展示英文噪音。
+ * 现在顶栏只剩「返回 + 标题」，正文只有一种渲染方式。
  *
  * 用法：`readerRef.value?.open(url, title)`；非校内链接自动回退到新标签页打开。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
-import { ArrowLeft, ArrowRight, Document, DocumentDelete, Refresh, TopRight } from '@element-plus/icons-vue'
-import { campusEmbedUrl, readCampusArticle, type CampusArticle } from '@/api/campus'
+import { ArrowLeft, ArrowRight, Document, DocumentDelete, Refresh } from '@element-plus/icons-vue'
+import { readCampusArticle, type CampusArticle } from '@/api/campus'
 
 const visible = ref(false)
 const loading = ref(false)
@@ -160,9 +128,6 @@ const error = ref('')
 const data = ref<CampusArticle | null>(null)
 const currentUrl = ref('')
 const currentTitle = ref('')
-const mode = ref<'article' | 'embed'>('article')
-const embedKey = ref(0)
-const iframeRef = ref<HTMLIFrameElement | null>(null)
 
 /** 桌面端居中卡片；移动端全屏抽屉（CSS 断点与全局一致） */
 const isDesktop = ref(window.innerWidth > 767)
@@ -190,13 +155,8 @@ const drillTransitionName = computed(() => (isDesktop.value ? '' : `reader-${dri
 /** 文档层的过渡 key：按 URL 变化。
  *  一次下钻 = currentUrl 改变 = 整块文档作为一「子页」整体替换，
  *  这样推入动画发生在「列表 → 文章」这一刻，而不是等接口返回后「骨架 → 正文」才滑。
- *  切模式（toggleMode）与重试（retry）都不改 URL，key 不变 → 不会误播滑动。 */
+ *  重试（retry）不改 URL，key 不变 → 不会误播滑动。 */
 const drillKey = computed(() => currentUrl.value)
-
-const embedSrc = computed(() => (currentUrl.value ? campusEmbedUrl(currentUrl.value) : ''))
-const currentHost = computed(() => {
-  try { return new URL(currentUrl.value).hostname } catch { return '' }
-})
 
 /** 与后端白名单一致：仅 *.mycc.edu.cn 走站内阅读 */
 function isAllowed(url: string) {
@@ -221,24 +181,15 @@ async function load() {
     const res = await readCampusArticle(currentUrl.value)
     data.value = res
     if (!currentTitle.value && res.title) currentTitle.value = res.title
-    // 列表页没有正文时，默认直接进「原页渲染」，省去一次手动切换
-    if (res.kind === 'links' && !res.links.length) mode.value = 'embed'
   } catch (e: any) {
-    error.value = e?.response?.data?.detail || '页面抓取失败，可切换原页渲染或稍后重试'
+    error.value = e?.response?.data?.detail || '页面抓取失败，请稍后重试'
   } finally {
     loading.value = false
   }
 }
 
 async function retry() {
-  if (mode.value === 'embed') { embedKey.value++; error.value = ''; return }
   await load()
-}
-
-function toggleMode() {
-  mode.value = mode.value === 'embed' ? 'article' : 'embed'
-  error.value = ''
-  if (mode.value === 'embed') embedKey.value++
 }
 
 /**
@@ -260,8 +211,6 @@ function open(url: string, title?: string, from: 'outside' | 'drill' | 'back' = 
   currentTitle.value = title || ''
   data.value = null
   error.value = ''
-  mode.value = 'article'
-  embedKey.value++
   visible.value = true
   void load()
 }
@@ -271,28 +220,6 @@ function close() {
   visible.value = false
   data.value = null
   error.value = ''
-}
-
-function onFrameLoad() {
-  // 若 iframe 加载的是反代错误页，桥接脚本会 postMessage(error)，此处不重复处理
-}
-
-/** 桥接：反代页面通过 postMessage 通知「就绪 / 页内跳转 / 报错」 */
-function onMessage(ev: MessageEvent) {
-  if (!visible.value) return
-  const payload: any = ev.data
-  if (!payload || payload.source !== 'campus-reader') return
-  // 只接受本组件 iframe 发来的消息，避免其它窗口伪造
-  if (!iframeRef.value || ev.source !== iframeRef.value.contentWindow) return
-  if (payload.type === 'navigate' && payload.url) {
-    // 反代页内跳转：源页面自身就在阅读器里，按「下钻」处理（推入前进）
-    open(String(payload.url), payload.title ? String(payload.title) : undefined, 'drill')
-  } else if (payload.type === 'error') {
-    error.value = String(payload.message || '原页渲染失败，可切换纯净正文查看')
-  } else if (payload.type === 'ready') {
-    if (payload.title && !currentTitle.value) currentTitle.value = String(payload.title)
-    error.value = ''
-  }
 }
 
 function onKeydown(ev: KeyboardEvent) {
@@ -306,12 +233,10 @@ watch(visible, async (v) => {
 })
 
 onMounted(() => {
-  window.addEventListener('message', onMessage)
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', onResize)
 })
 onBeforeUnmount(() => {
-  window.removeEventListener('message', onMessage)
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', onResize)
   document.body.style.overflow = ''
@@ -377,15 +302,6 @@ defineExpose({ open })
   font-size: 15.5px; font-weight: 600; color: var(--dt-text, #1f2329);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.reader-sub { font-size: 11.5px; color: var(--dt-text-quiet, #9aa0a6); margin-top: 1px; }
-.reader-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.reader-act {
-  height: 30px; padding: 0 11px; border: 1px solid var(--dt-divider, #e5e6eb);
-  border-radius: 8px; background: var(--dt-surface, #fff);
-  color: var(--dt-text-secondary, #4b5563); font-size: 12.5px; cursor: pointer;
-}
-.reader-act:hover:not(:disabled) { color: var(--dt-primary-strong, #1677ff); border-color: currentColor; }
-.reader-act:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .reader-body {
   flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -415,9 +331,6 @@ defineExpose({ open })
   color: var(--dt-text, #1f2329); font-size: 13px;
 }
 .state-btn.primary { background: var(--dt-primary, #1677ff); border-color: transparent; color: #fff; }
-
-/* 原页渲染 */
-.reader-frame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
 
 /* 正文 */
 .reader-article { padding: 20px 18px 40px; }

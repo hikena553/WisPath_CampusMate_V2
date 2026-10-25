@@ -41,27 +41,51 @@
       </div>
       <div class="header-actions">
         <div class="sidebar-menu">
-          <!-- 豆包式入口：左对齐线性图标 + 无底色整行，新工作任务在前 -->
-          <el-dropdown v-if="!isTeacher" trigger="click" placement="bottom-start" @command="newProject">
-            <button type="button" class="menu-row">
-              <span class="menu-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M11 1.99882C11.5522 1.99882 11.9999 2.44659 12 2.99882C12 3.5511 11.5523 3.99882 11 3.99882C9.58364 3.99882 8.58138 3.99928 7.79785 4.06327C7.02597 4.12634 6.5539 4.2457 6.18359 4.43436C5.43112 4.81782 4.81902 5.42995 4.43555 6.18241C4.24687 6.5527 4.12752 7.02482 4.06445 7.79667C4.00047 8.58018 4 9.58251 4 10.9988V11.9988C4 13.8959 4.00112 15.2389 4.11328 16.2742C4.22343 17.2906 4.43078 17.8922 4.76367 18.3504C5.01032 18.6898 5.309 18.9885 5.64844 19.2351C6.10667 19.5681 6.70818 19.7754 7.72461 19.8855C8.75997 19.9977 10.1029 19.9988 12 19.9988H13C14.4164 19.9988 15.4186 19.9984 16.2021 19.9344C16.9741 19.8713 17.4461 19.752 17.8164 19.5633C18.5689 19.1798 19.181 18.5677 19.5645 17.8152C19.7531 17.4449 19.8725 16.9728 19.9355 16.201C19.9995 15.4175 20 14.4151 20 12.9988C20.0001 12.4466 20.4478 11.9988 21 11.9988C21.5522 11.9988 21.9999 12.4466 22 12.9988C22 14.3823 22.0009 15.4802 21.9287 16.3641C21.8555 17.2596 21.7019 18.0233 21.3457 18.7225C20.7705 19.8514 19.8526 20.7693 18.7236 21.3445C18.0244 21.7008 17.2608 21.8544 16.3652 21.9275C15.4813 21.9997 14.3835 21.9988 13 21.9988H12C10.1475 21.9988 8.67782 22.0003 7.50977 21.8738C6.32316 21.7453 5.32958 21.475 4.47363 20.8533C3.96429 20.4832 3.51557 20.0345 3.14551 19.5252C2.52381 18.6693 2.25356 17.6756 2.125 16.4891C1.99848 15.321 2 13.8512 2 11.9988V10.9988C2 9.61535 1.99909 8.51745 2.07129 7.63358C2.14446 6.73808 2.29807 5.97437 2.6543 5.27518C3.22954 4.14626 4.14743 3.22834 5.27637 2.65311C5.97557 2.29689 6.73923 2.14327 7.63477 2.07011C8.51866 1.9979 9.61648 1.99882 11 1.99882ZM17.0459 2.70683C18.2174 1.53524 20.1174 1.53521 21.2891 2.70683C22.4598 3.87818 22.4598 5.77752 21.2891 6.94901L13.8271 14.4139C13.482 14.7592 13.2298 15.0167 12.9346 15.2254C12.6866 15.4005 12.4187 15.5472 12.1377 15.6619C11.8029 15.7986 11.4497 15.8732 10.9727 15.9783L9.9375 16.2068C9.75332 16.2474 9.54843 16.293 9.37305 16.3152C9.19723 16.3375 8.9042 16.3588 8.59375 16.2332C8.21725 16.0808 7.91905 15.7815 7.7666 15.4051C7.64121 15.0951 7.66139 14.8026 7.68359 14.6267C7.70579 14.4513 7.75139 14.2456 7.79199 14.0613L8.02149 13.0242C8.12639 12.5482 8.20065 12.1964 8.33692 11.8621C8.45152 11.5812 8.59848 11.3131 8.77344 11.0652C8.98179 10.7702 9.23812 10.5177 9.58301 10.1726L17.0459 2.70683ZM19.875 4.12089C19.4844 3.73029 18.8505 3.73117 18.46 4.12186L10.9971 11.5867C10.6059 11.9781 10.4944 12.0952 10.4072 12.2185C10.3199 12.3423 10.2457 12.4757 10.1885 12.616C10.1314 12.756 10.0939 12.9138 9.97461 13.4549L9.8125 14.1853L10.542 14.0252C11.084 13.9057 11.2417 13.8666 11.3818 13.8094C11.5222 13.752 11.6564 13.68 11.7803 13.5926C11.9038 13.5053 12.0203 13.3928 12.4121 13.0008L19.875 5.53495C20.2649 5.14455 20.2648 4.5113 19.875 4.12089Z" />
-                </svg>
-              </span>
-              <span class="menu-label">新工作任务</span>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu class="template-dropdown-menu">
-                <el-dropdown-item command="competition">学科竞赛</el-dropdown-item>
-                <el-dropdown-item command="thesis">毕业论文</el-dropdown-item>
-                <el-dropdown-item command="practice">社会实践</el-dropdown-item>
-                <el-dropdown-item command="certificate">证书考取</el-dropdown-item>
-                <el-dropdown-item command="student_work">学生工作</el-dropdown-item>
-                <el-dropdown-item command="custom">自定义项目</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <!-- 新建入口：点击直接下滑拉出「工作任务」列表（不再用下拉菜单） -->
+          <button
+            type="button"
+            class="menu-row"
+            aria-haspopup="listbox"
+            :aria-expanded="newTaskPanelOpen"
+            @click="toggleNewTaskPanel"
+          >
+            <span class="menu-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5.2v13.6M5.2 12h13.6" />
+              </svg>
+            </span>
+            <span class="menu-label">新建工作任务</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+              class="menu-caret" :class="{ open: newTaskPanelOpen }" aria-hidden="true"
+            >
+              <path d="M6.6 9.4 12 14.8l5.4-5.4" />
+            </svg>
+          </button>
+
+          <Transition name="task-slide" @before-enter="onTaskPanelBeforeEnter" @after-enter="onTaskPanelEnter" @before-leave="onTaskPanelLeave">
+            <div v-show="newTaskPanelOpen && !isTeacher" class="task-slide-panel" ref="taskPanelRef">
+              <ul class="task-type-list" role="listbox" aria-label="新建工作任务类型" ref="taskListRef">
+                <li v-for="t in TASK_TYPES" :key="t.key" role="option" :aria-selected="false">
+                  <button
+                    type="button"
+                    class="task-type-item"
+                    :disabled="creatingTask"
+                    @click="pickTaskType(t.key)"
+                  >
+                    <span class="task-type-icon">
+                      <DtIcon :name="t.icon" :size="iconSize" />
+                    </span>
+                    <span class="task-type-main">
+                      <span class="task-type-name">{{ t.label }}</span>
+                      <span class="task-type-desc">{{ t.desc }}</span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </Transition>
 
           <button type="button" class="menu-row" @click="newNormal">
             <span class="menu-icon"><el-icon><ChatRound /></el-icon></span>
@@ -152,11 +176,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Search, Top, Close, ArrowDown, RefreshLeft, ChatDotRound, ChatRound,
 } from '@element-plus/icons-vue'
+import DtIcon from '@/components/common/DtIcon.vue'
 import { useConversationStore, TITLE_MAX_LEN, type Conversation } from '@/stores/conversation'
 import { useTeacherConversationStore } from '@/stores/teacherConversation'
 import { useAgentStore } from '@/stores/agent'
@@ -248,6 +273,7 @@ function switchAfterRemoval() {
 }
 
 async function newNormal() {
+  closeNewTaskPanel()
   if (agentStore.messages.length > 0 && !store.activeId) {
     await store.createConversation('normal')
   }
@@ -256,7 +282,92 @@ async function newNormal() {
   emit('new')
 }
 
+/* ── 新建工作任务：点击直接下滑拉出类型列表 ──
+   顺序与 conversationMeta.ts 的 CONV_TYPE_ORDER / PROJECT_TEMPLATE_LABELS 保持一致，
+   列表里新增类型时两处一起改，会话分组才不会漏项。 */
+interface TaskType {
+  key: string
+  label: string
+  desc: string
+  /** DtIcon 图标名：与入口行同一套线条语言（24 网格 / 1.7 描边），不用 EP 的实心面图标 */
+  icon: string
+}
+
+const TASK_TYPES: TaskType[] = [
+  { key: 'competition', label: '学科竞赛', desc: '赛程拆解、备赛计划与进度跟踪', icon: 'trophy' },
+  { key: 'thesis', label: '毕业论文', desc: '选题开题、文献综述到答辩', icon: 'book' },
+  { key: 'practice', label: '社会实践', desc: '方案申报、执行落地与总结评优', icon: 'compass' },
+  { key: 'certificate', label: '证书考取', desc: '考情分析、学习规划与备考', icon: 'medal' },
+  { key: 'student_work', label: '学生工作', desc: '活动策划、审批协调与复盘', icon: 'clipboard' },
+  { key: 'custom', label: '自定义项目', desc: '按自己的目标自由命名', icon: 'pencil' },
+]
+
+/** 图标按视口取尺寸：24 网格线条图标在 15px 以下细节会糊，移动端不低于 18px */
+const iconSize = computed(() => (isMobile.value ? 18 : 16))
+const newTaskPanelOpen = ref(false)
+const creatingTask = ref(false)
+const taskListRef = ref<HTMLElement | null>(null)
+const taskPanelRef = ref<HTMLElement | null>(null)
+
+function toggleNewTaskPanel() {
+  if (isTeacher.value) return
+  newTaskPanelOpen.value = !newTaskPanelOpen.value
+}
+
+function closeNewTaskPanel() {
+  newTaskPanelOpen.value = false
+}
+
+/**
+ * 展开前先量出列表的真实高度写入 --panel-h：
+ * 之前用 max-height: 46vh 这类估算值，内容一旦超出估算高度，最后一行就会被裁掉
+ * （截图里面板底部边框压在「按自己的目标自由命名」上就是这个原因）。
+ */
+async function onTaskPanelBeforeEnter() {
+  await nextTick()
+  const panel = taskPanelRef.value
+  if (!panel) return
+  const contentH = panel.scrollHeight
+  // 可用高度 = 侧栏可视高度 - 面板顶部的偏移，留一点余量；超出则面板内滚动
+  const list = taskListRef.value
+  const top = list ? list.getBoundingClientRect().top : 0
+  const avail = Math.max(160, window.innerHeight - top - 16)
+  panel.style.setProperty('--panel-h', Math.min(contentH, avail) + 'px')
+}
+
+/** 面板落下后：内容超高时让它可滚动，并保证列表整体可见 */
+async function onTaskPanelEnter() {
+  const panel = taskPanelRef.value
+  if (!panel) return
+  const overflow = panel.scrollHeight > panel.clientHeight + 1
+  panel.style.overflowY = overflow ? 'auto' : ''
+  panel.scrollTop = 0
+}
+
+function onTaskPanelLeave() {
+  creatingTask.value = false
+  const panel = taskPanelRef.value
+  if (panel) {
+    panel.style.removeProperty('--panel-h')
+    panel.style.overflowY = ''
+  }
+}
+
+async function pickTaskType(template: string) {
+  closeNewTaskPanel()
+  await newProject(template)
+}
+
 async function newProject(template: string) {
+  creatingTask.value = true
+  try {
+    await createProject(template)
+  } finally {
+    creatingTask.value = false
+  }
+}
+
+async function createProject(template: string) {
   let title = ''
   if (template === 'competition') {
     try {
@@ -373,6 +484,9 @@ onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
   if (undoTimer) clearTimeout(undoTimer)
 })
+
+/** 从移动端切到桌面端（或反向）时收起下滑列表，避免残留展开态 */
+watch(isMobile, () => closeNewTaskPanel())
 </script>
 
 <style scoped>
@@ -445,7 +559,7 @@ onBeforeUnmount(() => {
   transition: background .15s ease, color .15s ease;
 }
 .menu-row:hover { background: rgba(15,23,42,.05); color: #1f2937; }
-.menu-row:active { background: rgba(15,23,42,.08); }
+.menu-row:active { background: rgba(15,23,42,.1); transition-duration: 0s; }
 .menu-icon {
   flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   width: 16px; height: 16px; font-size: 16px; color: #6b7280;
@@ -455,6 +569,70 @@ onBeforeUnmount(() => {
 .menu-icon :deep(.el-icon) { font-size: inherit; }
 .menu-row:hover .menu-icon { color: #374151; }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-caret {
+  flex-shrink: 0; width: 14px; height: 14px; color: #9aa0a6;
+  transition: transform .22s cubic-bezier(.4, 0, .2, 1), color .15s ease;
+}
+.menu-caret.open { transform: rotate(180deg); color: #6b7280; }
+
+/* ── 新建工作任务：点击后自入口下方下滑展开的类型列表 ── */
+.task-slide-panel {
+  overflow: hidden;
+  padding: 2px 0 4px;
+  /* 展开高度由 JS 量取的真实内容高度写入 --panel-h；
+     只有内容超出可用高度时才在面板内滚动，避免把最后一行裁掉 */
+  max-height: none;
+}
+.task-type-list {
+  list-style: none; margin: 0; padding: 0;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #f0f1f4;
+  overflow: visible;
+}
+.task-type-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 8px 10px;
+  border: none; border-radius: 0; background: transparent;
+  cursor: pointer; text-align: left; font-family: inherit;
+  transition: background .15s ease;
+}
+.task-type-list li:first-child .task-type-item { border-radius: 10px 10px 0 0; }
+.task-type-list li:last-child .task-type-item { border-radius: 0 0 10px 10px; }
+/* 点击反馈：只在按下的瞬间变暗，松手立刻恢复（::active 只在按住期间生效） */
+.task-type-item:active:not(:disabled) { background: rgba(15, 23, 42, .1); transition-duration: 0s; }
+.task-type-item:disabled { opacity: .55; cursor: default; }
+/* 图标保持单色：与「新对话」入口同一灰阶，不做彩色底、不做彩色前景 */
+.task-type-icon {
+  flex-shrink: 0; width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  color: #6b7280;
+}
+.task-type-icon :deep(.dt-icon) { display: block; }
+.task-type-item:active:not(:disabled) .task-type-icon { color: #1f2937; }
+.task-type-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.task-type-name {
+  font-size: 12.5px; font-weight: 500; color: #1f2937;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.task-type-desc {
+  font-size: 10.5px; color: #9aa0a6;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* 下滑展开 / 收起（max-height 过渡，收起时高度平滑归零） */
+.task-slide-enter-active,
+.task-slide-leave-active {
+  overflow: hidden;
+  transition: max-height .26s cubic-bezier(.4, 0, .2, 1), opacity .2s ease;
+}
+.task-slide-enter-from,
+.task-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+.task-slide-enter-to,
+.task-slide-leave-from { max-height: var(--panel-h, 1000px); opacity: 1; }
 
 /* 可滚动列表 */
 .sidebar-scroll {
@@ -587,8 +765,26 @@ onBeforeUnmount(() => {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
-  .menu-row:active { background: rgba(15,23,42,.07); }
+  .menu-row:active { background: rgba(15,23,42,.1); transition-duration: 0s; }
   .menu-icon { width: 20px; height: 20px; font-size: 20px; color: #4b5563; }
+
+  /* 工作任务下滑列表：整行 48px，字号放大到触屏可读 */
+  .menu-caret { width: 16px; height: 16px; }
+  .task-slide-panel { max-height: none; }
+  .task-type-list { border-radius: 12px; }
+  .task-type-item {
+    gap: 12px; padding: 12px 14px; border-radius: 0;
+    min-height: 52px;
+    /* manipulation：保留滚动/缩放，去掉 300ms 双击缩放延迟；按住滑过不计为按下 */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .12s ease;
+  }
+  .task-type-list li:first-child .task-type-item { border-radius: 12px 12px 0 0; }
+  .task-type-list li:last-child .task-type-item { border-radius: 0 0 12px 12px; }
+  .task-type-icon { width: 22px; height: 22px; color: #4b5563; }
+  .task-type-name { font-size: 15px; }
+  .task-type-desc { font-size: 12px; }
 
   /* 分组标题：静态小标题，触屏下只作为分节留白 */
   .section-header {

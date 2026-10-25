@@ -3,10 +3,19 @@
     <!-- 移动端吸顶栏：会话 / 通讯录 / 通知 三视图共用（聊天态由会话页头接管） -->
     <header v-if="isMobile && !activeId" class="msg-appbar">
       <button class="msg-appbar-btn" type="button" aria-label="打开侧边导航" @click="drawerOpen = true">
-        <DtIcon name="gridDots" :size="20" />
+        <DtIcon name="menu" :size="21" />
       </button>
       <div class="msg-appbar-title">{{ mobileViewTitle }}</div>
       <div class="msg-appbar-actions">
+        <button
+          class="msg-appbar-btn"
+          type="button"
+          aria-label="刷新列表"
+          :class="{ 'is-busy': sidebarRefreshing }"
+          @click="onHeaderRefresh"
+        >
+          <DtIcon name="refresh" :size="19" />
+        </button>
         <el-dropdown
           v-if="mobileView === 'messages'"
           trigger="click"
@@ -38,6 +47,7 @@
       </div>
     </header>
 
+    <!-- 移动端：视图切换收进侧边抽屉（吸顶栏汉堡按钮唤起），左栏只承载当前视图内容 -->
     <div class="msg-sidebar" v-show="isMobile ? !activeId : true">
       <!-- 桌面端头部：移动端改由吸顶栏 + 侧边抽屉承担 -->
       <div v-if="!isMobile" class="sidebar-header">
@@ -1324,6 +1334,7 @@
           </div>
         </div>
         <nav class="msg-drawer-nav">
+          <div class="msg-drawer-section">消息中心</div>
           <button
             v-for="v in viewTabs"
             :key="v.key"
@@ -3524,6 +3535,12 @@ function onGlobalClick(e: MouseEvent) {
 .msg-drawer-item.active { background: var(--tui-brand-soft); color: var(--tui-brand-strong); font-weight: 600; }
 .msg-drawer-icon { display: flex; color: inherit; }
 .msg-drawer-label { flex: 1; }
+.msg-drawer-section {
+  padding: 10px 10px 6px; font-size: 12px; font-weight: 600;
+  color: var(--tui-text-quiet); letter-spacing: .3px;
+}
+.msg-appbar-btn.is-busy .dt-icon { animation: msg-spin 1s linear infinite; }
+@keyframes msg-spin { to { transform: rotate(360deg); } }
 
 .drawer-mask-enter-active, .drawer-mask-leave-active { transition: opacity .22s ease; }
 .drawer-mask-enter-from, .drawer-mask-leave-to { opacity: 0; }

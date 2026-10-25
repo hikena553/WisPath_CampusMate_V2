@@ -292,22 +292,31 @@
             </button>
           </el-tooltip>
 
-          <!-- Upload buttons -->
-          <el-dropdown trigger="click" @command="handleUploadCommand" :disabled="loading">
-            <button type="button" class="action-icon-btn" :disabled="loading">
+          <!-- 图片上传：紧邻文件按钮左侧，一点即开系统相册/文件选择 -->
+          <el-tooltip content="上传图片" placement="top" :disabled="isMobile">
+            <button
+              type="button"
+              class="action-icon-btn"
+              aria-label="上传图片"
+              :disabled="loading"
+              @click="triggerImageUpload"
+            >
+              <el-icon :size="18"><Picture /></el-icon>
+            </button>
+          </el-tooltip>
+
+          <!-- 文件上传：保持原回形针图标；点击直接选择文件（原下拉已拆分） -->
+          <el-tooltip content="上传文件" placement="top" :disabled="isMobile">
+            <button
+              type="button"
+              class="action-icon-btn"
+              aria-label="上传文件"
+              :disabled="loading"
+              @click="triggerUpload"
+            >
               <el-icon :size="18"><Paperclip /></el-icon>
             </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="file">
-                  <el-icon style="margin-right:4px"><Document /></el-icon>文件
-                </el-dropdown-item>
-                <el-dropdown-item command="image">
-                  <el-icon style="margin-right:4px"><Picture /></el-icon>图片
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          </el-tooltip>
           <input ref="fileInputRef" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.zip,.rar" style="display:none" @change="onFileSelected" />
           <input ref="imageInputRef" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.svg" style="display:none" @change="onImageSelected" />
 
@@ -713,10 +722,7 @@ function isDuplicate(file: File): boolean {
 
 function triggerUpload() { fileInputRef.value?.click() }
 function triggerImageUpload() { imageInputRef.value?.click() }
-function handleUploadCommand(cmd: string) {
-  if (cmd === 'file') triggerUpload()
-  else if (cmd === 'image') triggerImageUpload()
-}
+/* 图片 / 文件各由一个按钮触发，原先的「附件下拉」已移除 */
 
 function toggleMic() {
   if (!speech.isSupported.value && recorder.isSupported.value) {
@@ -1835,6 +1841,9 @@ defineExpose({ sendText })
   margin-top: 2px;
   padding: 0 2px;
 }
+
+/* 图片 / 文件上传按钮：并排放在麦克风左侧，间距沿用 .input-actions 的 2px */
+.input-actions :deep(.el-tooltip) { display: inline-flex; }
 
 /* 图标按钮（附件、麦克风等） */
 .action-icon-btn {

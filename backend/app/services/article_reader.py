@@ -115,6 +115,17 @@ _JS_ONLY_HOSTS = (
 
 _DATE_RE = re.compile(r"(\d{4})\s*[-/年.]\s*(\d{1,2})\s*[-/月.]\s*(\d{1,2})")
 
+# 正文里需要保留的排版声明：博达 / 维普 CMS 用内联 style 表达「署名右对齐、日期右对齐」，
+# 全部剥掉会让这些行统一变成左对齐，与校站原文观感不一致。
+# 只保留 text-align，字体、颜色、宽度等其余声明一律丢弃（净化边界不变）。
+_ALIGN_STYLE_RE = re.compile(r"text-align\s*:\s*(left|right|center|justify)", re.IGNORECASE)
+
+# 附件链接识别：校站常见两种形态 ——
+# ① 维普 / 博达的下载中转：/system/_content/download.jsp?...DownloadAttachUrl...&wbfileid=...
+# ② 直接指向静态文件的地址：/__local/.../名单.xlsx
+_ATTACH_EXT_RE = re.compile(r"\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|txt)(?:$|[?#])", re.IGNORECASE)
+_ATTACH_HREF_HINTS = ("download.jsp", "downloadattachurl", "wbfileid")
+
 
 def _host_of(url: str) -> str:
     try:
@@ -255,10 +266,17 @@ def _sanitize(node: Tag, base_url: str) -> str:
         tag.decompose()
 
     for tag in node.find_all(True):
-        # 去掉事件类属性与内联脚本
+        # 去掉事件类属性与内联脚本；style 只保留 text-align（见 _ALIGN_STYLE_RE 注释）
         for attr in list(tag.attrs.keys()):
-            if attr.lower().startswith("on") or attr.lower() in ("style", "class", "id"):
+            low = attr.lower()
+            if low.startswith("on") or low in ("class", "id"):
                 del tag.attrs[attr]
+            elif low == "style":
+                align = _ALIGN_STYLE_RE.search(str(tag.attrs.get(attr) or ""))
+                if align:
+                    tag[attr] = f"text-align: {align.group(1).lower()}"
+                else:
+                    del tag.attrs[attr]
         if tag.name == "img":
             src = tag.get("src") or tag.get("data-src") or tag.get("data-original")
             if src:
@@ -276,6 +294,43 @@ def _sanitize(node: Tag, base_url: str) -> str:
             tag.attrs.pop("width", None)
 
     return node.decode_contents()
+
+
+def _collect_attachments(soup: BeautifulSoup, base_url: str) -> list[dict]:
+    """收集正文之外的附件下载链接。
+
+    校站把「附件【xxx.xlsx】」放在正文容器 ``#vsb_content_6`` **之外**（同页的
+    ``<ul><li>`` 里），而 ``_pick_content`` 只取容器内部，导致正文只剩一行
+    「附件：xxx名单」纯文字，真正的下载地址被丢掉。
+    这里独立于正文再扫一遍全页链接，把下载中转地址与静态文件地址收成附件列表，
+    交给前端渲染成可点击的下载卡片。
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for a in soup.find_all("a", href=True):
+        href = (a.get("href") or "").strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        absolute = urljoin(base_url, href)
+        if not is_allowed_url(absolute):
+            continue
+        text = _text_of(a)
+        if not text:
+            continue
+        lower = absolute.lower()
+        is_file = bool(_ATTACH_EXT_RE.search(absolute)) or any(h in lower for h in _ATTACH_HREF_HINTS)
+        # 「附件」字样本身不足以判定：有些页面正文里也会写「见附件」并链到另一篇文章。
+        # 必须同时满足「下载形态的地址」或「链接文字带文件名后缀」。
+        if not is_file and not _ATTACH_EXT_RE.search(text):
+            continue
+        if absolute in seen:
+            continue
+        seen.add(absolute)
+        name = re.sub(r"^附件\s*[：:]\s*", "", text).strip() or "附件"
+        out.append({"name": name, "url": absolute})
+        if len(out) >= 10:
+            break
+    return out
 
 
 def _nearby_text(a: Tag) -> str:
@@ -344,6 +399,7 @@ def extract_article(html: str, url: str) -> dict:
             "date": _extract_date(title, body_text[:120], _header_text(soup)),
             "content_html": _sanitize(content, base_url),
             "links": [],
+            "attachments": _collect_attachments(soup, base_url),
             "source_url": url,
         }
 
@@ -353,6 +409,7 @@ def extract_article(html: str, url: str) -> dict:
         "date": _extract_date(title),
         "content_html": None,
         "links": _collect_links(soup, base_url, url),
+        "attachments": [],
         "source_url": url,
     }
 
