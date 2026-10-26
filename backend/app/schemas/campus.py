@@ -66,10 +66,12 @@ class CampusArticleInteractOut(BaseModel):
     source: str = ""
     image_url: str | None = None
     like_count: int = 0
+    favorite_count: int = 0
     comment_count: int = 0
     repost_count: int = 0
     view_count: int = 0
     liked: bool = False
+    favorited: bool = False
     updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -106,6 +108,15 @@ class CampusArticleLikeIn(BaseModel):
 
 class CampusArticleLikeOut(BaseModel):
     liked: bool
+    count: int
+
+
+class CampusArticleFavoriteIn(BaseModel):
+    url: str = Field(..., min_length=8, max_length=700)
+
+
+class CampusArticleFavoriteOut(BaseModel):
+    favorited: bool
     count: int
 
 

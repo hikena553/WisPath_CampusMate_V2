@@ -40,6 +40,7 @@ class CampusArticleSocial(Base):
     source: Mapped[str] = mapped_column(String(30), default="")      # jwc_jxdt/jwc_tzgg/college_news/library ...
     image_url: Mapped[str | None] = mapped_column(String(500), default=None)
     like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    favorite_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     comment_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     repost_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -63,6 +64,23 @@ class CampusArticleLike(Base):
     __tablename__ = "campus_article_likes"
     __table_args__ = (
         UniqueConstraint("article_url", "user_id", name="uq_campus_article_like_user"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    article_url: Mapped[str] = mapped_column(String(700), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class CampusArticleFavorite(Base):
+    """收藏明细：与点赞同构，唯一约束保证一人对一篇只算一次。
+
+    收藏与点赞是两个独立动作：点赞是「我看过且认可」，收藏是「我以后还要找回来」，
+    所以各自一张明细表、各自一个计数，互不影响。
+    """
+    __tablename__ = "campus_article_favorites"
+    __table_args__ = (
+        UniqueConstraint("article_url", "user_id", name="uq_campus_article_favorite_user"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -4,7 +4,7 @@
          结构照抄 ArticleReader：Teleport + Transition(name="subpage") + 根元素 fixed inset:0。
          取舍：不用 el-dialog / el-drawer —— 它们自带居中、遮罩、body 滚动锁与 z-index 体系，
          而这页要的是「手机上整页盖上来、桌面端 760px 居中」的确定性版式，自己写样式可控得多。 -->
-    <Transition name="subpage" :duration="320">
+    <Transition name="subpage" :duration="320" @after-leave="emit('closed')">
       <div
         v-if="visible"
         class="adp-root"
@@ -131,31 +131,6 @@
               </div>
             </article>
 
-            <!-- ③ 互动区：评论 / 点赞 / 转发 -->
-            <section class="adp-actions">
-              <button type="button" class="adp-action" @click="focusComposer">
-                <el-icon :size="21"><ChatDotRound /></el-icon>
-                <span class="adp-action-label">
-                  评论<span v-if="commentCount" class="adp-action-num">{{ commentCount }}</span>
-                </span>
-              </button>
-              <button type="button" class="adp-action" :class="{ 'is-liked': liked }" @click="onLike">
-                <el-icon :size="21" :class="['adp-like-icon', { 'is-pop': likePop }]">
-                  <StarFilled v-if="liked" />
-                  <Star v-else />
-                </el-icon>
-                <span class="adp-action-label">
-                  点赞<span v-if="likeCount" class="adp-action-num">{{ likeCount }}</span>
-                </span>
-              </button>
-              <button type="button" class="adp-action" @click="openRepost">
-                <el-icon :size="21"><Share /></el-icon>
-                <span class="adp-action-label">
-                  转发<span v-if="repostCount" class="adp-action-num">{{ repostCount }}</span>
-                </span>
-              </button>
-            </section>
-
             <!-- ④ 评论区 -->
             <section class="adp-comments">
               <h2 class="adp-comments-head">{{ commentCount > 0 ? '共 ' + commentCount + ' 条评论' : '评论' }}</h2>
@@ -218,6 +193,40 @@
           <button type="button" class="adp-send" :disabled="!canSend" @click="submitComment">
             {{ sending ? '发送中' : '发送' }}
           </button>
+          <!-- 互动计数排在发送右侧：正文与评论之间不再单独占一条大按钮行，
+               把「点赞 / 收藏 / 评论数」收进这条常驻的输入栏，滚动到哪儿都能点。
+               数字按真实值显示（0 也显示），与信息流的计数口径一致。 -->
+          <div class="adp-bar-acts">
+            <button
+              type="button"
+              class="adp-bar-act"
+              :class="{ 'is-on': liked }"
+              :aria-pressed="liked"
+              aria-label="点赞"
+              @click="onLike"
+            >
+              <el-icon :size="19" :class="['adp-like-icon', { 'is-pop': likePop }]">
+                <StarFilled v-if="liked" />
+                <Star v-else />
+              </el-icon>
+              <span class="adp-bar-num">{{ likeCount }}</span>
+            </button>
+            <button
+              type="button"
+              class="adp-bar-act is-fav"
+              :class="{ 'is-on': favorited }"
+              :aria-pressed="favorited"
+              aria-label="收藏"
+              @click="onFavorite"
+            >
+              <el-icon :size="19"><CollectionTag /></el-icon>
+              <span class="adp-bar-num">{{ favoriteCount }}</span>
+            </button>
+            <button type="button" class="adp-bar-act" aria-label="评论" @click="focusComposer">
+              <el-icon :size="19"><ChatDotRound /></el-icon>
+              <span class="adp-bar-num">{{ commentCount }}</span>
+            </button>
+          </div>
         </div>
 
         <!-- ⑥ 转发层：自己画遮罩 + 底部面板（不用 el-dialog，避免组件库默认样式接管版式） -->
@@ -271,7 +280,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowLeft, ArrowRight, ChatDotRound, Close, DocumentDelete, Download, Link, Refresh, Share, Star, StarFilled,
+  ArrowLeft, ArrowRight, ChatDotRound, Close, CollectionTag, DocumentDelete, Download, Link, Refresh, Share, Star, StarFilled,
 } from '@element-plus/icons-vue'
 import type { CampusArticle } from '@/api/campus'
 import {
@@ -280,6 +289,7 @@ import {
   getArticleComments,
   getArticleDetail,
   repostArticle,
+  toggleArticleFavorite,
   toggleArticleLike,
   type CampusArticleComment,
   type CampusArticleDetail,
@@ -301,6 +311,8 @@ const props = defineProps<{ articleUrl: string; title?: string; source?: string 
 
 const emit = defineEmits<{
   (e: 'close'): void
+  /** 退场动画（.subpage 300ms）播完：父页收到后才能卸载本组件 */
+  (e: 'closed'): void
   /** 请求父页用站内阅读器打开原文（正文不再由本页渲染） */
   (e: 'read', url: string): void
   (
@@ -308,10 +320,12 @@ const emit = defineEmits<{
     payload: {
       url: string
       like_count: number
+      favorite_count: number
       comment_count: number
       repost_count: number
       view_count: number
       liked: boolean
+      favorited: boolean
     },
   ): void
 }>()
@@ -396,6 +410,8 @@ const commentCount = computed(() => social.value?.comment_count ?? 0)
 const repostCount = computed(() => social.value?.repost_count ?? 0)
 const viewCount = computed(() => social.value?.view_count ?? 0)
 const liked = computed(() => social.value?.liked ?? false)
+const favoriteCount = computed(() => social.value?.favorite_count ?? 0)
+const favorited = computed(() => social.value?.favorited ?? false)
 
 /** 正文之外的附件（校站下载区）：后端单独解析，避免正文只剩「附件：xxx」文字 */
 const attachments = computed(() => data.value?.attachments || [])
@@ -413,10 +429,12 @@ function emitUpdated() {
   emit('updated', {
     url: currentUrl.value,
     like_count: likeCount.value,
+    favorite_count: favoriteCount.value,
     comment_count: commentCount.value,
     repost_count: repostCount.value,
     view_count: viewCount.value,
     liked: liked.value,
+    favorited: favorited.value,
   })
 }
 
@@ -607,6 +625,39 @@ async function onLike() {
     if (!status || status < 500) ElMessage.error(e?.response?.data?.detail || '点赞失败，请重试')
   } finally {
     window.setTimeout(() => { likePop.value = false }, 320)
+  }
+}
+
+/* ================= 互动：收藏 ================= */
+
+/**
+ * 收藏与点赞同一套乐观更新：先改本地颜色与计数，失败按快照回滚。
+ * 收藏是「以后还要找回来」的收藏夹动作，与点赞（认可）互不影响，各记各的计数。
+ */
+async function onFavorite() {
+  if (!social.value) return
+  const snapshot = { favorited: social.value.favorited, favorite_count: social.value.favorite_count }
+  const nextFavorited = !snapshot.favorited
+
+  social.value.favorited = nextFavorited
+  social.value.favorite_count = Math.max(0, snapshot.favorite_count + (nextFavorited ? 1 : -1))
+  emitUpdated()
+
+  try {
+    const res = await toggleArticleFavorite(currentUrl.value)
+    if (social.value) {
+      social.value.favorited = res.favorited
+      social.value.favorite_count = res.count
+    }
+    emitUpdated()
+  } catch (e: any) {
+    if (social.value) {
+      social.value.favorited = snapshot.favorited
+      social.value.favorite_count = snapshot.favorite_count
+    }
+    emitUpdated()
+    const status = e?.response?.status as number | undefined
+    if (!status || status < 500) ElMessage.error(e?.response?.data?.detail || '收藏失败，请重试')
   }
 }
 
@@ -859,7 +910,7 @@ async function openAnd(url: string, action: 'comment' | 'repost') {
   else openRepost()
 }
 
-defineExpose({ reload, open, openAnd })
+defineExpose({ reload, open, openAnd, close })
 </script>
 
 <style scoped>
@@ -1188,36 +1239,9 @@ defineExpose({ reload, open, openAnd })
 .adp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .adp-btn.block { width: 100%; }
 
-/* ================= 互动区 =================
-   一行三按钮均分宽度，热区 56px 高：这是详情页最高频的三个动作，必须一按即中。 */
-.adp-actions {
-  display: flex;
-  align-items: stretch;
-  border-top: 1px solid #f0f0f0;
-  border-bottom: 1px solid #f0f0f0;
-  margin-top: 12px;
-}
-.adp-action {
-  flex: 1;
-  min-height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: none;
-  background: transparent;
-  color: #4e5969;
-  font-size: 14px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: opacity 0.14s ease, color 0.14s ease;
-}
-.adp-action:active { opacity: 0.62; }
-.adp-action-label { display: inline-flex; align-items: baseline; gap: 2px; }
-.adp-action-num { font-size: 13.5px; font-variant-numeric: tabular-nums; }
-/* 已点赞：图标与数字同时变品牌蓝，实心/空心由 StarFilled / Star 切换 */
-.adp-action.is-liked,
-.adp-action.is-liked .adp-action-num { color: #2563eb; }
+/* ================= 点赞弹跳 =================
+   点赞 / 收藏 / 评论数已从正文下方的大按钮行搬到底部输入栏右侧（见 .adp-bar-acts），
+   这里只保留图标本身的一次弹跳反馈，与动作放在哪里无关。 */
 
 .adp-like-icon.is-pop { animation: adp-like-pop 0.32s ease; }
 @keyframes adp-like-pop {
@@ -1370,6 +1394,37 @@ defineExpose({ reload, open, openAnd })
 }
 .adp-send:active:not(:disabled) { opacity: 0.72; }
 .adp-send:disabled { background: #c9d4e8; cursor: not-allowed; }
+
+/* 发送右侧的互动区：点赞 / 收藏 / 评论数，竖向「图标 + 数字」紧凑排列。
+   放在输入栏里是为了让这三个动作常驻屏幕底部，正文滚到多深都能点；
+   数字始终显示（含 0），与信息流的计数口径一致。 */
+.adp-bar-acts {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+.adp-bar-act {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 26px;
+  padding: 2px 3px;
+  border: none;
+  background: transparent;
+  color: #86909c;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.14s ease, transform 0.12s ease;
+}
+.adp-bar-act:active { transform: scale(0.92); }
+/* 已点赞 = 品牌蓝；已收藏 = 琥珀色。两个动作各自独立，颜色不共用 */
+.adp-bar-act.is-on { color: #2563eb; }
+.adp-bar-act.is-fav.is-on { color: #f5a623; }
+.adp-bar-num { font-size: 11px; font-variant-numeric: tabular-nums; }
 
 /* ================= 转发面板 ================= */
 .adp-sheet-mask {

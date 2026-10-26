@@ -4,6 +4,7 @@ from app.models.campus_social import (
     CampusArticleSocial,
     CampusArticleComment,
     CampusArticleLike,
+    CampusArticleFavorite,
     CampusArticleRepost,
 )
 from app.models.academic import College, Major, ClassGroup, Course, Semester, Grade, Exam

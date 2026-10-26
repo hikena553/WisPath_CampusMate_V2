@@ -85,10 +85,12 @@ export interface CampusArticleInteract {
   source: string
   image_url: string | null
   like_count: number
+  favorite_count: number
   comment_count: number
   repost_count: number
   view_count: number
   liked: boolean
+  favorited: boolean
   updated_at: string | null
 }
 
@@ -117,7 +119,12 @@ export function getArticleDetail(url: string) {
 /** 资讯流批量取互动状态：一次请求补齐整屏计数，返回 { url: 互动状态 } */
 export function getArticleInteractions(urls: string[]) {
   return request.get<Record<string, CampusArticleInteract>>('/campus/interactions', {
-    params: { urls: urls.join(',') },
+    // urls 传数组 + indexes: null：序列化成 urls=a&urls=b（重复键），
+    // 后端按 list[str] 逐条解析。默认会被序列化成 urls[]=a&urls[]=b，
+    // 参数名多了 []，后端取不到；拼成 "a,b,c" 又会变成一条匹配不上的长串 ——
+    // 两种都会让信息流拿不到计数（只有点进详情才由详情接口回填）。
+    params: { urls },
+    paramsSerializer: { indexes: null },
   })
 }
 
@@ -128,6 +135,11 @@ export function getArticleComments(url: string) {
 /** 点赞 / 取消点赞（同一接口切换），返回最新状态与总数 */
 export function toggleArticleLike(url: string) {
   return request.post<{ liked: boolean; count: number }>('/campus/articles/like', { url })
+}
+
+/** 收藏 / 取消收藏（同一接口切换），返回最新状态与总数 */
+export function toggleArticleFavorite(url: string) {
+  return request.post<{ favorited: boolean; count: number }>('/campus/articles/favorite', { url })
 }
 
 export function createArticleComment(url: string, content: string) {

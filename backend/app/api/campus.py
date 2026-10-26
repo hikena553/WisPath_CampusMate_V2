@@ -12,6 +12,7 @@ from app.core.deps import get_current_user
 from app.models.campus import CampusScenery, CampusImpressionItem
 from app.models.campus_social import (
     CampusArticleComment,
+    CampusArticleFavorite,
     CampusArticleLike,
     CampusArticleRepost,
     CampusArticleSocial,
@@ -25,6 +26,8 @@ from app.schemas.campus import (
     CampusArticleCommentCreate,
     CampusArticleCommentOut,
     CampusArticleDetailOut,
+    CampusArticleFavoriteIn,
+    CampusArticleFavoriteOut,
     CampusArticleInteractOut,
     CampusArticleLikeIn,
     CampusArticleLikeOut,
@@ -288,16 +291,24 @@ def _interact_out(
         .first()
         is not None
     )
+    favorited = (
+        db.query(CampusArticleFavorite.id)
+        .filter(CampusArticleFavorite.article_url == url, CampusArticleFavorite.user_id == current_user.id)
+        .first()
+        is not None
+    )
     return CampusArticleInteractOut(
         url=url,
         title=(article or {}).get("title") or (row.title if row else ""),
         source=row.source if row else "",
         image_url=row.image_url if row else None,
         like_count=row.like_count if row else 0,
+        favorite_count=row.favorite_count if row else 0,
         comment_count=row.comment_count if row else 0,
         repost_count=row.repost_count if row else 0,
         view_count=row.view_count if row else 0,
         liked=liked,
+        favorited=favorited,
         updated_at=row.updated_at if row else None,
     )
 
@@ -327,6 +338,15 @@ def get_interactions(
         )
         .all()
     }
+    favorited_urls = {
+        u
+        for (u,) in db.query(CampusArticleFavorite.article_url)
+        .filter(
+            CampusArticleFavorite.article_url.in_(clean),
+            CampusArticleFavorite.user_id == current_user.id,
+        )
+        .all()
+    }
     out: dict[str, CampusArticleInteractOut] = {}
     for url in clean:
         row = by_url.get(url)
@@ -338,10 +358,12 @@ def get_interactions(
             source=row.source,
             image_url=row.image_url,
             like_count=row.like_count,
+            favorite_count=row.favorite_count,
             comment_count=row.comment_count,
             repost_count=row.repost_count,
             view_count=row.view_count,
             liked=url in liked_urls,
+            favorited=url in favorited_urls,
             updated_at=row.updated_at,
         )
     return out
@@ -525,6 +547,45 @@ def toggle_article_like(
         fresh = _social_row(db, req.url)
         return CampusArticleLikeOut(liked=True, count=fresh.like_count if fresh else 0)
     return CampusArticleLikeOut(liked=True, count=row.like_count)
+
+
+@router.post("/articles/favorite", response_model=CampusArticleFavoriteOut)
+def toggle_article_favorite(
+    req: CampusArticleFavoriteIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """收藏 / 取消收藏（同一接口切换），返回最新状态与总数。
+
+    与点赞完全同构：唯一约束 (article_url, user_id) 兜住并发双击，
+    撞约束时按「已收藏」回传真实计数，避免前端看到计数错乱。
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    row = _update_social_meta(db, req.url)
+    existing = (
+        db.query(CampusArticleFavorite)
+        .filter(
+            CampusArticleFavorite.article_url == req.url,
+            CampusArticleFavorite.user_id == current_user.id,
+        )
+        .first()
+    )
+    if existing is not None:
+        db.delete(existing)
+        row.favorite_count = max(0, (row.favorite_count or 0) - 1)
+        db.commit()
+        return CampusArticleFavoriteOut(favorited=False, count=row.favorite_count)
+
+    db.add(CampusArticleFavorite(article_url=req.url, user_id=current_user.id))
+    row.favorite_count = (row.favorite_count or 0) + 1
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        fresh = _social_row(db, req.url)
+        return CampusArticleFavoriteOut(favorited=True, count=fresh.favorite_count if fresh else 0)
+    return CampusArticleFavoriteOut(favorited=True, count=row.favorite_count)
 
 
 @router.post("/articles/repost", response_model=CampusArticleRepostOut)
