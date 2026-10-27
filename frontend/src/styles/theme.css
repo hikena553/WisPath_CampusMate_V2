@@ -357,6 +357,16 @@ html.dark .el-message .el-message__closeBtn {
   z-index: 4000 !important;
 }
 
+/* 二次确认框（ElMessageBox）压在全屏覆盖子页之上：
+   资讯详情 / 校园搜索等子页是 fixed z-2600 的整页覆盖层，而 Element Plus 弹层
+   基准 z 约 2000（遮罩 2004）—— 确认框会被子页整个盖住，看起来像「点了没反应」
+   （搜索页的清空历史确认、以及任何从子页里发起的确认都踩这里）。与上方
+   .el-message 同一套思路：统一抬到子页之上。 */
+.el-overlay.is-message-box,
+.el-message-box {
+  z-index: 4100 !important;
+}
+
 /* ===== 退出登录确认框（ElMessageBox 二次确认）：极简卡片 =====
    不使用 MessageBox 默认的「彩色警示图标 + 蓝色确定按钮 + 右上角 ×」，
    改为「柔和红色徽章图标 + 居中标题/说明 + 等宽双按钮」，与全局黑白极简的

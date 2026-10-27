@@ -2256,11 +2256,16 @@ watch(() => route.query.tab, (val) => {
   .content-main { max-width: 100%; }
   .content-row { flex-direction: column; }
   /* 移动端覆盖式布局（仅在子页激活时生效，见下方 .has-subpage 条件）。
-     为什么用条件类：.schedule-page 是整页滚动容器，只有 in-flow 内容才能撑起它的滚动高度。
-     - 显示主页时：主页必须留在流内，否则滚动高度为 0、仪表盘无法滚动；
-     - 显示子页时：主页脱流垫在下层（此时它已被完全盖住，不需要滚动），
-       子页留在流内，长内容（课程表/成绩列表）照旧随整页滚动 —— 与改造前一致。
-     反过来把子页做成 absolute + bottom:0 是错的：高度会被钉死、长内容被裁掉无法滚动。 */
+     - 显示主页时：主页留在流内撑起 .schedule-page 的滚动高度，仪表盘正常滚动；
+     - 显示子页时：子页（.content-row）整屏覆盖 —— 与资讯搜索/详情子页同一形式，
+       滑入/滑出时连顶部页头与底部导航一起盖住。子页脱离整页滚动容器后自成滚动区
+       （overflow-y:auto），长内容（课程表/成绩列表）在子页内滚动。
+     注意 fixed 规则**不能**挂在 .has-subpage 下：返回时 activeTab 先变、has-subpage
+     先移除，而滑出动画还在播 —— 挂在条件下会让子页在动画第一帧从整屏跳回流内。
+     该元素本身只在子页态渲染（模板 v-if），不加条件等价且动画期间保持整屏。
+     主页滑出时绝对定位垫在下层（见下），被完全盖住不需要滚动，原地露出即可。
+     z-index 1500：盖过底部导航(1000)，低于 Element Plus 弹层基准(2000+)，
+     学期选择/日期等弹出层仍浮在子页之上。 */
   .schedule-page.has-subpage .dashboard-home {
     position: absolute;
     top: var(--sp-pad-t, 8px);
@@ -2268,7 +2273,15 @@ watch(() => route.query.tab, (val) => {
     right: var(--sp-pad-x, 12px);
     z-index: 1;
   }
-  .content-row { position: relative; z-index: 2; }
+  .content-row {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 12px 0;
+    box-sizing: border-box;
+  }
 
   /* ── 教学安排工具栏 ── */
   .schedule-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; row-gap: 8px; }

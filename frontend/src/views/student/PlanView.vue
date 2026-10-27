@@ -1021,6 +1021,24 @@ function isOverdue(t: PlanTask) {
   -webkit-overflow-scrolling: touch;
 }
 
+/* 移动端：整屏覆盖子页（与资讯搜索/详情子页同一形式）——
+   滑入/滑出时连顶栏与底部导航一起盖住，返回走页面顶部的 SubPageHeader。
+   z-index 1500：盖过顶栏(100)/底部导航(1000)，低于 Element Plus 弹层基准(2000+)，
+   页内的下拉/日期选择等弹出层不受影响。 */
+@media (max-width: 767px) {
+  .plan-page {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+    max-width: none;
+  }
+  .plan-page > .tui-appbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+}
+
 /* ========== 顶部品牌主视觉 ========== */
 .plan-hero {
   position: relative;

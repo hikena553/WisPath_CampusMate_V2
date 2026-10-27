@@ -916,7 +916,9 @@ defineExpose({ reload, open, openAnd, close })
 <style scoped>
 /* ================= 根容器 =================
    fixed inset:0 的整页覆盖层。z-index 2600 高于移动端底部导航（MobileTabBar 的 1000）
-   与顶栏（100）；本页内部的 ElMessage 会落在组件库自己的更高层级，仍可见。 */
+   与顶栏（100）；本页内部的 ElMessage 会落在组件库自己的更高层级，仍可见。
+   进出场动画统一走全局 .subpage（styles/animations.css，keyframes 驱动）——
+   本页曾是全站第一处 animation 驱动的子页，方案验证后已收编进全局，不再自带一份。 */
 .adp-root {
   position: fixed;
   inset: 0;
@@ -1516,6 +1518,7 @@ defineExpose({ reload, open, openAnd, close })
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .adp-root { animation: none !important; }
   .adp-pop-enter-active,
   .adp-pop-leave-active,
   .adp-pop-enter-active .adp-sheet,

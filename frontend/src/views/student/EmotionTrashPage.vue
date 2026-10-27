@@ -322,6 +322,22 @@ onMounted(loadAll)
   background: #f6f9ff;
 }
 
+/* 移动端：整屏覆盖子页（与资讯搜索/详情子页同一形式）——
+   滑入/滑出时连顶栏与底部导航一起盖住，返回走页面顶部的 SubPageHeader。
+   z-index 1500：盖过顶栏(100)/底部导航(1000)，低于 Element Plus 弹层基准(2000+)。 */
+@media (max-width: 767px) {
+  .emotion-page {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+  }
+  .emotion-page > .tui-appbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+}
+
 .emotion-hero {
   position: relative;
   overflow: hidden;

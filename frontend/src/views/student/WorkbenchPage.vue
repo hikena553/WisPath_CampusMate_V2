@@ -2311,13 +2311,16 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   flex-direction: column;
 }
 
-/* 移动端：底部避开导航栏，输入栏落在可见区域 */
+/* 移动端：整屏覆盖（与资讯搜索/详情子页同一形式）——
+   滑入/滑出时连底部导航一起盖住，返回走子页自己的返回按钮。
+   z-index 1500：盖过底部导航(1000)，低于 Element Plus 弹层基准(2000+)，
+   表单里的日期选择/下拉等弹出层仍浮在子页之上。 */
 @media (max-width: 767px) {
   .sub-page {
-    bottom: 56px;
+    z-index: 1500;
     /* 显式高度：为内部 chat-page / 消息列表的百分比与 flex 高度提供确定基准，
        否则 position:fixed + height:auto 会让嵌套滚动区失去高度约束而无法滚动 */
-    height: calc(100% - 56px);
+    height: 100%;
   }
 }
 

@@ -105,21 +105,31 @@ const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
 
-// 路由过渡分两种：
-// 1) 快捷空间子页面（学习计划/作品集/成长档案/情绪树洞）：覆盖式滑入/滑出
-//    用 .route-subpage（styles/animations.css 的「路由级」版本）：新页从右滑入盖住旧页，
-//    旧页脱流后向右滑出。**不能用 .subpage** —— 那个类给页内场景设计（主页面在 Transition
-//    之外、没有 leave 元素），离场侧刻意不脱流；而路由切换是真正的组件替换，
-//    新旧两页都是 .main-area 这个 flex column 的直接子项，离场页不脱流就会与进场页
-//    分摊高度（各约 50%）→ 高度塌陷抽搐、退出动画被掩盖。
-// 2) 其余同级页面切换（底部导航/顶栏之间，如校园资讯↔驾驶舱）：卡片式切换（新页浮起放大到位，旧页缩小退后）
+// 路由过渡分方向（2026-10 起，与页内子页的覆盖式观感对齐）：
+// 1) 推入（主页 → 快捷子页、子页 ↔ 子页）：.route-subpage —— 新页从右滑入盖住旧页，
+//    旧页原地不动。**不能用 .subpage** —— 那个类给页内场景设计（主页面在
+//    Transition 之外、没有 leave 元素）。桌面端路由页是流内布局，离场页不脱流就会
+//    与进场页分摊高度（各约 50%）→ 高度塌陷抽搐；移动端快捷页自身是 fixed 整屏
+//    覆盖层（见各页根元素样式），离场主页留在流内也不会被分摊高度，
+//    几何规则见 animations.css 路由段的断点拆分。
+// 2) 返回（子页 → 主页）：.route-subpage-back —— 离场的子页**原路向右滑出**，
+//    进入的主页面原地不动地露出来。此前路由级不分方向，返回也播「新页滑入」，
+//    观感是「又前进了一页」，与搜索/详情页「子页滑出」的返回不一致。
+//    旧页不能跟新页一起动：两页同时位移是「传送带」穿帮（此前用户反馈过「退出动画不对」），
+//    所以滑动的只有离场页自己。
+// 3) 其余同级页面切换（底部导航/顶栏之间，如校园资讯↔驾驶舱）：卡片式切换（新页浮起放大到位，旧页缩小退后）
 const quickPagePaths = ['/student/plan', '/student/portfolio', '/student/growth', '/student/emotion']
 const pageTransition = ref('')
 watch(
   () => route.path,
   (to, from) => {
-    if (quickPagePaths.includes(to) || quickPagePaths.includes(from)) pageTransition.value = 'route-subpage'
-    else pageTransition.value = 'page-card'
+    const toQuick = quickPagePaths.includes(to)
+    const fromQuick = quickPagePaths.includes(from)
+    if (toQuick || fromQuick) {
+      pageTransition.value = fromQuick && !toQuick ? 'route-subpage-back' : 'route-subpage'
+    } else {
+      pageTransition.value = 'page-card'
+    }
   },
   { flush: 'pre' }
 )
@@ -127,7 +137,7 @@ watch(
 /** 只有覆盖式滑动需要显式时长兜底移除（离场页脱流，见 animations.css）；
     卡片切换交给 Vue 自动检测，与 CSS 时长精确对齐 */
 const transitionDuration = computed(() =>
-  pageTransition.value === 'route-subpage' ? 320 : undefined
+  pageTransition.value === 'route-subpage' || pageTransition.value === 'route-subpage-back' ? 320 : undefined
 )
 
 // 移动端底部导航

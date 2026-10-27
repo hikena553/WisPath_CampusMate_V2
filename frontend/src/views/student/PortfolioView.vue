@@ -464,6 +464,25 @@ function copyToProjectForm() {
   color: #1a1a2e;
 }
 
+/* 移动端：整屏覆盖子页（与资讯搜索/详情子页同一形式）——
+   滑入/滑出时连顶栏与底部导航一起盖住，返回走页面顶部的 SubPageHeader。
+   z-index 1500：盖过顶栏(100)/底部导航(1000)，低于 Element Plus 弹层基准(2000+)，
+   页内的下拉/上传等弹出层不受影响。根元素自成滚动容器（原来靠外层裁剪，改后自滚）。 */
+@media (max-width: 767px) {
+  .portfolio-page {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .portfolio-page > .tui-appbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+}
+
 .portfolio-header {
   display: flex;
   align-items: center;

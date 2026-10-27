@@ -68,9 +68,6 @@ const ICONS: Record<string, string> = {
   // 动作：表情（笑脸，单色线条）
   smile:
     '<circle cx="12" cy="12" r="8.2"/><path d="M8.7 13.9a4.2 4.2 0 0 0 6.6 0"/><circle cx="9.3" cy="9.9" r="1.05" fill="currentColor" stroke="none"/><circle cx="14.7" cy="9.9" r="1.05" fill="currentColor" stroke="none"/>',
-  // 动作：上传图片（相框 + 山景 + 太阳）
-  image:
-    '<rect x="3.6" y="4.8" width="16.8" height="14.4" rx="2.6"/><circle cx="8.7" cy="9.9" r="1.5"/><path d="M4.2 16.6l4.3-4.1a1.7 1.7 0 0 1 2.3 0l3 2.8"/><path d="M12.4 17.2l2.6-2.4a1.7 1.7 0 0 1 2.3 0l2.2 2"/>',
   // 项目类型：学科竞赛（奖杯）
   trophy:
     '<path d="M8.2 4.2h7.6v4.4a3.8 3.8 0 0 1-7.6 0z"/><path d="M8.2 5.6H5.6v1.5a3 3 0 0 0 2.9 3"/><path d="M15.8 5.6h2.6v1.5a3 3 0 0 1-2.9 3"/><path d="M12 12.4v3.4"/><path d="M9 19.8h6"/><path d="M10.2 19.8a2 2 0 0 1 1.8-2.2 2 2 0 0 1 1.8 2.2"/>',
@@ -141,8 +138,6 @@ const ICONS: Record<string, string> = {
   // 文件夹
   folder:
     '<path d="M4.8 5.6h3.6l1.7 2h8.9a2 2 0 0 1 2 2v6.8a2 2 0 0 1-2 2H4.8a2 2 0 0 1-2-2V7.6a2 2 0 0 1 2-2z"/>',
-  // 三横线（菜单）
-  menu: '<path d="M4.4 7h15.2M4.4 12h15.2M4.4 17h15.2"/>',
   // 退出（离开）
   logout:
     '<path d="M14.6 4.6H6.4a2 2 0 0 0-2 2v10.8a2 2 0 0 0 2 2h8.2"/><path d="M16.6 15.4 20 12l-3.4-3.4"/><path d="M20.2 12H9.8"/>',

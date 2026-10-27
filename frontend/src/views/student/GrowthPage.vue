@@ -753,15 +753,33 @@ async function handleAdd() {
 </script>
 
 <style scoped>
-.growth-page { 
-  max-width: 1200px; 
-  margin: 0 auto; 
-  padding: 4px 0 24px; 
-  height: 100%; 
-  overflow-y: auto; 
-  box-sizing: border-box; 
-  scrollbar-width: none; 
+.growth-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 4px 0 24px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/* 移动端：整屏覆盖子页（与资讯搜索/详情子页同一形式）——
+   滑入/滑出时连顶栏与底部导航一起盖住，返回走页面顶部的 SubPageHeader。
+   z-index 1500：盖过顶栏(100)/底部导航(1000)，低于 Element Plus 弹层基准(2000+)，
+   页内的下拉等弹出层不受影响。 */
+@media (max-width: 767px) {
+  .growth-page {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+    max-width: none;
+  }
+  .growth-page > .tui-appbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
 }
 .growth-page::-webkit-scrollbar { display: none; }
 

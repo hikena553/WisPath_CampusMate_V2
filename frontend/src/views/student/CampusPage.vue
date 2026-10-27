@@ -498,6 +498,17 @@
          阅读器自己会 Teleport 抽屉到 body，放在这里不会影响布局。 -->
     <ArticleReader ref="readerRef" />
 
+    <!-- 移动端全屏搜索子页（移动端页头放大镜的落点；桌面端仍走上面的 el-dialog）：
+         搜索历史 / 搜索发现 / 热榜三段 + 结果视图，资讯池由父页备好传入。
+         点资讯命中条目 → 详情子页盖在本页之上（同 z-index、后挂载者在上），
+         详情返回后仍停留在搜索页，搜索上下文不丢。 -->
+    <CampusSearchPage
+      v-if="searchTarget"
+      :items="searchPool"
+      @closed="searchTarget = false"
+      @open="openHitFromSearch"
+    />
+
     <!-- 资讯详情子页（移动端信息流点进一条资讯后的落地页）：
          正文由 /api/campus/articles/detail 返回，附带评论 / 点赞 / 转发。
          v-if 控制挂载：组件挂载即打开，卸载即关闭，不必手动管理 visible。 -->
@@ -524,6 +535,7 @@ import { getCampusImpressionCache, setCampusImpressionCache } from '@/utils/stud
 import { tilt } from '@/directives/tilt'
 import ArticleReader from '@/components/campus/ArticleReader.vue'
 import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
+import CampusSearchPage, { type SearchPoolItem } from '@/components/campus/CampusSearchPage.vue'
 import { getArticleInteractions, type CampusArticleInteract } from '@/api/campus'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
@@ -865,13 +877,50 @@ const newsHits = ref<NewsHit[]>([])
 const knowledgeHits = ref<KnowledgeHit[]>([])
 const knowledgeLoading = ref(false)
 
+/**
+ * 移动端搜索入口：打开全屏搜索子页（CampusSearchPage），不再走对话框 ——
+ * 手机上对话框是「半个页面浮着」的形态，与参考的资讯流 App 搜索页差一代；
+ * 桌面端维持原对话框（全屏子页是移动端专属版式）。
+ */
+const searchTarget = ref(false)
+
+/** 搜索页的资讯池：全部栏目合并流（移动端口径：剔系统入口与已下线栏目），
+ * 并入互动计数、去掉公共前缀 —— 池子规则只在父页维护，搜索页只消费。 */
+const searchPool = computed<SearchPoolItem[]>(() =>
+  itemsOfTab('all').map(i => {
+    const s = interactionMap.value[i.url]
+    return {
+      title: removeCommonPrefix(i.title),
+      url: i.url,
+      source: i.source,
+      sourceLabel: SOURCE_LABELS[i.source] || '资讯',
+      date: i.date,
+      dateLabel: formatDate(i.date),
+      image_url: i.image_url,
+      comment_count: s?.comment_count ?? 0,
+      view_count: s?.view_count ?? 0,
+    }
+  }),
+)
+
 function openSearch() {
+  if (isMobile.value) {
+    searchTarget.value = true
+    return
+  }
   searchVisible.value = true
   // 每次打开都是干净状态：上次的结果留着会让人以为「已经搜过了」
   searchKeyword.value = ''
   searchDone.value = false
   newsHits.value = []
   knowledgeHits.value = []
+}
+
+/** 搜索子页点资讯命中：详情子页盖在搜索页上（同为 Teleport 覆盖层，后挂载者在
+ * 上层），详情返回后仍停留在搜索页。来源从命中条目自带，不走 mobileFeed 反查 ——
+ * 搜索命中的条目不一定在当前分类的信息流里。 */
+function openHitFromSearch(url: string, title: string, source: string) {
+  detailTarget.value = { url, title, source, from: 'row' }
 }
 
 /**
