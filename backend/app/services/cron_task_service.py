@@ -36,11 +36,17 @@ def compute_next_run(task: AgentCronTask, now: datetime | None = None) -> dateti
     """计算下一次触发时间（UTC）。daily/weekly 的触发时刻按北京时间解释。"""
     now = _as_utc(now) if now else datetime.now(timezone.utc)
     if task.schedule_kind == CronScheduleKind.INTERVAL:
-        hours = task.interval_hours or 24
+        hours = task.interval_hours if task.interval_hours and task.interval_hours >= 1 else 24
         return now + timedelta(hours=hours)
 
     bj_now = now.astimezone(BEIJING_TZ)
-    target = bj_now.replace(hour=task.hour or 8, minute=task.minute or 0, second=0, microsecond=0)
+    # 显式 is None 判断而非 `or` 兜底：hour=0（午夜）是合法值，不能被吞成 8
+    target = bj_now.replace(
+        hour=8 if task.hour is None else task.hour,
+        minute=0 if task.minute is None else task.minute,
+        second=0,
+        microsecond=0,
+    )
     if task.schedule_kind == CronScheduleKind.WEEKLY:
         target += timedelta(days=(task.weekday - bj_now.weekday()) % 7)
     if target <= bj_now:
@@ -50,12 +56,23 @@ def compute_next_run(task: AgentCronTask, now: datetime | None = None) -> dateti
 
 def describe_schedule(task: AgentCronTask) -> str:
     """把周期翻译成学生看得见的人话（列表页/通知/工具返回共用）。"""
-    hm = f"{task.hour or 0:02d}:{task.minute or 0:02d}"
+    # 显式 is None 判断而非 `or` 兜底：hour=0（午夜）是合法值，不能被吞成 8
+    hm = f"{0 if task.hour is None else task.hour:02d}:{0 if task.minute is None else task.minute:02d}"
     if task.schedule_kind == CronScheduleKind.DAILY:
         return f"每天 {hm}"
     if task.schedule_kind == CronScheduleKind.WEEKLY:
-        return f"每{WEEKDAY_NAMES[task.weekday or 0]} {hm}"
+        # 越界/None 的 weekday 不再 IndexError，兜底为周一
+        wd = task.weekday if task.weekday is not None and 0 <= task.weekday <= 6 else 0
+        return f"每{WEEKDAY_NAMES[wd]} {hm}"
     return f"每 {task.interval_hours or 24} 小时"
+
+
+def _to_int(v) -> int | None:
+    """宽容取整：非法输入（'abc'/None/浮串等）返回 None，交由调用方给错误文案。"""
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def validate_schedule_args(args: dict) -> tuple[dict, str | None]:
@@ -66,18 +83,18 @@ def validate_schedule_args(args: dict) -> tuple[dict, str | None]:
     kind = CronScheduleKind(kind)
     out: dict = {"schedule_kind": kind}
     if kind in (CronScheduleKind.DAILY, CronScheduleKind.WEEKLY):
-        hour, minute = args.get("hour"), args.get("minute")
-        if hour is None or minute is None or not (0 <= int(hour) <= 23) or not (0 <= int(minute) <= 59):
+        hour, minute = _to_int(args.get("hour")), _to_int(args.get("minute"))
+        if hour is None or minute is None or not (0 <= hour <= 23) or not (0 <= minute <= 59):
             return {}, "daily/weekly 周期需要合法的 hour（0-23）与 minute（0-59）"
-        out["hour"], out["minute"] = int(hour), int(minute)
+        out["hour"], out["minute"] = hour, minute
     if kind == CronScheduleKind.WEEKLY:
-        weekday = args.get("weekday")
-        if weekday is None or not (0 <= int(weekday) <= 6):
+        weekday = _to_int(args.get("weekday"))
+        if weekday is None or not (0 <= weekday <= 6):
             return {}, "weekly 周期需要 weekday（0=周一 … 6=周日）"
-        out["weekday"] = int(weekday)
+        out["weekday"] = weekday
     if kind == CronScheduleKind.INTERVAL:
-        hours = args.get("interval_hours")
-        if hours is None or not (1 <= int(hours) <= 720):
+        hours = _to_int(args.get("interval_hours"))
+        if hours is None or not (1 <= hours <= 720):
             return {}, "interval 周期需要 interval_hours（1-720 小时）"
-        out["interval_hours"] = int(hours)
+        out["interval_hours"] = hours
     return out, None
