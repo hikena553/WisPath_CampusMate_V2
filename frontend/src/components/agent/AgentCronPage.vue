@@ -11,14 +11,20 @@
           <span class="acp-head-space"></span>
         </header>
 
-        <div class="acp-scroll">
+        <div v-loading="loading" class="acp-scroll">
           <el-empty v-if="!loading && tasks.length === 0" description="还没有定时任务">
             <p class="acp-empty-tip">在对话框跟我说「每天早上 8 点帮我汇总校园资讯」就能建一个</p>
           </el-empty>
 
           <div v-else class="acp-list">
             <div v-for="t in tasks" :key="t.id" class="acp-item" :class="{ disabled: !t.enabled }">
-              <div class="acp-item-main" @click="openConversation(t)">
+              <div
+                class="acp-item-main"
+                role="button"
+                tabindex="0"
+                @click="openConversation(t)"
+                @keyup.enter="openConversation(t)"
+              >
                 <div class="acp-item-name">{{ t.name }}</div>
                 <div class="acp-item-meta">
                   {{ t.schedule_text }}<template v-if="t.last_run_at"> · 上次 {{ fmtTime(t.last_run_at) }}</template>
@@ -26,7 +32,7 @@
               </div>
               <div class="acp-item-ops">
                 <el-button text size="small" type="primary" :loading="runningId === t.id" @click.stop="runNow(t)">立即执行</el-button>
-                <el-switch :model-value="t.enabled" @change="(v: string | number | boolean) => toggle(t, Boolean(v))" />
+                <el-switch aria-label="启用或暂停该任务" :model-value="t.enabled" @change="(v: string | number | boolean) => toggle(t, Boolean(v))" />
                 <el-button text size="small" type="danger" @click.stop="remove(t)">删除</el-button>
               </div>
             </div>
@@ -60,6 +66,17 @@ function close() {
   visible.value = false
 }
 
+/** 5xx/网络错误已由全局拦截器统一提示，这里只对 4xx 弹后端 detail，避免双 toast。 */
+function toastBizError(e: unknown, fallback: string) {
+  const status = (e as { response?: { status?: number } })?.response?.status
+  if (status && status < 500) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || fallback)
+  } else {
+    console.error('cron task request failed', e)
+  }
+}
+
 async function load() {
   loading.value = true
   try {
@@ -74,8 +91,8 @@ async function toggle(t: CronTaskItem, enabled: boolean) {
     const updated = await updateCronTask(t.id, { enabled })
     Object.assign(t, updated)
     ElMessage.success(enabled ? '已恢复' : '已暂停')
-  } catch {
-    ElMessage.error('操作失败，请重试')
+  } catch (e: unknown) {
+    toastBizError(e, '操作失败，请重试')
   }
 }
 
@@ -91,8 +108,9 @@ async function remove(t: CronTaskItem) {
     await deleteCronTask(t.id)
     tasks.value = tasks.value.filter(x => x.id !== t.id)
     ElMessage.success('已删除')
-  } catch {
-    ElMessage.error('删除失败，请重试')
+  } catch (e: unknown) {
+    // 409（正在执行中）等 4xx 的后端 detail 由 toastBizError 透出
+    toastBizError(e, '删除失败，请重试')
   }
 }
 
@@ -105,13 +123,7 @@ async function runNow(t: CronTaskItem) {
   } catch (e: unknown) {
     // 5xx / 断网已由 request.ts 拦截器统一弹窗，这里只补 4xx 业务错误
     // （400 已暂停 / 409 忙，拦截器不弹），避免双 toast 且文案矛盾
-    const status = (e as { response?: { status?: number } })?.response?.status
-    if (status && status < 500) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      ElMessage.error(detail || '执行失败，请稍后再试')
-    } else {
-      console.error('run-now failed', e)
-    }
+    toastBizError(e, '执行失败，请稍后再试')
   } finally {
     runningId.value = null
   }
@@ -125,7 +137,7 @@ function openConversation(t: CronTaskItem) {
 function fmtTime(iso: string) {
   // 后端统一给北京时间 ISO（带 +08:00），new Date 解析后直接取本地字段即为正确展示
   const d = new Date(iso)
-  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 onMounted(() => {
@@ -149,7 +161,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 .acp-back {
@@ -172,7 +184,7 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 14px 24px;
+  padding: 4px 16px calc(40px + env(safe-area-inset-bottom, 0px));
 }
 .acp-empty-tip {
   margin: 4px 0 0;
