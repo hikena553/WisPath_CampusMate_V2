@@ -12,6 +12,7 @@ from app.services.cron_task_service import (
     MAX_TASKS_PER_USER,
     compute_next_run,
     describe_schedule,
+    to_beijing_iso,
     validate_schedule_args,
 )
 
@@ -48,7 +49,8 @@ def _create_cron_task(db: Session, args: dict, user: User) -> dict:
             "id": task.id,
             "name": task.name,
             "schedule": describe_schedule(task),
-            "next_run_at": task.next_run_at.isoformat(),
+            # commit 后 expire_on_commit 会从 SQLite 读回 naive UTC 值，必须经 to_beijing_iso 补偏移
+            "next_run_at": to_beijing_iso(task.next_run_at),
         },
         "message": f"定时任务「{task.name}」已创建，{describe_schedule(task)}自动执行",
     }
@@ -73,4 +75,5 @@ def _list_cron_tasks(db: Session, args: dict, user: User) -> dict:
             }
             for t in rows
         ],
+        "message": f"共 {len(rows)} 个定时任务",
     }

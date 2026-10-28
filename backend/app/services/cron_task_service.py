@@ -67,6 +67,11 @@ def describe_schedule(task: AgentCronTask) -> str:
     return f"每 {task.interval_hours or 24} 小时"
 
 
+def to_beijing_iso(dt: datetime) -> str:
+    """统一对外序列化：UTC 存储值转北京时间 ISO 串（带 +08:00），供工具载荷与管理 API 共用。"""
+    return _as_utc(dt).astimezone(BEIJING_TZ).isoformat()
+
+
 def _to_int(v) -> int | None:
     """宽容取整：非法输入（'abc'/None/浮串等）返回 None，交由调用方给错误文案。"""
     try:

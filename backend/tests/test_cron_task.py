@@ -138,3 +138,27 @@ def test_tool_list(db, make_user):
     out = _list_cron_tasks(db, {}, student)
     assert out["success"] is True and len(out["tasks"]) == 1
     assert out["tasks"][0]["schedule"] == "每天 08:30"
+
+
+def test_tool_create_weekly_ok(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    out = _create_cron_task(db, _args(schedule_kind="weekly", weekday=2, hour=9, minute=5), student)
+    assert out["success"] is True
+    assert out["task"]["schedule"] == "每周三 09:05"
+    # 对外载荷必须带北京时间偏移，否则 LLM 会把 UTC 裸串当学生本地时间转述
+    assert out["task"]["next_run_at"].endswith("+08:00")
+
+
+def test_tool_create_interval_ok(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    out = _create_cron_task(db, _args(schedule_kind="interval", interval_hours=6), student)
+    assert out["success"] is True
+    assert out["task"]["schedule"] == "每 6 小时"
+
+
+def test_tool_create_string_hour_minute(db, make_user):
+    # 回归护栏：LLM 可能传字符串数字，_to_int 宽容取整须经 handler 全链路生效
+    student = make_user(role=UserRole.STUDENT)
+    out = _create_cron_task(db, _args(hour="9", minute="30"), student)
+    assert out["success"] is True
+    assert out["task"]["schedule"] == "每天 09:30"
