@@ -352,6 +352,34 @@ TOOL_DEFINITIONS = [
             "parameters": {"type": "object", "properties": {}}
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_cron_task",
+            "description": "创建 Agent 定时任务（到点自动执行）。当学生表达'每天/每周/每隔多久自动帮我做某事'的意图时调用。调用前必须先向学生复述任务名称、执行内容与周期并得到确认；周期只支持三种：每天固定时刻（daily）、每周固定星期几的固定时刻（weekly）、每隔 N 小时（interval）。hour/minute 按学生说的北京时间。歧义（如'每隔一阵'）先追问再创建。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "任务名称，简短，如'早报汇总'"},
+                    "prompt": {"type": "string", "description": "每次执行时交给 AI 的完整指令，写清楚要做什么、输出什么"},
+                    "schedule_kind": {"type": "string", "enum": ["daily", "weekly", "interval"], "description": "周期类型"},
+                    "hour": {"type": "integer", "description": "触发时刻-小时（0-23，北京时间），daily/weekly 必填"},
+                    "minute": {"type": "integer", "description": "触发时刻-分钟（0-59），daily/weekly 必填"},
+                    "weekday": {"type": "integer", "description": "每周几（0=周一…6=周日），weekly 必填"},
+                    "interval_hours": {"type": "integer", "description": "间隔小时数（1-720），interval 必填"}
+                },
+                "required": ["name", "prompt", "schedule_kind"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_cron_tasks",
+            "description": "查询学生当前的 Agent 定时任务列表（名称、周期、启用状态、上次执行时间）。当学生问'我的定时任务/自动任务'时调用。",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
 ]
 
 

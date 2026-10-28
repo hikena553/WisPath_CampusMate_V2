@@ -4,6 +4,7 @@ from app.core.database import SessionLocal
 from app.models.user import User, UserRole
 
 from .definitions import TEACHER_TOOL_DEFINITIONS, TOOL_DEFINITIONS
+from .cron_task import _create_cron_task, _list_cron_tasks
 from .community import (
     _create_community_post,
     _query_community_posts,
@@ -87,6 +88,8 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
     try:
         handler = {
             "create_leave": _create_leave,
+            "create_cron_task": _create_cron_task,
+            "list_cron_tasks": _list_cron_tasks,
             "create_growth_record": _create_growth_record,
             "confirm_growth_record": _confirm_growth_record,
             "update_project_stage": lambda db, a, u: _update_project_stage(db, a, u, conv_id),

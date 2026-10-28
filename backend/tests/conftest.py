@@ -50,6 +50,7 @@ from app.models.notification import Notification  # noqa: E402
 from app.models.feedback import Feedback  # noqa: E402
 from app.models.conversation import Conversation, ConversationMessage  # noqa: E402
 from app.models.crisis import AIDialogSummary  # noqa: E402
+from app.models.cron_task import AgentCronTask  # noqa: E402
 from app.models.profile import StudentProfileSnapshot  # noqa: E402
 from app.models.leave import LeaveRequest  # noqa: E402
 from app.models.teacher_task import TeacherTask  # noqa: E402
@@ -136,6 +137,7 @@ def make_user(db):
         if u:
             db.query(Notification).filter(Notification.user_id == u.id).delete()
             db.query(Feedback).filter(Feedback.user_id == u.id).delete()
+            db.query(AgentCronTask).filter(AgentCronTask.user_id == u.id).delete()
             db.query(ConversationMessage).filter(
                 ConversationMessage.conversation_id.in_(
                     db.query(Conversation.id).filter(Conversation.user_id == u.id)

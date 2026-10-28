@@ -84,3 +84,57 @@ def test_validate_bad_hour_returns_error_not_raise():
     # 非法参数必须返回错误字符串而不是抛 ValueError（LLM 澄清回路依赖该契约）
     out, err = validate_schedule_args({"schedule_kind": "daily", "hour": "abc", "minute": 0})
     assert out == {} and err is not None
+
+
+# ---------- 工具 handler ----------
+
+from app.models.user import UserRole  # noqa: E402
+from app.models.conversation import Conversation  # noqa: E402
+from app.services.tools.cron_task import _create_cron_task, _list_cron_tasks  # noqa: E402
+from app.services.cron_task_service import MAX_TASKS_PER_USER  # noqa: E402
+
+
+def _args(**over):
+    a = {"name": "早报汇总", "prompt": "汇总今日校园要闻", "schedule_kind": "daily", "hour": 8, "minute": 30}
+    a.update(over)
+    return a
+
+
+def test_tool_create_ok(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    out = _create_cron_task(db, _args(), student)
+    assert out["success"] is True
+    task = db.query(AgentCronTask).filter(AgentCronTask.user_id == student.id).first()
+    assert task is not None and task.conversation_id > 0
+    conv = db.query(Conversation).filter(Conversation.id == task.conversation_id).first()
+    assert conv is not None and conv.title == "早报汇总"
+    assert task.next_run_at is not None
+
+
+def test_tool_create_missing_prompt(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    out = _create_cron_task(db, {"name": "x", "schedule_kind": "daily", "hour": 8, "minute": 0}, student)
+    assert out["success"] is False
+
+
+def test_tool_create_weekly_missing_weekday(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    out = _create_cron_task(db, _args(schedule_kind="weekly", hour=9, minute=0), student)
+    assert out["success"] is False
+
+
+def test_tool_create_limit(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    for i in range(MAX_TASKS_PER_USER):
+        assert _create_cron_task(db, _args(name=f"任务{i}"), student)["success"] is True
+    out = _create_cron_task(db, _args(name="超额"), student)
+    assert out["success"] is False
+    assert str(MAX_TASKS_PER_USER) in out["message"]
+
+
+def test_tool_list(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    _create_cron_task(db, _args(), student)
+    out = _list_cron_tasks(db, {}, student)
+    assert out["success"] is True and len(out["tasks"]) == 1
+    assert out["tasks"][0]["schedule"] == "每天 08:30"
