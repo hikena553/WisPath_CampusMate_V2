@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 BEIJING_TZ = timezone(timedelta(hours=8))
 MAX_TASKS_PER_USER = 10
-# 进程内防重入：调度循环与 run-now 并发触发同一任务时，后到者直接跳过
+# 进程内防重入：调度循环与 run-now 并发触发同一任务时，后到者直接跳过。
+# 仅单进程有效：多 worker 部署下 advance-then-execute 不是原子声明，需 DB 级抢占防重复执行
 _running_ids: set[int] = set()
 
 WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -199,6 +200,9 @@ async def execute_due_tasks(now: datetime | None = None) -> int:
 
     executed = 0
     for task_id in due_ids:
-        if await execute_once(task_id):
-            executed += 1
+        try:
+            if await execute_once(task_id):
+                executed += 1
+        except Exception:
+            logger.exception("[定时任务] 单任务执行异常 task_id=%s", task_id)
     return executed

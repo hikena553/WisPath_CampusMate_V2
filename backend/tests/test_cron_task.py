@@ -288,3 +288,44 @@ def test_execute_once_skips_disabled(db, make_user):
     db.commit()
     db.refresh(t)
     assert asyncio.run(svc.execute_once(t.id)) is False
+
+
+def test_execute_due_continues_after_single_failure(db, due_task, fake_agent_reply, make_user, monkeypatch):
+    """单个任务 execute_once 抛异常时，同轮扫描的其余到期任务仍要执行。
+
+    异常从收尾 _notify 逃逸出 execute_once（模拟长 agent 运行后连接池连接失效，
+    _run_agent_reply 内部的异常会被 execute_once 吞掉，到不了调度循环）。
+    """
+    student2 = make_user(role=UserRole.STUDENT)
+    conv2 = Conversation(user_id=student2.id, title="第二个任务")
+    db.add(conv2)
+    db.flush()
+    t2 = AgentCronTask(
+        user_id=student2.id, name="第二个", prompt="正常的活",
+        schedule_kind=CronScheduleKind.INTERVAL, interval_hours=2,
+        conversation_id=conv2.id,
+        next_run_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    db.add(t2)
+    db.commit()
+    db.refresh(t2)
+
+    real_notify = svc._notify
+
+    def _dead_pool(session, user_id, title, content, conversation_id):
+        if user_id == due_task.user_id:
+            raise RuntimeError("连接池连接失效")
+        return real_notify(session, user_id, title, content, conversation_id)
+
+    monkeypatch.setattr(svc, "_notify", _dead_pool)
+
+    ran = asyncio.run(svc.execute_due_tasks())
+    assert ran == 1  # 只有第二个任务成功
+    db.expire_all()
+    notif2 = (
+        db.query(Notification)
+        .filter(Notification.user_id == student2.id)
+        .order_by(Notification.id.desc())
+        .first()
+    )
+    assert notif2 is not None and notif2.title == "第二个"
