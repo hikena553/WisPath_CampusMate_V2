@@ -30,7 +30,7 @@ def upgrade() -> None:
         sa.Column('status', sa.Enum('PENDING', 'RESET', 'REJECTED', name='passwordresetstatus'), nullable=True),
         sa.Column('admin_note', sa.String(length=200), nullable=True),
         sa.Column('handled_by', sa.Integer(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
         sa.Column('handled_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['user_id'], ['users.id']),
         sa.ForeignKeyConstraint(['handled_by'], ['users.id']),
