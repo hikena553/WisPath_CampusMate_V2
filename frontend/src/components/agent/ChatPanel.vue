@@ -16,6 +16,7 @@
       <el-button
         v-if="props.role === 'student'"
         text circle class="menu-toggle"
+        :disabled="loading"
         aria-label="定时任务"
         @click="cronVisible = true"
       >
