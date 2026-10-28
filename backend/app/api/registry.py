@@ -50,6 +50,7 @@ from app.api.help_request import router as help_request_router
 from app.api.reference import router as reference_router
 from app.api.ml_training import router as ml_training_router
 from app.api.badge import router as badge_router
+from app.api.cron_task import router as cron_task_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -102,6 +103,7 @@ ROUTERS = [
     reference_router,
     ml_training_router,
     badge_router,
+    cron_task_router,
 ]
 
 

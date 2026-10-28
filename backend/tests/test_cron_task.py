@@ -329,3 +329,59 @@ def test_execute_due_continues_after_single_failure(db, due_task, fake_agent_rep
         .first()
     )
     assert notif2 is not None and notif2.title == "第二个"
+
+
+# ---------- 管理 API ----------
+
+from app.services.tools.cron_task import _create_cron_task as _svc_create  # noqa: E402
+
+
+def test_api_crud_and_permission(client, api, login_token, db, make_user):
+    owner = login_token(role=UserRole.STUDENT)
+    other = login_token(role=UserRole.STUDENT)
+
+    _svc_create(db, _args(), owner["user"])
+    task = db.query(AgentCronTask).filter(AgentCronTask.user_id == owner["user"].id).first()
+    assert task is not None
+
+    # 列表：只含本人任务
+    rows = api.get("/api/cron-tasks", headers=owner["headers"]).json()
+    assert len(rows) == 1 and rows[0]["schedule_text"] == "每天 08:30" and rows[0]["enabled"] is True
+
+    # 越权：他人访问一律 404，不暴露存在性
+    assert api.get("/api/cron-tasks", headers=other["headers"]).json() == []
+    assert api.put(f"/api/cron-tasks/{task.id}", json={"enabled": False}, headers=other["headers"]).status_code == 404
+
+    # 启停 + 恢复时重算过期 next_run_at
+    assert api.put(f"/api/cron-tasks/{task.id}", json={"enabled": False}, headers=owner["headers"]).json()["enabled"] is False
+    resumed = api.put(f"/api/cron-tasks/{task.id}", json={"enabled": True}, headers=owner["headers"]).json()
+    assert resumed["enabled"] is True
+    # SQLite 读回的 datetime 可能带 offset 也可能 naive，统一按 UTC 归一再比较
+    nxt = datetime.fromisoformat(str(resumed["next_run_at"]).replace("Z", "+00:00"))
+    if nxt.tzinfo is None:
+        nxt = nxt.replace(tzinfo=UTC)
+    assert nxt > datetime.now(UTC) - timedelta(minutes=5)
+
+    # run-now：执行中冲突 → 409
+    monkeypatch1 = pytest.MonkeyPatch()
+    monkeypatch1.setattr(svc, "execute_once", lambda task_id: asyncio.sleep(0, result=False))
+    assert api.post(f"/api/cron-tasks/{task.id}/run-now", headers=owner["headers"]).status_code == 409
+    monkeypatch1.undo()
+
+    # 删除
+    assert api.delete(f"/api/cron-tasks/{task.id}", headers=owner["headers"]).json()["ok"] is True
+    assert db.query(AgentCronTask).filter(AgentCronTask.id == task.id).first() is None
+    assert api.delete(f"/api/cron-tasks/{task.id}", headers=owner["headers"]).status_code == 404
+
+
+def test_api_run_now_success(client, api, login_token, db, monkeypatch):
+    owner = login_token(role=UserRole.STUDENT)
+    _svc_create(db, _args(), owner["user"])
+    task = db.query(AgentCronTask).filter(AgentCronTask.user_id == owner["user"].id).first()
+
+    monkeypatch.setattr(svc, "execute_once", lambda task_id: asyncio.sleep(0, result=True))
+    assert api.post(f"/api/cron-tasks/{task.id}/run-now", headers=owner["headers"]).json()["ok"] is True
+
+
+def test_api_requires_auth(client, api):
+    assert api.get("/api/cron-tasks").status_code == 401
