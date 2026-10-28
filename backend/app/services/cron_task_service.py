@@ -168,8 +168,16 @@ async def execute_once(task_id: int) -> bool:
             return False
 
         task.last_run_at = datetime.now(timezone.utc)
-        db.commit()
-        _notify(db, task.user_id, task.name, (reply or "（本次没有产出内容）")[:200], task.conversation_id)
+        # 收尾字段先取出：rollback 会 expire 本行，行若已被删再取属性会 ObjectDeletedError
+        notify_title, notify_content = task.name, (reply or "（本次没有产出内容）")[:200]
+        notify_user_id, notify_conv_id = task.user_id, task.conversation_id
+        try:
+            db.commit()
+        except Exception:
+            # 执行期间任务被删：行已不在，收尾更新落空不碍事——AI 回复已落会话，通知照发
+            db.rollback()
+            logger.info("[定时任务] 任务在执行期间被删除 task_id=%s", task_id)
+        _notify(db, notify_user_id, notify_title, notify_content, notify_conv_id)
         return True
     finally:
         _running_ids.discard(task_id)

@@ -331,12 +331,57 @@ def test_execute_due_continues_after_single_failure(db, due_task, fake_agent_rep
     assert notif2 is not None and notif2.title == "第二个"
 
 
+def test_execute_once_survives_task_deleted_midrun(db, make_user, monkeypatch):
+    """执行期间任务被另一连接删除：收尾 UPDATE 落空要被吞掉，成功通知照发。"""
+    student = make_user(role=UserRole.STUDENT)
+    conv = Conversation(user_id=student.id, title="中途删除")
+    db.add(conv)
+    db.flush()
+    t = AgentCronTask(
+        user_id=student.id, name="中途删除", prompt="干点活",
+        schedule_kind=CronScheduleKind.INTERVAL, interval_hours=1,
+        conversation_id=conv.id,
+        next_run_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+
+    real_notify = svc._notify
+    sent = []
+
+    def _spy_notify(session, user_id, title, content, conversation_id):
+        sent.append((user_id, title, content, conversation_id))
+        real_notify(session, user_id, title, content, conversation_id)
+
+    async def _delete_midrun(prompt, user, conv_id):
+        s2 = SessionLocal()
+        try:
+            s2.query(AgentCronTask).filter(AgentCronTask.id == t.id).delete()
+            s2.commit()
+        finally:
+            s2.close()
+        return "模拟结果"
+
+    monkeypatch.setattr(svc, "_run_agent_reply", _delete_midrun)
+    monkeypatch.setattr(svc, "_notify", _spy_notify)
+    assert asyncio.run(svc.execute_once(t.id)) is True
+    assert sent and sent[0][1] == "中途删除"
+    notif = (
+        db.query(Notification)
+        .filter(Notification.user_id == student.id)
+        .order_by(Notification.id.desc())
+        .first()
+    )
+    assert notif is not None and notif.title == "中途删除"
+
+
 # ---------- 管理 API ----------
 
 from app.services.tools.cron_task import _create_cron_task as _svc_create  # noqa: E402
 
 
-def test_api_crud_and_permission(client, api, login_token, db, make_user):
+def test_api_crud_and_permission(client, api, login_token, db, make_user, monkeypatch):
     owner = login_token(role=UserRole.STUDENT)
     other = login_token(role=UserRole.STUDENT)
 
@@ -352,21 +397,40 @@ def test_api_crud_and_permission(client, api, login_token, db, make_user):
     assert api.get("/api/cron-tasks", headers=other["headers"]).json() == []
     assert api.put(f"/api/cron-tasks/{task.id}", json={"enabled": False}, headers=other["headers"]).status_code == 404
 
-    # 启停 + 恢复时重算过期 next_run_at
+    # 启停：禁用后 run-now → 400
     assert api.put(f"/api/cron-tasks/{task.id}", json={"enabled": False}, headers=owner["headers"]).json()["enabled"] is False
+    assert api.post(f"/api/cron-tasks/{task.id}/run-now", headers=owner["headers"]).status_code == 400
+
+    # 恢复时重算过期 next_run_at：先把 next_run_at 拨到过去，恢复后必须回到未来（重算分支被真实锻炼）
+    db.query(AgentCronTask).filter(AgentCronTask.id == task.id).update(
+        {"next_run_at": datetime.now(UTC) - timedelta(hours=1)}
+    )
+    db.commit()
     resumed = api.put(f"/api/cron-tasks/{task.id}", json={"enabled": True}, headers=owner["headers"]).json()
     assert resumed["enabled"] is True
     # SQLite 读回的 datetime 可能带 offset 也可能 naive，统一按 UTC 归一再比较
     nxt = datetime.fromisoformat(str(resumed["next_run_at"]).replace("Z", "+00:00"))
     if nxt.tzinfo is None:
         nxt = nxt.replace(tzinfo=UTC)
-    assert nxt > datetime.now(UTC) - timedelta(minutes=5)
+    assert nxt > datetime.now(UTC)
 
-    # run-now：执行中冲突 → 409
-    monkeypatch1 = pytest.MonkeyPatch()
-    monkeypatch1.setattr(svc, "execute_once", lambda task_id: asyncio.sleep(0, result=False))
-    assert api.post(f"/api/cron-tasks/{task.id}/run-now", headers=owner["headers"]).status_code == 409
-    monkeypatch1.undo()
+    # run-now：真忙（调度循环/另一次 run-now 已占坑）→ 409
+    svc._running_ids.add(task.id)
+    try:
+        assert api.post(f"/api/cron-tasks/{task.id}/run-now", headers=owner["headers"]).status_code == 409
+    finally:
+        svc._running_ids.discard(task.id)
+
+    # run-now：未占坑但 execute_once 返回 False = 执行失败 → 502
+    monkeypatch.setattr(svc, "execute_once", lambda task_id: asyncio.sleep(0, result=False))
+    assert api.post(f"/api/cron-tasks/{task.id}/run-now", headers=owner["headers"]).status_code == 502
+
+    # 执行中的任务拒绝删除（execute_once 收尾要对本行 UPDATE，先删会 StaleDataError）
+    svc._running_ids.add(task.id)
+    try:
+        assert api.delete(f"/api/cron-tasks/{task.id}", headers=owner["headers"]).status_code == 409
+    finally:
+        svc._running_ids.discard(task.id)
 
     # 删除
     assert api.delete(f"/api/cron-tasks/{task.id}", headers=owner["headers"]).json()["ok"] is True

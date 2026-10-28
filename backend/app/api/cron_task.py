@@ -80,6 +80,9 @@ def update_task(
 @router.delete("/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = _get_own_task(db, task_id, current_user)
+    # 正在执行中的任务先拒绝删除：execute_once 收尾要对本行 UPDATE，先删会 StaleDataError
+    if task.id in cron_task_service._running_ids:
+        raise HTTPException(status_code=409, detail="任务正在执行中，请稍后再试")
     # 保留会话记录：历史执行结果学生还能在对话列表里看到
     db.delete(task)
     db.commit()
@@ -91,8 +94,11 @@ async def run_now(task_id: int, db: Session = Depends(get_db), current_user: Use
     task = _get_own_task(db, task_id, current_user)
     if not task.enabled:
         raise HTTPException(status_code=400, detail="任务已暂停，请先启用")
+    was_running = task.id in cron_task_service._running_ids
     ok = await cron_task_service.execute_once(task.id)
     if not ok:
-        # 唯一可能：与调度循环/另一次 run-now 并发（_running_ids 去重）
-        raise HTTPException(status_code=409, detail="任务正在执行中，请稍后再试")
+        if was_running:
+            # 调度循环/另一次 run-now 已占坑（_running_ids 去重）
+            raise HTTPException(status_code=409, detail="任务正在执行中，请稍后再试")
+        raise HTTPException(status_code=502, detail="执行失败，请稍后查看通知")
     return {"ok": True}
