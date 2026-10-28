@@ -164,6 +164,17 @@ def test_tool_create_string_hour_minute(db, make_user):
     assert out["task"]["schedule"] == "每天 09:30"
 
 
+def test_tool_list_last_run_at_beijing_iso(db, make_user):
+    # last_run_at 裸 isoformat 会输出无偏移 UTC 串，LLM 会当学生本地时间转述（差 8 小时）
+    student = make_user(role=UserRole.STUDENT)
+    _create_cron_task(db, _args(), student)
+    task = db.query(AgentCronTask).filter(AgentCronTask.user_id == student.id).first()
+    task.last_run_at = datetime(2026, 10, 29, 2, 0, tzinfo=UTC)  # 北京 10:00
+    db.commit()
+    out = _list_cron_tasks(db, {}, student)
+    assert out["tasks"][0]["last_run_at"].endswith("+08:00")
+
+
 # ---------- 调度执行内核 ----------
 
 import asyncio  # noqa: E402

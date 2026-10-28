@@ -71,7 +71,7 @@ def _list_cron_tasks(db: Session, args: dict, user: User) -> dict:
                 "name": t.name,
                 "schedule": describe_schedule(t),
                 "enabled": t.enabled,
-                "last_run_at": t.last_run_at.isoformat() if t.last_run_at else None,
+                "last_run_at": to_beijing_iso(t.last_run_at) if t.last_run_at else None,
             }
             for t in rows
         ],
