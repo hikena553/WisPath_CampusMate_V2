@@ -13,6 +13,14 @@
       <div class="mobile-header-title">
         <span class="title-text">{{ currentTitle }}</span>
       </div>
+      <el-button
+        v-if="props.role === 'student'"
+        text circle class="menu-toggle"
+        aria-label="定时任务"
+        @click="cronVisible = true"
+      >
+        <el-icon :size="20"><Clock /></el-icon>
+      </el-button>
       <el-button text circle class="menu-toggle" :disabled="loading" @click="handlePhoneCall">
         <el-icon :size="20"><Phone /></el-icon>
       </el-button>
@@ -359,12 +367,15 @@
       </div>
 
     </div>
+
+    <!-- Agent 定时任务管理子页：覆盖式整屏，仅学生端 -->
+    <AgentCronPage v-if="cronVisible" @closed="cronVisible = false" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAgentStore } from '@/stores/agent'
 import { useTeacherAgentStore } from '@/stores/teacherAgent'
 import { useConversationStore } from '@/stores/conversation'
@@ -375,7 +386,7 @@ import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, Close, Delete,
+  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, Close, Delete, Clock,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
@@ -383,6 +394,7 @@ import { useSiteConfig } from '@/composables/useSiteConfig'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import MianCharacter from './MianCharacter.vue'
+import AgentCronPage from './AgentCronPage.vue'
 import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
 
@@ -445,6 +457,7 @@ async function handleVoiceClose() {
 const store = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore()
 const convStore = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
 const router = useRouter()
+const route = useRoute()
 const input = ref('')
 
 // 当前对话标题
@@ -460,6 +473,7 @@ const msgContentRef = ref<HTMLElement>()
 const rootRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
+const cronVisible = ref(false)
 const previewImage = ref('')
 
 /**
@@ -1185,7 +1199,27 @@ watch(
   () => scrollToBottom(),
 )
 
+/** 通知直达：/student/agent?conv=<id>（Agent 定时任务通知/管理子页的 link），进入即打开对应会话。
+    换会话三件套照抄 handleVoiceClose：fetchMessages → replaceMessages → setActive/fetchList。 */
+function openConvFromQuery() {
+  const convParam = Number(route.query.conv)
+  if (props.role !== 'student' || !Number.isFinite(convParam) || convParam <= 0) return
+  convStore.fetchMessages(convParam).then(() => {
+    store.replaceMessages(
+      convStore.messages.map(m => ({
+        id: m.id.toString(),
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+      })),
+    )
+    convStore.setActive(convParam)
+    convStore.fetchList()
+  })
+}
+
 onMounted(() => {
+  openConvFromQuery()
   scrollToBottom(true)
   // 记录单行状态下的基准几何（此时输入框尚未被内容撑高）
   nextTick(() => {
@@ -1220,6 +1254,9 @@ onMounted(() => {
   // 动态获取推荐（缓存新鲜则直接复用，否则后台静默刷新）
   loadRecommendations()
 })
+
+// 同路由 push（/student/agent?conv=）不会重挂载本组件，query 变化必须靠 watch 兜住
+watch(() => route.query.conv, openConvFromQuery)
 
 onUnmounted(() => {
   closePreview()
