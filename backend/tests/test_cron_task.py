@@ -162,3 +162,129 @@ def test_tool_create_string_hour_minute(db, make_user):
     out = _create_cron_task(db, _args(hour="9", minute="30"), student)
     assert out["success"] is True
     assert out["task"]["schedule"] == "每天 09:30"
+
+
+# ---------- 调度执行内核 ----------
+
+import asyncio  # noqa: E402
+
+from app.core.database import SessionLocal  # noqa: E402
+from app.models.conversation import ConversationMessage  # noqa: E402
+from app.models.notification import Notification  # noqa: E402
+from app.services import cron_task_service as svc  # noqa: E402
+
+
+@pytest.fixture()
+def due_task(db, make_user):
+    """一条已到期（next_run_at 早于当前）的启用任务。"""
+    student = make_user(role=UserRole.STUDENT)
+    conv = Conversation(user_id=student.id, title="到期任务")
+    db.add(conv)
+    db.flush()
+    t = AgentCronTask(
+        user_id=student.id, name="早报", prompt="干点活",
+        schedule_kind=CronScheduleKind.DAILY, hour=8, minute=0,
+        conversation_id=conv.id,
+        next_run_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return t
+
+
+@pytest.fixture()
+def fake_agent_reply(monkeypatch):
+    """把 _run_agent_reply 换成假执行：记录调用并模拟 chat 的落库行为。"""
+    calls = []
+
+    async def _fake(prompt, user, conv_id):
+        calls.append({"prompt": prompt, "user_id": user.id, "conv_id": conv_id})
+        s = SessionLocal()
+        try:
+            s.add(ConversationMessage(conversation_id=conv_id, role="assistant", content="模拟结果"))
+            s.commit()
+        finally:
+            s.close()
+        return "模拟结果"
+
+    monkeypatch.setattr(svc, "_run_agent_reply", _fake)
+    return calls
+
+
+def test_execute_due_runs_and_notifies(db, due_task, fake_agent_reply):
+    before = due_task.next_run_at
+    ran = asyncio.run(svc.execute_due_tasks())
+    assert ran == 1
+
+    db.expire_all()
+    t = db.query(AgentCronTask).filter(AgentCronTask.id == due_task.id).first()
+    assert t.next_run_at > before          # 先推进再执行
+    assert t.last_run_at is not None
+    notif = (
+        db.query(Notification)
+        .filter(Notification.user_id == due_task.user_id)
+        .order_by(Notification.id.desc())
+        .first()
+    )
+    assert notif is not None and notif.title == "早报" and "模拟结果" in notif.content
+    assert f"conv={due_task.conversation_id}" in (notif.link or "")
+    msgs = (
+        db.query(ConversationMessage)
+        .filter(ConversationMessage.conversation_id == due_task.conversation_id)
+        .all()
+    )
+    assert {m.role for m in msgs} >= {"user", "assistant"}
+    assert fake_agent_reply[0]["prompt"] == "干点活"
+
+
+def test_execute_due_skips_not_due(db, due_task, fake_agent_reply):
+    db.query(AgentCronTask).filter(AgentCronTask.id == due_task.id).update(
+        {"next_run_at": datetime.now(UTC) + timedelta(hours=1)}
+    )
+    db.commit()
+    assert asyncio.run(svc.execute_due_tasks()) == 0
+
+
+def test_execute_failure_still_advances(db, due_task, monkeypatch):
+    async def _boom(prompt, user, conv_id):
+        raise RuntimeError("LLM 超时")
+
+    monkeypatch.setattr(svc, "_run_agent_reply", _boom)
+    before = due_task.next_run_at
+    assert asyncio.run(svc.execute_due_tasks()) == 0
+    db.expire_all()
+    t = db.query(AgentCronTask).filter(AgentCronTask.id == due_task.id).first()
+    assert t.next_run_at > before          # 失败也不阻塞下个周期
+    notif = (
+        db.query(Notification)
+        .filter(Notification.user_id == due_task.user_id)
+        .order_by(Notification.id.desc())
+        .first()
+    )
+    assert notif is not None and "失败" in notif.title
+
+
+def test_execute_once_reentrant_guard(db, due_task, fake_agent_reply):
+    svc._running_ids.add(due_task.id)
+    try:
+        assert asyncio.run(svc.execute_once(due_task.id)) is False
+    finally:
+        svc._running_ids.discard(due_task.id)
+
+
+def test_execute_once_skips_disabled(db, make_user):
+    student = make_user(role=UserRole.STUDENT)
+    conv = Conversation(user_id=student.id, title="停用")
+    db.add(conv)
+    db.flush()
+    t = AgentCronTask(
+        user_id=student.id, name="停用任务", prompt="x",
+        schedule_kind=CronScheduleKind.INTERVAL, interval_hours=1,
+        conversation_id=conv.id, enabled=False,
+        next_run_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    assert asyncio.run(svc.execute_once(t.id)) is False

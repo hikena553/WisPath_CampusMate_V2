@@ -103,3 +103,102 @@ def validate_schedule_args(args: dict) -> tuple[dict, str | None]:
             return {}, "interval 周期需要 interval_hours（1-720 小时）"
         out["interval_hours"] = hours
     return out, None
+
+
+def _notify(db: Session, user_id: int, title: str, content: str, conversation_id: int) -> None:
+    from app.api.notification import create_notification
+
+    create_notification(
+        db,
+        user_id=user_id,
+        title=title[:200],
+        content=content,
+        link=f"/student/agent?conv={conversation_id}",
+    )
+
+
+async def _run_agent_reply(prompt: str, user: User, conv_id: int) -> str:
+    """无头跑一轮 agent：消费流式生成器；回复由 chat 内部落库到会话。"""
+    from app.services import agent_service
+
+    reply = ""
+    async for event in agent_service.chat(prompt, [], user, conv_id=conv_id):
+        if isinstance(event, dict):
+            if event.get("type") == "content":
+                reply += event.get("content", "")
+        elif isinstance(event, str) and "__SUGGESTIONS__" not in event:
+            reply += event
+    return reply
+
+
+async def execute_once(task_id: int) -> bool:
+    """执行单个任务：占坑防重入 → 落 user 消息 → 消费 agent 流 → 通知送达。
+
+    返回 True 表示实际执行；False 表示正在执行/任务不可用。
+    next_run_at 的推进由调度方（execute_due_tasks）负责，这里只管跑。
+    """
+    if task_id in _running_ids:
+        return False
+    _running_ids.add(task_id)
+    db = SessionLocal()
+    try:
+        task = db.query(AgentCronTask).filter(AgentCronTask.id == task_id).first()
+        if not task or not task.enabled:
+            return False
+        user = db.query(User).filter(User.id == task.user_id).first()
+        conv = db.query(Conversation).filter(Conversation.id == task.conversation_id).first()
+        if not user or not conv:
+            logger.warning("[定时任务] 跳过：用户或会话不存在 task_id=%s", task_id)
+            return False
+
+        db.add(ConversationMessage(
+            conversation_id=task.conversation_id,
+            role="user",
+            content=f"【定时任务】{task.name}：{task.prompt}",
+        ))
+        conv.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        try:
+            reply = await _run_agent_reply(task.prompt, user, task.conversation_id)
+        except Exception:
+            logger.exception("[定时任务] 执行失败 task_id=%s name=%s", task_id, task.name)
+            _notify(db, task.user_id, f"定时任务「{task.name}」执行失败", "AI 执行出错，下个周期会自动重试。", task.conversation_id)
+            return False
+
+        task.last_run_at = datetime.now(timezone.utc)
+        db.commit()
+        _notify(db, task.user_id, task.name, (reply or "（本次没有产出内容）")[:200], task.conversation_id)
+        return True
+    finally:
+        _running_ids.discard(task_id)
+        db.close()
+
+
+async def execute_due_tasks(now: datetime | None = None) -> int:
+    """扫描到期任务并逐个执行，返回实际执行数。
+
+    先把 next_run_at 推进到下一周期点并提交，再执行——即使进程在执行中崩溃，
+    这一次到期也只会被消费一次（最多漏跑、不会重复跑）。
+    """
+    now = _as_utc(now) if now else datetime.now(timezone.utc)
+    db = SessionLocal()
+    due_ids: list[int] = []
+    try:
+        rows = (
+            db.query(AgentCronTask)
+            .filter(AgentCronTask.enabled.is_(True), AgentCronTask.next_run_at <= now)
+            .all()
+        )
+        for task in rows:
+            task.next_run_at = compute_next_run(task, now)
+            due_ids.append(task.id)
+        db.commit()
+    finally:
+        db.close()
+
+    executed = 0
+    for task_id in due_ids:
+        if await execute_once(task_id):
+            executed += 1
+    return executed
