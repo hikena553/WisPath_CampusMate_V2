@@ -1,6 +1,7 @@
-"""Agent 定时任务管理：学生查看/启停/删除/立即执行自己的任务。
+"""Agent 定时任务管理：学生新建/查看/启停/删除/立即执行自己的任务。
 
-创建不在 API 层暴露——创建走 agent 工具（聊天动嘴），管理页只管存量任务。
+创建有两条路径：聊天里说人话（agent 工具）与移动端「+」表单（本文件的 POST），
+两者共用 services/cron_task_service.create_task，规则完全一致。
 """
 from datetime import datetime, timezone
 
@@ -9,9 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.cron_task import AgentCronTask, CronScheduleKind
+from app.models.cron_task import AgentCronTask, CronScheduleKind, CronTaskSource
 from app.models.user import User
-from app.schemas.cron_task import CronTaskOut, CronTaskUpdate
+from app.schemas.cron_task import CronTaskCreate, CronTaskOut, CronTaskUpdate
 from app.services import cron_task_service
 from app.services.cron_task_service import describe_schedule
 
@@ -55,6 +56,26 @@ def list_my_tasks(db: Session = Depends(get_db), current_user: User = Depends(ge
         .all()
     )
     return [_serialize(t) for t in rows]
+
+
+@router.post("", response_model=CronTaskOut, status_code=201)
+def create_task_endpoint(
+    req: CronTaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """移动端「+」表单新建：规则与聊天创建一致（周期校验/每人上限/自动建专属会话）。"""
+    task, err = cron_task_service.create_task(
+        db,
+        current_user.id,
+        name=req.name,
+        prompt=req.prompt,
+        args=req.model_dump(),
+        source=CronTaskSource.MANUAL,
+    )
+    if err or task is None:
+        raise HTTPException(status_code=400, detail=err or "创建失败，请稍后重试")
+    return _serialize(task)
 
 
 @router.put("/{task_id}", response_model=CronTaskOut)

@@ -458,5 +458,38 @@ def test_api_run_now_success(client, api, login_token, db, monkeypatch):
     assert api.post(f"/api/cron-tasks/{task.id}/run-now", headers=owner["headers"]).json()["ok"] is True
 
 
+def test_api_create_manual_task(client, api, login_token, db, make_user):
+    """移动端「+」表单新建：与聊天创建同一套规则，落库来源为 manual。"""
+    owner = login_token(role=UserRole.STUDENT)
+
+    res = api.post("/api/cron-tasks", json={
+        "name": "早报汇总", "prompt": "汇总今日校园要闻",
+        "schedule_kind": "daily", "hour": 8, "minute": 30,
+    }, headers=owner["headers"])
+    assert res.status_code == 201
+    body = res.json()
+    assert body["schedule_text"] == "每天 08:30" and body["conversation_id"] > 0
+
+    task = db.query(AgentCronTask).filter(AgentCronTask.id == body["id"]).first()
+    assert task is not None and task.user_id == owner["user"].id
+    assert task.created_via.value == "manual"
+    # 与聊天创建一致：顺手建了专属会话，执行结果有地方落
+    assert db.query(Conversation).filter(Conversation.id == task.conversation_id).first() is not None
+
+    # 周期非法 / 缺字段：400 且带后端 detail（前端表单直接透出）
+    bad = api.post("/api/cron-tasks", json={
+        "name": "x", "prompt": "y", "schedule_kind": "weekly", "hour": 9, "minute": 0,
+    }, headers=owner["headers"])
+    assert bad.status_code == 400 and "weekday" in bad.json()["detail"]
+    empty = api.post("/api/cron-tasks", json={
+        "name": "  ", "prompt": "y", "schedule_kind": "daily", "hour": 9, "minute": 0,
+    }, headers=owner["headers"])
+    assert empty.status_code == 400
+
+    # 他人不可见：新建的任务只属于创建者（越权已由 test_api_requires_auth / CRUD 用例覆盖）
+    other = login_token(role=UserRole.STUDENT)
+    assert api.get("/api/cron-tasks", headers=other["headers"]).json() == []
+
+
 def test_api_requires_auth(client, api):
     assert api.get("/api/cron-tasks").status_code == 401

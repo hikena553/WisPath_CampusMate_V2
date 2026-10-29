@@ -1,7 +1,11 @@
 """应用入口：只做组装（中间件/静态资源/生命周期/路由注册），业务细节下沉各模块。"""
+import faulthandler
 import importlib
 import logging
+import os
 import sys
+import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +13,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 # ---------- 第三方包兜底 ----------
 # 若当前 Python 环境未安装 jieba（依赖缺失导致启动即报错），
@@ -35,6 +40,61 @@ from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
 # 结构化 JSON 日志（可观测性 p4_1）：级别由 LOG_LEVEL 环境变量控制（默认 INFO）
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# faulthandler 需要持有文件句柄直到进程结束，因此放在模块级
+_crash_stream = None
+
+
+def enable_crash_diagnostics() -> None:
+    """崩溃取证（稳定性 p4_2）：把"进程突然没了"变成可定位的记录。
+
+    - faulthandler：段错误 / 原生库崩溃（如 sqlite、lxml、SSL）会直接把
+      所有线程的调用栈写进 logs/crash.log，而不是静默退出；
+    - sys.excepthook / threading.excepthook：主线程与后台线程的未捕获异常
+      统一走 logger（同时落盘），避免只打一行 stderr 就被窗口关掉；
+    - 顺带在启动/退出打点，事后能区分"崩溃"和"被人关掉"。
+    """
+    global _crash_stream
+    crash_path = Path(__file__).resolve().parent.parent / "logs" / "crash.log"
+    try:
+        crash_path.parent.mkdir(parents=True, exist_ok=True)
+        _crash_stream = open(crash_path, "a", encoding="utf-8", buffering=1)
+        faulthandler.enable(file=_crash_stream, all_threads=True)
+    except OSError:  # pragma: no cover - 目录不可写时降级
+        logger.warning("crash.log 不可写，faulthandler 未启用")
+
+    def _log_uncaught(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        logger.critical("主线程未捕获异常，进程即将退出", exc_info=(exc_type, exc_value, exc_tb))
+
+    def _log_thread_exception(args):
+        name = args.thread.name if args.thread else "unknown"
+        logger.error(
+            "后台线程 %s 未捕获异常（进程继续存活但该任务已死）",
+            name,
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+
+    sys.excepthook = _log_uncaught
+    threading.excepthook = _log_thread_exception
+
+
+def _with_retry(fn, *, label: str, attempts: int = 3, delay: float = 1.5):
+    """启动阶段的可重试执行：SQLite 写入撞车（database is locked）不再直接崩进程。"""
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn()
+        except OperationalError as exc:
+            if attempt >= attempts:
+                raise
+            logger.warning(
+                "%s 第 %d/%d 次失败（数据库繁忙），%.1fs 后重试: %s",
+                label, attempt, attempts, delay, exc,
+            )
+            time.sleep(delay)
+
 
 
 def run_migrations() -> None:
@@ -83,16 +143,23 @@ for _noisy_logger in ("httpx", "httpcore", "hpack", "openai", "urllib3"):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 崩溃取证：必须最早启用，才能覆盖迁移/种子阶段的意外退出
+    enable_crash_diagnostics()
+    logger.info("应用启动中 pid=%s cwd=%s", os.getpid(), Path.cwd())
     # 可观测性：Sentry 初始化（如有配置）
     init_sentry_if_configured()
-    # 迁移：先保证表结构就绪
-    run_migrations()
+    # 迁移：先保证表结构就绪（SQLite 并发写入撞车时自动重试，避免启动即崩）
+    _with_retry(run_migrations, label="数据库迁移")
     # 初始化种子数据（幂等）
-    importlib.import_module("app.seed")
+    _with_retry(lambda: importlib.import_module("app.seed"), label="种子数据初始化")
     # 启动后台周期任务，退出时统一回收
     tasks = start_periodic_tasks()
-    yield
-    await stop_periodic_tasks(tasks)
+    logger.info("应用启动完成，后台周期任务 %d 个", len(tasks))
+    try:
+        yield
+    finally:
+        await stop_periodic_tasks(tasks)
+        logger.info("应用已优雅退出 pid=%s", os.getpid())
 
 
 app = FastAPI(title="智慧校园AI服务平台", version="0.2.0", lifespan=lifespan)

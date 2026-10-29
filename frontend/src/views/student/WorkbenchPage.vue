@@ -1,11 +1,14 @@
 <template>
   <div
-    class="workbench-page"
+    :class="['workbench-page', { 'msg-only': messagesOnly }]"
     @touchstart.passive="pull.onStart"
     @touchmove="pull.onMove"
     @touchend="pull.onEnd"
     @touchcancel="pull.onCancel"
   >
+    <!-- 主页面内容：messagesOnly（消息中心直达覆盖层）下不渲染——
+         覆盖层背后不画一版隐藏的工作台，动画过程中露出的应是宿主页 -->
+    <template v-if="!messagesOnly">
     <!-- 头部欢迎区（不参与下拉位移） -->
     <div class="workbench-header">
       <div class="header-bg-deco"></div>
@@ -89,7 +92,7 @@
         </div>
         <div class="contact-item" @click="openMessages">
           <div class="contact-icon" style="background: rgba(103,194,58,0.1); color: #67c23a;">
-            <DtIcon name="message" :size="20" />
+            <el-icon :size="20"><Message /></el-icon>
           </div>
           <div class="contact-info">
             <div class="contact-name">消息中心</div>
@@ -144,25 +147,16 @@
     </div>
 
     <div style="height: 80px;"></div>
+    </template>
 
     <!-- 子页面：办事服务表单
          动画统一走 styles/animations.css 的 .subpage（覆盖式：子页从右滑入盖住列表，
          主页面不动；返回时原路滑出），不再在本文件自带一份 slide-left 定义。 -->
-    <transition name="subpage" :duration="320">
+    <transition name="subpage" :duration="320" @after-leave="onSubpageAfterLeave">
       <div v-if="currentPage" :class="['sub-page', { 'chat-mode': isChatMode }]">
-        <!-- 非聊天页面显示标准头部（移动端消息中心：左侧改为唤起侧边抽屉） -->
-        <div v-if="!isChatMode" class="sub-page-header">
-          <el-button
-            v-if="currentPage === 'messages' && isMobile"
-            text
-            circle
-            class="back-btn"
-            aria-label="打开侧边导航"
-            @click="msgDrawerOpen = true"
-          >
-            <DtIcon name="menu" :size="22" />
-          </el-button>
-          <el-button v-else text circle class="back-btn" @click="closePage">
+        <!-- 非聊天页面显示标准头部（移动端消息中心/搜索子页自带页签头，不套用标准头部） -->
+        <div v-if="!isChatMode && !(isMobile && (currentPage === 'messages' || currentPage === 'mmsgSearch'))" class="sub-page-header">
+          <el-button text circle class="back-btn" @click="closePage">
             <el-icon :size="20"><ArrowLeft /></el-icon>
           </el-button>
           <div class="sub-page-title">{{ pageTitle }}</div>
@@ -203,7 +197,7 @@
           <div v-else class="chat-header-placeholder"></div>
         </div>
 
-        <div :class="['sub-page-content', { 'chat-content': isChatMode }]">
+        <div :class="['sub-page-content', { 'chat-content': isChatMode, 'msg-bleed': isMobile && (currentPage === 'messages' || currentPage === 'mmsgSearch') }]">
           <!-- 请假申请 -->
           <div v-if="currentPage === 'leave'">
             <div class="form-tip">
@@ -444,10 +438,97 @@
             <AnnouncementPanel @read="refreshAnnounceUnread" />
           </div>
 
-          <!-- 消息中心 -->
-          <div v-if="currentPage === 'messages'" class="messages-page">
-            <!-- 移动端：小绵管家 / 通知 / 文件 / 辅导员 收进侧边抽屉，页面只留会话列表 -->
-            <template v-if="!isMobile">
+          <!-- 消息中心（与搜索子页之间播 push 式覆盖动画，方向见 mmsgPageTransition） -->
+          <Transition :name="mmsgPageTransition" :duration="mmsgPageTransition ? 320 : undefined">
+          <div v-if="currentPage === 'messages'" key="messages" class="messages-page">
+            <!-- 移动端：页签头（好友 / 消息）+ 快捷圆标 + 会话流（原侧边抽屉的二级入口改为圆标直达） -->
+            <template v-if="isMobile">
+              <div class="mmsg-header">
+                <button type="button" class="mmsg-icon-btn" aria-label="返回" @click="closePage">
+                  <DtIcon name="back" :size="22" />
+                </button>
+                <div class="mmsg-tabs">
+                  <div :class="['mmsg-tab', { active: msgTab === 'friends' }]" @click="msgTab = 'friends'">好友</div>
+                  <div :class="['mmsg-tab', { active: msgTab === 'messages' }]" @click="msgTab = 'messages'">消息</div>
+                </div>
+                <div class="mmsg-actions">
+                  <button type="button" class="mmsg-icon-btn" aria-label="搜索" @click="openMsgSearch">
+                    <el-icon :size="20"><Search /></el-icon>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 消息页签：快捷入口 + 群聊与私聊混排的会话流 -->
+              <template v-if="msgTab === 'messages'">
+                <div class="mmsg-quick">
+                  <div v-for="q in mmsgQuickEntries" :key="q.key" class="mmsg-quick-item" @click="gotoPage(q.page)">
+                    <div class="mmsg-quick-icon" :style="{ background: q.bg, color: q.color }">
+                      <DtIcon :name="q.icon" :size="26" :filled="q.filled" />
+                    </div>
+                    <span class="mmsg-quick-label">{{ q.label }}</span>
+                  </div>
+                  <!-- 第 4 格留白：对齐参考稿四宫格节奏（@我的 暂无对应能力，先留空） -->
+                  <div class="mmsg-quick-item mmsg-quick-blank" aria-hidden="true"></div>
+                </div>
+
+                <div class="mmsg-list">
+                  <div v-if="msgFeed.length === 0" class="empty-messages">
+                    <DtIcon name="empty" :size="48" style="color: var(--dt-text-quiet);" />
+                    <span>暂无消息</span>
+                  </div>
+                  <div v-for="row in msgFeed" :key="row.key" class="message-item" @click="openMsgRow(row)">
+                    <div class="message-avatar">
+                      <el-avatar :size="48" :src="row.avatar || undefined">{{ row.name?.[0] }}</el-avatar>
+                      <span v-if="row.isGroup" class="mmsg-group-tag">群</span>
+                      <div v-if="row.unread" class="message-unread">{{ row.unread > 99 ? '99+' : row.unread }}</div>
+                      <span v-if="!row.isGroup && row.online" class="message-online-dot" title="在线" />
+                    </div>
+                    <div class="message-info">
+                      <div class="message-top">
+                        <span class="message-name">{{ row.name }}</span>
+                        <DtIcon v-if="row.muted" name="bellOff" :size="13" class="muted-icon" />
+                        <span class="message-time">{{ formatListTime(row.time) }}</span>
+                      </div>
+                      <div class="message-preview-row">
+                        <span v-if="row.isGroup && row.onlineCount" class="message-online-count">{{ row.onlineCount }}人在线</span>
+                        <span class="message-preview">{{ row.last || '暂无消息' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 好友页签：有过会话的联系人，点头像看主页、点行进聊天 -->
+              <template v-else>
+                <div class="mmsg-list">
+                  <div v-if="msgFriends.length === 0" class="empty-messages">
+                    <DtIcon name="contacts" :size="48" style="color: var(--dt-text-quiet);" />
+                    <span>暂无好友</span>
+                  </div>
+                  <div v-for="f in msgFriends" :key="f.user_id" class="message-item" @click="openConversation(f)">
+                    <div class="message-avatar">
+                      <el-avatar
+                        :size="48"
+                        :src="f.user_avatar || ''"
+                        class="entry-avatar-clickable"
+                        title="查看个人主页"
+                        @click.stop="openUserHomepage(f.user_id)"
+                      >{{ f.user_name?.[0] }}</el-avatar>
+                      <span v-if="isOnline(f.user_id)" class="message-online-dot" title="在线" />
+                    </div>
+                    <div class="message-info">
+                      <div class="message-top">
+                        <span class="message-name">{{ f.user_name }}</span>
+                      </div>
+                      <div class="message-preview">{{ isOnline(f.user_id) ? '在线' : '' }}</div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </template>
+
+            <!-- 桌面端：保持原有钉钉式结构（入口列表 + 群聊 + 会话） -->
+            <template v-else>
             <!-- 小绵管家：置顶常驻会话（自动推送最新资讯 / 总结对话） -->
             <div class="tutor-entry butler-entry" @click="openButler">
               <div class="tutor-entry-avatar">
@@ -519,7 +600,6 @@
               </div>
               <el-icon class="tutor-entry-arrow"><ArrowRight /></el-icon>
             </div>
-            </template>
 
             <!-- 群聊（已加入的群：扫码入群后出现在这里） -->
             <template v-if="myGroups.length">
@@ -575,45 +655,58 @@
                 </div>
               </div>
             </div>
+            </template>
           </div>
 
-          <!-- 移动端侧边抽屉（消息中心）：小绵管家 / 通知 / 文件 / 辅导员 -->
-          <Transition name="drawer-mask">
-            <div v-if="isMobile && msgDrawerOpen" class="msgs-drawer-mask" @click="msgDrawerOpen = false" />
-          </Transition>
-          <Transition name="drawer-panel">
-            <aside v-if="isMobile && msgDrawerOpen" class="msgs-drawer">
-              <div class="msgs-drawer-head">
-                <el-avatar :size="52" shape="square" :src="auth.user?.avatar || ''">
-                  {{ auth.userName?.[0] || '我' }}
-                </el-avatar>
-                <div class="msgs-drawer-user">
-                  <span class="msgs-drawer-name">{{ auth.userName || '同学' }}</span>
-                  <span class="msgs-drawer-sub">{{ siteName }}</span>
+          <!-- 消息中心搜索子页：整页即搜索框（对齐参考稿）——空关键字整页留白，无结果居中「暂无内容」；
+               结果行与消息流同构，返回清空关键字回消息中心，点结果进聊天后返回仍停留搜索页 -->
+          <div v-else-if="isMobile && currentPage === 'mmsgSearch'" key="mmsgSearch" class="mmsg-search-page">
+            <div class="msp-head">
+              <button type="button" class="mmsg-icon-btn" aria-label="返回" @click="exitMsgSearch">
+                <DtIcon name="back" :size="22" />
+              </button>
+              <div class="msp-field">
+                <DtIcon name="search" :size="16" class="msp-field-icon" />
+                <input
+                  ref="mspInputRef"
+                  v-model="msgKeyword"
+                  type="text"
+                  class="msp-input"
+                  placeholder="搜索联系人或群聊"
+                />
+                <button v-if="msgKeyword" type="button" class="msp-clear" aria-label="清空" @click="clearMsgSearch">
+                  <DtIcon name="close" :size="12" />
+                </button>
+              </div>
+            </div>
+            <div class="msp-body">
+              <div v-if="msgKeyword.trim() && msgFeed.length" class="msp-result">
+                <div v-for="row in msgFeed" :key="row.key" class="message-item" @click="openMsgRow(row)">
+                  <div class="message-avatar">
+                    <el-avatar :size="48" :src="row.avatar || undefined">{{ row.name?.[0] }}</el-avatar>
+                    <span v-if="row.isGroup" class="mmsg-group-tag">群</span>
+                    <div v-if="row.unread" class="message-unread">{{ row.unread > 99 ? '99+' : row.unread }}</div>
+                    <span v-if="!row.isGroup && row.online" class="message-online-dot" title="在线" />
+                  </div>
+                  <div class="message-info">
+                    <div class="message-top">
+                      <span class="message-name">{{ row.name }}</span>
+                      <DtIcon v-if="row.muted" name="bellOff" :size="13" class="muted-icon" />
+                      <span class="message-time">{{ formatListTime(row.time) }}</span>
+                    </div>
+                    <div class="message-preview-row">
+                      <span v-if="row.isGroup && row.onlineCount" class="message-online-count">{{ row.onlineCount }}人在线</span>
+                      <span class="message-preview">{{ row.last || '暂无消息' }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <nav class="msgs-drawer-nav">
-                <div class="msgs-drawer-section">消息中心</div>
-                <button type="button" class="msgs-drawer-item" @click="openButlerFromDrawer">
-                  <span class="msgs-drawer-icon"><DtIcon name="robot" :size="19" /></span>
-                  <span class="msgs-drawer-label">{{ agentName || '小绵' }}管家</span>
-                  <span class="msgs-drawer-tag">常驻</span>
-                </button>
-                <button type="button" class="msgs-drawer-item" @click="openNotificationsFromDrawer">
-                  <span class="msgs-drawer-icon"><DtIcon name="bell" :size="19" /></span>
-                  <span class="msgs-drawer-label">通知</span>
-                  <span v-if="notifUnread" class="msgs-drawer-count">{{ notifUnread > 99 ? '99+' : notifUnread }}</span>
-                </button>
-                <button type="button" class="msgs-drawer-item" @click="openSharedFilesFromDrawer">
-                  <span class="msgs-drawer-icon"><DtIcon name="file" :size="19" /></span>
-                  <span class="msgs-drawer-label">文件</span>
-                </button>
-                <button v-if="auth.user?.tutor_id" type="button" class="msgs-drawer-item" @click="startTutorChatFromDrawer">
-                  <span class="msgs-drawer-icon"><DtIcon name="contacts" :size="19" /></span>
-                  <span class="msgs-drawer-label">我的辅导员</span>
-                </button>
-              </nav>
-            </aside>
+              <div v-else-if="msgKeyword.trim()" class="empty-messages">
+                <DtIcon name="grid" :size="46" style="color: var(--dt-text-quiet);" />
+                <span>暂无内容</span>
+              </div>
+            </div>
+          </div>
           </Transition>
 
           <!-- 聊天页面 -->
@@ -713,6 +806,23 @@
                 </span>
               </button>
             </template>
+          </div>
+
+          <!-- 所有评论 / 赞和收藏 / 关注：互动流占位页 ——
+               后端「与我互动」数据源就绪前先给整屏居中空态，接列表时只需替换本块内容 -->
+          <div
+            v-if="currentPage === 'myComments' || currentPage === 'myLikes' || currentPage === 'myFollows'"
+            class="mmsg-interact-page"
+          >
+            <div class="empty-messages">
+              <DtIcon
+                :name="currentPage === 'myComments' ? 'message' : currentPage === 'myLikes' ? 'thumbUp' : 'user'"
+                :size="44"
+                style="color: var(--dt-text-quiet);"
+              />
+              <span>{{ currentPage === 'myComments' ? '暂无评论' : currentPage === 'myLikes' ? '暂无赞和收藏' : '暂无关注' }}</span>
+              <span class="mmsg-empty-hint">同学与你互动后会出现在这里</span>
+            </div>
           </div>
 
           <!-- 文件：跨会话文件汇总（各聊天里发送过的文件 / 图片 / 语音） -->
@@ -875,7 +985,7 @@ import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading, Microphone, Postcard
+  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading, Microphone, Postcard, Message
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -883,14 +993,34 @@ const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
 
+// 消息中心直达模式：被其他页面（校园资讯页头信封）当全屏覆盖层挂载。
+// 本体不渲染、不涂背景，子页(固定定位)直接盖在宿主页上；路由不切换、底部页签不动，
+// 子页滑出动画播完后 emit closed，由宿主卸载覆盖层。
+const props = defineProps<{ messagesOnly?: boolean }>()
+const emit = defineEmits<{ (e: 'closed'): void }>()
+
 // 吉祥物与站点名称取自站点配置：管理端变更后学生端同步
 const { siteMascot, siteName, agentName } = useSiteConfig()
 // 小绵管家入口的动态摘要（取最新一条资讯标题）
 const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
 const currentPage = ref<string | null>(null)
-// 移动端消息中心：侧边抽屉（小绵管家 / 通知 / 文件 / 辅导员 收进抽屉）
-const msgDrawerOpen = ref(false)
+// 子页返回栈：消息中心 → 通知/文件/聊天 等二级跳转时压栈，
+// 返回键逐级回退（如 通知 → 消息中心 → 最外层），而不是一退就到底
+const subpageStack = ref<string[]>([])
+
+/** 子页跳转：已打开某子页时再进新子页，把当前页压入返回栈 */
+function gotoPage(page: string) {
+  // 仅 消息中心 → 搜索子页 播 push 动画；跳往聊天/通知等其余页面时瞬时切换
+  mmsgPageTransition.value = currentPage.value === 'messages' && page === 'mmsgSearch' ? 'mmsg-cover' : ''
+  if (currentPage.value) subpageStack.value.push(currentPage.value)
+  currentPage.value = page
+}
+// 移动端消息中心（TapTap 式）：页签 / 整页搜索
+const msgTab = ref<'messages' | 'friends'>('messages')
+const msgKeyword = ref('')
+/** 消息中心 ↔ 搜索子页的过渡方向名：前进 cover / 返回 cover-back，其余页面切换置空瞬时过渡 */
+const mmsgPageTransition = ref('')
 const submitting = ref(false)
 const showDetail = ref(false)
 const currentDetail = ref<any>(null)
@@ -952,14 +1082,22 @@ const pageTitle = computed(() => {
     messages: '消息中心',
     notifications: '通知',
     files: '文件',
+    myComments: '所有评论',
+    myLikes: '赞和收藏',
+    myFollows: '关注',
     allRecords: '全部申请',
     announcements: '班级公告'
   }
   return titles[currentPage.value || ''] || ''
 })
 
+/** 从搜索结果发起的单聊对象（不在会话列表时的头部名称/头像兜底） */
+const chatPartnerOverride = ref<{ name: string; avatar: string } | null>(null)
+
 // 聊天对象名称
 const chatPartnerName = computed(() => {
+  // 搜索发起的会话对象尚未进会话列表：用 override 撑起头部，列表回填后值一致
+  if (chatPartnerOverride.value) return chatPartnerOverride.value.name
   if (tutorIdRef.value) {
     const conv = conversationList.value.find(c => c.user_id === tutorIdRef.value)
     if (conv) return conv.user_name
@@ -969,6 +1107,7 @@ const chatPartnerName = computed(() => {
 
 /** 单聊头部头像：优先取会话里的头像，落不到就交给 el-avatar 的姓名首字兜底 */
 const chatPartnerAvatar = computed(() => {
+  if (chatPartnerOverride.value) return chatPartnerOverride.value.avatar
   if (!tutorIdRef.value) return ''
   const conv = conversationList.value.find(c => c.user_id === tutorIdRef.value)
   return conv?.user_avatar || ''
@@ -1008,7 +1147,7 @@ function scrollGroupToBottom() {
 
 async function openGroupChat(g: GroupOut) {
   groupActive.value = g
-  currentPage.value = 'group'
+  gotoPage('group')
   try {
     groupMessages.value = await getGroupMessages(g.id)
     markGroupRead(g.id).catch(() => {})
@@ -1045,7 +1184,7 @@ async function sendGroupMsg() {
 
 /** 打开小绵管家会话：自动推送最新资讯 / 总结对话内容 */
 function openButler() {
-  currentPage.value = 'butler'
+  gotoPage('butler')
 }
 
 // ===== 站内通知（学生端消息中心的「通知」子页，闭环：列表 → 已读 → 跳转） =====
@@ -1075,7 +1214,7 @@ const FILE_TYPE_FILTERS = [
 ]
 
 async function openSharedFiles() {
-  currentPage.value = 'files'
+  gotoPage('files')
   await loadSharedFiles()
 }
 
@@ -1130,7 +1269,7 @@ async function openFileSession(f: SharedFile) {
 }
 
 async function openNotifications() {
-  currentPage.value = 'notifications'
+  gotoPage('notifications')
   notifLoading.value = true
   try {
     notificationList.value = await getNotifications({ page_size: 50 })
@@ -1316,29 +1455,101 @@ function openChat() {
 
 function openMessages() {
   currentPage.value = 'messages'
-  msgDrawerOpen.value = false
+  msgTab.value = 'messages'
+  subpageStack.value = []
   loadConversations()
 }
 
-/* ===== 消息中心抽屉：先收起抽屉，再跳到视图或聊天 ===== */
-function openButlerFromDrawer() {
-  msgDrawerOpen.value = false
-  openButler()
+// ===== 移动端消息中心（TapTap 式）：快捷圆标 / 会话流 / 好友页签 =====
+/** 快捷圆标：互动流入口（对齐参考稿：所有评论 / 赞和收藏 / 关注 / 留白）。
+    图标用实心形态（filled，对齐参考稿的实心圆标）；后端暂无「与我互动」通知流，
+    先落整屏居中空态页，数据源就绪后把页内列表接上即可 */
+const mmsgQuickEntries = computed(() => [
+  { key: 'myComments', label: '所有评论', icon: 'message', bg: '#eceefe', color: '#6d7cf5', page: 'myComments', filled: true },
+  { key: 'myLikes', label: '赞和收藏', icon: 'thumbUp', bg: '#e8f1ff', color: '#4a7dfc', page: 'myLikes', filled: true },
+  { key: 'myFollows', label: '关注', icon: 'user', bg: '#f1ecfe', color: '#9b7df0', page: 'myFollows', filled: true },
+])
+
+interface MsgFeedRow {
+  key: string
+  isGroup: boolean
+  id: number
+  name: string
+  avatar: string | null
+  last: string
+  time: string | null
+  unread: number
+  muted: boolean
+  online: boolean
+  onlineCount: number
 }
 
-function openNotificationsFromDrawer() {
-  msgDrawerOpen.value = false
-  void openNotifications()
+function rowTime(ts: string | null) {
+  return ts ? parseTime(ts).getTime() : 0
 }
 
-function openSharedFilesFromDrawer() {
-  msgDrawerOpen.value = false
-  void openSharedFiles()
+/** 群聊 + 私聊混排的会话流（按最后消息时间倒序），搜索行关键字过滤名称 */
+const msgFeed = computed<MsgFeedRow[]>(() => {
+  const kw = msgKeyword.value.trim().toLowerCase()
+  const rows: MsgFeedRow[] = [
+    ...myGroups.value.map((g) => ({
+      key: `g-${g.id}`, isGroup: true, id: g.id, name: g.name, avatar: g.avatar,
+      last: g.last_message, time: g.last_message_time, unread: g.unread_count || 0,
+      muted: !!g.is_muted, online: false, onlineCount: g.online_count || 0,
+    })),
+    ...conversationList.value.map((c: any) => ({
+      key: `s-${c.user_id}`, isGroup: false, id: c.user_id, name: c.user_name, avatar: c.user_avatar,
+      last: c.last_message, time: c.last_message_time, unread: c.unread_count || 0,
+      muted: false, online: !!c.online, onlineCount: 0,
+    })),
+  ]
+  const filtered = kw ? rows.filter((r) => r.name.toLowerCase().includes(kw)) : rows
+  return filtered.sort((a, b) => rowTime(b.time) - rowTime(a.time))
+})
+
+/** 好友页签：有过会话的联系人（本应用无独立好友实体，会话对象即联系人） */
+const msgFriends = computed(() => conversationList.value)
+
+function openMsgRow(row: MsgFeedRow) {
+  if (row.isGroup) {
+    const g = myGroups.value.find((x) => x.id === row.id)
+    if (g) void openGroupChat(g)
+  } else {
+    const conv = conversationList.value.find((c: any) => c.user_id === row.id)
+    openConversation(conv || { user_id: row.id, user_name: row.name })
+  }
 }
 
-function startTutorChatFromDrawer() {
-  msgDrawerOpen.value = false
-  startTutorChat()
+// ===== 搜索子页：整页搜索（对齐参考稿），每次进入从空关键字开始并自动聚焦 =====
+const mspInputRef = ref<HTMLInputElement>()
+
+function openMsgSearch() {
+  msgKeyword.value = ''
+  gotoPage('mmsgSearch')
+  nextTick(() => mspInputRef.value?.focus())
+}
+
+function exitMsgSearch() {
+  msgKeyword.value = ''
+  closePage()
+}
+
+function clearMsgSearch() {
+  msgKeyword.value = ''
+  mspInputRef.value?.focus()
+}
+/** 列表时间：今天只显示时分，昨天带「昨天」前缀，今年显示月-日，往年带年份 */
+function formatListTime(iso: string | null) {
+  if (!iso) return ''
+  const d = parseTime(iso)
+  const now = new Date()
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  if (sameDay(d, now)) return hm
+  if (sameDay(d, new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return `昨天${hm}`
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}-${d.getDate()}`
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
 }
 
 function openAllRecords() {
@@ -1362,7 +1573,8 @@ async function loadConversations() {
 
 function openConversation(conv: any) {
   // 打开与指定用户的聊天
-  currentPage.value = 'tutor'
+  chatPartnerOverride.value = null
+  gotoPage('tutor')
   tutorIdRef.value = conv.user_id
   loadTutorChat(conv.user_id)
 }
@@ -1374,7 +1586,8 @@ function startTutorChat() {
     return
   }
   // 打开与辅导员的聊天页面
-  currentPage.value = 'tutor'
+  chatPartnerOverride.value = null
+  gotoPage('tutor')
   loadTutorChat(tutorId)
 }
 
@@ -1427,12 +1640,25 @@ function goFeedback() {
 }
 
 function closePage() {
+  // 有上级子页：先逐级回退（如 通知 → 消息中心），列表与数据仍留在内存里
+  if (subpageStack.value.length) {
+    const prev = subpageStack.value.pop() as string
+    // 搜索子页 → 消息中心：播原路滑出的返回动画
+    mmsgPageTransition.value = currentPage.value === 'mmsgSearch' && prev === 'messages' ? 'mmsg-cover-back' : ''
+    currentPage.value = prev
+    return
+  }
+  mmsgPageTransition.value = ''
   currentPage.value = null
-  msgDrawerOpen.value = false
   showDetail.value = false
   currentDetail.value = null
   lostfoundDetailVisible.value = false
   lostfoundDetail.value = null
+}
+
+/** messagesOnly：子页滑出动画播完再卸载覆盖层，避免打断返回动画 */
+function onSubpageAfterLeave() {
+  if (props.messagesOnly) emit('closed')
 }
 
 function viewDetail(record: any) {
@@ -1722,24 +1948,40 @@ onMounted(() => {
   announcePolling.start()
   // 从他人个人主页的「发消息 / 加为好友」跳转而来：直接进消息中心并打开会话，可带预填草稿
   openFromHomepageQuery()
+  // 直达覆盖层：挂载即进消息中心（宿主页路由不变）
+  if (props.messagesOnly) {
+    currentPage.value = 'messages'
+    void loadConversations()
+  }
 })
 
 /**
- * 打开发起自他人个人主页的会话：已在工作台时再次跳转不会重挂载组件（同路由只换 query），
- * 因此除 onMounted 外还需要 watch 兜底。
+ * 打开站内其他页面带 query 直达的入口：
+ * - ?messages=1：消息中心直达（校园资讯页头信封）
+ * - ?chat=<id>：个人主页「发消息 / 加为好友」跳来，直接进消息中心并打开会话，可带预填草稿
+ * 已在工作台时再次跳转不会重挂载组件（同路由只换 query），因此除 onMounted 外还需要 watch 兜底。
  */
 function openFromHomepageQuery() {
   const chatId = Number(route.query.chat || 0)
-  if (!chatId) return
+  if (!chatId && !route.query.messages) return
   currentPage.value = 'messages'
-  openConversation({ user_id: chatId, user_name: (route.query.chatName as string) || '' })
-  if (route.query.draft) tutorNewMsg.value = String(route.query.draft)
+  subpageStack.value = []
+  if (chatId) {
+    openConversation({ user_id: chatId, user_name: (route.query.chatName as string) || '' })
+    // 会话列表可能还没有这条会话：用 query 里的名字撑起聊天头部
+    if (route.query.chatName) chatPartnerOverride.value = { name: String(route.query.chatName), avatar: '' }
+    if (route.query.draft) tutorNewMsg.value = String(route.query.draft)
+  } else {
+    msgTab.value = 'messages'
+  }
+  // 会话列表不随 loadData 拉，直达时必须补一次，否则消息流是空的
+  void loadConversations()
   router.replace({ query: {} })
 }
 
 watch(
-  () => route.query.chat,
-  (v) => { if (v) openFromHomepageQuery() },
+  () => [route.query.chat, route.query.messages],
+  ([chat, messages]) => { if (chat || messages) openFromHomepageQuery() },
 )
 
 /** 下拉刷新：并行重拉工作台数据（事务 / 材料 / 未读 / 管家摘要 / 群组），静默更新不触发加载态 */
@@ -1763,6 +2005,14 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   background: #f5f7fa;
   /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
   overscroll-behavior-y: contain;
+}
+
+/* messagesOnly（消息中心直达覆盖层）：本体不占位、不涂背景——
+   子页(固定定位)直接盖在宿主页上，返回动画露出的也是宿主页而不是隐藏的工作台 */
+.workbench-page.msg-only {
+  height: 0;
+  overflow: visible;
+  background: transparent;
 }
 
 /* 头部 */
@@ -2333,6 +2583,8 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 }
 
 .sub-page-header {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2363,6 +2615,11 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   min-height: 0;
   overflow-y: auto;
   padding: 12px;
+}
+
+/* 移动端消息中心：去内边距整屏出血（页签头吸顶、列表通栏） */
+.sub-page-content.msg-bleed {
+  padding: 0;
 }
 
 .sub-form {
@@ -2842,9 +3099,28 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   background: var(--dt-bg);
 }
 
-/* 移动端：以上入口统一收进侧边抽屉，页面本体只留会话列表 */
+/* 移动端：消息中心整屏出血（页签头 / 快捷圆标 / 会话流通栏，无卡片圆角）；
+   overflow 放开，让吸顶页签头贴着 .sub-page-content 这个滚动容器工作 */
 @media (max-width: 767px) {
-  .messages-page .mcenter-section-head { background: var(--dt-bg); }
+  .messages-page {
+    overflow: visible;
+    border-radius: 0;
+    /* 会话很少时页面只有内容高，下方会露出 .sub-page 的灰底（左灰右白的穿帮）——
+       撑满整屏白底，任何内容量/动画中间态下都不再露灰 */
+    min-height: 100%;
+  }
+
+  /* 空态提示整屏居中（含页签头/快捷圆标高度）；快捷圆标保持可点 */
+  .mmsg-quick {
+    position: relative;
+    z-index: 2;
+  }
+
+  .mmsg-list .empty-messages {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
 }
 
 /* ===== 消息中心：分组小标题 / 群聊补充样式 ===== */
@@ -2994,6 +3270,8 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 }
 
 .files-head {
+  position: relative;
+  z-index: 2;
   padding: 12px 16px 0;
 }
 
@@ -3101,7 +3379,27 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 60px 0;
+  padding: 24px 0;
+  color: var(--dt-text-quiet);
+}
+
+/* 空态提示整屏居中（含各页页头高度）：绝对定位于 .sub-page（fixed，本区唯一的定位祖先），
+   不随内容滚动；可交互头部（子页头 / 搜索行 / 筛选行 / 快捷圆标）z-index 抬高保持可点 */
+.notif-page .empty-messages,
+.files-page .empty-messages,
+.mmsg-interact-page .empty-messages {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* 所有评论 / 赞和收藏 / 关注：互动流占位页 */
+.mmsg-interact-page {
+  background: var(--dt-surface);
+}
+
+.mmsg-interact-page .mmsg-empty-hint {
+  font-size: 12px;
   color: var(--dt-text-quiet);
 }
 
@@ -3301,7 +3599,9 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 60px 0;
+  /* 撑满聊天区高度：空聊提示上下居中 */
+  height: 100%;
+  padding: 24px 0;
   color: var(--dt-text-quiet);
 }
 
@@ -3434,159 +3734,272 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
    此处不再重复定义 slide-left —— 原先本地那份与全局版本参数不同（0.3s ease 一致但
    方向语义、离场定位各写各的），是本次统一要消除的重复。 */
 
-/* ==================== 消息中心：移动端侧边抽屉（钉钉式） ====================
-   与教师端「消息」页保持同一套交互：左侧汉堡按钮唤起抽屉，抽屉内承接
-   小绵管家 / 通知 / 文件 / 辅导员 等二级入口，页面本体只保留会话列表。 */
-.msgs-drawer-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  background: rgba(15, 17, 21, 0.42);
+/* ==================== 消息中心：移动端 TapTap 式改版 ====================
+   页签头（好友 / 消息）+ 三个实心快捷圆标（所有评论 / 赞和收藏 / 关注，第 4 格留白）
+   + 群聊与私聊混排的会话流；二级页空态一律整屏居中。 */
+
+/* 页签头（吸顶：贴 .sub-page-content.msg-bleed 滚动容器顶部） */
+.mmsg-header {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  padding: 8px 8px 0;
+  background: var(--dt-surface);
 }
 
-.msgs-drawer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 1201;
-  width: 78vw;
-  max-width: 302px;
+.mmsg-icon-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dt-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mmsg-icon-btn:active {
+  background: var(--dt-surface-press);
+}
+
+.mmsg-tabs {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+}
+
+.mmsg-tab {
+  position: relative;
+  padding: 6px 2px 10px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--dt-text-secondary);
+  cursor: pointer;
+  transition: color 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mmsg-tab.active {
+  color: var(--dt-text);
+  font-weight: 600;
+}
+
+/* 选中页签的短下划线（参考稿的黑色小横条） */
+.mmsg-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--dt-text);
+  transform: translateX(-50%);
+}
+
+.mmsg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 快捷圆标（参考稿的浅底圆形图标 + 下方小字） */
+.mmsg-quick {
+  display: flex;
+  justify-content: space-around;
+  padding: 16px 8px 18px;
+  background: var(--dt-surface);
+}
+
+.mmsg-quick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 72px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 第 4 格留白：占位不响应点击，只为对齐四宫格节奏 */
+.mmsg-quick-blank {
+  pointer-events: none;
+}
+
+.mmsg-quick-icon {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.mmsg-quick-item:active .mmsg-quick-icon {
+  transform: scale(0.93);
+}
+
+.mmsg-quick-label {
+  font-size: 12px;
+  color: var(--dt-text);
+}
+
+.mmsg-quick-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--dt-danger);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 会话流 / 好友列表：通栏白底，行样式复用 .message-item */
+.mmsg-list {
+  background: var(--dt-surface);
+  border-top: 1px solid var(--dt-divider);
+}
+
+/* 群聊头像角标：区分群聊与私聊 */
+.mmsg-group-tag {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(23, 26, 29, 0.55);
+  color: #fff;
+  font-size: 9px;
+  line-height: 1.4;
+  border: 1.5px solid #fff;
+  box-sizing: content-box;
+}
+
+/* ==================== 搜索子页：整页即搜索框（对齐参考稿） ==================== */
+.mmsg-search-page {
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--dt-surface);
-  box-shadow: 0 12px 40px rgba(15, 17, 21, 0.24);
 }
 
-.msgs-drawer-head {
+.msp-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: calc(20px + env(safe-area-inset-top)) 18px 18px;
+  gap: 6px;
+  padding: 8px 10px;
   background: var(--dt-surface);
   border-bottom: 1px solid var(--dt-divider);
 }
 
-.msgs-drawer-head :deep(.el-avatar) {
-  border-radius: 14px;
-  background: var(--dt-primary-soft);
-  color: var(--dt-primary-strong);
+.msp-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--dt-fill-2, #f2f3f5);
+}
+
+.msp-field-icon {
+  color: var(--dt-text-quiet);
   flex-shrink: 0;
 }
 
-.msgs-drawer-user {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+.msp-input {
+  flex: 1;
   min-width: 0;
-}
-
-.msgs-drawer-name {
-  font-size: 15.5px;
-  font-weight: 600;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
   color: var(--dt-text);
 }
 
-.msgs-drawer-sub {
-  font-size: 12px;
+.msp-input::placeholder {
   color: var(--dt-text-quiet);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.msgs-drawer-nav {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 8px calc(12px + env(safe-area-inset-bottom));
-}
-
-.msgs-drawer-section {
-  padding: 10px 10px 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--dt-text-quiet);
-  letter-spacing: .3px;
-}
-
-.msgs-drawer-item {
+.msp-clear {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--dt-text-quiet);
+  color: var(--dt-surface);
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: var(--dt-radius-sm);
-  background: transparent;
+  justify-content: center;
   cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  color: var(--dt-text-secondary);
-  font-size: 14.5px;
-  font-weight: 500;
-  transition: background .15s ease, color .15s ease;
-  -webkit-tap-highlight-color: transparent;
 }
 
-.msgs-drawer-item:active {
-  background: var(--dt-surface-press);
-}
-
-.msgs-drawer-icon {
-  display: flex;
-  color: inherit;
-}
-
-.msgs-drawer-label {
+.msp-body {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.msgs-drawer-count {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--dt-danger);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 20px;
-  text-align: center;
+/* 无结果：空态在搜索框以下的整块区域内上下居中（视觉对齐参考稿的屏幕中部） */
+.msp-body .empty-messages {
+  min-height: 100%;
 }
 
-.msgs-drawer-tag {
-  flex-shrink: 0;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--dt-primary-soft);
-  color: var(--dt-primary-strong);
-  font-size: 11px;
-  font-weight: 600;
+/* 消息中心 ↔ 搜索子页：push 式覆盖动画（与全站子页同一观感）——
+   前进：搜索页从右滑入盖住消息中心，消息中心原地不动；
+   返回：搜索页原路向右滑出，露出原地不动的消息中心。
+   滑动的方绝对定位盖在另一方之上，两页只有一方位移，避免「传送带」穿帮。 */
+.mmsg-cover-enter-active {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  animation: mmsg-cover-in 0.3s ease backwards;
 }
 
-.drawer-mask-enter-active,
-.drawer-mask-leave-active {
-  transition: opacity .22s ease;
+.mmsg-cover-back-leave-active {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  animation: mmsg-cover-out 0.3s ease forwards;
 }
 
-.drawer-mask-enter-from,
-.drawer-mask-leave-to {
-  opacity: 0;
+@keyframes mmsg-cover-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
-.drawer-panel-enter-active {
-  transition: transform .26s cubic-bezier(.22, .68, 0, 1);
+@keyframes mmsg-cover-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
 }
 
-.drawer-panel-leave-active {
-  transition: transform .2s ease-in;
-}
-
-.drawer-panel-enter-from,
-.drawer-panel-leave-to {
-  transform: translateX(-100%);
+@media (prefers-reduced-motion: reduce) {
+  .mmsg-cover-enter-active,
+  .mmsg-cover-back-leave-active {
+    animation: none;
+  }
 }
 </style>

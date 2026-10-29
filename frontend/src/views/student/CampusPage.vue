@@ -36,8 +36,8 @@
         <button
           type="button"
           class="appbar-btn"
-          aria-label="通知公告"
-          @click="onTabClick('jwc_tzgg')"
+          aria-label="消息中心"
+          @click="goMessageCenter"
         >
           <el-icon><Message /></el-icon>
         </button>
@@ -126,10 +126,11 @@
          与下方信息流共用同一份数据，切换只是换 filter，不重新请求。
          滚动说明：页头与 Tab 一起吸顶（Tab 粘在页头下沿），滚到信息流任何位置都能
          直接切分类；两者叠成一个白色顶栏，不会在信息流上方切出两条分离的悬浮条。
-         不放条数角标：6 个分类在 390px 宽下已接近满宽，再加数字会把「图书馆」
-         挤出首屏却看不到可滑动的暗示。
+         不放条数角标：7 个分类在 390px 宽下已超出首屏、需要横向滑动，
+         再加数字只会把「图书馆」推得更远，却没有滑动暗示。
          分类口径：移动端不展示「高教信息」（见 MOBILE_HIDDEN_SOURCES），
-         所以这里比桌面端卡片少一栏 —— 桌面端「高教信息」卡片保留不变。 -->
+         所以这里比桌面端卡片少一栏 —— 桌面端「高教信息」卡片保留不变。
+         「推荐」= 原「全部」合并流；「关注」为新增 Tab，数据源待接（见 itemsOfTab）。 -->
     <nav
       v-if="isMobile"
       class="campus-tabs"
@@ -172,7 +173,7 @@
          吸附到最近一页（或回弹）。全程「跟手」，不会等到松手后才补动画。
          邻居页只在拖动开始时挂载（pagerOpen），松手吸附完成后立即卸载，
          页面高度回到当前分类自己的高度，不在底部留多余白区。
-         每页 = 一条分类的完整卡片：「全部」页含顶部大图轮播，其余是纯信息流。
+         每页 = 一条分类的完整卡片：「推荐」页含顶部大图轮播，「关注」页是空态，其余是纯信息流。
          轮播自己的拖动仍挂在 .hero-track 上，与分类翻页互不干扰（按压必须落在
          .campus-feed 上才会启动分类拖动）。 -->
     <!-- 裁切层：overflow:hidden 必须挂在「不参与位移」的这一层上。
@@ -207,8 +208,8 @@
         v-memo="[entry.key, entry.items, entry.slides]"
         class="campus-pager-page"
       >
-        <!-- 大图轮播：只在「全部」那一页的顶部渲染。
-             图源 = 全部资讯里带 image_url 的最新条目（教学动态详情页抓到的主图），
+        <!-- 大图轮播：只在「推荐」那一页的顶部渲染。
+             图源 = 全部资讯里带 image_url 的最新条目（各来源详情页抓到的正文首图），
              按日期倒序最多 5 张；一张带图的都没有时回落到本地校园风光，避免首屏空一块。
              点击进站内阅读器（与信息流一致），不跳出应用。
              按住图片左右拖动即可切换（鼠标 / 触屏同一套 Pointer 事件逻辑）。
@@ -232,7 +233,7 @@
             @pointercancel="onHeroPointerCancel"
             @dragstart="onHeroSlideDragStart"
           >
-            <!-- ref 用函数形式：轮播在 v-for 的页面里，最多只有一个（只有「全部」有图），
+            <!-- ref 用函数形式：轮播在 v-for 的页面里，最多只有一个（只有「推荐」有图），
                  用字符串 ref 会被当成数组，轮播的 next/prev 就取不到了。 -->
             <el-carousel
               :ref="setHeroCarouselRef"
@@ -322,7 +323,7 @@
               <img :src="item.image_url" loading="lazy" alt="" />
             </div>
           </div>
-          <p v-if="!entry.items.length" class="feed-empty">该分类暂无内容</p>
+          <p v-if="!entry.items.length" class="feed-empty">{{ emptyTextOf(entry.key) }}</p>
         </section>
       </div>
     </div>
@@ -523,6 +524,9 @@
       @updated="onDetailUpdated"
       @read="onDetailRead"
     />
+
+    <!-- 消息中心覆盖层：全屏盖在资讯页上（路由不动、页签不变），关闭后原地停留 -->
+    <WorkbenchPage v-if="msgCenterOpen" messages-only @closed="msgCenterOpen = false" />
   </div>
 </template>
 
@@ -536,6 +540,8 @@ import { tilt } from '@/directives/tilt'
 import ArticleReader from '@/components/campus/ArticleReader.vue'
 import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
 import CampusSearchPage, { type SearchPoolItem } from '@/components/campus/CampusSearchPage.vue'
+// 消息中心覆盖层：复用工作台的 messagesOnly 直达模式（不切路由、不换底部页签）
+import WorkbenchPage from '@/views/student/WorkbenchPage.vue'
 import { getArticleInteractions, type CampusArticleInteract } from '@/api/campus'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
@@ -558,6 +564,16 @@ const auth = useAuthStore()
 function goLogin() {
   auth.exitGuest()
   router.push({ path: '/login', query: { reason: 'login' } })
+}
+
+/** 页头信封 → 消息中心（全屏覆盖层，不切路由/页签）：需要登录态，游客先引导登录 */
+const msgCenterOpen = ref(false)
+function goMessageCenter() {
+  if (isGuestMode()) {
+    void promptLogin('进入消息中心')
+    return
+  }
+  msgCenterOpen.value = true
 }
 
 const vTilt = tilt
@@ -884,10 +900,10 @@ const knowledgeLoading = ref(false)
  */
 const searchTarget = ref(false)
 
-/** 搜索页的资讯池：全部栏目合并流（移动端口径：剔系统入口与已下线栏目），
+/** 搜索页的资讯池：全部栏目合并流（即「推荐」页的口径：剔系统入口与已下线栏目），
  * 并入互动计数、去掉公共前缀 —— 池子规则只在父页维护，搜索页只消费。 */
 const searchPool = computed<SearchPoolItem[]>(() =>
-  itemsOfTab('all').map(i => {
+  itemsOfTab('recommend').map(i => {
     const s = interactionMap.value[i.url]
     return {
       title: removeCommonPrefix(i.title),
@@ -1020,15 +1036,27 @@ const carouselImages = computed(() => galleryImages)
 
 /**
  * 分类定义。key 直接复用后端的 source 取值，这样切 Tab 只是换一个 filter，
- * 不产生任何网络请求；'all' 为合并流。
- * 与桌面端卡片一一对应：教学动态 / 通知公告 / 教学建设 / 学院动态 / 图书馆。
+ * 不产生任何网络请求。
+ * 'recommend' 是合并流（原「全部」）：所有栏目混排 + 顶部大图轮播，即首屏的推荐位；
+ * 'following' 是「关注」：只放用户关注的栏目 / 来源的资讯 ——
+ *   关注关系与数据源尚未接入，当前 itemsOfTab 固定返回空数组、页面走空态，
+ *   后续接后端时只改 itemsOfTab 一处即可（轮播仍只属于推荐页，见 heroSlidesOf）。
+ * 其余 5 个与桌面端卡片一一对应：教学动态 / 通知公告 / 教学建设 / 学院动态 / 图书馆。
  * 「高教信息」不设 Tab：移动端信息流不展示该栏目的内容（见 itemsOfTab），
  * 与桌面端「高教信息」卡片并列的只剩「教学建设」，那条桌面布局保持不变。
  */
-type FeedTabKey = 'all' | 'jwc_jxdt' | 'jwc_tzgg' | 'jwc_jxjs' | 'college_news' | 'library'
+type FeedTabKey =
+  | 'recommend'
+  | 'following'
+  | 'jwc_jxdt'
+  | 'jwc_tzgg'
+  | 'jwc_jxjs'
+  | 'college_news'
+  | 'library'
 
 const FEED_TABS: { key: FeedTabKey; label: string }[] = [
-  { key: 'all', label: '全部' },
+  { key: 'recommend', label: '推荐' },
+  { key: 'following', label: '关注' },
   { key: 'jwc_jxdt', label: '教学动态' },
   { key: 'jwc_tzgg', label: '通知公告' },
   { key: 'jwc_jxjs', label: '教学建设' },
@@ -1036,12 +1064,12 @@ const FEED_TABS: { key: FeedTabKey; label: string }[] = [
   { key: 'library', label: '图书馆' },
 ]
 
-const activeTab = ref<FeedTabKey>('all')
+const activeTab = ref<FeedTabKey>('recommend')
 
 /**
  * 移动端信息流不展示的栏目（source 取值）。
  * 「高教信息」（jwc_gjxx）已在移动端下线：分类 Tab 里没有它，
- * 「全部」合并流里也要一并剔除，否则它会以「高教信息」的来源标签混在首屏，
+ * 「推荐」合并流里也要一并剔除，否则它会以「高教信息」的来源标签混在首屏，
  * 用户既点不到对应分类、也找不到它在哪 —— 搜得到却翻不到，比不展示更困惑。
  * 桌面端不受影响：桌面卡片直接读 impression.gjxx。
  */
@@ -1049,15 +1077,19 @@ const MOBILE_HIDDEN_SOURCES: string[] = ['jwc_gjxx']
 
 /** 某个分类下的条目（已去重 + 按日期倒序） */
 function itemsOfTab(key: FeedTabKey): ImpressionItem[] {
+  // 关注流：关注关系（用户 → 栏目 / 来源）尚未落地，先返回空数组走空态。
+  // 后续接入时在这里按「我关注的来源」过滤即可，口径与推荐流保持一致（同样剔除系统入口）。
+  if (key === 'following') return []
+
   const all = impressionData.value.filter(i => !MOBILE_HIDDEN_SOURCES.includes(i.source))
-  if (key === 'all') {
+  if (key === 'recommend') {
     // 合并流：入口项（系统入口）不是资讯，剔除；其余全部参与排序
     return deduplicateByTitle(all.filter(i => i.source !== 'jwc_entries')).sort(byDateDesc)
   }
   return deduplicateByTitle(all.filter(i => i.source === key)).sort(byDateDesc)
 }
 
-/** Tab 列表（只含 key/label）：条数不放在 Tab 上 —— 6 个分类 × 数字会把「图书馆」挤出首屏 */
+/** Tab 列表（只含 key/label）：条数不放在 Tab 上 —— 7 个分类 × 数字会把「图书馆」挤出首屏 */
 const mobileTabs = computed(() => FEED_TABS)
 
 /**
@@ -1165,7 +1197,7 @@ function cancelPagerMotion() {
 
 /* ==================== 移动端：卡片分页（跟手切换分类） ==================== */
 
-/** 分页里的一页：某个分类的完整卡片（「全部」页额外带顶部大图轮播） */
+/** 分页里的一页：某个分类的完整卡片（「推荐」页额外带顶部大图轮播，「关注」页为空态） */
 interface PagerPage {
   key: FeedTabKey
   label: string
@@ -1626,6 +1658,16 @@ function feedItemsOf(key: FeedTabKey): FeedItem[] {
 /** 当前分类的信息流（详情页取来源、页面渲染都读这一份） */
 const mobileFeed = computed<FeedItem[]>(() => feedItemsOf(activeTab.value))
 
+/**
+ * 信息流空态文案。
+ * 「关注」是空态的常客（关注关系还没接，itemsOfTab 固定返回空数组），
+ * 单独给一句中性说明；等关注功能落地后，这里换成「还没有关注的栏目」之类的引导文案。
+ * 其余分类沿用原文案；「推荐」几乎不会为空，也按普通分类处理，不额外造一句。
+ */
+function emptyTextOf(key: FeedTabKey): string {
+  return key === 'following' ? '还没有关注的内容' : '该分类暂无内容'
+}
+
 /* ==================== 移动端：大图轮播 ==================== */
 
 interface HeroSlide {
@@ -1635,7 +1677,7 @@ interface HeroSlide {
   tagLabel: string
 }
 
-/** 「全部」Tab 的兜底图：全部资讯里一张带图的都没有时用（本地校园风光，不依赖外网） */
+/** 「推荐」Tab 的兜底图：全部资讯里一张带图的都没有时用（本地校园风光，不依赖外网） */
 const HERO_FALLBACK_IMAGES = [
   '/images/campus/游仙校区博识楼.jpg',
   '/images/campus/安州校区博润楼.jpg',
@@ -1650,7 +1692,7 @@ const HERO_FALLBACK_IMAGES = [
 const HERO_MAX = 5
 
 /**
- * 某个分类顶部的大图轮播数据。只有「全部」分类有图，其余分类返回空数组（纯信息流）。
+ * 某个分类顶部的大图轮播数据。只有「推荐」分类有图，其余分类（含「关注」）返回空数组（纯信息流）。
  * 规则：
  *  ① 取全部资讯里**真带图**的条目（按日期倒序）—— 图与标题都来自资讯本身，
  *     点进去就是这篇资讯，这是最有价值的轮播形态；
@@ -1659,10 +1701,10 @@ const HERO_MAX = 5
  * 纯前端计算：切 Tab 不产生任何请求。
  */
 function heroSlidesOf(key: FeedTabKey): HeroSlide[] {
-  // 非「全部」分类：不渲染轮播（模板 v-if 已拦截，这里返回空数组兜底）
-  if (key !== 'all') return []
+  // 非「推荐」分类：不渲染轮播（模板 v-if 已拦截，这里返回空数组兜底）
+  if (key !== 'recommend') return []
 
-  const items = itemsOfTab('all')
+  const items = itemsOfTab('recommend')
 
   // ① 真带图资讯
   const withImage = items.filter((i): i is ImpressionItem & { image_url: string } => !!i.image_url)
@@ -1714,7 +1756,7 @@ function onHeroIndexChange(index: number) {
 
 /**
  * 函数式 ref：轮播渲染在分页的 v-for 页面里，字符串 ref 会被收成数组，
- * next / prev 就取不到了；这里直接记住唯一的轮播实例（只有「全部」页有图）。
+ * next / prev 就取不到了；这里直接记住唯一的轮播实例（只有「推荐」页有图）。
  * 实例（重新）挂载时把指示点序号归零：轮播从第 1 张开始，点也要跟着归零。
  */
 function setHeroCarouselRef(el: unknown) {
@@ -2006,7 +2048,7 @@ function onDetailRead(url: string) {
 /**
  * 为轨道上可见的页面（当前 + 拖动时挂载的邻居）补齐互动计数。
  * 只为「正在渲染」的这批文章取数：邻居页一旦挂载，计数就不会在翻到它之后才跳出来。
- * watch immediate 保证首屏（默认「全部」）也会拉，不用在 onMounted 里再写一遍。
+ * watch immediate 保证首屏（默认「推荐」）也会拉，不用在 onMounted 里再写一遍。
  */
 watch(
   () => pagerPages.value.map(p => p.items.map(i => i.url).join(',')).join('|'),
@@ -2977,7 +3019,7 @@ onMounted(() => {
     transition: none;
   }
 
-  /* ---------- 大图轮播（只在「全部」那一页的顶部渲染）----------
+  /* ---------- 大图轮播（只在「推荐」那一页的顶部渲染）----------
      位次：页内最上方，信息流之上，属于同一张白卡的上半段；
      左右内边距在分页里被清零（见 .campus-pager … 的补平规则），图片铺满卡片宽度。
      版式：16:9 左右的圆角大图 + 底部黑色渐变 + 白色标题两行截断；
@@ -3178,7 +3220,7 @@ onMounted(() => {
   /* 拖动中不保留按下态的压暗：滑动是切分类，不是「按住这一行」 */
   .campus-pager.is-pager-dragging .feed-item:active { opacity: 1; }
 
-  /* 一张卡片 = 一个分类的完整内容：「全部」页是轮播 + 信息流，其余只有信息流。
+  /* 一张卡片 = 一个分类的完整内容：「推荐」页是轮播 + 信息流，「关注」页只有空态，其余只有信息流。
      flex: 0 0 100% 让每页正好占满一屏宽（100% 相对轨道自身宽度，轨道宽度 = 内容区宽）。
      页容器自带白底与下圆角：邻居页比当前页矮时也能把卡片补齐，拖动时不会露底色。 */
   .campus-pager-page {

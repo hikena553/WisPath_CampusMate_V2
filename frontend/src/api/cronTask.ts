@@ -18,8 +18,23 @@ export interface CronTaskItem {
   next_run_at: string
 }
 
+export interface CronTaskCreatePayload {
+  name: string
+  prompt: string
+  schedule_kind: 'daily' | 'weekly' | 'interval'
+  hour?: number | null
+  minute?: number | null
+  weekday?: number | null
+  interval_hours?: number | null
+}
+
 export function listCronTasks() {
   return request.get<CronTaskItem[]>('/cron-tasks')
+}
+
+/** 移动端「+」表单新建；规则与聊天创建一致（周期校验、每人上限、自动建专属会话） */
+export function createCronTask(data: CronTaskCreatePayload) {
+  return request.post<CronTaskItem>('/cron-tasks', data)
 }
 
 export function updateCronTask(id: number, data: { name?: string; enabled?: boolean }) {

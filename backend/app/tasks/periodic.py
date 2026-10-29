@@ -10,6 +10,34 @@ REFRESH_INTERVAL_SECONDS = 1800
 PROACTIVE_INTERVAL_SECONDS = 1800
 # Agent 定时任务：每分钟扫一次到期任务
 CRON_TASK_SCAN_INTERVAL_SECONDS = 60
+# 资源探针：10 分钟记一次内存/线程数
+RESOURCE_PROBE_INTERVAL_SECONDS = 600
+
+
+def _process_stats() -> tuple[float, int] | None:
+    """取当前进程 RSS(MB) 与线程数；psutil 未安装时返回 None（不影响主流程）。"""
+    try:
+        import psutil
+
+        proc = psutil.Process()
+        return proc.memory_info().rss / 1024 / 1024, proc.num_threads()
+    except Exception:  # pragma: no cover - 依赖缺失/权限受限
+        return None
+
+
+async def _periodic_resource_probe() -> None:
+    """定期记录内存与线程数（稳定性 p4_2）。
+
+    "进程跑着跑着自己没了"最常见的原因之一就是内存持续上涨被系统干掉。
+    有了这条时间序列，事后翻 app.log 就能看出是稳态（194MB 上下）还是
+    一路爬升到崩溃——比猜省事得多。
+    """
+    while True:
+        stats = _process_stats()
+        if stats is not None:
+            rss_mb, threads = stats
+            logger.info("[资源] RSS=%.0fMB 线程数=%d", rss_mb, threads)
+        await asyncio.sleep(RESOURCE_PROBE_INTERVAL_SECONDS)
 
 
 async def _periodic_impression_refresh() -> None:
@@ -81,6 +109,8 @@ def start_periodic_tasks() -> list[asyncio.Task]:
         asyncio.create_task(_periodic_proactive_push()),
         # Agent 定时任务：每分钟扫描到期任务，AI 到点自动执行
         asyncio.create_task(_periodic_cron_task_runner()),
+        # 资源探针：每 10 分钟记录 RSS / 线程数，用于判断进程是否被内存拖死
+        asyncio.create_task(_periodic_resource_probe()),
     ]
 
 

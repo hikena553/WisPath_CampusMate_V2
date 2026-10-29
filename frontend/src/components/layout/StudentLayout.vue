@@ -16,7 +16,7 @@
             <span>绵小城</span>
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/campus') }" @click="navTo('/student/campus', '浏览校园资讯')">
-            <el-icon :size="16"><PictureFilled /></el-icon>
+            <el-icon :size="16"><Memo /></el-icon>
             <span>校园资讯</span>
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/schedule') || route.path.startsWith('/student/growth') || route.path.startsWith('/student/grade') || route.path.startsWith('/student/plan') || route.path.startsWith('/student/portfolio') }" @click="navTo('/student/schedule', '进入学业驾驶舱')">
@@ -91,7 +91,9 @@ import { fetchProactiveActions } from '@/api/agent'
 import { getToday } from '@/api/plan'
 import { studentDataCache } from '@/utils/studentDataCache'
 import type { Course } from '@/types'
-import { ChatDotRound, PictureFilled, Grid, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
+// 校园资讯 Tab 图标用 Memo（册页/刊物）而不是 PictureFilled（相册）：
+// 这页现在是「资讯流 + 分类 + 互动」，图片图标会把人引到「校园图库」的错误预期。
+import { ChatDotRound, Memo, Grid, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import UserHomepage from '@/components/profile/UserHomepage.vue'
@@ -142,7 +144,7 @@ const transitionDuration = computed(() =>
 
 // 移动端底部导航
 const mobileNavItems = [
-  { key: 'campus', label: '校园资讯', icon: PictureFilled, route: '/student/campus' },
+  { key: 'campus', label: '校园资讯', icon: Memo, route: '/student/campus' },
   { key: 'schedule', label: '驾驶舱', icon: Odometer, route: '/student/schedule' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/student' },
   { key: 'workbench', label: '工作台', icon: Grid, route: '/student/workbench' },

@@ -3,6 +3,7 @@ import logging
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib.parse import urlparse
 
@@ -79,7 +80,8 @@ def _refresh_in_background() -> None:
     """后台线程里跑一次全量刷新（stale-while-revalidate 的 revalidate 阶段）。
 
     为什么要另起线程：crawl_all() 是同步阻塞网络请求（要串行访问十余个校站，
-    教学动态还对每条新闻再抓一次详情页），放进请求线程会让 /api/campus/impression
+    教学动态/通知公告/教学建设/学院动态还会并发抓各条详情页提取首图），
+    放进请求线程会让 /api/campus/impression
     卡住数秒——前端表现为「进页面空白很久」。这里改为后台刷新，请求立刻返回旧数据。
     """
     global _refresh_running
@@ -114,6 +116,38 @@ def _get(url: str, timeout: float = 10) -> str:
     return resp.content.decode("utf-8", errors="replace")
 
 
+def _detail_base(url: str) -> str:
+    """详情页首图的补链基准：教务处与全部学院站同一套 CMS，正文图都是 /__local/ 站内相对路径。"""
+    p = urlparse(url)
+    return f"{p.scheme}://{p.netloc}"
+
+
+def _attach_first_images(items: list[AnnouncementItem], drop_without_image: bool = False) -> list[AnnouncementItem]:
+    """并发进入各条详情页提取正文首图（parse_detail_first_image 只认 /__local/，天然跳过站点图标菜单图）。
+
+    为什么并发：全量刷新本身是串行的，通知公告/教学建设/学院动态再加 30+ 次详情页请求
+    会让刷新时长翻倍；线程池把每批详情页压到一两个网络往返的量级。
+    drop_without_image=True 沿用教学动态「无图丢弃」的老规则，其余来源无图照常保留。
+    """
+    def _fetch(it: AnnouncementItem) -> tuple[AnnouncementItem, str | None]:
+        try:
+            return it, _get(it.url)
+        except Exception:
+            return it, None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        fetched = list(pool.map(_fetch, items))
+    result = []
+    for it, html in fetched:
+        img = parse_detail_first_image(html, base_url=_detail_base(it.url)) if html else None
+        if img:
+            it.image_url = img
+        elif drop_without_image:
+            continue
+        result.append(it)
+    return result
+
+
 def _is_hidden_entry(item: AnnouncementItem) -> bool:
     """入口卡片里不再展示的系统入口。
 
@@ -137,20 +171,10 @@ def fetch_jwc_jxdt() -> list[AnnouncementItem]:
     """教学动态：列表 + 详情页取首图，无图丢弃"""
     path, marker = JWC_PAGES["jwc_jxdt"]
     html = _get(JWC_BASE + path)
-    items = parse_news_list(html, base_url=JWC_BASE, url_marker=marker)
-    result = []
-    for it in items[:10]:
-        try:
-            detail = _get(it.url)
-        except Exception:
-            continue
-        img = parse_detail_first_image(detail, base_url=JWC_BASE)
-        if not img:
-            continue
-        it.image_url = img
+    items = parse_news_list(html, base_url=JWC_BASE, url_marker=marker)[:10]
+    for it in items:
         it.source = "jwc_jxdt"
-        result.append(it)
-    return result
+    return _attach_first_images(items, drop_without_image=True)
 
 
 def fetch_jwc_simple(source: str) -> list[AnnouncementItem]:
@@ -160,7 +184,12 @@ def fetch_jwc_simple(source: str) -> list[AnnouncementItem]:
     items = parse_news_list(html, base_url=JWC_BASE, url_marker=marker)
     for it in items:
         it.source = source
-    return items[:10]
+    items = items[:10]
+    if source == "jwc_gjxx":
+        # 高教信息条目全是外链（教育部/省考试院等政府站点），不去外站抓图：
+        # 每轮刷新都访问十几个第三方站点既慢又不可靠，且外站图片有防盗链风险
+        return items
+    return _attach_first_images(items)
 
 
 def fetch_college_news() -> list[AnnouncementItem]:
@@ -175,7 +204,7 @@ def fetch_college_news() -> list[AnnouncementItem]:
         for it in parsed[:2]:
             it.source = "college_news"
         items.extend(parsed[:2])
-    return items
+    return _attach_first_images(items)
 
 
 def _doh_resolve(host: str) -> str | None:

@@ -44,8 +44,8 @@
               </div>
             </div>
 
-            <!-- 错误态 -->
-            <div v-else-if="error" class="reader-doc">
+            <!-- 错误态（reader-doc-center：撑满后上下居中） -->
+            <div v-else-if="error" class="reader-doc reader-doc-center">
               <div class="reader-state reader-state-error">
                 <el-icon :size="42" class="state-icon"><DocumentDelete /></el-icon>
                 <p class="state-title">页面暂不可用</p>
@@ -280,6 +280,8 @@ defineExpose({ open })
 }
 
 .reader-head {
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -316,9 +318,19 @@ defineExpose({ open })
 @keyframes sk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* 状态页（错误 / 空） */
+.reader-doc-center {
+  /* 绝对定位于 .reader-panel：撑满整屏（含页头高度），错误态按整屏上下居中；
+     页头 z-index 更高保持可点 */
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .reader-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; padding: 72px 24px; text-align: center;
+  gap: 8px; padding: 24px; text-align: center;
 }
 .state-icon { color: var(--dt-text-quiet, #c9cdd4); }
 .state-title { margin: 4px 0 0; font-size: 15px; font-weight: 600; color: var(--dt-text, #1f2329); }

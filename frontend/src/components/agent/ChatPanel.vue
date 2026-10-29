@@ -2,30 +2,38 @@
   <div class="chat-modern" ref="rootRef">
     <!-- 移动端顶栏 -->
     <div v-if="showMenuButton" class="mobile-header">
-      <el-button text circle class="menu-toggle" @click="emit('toggleSidebar')">
-        <div class="hamburger-icon">
-          <span></span>
-          <span></span>
-          <span></span>
+      <!-- 定时任务视图：左侧变成返回对话，标题换成分区名（视图自身不再重复画标题行） -->
+      <template v-if="cronVisible">
+        <el-button text circle class="menu-toggle" aria-label="返回对话" @click="closeCron">
+          <el-icon :size="20"><ArrowLeft /></el-icon>
+        </el-button>
+        <div class="mobile-header-title">
+          <span class="title-text">定时任务</span>
         </div>
-      </el-button>
-      <!-- 标题只做展示：对话的重命名/置顶/删除统一收在侧边栏列表里，对话页不再弹操作面板 -->
-      <div class="mobile-header-title">
-        <span class="title-text">{{ currentTitle }}</span>
-      </div>
-      <el-button
-        v-if="props.role === 'student'"
-        text circle class="menu-toggle"
-        :disabled="loading"
-        aria-label="定时任务"
-        @click="cronVisible = true"
-      >
-        <el-icon :size="20"><Clock /></el-icon>
-      </el-button>
-      <el-button text circle class="menu-toggle" :disabled="loading" @click="handlePhoneCall">
-        <el-icon :size="20"><Phone /></el-icon>
-      </el-button>
+        <span class="mobile-header-placeholder"></span>
+      </template>
+      <template v-else>
+        <el-button text circle class="menu-toggle" @click="emit('toggleSidebar')">
+          <div class="hamburger-icon">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </el-button>
+        <!-- 标题只做展示：对话的重命名/置顶/删除统一收在侧边栏列表里，对话页不再弹操作面板 -->
+        <div class="mobile-header-title">
+          <span class="title-text">{{ currentTitle }}</span>
+        </div>
+        <el-button text circle class="menu-toggle" :disabled="loading" @click="handlePhoneCall">
+          <el-icon :size="20"><Phone /></el-icon>
+        </el-button>
+      </template>
     </div>
+
+    <!-- ── 对话视图 ──
+         用 v-show 而非 v-if 切走：切到定时任务时对话实例保持挂载，
+         流式回复的定时器、滚动位置、输入草稿都不会丢。 -->
+    <div v-show="!cronVisible" class="chat-view">
 
     <!-- Pending Files Preview (top-right) -->
     <div v-if="pendingFiles.length > 0" class="pending-files-corner">
@@ -284,23 +292,6 @@
             </button>
           </el-tooltip>
 
-          <!-- Essence Toggle（本质回答：先给结论/根因，再给可追溯依据） -->
-          <el-tooltip content="本质回答：先给结论与根因，再给依据" placement="top" :disabled="isMobile">
-            <button
-              type="button"
-              :class="['toggle-btn', { active: essenceEnabled }]"
-              :disabled="loading"
-              @click="essenceEnabled = !essenceEnabled"
-            >
-              <svg class="essence-icon toggle-icon" viewBox="0 0 16 16" aria-hidden="true">
-                <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" />
-                <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.4" />
-                <circle cx="8" cy="8" r="1.1" fill="currentColor" />
-              </svg>
-              <span>本质回答</span>
-            </button>
-          </el-tooltip>
-
           <!-- 图片上传：紧邻文件按钮左侧，一点即开系统相册/文件选择 -->
           <el-tooltip content="上传图片" placement="top" :disabled="isMobile">
             <button
@@ -369,8 +360,17 @@
 
     </div>
 
-    <!-- Agent 定时任务管理子页：覆盖式整屏，仅学生端 -->
-    <AgentCronPage v-if="cronVisible" @closed="cronVisible = false" />
+    </div>
+    <!-- ── 定时任务视图 ──
+         同一页内的第二种视图（不再弹出覆盖式子页）：点侧边栏「定时任务」或顶栏时钟
+         即把对话区换成任务清单，侧边栏/底部导航留在原位，返回对话一键切回。 -->
+    <AgentCronView
+      v-if="cronVisible"
+      class="chat-cron"
+      :show-head="!showMenuButton"
+      @close="closeCron"
+      @open="openCronConversation"
+    />
   </div>
 </template>
 
@@ -387,15 +387,16 @@ import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, Close, Delete, Clock,
+  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, ArrowLeft, Close, Delete,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useCronPage } from '@/composables/useCronPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import MianCharacter from './MianCharacter.vue'
-import AgentCronPage from './AgentCronPage.vue'
+import AgentCronView from './AgentCronView.vue'
 import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
 
@@ -407,8 +408,6 @@ const { agentName } = useSiteConfig()
 const charState = ref<'idle' | 'thinking' | 'speaking'>('idle')
 const charBubble = ref('')
 const deepThinkEnabled = ref(false)
-// 本质回答：先给结论/根因，再给可追溯的依据（与深度思考可独立叠加）
-const essenceEnabled = ref(false)
 const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
@@ -474,7 +473,8 @@ const msgContentRef = ref<HTMLElement>()
 const rootRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
-const cronVisible = ref(false)
+// 定时任务视图开关：状态放在 composable 里，由侧边栏入口打开；这里只负责切回对话
+const { cronVisible, closeCron } = useCronPage()
 const previewImage = ref('')
 
 /**
@@ -1013,7 +1013,8 @@ async function send() {
       cid || undefined,
       deepThinkEnabled.value,
       skipConv,
-      essenceEnabled.value ? 'essence' : 'normal',
+      // 本质回答入口已下线，固定走常规模式（服务端仍保留 answer_mode 参数）
+      'normal',
       (meta) => {
         // 服务端已把本轮回复落库：同步标题并标记已保存，避免前端重复写入
         metaReceived = true
@@ -1219,6 +1220,27 @@ function openConvFromQuery() {
   })
 }
 
+/**
+ * 从定时任务视图点开某个任务的会话：切回对话视图并就地换会话。
+ * 不跳路由 —— 定时任务本身就是对话区的一部分，跳 /student/agent 会把侧边栏丢掉。
+ * 换会话三件套与 handleVoiceClose / openConvFromQuery 保持一致。
+ */
+async function openCronConversation(cid: number) {
+  closeCron()
+  await convStore.fetchMessages(cid)
+  store.replaceMessages(
+    convStore.messages.map(m => ({
+      id: m.id.toString(),
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+    })),
+  )
+  convStore.setActive(cid)
+  convStore.fetchList()
+  scrollToBottom(true)
+}
+
 onMounted(() => {
   openConvFromQuery()
   scrollToBottom(true)
@@ -1299,6 +1321,26 @@ defineExpose({ sendText })
   height: calc(100vh / var(--ui-zoom)); 
   background: linear-gradient(180deg, #f0f8ff 0%, #fafcff 40%, #fff 100%); 
   overflow: hidden;
+}
+
+/* ── 对话视图 ──
+   面板里与「定时任务」互为两种视图：撑满剩余高度，切走时只 display:none，
+   对话实例（含流式定时器、草稿、滚动位置）继续存活。 */
+.chat-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+/* 定时任务视图：同页切换做一个轻量上浮淡入，避免生硬闪切 */
+.chat-cron { animation: cronViewIn .22s ease both; }
+@keyframes cronViewIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-cron { animation: none; }
 }
 
 /* ── Messages Area ── */
@@ -1795,13 +1837,7 @@ defineExpose({ sendText })
   box-shadow: 0 2px 16px rgba(64,158,255,.12);
 }
 
-/* 功能开关（输入框上方） */
-.feature-toggles {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 4px;
-  padding: 0 4px;
-}
+/* 功能开关（输入框下方操作栏里的胶囊按钮） */
 .toggle-btn {
   display: inline-flex;
   align-items: center;
@@ -1914,15 +1950,6 @@ defineExpose({ sendText })
 /* 深度思考胶囊按钮：图标取自 chat.deepseek.com 官方图形（四瓣回环 + 中心圆点）。
    静态度量分离 —— 颜色/边框/背景过渡平滑，不缩放、不改变文字宽度。 */
 .deep-think-icon {
-  display: block;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  transition: color .26s cubic-bezier(.4, 0, .2, 1);
-}
-
-/* 本质回答胶囊按钮：靶心图标，寓意"直击本质" */
-.essence-icon {
   display: block;
   width: 16px;
   height: 16px;
@@ -2083,11 +2110,9 @@ defineExpose({ sendText })
   .char-counter { padding-right: 0; }
   .input-actions { justify-content: space-between; gap: 8px; margin-top: 6px; padding: 0; flex-wrap: wrap; }
   .toggle-btn { padding: 5px 11px; font-size: 12px; }
-  .feature-toggles { margin-bottom: 6px; }
   .chat-textarea { font-size: 14px; }
   .action-icon-btn { width: 28px; height: 28px; }
   .deep-think-icon { width: 14px; height: 14px; }
-  .essence-icon { width: 14px; height: 14px; }
   .send-btn { width: 30px; height: 30px; }
   .msg-actions { opacity: 1; }
 }

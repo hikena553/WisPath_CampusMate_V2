@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.models.conversation import Conversation, ConversationMessage
-from app.models.cron_task import AgentCronTask, CronScheduleKind
+from app.models.cron_task import AgentCronTask, CronScheduleKind, CronTaskSource
 from app.models.notification import Notification
 from app.models.user import User
 
@@ -104,6 +104,49 @@ def validate_schedule_args(args: dict) -> tuple[dict, str | None]:
             return {}, "interval 周期需要 interval_hours（1-720 小时）"
         out["interval_hours"] = hours
     return out, None
+
+
+def create_task(
+    db: Session,
+    user_id: int,
+    *,
+    name: str | None,
+    prompt: str | None,
+    args: dict,
+    source: CronTaskSource | None = None,
+) -> tuple[AgentCronTask | None, str | None]:
+    """创建定时任务（聊天工具与手动新建接口共用）。
+
+    返回 (task, 错误文案)：错误文案为 None 表示成功。
+    建任务同时建专属会话——每次执行的消息都追加于此，学生可在会话里回溯历史。
+    """
+    name = (name or "").strip()
+    prompt = (prompt or "").strip()
+    if not name or not prompt:
+        return None, "缺少任务名称(name)或执行指令(prompt)，请补充后重试"
+    normalized, err = validate_schedule_args(args)
+    if err:
+        return None, err
+    count = db.query(AgentCronTask).filter(AgentCronTask.user_id == user_id).count()
+    if count >= MAX_TASKS_PER_USER:
+        return None, f"每人最多 {MAX_TASKS_PER_USER} 个定时任务，请先在定时任务页删除部分任务"
+
+    conv = Conversation(user_id=user_id, title=name[:200])
+    db.add(conv)
+    db.flush()
+    task = AgentCronTask(
+        user_id=user_id,
+        name=name[:100],
+        prompt=prompt,
+        conversation_id=conv.id,
+        created_via=source or CronTaskSource.CHAT,
+        **normalized,
+    )
+    task.next_run_at = compute_next_run(task)
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task, None
 
 
 def _notify(db: Session, user_id: int, title: str, content: str, conversation_id: int) -> None:

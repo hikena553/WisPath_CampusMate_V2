@@ -91,6 +91,18 @@
             <span class="menu-icon"><el-icon><ChatRound /></el-icon></span>
             <span class="menu-label">新对话</span>
           </button>
+
+          <!-- 定时任务：紧跟在「新对话」下面（同一行样式）。它把对话区切成任务清单，
+               是同一页里的第二种视图，所以这里按导航项处理：选中态高亮，再点一次回到对话 -->
+          <button
+            v-if="!isTeacher" type="button"
+            :class="['menu-row', { active: cronVisible }]"
+            :aria-current="cronVisible ? 'page' : undefined"
+            @click="openCronPage"
+          >
+            <span class="menu-icon"><el-icon><Clock /></el-icon></span>
+            <span class="menu-label">定时任务</span>
+          </button>
         </div>
       </div>
     </div>
@@ -179,7 +191,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, Top, Close, ArrowDown, RefreshLeft, ChatDotRound, ChatRound,
+  Search, Top, Close, ArrowDown, RefreshLeft, ChatDotRound, ChatRound, Clock,
 } from '@element-plus/icons-vue'
 import DtIcon from '@/components/common/DtIcon.vue'
 import { useConversationStore, TITLE_MAX_LEN, type Conversation } from '@/stores/conversation'
@@ -190,11 +202,13 @@ import { useResponsive } from '@/composables/useResponsive'
 import { filterConversations } from './conversationSearch'
 import { groupByType } from './conversationMeta'
 import ConversationItem from './ConversationItem.vue'
+import { useCronPage } from '@/composables/useCronPage'
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
 const store = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
 const agentStore = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore()
 const { isMobile } = useResponsive()
+const { cronVisible, toggleCron, closeCron } = useCronPage()
 const emit = defineEmits<{ select: [conv: Conversation]; new: []; close: [] }>()
 
 const isTeacher = computed(() => props.role === 'teacher')
@@ -242,6 +256,8 @@ function onScroll() {
 
 function selectConv(c: Conversation) {
   if (c.id === store.activeId) return
+  // 从定时任务视图点回某个会话：先切回对话视图，否则会话加载了但界面还停在任务清单
+  closeCron()
   emit('select', c)
 }
 
@@ -274,12 +290,20 @@ function switchAfterRemoval() {
 
 async function newNormal() {
   closeNewTaskPanel()
+  closeCron()
   if (agentStore.messages.length > 0 && !store.activeId) {
     await store.createConversation('normal')
   }
   store.setActive(null)
   agentStore.clearMessages()
   emit('new')
+}
+
+/** 定时任务：先收起下滑列表；移动端顺手关掉抽屉，让对话区整块露出来 */
+function openCronPage() {
+  closeNewTaskPanel()
+  toggleCron()
+  if (isMobile.value) emit('close')
 }
 
 /* ── 新建工作任务：点击直接下滑拉出类型列表 ──
@@ -560,6 +584,9 @@ watch(isMobile, () => closeNewTaskPanel())
 }
 .menu-row:hover { background: rgba(15,23,42,.05); color: #1f2937; }
 .menu-row:active { background: rgba(15,23,42,.1); transition-duration: 0s; }
+/* 当前所在分区（定时任务）：常态高亮，和 hover 的浅灰区分开 */
+.menu-row.active { background: rgba(15, 23, 42, .06); color: #111827; font-weight: 500; }
+.menu-row.active .menu-icon { color: #111827; }
 .menu-icon {
   flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   width: 16px; height: 16px; font-size: 16px; color: #6b7280;

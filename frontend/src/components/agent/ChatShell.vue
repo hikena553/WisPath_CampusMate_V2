@@ -35,8 +35,12 @@ import { useTeacherConversationStore } from '@/stores/teacherConversation'
 import { useAgentStore } from '@/stores/agent'
 import { useTeacherAgentStore } from '@/stores/teacherAgent'
 import { useResponsive } from '@/composables/useResponsive'
+import { useCronPage } from '@/composables/useCronPage'
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; pullRefresh?: boolean }>(), { role: 'student', pullRefresh: false })
+// 定时任务视图是对话区内的第二种视图（不是覆盖层）：任何「打开某个会话 / 开新对话」的动作
+// 都要先切回对话视图，否则会话在后台加载、界面却还停在任务清单上
+const { closeCron } = useCronPage()
 const store = props.role === 'teacher' ? useTeacherConversationStore() : useConversationStore()
 const agentStore = props.role === 'teacher' ? useTeacherAgentStore() : useAgentStore()
 const { isMobile } = useResponsive()
@@ -46,6 +50,7 @@ const fetching = ref(false)
 const mobileSidebarVisible = ref(false)
 
 async function onSelect(conv: Conversation) {
+  closeCron()
   fetching.value = true
   store.setActive(conv.id)
   await store.fetchMessages(conv.id)
@@ -64,6 +69,7 @@ async function onSelect(conv: Conversation) {
 }
 
 function onNew() {
+  closeCron()
   store.setActive(null)
   agentStore.clearMessages()
   chatKey.value++
@@ -78,6 +84,9 @@ function onNew() {
 // 切换会话的重挂载由 onSelect / onNew（以及 Sidebar 的 select/new 事件）显式触发即可。
 
 onMounted(() => {
+  // 离开页面再回来（底部导航切走又切回）时回到对话视图：
+  // 定时任务是对话区的第二种视图，记着上次停在任务清单会让人以为「对话没了」
+  closeCron()
   store.setActive(null)
   agentStore.clearMessages()
   store.fetchList()

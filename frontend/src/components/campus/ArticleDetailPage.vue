@@ -933,6 +933,8 @@ defineExpose({ reload, open, openAnd, close })
 
 /* ================= 顶栏 ================= */
 .adp-head {
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -1208,11 +1210,17 @@ defineExpose({ reload, open, openAnd, close })
 
 /* ================= 错误态 ================= */
 .adp-state {
+  /* 绝对定位于 .adp-root：撑满整屏（含页头高度），错误态按整屏上下居中；
+     页头 z-index 更高保持可点，本层透明不遮内容 */
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 72px 24px;
+  padding: 24px;
   text-align: center;
 }
 .adp-state-icon { color: #c9cdd4; }

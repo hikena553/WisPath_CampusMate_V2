@@ -256,8 +256,7 @@ onMounted(() => {
 .pet-body :deep(.input-actions) { gap: 4px; }
 .pet-body :deep(.toggle-btn) { padding: 4px 8px; font-size: 11px; gap: 4px; }
 .pet-body :deep(.toggle-icon),
-.pet-body :deep(.deep-think-icon),
-.pet-body :deep(.essence-icon) { width: 12px; height: 12px; }
+.pet-body :deep(.deep-think-icon) { width: 12px; height: 12px; }
 .pet-body :deep(.action-icon-btn) { width: 26px; height: 26px; }
 /* el-icon 的 size 是内联 font-size，需 !important 才能随小窗收小 */
 .pet-body :deep(.action-icon-btn .el-icon),
