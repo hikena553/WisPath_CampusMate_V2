@@ -19,9 +19,9 @@
             <el-icon :size="16"><Memo /></el-icon>
             <span>校园资讯</span>
           </div>
-          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/schedule') || route.path.startsWith('/student/growth') || route.path.startsWith('/student/grade') || route.path.startsWith('/student/plan') || route.path.startsWith('/student/portfolio') }" @click="navTo('/student/schedule', '进入学业驾驶舱')">
+          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/schedule') || route.path.startsWith('/student/growth') || route.path.startsWith('/student/grade') || route.path.startsWith('/student/plan') || route.path.startsWith('/student/portfolio') }" @click="navTo('/student/schedule', '进入学业中心')">
             <el-icon :size="16"><Odometer /></el-icon>
-            <span>驾驶舱</span>
+            <span>学业中心</span>
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/workbench') || route.path.startsWith('/student/service') || route.path.startsWith('/student/resources') || route.path.startsWith('/student/community') || route.path.startsWith('/student/feedback') }" @click="navTo('/student/workbench', '使用工作台办事')" style="position:relative">
             <el-icon :size="16"><Grid /></el-icon>
@@ -145,7 +145,7 @@ const transitionDuration = computed(() =>
 // 移动端底部导航
 const mobileNavItems = [
   { key: 'campus', label: '校园资讯', icon: Memo, route: '/student/campus' },
-  { key: 'schedule', label: '驾驶舱', icon: Odometer, route: '/student/schedule' },
+  { key: 'schedule', label: '学业中心', icon: Odometer, route: '/student/schedule' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/student' },
   { key: 'workbench', label: '工作台', icon: Grid, route: '/student/workbench' },
   { key: 'profile', label: '个人中心', icon: User, route: '/student/profile' },
@@ -243,7 +243,18 @@ function logout() {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(135deg, #f5faff 0%, #f0f8ff 50%, #f8fbff 100%);
+  /* 中性灰底。原来是 3 段淡蓝渐变（#f5faff → #f0f8ff → #f8fbff）——
+     它铺满整屏，是「大面积蓝」最主要的来源，比任何卡片配色都更显眼 */
+  background: #f5f6f7;
+
+  /* 底部导航选中态变量：MobileTabBar 是学生/教师共用组件，
+     这里只覆盖学生端，其它端仍是品牌蓝 */
+  --tab-active-color: #14171a;
+  --tab-center-bg: radial-gradient(circle at 32% 26%, #ffffff 0%, #f7f8f9 58%, #eef0f2 100%);
+  --tab-center-glow: rgba(20, 23, 26, 0.06);
+  --tab-center-ring: rgba(20, 23, 26, 0.10);
+  --tab-center-glow-strong: rgba(20, 23, 26, 0.10);
+
   overflow: hidden;
 }
 

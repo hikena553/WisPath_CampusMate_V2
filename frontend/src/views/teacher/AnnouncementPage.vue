@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="班级公告" sub="发布与触达 · 一条不落传达到学生" fallback="/teacher" />
+    <SubPageHeader title="班级公告" fallback="/teacher" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：广播语义色 + 喇叭图标。

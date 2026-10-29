@@ -77,7 +77,9 @@ defineEmits<{
 }
 
 .tab-item.active {
-  color: #409eff;
+  /* 用变量承接：学生端驾驶舱 v2 把选中色改成近黑（见 StudentLayout 的 --tab-active），
+     其它端不覆盖变量，保持原品牌蓝，行为不变 */
+  color: var(--tab-active-color, #409eff);
 }
 
 /* 中间标签：凸起圆托（底部导航主入口强调，不显示文字） */
@@ -92,12 +94,12 @@ defineEmits<{
   height: 42px;
   margin-top: -3px;
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 26%, #ffffff 0%, #eff6ff 58%, #dbeafe 100%);
+  background: var(--tab-center-bg, radial-gradient(circle at 32% 26%, #ffffff 0%, #eff6ff 58%, #dbeafe 100%));
   /* 4px 白色描边把圆托从导航栏上沿「顶」出来，外圈一条淡描边保证在浅色内容上也有轮廓 */
   box-shadow:
     0 0 0 4px #fff,
     0 0 0 5px rgba(15, 23, 42, 0.06),
-    0 6px 16px rgba(64, 158, 255, 0.24);
+    0 6px 16px var(--tab-center-glow, rgba(64, 158, 255, 0.24));
   transition:
     transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.26s ease;
@@ -118,8 +120,8 @@ defineEmits<{
 .tab-item.center.active .tab-icon-wrap {
   box-shadow:
     0 0 0 4px #fff,
-    0 0 0 5px rgba(64, 158, 255, 0.22),
-    0 6px 16px rgba(64, 158, 255, 0.34);
+    0 0 0 5px var(--tab-center-ring, rgba(64, 158, 255, 0.22)),
+    0 6px 16px var(--tab-center-glow-strong, rgba(64, 158, 255, 0.34));
 }
 
 /* 按下态：必须放在 .active 之后，否则特异性相同时会被覆盖，

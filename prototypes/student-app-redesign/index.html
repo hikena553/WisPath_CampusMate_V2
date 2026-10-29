@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="9x0gyEFBwXPrGmW00LDHTU">
+<head data-page-node-id="lleULbYyc2kBjzxGsYwrhG">
+<meta charset="UTF-8" data-page-node-id="RMnC6cw4ZwiFmLFo6c7TXc">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" data-page-node-id="SP1zxWJbXMRlXulEU9CZEE">
+<title>学生端 · 驾驶舱重构原型</title>
+<link rel="stylesheet" href="styles.css" data-page-node-id="FZRA3bYkHEdpCeFhfWCfqf">
+</head>
+<body data-page-node-id="Qz1Cm9qNC02P3GKRdAb7LV">
+
+<!-- ===================== Lucide 图标 sprite（ISC） ===================== -->
+<svg id="sprite" width="0" height="0" style="position:absolute" aria-hidden="true" data-page-node-id="TjRlfbo8LAGLuhkkcLREkG">
+  <symbol id="i-house" viewBox="0 0 24 24" data-page-node-id="hTEd6UcdcqsbqO4OdE6xVN"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" data-page-node-id="DmqAqM7m2PB72VJ8eYAkSR" /><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" data-page-node-id="TjUA7mwwgkvY4l0s1uVH8H" /></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" data-page-node-id="nB3NSpmlUh7HQHj9o734Ev"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" data-page-node-id="BQsPsGWcmfmuxVHcHAzIO0" /><path d="M16 3.128a4 4 0 0 1 0 7.744" data-page-node-id="GP47FGIGFQDTgZJXn1xLND" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" data-page-node-id="2YrA454sZF8uAlv6jolyRH" /><circle cx="9" cy="7" r="4" data-page-node-id="67sBywCbPPx2cXlL1AFva3" /></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" data-page-node-id="Gu7acpgQ3ukflpjeSkkx6p"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" data-page-node-id="GCtgdKuagtr3cvs3a40oJu" /><circle cx="12" cy="7" r="4" data-page-node-id="glGJwgm4TBoPYRPK7FbXbl" /></symbol>
+  <symbol id="i-users-round" viewBox="0 0 24 24" data-page-node-id="AIjgcwMVDNcDWmIygHz39F"><path d="M18 21a8 8 0 0 0-16 0" data-page-node-id="YL0iFkVUC0MixeDL7j8Mcx" /><circle cx="10" cy="8" r="5" data-page-node-id="3aiLulQAacX99jlYKzdLF6" /><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3" data-page-node-id="IwemsEXQe6RiQpHnxZTH9y" /></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24" data-page-node-id="AiFBVAuOYYjId4FadrIDd9"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" data-page-node-id="X8feXzOiYDyu8EQ74rJmAU" /><circle cx="9" cy="7" r="4" data-page-node-id="zx7c6nxVUvlgk2WEE2IXeW" /><line x1="19" x2="19" y1="8" y2="14" data-page-node-id="68aGIVA26TN7ghsdQxvdUv" /><line x1="22" x2="16" y1="11" y2="11" data-page-node-id="WTQfjA3Flxa8QqiFzU2hRH" /></symbol>
+  <symbol id="i-message-circle" viewBox="0 0 24 24" data-page-node-id="Yncy1EWqrsF935kuoHijcF"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" data-page-node-id="8Ogaj7t4PclsVp3HrVis4y" /></symbol>
+  <symbol id="i-message-square" viewBox="0 0 24 24" data-page-node-id="5oWctJYpnZJBtgiqa8LxZe"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" data-page-node-id="kAoBCPorKf6mVBa7oQgkvm" /></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" data-page-node-id="wDzcy9tLn0rifCaSeREDia"><path d="M10.268 21a2 2 0 0 0 3.464 0" data-page-node-id="8YXzAaILUbowqI4bVXhUcI" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" data-page-node-id="FiCouYmHUgfsEHQCGxR1I4" /></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" data-page-node-id="2jLAp4QEzj5RZNjPKwd0nK"><circle cx="12" cy="12" r="10" data-page-node-id="L3CysVWHYEq3I6noKeuFwd" /><path d="M12 6v6l4 2" data-page-node-id="XGOIfiEspAL3c6P8gnIPtn" /></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24" data-page-node-id="8UnBx7RvADPrtk9VhxuAo1"><path d="M8 2v3" data-page-node-id="LJk3iv5QaZBaHsEgts0aWM" /><path d="M16 2v3" data-page-node-id="MmFP8pUZIlxNGnxX1YNJ5y" /><rect x="3" y="3" width="18" height="18" rx="2" data-page-node-id="69OWZ6P98AyA0ti6FdjEV5" /><path d="M3 9h18" data-page-node-id="ySgvawfF9GJ7sZAN5O6TEA" /></symbol>
+  <symbol id="i-layout-grid" viewBox="0 0 24 24" data-page-node-id="FxwXgz1MqKvi1fTVG0I00K"><rect width="7" height="7" x="3" y="3" rx="1" data-page-node-id="pRki6d9iYQrtVdBVicn234" /><rect width="7" height="7" x="14" y="3" rx="1" data-page-node-id="SroQZ0KqGW8ArTtDpdm9kT" /><rect width="7" height="7" x="14" y="14" rx="1" data-page-node-id="yv3jGVKqXwEmENS4EHURHP" /><rect width="7" height="7" x="3" y="14" rx="1" data-page-node-id="uvuZtvXkHOYj8vdu8D5x5T" /></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" data-page-node-id="beixryKUDf2oPOwC9mA9S9"><path d="m21 21-4.34-4.34" data-page-node-id="nAEUO8XsGEkFS0kOtYc4BY" /><circle cx="11" cy="11" r="8" data-page-node-id="0hHrqng20KCe9KGaBdHTH7" /></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" data-page-node-id="NP9HaFJ7Q3iHEUyE3VVrP5"><path d="M5 12h14" data-page-node-id="xchRWkHyIb3dtw9LJcz4M8" /><path d="M12 5v14" data-page-node-id="6ULshQgLH9CuVM97C2k8tu" /></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" data-page-node-id="5GDGWDjtusXG3wUEAQzJAo"><path d="M18 6 6 18" data-page-node-id="ynZZgH4sb4x76O0ZcR10gm" /><path d="m6 6 12 12" data-page-node-id="YQfIeBegzu1g0eYPEtfDOS" /></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24" data-page-node-id="pPTZx1MzGMIVuILPgepCy0"><path d="m9 18 6-6-6-6" data-page-node-id="U7NzKBho7TEHhNgRdgiEcq" /></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24" data-page-node-id="ItwsfI1XkDyJpg2dXHI2DZ"><path d="m15 18-6-6 6-6" data-page-node-id="kAwynevXoPjXwHE1J1venE" /></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24" data-page-node-id="TyYY98xe0bymsRwxnh2H0Q"><path d="m6 9 6 6 6-6" data-page-node-id="8mxCQ2pr2dvGOXFyFzziFE" /></symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24" data-page-node-id="TGwFIjHcITsCnJVPzZ7047"><path d="m18 15-6-6-6 6" data-page-node-id="b7GL5FkJltHc6r86GEgGlt" /></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24" data-page-node-id="TNAXXMZw7H6uGTeSjyTDr9"><path d="m12 19-7-7 7-7" data-page-node-id="wi56wjHRK4WEdq4gnz1nsQ" /><path d="M19 12H5" data-page-node-id="z10Ow5ZGGizO6ZaneAMOM7" /></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" data-page-node-id="l6KhE4aIpLchUpcphfBSEe"><path d="M5 12h14" data-page-node-id="JVXFk0A7bRZcwWVCVLLICb" /><path d="m12 5 7 7-7 7" data-page-node-id="tBm9TW5m47Q6twSV0FB2RN" /></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24" data-page-node-id="28Bjkho877lmhz48rEQ8IN"><path d="M7 7h10v10" data-page-node-id="tlTR2x8WMtm9xvbDFLakKA" /><path d="M7 17 17 7" data-page-node-id="MQJLXHHEa8OIpVeWjhFAz3" /></symbol>
+  <symbol id="i-ellipsis" viewBox="0 0 24 24" data-page-node-id="g2HmehjEWZeFVuFqvFABWo"><circle cx="12" cy="12" r="1" data-page-node-id="LF81EqRHHAAYzdkaFnIMHX" /><circle cx="19" cy="12" r="1" data-page-node-id="6UIq9aclA2WDiF6Nv0HC5Q" /><circle cx="5" cy="12" r="1" data-page-node-id="7I0mOYEoejJKCW2zirVM05" /></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" data-page-node-id="avGesoAv85BBlV5ADoqqA0"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" data-page-node-id="IEAgYG430g9fTCs6ToPjzV" /><circle cx="12" cy="12" r="3" data-page-node-id="y0VTbmT16p5PhdawX9qBa6" /></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24" data-page-node-id="KIWfBcrbYEfQMZld4U9uLp"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" data-page-node-id="WzX0B9E5NnjARmsa8FOL7D" /></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24" data-page-node-id="2dztf8eaSHkIIOwALJPSDp"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" data-page-node-id="nKWLKjlqAm3ni1luN0WxAX" /><rect x="2" y="6" width="14" height="12" rx="2" data-page-node-id="8FrxOXa87HVS3H9Uo8mjVt" /></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24" data-page-node-id="NWdTVz0TMxhMGmPF2LB5Dy"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" data-page-node-id="A0Jb0nqLAyjhEK1W1xz26l" /><circle cx="9" cy="9" r="2" data-page-node-id="dErzkgfUOzmcCwEVUE32Qx" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" data-page-node-id="x1Nq14NmPyxeidVKjeNDkY" /></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24" data-page-node-id="UKxCFys4GsbMxflWQeRrTj"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z" data-page-node-id="PcEOvk0imASYw8SwlnVYwl" /><circle cx="12" cy="13" r="3" data-page-node-id="yJMLQiES91lJEVBiscmA29" /></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24" data-page-node-id="4x9WUMeT0PAnXRUNRBGr1K"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" data-page-node-id="yQEzzcFaQxDm3sEMrDB82l" /><path d="M14 2v5a1 1 0 0 0 1 1h5" data-page-node-id="5LJ7tU5pPYc6txAIW1juPd" /><path d="M10 9H8" data-page-node-id="BZurNJNuDeckqiOuySHCdH" /><path d="M16 13H8" data-page-node-id="IsD4dDN9nW8JwiLtA0qeho" /><path d="M16 17H8" data-page-node-id="E2q4n2dYFrWh67mJttEbJ9" /></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24" data-page-node-id="UBT1HKgTV8WaQqDLD0u1nY"><path d="M12 19v3" data-page-node-id="RUSTa5gP7gDQ1msRWWiSGD" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" data-page-node-id="Pf1Ha6U8MFPk1LeLoXZPW0" /><rect x="9" y="2" width="6" height="13" rx="3" data-page-node-id="5t1r8jwhhhM8a7mMzRXXZj" /></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" data-page-node-id="GEGkW1YuLIGMREB2lWJPqN"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" data-page-node-id="zhxneGf8ICINjMnxQBgMXR" /></symbol>
+  <symbol id="i-map-pin" viewBox="0 0 24 24" data-page-node-id="y1MZYSpcqwoIR0DD0sSK0A"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" data-page-node-id="hGNT8wZSX8ogktzAmNcAWc" /><circle cx="12" cy="10" r="3" data-page-node-id="tiHi133NHxVZPN0Vkfmg0R" /></symbol>
+  <symbol id="i-volume-x" viewBox="0 0 24 24" data-page-node-id="rHPfpoY8Cn6UFVsG4KRC39"><path d="M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z" data-page-node-id="Th08SC53MgkHGSK01RhFNk" /><path d="m16.5 14.5 5-5" data-page-node-id="EfqPJEFWgQZDBrFbJHL0Xf" /><path d="m16.5 9.5 5 5" data-page-node-id="I4Hz2mbODRHSLX9NyjiWkf" /></symbol>
+  <symbol id="i-log-out" viewBox="0 0 24 24" data-page-node-id="LEIJBTlD8TdI0Xti2AmKFO"><path d="m16 17 5-5-5-5" data-page-node-id="gdJH4WOzAmhupIuruTzpYv" /><path d="M21 12H9" data-page-node-id="aCXFFDLj3VNPL93eCDgwBq" /><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" data-page-node-id="gAnzEPIZSOM9OCHA63kDlD" /></symbol>
+  <symbol id="i-shield-alert" viewBox="0 0 24 24" data-page-node-id="QOFlDiJGRXDXhzHdF8gARG"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" data-page-node-id="guDQg47wqY8kLHzjskPGmE" /><path d="M12 8v4" data-page-node-id="eqyMFfQM6d0fm10EhOPD2h" /><path d="M12 16h.01" data-page-node-id="5yfZaNPVWaoH7J2zAQYdqy" /></symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24" data-page-node-id="yQGDGSiMOrKOJNDlo0sOQr"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" data-page-node-id="Am1rhlbBaw5xTKZReOmp83" /><path d="M12 9v4" data-page-node-id="onsgOpPaTDiL2XVAGsy4l6" /><path d="M12 17h.01" data-page-node-id="B4QD72B0hp9UohyU0Qndfs" /></symbol>
+  <symbol id="i-circle-check" viewBox="0 0 24 24" data-page-node-id="I430ZT8H0As4W974tEZm7q"><circle cx="12" cy="12" r="10" data-page-node-id="d7Jt02B3DMNJqA60dbDI88" /><path d="m16 9-5.5 5.5L8 12" data-page-node-id="Djh6lvXHE88GlWRBbNz3Po" /></symbol>
+  <symbol id="i-circle-x" viewBox="0 0 24 24" data-page-node-id="vF3J3dneDHHc1FdsazuwKq"><circle cx="12" cy="12" r="10" data-page-node-id="uqKKAm7KsKEmPrueFtLnSQ" /><path d="m15 9-6 6" data-page-node-id="2bAcbyH1tFEm2tclGFNQvr" /><path d="m9 9 6 6" data-page-node-id="mGmFo7cEMZsjFcHhA5mvWe" /></symbol>
+  <symbol id="i-circle-dot" viewBox="0 0 24 24" data-page-node-id="UyAhHBeEMMBOvctPCyDjzX"><circle cx="12" cy="12" r="1" data-page-node-id="1NgsiTXCN1WtcQBibwfhKV" /><circle cx="12" cy="12" r="10" data-page-node-id="qEELZoOdr3JxbjDUt9jOVG" /></symbol>
+  <symbol id="i-circle-question-mark" viewBox="0 0 24 24" data-page-node-id="NCyP9N7fVd8ryHfi4EVMQy"><circle cx="12" cy="12" r="10" data-page-node-id="XZfHTfir1rSELFqDbT7VaQ" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" data-page-node-id="X6a0GJAWMw8fs3AfxiXwbT" /><path d="M12 17h.01" data-page-node-id="FWPFKGBa1aCKsXRPatPQZE" /></symbol>
+  <symbol id="i-badge-check" viewBox="0 0 24 24" data-page-node-id="I2lVNApwupiD1oVHBwNJNh"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" data-page-node-id="wjHrLM8yTFCuBaiB0JsWlz" /><path d="m16 9-5.5 5.5L8 12" data-page-node-id="0zuhPhrvyiX8wt8HFyF76b" /></symbol>
+  <symbol id="i-shield-check" viewBox="0 0 24 24" data-page-node-id="41o6lfIbiwQQfsumfOnTaC"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" data-page-node-id="jC0uzWblPQ2IvXJBYuUhV5" /><path d="m9 12 2 2 4-4" data-page-node-id="6V1n6XrUB5x3ZFcZz15ktD" /></symbol>
+  <symbol id="i-shield-plus" viewBox="0 0 24 24" data-page-node-id="42Hwgt4BYFdfRWO9TXq08A"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" data-page-node-id="kTmpMYccQlvpGH0i4X7GS6" /><path d="M9 12h6" data-page-node-id="nTwGeKeUvDE18po0v3Ovx1" /><path d="M12 9v6" data-page-node-id="fgrdvwqBMavw4JRqVYE6xm" /></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" data-page-node-id="bqJHcdOqJp733P8C8CjzHd"><circle cx="12" cy="12" r="10" data-page-node-id="O4mP5aLMg8TLS1Izjpzqdj" /><path d="M12 16v-4" data-page-node-id="BMv54YONvZWnIVSY4bCJVq" /><path d="M12 8h.01" data-page-node-id="LxLJeF3ONmvokKhnM5MviS" /></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24" data-page-node-id="YTOXgrK17KX0Alm7IgKzHE"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528" data-page-node-id="SBDdxKPf23TcVlYNranHuW" /></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24" data-page-node-id="UxYkUw8GBGH9ELSKwfftS9"><circle cx="12" cy="12" r="10" data-page-node-id="JX2j8BBnE4rA8AzzAfHqOL" /><circle cx="12" cy="12" r="6" data-page-node-id="B4U08YX4IX6jwLD7zzGIAg" /><circle cx="12" cy="12" r="2" data-page-node-id="G4nUGpQRNaxKKlHn2rwA4E" /></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24" data-page-node-id="IJTKYy5uj2kRtLaPyYMik8"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" data-page-node-id="CVnM7S7I7Oq4v2HuDuorP4" /></symbol>
+  <symbol id="i-trending-up" viewBox="0 0 24 24" data-page-node-id="AHDc2ev3I6FAgIE32EtXiY"><path d="M16 7h6v6" data-page-node-id="ce2BybvMVV13cukxyliNv5" /><path d="m22 7-8.5 8.5-5-5L2 17" data-page-node-id="IyGj8FgpQbtB7aeXUo6ivF" /></symbol>
+  <symbol id="i-trending-down" viewBox="0 0 24 24" data-page-node-id="zR1CZvRZZFB5LGKj9TLAz0"><path d="M16 17h6v-6" data-page-node-id="uSbQvU16yueWyXYRItYhmm" /><path d="m22 17-8.5-8.5-5 5L2 7" data-page-node-id="fEK0XhvnvLyU5ZwfU4TQj9" /></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24" data-page-node-id="d9iY6DnIH8NPR0EyEa0qEy"><path d="m12 14 4-4" data-page-node-id="5L26NwkTjIyFyBcEoeJt1m" /><path d="M3.34 19a10 10 0 1 1 17.32 0" data-page-node-id="veuwPA2qhixtTWNxRyxPAt" /></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" data-page-node-id="EYX6IeGtxuBjph6TWC2sol"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" data-page-node-id="fSBHoJ4iUP1Mo46fMuKG9j" /></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24" data-page-node-id="UcHZKhjDjcbKC7TckIVJHs"><line x1="10" x2="14" y1="2" y2="2" data-page-node-id="b6WcAw6q7a1UtYYiXEOp7H" /><line x1="12" x2="15" y1="14" y2="11" data-page-node-id="Aw5K010cu9AbnysdtQcFHs" /><circle cx="12" cy="14" r="8" data-page-node-id="MGGkVrgOHad1xu37fxTBSY" /></symbol>
+  <symbol id="i-hourglass" viewBox="0 0 24 24" data-page-node-id="R5luY7fFG77dCvdnFJNGGA"><path d="M5 22h14" data-page-node-id="fiBQpHRRgoun9dSq4fteQF" /><path d="M5 2h14" data-page-node-id="xwO38zYOEXCWUT4nrKBEPO" /><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" data-page-node-id="qaX9CzPyBer2l2neTS8frl" /><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" data-page-node-id="1QbEjWmJDpCmYL21EoLOer" /></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24" data-page-node-id="CWSHTSESKk47K1KxLwhwng"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4" data-page-node-id="NAYhjo7nHXLh5IJGIsd8xp" /></symbol>
+  <symbol id="i-percent" viewBox="0 0 24 24" data-page-node-id="IfIVIgMCOu0anQg7N5W2aA"><line x1="19" x2="5" y1="5" y2="19" data-page-node-id="XaCM0jFCXgHoJ3mSri7V9G" /><circle cx="6.5" cy="6.5" r="2.5" data-page-node-id="6XuI6Bg2Q5dgcVzItbzr2A" /><circle cx="17.5" cy="17.5" r="2.5" data-page-node-id="FCk1hGhN2BnBHf5MdCy1tj" /></symbol>
+  <symbol id="i-clipboard-check" viewBox="0 0 24 24" data-page-node-id="FvkvzG6kMihvwoQUBYAUwX"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" data-page-node-id="2TWGhg8wrIMRyypleqUTLd" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" data-page-node-id="kXo2lLFr2fwiel9R8QcnNL" /><path d="m9 14 2 2 4-4" data-page-node-id="wCeqcRzKigsGVABIqVVHSe" /></symbol>
+  <symbol id="i-clipboard-list" viewBox="0 0 24 24" data-page-node-id="7ubTocEpo5KMH0DYRsGRE7"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" data-page-node-id="W5Zmivn8sj6djGk2VDWQCI" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" data-page-node-id="BIMUZGLNUSZCkXrvHTRIBZ" /><path d="M12 11h4" data-page-node-id="SzI1DHz0QXLV9omO1i1n2y" /><path d="M12 16h4" data-page-node-id="YhmCSajxFDO0WE0Ofc27x3" /><path d="M8 11h.01" data-page-node-id="84viewDoyI685wxlY5mHTt" /><path d="M8 16h.01" data-page-node-id="09xzEWsb5XHZMFE6xCH5AB" /></symbol>
+  <symbol id="i-clipboard-pen" viewBox="0 0 24 24" data-page-node-id="gqAmdETYgVkCaSN7Ffi7SB"><path d="M16 4h2a2 2 0 0 1 2 2v2" data-page-node-id="SRtANM1n7HVHsQkZqF6Flg" /><path d="M21.34 15.664a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" data-page-node-id="y7eh77Ou7iBHRfoje4zGDQ" /><path d="M8 22H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" data-page-node-id="JRezYJnYeqbye0YHH7IiKD" /><rect x="8" y="2" width="8" height="4" rx="1" data-page-node-id="an5jAhcFElEHYsEVnIXLxm" /></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24" data-page-node-id="xeQGshyAe4nTCMkWRWRRnc"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" data-page-node-id="BIynQLKd9OXvT2AM99eBlJ" /><path d="m21.854 2.147-10.94 10.939" data-page-node-id="TPjzaCj6PhwEnSLwKFxDxa" /></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" data-page-node-id="ttHYlBjOhrlBszTjTPDw48"><path d="M10 11v6" data-page-node-id="UwufjlxuvipVAG4xnAQWD7" /><path d="M14 11v6" data-page-node-id="fssBQSKIXkPqyyEhmv8bZC" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" data-page-node-id="1wEiXJEP38Cp8gvNxp43ZC" /><path d="M3 6h18" data-page-node-id="ZOItkVNVkFwEivIpVWyIQh" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" data-page-node-id="6joIcTgrZyWWLiTqcW4B8V" /></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24" data-page-node-id="rLxBgbsAIQwcE2nGQHY9Ik"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" data-page-node-id="9gz9dC9lBGJ2JpXfBdOqkl" /><path d="m15 5 4 4" data-page-node-id="ASgUQQUIWgOrWnXYUk0YGP" /></symbol>
+  <symbol id="i-square-pen" viewBox="0 0 24 24" data-page-node-id="TvvBa0zZHgppPtIwzrnmtI"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" data-page-node-id="MEE6lxaHB5vSRnFAsJ2z1I" /><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" data-page-node-id="l0r5AdmGRuXB3IVhJ0mJ3V" /></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" data-page-node-id="2cyvVEv4GXn4N9fJthHQsz"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" data-page-node-id="qG9JqAuZ4bt4LmNkiMZHER" /><circle cx="12" cy="12" r="3" data-page-node-id="UkzF0j78F5U7keWYJ20ZES" /></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" data-page-node-id="1cmVfIC6OBk6ZzSZOVCQbv"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" data-page-node-id="a5xuu4BAuBdAe5QKLdwGbN" /><path d="M7 11V7a5 5 0 0 1 10 0v4" data-page-node-id="psISMh8qSP2FSPlvi4HDgy" /></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" data-page-node-id="KNRlYQ3lge4HmHVpIAyP5h"><path d="M12 15V3" data-page-node-id="lLLzcMMKCZ7VF53NPB0Zl1" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" data-page-node-id="Vu2qskr41p3lALcVhqhhg8" /><path d="m7 10 5 5 5-5" data-page-node-id="EHpBYvDEcXacxBG5CVvEfr" /></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" data-page-node-id="g1Xy8fGy3OcmQA511PV4cI"><path d="M12 3v12" data-page-node-id="1ZKeBvzFrCQvvH16FX90nd" /><path d="m17 8-5-5-5 5" data-page-node-id="0ZQDS08Ml1lYzbacsO00a6" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" data-page-node-id="gFY3R9WIGfFHx0gTZJPA7i" /></symbol>
+  <symbol id="i-share-2" viewBox="0 0 24 24" data-page-node-id="Sj3cDjL0XeromvcD8XeZ6U"><circle cx="18" cy="5" r="3" data-page-node-id="nBrnmSawFPhi9vlaax6vDh" /><circle cx="6" cy="12" r="3" data-page-node-id="wV1xsOUXwnoibZF07SN0K4" /><circle cx="18" cy="19" r="3" data-page-node-id="5BNnjggpfETRmSSoMEvUAi" /><line x1="8.59" x2="15.42" y1="13.51" y2="17.49" data-page-node-id="FavwAZEroQQeHRFCxtlqfP" /><line x1="15.41" x2="8.59" y1="6.51" y2="10.49" data-page-node-id="TTMJUxObp072wA4n2VF17G" /></symbol>
+  <symbol id="i-refresh-cw" viewBox="0 0 24 24" data-page-node-id="5eNpGLNmkQumeTZw1IhGQD"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" data-page-node-id="15zprXrExt8UDWs1FIdcgL" /><path d="M21 3v5h-5" data-page-node-id="WUKRJjeCuSozrdiogLxRfU" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" data-page-node-id="T7Mqj4vWy3tRQtibOOkhNJ" /><path d="M8 16H3v5" data-page-node-id="Jmc3M0bNVL0u2P0lDkzmF8" /></symbol>
+  <symbol id="i-funnel" viewBox="0 0 24 24" data-page-node-id="xp6F9NgAoHk5Z9adJgdHKA"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" data-page-node-id="JDbvXRXqQHcL7mTNr9ks5R" /></symbol>
+  <symbol id="i-sliders-horizontal" viewBox="0 0 24 24" data-page-node-id="8lq4HE5cHy3PSfmcs29Adp"><path d="M10 5H3" data-page-node-id="RrdGLM7UBJG6HNkK9za0tU" /><path d="M12 19H3" data-page-node-id="OUFa2NIjvaDacAF5iFMQCU" /><path d="M14 3v4" data-page-node-id="O2Rt9USHBZ0OwETNRlBw3Q" /><path d="M16 17v4" data-page-node-id="16ZZxlwhSUwt6X5T12O7xy" /><path d="M21 12h-9" data-page-node-id="ucCd8c4LC8FJCBcM5N9WNL" /><path d="M21 19h-5" data-page-node-id="Lgsi7a58dqHmO5ZNdF9EQE" /><path d="M21 5h-7" data-page-node-id="dCJ24mLO7pVPo14ByMnbnl" /><path d="M8 10v4" data-page-node-id="kQWgIikhKe5XZBY7QqssZC" /><path d="M8 12H3" data-page-node-id="nHfAaLpcl0fyvkOHeC5NZJ" /></symbol>
+  <symbol id="i-paperclip" viewBox="0 0 24 24" data-page-node-id="fcIIprxdn15CnaaTRnAPwX"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" data-page-node-id="0Q9LGbWdfwMIo00PwNzBnl" /></symbol>
+  <symbol id="i-file-plus" viewBox="0 0 24 24" data-page-node-id="ftDUDXVltgFVLNAxvytEag"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" data-page-node-id="ceTJYt4MyRWZRDIUqbFw6i" /><path d="M14 2v5a1 1 0 0 0 1 1h5" data-page-node-id="rvoKWjAIhyTeOnS6RwrHDJ" /><path d="M9 15h6" data-page-node-id="KywFePr7IdLHN3CzekxS9Y" /><path d="M12 18v-6" data-page-node-id="TGDDNkzFsHJ5m4BpnGUoUq" /></symbol>
+  <symbol id="i-external-link" viewBox="0 0 24 24" data-page-node-id="QoCuC52Z5ZNe9kQXgnvV63"><path d="M15 3h6v6" data-page-node-id="v1rzj9spd5sX7WMU6Q5KDx" /><path d="M10 14 21 3" data-page-node-id="5DXCLzqhqlgffXb3hUgIt3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" data-page-node-id="GDIjux1K9ylEmJaabBdxHr" /></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" data-page-node-id="UILUCHMDxYqwYELSa5aKDG"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" data-page-node-id="pabCAOhejfXIlosX7x5UJK" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" data-page-node-id="e4b9BT4lfs6j00Hdk6zZaD" /></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24" data-page-node-id="wHF40Q6tEtf1KIhduJnbI4"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" data-page-node-id="ELOecCsETmUb1uoPgXMWL4" /></symbol>
+  <symbol id="i-thumbs-up" viewBox="0 0 24 24" data-page-node-id="paACSjyYlmazVuTYtCAqnt"><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" data-page-node-id="WYDMdAaaeFzJBh4eIqs4Np" /><path d="M7 10v12" data-page-node-id="V9H7pmeLZDY2Wp32wBgQeF" /></symbol>
+  <symbol id="i-circle-plus" viewBox="0 0 24 24" data-page-node-id="C5YU3ZOLB2cx33NF4HT70N"><circle cx="12" cy="12" r="10" data-page-node-id="VoT2K2xN6EcSmvLCf9imZU" /><path d="M8 12h8" data-page-node-id="4eHfPqoI2gfOHY8jOohLbT" /><path d="M12 8v8" data-page-node-id="6vuquqDlm4cNOQsDmalxrQ" /></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" data-page-node-id="2AX2FOhiSAkGIt3DEtPPQV"><path d="M20 6 9 17l-5-5" data-page-node-id="Waw0A19xDnNoauFDqd1AOq" /></symbol>
+  <symbol id="i-check-check" viewBox="0 0 24 24" data-page-node-id="a6uvLj2rHoDFQB17QSV60Y"><path d="M18 6 7 17l-5-5" data-page-node-id="Z2rzNtdMMsgnTpVYozpCAE" /><path d="m22 10-7.5 7.5L13 16" data-page-node-id="3GnYXbFVcSIg1LggJiIlz1" /></symbol>
+  <symbol id="i-rotate-ccw" viewBox="0 0 24 24" data-page-node-id="rR0tCAmgoD1tLsAewcmVXC"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" data-page-node-id="Rg3sH144UWCfsOV09G8ADt" /><path d="M3 3v5h5" data-page-node-id="rXDyvNagpMiT11FkzunzaC" /></symbol>
+  <symbol id="i-megaphone" viewBox="0 0 24 24" data-page-node-id="XVeti8sIif7HxYCt0gHs31"><path d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" data-page-node-id="AZvxkSWVx1VSEMMH2wZWnE" /><path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14" data-page-node-id="mRj4w3IgO3Cl3v9fBNR9Wz" /><path d="M8 6v8" data-page-node-id="dIg99HPPjIMrSAWixdTPOj" /></symbol>
+  <symbol id="i-bell-ring" viewBox="0 0 24 24" data-page-node-id="a4H87DjVB5TbPi677A9Azx"><path d="M10.268 21a2 2 0 0 0 3.464 0" data-page-node-id="nDkI1HR6gzr7t5JrrvwM8C" /><path d="M22 8c0-2.3-.8-4.3-2-6" data-page-node-id="df0cHGuni1R7ByR5Ta1RPS" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" data-page-node-id="lyL6CLYyW8SQoCFGfAiRwh" /><path d="M4 2C2.8 3.7 2 5.7 2 8" data-page-node-id="Trxjg8lvFGRvYglEu0ids7" /></symbol>
+  <symbol id="i-award" viewBox="0 0 24 24" data-page-node-id="TPpLQfjzVyLkgh1V9HCD5g"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526" data-page-node-id="GsiEhfN9CAYOgjJyO0sxRN" /><circle cx="12" cy="8" r="6" data-page-node-id="prDUFa86eHKA4QpHr4jPsG" /></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24" data-page-node-id="QLLsceTVmpNWM3vdAPo0NP"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2" data-page-node-id="y3H3UWIag16MnOb26aUoF7" /><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2" data-page-node-id="xYAmuWfQO2xkS4WkYTByLY" /><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3" data-page-node-id="j4U3mzrHGTHIKHJpzek8Y0" /><path d="M4 22h16" data-page-node-id="UfAxCZSQV16LSqG42IvZAp" /><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z" data-page-node-id="8TgepoJvVVa9XzYVec5322" /><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3" data-page-node-id="R2jJcXCHKLk4vnS2JJO4zC" /></symbol>
+  <symbol id="i-medal" viewBox="0 0 24 24" data-page-node-id="fl1oNyCsayKHvF19BxupOk"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" data-page-node-id="ZkuH1aYjjn4fgbrmIbAl5u" /><path d="M11 12 5.12 2.2" data-page-node-id="nwGLaTUqmLXKQRCD6UYtty" /><path d="m13 12 5.88-9.8" data-page-node-id="FYwbCKIQDQ6wvwXGflrea5" /><path d="M8 7h8" data-page-node-id="7v60a0m91AnEiRmKpuykHR" /><circle cx="12" cy="17" r="5" data-page-node-id="FBkHJLQEAkMTmDMEOqWr94" /><path d="M12 18v-2h-.5" data-page-node-id="kyu6meG9UQN2kTH1hSWjf7" /></symbol>
+  <symbol id="i-graduation-cap" viewBox="0 0 24 24" data-page-node-id="vKCOFT9GtfEFm17fM9EG0S"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" data-page-node-id="Z5LvVUkiHbkB0AAqvceYj9" /><path d="M22 10v6" data-page-node-id="L8Y9v38vGU6z3FlX41tEhT" /><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5" data-page-node-id="ci0Fd0kJDENYZs50gGGibU" /></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" data-page-node-id="FuGePlNoae3CYl4ER9YHZW"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" data-page-node-id="cbTeiAmG44pLB0cwjVaAvd" /></symbol>
+  <symbol id="i-heart-pulse" viewBox="0 0 24 24" data-page-node-id="VKMrNZj2IiCyeDme8egAKb"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" data-page-node-id="mkXRI2u0ezBHJIrJEYXWSP" /><path d="M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" data-page-node-id="2G70yyqkCW4YdGENqMqmQl" /></symbol>
+  <symbol id="i-heart-handshake" viewBox="0 0 24 24" data-page-node-id="FcH73xj8mse3lXC27jDEWC"><path d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762" data-page-node-id="p8FHRluLN4x8mGzfhNm09Z" /></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" data-page-node-id="coZfv82sbkxSNuN7zDKVKq"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" data-page-node-id="cMpcxvq8jScCQcHRGeL8UR" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" data-page-node-id="MV7GuhYfQNeJaSK5u8nTQd" /></symbol>
+  <symbol id="i-chart-column" viewBox="0 0 24 24" data-page-node-id="jMJAYNeKTpwy5wGQHozbEw"><path d="M3 3v16a2 2 0 0 0 2 2h16" data-page-node-id="GICy6cyj5oJZYQrmk9VKWk" /><path d="M18 17V9" data-page-node-id="i7PfgBLwEGUEz2DkGC5Y67" /><path d="M13 17V5" data-page-node-id="YXxAFlENF7sB1u13hYOqHh" /><path d="M8 17v-3" data-page-node-id="n6md4xcsK31bDBIIiuSvFH" /></symbol>
+  <symbol id="i-chart-line" viewBox="0 0 24 24" data-page-node-id="ow8VvjMTzQDBwaFRPMf0ra"><path d="M3 3v16a2 2 0 0 0 2 2h16" data-page-node-id="DGavhR4YlZFDaVmhvk2NKj" /><path d="m19 9-5 5-4-4-3 3" data-page-node-id="5IIwHkelHyH33duCqv7e8q" /></symbol>
+  <symbol id="i-chart-pie" viewBox="0 0 24 24" data-page-node-id="YgpusEn2dXg2ECnaaVAcsf"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z" data-page-node-id="hGZXnGJH4COtUtEooeJZDS" /><path d="M21.21 15.89A10 10 0 1 1 8 2.83" data-page-node-id="zECgPN51T49Zlaj9ShdgkY" /></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24" data-page-node-id="DzIz8q6M0kvK7tjB5y6KKq"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" data-page-node-id="RhueF7cKhFljj87Ied3BUB" /><path d="M20 2v4" data-page-node-id="XZvWLnaLniDEYo5G1Zkznf" /><path d="M22 4h-4" data-page-node-id="HO3eQI0wOvxDgb7LBgtldp" /><circle cx="4" cy="20" r="2" data-page-node-id="sv7sh7oqde4Q1qMocbhopF" /></symbol>
+  <symbol id="i-wand-sparkles" viewBox="0 0 24 24" data-page-node-id="M4cBejV9mJ97gyIAVkI0u9"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72" data-page-node-id="rXGCwncQm0tKD70MP9VDyP" /><path d="m14 7 3 3" data-page-node-id="D8AmpVrocDP84hqvUaEaFI" /><path d="M5 6v4" data-page-node-id="bkBfNZjGL7UYEQ1XLpCYbD" /><path d="M19 14v4" data-page-node-id="RCPommw0rOl37ZWaSuFl3N" /><path d="M10 2v2" data-page-node-id="WTwqUwEaFKklrB1AxmPhxY" /><path d="M7 8H3" data-page-node-id="0s0jlUkwUv6Hcd91MLIE8V" /><path d="M21 16h-4" data-page-node-id="YqoSK9Zc9M5OHvrSF0KyxG" /><path d="M11 3H9" data-page-node-id="vYz0GtaysI4hy6VCsAq6CB" /></symbol>
+  <symbol id="i-lightbulb" viewBox="0 0 24 24" data-page-node-id="4JdQxZkkWbAZDiwel6mXMy"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" data-page-node-id="hlHgOgv0z6DL7HJsfgwJUj" /><path d="M9 18h6" data-page-node-id="qKYKmHT0e9oY2AOS4rTSMB" /><path d="M10 22h4" data-page-node-id="wiTDGV1dIMAUn0Yviq4Rgg" /></symbol>
+  <symbol id="i-brain" viewBox="0 0 24 24" data-page-node-id="rD79LjWUDcqzlWUwoJAvs5"><path d="M12 18V5" data-page-node-id="wucr4BRRB6GiQ7HKKdv5bO" /><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" data-page-node-id="yajufZ98SOV8TKiYccx9Bl" /><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" data-page-node-id="ICNYa7CtyLvbXpJ9sJC2ie" /><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77" data-page-node-id="Z5st9T326oGeMfKFsW2nyL" /><path d="M18 18a4 4 0 0 0 2-7.464" data-page-node-id="uS4lYEHgL5fx0O4oB1UjbH" /><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" data-page-node-id="d0QiHmvVw0u3P3Eau5hbOI" /><path d="M6 18a4 4 0 0 1-2-7.464" data-page-node-id="900fiweXSIAaWGHo7adhmV" /><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77" data-page-node-id="9BaFavDDgeOoYaDGUIsZS7" /></symbol>
+  <symbol id="i-school" viewBox="0 0 24 24" data-page-node-id="YtrCNk7tYZisIqLrFwXbz2"><path d="M14 21v-3a2 2 0 0 0-4 0v3" data-page-node-id="9MFluPnOTZX5oM2EiGarHO" /><path d="M18 4.933V21" data-page-node-id="ALmlVEnGC7NyE9WWYFC9X7" /><path d="m4 6 7.106-3.79a2 2 0 0 1 1.788 0L20 6" data-page-node-id="FamdxHRFd8USSS0ntzRL6u" /><path d="m6 11-3.52 2.147a1 1 0 0 0-.48.854V19a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a1 1 0 0 0-.48-.853L18 11" data-page-node-id="pypTktkHhjzO7Rymux9vvR" /><path d="M6 4.933V21" data-page-node-id="GCj6vmsr1IF3xmh8WXUU30" /><circle cx="12" cy="9" r="2" data-page-node-id="vXSF7Ckmb1jQuCUmDnhd2K" /></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24" data-page-node-id="R5wvydxC23RGjCwOkuFGVX"><path d="M12 10h.01" data-page-node-id="j0QEjPxRpIPSolJTeAd7qX" /><path d="M12 14h.01" data-page-node-id="lm5F3JZE2kDuNbODOWgELx" /><path d="M12 6h.01" data-page-node-id="W9vvLAvmV4Jd7xnBUKY9sD" /><path d="M16 10h.01" data-page-node-id="XjiTeyVZSVZyl4n9qcaPEB" /><path d="M16 14h.01" data-page-node-id="AhoJkzRE208B3KbLzQ0xkS" /><path d="M16 6h.01" data-page-node-id="83fHNbfFBPr7zEPv3sPfp3" /><path d="M8 10h.01" data-page-node-id="MRxgnSkvBMFXzPSIQexRhr" /><path d="M8 14h.01" data-page-node-id="ve6mN94lZG4w2KonQTjYx3" /><path d="M8 6h.01" data-page-node-id="hCWRBgm49cLaSSTLrKSi2F" /><path d="M9 22v-3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" data-page-node-id="CL8F6JFPDkAUrdLxdQL7F7" /><rect x="4" y="2" width="16" height="20" rx="2" data-page-node-id="VQVFLUlK85QhHiOBhthdCM" /></symbol>
+  <symbol id="i-book-open" viewBox="0 0 24 24" data-page-node-id="pFPhqmjZxV4Ic3tyWvWyoU"><path d="M12 5v16" data-page-node-id="4yE8D4e0lhIKARtXIpCObp" /><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" data-page-node-id="IHZgABgKSjkacvLFkwnmQi" /></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24" data-page-node-id="HkNvdtQuC3CbcV6CnvxzjN"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z" data-page-node-id="UEfhBsi9jqVf2qGkl2AGGP" /></symbol>
+  <symbol id="i-notebook-pen" viewBox="0 0 24 24" data-page-node-id="YiJ05VK9ymQPaUkHlC4aWM"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4" data-page-node-id="KYOckWSj2Cn1ihOQ3Zsq45" /><path d="M2 6h4" data-page-node-id="wc6IN8TTidYO1Mc87XpjCo" /><path d="M2 10h4" data-page-node-id="5yTC9MsBMeZb5dGa3WyVNi" /><path d="M2 14h4" data-page-node-id="ZdguaIWI8sAiDFmfdBXg32" /><path d="M2 18h4" data-page-node-id="gEDotWszvNDLT049DC5iGj" /><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" data-page-node-id="DHg7eR7QicfttsrnwhOhPo" /></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24" data-page-node-id="IO1J57h3W2PzehaOehYdly"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" data-page-node-id="J7sdj23kS8cXf9l0fobNpC" /><rect width="20" height="14" x="2" y="6" rx="2" data-page-node-id="fzOVSBjzzWiZTV2JXvQd7x" /></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" data-page-node-id="CFoyXAtbQe3aCNjcUxQFgH"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" data-page-node-id="RiV8PAHFn4VItJTr8867Nu" /><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" data-page-node-id="4Je5TvvH6DmgWePBCG1XH7" /><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" data-page-node-id="M3J26JrzJKbeT0vr9yOIyS" /></symbol>
+  <symbol id="i-list-checks" viewBox="0 0 24 24" data-page-node-id="8Mdq8YYL6i2oVriukZvI3R"><path d="M13 5h8" data-page-node-id="PjmHQ9wO8xpXA9EoEV3DtF" /><path d="M13 12h8" data-page-node-id="w6GG9dc48PyMOENEpveW29" /><path d="M13 19h8" data-page-node-id="cUFrxRYf2v1FMBmrvbsg2f" /><path d="m3 17 2 2 4-4" data-page-node-id="BQDkvo9NbhPRsjoqCgy99p" /><path d="m3 7 2 2 4-4" data-page-node-id="uxrhgGR89xuUSoyBD8VNJs" /></symbol>
+  <symbol id="i-list-ordered" viewBox="0 0 24 24" data-page-node-id="pGSMbaxNni3cNiBo85EPTx"><path d="M11 5h10" data-page-node-id="WlpkcZFoa040Q4XvCwQaVG" /><path d="M11 12h10" data-page-node-id="uv2IzJLuDUgMQ0KJWUaeas" /><path d="M11 19h10" data-page-node-id="FF5BNyfgcrBLjAcuK2zGW6" /><path d="M4 4h1v5" data-page-node-id="bnR9jtrJe8NlsDfmu1L0y9" /><path d="M4 9h2" data-page-node-id="XBlZHfYcIwruCHEtegD5CJ" /><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" data-page-node-id="CCOQJiSPFQHmyK61JHtr1x" /></symbol>
+  <symbol id="i-calendar-plus" viewBox="0 0 24 24" data-page-node-id="LToUoHHQALhpyNSpEhSgNi"><path d="M16 18h6" data-page-node-id="hAGrAz2NuL9QkkYYVUdOIy" /><path d="M16 2v3" data-page-node-id="NPOb0FPpkzI26xIeHvLsFF" /><path d="M19 15v6" data-page-node-id="m5oj3mpHPdt8M0xIVTu9wo" /><path d="M21 11.5V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h8.3" data-page-node-id="1ITheDVlPDIfSLketqZKPt" /><path d="M3 9h18" data-page-node-id="Z1Ooqx86saXYndEGwgynH6" /><path d="M8 2v3" data-page-node-id="KtD01FnNqqX9dprheI5gBl" /></symbol>
+  <symbol id="i-calendar-check" viewBox="0 0 24 24" data-page-node-id="7irADj7Owf4lpKdNOgMQcn"><path d="M8 2v3" data-page-node-id="g1aI4aoSjGUhRIfAypFORX" /><path d="M16 2v3" data-page-node-id="EbDiBVZZ2JfnTcJmAsCxZl" /><rect x="3" y="3" width="18" height="18" rx="2" data-page-node-id="GuanO9xMZKiVByEXt7nx2b" /><path d="M3 9h18" data-page-node-id="YTu4pzDP0oAWkyE1c3vVM8" /><path d="m9 15 2 2 4-4" data-page-node-id="oERyjFy1WEPZDL2qQf63Hp" /></symbol>
+  <symbol id="i-calendar-days" viewBox="0 0 24 24" data-page-node-id="BDyztXapEk3iCU8kxN3nEO"><path d="M8 2v3" data-page-node-id="AHvlEkvYUPOtHLJ1JGmfkP" /><path d="M16 2v3" data-page-node-id="SVyFKyBgI1lcEyOigXDBPa" /><rect x="3" y="3" width="18" height="18" rx="2" data-page-node-id="m1fmO2eCvltLVJrubYnSeJ" /><path d="M3 9h18" data-page-node-id="4fcj8BaNF5YH0qGG9Cp5xa" /><path d="M8 13h.01" data-page-node-id="FY1u2FGfnVY3kjVeyABWWQ" /><path d="M12 13h.01" data-page-node-id="lZjj7gWaA0xMpw16j8GSIm" /><path d="M16 13h.01" data-page-node-id="IiF0YZPRJDuvTPYtOeUT3T" /><path d="M8 17h.01" data-page-node-id="LIKkUDwW06rpiFSTZ27i5y" /><path d="M12 17h.01" data-page-node-id="GTACDPcB8WUBOnKDhbRPF3" /><path d="M16 17h.01" data-page-node-id="MLU89P9NFebm8vw9FQolDc" /></symbol>
+  <symbol id="i-calendar-clock" viewBox="0 0 24 24" data-page-node-id="I242dzlnvFASPGH3xtwjEb"><path d="M16 14v2.2l1.6 1" data-page-node-id="Nn6UHJe2LXIGdV6eRmJFYC" /><path d="M16 2v3" data-page-node-id="l5KnED4FvwzyjUDPAm3gWk" /><path d="M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338" data-page-node-id="MppmxV71idEvcZIWLMxgVV" /><path d="M3 9h5.859" data-page-node-id="clnoSfwAMnRMA4ZuH0jLgF" /><path d="M8 2v3" data-page-node-id="CXGmfVgZUy4GSjd6dhFDuP" /><circle cx="16" cy="16" r="6" data-page-node-id="OBVET7RwHrzjkCDTK5uBFk" /></symbol>
+  <symbol id="i-messages-square" viewBox="0 0 24 24" data-page-node-id="8tGjj3nWWFkxghteiX9b9D"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" data-page-node-id="ZCLfjSr7IpN1Vhqnmkp7N5" /><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1" data-page-node-id="k8AI6dWuKygk08HboXB9vC" /></symbol>
+  <symbol id="i-message-square-plus" viewBox="0 0 24 24" data-page-node-id="HouHJZqVtWWvPCFpRrvNQM"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" data-page-node-id="4cej1qEkFKN7nhExuIxAbY" /><path d="M12 8v6" data-page-node-id="QQjiHVHNuvYot47HxiHcSH" /><path d="M9 11h6" data-page-node-id="0TFL4IPrqi3UjGCNGW5rvm" /></symbol>
+  <symbol id="i-phone-call" viewBox="0 0 24 24" data-page-node-id="FKTnmzD8ihi5iMQPOHbk2U"><path d="M13 2a9 9 0 0 1 9 9" data-page-node-id="OJugfyTl3akBRNKMBVGAAD" /><path d="M13 6a5 5 0 0 1 5 5" data-page-node-id="MmJTyyo7fY1deAYSm2qtx5" /><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" data-page-node-id="UX4mlDmrwm1PHIz1vvVvF3" /></symbol>
+  <symbol id="i-phone-outgoing" viewBox="0 0 24 24" data-page-node-id="f6YATSqCOgpJzKH9TCzsxx"><path d="m16 8 6-6" data-page-node-id="fDzOqWzakF1Xpdpol8kmiV" /><path d="M22 8V2h-6" data-page-node-id="roXOAdJWc6VMlXJHTWxsbL" /><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" data-page-node-id="IBHVMcMxWuJkeiJDcSeesW" /></symbol>
+  <symbol id="i-phone-incoming" viewBox="0 0 24 24" data-page-node-id="kG3vhAGJPq4nbHiAU8smGk"><path d="M16 2v6h6" data-page-node-id="7EAzXzRJQfcqE3xoZcPsdi" /><path d="m22 2-6 6" data-page-node-id="oaU7HnAJ8Y6nRbD8H6bRQw" /><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" data-page-node-id="oi5MJ7AHtBlAFElpqcg9L6" /></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24" data-page-node-id="k6oDT1ayX8briElKx4qw3m"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" data-page-node-id="G9cEsHjlBgkyF1HiBEZukf" /><rect x="2" y="4" width="20" height="16" rx="2" data-page-node-id="FGWDGWMjrXRpVTF5pjNLW9" /></symbol>
+  <symbol id="i-contact" viewBox="0 0 24 24" data-page-node-id="EfGJaVExtDmDEnfmFopQ0g"><path d="M16 2v2" data-page-node-id="7FhI1HtUZuH8FYI7aSkJM7" /><path d="M7 21v-2a2 2 0 012-2h6a2 2 0 012 2v2" data-page-node-id="mRXsjyrgLiX868qVvXy3iz" /><path d="M8 2v2" data-page-node-id="jDbdsJkK27h6UUc7Fehe8P" /><circle cx="12" cy="10" r="3" data-page-node-id="2gScWy32J0GhytIUtoxJeH" /><rect x="3" y="3" width="18" height="18" rx="2" data-page-node-id="DTFhygicAP5VoCMclAuoWH" /></symbol>
+  <symbol id="i-user-check" viewBox="0 0 24 24" data-page-node-id="1m5wNufISauIRR3jfDXybW"><path d="m16 11 2 2 4-4" data-page-node-id="w4Sp9rW0Kq2HUKRqjCAl6j" /><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" data-page-node-id="F9hnzFEtPPh7M2CHCDznAH" /><circle cx="9" cy="7" r="4" data-page-node-id="NNj29NCmE9al4hDpXXbufP" /></symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24" data-page-node-id="jJZA938TpbShYdoQ1yVAG4"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" data-page-node-id="Q5KY739g84eejZpHjSEua9" /><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09" data-page-node-id="ukwv5nHlTywuagoMwpZ0If" /><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z" data-page-node-id="1zynzNF5MyuredumPnO28A" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05" data-page-node-id="NnOiqe9uTrVkVuALQ0lSHi" /></symbol>
+  <symbol id="i-face-slightly-smiling" viewBox="0 0 24 24" data-page-node-id="25HVBVbeGgvsbC5nIbYrpm"><path d="M15 10V9" data-page-node-id="mtHqusCSrijYRtYSlnUlxB" /><path d="M16.472 15a6 6 0 01-8.943 0" data-page-node-id="1kurO5u5B4HXOXheRO6g4n" /><path d="M9 10V9" data-page-node-id="KbSZpmjFxaL4p3W5NblMYb" /><circle cx="12" cy="12" r="10" data-page-node-id="Xj0QpalvUHR27I4GCNp9Zr" /></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" data-page-node-id="ExIpnpPuh7J7ARONHkXp8p"><circle cx="12" cy="12" r="4" data-page-node-id="y0uch8in63JNRRpSmDCRqj" /><path d="M12 2v2" data-page-node-id="UBMTK753hcjKaujHs8AXeC" /><path d="M12 20v2" data-page-node-id="cU0j5f6uxOuHvFo6p9CZ7G" /><path d="m4.93 4.93 1.41 1.41" data-page-node-id="xllTOLudeGMK8JAcxVaZjT" /><path d="m17.66 17.66 1.41 1.41" data-page-node-id="pMWeIyGTLXBRMJweFqJnMx" /><path d="M2 12h2" data-page-node-id="1bhJ0rfggbxA4Duqf80jwA" /><path d="M20 12h2" data-page-node-id="xeAZo6RIsek9wRLEYIQvK1" /><path d="m6.34 17.66-1.41 1.41" data-page-node-id="dkbOdMIs3v8kuCgWhLOnL6" /><path d="m19.07 4.93-1.41 1.41" data-page-node-id="2X6bY8TLE14OiGx7lOzHO4" /></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24" data-page-node-id="oTUvUDsIzU47ziGYXN2GLM"><circle cx="12" cy="12" r="10" data-page-node-id="9kB7pvDlZ7z3TcsGd3BvOt" /><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z" data-page-node-id="zyX5ssWJhdtLAM9cNjJNBH" /></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24" data-page-node-id="UyT35zrOR9kgOEwfV6lN0p"><path d="M12 3v18" data-page-node-id="smXv4TvFLcwpnBxuhedctL" /><path d="m19 8 3 8a5 5 0 0 1-6 0zV7" data-page-node-id="6kr8fB8FykoYF5eNindfKN" /><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" data-page-node-id="b1SxwiexkMB6ZDL6BFsmSR" /><path d="m5 8 3 8a5 5 0 0 1-6 0zV7" data-page-node-id="JcKOCHmuClT795syAb1Duz" /><path d="M7 21h10" data-page-node-id="zunfRUyG1KeRte531Vup6E" /></symbol>
+</svg>
+
+<div class="device" data-page-node-id="n7BhvYsRJtCJTd7C1WplPV">
+  <div class="app" data-page-node-id="DJyVrTGCNImF1llaYElLYD">
+
+    <!-- ===================== 主页（驾驶舱） ===================== -->
+    <div class="screens" id="screens" data-page-node-id="ZjphyusPBHBqRGMQTxMndN">
+
+      <section class="screen active" id="scr-home" aria-label="驾驶舱" data-page-node-id="TqTPWQKOgZFkui1FxAqqJX">
+        <header class="appbar" data-page-node-id="TSKcfu5uykAVrQVgLotTlc">
+          <div class="appbar-title" id="homeTitle" data-page-node-id="6vGu7gY3g54cytFFNw062Q">早上好，予安</div>
+          <div class="appbar-actions" data-page-node-id="N7RcWeWOplmO71FIufBpTi">
+            <button class="icon-btn" id="btnBell" aria-label="消息通知" data-page-node-id="8u4ek0P6gNNRlpIXG7VCww">
+              <svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" data-page-node-id="VG6NDe9AATByLnaA3kjQGf"><use href="#i-bell" data-page-node-id="0to88NuyaN4BilEecpfPUI"/></svg>
+            </button>
+            <button class="icon-btn" id="btnMore" aria-label="更多操作" data-page-node-id="bZ1U6e4Dt1Kv8cDzDukXuz">
+              <svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" data-page-node-id="64m1cMgOZAiFxwSOensuqw"><use href="#i-ellipsis" data-page-node-id="JZz1d7nW05CQYZmsHw1pxO"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="ptr" id="ptrHome" data-page-node-id="4F8jJC9j32JqH1VAS0lHQA">
+          <img src="assets/mascot.png" alt="" data-page-node-id="mCQfWGSU0mJkndq5QjzbFH">
+          <span data-page-node-id="VxhNPQHw7mUgqZN3IlxO3K">下拉刷新</span>
+        </div>
+
+        <div class="content pull-body" id="homeBody">
+
+          <!-- ① 今天：一句话 + 一行指标（不用色块，不用大卡片） -->
+          <section class="today-head">
+            <div class="today-date">
+              <b>10月28日 周三</b>
+              <span>第 9 教学周</span>
+              <span>·</span>
+              <span>晴 18°</span>
+            </div>
+            <h1 class="today-line" id="todayLine">今天有 <em>2 节课</em>，<br>3 项作业今晚截止</h1>
+            <p class="today-sub" id="todaySub">下一节 10:25 体育（羽毛球）· 体育馆</p>
+
+            <div class="metrics" id="metrics">
+              <div class="metric">
+                <div class="metric-val num" id="mScore">78.4<small>分</small></div>
+                <div class="metric-label">综合评分</div>
+              </div>
+              <div class="metric">
+                <div class="metric-val num" id="mRank">12<small>/46</small></div>
+                <div class="metric-label">专业排名</div>
+              </div>
+              <div class="metric">
+                <div class="metric-val num" id="mTodo">5<small>项</small></div>
+                <div class="metric-label">待办未完成</div>
+              </div>
+              <div class="metric">
+                <div class="metric-val num" id="mRecord">47<small>条</small></div>
+                <div class="metric-label">成长记录</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ② 现在：时间条（下一节摘要 + 今日全部课程） -->
+          <section class="block">
+            <div class="block-head">
+              <h2 class="block-title">今天</h2>
+              <span class="block-meta num" id="schedMeta">2 节课</span>
+              <button class="block-more" id="btnOpenSchedule">
+                课程表
+                <svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </div>
+            <div class="card" id="schedCard"></div>
+          </section>
+
+          <!-- ③ 待办 -->
+          <section class="block">
+            <div class="block-head">
+              <h2 class="block-title">要交的</h2>
+              <span class="block-meta num" id="taskMeta">5 项</span>
+              <button class="block-more" id="btnOpenTasks">
+                全部
+                <svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </div>
+            <div class="card" id="taskCard"></div>
+          </section>
+
+          <!-- ④ 成长 -->
+          <section class="block">
+            <div class="block-head">
+              <h2 class="block-title">成长</h2>
+              <span class="block-meta num" id="growthMeta">近 6 个月</span>
+              <button class="block-more" id="btnOpenGrowth">
+                详情
+                <svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </button>
+            </div>
+            <div class="card" id="growthCard"></div>
+          </section>
+
+          <!-- ⑤ 更多入口：单色两列，不是彩色图标网格 -->
+          <section class="block">
+            <div class="block-head">
+              <h2 class="block-title">更多</h2>
+            </div>
+            <div class="fn-list" id="fnGrid"></div>
+          </section>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ===================== 子页图层 ===================== -->
+    <div class="layers" id="layers" data-page-node-id="gD5vEEwVyAD6z0R60s6SKF"></div>
+
+    <!-- ===================== 底部导航（冻结 5 页签） ===================== -->
+    <nav class="tabbar" id="tabbar" aria-label="主导航" data-page-node-id="8jPiebhINzXB5iG6tQFsoA">
+      <button class="tab" data-tab="feed" data-page-node-id="ksbMPEpgu0zxXqgaA7KbSm">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" data-page-node-id="3sT5vAzFap7ussmrOk4r6x"><use href="#i-megaphone" data-page-node-id="5g3qaoaAvYrMkPM3IaMH7k"/></svg>
+        <span data-page-node-id="T5KcCaAXNH6nqnVEQ4GzFP">校园资讯</span>
+      </button>
+      <button class="tab active" data-tab="home" aria-current="page" data-page-node-id="Uue8ZIQ69y4PgClpTBVLhB">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" data-page-node-id="HzRmMOr43pVtVFYehzQ1Qa"><use href="#i-gauge" data-page-node-id="sRSrmW0YCZGNXQClWB6Qxo"/></svg>
+        <span data-page-node-id="TGTN7kuMRAnWHo4tzlGnFw">驾驶舱</span>
+      </button>
+      <button class="tab tab-center" data-tab="mian" data-page-node-id="fdYaLl2eB47BW8TaK4kS5A">
+        <span class="tab-logo" data-page-node-id="1slebDrYQDYwMuluGs3WF4"><img src="assets/mascot.png" alt="" data-page-node-id="nE9t9Ua1DvTFUk66x2Zi3A"></span>
+        <span data-page-node-id="YsMcDbDz3iGvhV7AihkunV">绵小城</span>
+      </button>
+      <button class="tab" data-tab="work" data-page-node-id="AEkcRGyRWvIR1jz4QAhNBW">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" data-page-node-id="PU8GzAWNgZtkqtCfoj3L7b"><use href="#i-layout-grid" data-page-node-id="SrPWo0eN6x2xjrBdm9hYL3"/></svg>
+        <span data-page-node-id="ZoS8ChHezJBvnESJF4xxP6">工作台</span>
+      </button>
+      <button class="tab" data-tab="me" data-page-node-id="fQIVGkCbjiGStE8RI3M36T">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" data-page-node-id="52pxeTJE28c4XcRgPgCx9e"><use href="#i-user" data-page-node-id="5d6c8chO2UR4nI7KrtlYVi"/></svg>
+        <span data-page-node-id="1iGytekiFOmuRQAgmHFrpD">个人中心</span>
+      </button>
+    </nav>
+
+    <!-- 遮罩与底部弹窗容器 -->
+    <div class="sheet-mask" id="sheetMask" hidden data-page-node-id="681BdWjHKYkEgfLTKhgBAe"></div>
+    <div id="sheetHost" data-page-node-id="2HCcKjE4s1pMniyNDxyo1d"></div>
+
+    <!-- 轻提示 -->
+    <div id="toastHost" aria-live="polite" data-page-node-id="IcTNWw8SzwGR6SBlu6uh7Y"></div>
+
+  </div>
+</div>
+
+<script src="mock.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

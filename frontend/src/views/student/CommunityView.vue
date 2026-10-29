@@ -5,7 +5,6 @@
     <div class="community-header">
       <div>
         <h2 class="community-title">交流社区</h2>
-        <p class="community-sub">技术 · 提问 · 分享 · 求助</p>
       </div>
       <el-button type="primary" round @click="openPostDialog()">
         <el-icon style="margin-right:4px"><Plus /></el-icon>发帖
@@ -367,7 +366,6 @@ async function removeDetailPost() {
   margin-bottom: 14px;
 }
 .community-title { margin: 0; font-size: 20px; font-weight: 600; color: #1a1a2e; }
-.community-sub { margin: 4px 0 0; font-size: 12px; color: #999; }
 
 .card {
   background: #fff;

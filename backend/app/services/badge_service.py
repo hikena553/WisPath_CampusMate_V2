@@ -30,6 +30,7 @@ from app.models.plan import PlanCheckin
 from app.models.teacher_portfolio import TeacherPortfolioItem
 from app.models.teacher_task import TaskStatus, TeacherTask
 from app.models.user import User, UserRole
+from app.services.plan_streak import compute_streak
 
 # ══════════════════════════════════════════════════════════
 # 勋章目录
@@ -79,6 +80,12 @@ BADGE_CATALOG: list[dict] = [
     dict(code="planner", name="计划执行者", desc="完成 10 次计划打卡", icon="✅",
          tier="silver", category="学习", audience="student", metric="plan_checkins", threshold=10,
          target_label="10 次计划打卡"),
+    dict(code="streak7", name="七日不辍", desc="连续打卡 7 天", icon="🔥",
+         tier="silver", category="学习", audience="student", metric="streak_best", threshold=7,
+         target_label="连续 7 天"),
+    dict(code="streak30", name="月度恒心", desc="连续打卡 30 天", icon="🗓️",
+         tier="diamond", category="学习", audience="student", metric="streak_best", threshold=30,
+         target_label="连续 30 天"),
     dict(code="scholar", name="荣誉之星", desc="收获 1 项证书或荣誉", icon="🏅",
          tier="gold", category="荣誉", audience="student", metric="certificates", threshold=1,
          target_label="1 项证书/荣誉"),
@@ -206,6 +213,8 @@ def collect_metrics(db: Session, user: User) -> dict[str, int]:
             skills=_skills_count(user),
             posts=_count(db, CommunityPost, student_id=uid),
             plan_checkins=_count(db, PlanCheckin, student_id=uid),
+            # 连击取历史最长（已达成不会因某天断签而丢失），与 /plan/streak 同口径
+            streak_best=compute_streak(db, uid)["longest"],
             certificates=_count(db, Certificate, student_id=uid),
             praises_received=_count(db, PraiseRecord, student_id=uid, is_deleted=False),
         )
@@ -380,6 +389,7 @@ def _stats_for(user: User, metrics: dict[str, int]) -> list[dict]:
             {"key": "growth_records", "label": "成长记录", "value": metrics.get("growth_records", 0), "icon": "🌱"},
             {"key": "projects", "label": "项目经历", "value": metrics.get("projects", 0), "icon": "🚀"},
             {"key": "plan_checkins", "label": "计划打卡", "value": metrics.get("plan_checkins", 0), "icon": "✅"},
+            {"key": "streak_best", "label": "最长连续", "value": metrics.get("streak_best", 0), "icon": "🔥"},
         ] + base
     elif user.role == UserRole.TEACHER:
         base = [

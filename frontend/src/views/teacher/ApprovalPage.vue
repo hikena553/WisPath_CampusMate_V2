@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="审批管理" :sub="totalPending + ' 条待处理'" fallback="/teacher">
+    <SubPageHeader title="审批管理" fallback="/teacher">
       <template #right>
         <el-button text circle aria-label="刷新" @click="loadData()">
           <el-icon :size="19"><Refresh /></el-icon>

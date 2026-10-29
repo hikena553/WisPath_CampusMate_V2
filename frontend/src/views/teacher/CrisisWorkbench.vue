@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="心理预警工作台" sub="风险处置台 · 发现 → 干预 → 随访 → 闭环" fallback="/teacher">
+    <SubPageHeader title="心理预警工作台" fallback="/teacher">
       <template #right>
         <el-button text circle aria-label="刷新" :loading="loading" @click="loadAlerts">
           <el-icon :size="19"><Refresh /></el-icon>

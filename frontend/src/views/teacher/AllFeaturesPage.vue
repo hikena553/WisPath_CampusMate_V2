@@ -1,7 +1,7 @@
 <template>
   <div class="tui-page">
     <!-- 移动端吸顶栏（首页下钻的子页面，返回回首页） -->
-    <SubPageHeader title="全部功能" sub="教师工作台功能总览" fallback="/teacher" />
+    <SubPageHeader title="全部功能" fallback="/teacher" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：功能总览语义色 + 宫格图标 -->

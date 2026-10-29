@@ -80,6 +80,9 @@ class GrowthProfileOut(BaseModel):
     monthly_trend: list[MonthlyStat]
     skills: list[str]
     interests: list[str]
+    # 绵小城依据成长档案生成的标签（含来源证据），供前端只读展示与溯源
+    skill_items: list[dict] = []
+    interest_items: list[dict] = []
     total_records: int
     total_skills: int
     gpa_trend: list[GpaPoint]

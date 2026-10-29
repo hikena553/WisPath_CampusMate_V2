@@ -13,6 +13,7 @@ from app.schemas.growth import GrowthRecordCreate, GrowthRecordOut, GrowthProfil
 from app.schemas.user import SkillsUpdate
 from app.core.deps import get_current_user
 from app.services.scoring import calc_radar_score, get_radar_dimensions, get_record_type_counts, TYPE_LABELS
+from app.services.growth_tags import derive_growth_tags
 from app.utils.enum_helpers import safe_enum_val
 
 router = APIRouter(prefix="/api/growth", tags=["growth"])
@@ -30,10 +31,12 @@ def _parse_date(d: str | None) -> date | None:
 def get_growth_profile(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     sid = current_user.id
     records = db.query(GrowthRecord).filter(GrowthRecord.student_id == sid).all()
-    skills_data = current_user.skills_json or {"skills": [], "interests": []}
-    raw_skills = skills_data.get("skills", [])
-    skills = [s["name"] if isinstance(s, dict) else s for s in raw_skills]
-    interests = skills_data.get("interests", [])
+    grades = db.query(Grade).filter(Grade.student_id == sid).all()
+
+    # 技能与兴趣由绵小城依据成长档案自动归纳，每条标签都带来源证据（只读，供学生查看与溯源）
+    tags = derive_growth_tags(db, current_user, records=records, grades=grades)
+    skills = [t["name"] for t in tags["skills"]]
+    interests = [t["name"] for t in tags["interests"]]
 
     # 按类型统计
     type_counts = get_record_type_counts(records)
@@ -60,7 +63,6 @@ def get_growth_profile(db: Session = Depends(get_db), current_user: User = Depen
     total_score = calc_radar_score(db, sid, current_user)
 
     # GPA学期趋势
-    grades = db.query(Grade).filter(Grade.student_id == sid).all()
     semester_gpa = defaultdict(list)
     for g in grades:
         semester_gpa[g.semester].append(g.gpa)
@@ -76,6 +78,8 @@ def get_growth_profile(db: Session = Depends(get_db), current_user: User = Depen
         monthly_trend=monthly_trend,
         skills=skills,
         interests=interests,
+        skill_items=tags["skills"],
+        interest_items=tags["interests"],
         total_records=n_records,
         total_skills=n_skills,
         gpa_trend=gpa_trend,

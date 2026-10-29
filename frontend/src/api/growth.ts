@@ -1,6 +1,22 @@
 import request from '@/utils/request'
 import type { GrowthRecord } from '@/types'
 
+/** 标签来源证据：成长记录 / 项目 / 课程 / 对话 */
+export interface GrowthTagEvidence {
+  source: string
+  label: string
+  title: string
+  date: string
+  detail: string
+}
+
+/** 绵小城依据成长档案生成的技能/兴趣标签 */
+export interface GrowthTagItem {
+  name: string
+  kind: 'skill' | 'interest'
+  evidence: GrowthTagEvidence[]
+}
+
 export interface GrowthProfile {
   total_score: number
   radar: { name: string; value: number }[]
@@ -8,6 +24,8 @@ export interface GrowthProfile {
   monthly_trend: { month: string; count: number; type: string }[]
   skills: string[]
   interests: string[]
+  skill_items?: GrowthTagItem[]
+  interest_items?: GrowthTagItem[]
   total_records: number
   total_skills: number
   gpa_trend: { semester: string; gpa: number }[]

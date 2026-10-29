@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="tui-page">
-    <SubPageHeader title="人文关怀中心" sub="关怀行动 · 温度加温 · 家校联动" fallback="/teacher" />
+    <SubPageHeader title="人文关怀中心" fallback="/teacher" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：指标本身可点击下钻（点数字即跳到对应清单 / 台账） -->

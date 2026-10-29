@@ -44,13 +44,19 @@
             <!-- 勋章条：贴在头像右侧的留白里（QQ 资料卡的等级 + 勋章串），用图标填空而不是留空 -->
             <div v-if="badgeWall" class="pf-badge-strip">
               <span class="pf-badge-strip-icons">
-                <span
+                <button
                   v-for="b in earnedBadgePreview"
                   :key="b.code"
+                  type="button"
                   class="pf-badge-mini"
-                  :class="`tier-${b.tier}`"
                   :title="b.name"
-                ><i>{{ b.icon }}</i></span>
+                  @click="badgeDetail = b"
+                >
+                  <BadgeMedal :icon="b.icon" :tier="b.tier" :size="22" :ribbon="false" />
+                </button>
+                <span v-if="badgeWall.earned.length > earnedBadgePreview.length" class="pf-badge-more">
+                  +{{ badgeWall.earned.length - earnedBadgePreview.length }}
+                </span>
                 <span v-if="!earnedBadgePreview.length" class="pf-badge-empty">还没有点亮勋章</span>
               </span>
               <button type="button" class="pf-badge-pill" @click="openPage('badges')">
@@ -498,6 +504,9 @@
         <el-button type="primary" @click="handleAvatarCropConfirm">确认裁剪</el-button>
       </template>
     </el-dialog>
+
+    <!-- 勋章放大查看 -->
+    <BadgeDetail :badge="badgeDetail" @close="badgeDetail = null" />
   </div>
 </template>
 
@@ -513,10 +522,12 @@ import { createFeedback, getFeedbacks } from '@/api/feedback'
 import { uploadFile } from '@/api/upload'
 import { getGrowthProfile, getProjects, type GrowthProfile } from '@/api/growth'
 import { getGoals } from '@/api/plan'
-import { getMyBadgeWall, type BadgeWall as BadgeWallData } from '@/api/badge'
+import { getMyBadgeWall, type BadgeItem, type BadgeWall as BadgeWallData } from '@/api/badge'
 import { syncQuickAccount } from '@/utils/quickLogin'
 import { confirmLogout } from '@/utils/logout'
 import BadgeWall from '@/components/profile/BadgeWall.vue'
+import BadgeMedal from '@/components/profile/BadgeMedal.vue'
+import BadgeDetail from '@/components/profile/BadgeDetail.vue'
 import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import {
@@ -602,9 +613,11 @@ async function loadGrowth() {
 
 // 勋章墙（等级 / 已获得 / 待解锁进度）
 const badgeWall = ref<BadgeWallData | null>(null)
+/** 点击勋章条上的小勋章 → 放大查看 */
+const badgeDetail = ref<BadgeItem | null>(null)
 
-/** 勋章条只陈列前 5 枚已点亮勋章，超出走勋章墙 */
-const earnedBadgePreview = computed(() => (badgeWall.value?.earned ?? []).slice(0, 5))
+/** 勋章条只陈列前 4 枚已点亮勋章（再多会挤掉右侧入口），其余用 +N 提示 */
+const earnedBadgePreview = computed(() => (badgeWall.value?.earned ?? []).slice(0, 4))
 
 /**
  * 结算 + 拉取勋章墙：先让后端按最新使用数据结算（可能解锁新勋章，由布局层的
@@ -1418,10 +1431,10 @@ onMounted(async () => {
   border-radius: 20px 20px 0 0;
   padding: 50px 16px 10px;
 }
-/* 勋章条：头像右侧的留白带，等级牌 + 勋章小图标串 + 勋章墙入口（QQ 资料卡样式） */
+/* 勋章条：头像右侧的留白带，等级牌 + 迷你金属勋章串 + 勋章墙入口（QQ 资料卡样式） */
 .pf-badge-strip {
   position: absolute;
-  top: 12px;
+  top: 9px;
   left: 108px;
   right: 16px;
   height: 26px;
@@ -1434,30 +1447,44 @@ onMounted(async () => {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   overflow: hidden;
 }
+/* 迷你勋章不再是圆形图标：复用盾形成就徽章造型（无绶带、缩到 22px），点击可放大查看 */
 .pf-badge-mini {
   flex-shrink: 0;
-  width: 23px;
-  height: 23px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: #fff7e6;
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.32);
-  font-size: 12px;
-  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
 }
-.pf-badge-mini.tier-silver { background: #f3f5f8; box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4); }
-.pf-badge-mini.tier-gold { background: linear-gradient(135deg, #ffefc2, #f7bf45); box-shadow: 0 0 0 1px rgba(214, 158, 46, 0.5); }
-.pf-badge-mini.tier-diamond { background: linear-gradient(135deg, #e0f2ff, #93c5fd); box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.42); }
-.pf-badge-mini i { font-style: normal; }
+.pf-badge-mini:active { transform: scale(0.93); }
+.pf-badge-mini:focus-visible { outline: 2px solid #c7ccd4; outline-offset: 1px; border-radius: 8px; }
 .pf-badge-empty {
   font-size: 10.5px;
   color: var(--tui-text-quiet);
   white-space: nowrap;
+}
+/* 勋章条只放得下前 5 枚，多出来的用 +N 明示，避免和勋章墙数量对不上 */
+.pf-badge-more {
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(17, 20, 24, 0.06);
+  color: var(--tui-text-secondary, #667085);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .pf-badge-pill {
   flex-shrink: 0;

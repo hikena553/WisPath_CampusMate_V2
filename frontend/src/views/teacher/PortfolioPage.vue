@@ -2,7 +2,6 @@
   <div class="tui-page">
     <SubPageHeader
       title="学生成长档案"
-      sub="按学生查看成长徽章与成长轨迹，并沉淀你的育人档案"
       fallback="/teacher"
     />
 

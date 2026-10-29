@@ -212,6 +212,7 @@ class TodayTaskOut(BaseModel):
     plan_id: int = 0
     plan_title: str = ""
     checked_today: bool = False
+    checkin_id: int | None = None
 
 
 class AISuggestItem(BaseModel):

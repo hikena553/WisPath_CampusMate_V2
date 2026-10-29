@@ -1,7 +1,14 @@
 <template>
   <div class="portfolio-page">
-    <SubPageHeader title="我的作品集" fallback="/student" />
-    <!-- 顶部标题 -->
+    <SubPageHeader title="作品集" sub="项目 · 证书 · 简历" accent="#b45309" fallback="/student">
+      <!-- 移动端：AI 建议压成 Head 右侧图标按钮，避免正文顶部再顶一个蓝色大按钮 -->
+      <template #right>
+        <button class="pf-ai-btn" type="button" aria-label="AI 优化建议" :disabled="aiLoading" @click="openAISuggest">
+          <el-icon :size="17"><MagicStick /></el-icon>
+        </button>
+      </template>
+    </SubPageHeader>
+    <!-- 顶部标题（桌面端） -->
     <div class="portfolio-header">
       <div>
         <h2 class="portfolio-title">我的作品集</h2>
@@ -479,7 +486,10 @@ function copyToProjectForm() {
   .portfolio-page > .tui-appbar {
     position: sticky;
     top: 0;
+    left: auto; right: auto;
     z-index: 5;
+    margin: 0 -14px 2px;   /* 横向铺满，抵掉页面内边距 */
+    padding: 0 14px;
   }
 }
 
@@ -490,7 +500,6 @@ function copyToProjectForm() {
   margin-bottom: 14px;
 }
 .portfolio-title { margin: 0; font-size: 20px; font-weight: 600; color: #1a1a2e; }
-.portfolio-sub { margin: 4px 0 0; font-size: 12px; color: #999; }
 
 .card {
   background: #fff;
@@ -574,5 +583,195 @@ function copyToProjectForm() {
   font-size: 13px; color: #444; line-height: 1.7;
   background: #f5f7fb; border-radius: 8px; padding: 10px 12px;
   margin-bottom: 8px; white-space: pre-wrap;
+}
+
+/* ===== 作品集 v5（仅移动端）：GitHub Profile Pinned 仓库卡风 =====
+   参考：GitHub 个人主页置顶仓库卡 —— 蓝色仓库名 + 空心 repo 图标 + 描述 +
+   语言色点/star/更新时间 元信息行。扁平分区，无大标题重复（顶部 Head 已有标题）。 */
+@media (max-width: 767px) {
+  .portfolio-page {
+    background: var(--sp-bg, #f5f6f7);
+    /* Head 是 sticky 且在文档流内，自己占 48px；这里不再额外让位，否则顶部会多出一条白带 */
+    padding: 0 14px 24px;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+
+  /* 顶部操作行：整块隐藏 —— 标题归 Head，AI 按钮已移到 Head 右侧 */
+  .portfolio-header { display: none; }
+
+  /* Head 右侧 AI 图标按钮：与 Head 同色系的幽灵按钮，不抢视觉 */
+  .pf-ai-btn {
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 8px; padding: 0;
+    background: transparent; color: var(--sp-ink-2, #5b6470);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: background .18s ease;
+  }
+  .pf-ai-btn:active { background: rgba(20, 23, 26, .06); }
+  .pf-ai-btn:focus-visible { outline: 2px solid #b45309; outline-offset: 1px; }
+  .pf-ai-btn:disabled { opacity: .5; }
+
+  /* 分区：全部透明，靠发丝线与小标题分区 */
+  .portfolio-page .card {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .portfolio-page .card + .card { margin-top: 6px; }
+  .portfolio-page .card-head {
+    padding: 14px 2px 8px;
+    margin: 0;
+  }
+  .portfolio-page .card-head .head-bar { display: none; }
+  .portfolio-page .card-head .head-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sp-ink-2, #5b6472);
+  }
+  /* 计数徽标在扁平分区里会顶着标题行浮出来，移动端隐藏（条数看列表即可） */
+  .portfolio-page .card-head :deep(.el-badge__content) { display: none; }
+  .portfolio-page .card-head :deep(.el-badge) { display: inline-flex; }
+  .portfolio-page .card-head .el-button--primary.is-text {
+    font-size: 12.5px;
+    padding: 0;
+    height: auto;
+  }
+
+  /* 仓库卡 */
+  .portfolio-page .project-card {
+    background: var(--sp-surface, #fff);
+    border: 1px solid #e4e7eb;
+    border-radius: 12px;
+    box-shadow: none;
+    padding: 12px 14px 13px;
+    margin: 0 0 8px;
+  }
+  .portfolio-page .project-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+  }
+  .portfolio-page .project-title {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #0969da;
+    line-height: 20px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* 空心 repo 圆点（GitHub 仓库图标简化） */
+  .portfolio-page .project-title::before {
+    content: '';
+    width: 12px; height: 12px;
+    flex: none;
+    border: 1.5px solid #9aa0a8;
+    border-radius: 50%;
+  }
+  .portfolio-page .project-title .el-tag {
+    font-size: 10px;
+    height: 16px;
+    line-height: 14px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: #eef2f6;
+    border-color: transparent;
+    color: #5b6472;
+    font-weight: 400;
+  }
+  /* 编辑/删除收起为轻量文字，靠右 */
+  .portfolio-page .project-actions { flex: none; display: flex; gap: 2px; }
+  .portfolio-page .project-actions .el-button {
+    font-size: 11.5px;
+    padding: 0 4px;
+    height: 20px;
+  }
+
+  .portfolio-page .project-desc {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.55;
+    color: #6a737d;
+  }
+
+  /* 元信息行：语言点 + 技术栈，仿 GitHub repo meta */
+  .portfolio-page .project-tags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 9px;
+  }
+  .portfolio-page .project-tags::before {
+    content: '';
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #3178c6;
+    flex: none;
+  }
+  .portfolio-page .project-tags .tag-item {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    height: auto;
+    font-size: 11px;
+    color: #6a737d;
+  }
+  .portfolio-page .project-tags .tag-item + .tag-item::before {
+    content: '·';
+    margin-right: 8px;
+    color: #c9ccd2;
+  }
+
+  /* 时间/角色行并入元信息行（压缩为单行灰字） */
+  .portfolio-page .project-meta {
+    display: flex;
+    gap: 10px;
+    margin: 6px 0 0;
+    font-size: 10.5px;
+    color: #9aa0a8;
+    line-height: 15px;
+  }
+  .portfolio-page .project-meta .meta-item { margin: 0; }
+
+  .portfolio-page .project-links { margin-top: 8px; }
+  .portfolio-page .project-links .el-link { font-size: 11.5px; }
+
+  /* 证书卡：同语言，标题不用蓝色（非仓库） */
+  .portfolio-page .cert-card {
+    background: var(--sp-surface, #fff);
+    border: 1px solid #e4e7eb;
+    border-radius: 12px;
+    box-shadow: none;
+    padding: 12px 14px 13px;
+    margin: 0 0 8px;
+  }
+  .portfolio-page .cert-title { font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); }
+  .portfolio-page .cert-meta { margin-top: 5px; font-size: 11px; color: #9aa0a8; }
+
+  /* 简历：极简行 */
+  .portfolio-page .resume-card,
+  .portfolio-page .resume-item {
+    background: var(--sp-surface, #fff);
+    border: 1px solid #e4e7eb;
+    border-radius: 12px;
+    box-shadow: none;
+  }
+
+  .portfolio-page .empty-tip {
+    padding: 16px 2px;
+    font-size: 12px;
+    color: #9aa0a8;
+  }
 }
 </style>

@@ -1,240 +1,230 @@
 <template>
-  <div ref="rootRef" class="growth-dashboard">
-    <!-- Hero：问候 + 周次/日期 + 下一节课 + 成长指数 -->
-    <section class="gd-hero">
-      <div class="gd-hero-top">
-        <div class="gd-hero-hello">
-          <div class="gd-greet">{{ greeting }}，同学</div>
-        </div>
-        <div class="gd-hero-actions">
-          <button v-if="editMode" type="button" class="gd-mini-btn" @click="resetCards">恢复默认</button>
-          <button
-            type="button"
-            class="gd-mini-btn"
-            :class="{ 'gd-mini-btn--on': editMode }"
-            @click="editMode = !editMode"
-          >{{ editMode ? '完成' : '编辑' }}</button>
-        </div>
+  <div class="growth-dashboard">
+    <!-- 日期行：固定 Head 由父级 .home-bar 承担（学业中心标题），这里只留日期语境 -->
+    <section class="gd-today">
+      <div class="gd-today-date">
+        <b>{{ dateLabel }}</b>
+        <span>第 {{ currentWeek }} 教学周</span>
+        <template v-if="isHoliday"><span>·</span><span>假期</span></template>
       </div>
+    </section>
 
-      <div class="gd-hero-main">
-        <!-- 下一节课卡：整卡可点推入课程表（查看全部课程入口移入此处）；编辑卡片模式下禁用跳转 -->
+    <!-- 今日学业卡：主页唯一的白卡（A+B 融合的 Hero），其余区域全部扁平化 -->
+    <section class="gd-today-card" :aria-label="'今日学业概览'">
+      <div class="gd-tc-head">
+        <p class="gd-tc-cap">今日学业</p>
+        <button v-if="!coursesLoading && todayCourses.length" type="button" class="gd-tc-all" @click="openSchedule">全部课程 ›</button>
+      </div>
+      <p class="gd-tc-line">
+        {{ coursesLoading ? '正在读取课表…' : `${todayCourses.length} 节课` }}<template v-if="!coursesLoading && nDueToday"> ·
+          <b class="gd-tc-due">{{ nDueToday }} 项作业今天截止</b></template><template v-else-if="!coursesLoading && pendingTodos"> ·
+          <b class="gd-tc-due">{{ pendingTodos }} 项待办</b></template>
+      </p>
+      <template v-if="!coursesLoading && todayCourses.length">
         <div
-          class="gd-next"
-          :class="{ 'is-link': !editMode }"
-          :role="editMode ? undefined : 'button'"
-          :tabindex="editMode ? -1 : 0"
-          :aria-label="editMode ? undefined : '查看全部课程'"
-          @click="openSchedule"
-          @keydown.enter.prevent="openSchedule"
+          v-for="c in todayCardCourses"
+          :key="c.id"
+          class="gd-tl-row"
+          :class="{ 'is-live': isCourseLive(c), 'is-done': isCourseDone(c) }"
         >
-          <div class="gd-next-label-row">
-            <div class="gd-next-label">下一节课</div>
-            <span class="gd-next-more">查看全部课程<el-icon :size="11"><ArrowRight /></el-icon></span>
+          <p class="gd-tl-time">{{ timeLabel(c.start_period) }}</p>
+          <div class="gd-tl-main">
+            <p class="gd-tl-name">{{ c.name }}</p>
+            <p class="gd-tl-meta">
+              <template v-if="isCourseLive(c)">进行中{{ c.location ? ' · ' + c.location : '' }}</template>
+              <template v-else>{{ c.location || '待上课' }}</template>
+            </p>
           </div>
-          <!-- 课程数据加载中：骨架占位（尺寸对齐 time/name/meta），避免先闪「今日没有课程安排」再出内容 -->
-          <template v-if="coursesLoading">
-            <div class="gd-skel gd-next-skel-time"></div>
-            <div class="gd-skel gd-next-skel-name"></div>
-            <div class="gd-skel gd-next-skel-meta"></div>
-          </template>
-          <template v-else-if="nextCourse">
-            <div class="gd-next-time">{{ timeLabel(nextCourse.start_period) }}</div>
-            <div class="gd-next-name">{{ nextCourse.name }}</div>
-            <div class="gd-next-meta">
-              <span>{{ nextCourse.location }}</span>
-              <span v-if="nextCourse.teacher"> · {{ nextCourse.teacher }}</span>
-            </div>
-          </template>
-          <div v-else class="gd-next-none">{{ nextEmptyText }}</div>
         </div>
+        <p v-if="todayCourses.length > todayCardCourses.length" class="gd-tl-more">
+          还有 {{ todayCourses.length - todayCardCourses.length }} 节课 ›
+        </p>
+      </template>
+      <p v-else-if="!coursesLoading" class="gd-tc-empty">{{ nextSummary }}</p>
+      <button type="button" class="gd-tc-cta" @click="openSchedule">开始今天的学习</button>
+    </section>
 
-        <div class="gd-ring-wrap">
-          <svg class="gd-ring" viewBox="0 0 120 120" role="img" :aria-label="`成长指数 ${score} 分`">
-            <defs>
-              <linearGradient id="gdRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#409eff" />
-                <stop offset="100%" stop-color="#2f7fd8" />
-              </linearGradient>
-            </defs>
-            <circle class="gd-ring-track" cx="60" cy="60" r="52" fill="none" stroke-width="10" />
-            <circle
-              class="gd-ring-progress"
-              cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round"
-              :stroke-dasharray="`${(score / 100) * 326.7} 326.7`"
-              transform="rotate(-90 60 60)"
-            />
-          </svg>
-          <div class="gd-ring-center">
-            <span class="gd-ring-value">{{ score }}</span>
-            <span class="gd-ring-label">成长指数</span>
+    <!-- 速览条：把今天/本周最关心的四个数字摊在同一行，避免首页只有一张卡显得空 -->
+    <section class="gd-glance" aria-label="本周速览">
+      <button type="button" class="gd-glance-item" @click="openSchedule">
+        <b>{{ coursesLoading ? '—' : todayCourses.length }}</b>
+        <span>今日课程</span>
+      </button>
+      <button type="button" class="gd-glance-item" @click="emit('open', 'plan')">
+        <b>{{ pendingTodos }}</b>
+        <span>待办未完成</span>
+      </button>
+      <button type="button" class="gd-glance-item" @click="openLedger">
+        <b>{{ weekRecordedDays }}</b>
+        <span>本周心情</span>
+      </button>
+      <button type="button" class="gd-glance-item" @click="emit('open', 'plan')">
+        <b>{{ streakDays }}</b>
+        <span>连续打卡</span>
+      </button>
+    </section>
+
+    <!-- ===== 心情：扁平区（无卡片底），分区靠发丝线与留白 =====
+         情绪树洞淡出后的新形态——5 档心情脸 + 本周 7 天柱 + 30 天台账弹窗。
+         与 AI 外呼电话识别共用 /emotions/*：电话记录自动进台账并驱动今日情绪展示。 -->
+    <section class="gd-flat gd-mood" aria-label="心情记录">
+      <div class="gd-flat-head">
+        <div class="gd-flat-head-main">
+          <h3 class="gd-flat-title">此刻的心情</h3>
+          <p class="gd-flat-sub">记下一次，绵小城会更懂你的近况</p>
+        </div>
+        <span v-if="voiceSynced" class="gd-mood-sync"><el-icon :size="11"><Connection /></el-icon>电话已同步</span>
+      </div>
+      <div class="gd-mood-faces" role="radiogroup" aria-label="选择今天的心情">
+        <button
+          v-for="m in MOODS" :key="m.score"
+          type="button" role="radio" :aria-checked="moodValue === m.score" :aria-label="m.label"
+          class="gd-mood-face" :class="{ 'is-active': moodValue === m.score }"
+          :style="{ '--mood-c': m.color, '--mood-s': (28 + m.score * 2.6) + 'px' }"
+          :disabled="moodSaving"
+          @click="pickMood(m)"
+        >
+          <span class="gd-mood-face-emoji">
+            <i class="gd-mood-face-shine" aria-hidden="true"></i>
+            <span class="gd-mood-face-glyph">{{ m.emoji }}</span>
+            <span v-if="moodValue === m.score" class="gd-mood-face-check" aria-hidden="true">✓</span>
+          </span>
+          <span class="gd-mood-face-label">{{ m.label }}</span>
+        </button>
+      </div>
+      <p
+        class="gd-mood-label" :class="{ 'is-set': moodValue }"
+        :style="moodValue ? { '--mood-c': moodColor } : undefined"
+      >
+        {{ moodValue ? `今天 · ${moodLabel}` : '点一下，记下此刻的心情' }}
+      </p>
+      <p v-if="moodTip" class="gd-mood-tip">{{ moodTip }}</p>
+      <!-- 周柱：柱子放在固定高的轨道里、轨道底对齐，日期行永远贴在同一条基线上
+           （此前柱子直接和日期排在同一列，柱高不同导致日期看起来错位） -->
+      <div class="gd-mood-panel">
+        <div class="gd-mood-panel-head">
+          <span>近 7 天</span>
+          <span v-if="weekRecordedDays">已记录 {{ weekRecordedDays }} 天<template v-if="weekMoodAvgLabel"> · 平均「{{ weekMoodAvgLabel }}」</template></span>
+          <span v-else>还没有记录</span>
+        </div>
+        <div class="gd-mood-week">
+          <div
+            v-for="(d, i) in weekBars" :key="i"
+            class="gd-mood-col" :class="{ 'is-today': d.isToday }" :title="`${d.label}（${d.dateLabel}）`"
+          >
+            <span class="gd-mood-track">
+              <span class="gd-mood-bar" :style="{ height: d.height + 'px', background: d.color }"></span>
+            </span>
+            <span class="gd-mood-day" :class="{ 'is-today': d.isToday }">{{ d.weekday }}</span>
           </div>
         </div>
       </div>
+      <button type="button" class="gd-mood-ledger-btn" @click="openLedger">
+        心情台账 · 近 30 天 <el-icon :size="11"><ArrowRight /></el-icon>
+      </button>
     </section>
 
-    <!-- KPI 行 -->
-    <section class="gd-kpi-row">
-      <KpiStat label="今日课程" :value="coursesLoading ? '--' : todayCourses.length" :unit="coursesLoading ? '' : '门'" tone="primary" />
-      <KpiStat label="待办" :value="pendingTodos" unit="项" :tone="pendingTodos > 0 ? 'warning' : 'neutral'" />
-      <KpiStat label="综合评分" :value="score || '--'" />
-      <KpiStat label="成长记录" :value="profile?.total_records ?? 0" unit="条" />
-    </section>
+    <!-- ===== AI：压缩成一条入口（v4.2）=====
+         完整内容（心情/任务/积累/天气/运势）在独立子页「今日报告」，这里只保留一行摘要 -->
+    <button type="button" class="gd-flat gd-ai-entry" aria-label="查看今日报告" @click="emit('open', 'ai')">
+      <span class="gd-ai-badge"><img :src="siteMascot" :alt="siteName" class="gd-ai-badge-img" /></span>
+      <span class="gd-ai-entry-main">
+        <span class="gd-ai-entry-title">AI 今日报告</span>
+        <span class="gd-ai-entry-sub">
+          <template v-if="discoverLoading && !proactiveActions.length">正在生成今日报告…</template>
+          <template v-else-if="proactiveActions.length">{{ proactiveActions.length }} 条建议 · {{ proactiveActions[0].title }}</template>
+          <template v-else-if="discoverLoaded">今日状态平稳，点击查看报告</template>
+          <template v-else>加载中…</template>
+        </span>
+      </span>
+      <el-icon class="gd-ai-chev" :size="13"><ArrowRight /></el-icon>
+    </button>
 
-    <!-- 可配置卡片区（编辑态可排序 / 显隐） -->
-    <div class="gd-stack">
-      <!-- 今日课程卡已删除：课程表入口在 Hero「下一节课」卡（查看全部课程），
-           今日课次与下一节课信息也都在 Hero/KPI 中，无需重复成卡 -->
+    <!-- ===== 更多：单排横向滑动入口（v4.3）
+         入口数量超过一屏后横向滑动查看，内容不足一屏时整排居中，
+         保留彩色软底图标，让首页功能密度更高但不形成第二张卡片 -->
+    <nav class="gd-flat gd-more" aria-label="功能入口">
+      <div class="gd-flat-head">
+        <h3 class="gd-flat-title">更多</h3>
+        <span class="gd-flat-sub">左右滑动查看更多</span>
+      </div>
+      <div class="gd-tile-scroll">
+        <div class="gd-tile-track">
+          <button type="button" class="gd-tile" @click="openSchedule">
+            <span class="gd-tile-chip" style="background:#e8f1e9"><el-icon :size="20" color="#16794c"><Calendar /></el-icon></span>
+            <span class="gd-tile-label">课程表</span>
+          </button>
+          <button type="button" class="gd-tile" @click="emit('open', 'grades')">
+            <span class="gd-tile-chip" style="background:#e3f2ec"><el-icon :size="20" color="#0f7a58"><DataLine /></el-icon></span>
+            <span class="gd-tile-label">成绩分析</span>
+          </button>
+          <button type="button" class="gd-tile" @click="emit('open', 'growth')">
+            <span class="gd-tile-chip" style="background:#e5ecfc"><el-icon :size="20" color="#1a4fd6"><TrendCharts /></el-icon></span>
+            <span class="gd-tile-label">成长轨迹</span>
+          </button>
+          <button type="button" class="gd-tile" @click="emit('open', 'plan')">
+            <span class="gd-tile-chip" style="background:#e2f1fa"><el-icon :size="20" color="#0369a1"><Notebook /></el-icon></span>
+            <span class="gd-tile-label">学习计划</span>
+          </button>
+          <button type="button" class="gd-tile" @click="emit('open', 'service')">
+            <span class="gd-tile-chip" style="background:#f0e8fc"><el-icon :size="20" color="#6d28d9"><Tickets /></el-icon></span>
+            <span class="gd-tile-label">请假服务</span>
+          </button>
+          <button type="button" class="gd-tile" @click="go('/student/portfolio')">
+            <span class="gd-tile-chip" style="background:#fdf1e3"><el-icon :size="20" color="#b45309"><Collection /></el-icon></span>
+            <span class="gd-tile-label">作品集</span>
+          </button>
+        </div>
+      </div>
+    </nav>
 
-      <!-- AI 主动发现 -->
-      <section class="gd-card" data-card="ai" :class="cardClass('ai')" :style="{ order: orderOf('ai') }" v-show="show('ai')">
-        <div v-if="editMode" class="gd-veil" aria-hidden="true"></div>
-        <CardToolbar
-          v-if="editMode" :can-up="canUp('ai')" :can-down="canDown('ai')" :hidden="!isVisible('ai')"
-          @up="move('ai', -1)" @down="move('ai', 1)" @toggle="toggle('ai')"
-        />
-        <div class="gd-head">
-          <h3 class="gd-title gd-title-icon">
-            <el-icon class="gd-title-glyph" :size="17"><MagicStick /></el-icon>AI 主动发现
-          </h3>
-          <button type="button" class="gd-icon-btn" :aria-label="'刷新 AI 洞察'" @click="loadDiscover">
-            <el-icon :size="14" :class="{ 'is-loading': discoverLoading }"><Refresh /></el-icon>
-          </button>
-        </div>
-        <!-- LLM 洞察引导句：仅在有待处理事项时出现；容器高度固定，
-             异步拿到洞察时不改变卡片高度（此前的高度跳变曾表现为抽搐） -->
-        <div v-if="proactiveActions.length" class="gd-ai-insight">
-          <el-icon class="gd-ai-insight-ico" :size="13"><MagicStick /></el-icon>
-          <span v-if="insight" class="gd-ai-insight-text">{{ insight }}</span>
-          <span v-else-if="insightPending" class="gd-skel gd-ai-insight-skel" aria-hidden="true"></span>
-        </div>
-        <!-- 加载中且尚无数据：首帧即骨架占位，
-             避免「空态文案 → 空列表 → 行内容」连续三次高度变化造成卡片抽搐 -->
-        <div v-if="discoverLoading && !proactiveActions.length" class="gd-insight-list">
-          <div class="gd-skel gd-ai-skel-row"></div>
-          <div class="gd-skel gd-ai-skel-row"></div>
-        </div>
-        <!-- 空态只在首次加载真正完成后才出现，避免先闪一下「状态良好」又被行内容顶掉 -->
-        <div v-else-if="discoverLoaded && !proactiveActions.length" class="gd-ai-empty">
-          <el-icon class="gd-ai-empty-icon" :size="17"><CircleCheckFilled /></el-icon>
-          <span>状态良好，AI 持续守护你的成长</span>
-        </div>
-        <div v-else class="gd-insight-list">
-          <div
-            v-for="act in proactiveActions"
-            :key="act.trigger + '-' + act.student_id"
-            class="gd-insight-row"
-          >
-            <span class="gd-pill" :class="pillClass(act.priority)">{{ actionLabel(act.priority) }}</span>
-            <p class="gd-insight-text"><span class="gd-insight-strong">{{ act.title }}</span> · {{ act.content }}</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- 我的学业卡已删除：课程表入口在 Hero「下一节课」卡（查看全部课程），成绩分析/成长轨迹在快捷空间 -->
-
-      <!-- 五维成长（默认展开，点标题行可收起） -->
-      <section class="gd-card" data-card="dims" :class="cardClass('dims')" :style="{ order: orderOf('dims') }" v-show="show('dims')">
-        <div v-if="editMode" class="gd-veil" aria-hidden="true"></div>
-        <CardToolbar
-          v-if="editMode" :can-up="canUp('dims')" :can-down="canDown('dims')" :hidden="!isVisible('dims')"
-          @up="move('dims', -1)" @down="move('dims', 1)" @toggle="toggle('dims')"
-        />
-        <div class="gd-head">
-          <h3 class="gd-title">五维成长</h3>
-          <button
-            type="button"
-            class="gd-collapse-btn"
-            :aria-expanded="!dimsCollapsed"
-            aria-label="展开或收起五维成长"
-            @click="dimsCollapsed = !dimsCollapsed"
-          >
-            <span class="gd-cap">综合评分构成</span>
-            <el-icon class="gd-collapse-ico" :class="{ 'is-collapsed': dimsCollapsed }" :size="14"><ArrowDown /></el-icon>
-          </button>
-        </div>
-        <ul v-if="radarDims.length && !dimsCollapsed" class="gd-dim-list">
-          <li v-for="d in radarDims" :key="d.name" class="gd-dim-row">
-            <span class="gd-dim-name">{{ d.name }}</span>
-            <span class="gd-dim-track">
-              <span class="gd-dim-fill" :style="{ width: d.value + '%', opacity: dimOpacity(d.value) }"></span>
-            </span>
-            <span class="gd-dim-value">{{ Math.round(d.value) }}</span>
-          </li>
-        </ul>
-        <!-- 画像尚未返回：骨架占位（行高对齐真实五维行），避免先闪「暂无数据」再撑开 5 行 -->
-        <div v-else-if="!dimsCollapsed && !profileLoaded" class="gd-dim-skel">
-          <div v-for="i in 5" :key="i" class="gd-skel gd-dim-skel-row"></div>
-        </div>
-        <p v-else-if="!dimsCollapsed" class="gd-empty-line">暂无五维数据，完善成长记录后自动生成</p>
-      </section>
-
-      <!-- 快捷空间 -->
-      <section class="gd-card" data-card="space" :class="cardClass('space')" :style="{ order: orderOf('space') }" v-show="show('space')">
-        <div v-if="editMode" class="gd-veil" aria-hidden="true"></div>
-        <CardToolbar
-          v-if="editMode" :can-up="canUp('space')" :can-down="canDown('space')" :hidden="!isVisible('space')"
-          @up="move('space', -1)" @down="move('space', 1)" @toggle="toggle('space')"
-        />
-        <div class="gd-head">
-          <h3 class="gd-title">快捷空间</h3>
-          <span class="gd-cap">常用服务</span>
-        </div>
-        <div class="gd-space-grid">
-          <!-- 成绩分析 / 成长轨迹：从「我的学业」移入，走 open 事件推入学业中心对应子页（非路由跳转） -->
-          <button type="button" class="gd-space-item" @click="emit('open', 'grades')">
-            <span class="gd-space-icon"><el-icon :size="21"><DataLine /></el-icon></span>
-            <span class="gd-space-label">成绩分析</span>
-          </button>
-          <button type="button" class="gd-space-item" @click="emit('open', 'growth')">
-            <span class="gd-space-icon"><el-icon :size="21"><TrendCharts /></el-icon></span>
-            <span class="gd-space-label">成长轨迹</span>
-          </button>
-          <button type="button" class="gd-space-item" @click="go('/student/plan')">
-            <span class="gd-space-icon"><el-icon :size="21"><Calendar /></el-icon></span>
-            <span class="gd-space-label">学习计划</span>
-          </button>
-          <button type="button" class="gd-space-item" @click="go('/student/portfolio')">
-            <span class="gd-space-icon"><el-icon :size="21"><Collection /></el-icon></span>
-            <span class="gd-space-label">作品集</span>
-          </button>
-          <!-- 成长档案图标由 TrendCharts 改为 FolderOpened：与相邻的「成长轨迹」区分（原文/图重复易混淆） -->
-          <button type="button" class="gd-space-item" @click="go('/student/growth')">
-            <span class="gd-space-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
-            <span class="gd-space-label">成长档案</span>
-          </button>
-          <button type="button" class="gd-space-item" @click="go('/student/emotion')">
-            <span class="gd-space-icon"><el-icon :size="21"><FirstAidKit /></el-icon></span>
-            <span class="gd-space-label">情绪树洞</span>
-          </button>
-        </div>
-      </section>
-    </div>
+    <!-- 心情台账弹窗：30 天日历点阵 + 近期记录列表 -->
+    <el-dialog v-model="ledgerVisible" title="心情台账 · 近 30 天" width="92%" class="gd-ledger-dialog">
+      <div class="gd-ledger-grid">
+        <div
+          v-for="d in ledgerDays" :key="d.date"
+          class="gd-ledger-cell" :title="`${d.dateLabel}${d.label ? ' · ' + d.label : ''}`"
+          :style="{ background: d.color }"
+        ></div>
+      </div>
+      <div class="gd-ledger-legend">
+        <span v-for="m in MOODS" :key="m.score" class="gd-ledger-lg"><i :style="{ background: m.color }"></i>{{ m.label }}</span>
+        <span class="gd-ledger-lg"><i style="background:#e9ebee"></i>未记录</span>
+      </div>
+      <p v-if="!ledgerList.length" class="gd-ledger-empty">还没有记录，从打一个心情点开始</p>
+      <ul v-else class="gd-ledger-list">
+        <li v-for="r in ledgerList" :key="r.id" class="gd-ledger-row">
+          <i class="gd-ledger-dot" :style="{ background: moodColorOf(r.emotion) }"></i>
+          <span class="gd-ledger-lb">{{ r.label }}</span>
+          <span class="gd-ledger-src">{{ r.source === 'voice_call' ? '电话识别' : '手动记录' }}</span>
+          <span class="gd-ledger-tm">{{ moodTime(r.created_at) }}</span>
+        </li>
+      </ul>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  TrendCharts, Collection, MagicStick, Refresh,
-  CircleCheckFilled, Calendar, DataLine, ArrowRight, ArrowDown, FirstAidKit, FolderOpened
+  TrendCharts, Collection,
+  Calendar, DataLine, ArrowRight, Connection, Tickets,
+  Notebook
 } from '@element-plus/icons-vue'
-import { getGrowthProfile, type GrowthProfile } from '@/api/growth'
 import { fetchProactiveFeed, fetchProactiveInsight, type ProactiveAction } from '@/api/agent'
-import { getToday, type TodayTask } from '@/api/plan'
-import { useAuthStore } from '@/stores/auth'
+import { getToday, getStreak, type TodayTask } from '@/api/plan'
+import { fetchEmotionHistory, recordEmotion, type EmotionRecordItem } from '@/api/emotion'
 import type { Course } from '@/types'
 import { studentDataCache } from '@/utils/studentDataCache'
-import KpiStat from './dashboard/KpiStat.vue'
-import CardToolbar from './dashboard/CardToolbar.vue'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 
 const props = withDefaults(defineProps<{
   courses?: Course[]
   currentWeek?: number
   periodTimes?: Record<number, string>
   isHoliday?: boolean
-  /** 课程数据是否仍在加载：为 true 时 Hero/今日课程显示骨架占位而非空态文案 */
+  /** 课程数据是否仍在加载：为 true 时今日学业卡显示骨架占位而非空态文案 */
   coursesLoading?: boolean
 }>(), {
   courses: () => [],
@@ -244,27 +234,16 @@ const props = withDefaults(defineProps<{
   coursesLoading: false,
 })
 
-const emit = defineEmits<{ (e: 'open', tab: 'schedule' | 'grades' | 'growth'): void }>()
+const emit = defineEmits<{ (e: 'open', tab: 'schedule' | 'grades' | 'growth' | 'service' | 'plan' | 'ai'): void }>()
 const router = useRouter()
-const auth = useAuthStore()
-// 数据初值取自模块级缓存：从其它页签切回驾驶舱时组件会重建，命中缓存即可首帧渲染真实内容，
-// 不再出现「骨架 → 内容」的高度变化（否则下方卡片会被推动，看起来像抽搐）；挂载后仍静默刷新
+const { siteMascot, siteName } = useSiteConfig()
+
 const discoverLoading = ref(!studentDataCache.actions)
-/** 首次请求是否已完成：空态只在完成后出现，避免未加载完就先弹「状态良好」 */
 const discoverLoaded = ref(!!studentDataCache.actions)
-const profile = ref<GrowthProfile | null>(studentDataCache.profile)
-/** 画像是否已加载完成：五维成长默认展开，用它区分「还没回来」与「确实没有数据」 */
-const profileLoaded = ref(!!studentDataCache.profile)
 const proactiveActions = ref<ProactiveAction[]>(studentDataCache.actions ?? [])
-/** LLM 个性化洞察（异步补充，不阻塞卡片；服务端缓存 30 分钟） */
 const insight = ref<string>(studentDataCache.insight ?? '')
 const insightPending = ref(false)
 const todayTasks = ref<TodayTask[]>(studentDataCache.tasks ?? [])
-/** 五维成长默认展开（点标题行可收起） */
-const dimsCollapsed = ref(false)
-const rootRef = ref<HTMLElement | null>(null)
-
-const score = computed(() => profile.value?.total_score ?? 0)
 
 // ===== 今日课程 / 下一节课（数据来自 SchedulePage 下传）=====
 const now = new Date()
@@ -285,151 +264,184 @@ const todayCourses = computed(() =>
     .slice()
     .sort((a, b) => a.start_period - b.start_period)
 )
-const nextCourse = computed(() =>
-  props.isHoliday ? null : (todayCourses.value.find(c => toMin(c.start_period) >= nowMin) || null)
-)
-const nextEmptyText = computed(() => {
-  if (props.isHoliday) return '假期中，好好休息～'
-  if (!todayCourses.value.length) return '今日没有课程安排'
-  return '今日课程已结束'
-})
 
-const greeting = computed(() => {
-  const h = now.getHours()
-  if (h < 6) return '凌晨好'
-  if (h < 12) return '早上好'
-  if (h < 14) return '中午好'
-  if (h < 18) return '下午好'
-  return '晚上好'
+/** 日期行：10月29日 周四 · 第 N 教学周 */
+const dateLabel = computed(() => {
+  const d = now
+  const wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()]
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${wd}`
 })
 
 const pendingTodos = computed(() => todayTasks.value.filter(t => !t.checked_today && t.status !== 'done').length)
 
-/** 五维：单一品牌色不同明度步进，不使用多色系 */
-const radarDims = computed(() => {
-  const src = profile.value?.radar ?? []
-  return src.map(d => ({ name: d.name, value: Math.max(0, Math.min(100, d.value)) }))
+/**
+ * v4「今日学业」卡：课程数 + 今天截止的待办数压成一行标题，
+ * 下方是今日课程时间轴（最多 3 条，进行中蓝色高亮），底部主 CTA 进课程表。
+ */
+const nDueToday = computed(() => todayTasks.value.filter(t => {
+  if (t.checked_today || t.status === 'done') return false
+  if (!t.due_date) return false
+  const due = new Date(t.due_date)
+  return !Number.isNaN(due.getTime()) && due.toDateString() === now.toDateString()
+}).length)
+
+/** 时间轴只展示前 3 节，超出部分提示「还有 N 节」 */
+const todayCardCourses = computed(() => todayCourses.value.slice(0, 3))
+function courseRange(c: Course) {
+  const s = toMin(c.start_period)
+  const e = toMin(c.end_period) + 45
+  return { s, e: e > s ? e : s + 45 }
+}
+function isCourseLive(c: Course) {
+  const { s, e } = courseRange(c)
+  return s <= nowMin && nowMin < e
+}
+function isCourseDone(c: Course) {
+  return nowMin >= courseRange(c).e
+}
+
+/** 空态文案 */
+const nextSummary = computed(() => {
+  if (props.isHoliday) return '假期中，好好休息～'
+  if (!todayCourses.value.length) return '今天没有课程安排'
+  if (!nextCourse.value) return '今天的课已经全部上完'
+  const c = nextCourse.value
+  return `${timeLabel(c.start_period)} ${c.name}${c.location ? ' · ' + c.location : ''}`
+})
+const nextCourse = computed(() =>
+  props.isHoliday ? null : (todayCourses.value.find(c => toMin(c.start_period) >= nowMin) || null)
+)
+
+// ===== 心情（Daylio 打点 + 台账） =====
+// 数据源与 AI 外呼电话识别共用 /emotions/*：电话识别写入 source='voice_call' 的记录，
+// 手动打点写 source='manual'。今日心情取今天最新一条；没有则未打点。
+type Mood = { score: number; emotion: string; label: string; color: string; emoji: string }
+const MOODS: Mood[] = [
+  { score: 1, emotion: 'sad', label: '很糟', color: '#f09595', emoji: '😞' },
+  { score: 2, emotion: 'fearful', label: '有点低', color: '#fac775', emoji: '😕' },
+  { score: 3, emotion: 'neutral', label: '平静', color: '#b4b2a9', emoji: '😐' },
+  { score: 4, emotion: 'happy', label: '不错', color: '#5dcaa5', emoji: '🙂' },
+  { score: 5, emotion: 'surprised', label: '超棒', color: '#85b7eb', emoji: '😄' },
+]
+/** 后端 7 类情绪 → 打点色（台账点阵用；打点自身只产生 MOODS 里的 5 类） */
+function moodColorOf(emotion: string): string {
+  const m = MOODS.find(x => x.emotion === emotion)
+  if (m) return m.color
+  const extra: Record<string, string> = { angry: '#e24b4a', disgusted: '#afaaa0' }
+  return extra[emotion] ?? '#e9ebee'
+}
+/** 后端 7 类情绪 → 1-5 分（周趋势柱高） */
+function moodScoreOf(emotion: string): number {
+  if (emotion === 'happy') return 4
+  if (emotion === 'surprised') return 5
+  if (emotion === 'neutral') return 3
+  if (emotion === 'fearful') return 2
+  return 1
+}
+const moodHistory = ref<EmotionRecordItem[]>([])
+const moodSaving = ref(false)
+const ledgerVisible = ref(false)
+
+const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const todayKey = dayKey(now)
+
+/** 今日心情 = 今天最新一条记录；没有则未打点（5 个点全灰可点） */
+const todayMood = computed(() => moodHistory.value.find(r => r.created_at.slice(0, 10) === todayKey) || null)
+const moodValue = computed(() => (todayMood.value ? moodScoreOf(todayMood.value.emotion) : 0))
+const moodLabel = computed(() => {
+  const r = todayMood.value
+  if (!r) return ''
+  const m = MOODS.find(x => x.emotion === r.emotion)
+  return m ? m.label : r.label
+})
+const moodColor = computed(() => (todayMood.value ? moodColorOf(todayMood.value.emotion) : ''))
+/** 电话已同步：今天有来自外呼识别的记录 */
+const voiceSynced = computed(() =>
+  moodHistory.value.some(r => r.created_at.slice(0, 10) === todayKey && r.source === 'voice_call'),
+)
+/** 一句轻提示：电话识别与手动打卡不一致时温和说明（不评判） */
+const moodTip = computed(() => {
+  const r = todayMood.value
+  if (!r) return ''
+  const calls = moodHistory.value.filter(x => x.created_at.slice(0, 10) === todayKey && x.source === 'voice_call')
+  if (r.source !== 'voice_call' && calls.length && calls[0].emotion !== r.emotion) {
+    return `电话识别到「${calls[0].label}」，你的记录已覆盖它`
+  }
+  if (r.source === 'voice_call') return '来自 AI 外呼的心情识别，点圆点可调整'
+  return ''
 })
 
-// ===== 卡片配置化：显隐 / 排序 + 本地持久化 =====
-// 默认顺序：快捷空间 → AI 主动发现 → 五维成长（今日课程卡已删除）
-type CardId = 'ai' | 'space' | 'dims'
-const CARD_IDS: CardId[] = ['space', 'ai', 'dims']
-const cardOrder = ref<CardId[]>([...CARD_IDS])
-const hiddenIds = ref<CardId[]>([])
-const editMode = ref(false)
-// 存储键带版本号：默认卡片结构（增删卡/默认顺序）变更时升级版本，
-// 旧键整体作废回落新默认，避免浏览器里残留的旧排序盖住新布局。
-// 注：仅删除卡片时无需升版——loadCards 的 isCardId 过滤会自动剔除已删除的 id，
-// 并按原相对顺序保留用户自定义排序
-const storageKey = `cm.dashboard.cards.v2.${auth.user?.id ?? 'anon'}`
+/** 本周 7 天柱：每天取当天最新一条记录的分数；未记录为 0（灰点占位） */
+const weekBars = computed(() => {
+  const out: { height: number; score: number; color: string; weekday: string; isToday: boolean; dateLabel: string; label: string }[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const key = dayKey(d)
+    const rec = moodHistory.value.find(r => r.created_at.slice(0, 10) === key)
+    const score = rec ? moodScoreOf(rec.emotion) : 0
+    out.push({
+      height: score ? 10 + score * 7 : 5,
+      score,
+      color: rec ? moodColorOf(rec.emotion) : '#e9ebee',
+      weekday: i === 0 ? '今天' : ['日', '一', '二', '三', '四', '五', '六'][d.getDay()],
+      isToday: i === 0,
+      dateLabel: `${d.getMonth() + 1}月${d.getDate()}日`,
+      label: rec ? rec.label : '未记录',
+    })
+  }
+  return out
+})
 
-function isCardId(v: unknown): v is CardId {
-  return typeof v === 'string' && (CARD_IDS as string[]).includes(v)
+/** 台账：近 30 天按日取当天最新记录；列表取最近 12 条明细 */
+const ledgerDays = computed(() => {
+  const out: { date: string; dateLabel: string; color: string; label: string }[] = []
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const key = dayKey(d)
+    const rec = moodHistory.value.find(r => r.created_at.slice(0, 10) === key)
+    out.push({
+      date: key,
+      dateLabel: `${d.getMonth() + 1}月${d.getDate()}日`,
+      color: rec ? moodColorOf(rec.emotion) : '#f1f2f4',
+      label: rec ? rec.label : '',
+    })
+  }
+  return out
+})
+const ledgerList = computed(() => moodHistory.value.slice(0, 12))
+/** 近 7 天有记录的天数 + 平均心情（速览条与心情区摘要共用） */
+const weekRecordedDays = computed(() => weekBars.value.filter(d => d.label !== '未记录').length)
+const weekMoodAvgLabel = computed(() => {
+  const scores = weekBars.value.filter(d => d.score).map(d => d.score)
+  if (!scores.length) return ''
+  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+  return MOODS.find(m => m.score === avg)?.label || ''
+})
+function moodTime(iso: string) {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
-function loadCards() {
+function openLedger() { ledgerVisible.value = true }
+
+async function loadMood() {
   try {
-    const raw = localStorage.getItem(storageKey)
-    if (!raw) return
-    const parsed = JSON.parse(raw) as { order?: unknown; hidden?: unknown }
-    if (Array.isArray(parsed.order)) {
-      const valid = parsed.order.filter(isCardId)
-      const missing = CARD_IDS.filter(id => !valid.includes(id))
-      cardOrder.value = [...valid, ...missing]
-    }
-    if (Array.isArray(parsed.hidden)) hiddenIds.value = parsed.hidden.filter(isCardId)
-  } catch { /* ignore */ }
+    moodHistory.value = await fetchEmotionHistory(30, 300) || []
+  } catch { /* 失败保持空态，区域结构不变 */ }
 }
-// 首帧前就应用本地保存的排序/显隐：原先放在 onMounted 里会在挂载后第二次渲染才生效，
-// 卡片位置与显隐会当场跳变（与页面切换动画叠加后尤其明显）
-loadCards()
-function saveCards() {
-  try { localStorage.setItem(storageKey, JSON.stringify({ order: cardOrder.value, hidden: hiddenIds.value })) } catch { /* ignore */ }
-}
-function orderOf(id: CardId) { return cardOrder.value.indexOf(id) + 1 }
-function isVisible(id: CardId) { return !hiddenIds.value.includes(id) }
-function show(id: CardId) { return editMode.value || isVisible(id) }
-function cardClass(id: CardId) {
-  return { 'gd-editing': editMode.value, 'gd-card--hidden': editMode.value && !isVisible(id) }
-}
-function canUp(id: CardId) { return cardOrder.value.indexOf(id) > 0 }
-function canDown(id: CardId) { return cardOrder.value.indexOf(id) < cardOrder.value.length - 1 }
-const prefersReducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  : false
-
-function cardEls(): HTMLElement[] {
-  if (!rootRef.value) return []
-  return Array.from(rootRef.value.querySelectorAll<HTMLElement>('[data-card]'))
-}
-
-async function move(id: CardId, dir: number) {
-  const arr = [...cardOrder.value]
-  const i = arr.indexOf(id)
-  const j = i + dir
-  if (i < 0 || j < 0 || j >= arr.length) return
-
-  // FLIP：先记录旧位置 → 改变顺序 → 下一帧测量新位置 → 反向后过渡回位
-  const els = cardEls()
-  const first = new Map<HTMLElement, DOMRect>()
-  els.forEach(el => first.set(el, el.getBoundingClientRect()))
-
-  ;[arr[i], arr[j]] = [arr[j], arr[i]]
-  cardOrder.value = arr
-  saveCards()
-
-  if (prefersReducedMotion) return
-  await nextTick()
-
-  els.forEach(el => {
-    const f = first.get(el)
-    if (!f) return
-    const l = el.getBoundingClientRect()
-    const dx = f.left - l.left
-    const dy = f.top - l.top
-    if (!dx && !dy) return
-    el.style.transition = 'none'
-    el.style.transform = `translate(${dx}px, ${dy}px)`
-    void el.offsetHeight
-    el.style.transition = 'transform 0.32s cubic-bezier(0.16, 1, 0.3, 1)'
-    el.style.transform = ''
-  })
-
-  window.setTimeout(() => {
-    els.forEach(el => { el.style.transition = '' })
-  }, 380)
-}
-function toggle(id: CardId) {
-  hiddenIds.value = hiddenIds.value.includes(id)
-    ? hiddenIds.value.filter(x => x !== id)
-    : [...hiddenIds.value, id]
-  saveCards()
-}
-function resetCards() {
-  cardOrder.value = [...CARD_IDS]
-  hiddenIds.value = []
-  saveCards()
-}
-
-function dimOpacity(v: number) {
-  return 0.55 + (v / 100) * 0.45
+async function pickMood(m: Mood) {
+  if (moodSaving.value) return
+  moodSaving.value = true
+  try {
+    await recordEmotion(m.emotion, 1, 'manual')
+    await loadMood()
+  } catch { /* 失败静默：本地不假写，下次进入会重试拉取 */ }
+  finally { moodSaving.value = false }
 }
 
 function go(p: string) { router.push(p) }
-/** 下一节课卡（查看全部课程入口）：整卡点击推入课程表；卡片编辑模式下不跳转 */
-function openSchedule() { if (!editMode.value) emit('open', 'schedule') }
-function pillClass(p: number) {
-  return p >= 80 ? 'gd-pill-danger' : p >= 60 ? 'gd-pill-warning' : 'gd-pill-primary'
-}
-function actionLabel(p: number) { return p >= 80 ? '重点关注' : p >= 60 ? '值得关注' : '温馨提醒' }
+/** 今日学业卡（查看全部课程入口）：整卡点击推入课程表 */
+function openSchedule() { emit('open', 'schedule') }
 
-async function loadOverview() {
-  try {
-    profile.value = await getGrowthProfile()
-    studentDataCache.profile = profile.value
-  } catch { /* ignore：保留缓存/上次数据，不清空 */ }
-  finally { profileLoaded.value = true }
-}
 async function loadDiscover() {
   discoverLoading.value = true
   try {
@@ -449,17 +461,14 @@ async function loadDiscover() {
       insight.value = feed.insight
       studentDataCache.insight = feed.insight
     } else if (proactiveActions.value.length) {
-      // 服务端缓存未命中：后台补一次 LLM 洞察（不阻塞卡片，失败保持规则文案）
       void loadInsight()
     }
   } catch {
-    // 失败时保留缓存/上次结果（而非清空），避免卡片高度凭空变化
     if (!proactiveActions.value.length && studentDataCache.actions) proactiveActions.value = studentDataCache.actions
   }
   finally { discoverLoading.value = false; discoverLoaded.value = true }
 }
 
-/** 拉取 LLM 洞察：结果写入缓存供二次进入首帧显示；拿不到就不显示（占位区高度固定，不会跳变） */
 async function loadInsight() {
   if (insight.value || insightPending.value) return
   insightPending.value = true
@@ -482,253 +491,385 @@ async function loadTodayTasks() {
   }
 }
 
-onMounted(() => { loadOverview(); loadDiscover(); loadTodayTasks() })
+/** 连续打卡天数（速览条用；失败不阻塞首页，保持 0） */
+const streakDays = ref(0)
+async function loadStreak() {
+  try {
+    const s = await getStreak()
+    streakDays.value = Math.max(0, s?.current || 0)
+  } catch { /* 失败保持 0 */ }
+}
 
-/** 下拉刷新（父组件驾驶舱首页调用）：重拉总览 / AI 主动发现 / 今日任务，同步刷新缓存 */
+onMounted(() => { loadDiscover(); loadTodayTasks(); loadMood(); loadStreak() })
+
+/** 下拉刷新（父组件学业中心首页调用）：重拉 AI 主动发现 / 今日任务 / 心情 / 打卡，同步刷新缓存 */
 async function refresh() {
-  await Promise.all([loadOverview(), loadDiscover(), loadTodayTasks()])
+  await Promise.all([loadDiscover(), loadTodayTasks(), loadMood(), loadStreak()])
 }
 defineExpose({ refresh })
 </script>
 
 <style scoped>
-/* ===== 组件级 token（沿用全局品牌蓝，单一主色） ===== */
+/* ===== 组件级 token =====
+   v4.1：主页去卡片化——唯一保留的白卡是「今日学业」Hero，
+   心情 / AI 发现 / 更多 改为扁平分区，靠发丝线与留白分层。 */
 .growth-dashboard {
-  --gd-primary: #409eff;
-  --gd-primary-strong: #2f7fd8;
-  --gd-primary-soft: #eaf3ff;
-  --gd-primary-track: #e8eef7;
-  --gd-ink: #1a1a2e;
-  --gd-ink-2: #666666;
-  --gd-ink-3: #999999;
-  --gd-border: rgba(0, 0, 0, 0.06);
-  --gd-muted: #f6f8fc;
-  --gd-warning: #e6a23c;
-  --gd-warning-soft: #fdf4e5;
-  --gd-danger: #f56c6c;
-  --gd-danger-soft: #fef0f0;
+  --gd-bg: #f5f6f7;
+  --gd-surface: #ffffff;
+  --gd-ink: #14171a;
+  --gd-ink-2: #5b6470;
+  --gd-ink-3: #8b939e;
+  --gd-ink-quiet: #a8aeb6;
+  --gd-border: #e9ebee;
+  --gd-border-strong: #dcdfe4;
+  --gd-accent: #1a4fd6;
+  --gd-accent-soft: #eef3fd;
+  --gd-warning: #c2410c;
   --gd-radius-lg: 16px;
   --gd-radius-md: 12px;
+  --gd-radius-sm: 9px;
+  --gd-shadow-card: 0 1px 2px rgba(20, 23, 26, 0.035);
 
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
-/* ===== Hero ===== */
-.gd-hero {
-  background: linear-gradient(135deg, #eaf3ff 0%, #f4f9ff 100%);
-  border: 1px solid var(--gd-border);
-  border-radius: var(--gd-radius-lg);
-  padding: 15px 14px;
-}
-.gd-hero-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.gd-greet { font-size: 18px; font-weight: 800; color: var(--gd-ink); letter-spacing: -0.02em; }
+.gd-skel { background: #eef0f3; border-radius: 6px; animation: gd-pulse 1.4s ease-in-out infinite; }
+@keyframes gd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
-.gd-hero-actions { flex: none; display: inline-flex; align-items: center; gap: 6px; }
-.gd-mini-btn {
-  padding: 3px 11px; border-radius: 999px;
-  border: 1px solid var(--gd-border); background: #ffffff;
-  font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--gd-ink-2);
-  cursor: pointer; transition: color .18s ease, border-color .18s ease, background-color .18s ease;
-}
-.gd-mini-btn:hover { color: var(--gd-primary); border-color: var(--gd-primary); }
-.gd-mini-btn--on { background: var(--gd-primary); border-color: var(--gd-primary); color: #ffffff; }
-.gd-mini-btn:focus-visible { outline: 2px solid var(--gd-primary); outline-offset: 2px; }
-
-.gd-hero-main { display: flex; align-items: center; gap: 12px; }
-.gd-next {
-  flex: 1 1 auto; min-width: 0;
-  background: #ffffff;
-  border: 1px solid var(--gd-border);
-  border-left: 4px solid var(--gd-primary);
-  border-radius: var(--gd-radius-md);
-  padding: 11px 13px;
-}
-/* 下一节课卡：整卡可点推入课程表（查看全部课程入口），编辑卡片模式恢复为静态卡 */
-.gd-next.is-link {
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
-  transition: transform .15s ease, box-shadow .18s ease, border-color .18s ease;
-}
-.gd-next.is-link:active { transform: scale(.985); box-shadow: 0 2px 10px rgba(47, 127, 216, 0.14); }
-.gd-next.is-link:focus-visible { outline: 2px solid var(--gd-primary); outline-offset: 2px; }
-.gd-next-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.gd-next-label { font-size: 11px; font-weight: 600; color: var(--gd-primary); letter-spacing: 0.02em; }
-.gd-next-more { flex: none; display: inline-flex; align-items: center; gap: 1px; font-size: 11px; font-weight: 600; color: var(--gd-primary); white-space: nowrap; }
-.gd-next-time { margin-top: 3px; font-size: 20px; font-weight: 800; color: var(--gd-ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.gd-next-name {
-  margin-top: 1px; font-size: 14px; font-weight: 600; color: var(--gd-ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.gd-next-meta {
-  margin-top: 2px; font-size: 11.5px; color: var(--gd-ink-3);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.gd-next-none { margin-top: 6px; font-size: 13px; color: var(--gd-ink-2); }
-
-/* ===== 课程数据加载骨架（Hero 下一节课 / 今日课程卡）：占位条尺寸对齐真实内容，卡片高度不跳变 ===== */
-.gd-skel {
-  border-radius: 6px;
-  background: linear-gradient(90deg, #eef2f8 25%, #e2e9f3 50%, #eef2f8 75%);
-  background-size: 200% 100%;
-  animation: gd-skel-shimmer 1.2s ease-in-out infinite;
-}
-@keyframes gd-skel-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.gd-next-skel-time { margin-top: 5px; height: 20px; width: 56px; }
-.gd-next-skel-name { margin-top: 7px; height: 14px; width: 72%; }
-.gd-next-skel-meta { margin-top: 6px; height: 11px; width: 48%; }
-@media (prefers-reduced-motion: reduce) { .gd-skel { animation: none; } }
-
-.gd-ring-wrap { position: relative; width: 92px; height: 92px; flex: none; }
-.gd-ring { display: block; width: 100%; height: 100%; }
-.gd-ring-track { stroke: var(--gd-primary-track); }
-.gd-ring-progress { stroke: url(#gdRingGrad); transition: stroke-dasharray 0.9s cubic-bezier(.22,.61,.36,1); }
-.gd-ring-center {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-}
-.gd-ring-value { font-size: 26px; line-height: 1; font-weight: 800; color: var(--gd-ink); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.gd-ring-label { font-size: 10.5px; color: var(--gd-ink-3); }
-
-/* ===== KPI 行 ===== */
-.gd-kpi-row { display: flex; gap: 8px; }
-
-/* ===== 可配置卡片区 ===== */
-.gd-stack { display: flex; flex-direction: column; gap: 10px; }
-
-/* ===== 统一卡片：描边分层，静态卡不加阴影 ===== */
-.gd-card {
-  position: relative;
-  background: #ffffff;
-  border: 1px solid var(--gd-border);
-  border-radius: var(--gd-radius-lg);
-  padding: 14px;
-}
-.gd-card.gd-editing { outline: 2px dashed rgba(64, 158, 255, 0.45); outline-offset: -2px; }
-.gd-card.gd-card--hidden { opacity: 0.5; }
-.gd-veil { position: absolute; inset: 0; z-index: 1; background: transparent; border-radius: inherit; }
-
-/* ===== 卡内标题行 ===== */
-.gd-head {
+/* ===== 日期行 ===== */
+.gd-today { padding: 4px 2px 10px; }
+.gd-today-date {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.gd-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--gd-ink);
-  letter-spacing: -0.01em;
-}
-.gd-title-icon { display: flex; align-items: center; gap: 6px; }
-.gd-title-glyph { color: var(--gd-primary); }
-.gd-cap {
-  flex: none;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 17px;
   color: var(--gd-ink-3);
-  white-space: nowrap;
+  min-width: 0;
 }
-.gd-collapse-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 4px; border: none; background: transparent;
-  font-family: inherit; cursor: pointer; border-radius: 8px;
+.gd-today-date b { font-weight: 600; color: var(--gd-ink-2); }
+
+/* ===== 今日学业卡（主页唯一白卡） ===== */
+.gd-today-card {
+  padding: 14px;
+  background: var(--gd-surface);
+  border: 1px solid var(--gd-border);
+  border-radius: var(--gd-radius-lg);
+  box-shadow: var(--gd-shadow-card);
 }
-.gd-collapse-btn:hover { background: var(--gd-muted); }
-.gd-collapse-btn:focus-visible { outline: 2px solid var(--gd-primary); outline-offset: 2px; }
-.gd-collapse-ico { color: var(--gd-ink-3); transition: transform 0.2s ease; }
-.gd-collapse-ico.is-collapsed { transform: rotate(-90deg); }
+.gd-tc-head { display: flex; align-items: center; justify-content: space-between; }
+.gd-tc-cap { margin: 0; font-size: 11.5px; color: var(--gd-ink-3); }
+.gd-tc-all {
+  border: none; background: transparent; padding: 0;
+  font-family: inherit; font-size: 12px; color: var(--gd-accent); cursor: pointer;
+}
+.gd-tc-line { margin: 5px 0 10px; font-size: 19px; line-height: 27px; font-weight: 600; letter-spacing: -0.4px; color: var(--gd-ink); }
+.gd-tc-due { color: #8a5a12; font-weight: 600; }
+.gd-tc-empty { margin: 2px 0 10px; font-size: 13px; color: var(--gd-ink-3); }
+.gd-tl-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 3px 0 3px 10px; margin-bottom: 7px;
+  border-left: 3px solid var(--gd-border-strong);
+}
+.gd-tl-row.is-live { border-left-color: var(--gd-accent); }
+.gd-tl-row.is-done { opacity: 0.62; }
+.gd-tl-time { flex: none; margin: 0; font-size: 12px; line-height: 18px; color: var(--gd-ink-2); font-variant-numeric: tabular-nums; }
+.gd-tl-main { min-width: 0; }
+.gd-tl-name { margin: 0; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--gd-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gd-tl-row.is-live .gd-tl-name { color: var(--gd-accent); }
+.gd-tl-meta { margin: 0; font-size: 11px; line-height: 15px; color: var(--gd-ink-3); }
+.gd-tl-more { margin: 0 0 8px 13px; font-size: 11.5px; color: var(--gd-ink-3); }
+.gd-tc-cta {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 38px; margin-top: 4px;
+  border: none; border-radius: var(--gd-radius-sm);
+  background: var(--gd-ink); color: #fff;
+  font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.gd-tc-cta:active { transform: scale(0.985); }
+.gd-tc-cta:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: 2px; }
 
-/* ===== 五维成长 ===== */
-.gd-dim-list { list-style: none; margin: 0; padding: 0; }
-.gd-dim-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
-.gd-dim-row + .gd-dim-row { border-top: 1px solid var(--gd-border); }
-/* 五维成长骨架：行高对齐 gd-dim-row（5 行），画像返回时高度基本不跳 */
-.gd-dim-skel { display: flex; flex-direction: column; }
-.gd-dim-skel-row { height: 26px; border-radius: 6px; }
-.gd-dim-skel-row + .gd-dim-skel-row { margin-top: 7px; }
-.gd-dim-name { flex: none; width: 56px; font-size: 13px; color: var(--gd-ink-2); white-space: nowrap; }
-.gd-dim-track { flex: 1 1 auto; min-width: 0; height: 7px; border-radius: 999px; background: var(--gd-primary-track); overflow: hidden; }
-.gd-dim-fill { display: block; height: 100%; border-radius: 999px; background: var(--gd-primary); transition: width 0.7s cubic-bezier(.22,.61,.36,1); }
-.gd-dim-value { flex: none; width: 26px; text-align: right; font-size: 13px; font-weight: 600; color: var(--gd-ink); font-variant-numeric: tabular-nums; }
-.gd-empty-line { margin: 0; font-size: 12px; color: var(--gd-ink-3); padding: 4px 0; }
+/* ===== 扁平分区：无底色无描边，区与区之间一条发丝线 ===== */
+.gd-flat { padding: 16px 2px 14px; }
+/* 有卡片外壳的分区（AI 入口 / 更多）之间不再画发丝线，靠卡片间距分隔 */
+.gd-flat + .gd-flat { border-top: 0; }
+.gd-flat-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.gd-flat-head-main { min-width: 0; }
+.gd-flat-title { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--gd-ink); letter-spacing: -0.2px; }
+.gd-flat-sub { margin: 2px 0 0; font-size: 11px; line-height: 15px; color: var(--gd-ink-3); font-weight: 400; }
+.gd-flat-head > .gd-flat-sub { flex: none; align-self: center; white-space: nowrap; }
 
-/* ===== 快捷空间 ===== */
-.gd-space-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; column-gap: 6px; }
-.gd-space-item {
+/* ===== 速览条：四个数字平铺，靠竖线分隔，不形成第二张卡片 ===== */
+.gd-glance {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  margin: 2px 0 0; padding: 12px 0 2px;
+}
+.gd-glance-item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 0 2px; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; -webkit-tap-highlight-color: transparent;
+}
+.gd-glance-item + .gd-glance-item::before {
+  content: ''; position: absolute; left: 0; top: 3px; bottom: 3px;
+  width: 1px; background: var(--gd-border);
+}
+.gd-glance-item b {
+  font-size: 18px; font-weight: 600; line-height: 22px; color: var(--gd-ink);
+  font-variant-numeric: tabular-nums;
+}
+.gd-glance-item span { font-size: 10.5px; line-height: 14px; color: var(--gd-ink-3); }
+.gd-glance-item:active b { color: var(--gd-accent); }
+.gd-glance-item:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: 2px; border-radius: 8px; }
+
+/* ===== 更多入口：轻卡片，横向滑动 6 个入口 ===== */
+.gd-flat.gd-more {
+  margin: 10px 0 2px;
+  padding: 14px 10px 12px;
+  border: 1px solid var(--gd-border);
+  border-radius: 14px;
+  background: var(--gd-surface);
+  box-shadow: 0 1px 2px rgba(17, 20, 24, 0.04);
+}
+.gd-flat.gd-more .gd-flat-head { padding: 0 3px; }
+
+/* ===== 心情（独立软底面板：与页面灰底明显区分，承载 5 档气泡） ===== */
+.gd-flat.gd-mood {
+  position: relative;
+  margin: 10px 0 2px;
+  padding: 15px 13px 12px;
+  border-top: 0;
+  border-radius: 18px;
+  background:
+    radial-gradient(130% 100% at 4% 0%, #eef4ff 0%, rgba(238, 244, 255, 0) 58%),
+    radial-gradient(120% 100% at 100% 6%, #fdeff6 0%, rgba(253, 239, 246, 0) 54%),
+    linear-gradient(168deg, #ffffff 0%, #f8fafd 52%, #f5f2fa 100%);
+  box-shadow:
+    0 1px 2px rgba(17, 20, 24, 0.05),
+    inset 0 0 0 1px rgba(17, 20, 24, 0.045);
+}
+.gd-flat.gd-mood + .gd-flat { border-top: 0; }
+.gd-mood-sync {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: 999px;
+  background: var(--gd-accent-soft); color: var(--gd-accent);
+  font-size: 10.5px; font-weight: 500;
+}
+/* 表情气泡：带高光的立体马卡龙珠，选中后升起、描同色光环并亮出对勾 */
+.gd-mood-faces {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 6px; margin: 14px 0 0; padding: 0 2px;
+}
+.gd-mood-face {
+  flex: 1; min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 5px 2px;
-  border: none; background: transparent; font-family: inherit; cursor: pointer;
-  border-radius: var(--gd-radius-md);
-  transition: background-color .18s ease, transform .18s ease;
+  padding: 4px 2px 5px;
+  border: none; border-radius: 12px; background: transparent;
+  cursor: pointer; font-family: inherit;
+  transition: background 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.gd-space-icon { display: inline-flex; align-items: center; justify-content: center; color: var(--gd-primary); }
-.gd-space-label { font-size: 11px; line-height: 1.2; color: var(--gd-ink-2); white-space: nowrap; }
-.gd-space-item:hover { background: var(--gd-muted); }
-.gd-space-item:active { transform: scale(.96); }
-.gd-space-item:focus-visible { outline: 2px solid var(--gd-primary); outline-offset: 2px; }
-
-/* ===== AI 主动发现 ===== */
-.gd-icon-btn {
-  flex: none; width: 28px; height: 28px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--gd-border); border-radius: var(--gd-radius-md);
-  background: #ffffff; color: var(--gd-ink-2); cursor: pointer;
-  transition: background-color .18s ease, color .18s ease, transform .18s ease;
+.gd-mood-face-emoji {
+  position: relative;
+  width: var(--mood-s, 38px); height: var(--mood-s, 38px);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 122%, color-mix(in srgb, var(--mood-c) 88%, #fff) 0%, color-mix(in srgb, var(--mood-c) 52%, #fff) 54%, color-mix(in srgb, var(--mood-c) 26%, #fff) 100%);
+  box-shadow:
+    inset 0 -5px 9px color-mix(in srgb, var(--mood-c) 42%, transparent),
+    inset 0 2px 3px rgba(255, 255, 255, 0.9),
+    0 3px 8px color-mix(in srgb, var(--mood-c) 24%, transparent);
+  opacity: 0.86;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, opacity 0.2s ease;
 }
-.gd-icon-btn:hover { background: var(--gd-muted); color: var(--gd-primary); }
-.gd-icon-btn:active { transform: scale(.92); }
-.gd-icon-btn:focus-visible { outline: 2px solid var(--gd-primary); outline-offset: 2px; }
-
-.gd-ai-empty { display: flex; align-items: center; gap: 8px; color: var(--gd-ink-3); font-size: 12.5px; padding: 6px 0; }
-.gd-ai-empty-icon { color: #34d399; }
-/* LLM 洞察引导句：高度固定 50px（容纳 2 行 12px/1.45 文案 + 内边距），
-   异步到达或始终拿不到洞察时卡片高度都不变，避免推动下方卡片 */
-.gd-ai-insight {
-  display: flex; align-items: flex-start; gap: 6px;
-  height: 50px; box-sizing: border-box; margin-bottom: 8px; padding: 7px 9px;
-  border-radius: 8px; background: var(--gd-primary-soft); overflow: hidden;
-  font-size: 12px; line-height: 1.45; color: var(--gd-primary-strong);
+/* 左上高光：让气泡有玻璃珠的受光面 */
+.gd-mood-face-shine {
+  position: absolute;
+  top: calc(var(--mood-s, 38px) * 0.16); left: calc(var(--mood-s, 38px) * 0.24);
+  width: calc(var(--mood-s, 38px) * 0.32); height: calc(var(--mood-s, 38px) * 0.18);
+  border-radius: 50%;
+  transform: rotate(-20deg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
 }
-.gd-ai-insight-ico { flex: none; margin-top: 2px; color: var(--gd-primary); }
-.gd-ai-insight-text {
-  flex: 1 1 auto; min-width: 0;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+.gd-mood-face-glyph {
+  position: relative;
+  font-size: calc(var(--mood-s, 38px) * 0.54); line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.16));
 }
-.gd-ai-insight-skel { flex: 1 1 auto; height: 12px; margin-top: 3px; }
-/* AI 主动发现加载骨架：行高对齐 gd-insight-row（2 行文案 + 内边距），加载完成时高度基本不跳 */
-.gd-ai-skel-row { height: 50px; border-radius: 8px; }
-.gd-ai-skel-row + .gd-ai-skel-row { margin-top: 8px; }
-
-.gd-insight-list { display: flex; flex-direction: column; }
-.gd-insight-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; min-width: 0; }
-.gd-insight-row + .gd-insight-row { border-top: 1px solid var(--gd-border); }
-.gd-pill {
-  flex: none; display: inline-flex; align-items: center;
-  padding: 2px 8px; border-radius: 999px;
-  font-size: 11px; font-weight: 600; white-space: nowrap;
+/* 选中对勾：挂在气泡右下，和光环一起构成明确的「已记录」状态 */
+.gd-mood-face-check {
+  position: absolute;
+  right: -3px; bottom: -3px;
+  width: 15px; height: 15px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--mood-c); color: #fff;
+  font-size: 9px; font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 1.5px #fff, 0 2px 4px rgba(17, 20, 24, 0.18);
 }
-.gd-pill-primary { background: var(--gd-primary-soft); color: var(--gd-primary); }
-.gd-pill-warning { background: var(--gd-warning-soft); color: var(--gd-warning); }
-.gd-pill-danger { background: var(--gd-danger-soft); color: var(--gd-danger); }
-.gd-insight-text {
-  margin: 0; flex: 1 1 auto; min-width: 0;
-  font-size: 12px; line-height: 1.5; color: var(--gd-ink-2);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+.gd-mood-face-label {
+  font-size: 10.5px; line-height: 14px; color: var(--gd-ink-3);
+  transition: color 0.18s ease;
 }
-.gd-insight-strong { font-weight: 600; color: var(--gd-ink); }
-
+.gd-mood-face:hover .gd-mood-face-emoji { opacity: 1; transform: translateY(-2px); }
+.gd-mood-face.is-active .gd-mood-face-emoji {
+  opacity: 1;
+  transform: translateY(-3px) scale(1.08);
+  box-shadow:
+    0 0 0 2.5px #fff,
+    0 0 0 4px color-mix(in srgb, var(--mood-c) 78%, transparent),
+    0 6px 14px color-mix(in srgb, var(--mood-c) 38%, transparent);
+  animation: gd-mood-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.gd-mood-face.is-active .gd-mood-face-label { color: var(--gd-ink); font-weight: 600; }
+.gd-mood-face.is-active::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 16px; height: 2px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mood-c) 70%, transparent);
+}
+.gd-mood-face { position: relative; }
+.gd-mood-face:disabled { cursor: default; }
+.gd-mood-face:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: 2px; }
+@keyframes gd-mood-pop {
+  0% { transform: translateY(0) scale(0.92); }
+  60% { transform: translateY(-4px) scale(1.12); }
+  100% { transform: translateY(-3px) scale(1.08); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .gd-ring-progress, .gd-dim-fill, .gd-collapse-ico { transition: none; }
-  .gd-next.is-link, .gd-space-item, .gd-icon-btn, .gd-mini-btn { transition: none; }
+  .gd-mood-face.is-active .gd-mood-face-emoji { animation: none; }
 }
+.gd-mood-label { margin: 10px 0 0; text-align: center; font-size: 13px; font-weight: 600; color: var(--gd-ink-3); }
+/* 已记录时用同色加深，保留心情色彩又不牺牲可读性（浅色气泡色直接做文字会看不清） */
+.gd-mood-label.is-set { color: color-mix(in srgb, var(--mood-c) 52%, #14171b); }
+.gd-mood-tip { margin: 3px 0 0; text-align: center; font-size: 11px; line-height: 16px; color: var(--gd-ink-3); }
+/* 近 7 天：白底面板（与心情区的软色底形成层次），承载柱状与摘要 */
+.gd-mood-panel {
+  margin-top: 12px; padding: 10px 10px 8px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(17, 20, 24, 0.03),
+    inset 0 0 0 1px rgba(17, 20, 24, 0.04);
+}
+.gd-mood-panel-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: 10.5px; line-height: 14px; color: var(--gd-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.gd-mood-panel-head span:first-child { font-weight: 600; color: var(--gd-ink-2); }
+/* 周柱：柱子放在固定高轨道里并贴底，日期行与柱底永远在同一条基线上 */
+.gd-mood-week { display: flex; justify-content: space-between; margin-top: 8px; padding: 0 2px; }
+.gd-mood-col {
+  display: flex; flex-direction: column; align-items: center;
+  flex: 1; min-width: 0;
+  padding: 3px 0 2px; border-radius: 9px;
+}
+.gd-mood-col.is-today { background: rgba(17, 17, 17, 0.04); }
+.gd-mood-track { display: flex; align-items: flex-end; height: 46px; }
+.gd-mood-bar {
+  display: block; width: 14px;
+  border-radius: 5px 5px 2px 2px;
+  min-height: 5px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.gd-mood-day { margin-top: 5px; font-size: 10.5px; color: var(--gd-ink-3); }
+.gd-mood-day.is-today { color: var(--gd-ink); font-weight: 600; }
+.gd-mood-ledger-btn {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  width: 100%; margin-top: 12px; padding: 8px 0 0;
+  border: none; border-top: 1px dashed var(--gd-border); border-radius: 0;
+  background: transparent; font-family: inherit; font-size: 12px; color: var(--gd-ink-2); cursor: pointer;
+}
+.gd-mood-ledger-btn:hover { color: var(--gd-ink); }
+
+/* ===== AI 主动发现（扁平时间线） ===== */
+.gd-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: none; background: transparent; color: var(--gd-ink-3); cursor: pointer;
+}
+.gd-icon-btn:hover { background: #eceef1; color: var(--gd-ink); }
+.gd-ai-entry {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 12px 13px;
+  margin: 10px 0 2px;
+  border: 1px solid var(--gd-border); border-radius: 14px;
+  background: var(--gd-surface); cursor: pointer;
+  box-shadow: 0 1px 2px rgba(17, 20, 24, 0.04);
+  font-family: inherit; text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.gd-ai-entry:active { background: #f7f8fa; }
+.gd-ai-entry:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: -2px; border-radius: 8px; }
+.gd-ai-badge {
+  flex: none; width: 34px; height: 34px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: #f5f6f8;
+}
+.gd-ai-badge-img {
+  width: 28px; height: 28px; object-fit: contain;
+  user-select: none; -webkit-user-select: none; -webkit-user-drag: none; pointer-events: none;
+}
+.gd-ai-entry-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gd-ai-entry-title { font-size: 14px; font-weight: 600; color: var(--gd-ink); }
+.gd-ai-entry-sub { font-size: 12px; line-height: 17px; color: var(--gd-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gd-ai-chev { color: var(--gd-ink-quiet); flex: none; }
+
+/* ===== 更多：单排横向滑动入口 ===== */
+.gd-tile-scroll {
+  margin: 10px -2px 0;
+  overflow-x: auto; overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  /* 两侧渐隐：让滑出屏幕的入口自然淡掉，而不是被硬生生切一半 */
+  mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 16px), transparent 100%);
+}
+.gd-tile-scroll::-webkit-scrollbar { display: none; }
+.gd-tile-track {
+  display: flex; align-items: flex-start; justify-content: center;
+  gap: 12px; width: max-content; min-width: 100%;
+  padding: 2px 2px 2px;
+}
+.gd-tile {
+  flex: none; width: 58px; scroll-snap-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 0; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; -webkit-tap-highlight-color: transparent;
+}
+.gd-tile:active .gd-tile-chip { transform: scale(0.94); }
+.gd-tile:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: 2px; border-radius: 12px; }
+.gd-tile-chip {
+  width: 42px; height: 42px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+.gd-tile-label { font-size: 11px; line-height: 15px; color: var(--gd-ink-2); white-space: nowrap; }
+
+/* ===== 心情台账弹窗 ===== */
+.gd-ledger-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
+.gd-ledger-cell { aspect-ratio: 1; border-radius: 6px; min-height: 22px; }
+.gd-ledger-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 14px; }
+.gd-ledger-lg { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--gd-ink-2); }
+.gd-ledger-lg i { width: 10px; height: 10px; border-radius: 3px; }
+.gd-ledger-empty { margin: 16px 0 4px; font-size: 13px; color: var(--gd-ink-3); text-align: center; }
+.gd-ledger-list { list-style: none; margin: 14px 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.gd-ledger-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
+.gd-ledger-row + .gd-ledger-row { border-top: 1px solid var(--gd-border); }
+.gd-ledger-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.gd-ledger-lb { font-size: 13px; color: var(--gd-ink); }
+.gd-ledger-src { margin-left: auto; font-size: 11px; color: var(--gd-ink-3); }
+.gd-ledger-tm { font-size: 11px; color: var(--gd-ink-3); font-variant-numeric: tabular-nums; }
 </style>

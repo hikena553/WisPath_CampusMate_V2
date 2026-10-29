@@ -162,6 +162,11 @@ export function getCheckins() {
   return request.get<Checkin[]>('/plan/checkins')
 }
 
+/** 撤销当天打卡（误点修正），任务会同步回退为进行中 */
+export function deleteCheckin(id: number) {
+  return request.delete(`/plan/checkins/${id}`)
+}
+
 export interface Streak {
   current: number
   longest: number
@@ -183,6 +188,7 @@ export interface TodayTask {
   plan_id: number
   plan_title: string
   checked_today: boolean
+  checkin_id: number | null
 }
 
 export function getToday() {

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>v5 子页设计方案</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:#e9ebee; padding:32px 24px; }
+  .page-sec { margin-bottom:48px; }
+  .sec-head { max-width:1200px; margin:0 auto 16px; }
+  .sec-head h2 { font-size:22px; color:#14171a; }
+  .sec-head p { font-size:13px; color:#5b6472; margin-top:4px; line-height:1.6; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; max-width:1200px; margin:0 auto; }
+  .frame-wrap { width:340px; }
+  .frame-label { font-size:14px; font-weight:600; color:#14171a; margin-bottom:8px; }
+  .frame-label b { color:#fff; background:#14171a; border-radius:6px; padding:2px 8px; font-size:12px; margin-right:8px; }
+  .frame-label small { display:block; font-weight:400; color:#8a9099; font-size:12px; margin-top:3px; }
+  .phone { width:340px; height:640px; background:#f5f6f7; border-radius:28px; overflow:hidden; box-shadow:0 12px 32px rgba(20,23,26,.14); position:relative; }
+  .head { height:48px; background:#fff; border-bottom:1px solid #e9ebee; display:flex; align-items:center; padding:0 14px; gap:7px; flex:none; }
+  .head .dot { width:7px; height:7px; border-radius:50%; }
+  .head .t { font-size:15px; font-weight:600; color:#14171a; }
+  .head .s { font-size:10.5px; color:#9aa0a8; margin-left:auto; }
+  .body { height:calc(100% - 48px); overflow:hidden; padding:12px 14px; }
+  .scroll::-webkit-scrollbar { display:none; }
+
+  /* 通用原子 */
+  .sec-t { font-size:14px; font-weight:600; color:#14171a; margin:14px 0 8px; }
+  .hairline { border-top:1px solid #e9ebee; }
+  .tag { display:inline-block; font-size:10.5px; padding:2px 8px; border-radius:6px; font-weight:500; }
+  .btn-dark { display:block; background:#14171a; color:#fff; border-radius:12px; text-align:center; padding:11px 0; font-size:14px; font-weight:600; }
+
+  /* ============ 成长轨迹 A：Apple Fitness ============ */
+  .fit-hero { background:#fff; border-radius:16px; padding:16px; display:flex; gap:16px; align-items:center; }
+  .rings { width:86px; height:86px; flex:none; }
+  .fit-meta { flex:1; }
+  .fit-meta .big { font-size:20px; font-weight:700; color:#14171a; }
+  .fit-meta .sub { font-size:11.5px; color:#8a9099; margin-top:2px; }
+  .fit-leg { display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+  .fit-leg span { display:flex; align-items:center; gap:6px; font-size:11px; color:#5b6472; }
+  .fit-leg i { width:8px; height:8px; border-radius:50%; }
+  .fit-bars { background:#fff; border-radius:16px; padding:14px 16px; margin-top:10px; }
+  .fit-bars .week { display:flex; align-items:flex-end; gap:10px; height:56px; margin-top:10px; }
+  .fit-bars .b { flex:1; border-radius:4px 4px 2px 2px; }
+  .fit-bars .d { display:flex; gap:10px; margin-top:5px; }
+  .fit-bars .d span { flex:1; text-align:center; font-size:9.5px; color:#9aa0a8; }
+  .fit-row { display:flex; align-items:center; gap:10px; padding:11px 0; }
+  .fit-row + .fit-row { border-top:1px solid #f0f1f3; }
+  .fit-row .ic { width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:15px; flex:none; }
+  .fit-row .tx { flex:1; font-size:12.5px; color:#14171a; }
+  .fit-row .tx small { display:block; font-size:10.5px; color:#9aa0a8; margin-top:1px; }
+  .fit-row .v { font-size:12px; font-weight:600; color:#14171a; }
+
+  /* ============ 成长轨迹 B：Duolingo ============ */
+  .dl-streak { background:linear-gradient(135deg,#58cc02,#4bb30a); border-radius:16px; padding:14px 16px; color:#fff; display:flex; align-items:center; gap:12px; }
+  .dl-streak .n { font-size:26px; font-weight:800; }
+  .dl-streak .l { font-size:12px; opacity:.9; }
+  .dl-streak .flame { margin-left:auto; font-size:26px; }
+  .dl-path { position:relative; margin-top:14px; padding-left:26px; }
+  .dl-path::before { content:''; position:absolute; left:11px; top:6px; bottom:6px; width:3px; border-radius:2px; background:#dce9c8; }
+  .dl-node { position:relative; margin-bottom:14px; }
+  .dl-node .pt { position:absolute; left:-26px; top:2px; width:20px; height:20px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 0 2px #dce9c8; }
+  .dl-node.done .pt { background:#58cc02; }
+  .dl-node.now .pt { background:#ffc800; box-shadow:0 0 0 4px rgba(255,200,0,.3); }
+  .dl-node.lock .pt { background:#e5e7ea; }
+  .dl-node .bx { background:#fff; border-radius:14px; padding:11px 13px; }
+  .dl-node .bx h4 { font-size:13px; color:#14171a; }
+  .dl-node .bx p { font-size:11px; color:#8a9099; margin-top:2px; }
+  .dl-node.now .bx { border:2px solid #ffc800; }
+
+  /* ============ 成长轨迹 C：flomo/Notion ============ */
+  .fl-chips { display:flex; gap:8px; margin-bottom:12px; }
+  .fl-chips span { font-size:11.5px; padding:5px 12px; border-radius:999px; background:#fff; color:#5b6472; border:1px solid #e9ebee; }
+  .fl-chips span.on { background:#14171a; color:#fff; border-color:#14171a; }
+  .fl-item { padding:11px 0; }
+  .fl-item + .fl-item { border-top:1px solid #f0f1f3; }
+  .fl-item .meta { display:flex; align-items:center; gap:6px; font-size:10.5px; color:#9aa0a8; }
+  .fl-item .meta .tg { color:#0f7a58; background:#e3f2ec; padding:1px 7px; border-radius:5px; font-weight:500; }
+  .fl-item p { font-size:12.5px; color:#14171a; margin-top:5px; line-height:1.55; }
+
+  /* ============ 请假服务 A：美团订单流 ============ */
+  .mt-status { background:#fff; border-radius:16px; padding:16px; }
+  .mt-steps { display:flex; margin-top:14px; }
+  .mt-step { flex:1; text-align:center; position:relative; }
+  .mt-step .c { width:22px; height:22px; border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; position:relative; z-index:1; }
+  .mt-step::before { content:''; position:absolute; top:10px; left:-50%; width:100%; height:2px; background:#e9ebee; }
+  .mt-step:first-child::before { display:none; }
+  .mt-step.done::before, .mt-step.cur::before { background:#ff7a1a; }
+  .mt-step .c.done { background:#ff7a1a; }
+  .mt-step .c.cur { background:#ffb066; box-shadow:0 0 0 3px rgba(255,122,26,.18); }
+  .mt-step .c.wait { background:#d6d9de; }
+  .mt-step p { font-size:10px; color:#8a9099; margin-top:6px; }
+  .mt-step.cur p { color:#ff7a1a; font-weight:600; }
+  .mt-cta { background:linear-gradient(90deg,#ff7a1a,#ff9f45); color:#fff; border-radius:12px; text-align:center; padding:12px 0; font-size:14.5px; font-weight:600; margin:14px 0 4px; }
+  .mt-item { display:flex; align-items:center; gap:10px; padding:12px 0; }
+  .mt-item + .mt-item { border-top:1px solid #f0f1f3; }
+  .mt-item .ic { width:36px; height:36px; border-radius:10px; background:#fff3e8; display:flex; align-items:center; justify-content:center; font-size:16px; flex:none; }
+  .mt-item .tx { flex:1; }
+  .mt-item .tx h5 { font-size:13px; color:#14171a; }
+  .mt-item .tx small { font-size:10.5px; color:#9aa0a8; }
+  .mt-item .st { font-size:11px; color:#ff7a1a; font-weight:600; }
+
+  /* ============ 请假服务 B：支付宝办事大厅 ============ */
+  .zf-greet { display:flex; align-items:center; gap:10px; }
+  .zf-greet h3 { font-size:17px; color:#14171a; }
+  .zf-greet p { font-size:11px; color:#9aa0a8; }
+  .zf-grid { background:#fff; border-radius:16px; padding:16px 8px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px 4px; margin-top:12px; }
+  .zf-grid .g { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .zf-grid .ic { width:42px; height:42px; border-radius:13px; display:flex; align-items:center; justify-content:center; font-size:19px; }
+  .zf-grid .lb { font-size:10.5px; color:#3c4450; }
+  .zf-notice { background:#fff; border-radius:14px; padding:11px 13px; margin-top:10px; display:flex; gap:8px; align-items:center; font-size:11.5px; color:#5b6472; }
+  .zf-notice b { color:#1677ff; font-weight:600; flex:none; }
+  .zf-quick { display:flex; align-items:center; justify-content:space-between; padding:12px 2px; }
+  .zf-quick + .zf-quick { border-top:1px solid #f0f1f3; }
+  .zf-quick .l { font-size:12.5px; color:#14171a; }
+  .zf-quick .l small { display:block; font-size:10.5px; color:#9aa0a8; margin-top:1px; }
+  .zf-quick .r { font-size:11px; color:#9aa0a8; }
+
+  /* ============ 请假服务 C：Apple Wallet ============ */
+  .wl-card { border-radius:16px; padding:16px; color:#fff; margin-bottom:12px; position:relative; }
+  .wl-card .brand { font-size:10.5px; opacity:.85; letter-spacing:.5px; }
+  .wl-card h4 { font-size:17px; font-weight:700; margin-top:6px; }
+  .wl-card .row2 { display:flex; justify-content:space-between; margin-top:22px; font-size:11px; opacity:.92; }
+  .wl-card .st { background:rgba(255,255,255,.22); border-radius:999px; padding:2px 10px; font-size:10.5px; }
+
+  /* ============ 学习计划 A：滴答清单 ============ */
+  .td-prog { background:#fff; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:14px; }
+  .td-prog .ring { width:52px; height:52px; flex:none; }
+  .td-prog .tx h4 { font-size:14px; color:#14171a; }
+  .td-prog .tx p { font-size:11px; color:#9aa0a8; margin-top:2px; }
+  .td-group { font-size:11.5px; color:#9aa0a8; margin:14px 2px 6px; display:flex; justify-content:space-between; }
+  .td-item { display:flex; align-items:flex-start; gap:10px; padding:10px 0; }
+  .td-item + .td-item { border-top:1px solid #f0f1f3; }
+  .td-item .cb { width:18px; height:18px; border-radius:6px; border:2px solid #c9ccd2; flex:none; margin-top:1px; }
+  .td-item.done .cb { background:#3478f6; border-color:#3478f6; position:relative; }
+  .td-item.done .cb::after { content:'✓'; color:#fff; font-size:11px; position:absolute; left:2px; top:-2px; }
+  .td-item .tx { flex:1; }
+  .td-item .tx h5 { font-size:13px; color:#14171a; font-weight:500; }
+  .td-item.done .tx h5 { color:#b6bac1; text-decoration:line-through; }
+  .td-item .tx small { font-size:10.5px; color:#9aa0a8; }
+  .td-item .prio { font-size:10px; padding:1px 7px; border-radius:5px; flex:none; margin-top:2px; }
+
+  /* ============ 学习计划 B：Duolingo 关卡地图 ============ */
+  .map-path { position:relative; height:100%; }
+  .map-node { width:74px; text-align:center; margin:0 auto 4px; position:relative; }
+  .map-node .c { width:60px; height:60px; border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center; font-size:22px; color:#fff; font-weight:700; border-bottom:5px solid rgba(0,0,0,.15); }
+  .map-node p { font-size:10.5px; color:#5b6472; margin-top:5px; }
+  .map-node .c.cur { background:#ffc800; box-shadow:0 0 0 6px rgba(255,200,0,.25); }
+  .map-node .c.done { background:#58cc02; }
+  .map-node .c.lock { background:#d6d9de; }
+  .map-node:nth-child(odd) { transform:translateX(-34px); }
+  .map-node:nth-child(even) { transform:translateX(34px); }
+  .map-week { text-align:center; font-size:11px; color:#9aa0a8; margin:8px 0; }
+
+  /* ============ 学习计划 C：Forest ============ */
+  .fs-hero { background:linear-gradient(160deg,#0f3d2e,#1c6b4a); border-radius:16px; padding:16px; color:#fff; }
+  .fs-hero .big { font-size:22px; font-weight:700; }
+  .fs-hero .sub { font-size:11.5px; opacity:.85; margin-top:3px; }
+  .fs-stats { display:flex; gap:18px; margin-top:14px; }
+  .fs-stats .s .n { font-size:16px; font-weight:700; }
+  .fs-stats .s .l { font-size:10px; opacity:.75; }
+  .fs-plan { background:#fff; border-radius:14px; padding:12px 14px; margin-top:10px; display:flex; align-items:center; gap:10px; }
+  .fs-plan .tree { font-size:20px; flex:none; }
+  .fs-plan .tx { flex:1; }
+  .fs-plan .tx h5 { font-size:13px; color:#14171a; }
+  .fs-plan .tx small { font-size:10.5px; color:#9aa0a8; }
+  .fs-bar { height:5px; background:#eef1f4; border-radius:3px; margin-top:6px; overflow:hidden; }
+  .fs-bar i { display:block; height:100%; border-radius:3px; background:#2f9e63; }
+
+  /* ============ 作品集 A：小红书瀑布流 ============ */
+  .xhs-grid { column-count:2; column-gap:10px; }
+  .xhs-card { background:#fff; border-radius:12px; overflow:hidden; margin-bottom:10px; break-inside:avoid; }
+  .xhs-card .img { display:flex; align-items:center; justify-content:center; color:#fff; font-size:26px; }
+  .xhs-card .cap { padding:8px 10px 10px; }
+  .xhs-card .cap p { font-size:11.5px; color:#14171a; line-height:1.45; }
+  .xhs-card .cap .m { display:flex; align-items:center; gap:4px; margin-top:6px; font-size:10px; color:#9aa0a8; }
+  .xhs-card .cap .m i { width:14px; height:14px; border-radius:50%; background:#d6d9de; }
+
+  /* ============ 作品集 B：GitHub pinned ============ */
+  .gh-card { background:#fff; border:1px solid #e4e7eb; border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .gh-card h5 { font-size:13px; color:#0969da; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .gh-card h5 i { width:13px; height:13px; border:1.5px solid #9aa0a8; border-radius:50%; display:inline-block; }
+  .gh-card p { font-size:11px; color:#6a737d; margin-top:4px; line-height:1.5; }
+  .gh-card .m { display:flex; gap:14px; margin-top:9px; font-size:10.5px; color:#6a737d; align-items:center; }
+  .gh-card .m .lang { display:flex; align-items:center; gap:5px; }
+  .gh-card .m .lang i { width:9px; height:9px; border-radius:50%; }
+
+  /* ============ 作品集 C：Behance 大图 ============ */
+  .bh-card { background:#fff; border-radius:14px; overflow:hidden; margin-bottom:12px; }
+  .bh-card .img { height:130px; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,.85); font-size:15px; font-weight:600; letter-spacing:1px; }
+  .bh-card .cap { padding:10px 13px 12px; }
+  .bh-card .cap h5 { font-size:13.5px; color:#14171a; }
+  .bh-card .cap .m { display:flex; gap:12px; font-size:10.5px; color:#9aa0a8; margin-top:4px; }
+
+  /* ============ 我的申请 A：顺丰跟踪 ============ */
+  .sf-card { background:#fff; border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+  .sf-card .top { display:flex; align-items:center; gap:8px; }
+  .sf-card .top h5 { font-size:13.5px; color:#14171a; flex:1; }
+  .sf-trace { margin-top:10px; padding-left:20px; position:relative; }
+  .sf-trace::before { content:''; position:absolute; left:6px; top:4px; bottom:10px; width:2px; background:#eef1f4; }
+  .sf-t { position:relative; padding:4px 0; font-size:11px; color:#9aa0a8; }
+  .sf-t::before { content:''; position:absolute; left:-19px; top:8px; width:9px; height:9px; border-radius:50%; background:#d6d9de; }
+  .sf-t.on { color:#14171a; font-weight:500; }
+  .sf-t.on::before { background:#ff7a1a; box-shadow:0 0 0 3px rgba(255,122,26,.15); }
+
+  /* ============ 我的申请 B：支付宝账单列表 ============ */
+  .bill-row { display:flex; align-items:center; gap:11px; padding:12px 2px; }
+  .bill-row + .bill-row { border-top:1px solid #f0f1f3; }
+  .bill-row .ic { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex:none; }
+  .bill-row .tx { flex:1; }
+  .bill-row .tx h5 { font-size:12.5px; color:#14171a; font-weight:500; }
+  .bill-row .tx small { font-size:10.5px; color:#9aa0a8; }
+  .bill-row .r { text-align:right; }
+  .bill-row .r .st { font-size:11px; font-weight:600; }
+  .bill-row .r small { display:block; font-size:10px; color:#c0c4cb; margin-top:2px; }
+  .st.ok { color:#2f9e63; } .st.ing { color:#ff7a1a; } .st.no { color:#b6bac1; }
+
+  /* ============ 我的申请 C：iOS 邮件 ============ */
+  .ml-row { display:flex; gap:10px; padding:12px 2px; align-items:flex-start; }
+  .ml-row + .ml-row { border-top:1px solid #f0f1f3; }
+  .ml-row .un { width:8px; height:8px; border-radius:50%; background:#3478f6; flex:none; margin-top:6px; }
+  .ml-row .un.read { background:transparent; }
+  .ml-row .tx { flex:1; }
+  .ml-row .tx .t1 { display:flex; justify-content:space-between; }
+  .ml-row .tx .t1 h5 { font-size:12.5px; color:#14171a; font-weight:600; }
+  .ml-row .tx .t1 span { font-size:10.5px; color:#9aa0a8; }
+  .ml-row .tx p { font-size:11.5px; color:#5b6472; margin-top:2px; }
+  .ml-row .tx small { font-size:11px; color:#9aa0a8; display:block; margin-top:2px; }
+</style>
+</head>
+<body>
+
+<!-- ================= 1 成长轨迹 ================= -->
+<div class="page-sec" id="sec-growth">
+  <div class="sec-head">
+    <h2>① 成长轨迹（成长分析）· 3 个方案</h2>
+    <p>现状是 hero 卡 + 成长记录列表。三个方案都把图表压缩成「小面积、强结论」的形态。</p>
+  </div>
+  <div class="row">
+    <div class="frame-wrap">
+      <div class="frame-label"><b>A</b>仿 Apple Fitness 健身摘要<small>三环成就 + 周柱状摘要 + 记录列表，图表只有拇指大</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#1a4fd6"></span><span class="t">成长轨迹</span><span class="s">成就 · 记录</span></div>
+      <div class="body scroll">
+        <div class="fit-hero">
+          <svg class="rings" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#eceef1" stroke-width="10"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#1a4fd6" stroke-width="10" stroke-linecap="round" stroke-dasharray="198 264" transform="rotate(-90 50 50)"/>
+            <circle cx="50" cy="50" r="30" fill="none" stroke="#eceef1" stroke-width="10"/>
+            <circle cx="50" cy="50" r="30" fill="none" stroke="#5dcaa5" stroke-width="10" stroke-linecap="round" stroke-dasharray="140 188" transform="rotate(-90 50 50)"/>
+            <circle cx="50" cy="50" r="18" fill="none" stroke="#eceef1" stroke-width="10"/>
+            <circle cx="50" cy="50" r="18" fill="none" stroke="#ff9f0a" stroke-width="10" stroke-linecap="round" stroke-dasharray="90 113" transform="rotate(-90 50 50)"/>
+          </svg>
+          <div class="fit-meta">
+            <div class="big">综合表现 良好</div>
+            <div class="sub">较上周 +12% · 超过班级 68% 的同学</div>
+            <div class="fit-leg">
+              <span><i style="background:#1a4fd6"></i>任务完成 75%</span>
+              <span><i style="background:#5dcaa5"></i>学习打卡 74%</span>
+              <span><i style="background:#ff9f0a"></i>心情稳定 80%</span>
+            </div>
+          </div>
+        </div>
+        <div class="fit-bars">
+          <span style="font-size:12px;color:#8a9099">本周完成度</span>
+          <div class="week">
+            <div class="b" style="height:40%;background:#c9d8f8"></div>
+            <div class="b" style="height:62%;background:#c9d8f8"></div>
+            <div class="b" style="height:30%;background:#c9d8f8"></div>
+            <div class="b" style="height:88%;background:#1a4fd6"></div>
+            <div class="b" style="height:70%;background:#1a4fd6"></div>
+            <div class="b" style="height:52%;background:#c9d8f8"></div>
+            <div class="b" style="height:76%;background:#1a4fd6"></div>
+          </div>
+          <div class="d"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        </div>
+        <div class="fit-bars" style="padding:4px 16px">
+          <div class="fit-row"><span class="ic" style="background:#e5ecfc">🏆</span><span class="tx">连续打卡 12 天<small>个人最佳纪录</small></span><span class="v">新纪录</span></div>
+          <div class="fit-row"><span class="ic" style="background:#e3f2ec">📈</span><span class="tx">高数小测 92 分<small>较上次 +8 · 班级前 15%</small></span><span class="v">+8</span></div>
+          <div class="fit-row"><span class="ic" style="background:#fdf1e3">🎨</span><span class="tx">新作品《课程表重构》<small>已被 3 位同学收藏</small></span><span class="v">+3</span></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>B</b>仿 Duolingo 成就路径<small>绿色节点成长路径，每个节点=一个里程碑，游戏化最强</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#1a4fd6"></span><span class="t">成长轨迹</span><span class="s">里程碑 · 记录</span></div>
+      <div class="body scroll">
+        <div class="dl-streak"><div><div class="n">12</div><div class="l">连续打卡天数</div></div><div class="flame">🔥</div></div>
+        <div class="dl-path">
+          <div class="dl-node done"><span class="pt"></span><div class="bx"><h4>🏅 完成第 9 周全部课程任务</h4><p>10 月 24 日 · 获得勤学徽章</p></div></div>
+          <div class="dl-node done"><span class="pt"></span><div class="bx"><h4>📈 高数小测 92 分</h4><p>10 月 27 日 · 较上次 +8 分</p></div></div>
+          <div class="dl-node now"><span class="pt"></span><div class="bx"><h4>🎯 当前目标：作品集首个项目上线</h4><p>进度 2/3 · 预计本周完成</p></div></div>
+          <div class="dl-node lock"><span class="pt"></span><div class="bx"><h4>🔒 连续打卡 14 天</h4><p>还差 2 天解锁坚持徽章</p></div></div>
+          <div class="dl-node lock"><span class="pt"></span><div class="bx"><h4>🔒 月度总结</h4><p>11 月 1 日解锁</p></div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>C</b>仿 flomo 浮墨笔记流<small>零图表、纯记录流 + 标签筛选，最克制的信息密度</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#1a4fd6"></span><span class="t">成长轨迹</span><span class="s">记录 42 条</span></div>
+      <div class="body scroll">
+        <div class="fl-chips"><span class="on">全部</span><span>#课程</span><span>#作业</span><span>#竞赛</span><span>#心情</span></div>
+        <div class="fl-item">
+          <div class="meta"><span class="tg">#作业</span><span>10 月 28 日 21:40</span></div>
+          <p>完成高数第 5 章习题，卡在最后一道证明题 20 分钟，看了解析后恍然大悟——中值定理的构造方向想反了。</p>
+        </div>
+        <div class="fl-item">
+          <div class="meta"><span class="tg" style="color:#b45309;background:#fdf1e3">#竞赛</span><span>10 月 26 日 18:05</span></div>
+          <p>和队长过了 bluebird 项目的第二版方案，接口层改成统一的 Promise 封装，队友评价"可读性提升明显"。</p>
+        </div>
+        <div class="fl-item">
+          <div class="meta"><span class="tg" style="color:#6d28d9;background:#f0e8fc">#课程</span><span>10 月 24 日 14:22</span></div>
+          <p>软件工程课第一次答辩拿了 A 组第 2，老师点名表扬了需求分析部分。</p>
+        </div>
+        <div class="fl-item">
+          <div class="meta"><span class="tg" style="color:#0369a1;background:#e2f1fa">#心情</span><span>10 月 23 日 22:10</span></div>
+          <p>连续打卡第 9 天，有点累但很踏实，给自己点一杯奶茶。</p>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 2 请假服务 ================= -->
+<div class="page-sec" id="sec-service">
+  <div class="sec-head">
+    <h2>② 请假服务 · 3 个方案</h2>
+    <p>现状是「请假/证明/项目」三段表单。建议把表单收进二级，首页只呈现「状态 + 入口」，申请记录合并进「我的申请」。</p>
+  </div>
+  <div class="row">
+    <div class="frame-wrap">
+      <div class="frame-label"><b>A</b>仿 美团订单页<small>顶部审批进度条 + 大 CTA「发起申请」+ 历史记录，状态感最强</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#6d28d9"></span><span class="t">请假服务</span><span class="s">请假 · 证明 · 项目</span></div>
+      <div class="body scroll">
+        <div class="mt-status">
+          <span style="font-size:12px;color:#8a9099">当前进行中的申请</span>
+          <h4 style="font-size:15px;color:#14171a;margin-top:6px">事假 · 10 月 30 日 ~ 10 月 31 日</h4>
+          <div class="mt-steps">
+            <div class="mt-step done"><span class="c done">✓</span><p>已提交</p></div>
+            <div class="mt-step cur"><span class="c cur">·</span><p>辅导员审批</p></div>
+            <div class="mt-step"><span class="c wait"></span><p>完成</p></div>
+          </div>
+          <p style="font-size:11px;color:#9aa0a8;margin-top:10px">预计 24 小时内出结果，结果将通过电话同步心情卡提醒</p>
+        </div>
+        <div class="mt-cta">＋ 发起新申请</div>
+        <div class="sec-t" style="font-size:12.5px">历史申请</div>
+        <div class="mt-item"><span class="ic">📄</span><span class="tx"><h5>在读证明 × 1</h5><small>10 月 12 日 · 已办结</small></span><span class="st" style="color:#2f9e63">已完成</span></div>
+        <div class="mt-item"><span class="ic">🏥</span><span class="tx"><h5>病假 · 10 月 8 日</h5><small>10 月 7 日 · 已销假</small></span><span class="st" style="color:#2f9e63">已完成</span></div>
+        <div class="mt-item"><span class="ic">🏆</span><span class="tx"><h5>竞赛项目备案 · bluebird</h5><small>9 月 28 日 · 审批通过</small></span><span class="st" style="color:#2f9e63">已完成</span></div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>B</b>仿 支付宝市民中心办事大厅<small>四宫格入口 + 办事提醒 + 快捷记录，入口最全、扩展性最好</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#6d28d9"></span><span class="t">请假服务</span><span class="s">事务大厅</span></div>
+      <div class="body scroll">
+        <div class="zf-greet"><div style="font-size:30px">🏫</div><div><h3>同学，需要办什么？</h3><p>请假、证明、项目备案一站办理</p></div></div>
+        <div class="zf-grid">
+          <div class="g"><span class="ic" style="background:#f0e8fc">🏖️</span><span class="lb">我要请假</span></div>
+          <div class="g"><span class="ic" style="background:#e2f1fa">📄</span><span class="lb">开证明</span></div>
+          <div class="g"><span class="ic" style="background:#fdf1e3">🏆</span><span class="lb">项目备案</span></div>
+          <div class="g"><span class="ic" style="background:#eef1f4">📋</span><span class="lb">我的申请</span></div>
+        </div>
+        <div class="zf-notice"><b>进行中</b><span>事假申请正在辅导员审批，预计明天出结果</span></div>
+        <div class="sec-t" style="font-size:12.5px">最近办理</div>
+        <div class="zf-quick"><span class="l">在读证明 × 1<small>10 月 12 日 · 已办结</small></span><span class="r">查看 ›</span></div>
+        <div class="zf-quick"><span class="l">病假（10 月 8 日）<small>10 月 7 日 · 已销假</small></span><span class="r">查看 ›</span></div>
+        <div class="zf-quick"><span class="l">晚归报备<small>9 月 30 日 · 已通过</small></span><span class="r">查看 ›</span></div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>C</b>仿 Apple Wallet 凭证卡<small>每张申请是一张渐变凭证卡，视觉最惊艳，但信息密度低</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#6d28d9"></span><span class="t">请假服务</span><span class="s">我的凭证</span></div>
+      <div class="body scroll">
+        <div class="wl-card" style="background:linear-gradient(135deg,#6d28d9,#9b6bde)">
+          <div class="brand">CAMPUSMATE · 请假凭证</div>
+          <h4>事假 · 10.30 ~ 10.31</h4>
+          <div class="row2"><span>辅导员：王老师</span><span class="st">审批中</span></div>
+        </div>
+        <div class="wl-card" style="background:linear-gradient(135deg,#0369a1,#3d9bd1)">
+          <div class="brand">CAMPUSMATE · 证明文件</div>
+          <h4>在读证明 × 1</h4>
+          <div class="row2"><span>编号 CZ-2026-0412</span><span class="st">可下载</span></div>
+        </div>
+        <div class="wl-card" style="background:linear-gradient(135deg,#b45309,#d98c2b)">
+          <div class="brand">CAMPUSMATE · 项目备案</div>
+          <h4>竞赛 · bluebird 小队</h4>
+          <div class="row2"><span>指导老师：李老师</span><span class="st">已通过</span></div>
+        </div>
+        <div class="btn-dark" style="margin-top:6px">＋ 发起新申请</div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 3 学习计划 ================= -->
+<div class="page-sec" id="sec-plan">
+  <div class="sec-head">
+    <h2>③ 学习计划 · 3 个方案</h2>
+    <p>现状是目标+关卡+打卡三段。三个方案分别从「清单效率」「游戏化路径」「专注陪伴」三个角度重构。</p>
+  </div>
+  <div class="row">
+    <div class="frame-wrap">
+      <div class="frame-label"><b>A</b>仿 滴答清单 / Things 3<small>今日清单 + 勾选流，效率感最强，与「AI 生成计划加入」衔接最顺</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#0369a1"></span><span class="t">学习计划</span><span class="s">今日 · 本周 · 全部</span></div>
+      <div class="body scroll">
+        <div class="td-prog">
+          <svg class="ring" viewBox="0 0 60 60">
+            <circle cx="30" cy="30" r="24" fill="none" stroke="#eceef1" stroke-width="7"/>
+            <circle cx="30" cy="30" r="24" fill="none" stroke="#0369a1" stroke-width="7" stroke-linecap="round" stroke-dasharray="98 151" transform="rotate(-90 30 30)"/>
+            <text x="30" y="35" text-anchor="middle" font-size="14" font-weight="700" fill="#14171a">65%</text>
+          </svg>
+          <div class="tx"><h4>今天完成 2 / 3 项</h4><p>再完成 1 项即达成今日目标</p></div>
+        </div>
+        <div class="td-group"><span>今天 · 10 月 29 日</span><span>剩余 1</span></div>
+        <div class="td-item done"><span class="cb"></span><div class="tx"><h5>高数第 5 章习题（剩余 3 道）</h5><small>来自 AI 建议 · 今晚 19:00</small></div><span class="prio" style="background:#fdeaea;color:#c0392b">紧急</span></div>
+        <div class="td-item done"><span class="cb"></span><div class="tx"><h5>英语单词复盘 30 分钟</h5><small>本周计划 · 已完成</small></div></div>
+        <div class="td-item"><span class="cb"></span><div class="tx"><h5>bluebird 接口层重构</h5><small>竞赛项目 · 预计 2h</small></div><span class="prio" style="background:#fdf3e3;color:#b45309">本周</span></div>
+        <div class="td-group"><span>本周</span><span>4 项</span></div>
+        <div class="td-item"><span class="cb"></span><div class="tx"><h5>软件工程答辩 PPT 初稿</h5><small>截止周五</small></div></div>
+        <div class="td-item"><span class="cb"></span><div class="tx"><h5>整理《数据结构》错题本</h5><small>来自 AI 建议 · 已加入</small></div></div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>B</b>仿 Duolingo 关卡地图<small>计划变成蜿蜒闯关路径，游戏化最强、最有趣</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#0369a1"></span><span class="t">学习计划</span><span class="s">第 2 周 · 闯关中</span></div>
+      <div class="body scroll">
+        <div class="map-path">
+          <div class="map-week">—— 第 1 周 · 已完成 ——</div>
+          <div class="map-node done"><div class="c done">✓</div><p>第 5 章习题</p></div>
+          <div class="map-node done"><div class="c done">✓</div><p>单词复盘 ×2</p></div>
+          <div class="map-week">—— 第 2 周 · 进行中 ——</div>
+          <div class="map-node cur"><div class="c cur">★</div><p>接口层重构</p></div>
+          <div class="map-node lock"><div class="c lock">🔒</div><p>答辩 PPT</p></div>
+          <div class="map-node lock"><div class="c lock">🔒</div><p>错题本整理</p></div>
+          <div class="map-week">—— 第 3 周 ——</div>
+          <div class="map-node lock"><div class="c lock">🔒</div><p>期中模拟测</p></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>C</b>仿 Forest 专注森林<small>深绿治愈系 + 专注统计，情绪陪伴感最强（与心情卡同气质）</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#0369a1"></span><span class="t">学习计划</span><span class="s">本周 · 专注</span></div>
+      <div class="body scroll">
+        <div class="fs-hero">
+          <div class="big">本周已专注 9 小时 40 分</div>
+          <div class="sub">种下 7 棵树 · 超过上周 2 小时</div>
+          <div class="fs-stats">
+            <div class="s"><div class="n">7</div><div class="l">专注次数</div></div>
+            <div class="s"><div class="n">83 分钟</div><div class="l">最长一次</div></div>
+            <div class="s"><div class="n">12 天</div><div class="l">连续打卡</div></div>
+          </div>
+        </div>
+        <div class="fs-plan"><span class="tree">🌳</span><div class="tx"><h5>高数第 5 章习题</h5><small>今晚 19:00 · 计划 40 分钟</small><div class="fs-bar"><i style="width:75%"></i></div></div></div>
+        <div class="fs-plan"><span class="tree">🌱</span><div class="tx"><h5>bluebird 接口层重构</h5><small>明天下午 · 计划 2 小时</small><div class="fs-bar"><i style="width:20%"></i></div></div></div>
+        <div class="fs-plan"><span class="tree">🌲</span><div class="tx"><h5>英语单词复盘</h5><small>已完成 · +30 分钟</small><div class="fs-bar"><i style="width:100%"></i></div></div></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 4 作品集 ================= -->
+<div class="page-sec" id="sec-portfolio">
+  <div class="sec-head">
+    <h2>④ 作品集 · 3 个方案</h2>
+    <p>现状是项目列表卡。三个方案按「发现感 → 工程感 → 展示感」排列。</p>
+  </div>
+  <div class="row">
+    <div class="frame-wrap">
+      <div class="frame-label"><b>A</b>仿 小红书双列瀑布流<small>封面 + 标题的瀑布流，浏览感最好，适合图文并茂的作品</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#b45309"></span><span class="t">作品集</span><span class="s">12 个作品</span></div>
+      <div class="body scroll">
+        <div class="xhs-grid">
+          <div class="xhs-card"><div class="img" style="height:130px;background:linear-gradient(135deg,#b45309,#e2a13d)">📊</div><div class="cap"><p>课程表 v4 重设计实录：从卡片到扁平分区</p><div class="m"><i></i>校园小王 · 128 赞</div></div></div>
+          <div class="xhs-card"><div class="img" style="height:96px;background:linear-gradient(135deg,#0369a1,#4aa8dc)">🤖</div><div class="cap"><p>bluebird：AI 值周助手诞生记</p><div class="m"><i></i>96 赞</div></div></div>
+          <div class="xhs-card"><div class="img" style="height:110px;background:linear-gradient(135deg,#6d28d9,#a97ae0)">🎨</div><div class="cap"><p>手绘 IP 形象「阿学」全过程</p><div class="m"><i></i>210 赞</div></div></div>
+          <div class="xhs-card"><div class="img" style="height:88px;background:linear-gradient(135deg,#0f7a58,#4cbf8e)">📝</div><div class="cap"><p>高数错题本电子化方案</p><div class="m"><i></i>43 赞</div></div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>B</b>仿 GitHub Pinned 仓库卡<small>语言点 + star + 更新时间的工程风，适合代码类作品</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#b45309"></span><span class="t">作品集</span><span class="s">置顶 · 全部</span></div>
+      <div class="body scroll">
+        <div class="gh-card"><h5><i></i>bluebird-agent</h5><p>AI 值周助手：语音情绪识别 + 主动发现引擎，Vue3 + FastAPI。</p><div class="m"><span class="lang"><i style="background:#3178c6"></i>TypeScript</span><span>★ 23</span><span>更新于 2 天前</span></div></div>
+        <div class="gh-card"><h5><i></i>timetable-v4</h5><p>移动端课程表重设计：48px 固定 Head、扁平分区、心情打点。</p><div class="m"><span class="lang"><i style="background:#41b883"></i>Vue</span><span>★ 17</span><span>更新于 5 小时前</span></div></div>
+        <div class="gh-card"><h5><i></i>grade-viz</h5><p>成绩分析小工具：GPA 趋势 + 弱科定位，纯前端零依赖。</p><div class="m"><span class="lang"><i style="background:#f1e05a"></i>JavaScript</span><span>★ 9</span><span>更新于 1 周前</span></div></div>
+        <div class="gh-card"><h5><i></i>campus-mascot</h5><p>吉祥物「阿学」表情包工程文件与切图规范。</p><div class="m"><span class="lang"><i style="background:#a074c4"></i>SVG</span><span>★ 31</span><span>更新于 3 周前</span></div></div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>C</b>仿 Behance 大图编辑风<small>单列大图 + 项目名 + 浏览数，展示感最强，适合答辩演示</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#b45309"></span><span class="t">作品集</span><span class="s">精选 · 最新</span></div>
+      <div class="body scroll">
+        <div class="bh-card"><div class="img" style="background:linear-gradient(135deg,#1a2233,#3d5a99)">课程表 v4 · 重设计</div><div class="cap"><h5>学业中心 v4：从卡片堆到扁平设计系统</h5><div class="m"><span>👁 486</span><span>👍 128</span><span>10 月 28 日</span></div></div></div>
+        <div class="bh-card"><div class="img" style="background:linear-gradient(135deg,#0f3d2e,#2f9e63)">bluebird · AI 助手</div><div class="cap"><h5>bluebird：会打电话的值周 AI</h5><div class="m"><span>👁 322</span><span>👍 96</span><span>10 月 20 日</span></div></div></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 5 我的申请 ================= -->
+<div class="page-sec" id="sec-tickets">
+  <div class="sec-head">
+    <h2>⑤ 我的申请（新独立子页）· 3 个方案</h2>
+    <p>把「请假/证明/项目」的所有申请记录合并成一个统一进度页，从请假服务里拆出来独立呈现。</p>
+  </div>
+  <div class="row">
+    <div class="frame-wrap">
+      <div class="frame-label"><b>A</b>仿 顺丰快递跟踪<small>每张申请卡内嵌物流式步骤条，进度一目了然</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#5b6472"></span><span class="t">我的申请</span><span class="s">全部 · 审批中 · 已办结</span></div>
+      <div class="body scroll">
+        <div class="sf-card">
+          <div class="top"><h5>事假 · 10.30 ~ 10.31</h5><span class="tag" style="background:#fdf3e3;color:#b45309">审批中</span></div>
+          <div class="sf-trace">
+            <div class="sf-t on">10 月 29 日 09:12 · 提交申请</div>
+            <div class="sf-t on">10 月 29 日 09:15 · 已送达辅导员王老师</div>
+            <div class="sf-t">等待审批结果，预计 24 小时内</div>
+          </div>
+        </div>
+        <div class="sf-card">
+          <div class="top"><h5>在读证明 × 1</h5><span class="tag" style="background:#e3f2ec;color:#0f7a58">已办结</span></div>
+          <div class="sf-trace">
+            <div class="sf-t on">10 月 12 日 14:02 · 提交申请</div>
+            <div class="sf-t on">10 月 13 日 10:30 · 审批通过</div>
+            <div class="sf-t on">10 月 13 日 16:00 · 证明已生成，可下载</div>
+          </div>
+        </div>
+        <div class="sf-card">
+          <div class="top"><h5>竞赛项目备案 · bluebird</h5><span class="tag" style="background:#e3f2ec;color:#0f7a58">已通过</span></div>
+          <div class="sf-trace">
+            <div class="sf-t on">9 月 28 日 · 提交备案</div>
+            <div class="sf-t on">9 月 29 日 · 教务处审核通过</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>B</b>仿 支付宝账单列表<small>极简行 + 状态 tag，按月分组，信息密度最高</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#5b6472"></span><span class="t">我的申请</span><span class="s">共 8 条</span></div>
+      <div class="body scroll">
+        <div class="td-group" style="margin-top:2px"><span>10 月 · 5 条</span><span>1 条审批中</span></div>
+        <div class="bill-row"><span class="ic" style="background:#f0e8fc">🏖️</span><div class="tx"><h5>事假 · 10.30 ~ 10.31</h5><small>昨天 21:40 提交</small></div><div class="r"><span class="st ing">审批中</span><small>辅导员已收到</small></div></div>
+        <div class="bill-row"><span class="ic" style="background:#e2f1fa">📄</span><div class="tx"><h5>在读证明 × 1</h5><small>10 月 12 日</small></div><div class="r"><span class="st ok">已办结</span><small>可下载</small></div></div>
+        <div class="bill-row"><span class="ic" style="background:#fdf1e3">🏥</span><div class="tx"><h5>病假 · 10 月 8 日</h5><small>10 月 7 日</small></div><div class="r"><span class="st ok">已销假</span></div></div>
+        <div class="bill-row"><span class="ic" style="background:#eef1f4">🏆</span><div class="tx"><h5>竞赛项目备案</h5><small>9 月 28 日</small></div><div class="r"><span class="st ok">已通过</span></div></div>
+        <div class="bill-row"><span class="ic" style="background:#fdeaea">⏰</span><div class="tx"><h5>晚归报备 · 9.26</h5><small>9 月 26 日</small></div><div class="r"><span class="st no">已退回</span><small>材料不全</small></div></div>
+        <div class="td-group"><span>9 月 · 3 条</span></div>
+        <div class="bill-row"><span class="ic" style="background:#e3f2ec">📄</span><div class="tx"><h5>成绩证明 × 2</h5><small>9 月 12 日</small></div><div class="r"><span class="st ok">已办结</span></div></div>
+      </div></div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame-label"><b>C</b>仿 iOS 邮件收件箱<small>未读蓝点 = 有新进展，像收邮件一样收「审批结果」</small></div>
+      <div class="phone"><div class="head"><span class="dot" style="background:#5b6472"></span><span class="t">我的申请</span><span class="s">2 条新进展</span></div>
+      <div class="body scroll">
+        <div class="ml-row"><span class="un"></span><div class="tx"><div class="t1"><h5>请假服务中心</h5><span>09:15</span></div><p>你的事假申请已送达辅导员王老师</p><small>预计 24 小时内出结果</small></div></div>
+        <div class="ml-row"><span class="un"></span><div class="tx"><div class="t1"><h5>教务处</h5><span>昨天</span></div><p>在读证明已生成，点击下载 PDF</p><small>编号 CZ-2026-0412</small></div></div>
+        <div class="ml-row"><span class="un read"></span><div class="tx"><div class="t1"><h5 style="font-weight:500">请假服务中心</h5><span>10 月 7 日</span></div><p style="color:#8a9099">病假销假已完成，假期愉快</p></div></div>
+        <div class="ml-row"><span class="un read"></span><div class="tx"><div class="t1"><h5 style="font-weight:500">竞赛管理委员会</h5><span>9 月 29 日</span></div><p style="color:#8a9099">bluebird 项目备案审核通过</p></div></div>
+        <div class="ml-row"><span class="un read"></span><div class="tx"><div class="t1"><h5 style="font-weight:500">辅导员王老师</h5><span>9 月 26 日</span></div><p style="color:#8a9099">晚归报备材料不全，已退回补充</p></div></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

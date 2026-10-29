@@ -48,7 +48,7 @@ const WELCOME_SEEN_KEY = 'mian02_welcome_seen'
 
 const features = [
   {
-    title: '驾驶舱',
+    title: '学业中心',
     desc: '把远方，走成今天的一步',
     icon: 'M20 12a8 8 0 1 1-8-8 8 8 0 0 1 8 8z',
     icon2: 'M14.9 9.1l-2.2 4.8-4.8 2.2 2.2-4.8z',

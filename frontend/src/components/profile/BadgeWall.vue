@@ -32,15 +32,17 @@
           <span class="mw-group-count">{{ g.earned }}/{{ g.items.length }}</span>
         </div>
         <div class="mw-grid">
-          <div
+          <button
             v-for="b in g.items"
             :key="b.code"
+            type="button"
             class="mw-item"
             :class="[`tier-${b.tier}`, { 'is-locked': !b.earned }]"
             :title="b.earned ? `${b.name} · ${b.desc}` : `${b.name} · ${b.target_label}（${b.progress}%）`"
+            @click="detailBadge = b"
           >
-            <span class="mw-disc">
-              <span class="mw-inner"><i class="mw-emoji">{{ b.icon }}</i></span>
+            <span class="mw-medal">
+              <BadgeMedal :icon="b.icon" :tier="b.tier" :earned="b.earned" :size="52" />
               <span v-if="!b.earned" class="mw-lock"><el-icon :size="9"><Lock /></el-icon></span>
             </span>
             <span class="mw-name">{{ b.name }}</span>
@@ -48,24 +50,31 @@
               <i :style="{ width: b.progress + '%' }"></i>
             </span>
             <span class="mw-meta">{{ b.earned ? '已获得' : b.progress + '%' }}</span>
-          </div>
+          </button>
         </div>
       </section>
     </div>
+
+    <BadgeDetail :badge="detailBadge" @close="detailBadge = null" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { BadgeItem, BadgeTier, LevelInfo } from '@/api/badge'
 import { Lock } from '@element-plus/icons-vue'
+import BadgeMedal from './BadgeMedal.vue'
+import BadgeDetail from './BadgeDetail.vue'
 
 const props = defineProps<{
   earned: BadgeItem[]
   locked: BadgeItem[]
   level: LevelInfo
 }>()
+
+/** 点击勋章后放大查看，空值即关闭 */
+const detailBadge = ref<BadgeItem | null>(null)
 
 const TIER_META: { key: BadgeTier; label: string }[] = [
   { key: 'bronze', label: '铜' },
@@ -224,48 +233,42 @@ const groups = computed(() => {
   gap: 14px 8px;
 }
 
-/* ===== 单枚勋章：扁平圆盘，层级靠底色深浅与描边区分 ===== */
+/* ===== 单枚勋章：盾形成就徽章（金属包边 + 珐琅内芯 + 底部绶带），无圆形描边 ===== */
 .mw-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.mw-disc {
+.mw-item:focus-visible { outline: 2px solid #c7ccd4; outline-offset: 2px; }
+.mw-medal {
   position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--disc-bg);
-  box-shadow: inset 0 0 0 1px var(--disc-ring);
+  height: 66px;
+  transition: transform 0.18s ease;
 }
-.mw-inner {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.mw-emoji { font-style: normal; font-size: 24px; line-height: 1; }
-
-/* 未点亮：中性灰底、降饱和徽记，右下角小锁 */
-.mw-item.is-locked .mw-disc {
-  background: var(--tui-surface-sunken, #f5f6f8);
-  box-shadow: inset 0 0 0 1px var(--tui-border, #eaecf0);
-}
-.mw-item.is-locked .mw-emoji { filter: grayscale(1); opacity: 0.32; }
+.mw-item:not(.is-locked):hover .mw-medal { transform: translateY(-2px); }
+.mw-item:active .mw-medal { transform: scale(0.97); }
 .mw-lock {
   position: absolute;
-  right: 0;
+  right: -1px;
   bottom: 0;
+  z-index: 5;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -273,12 +276,6 @@ const groups = computed(() => {
   color: #a6adb8;
   box-shadow: inset 0 0 0 1px var(--tui-border, #e4e7ec);
 }
-
-/* 分级配色：极浅底色 + 同色 1px 内描边，克制但有区分 */
-.tier-bronze { --disc-bg: #fbf3ec; --disc-ring: #ecd6c2; }
-.tier-silver { --disc-bg: #f6f7f9; --disc-ring: #dfe4ea; }
-.tier-gold { --disc-bg: #fdf7e8; --disc-ring: #efdfb6; }
-.tier-diamond { --disc-bg: #eef7fb; --disc-ring: #cfe6f0; }
 
 .mw-name {
   max-width: 100%;
@@ -308,7 +305,7 @@ const groups = computed(() => {
 
 @media (max-width: 380px) {
   .mw-grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 14px 6px; }
-  .mw-disc { width: 50px; height: 50px; }
-  .mw-emoji { font-size: 21px; }
+  .mw-medal { width: 48px; height: 60px; }
+  .mw-lock { width: 15px; height: 15px; }
 }
 </style>

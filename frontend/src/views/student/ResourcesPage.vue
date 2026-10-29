@@ -8,7 +8,6 @@
           <span class="brand-emoji">📚</span>
           <div class="brand-text">
             <h2 class="res-title">AI 资源空间</h2>
-            <p class="res-sub">为你发现 · 学习资源 · 行业资讯 · 校园信息</p>
           </div>
         </div>
         <div class="topbar-actions">
@@ -628,7 +627,6 @@ onMounted(async () => {
 }
 .brand-text { min-width: 0; flex: 1; overflow: hidden; }
 .res-title { margin: 0; font-size: 18px; font-weight: 700; color: #fff; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.res-sub { margin: 2px 0 0; font-size: 11px; color: rgba(255, 255, 255, 0.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .tb-btn.el-button {
   border: none; background: rgba(255, 255, 255, 0.18); color: #fff;

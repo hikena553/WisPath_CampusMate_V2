@@ -179,6 +179,51 @@ def build_proactive_insight_prompt(*, student_name: str, lines: str, max_chars: 
     return compose(identity, goal, context, constraints, output_format)
 
 
+# ==================== 今日报告：昨日回顾 / 今日安排 / 心情 / 任务 / 积累 / 天气 + 运势 ====================
+
+_DAILY_REPORT_JSON_SPEC = """只输出 JSON（不要额外文字、不要代码块标记）：
+{
+  "fortune": {"keyword": "", "summary": ""},
+  "sections": [
+    {"key": "review", "title": "昨日回顾", "items": ["", ""]},
+    {"key": "today", "title": "今日学习安排", "items": ["", "", ""]},
+    {"key": "task", "title": "任务焦点", "items": ["", ""]},
+    {"key": "mood", "title": "心情状态", "items": ["", ""]},
+    {"key": "weather", "title": "天气与安排", "items": ["", ""]},
+    {"key": "achievement", "title": "已实现", "items": ["", ""]}
+  ]
+}
+
+标注规则（非常重要）：
+- 需要读者立刻抓住的重点，用 ==重点内容== 包裹；
+- 需要留意但不必马上行动的信息，用 __留意内容__ 包裹（双下划线会渲染成虚线下划线）；
+- 每一条 item 30-70 字，短句、口语化，不要使用其他 Markdown。"""
+
+
+def build_daily_report_prompt(*, student_name: str, facts: str) -> str:
+    """把系统计算好的真实事实，改写成一份带重点标注的今日报告。"""
+    identity = section(TAG_IDENTITY, f"你是校园 AI 助手「绵小城」，正在给「{student_name}」写今天的日报。")
+    goal = section(
+        TAG_GOAL,
+        "先总结昨天真实完成与没完成的事，再给出今天带具体时间点的学习安排，"
+        "最后点出今天最值得做的一两件事。",
+    )
+    context = section(TAG_CONTEXT, f"系统采集到的真实事实：\n{facts}")
+    constraints = section(TAG_CONSTRAINTS, bullets(
+        "review 段只写昨天的事实（打卡次数/时长/做过的事/心情、昨天到期没做完的任务），不得把今天的事写进去",
+        "today 段必须给出 2-3 个带具体时间点的学习安排（如 09:00-10:00、14:00-16:00），"
+        "优先清遗留任务和今日到期任务，最难的放进事实里的黄金时段，结尾留 15 分钟复盘",
+        "其余段落每条 2 条以内，只保留最有价值的，宁缺毋滥",
+        "只能使用事实中出现的信息，不得编造天气、任务、成绩、心情，也不得编造不存在的课程或作业",
+        "段落不串台：天气段只写天气与据此的出行/学习安排，不要写打卡或任务数据",
+        "fortune.summary 不复述等级和分数，只写一句 20-40 字的具体提醒",
+        "不能给医疗/心理诊断，不做命理吉凶断言，运势只作为轻松的打气话术",
+        INJECTION_GUARD,
+    ))
+    output_format = section(TAG_OUTPUT_FORMAT, _DAILY_REPORT_JSON_SPEC)
+    return compose(identity, goal, context, constraints, output_format)
+
+
 # ==================== 学习计划：阶段拆解 / 阶段评估 ====================
 
 def build_plan_stages_prompt(

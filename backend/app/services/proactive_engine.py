@@ -21,6 +21,7 @@ from app.core.database import SessionLocal
 from app.models.crisis import AIDialogSummary
 from app.models.notification import Notification, NotificationType
 from app.models.user import User, UserRole
+from app.services.plan_streak import checkin_days, local_today
 from app.services.proactive_signals import StudentSignals, gather_signals
 
 logger = logging.getLogger(__name__)
@@ -312,6 +313,33 @@ class MilestoneTrigger(BaseTrigger):
         )
 
 
+class StreakBreakTrigger(BaseTrigger):
+    """连续打卡中断提醒。
+
+    判定口径与页面一致：今天未打卡不算断签（有 1 天宽限），只有「今天和昨天都没打卡」
+    且中断前已连续 ≥3 天，才提醒续上，避免早上刚打开就被催。
+    """
+
+    def evaluate(self, db, student, signals):
+        today = local_today()
+        days = checkin_days(db, student.id)
+        if today in days or (today - timedelta(days=1)) in days:
+            return None
+        broken = 0
+        cursor = today - timedelta(days=2)
+        while cursor in days:
+            broken += 1
+            cursor -= timedelta(days=1)
+        if broken < 3:
+            return None
+        return _action(
+            "streak_break", student, 45, "system_message",
+            "连续打卡中断",
+            f"你的连续打卡已中断，中断前保持了 {broken} 天。今天挑一个小任务重新打卡，把连击接回来。",
+            "student",
+        )
+
+
 TRIGGERS: list[BaseTrigger] = [
     CrisisEscalationTrigger(),
     ExamSoonTrigger(),
@@ -322,6 +350,7 @@ TRIGGERS: list[BaseTrigger] = [
     LeaveStatusTrigger(),
     InactivityTrigger(),
     MilestoneTrigger(),
+    StreakBreakTrigger(),
     GrowthRecordGapTrigger(),
 ]
 

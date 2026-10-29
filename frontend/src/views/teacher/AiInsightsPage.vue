@@ -1,6 +1,6 @@
 <template>
   <div class="tui-page">
-    <SubPageHeader title="AI 主动洞察" sub="主动发现 · 置信度 · 周报" fallback="/teacher" />
+    <SubPageHeader title="AI 主动洞察" fallback="/teacher" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：洞察语义色 + 数据分析图标。

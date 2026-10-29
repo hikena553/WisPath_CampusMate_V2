@@ -29,6 +29,7 @@ from app.api.notification import create_notification
 from app.models.notification import NotificationType
 from app.services.llm_service import _get_llm_config, _get_client
 from app.services.prompts import build_plan_reschedule_prompt
+from app.services.plan_streak import compute_streak, local_today
 from app.services.plan_stage_service import (
     ai_generate_stages, ai_evaluate_stage, persist_generated_stages,
 )
@@ -49,7 +50,7 @@ def _plan_state(plan: StudyPlan, today: date) -> tuple[str, int]:
 
 
 def _serialize_plan(db: Session, p: StudyPlan, today: date | None = None) -> StudyPlanOut:
-    today = today or date.today()
+    today = today or local_today()
     tasks = db.query(PlanTask).filter(PlanTask.plan_id == p.id).all()
     total = len(tasks)
     done = sum(1 for t in tasks if t.status == TaskStatus.DONE)
@@ -150,7 +151,7 @@ def list_plans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    today = date.today()
+    today = local_today()
     query = db.query(StudyPlan).filter(StudyPlan.student_id == current_user.id)
     plans = query.order_by(StudyPlan.created_at.desc()).all()
 
@@ -178,7 +179,7 @@ def create_plan(req: StudyPlanCreate, db: Session = Depends(get_db), current_use
         title=req.title.strip(),
         objective=req.objective,
         stage=req.stage,
-        start_date=_parse_date(req.start_date) or date.today(),
+        start_date=_parse_date(req.start_date) or local_today(),
         end_date=_parse_date(req.end_date),
     )
     db.add(plan)
@@ -248,7 +249,7 @@ def list_tasks(
     checked_task_ids = {
         c.task_id for c in db.query(PlanCheckin).filter(
             PlanCheckin.student_id == current_user.id,
-            PlanCheckin.check_date == date.today(),
+            PlanCheckin.check_date == local_today(),
         ).all() if c.task_id
     }
     result = []
@@ -308,14 +309,14 @@ def update_task(task_id: int, req: PlanTaskUpdate, db: Session = Depends(get_db)
     if task.status == TaskStatus.DONE and old_status != TaskStatus.DONE:
         exists = db.query(PlanCheckin).filter(
             PlanCheckin.task_id == task.id,
-            PlanCheckin.check_date == date.today(),
+            PlanCheckin.check_date == local_today(),
         ).first()
         if not exists:
             db.add(PlanCheckin(
                 student_id=current_user.id,
                 plan_id=task.plan_id,
                 task_id=task.id,
-                check_date=date.today(),
+                check_date=local_today(),
                 minutes=30,
                 note="完成任务自动打卡",
             ))
@@ -347,16 +348,30 @@ def create_checkin(req: CheckinCreate, db: Session = Depends(get_db), current_us
     plan = db.query(StudyPlan).filter(StudyPlan.id == req.plan_id, StudyPlan.student_id == current_user.id).first()
     if not plan:
         raise HTTPException(404, "计划不存在")
-    today = date.today()
-    cin = PlanCheckin(
-        student_id=current_user.id,
-        plan_id=req.plan_id,
-        task_id=req.task_id,
-        check_date=today,
-        minutes=max(1, min(req.minutes, 600)),
-        note=req.note,
-    )
-    db.add(cin)
+    today = local_today()
+    minutes = max(1, min(req.minutes, 600))
+    # 同一任务同一天只保留一条记录：重复打卡按更新处理，避免累计时长被重复累加
+    cin = None
+    if req.task_id:
+        cin = db.query(PlanCheckin).filter(
+            PlanCheckin.student_id == current_user.id,
+            PlanCheckin.task_id == req.task_id,
+            PlanCheckin.check_date == today,
+        ).first()
+    if cin:
+        cin.minutes = minutes
+        if req.note:
+            cin.note = req.note
+    else:
+        cin = PlanCheckin(
+            student_id=current_user.id,
+            plan_id=req.plan_id,
+            task_id=req.task_id,
+            check_date=today,
+            minutes=minutes,
+            note=req.note,
+        )
+        db.add(cin)
     # 关联任务则同步流转为已完成
     if req.task_id:
         task = db.query(PlanTask).filter(PlanTask.id == req.task_id, PlanTask.plan_id == req.plan_id).first()
@@ -383,34 +398,39 @@ def list_checkins(db: Session = Depends(get_db), current_user: User = Depends(ge
     return result
 
 
+@router.delete("/checkins/{checkin_id}")
+def delete_checkin(checkin_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """撤销打卡：误点后可修正；若该任务当天只剩这一条记录，任务状态一并回退为进行中。"""
+    cin = db.query(PlanCheckin).filter(
+        PlanCheckin.id == checkin_id,
+        PlanCheckin.student_id == current_user.id,
+    ).first()
+    if not cin:
+        raise HTTPException(404, "打卡记录不存在")
+    task_id, check_date = cin.task_id, cin.check_date
+    db.delete(cin)
+    db.flush()
+    if task_id:
+        left = db.query(PlanCheckin).filter(
+            PlanCheckin.task_id == task_id, PlanCheckin.check_date == check_date,
+        ).count()
+        if left == 0:
+            task = db.query(PlanTask).filter(PlanTask.id == task_id).first()
+            if task and task.status == TaskStatus.DONE:
+                task.status = TaskStatus.DOING
+    db.commit()
+    return {"message": "deleted"}
+
+
 @router.get("/streak", response_model=StreakOut)
 def get_streak(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    days = {c.check_date for c in db.query(PlanCheckin).filter(PlanCheckin.student_id == current_user.id).all()}
-    today = date.today()
-
-    # 当前连续：从今天（或昨天，若今天未打卡）往前数
-    current = 0
-    cursor = today if today in days else today - timedelta(days=1)
-    while cursor in days:
-        current += 1
-        cursor -= timedelta(days=1)
-
-    # 最长连续
-    longest = 0
-    run = 0
-    prev = None
-    for d in sorted(days):
-        run = run + 1 if prev is not None and (d - prev).days == 1 else 1
-        longest = max(longest, run)
-        prev = d
-
-    # 最近 7 天记录
-    week = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+    """连击统计：与智能体工具共用 services/plan_streak 的口径，避免两边数字不一致。"""
+    s = compute_streak(db, current_user.id)
     return StreakOut(
-        current=current,
-        longest=longest,
-        today_checked=today in days,
-        days=[d.isoformat() for d in sorted(days)],
+        current=s["current"],
+        longest=s["longest"],
+        today_checked=s["today_checked"],
+        days=[d.isoformat() for d in s["days"]],
     )
 
 
@@ -418,8 +438,14 @@ def get_streak(db: Session = Depends(get_db), current_user: User = Depends(get_c
 
 @router.get("/today", response_model=list[TodayTaskOut])
 def get_today(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    today = date.today()
+    today = local_today()
     plans = {p.id: p for p in db.query(StudyPlan).filter(StudyPlan.student_id == current_user.id).all()}
+    checked_map = {
+        c.task_id: c.id for c in db.query(PlanCheckin).filter(
+            PlanCheckin.student_id == current_user.id,
+            PlanCheckin.check_date == today,
+        ).all() if c.task_id
+    }
     tasks = db.query(PlanTask).join(StudyPlan, StudyPlan.id == PlanTask.plan_id).filter(
         StudyPlan.student_id == current_user.id,
         PlanTask.status != TaskStatus.DONE,
@@ -430,12 +456,13 @@ def get_today(db: Session = Depends(get_db), current_user: User = Depends(get_cu
     merged: dict[int, PlanTask] = {}
     for t in due_today + no_due_high:
         merged[t.id] = t
-    checked_task_ids = {
-        c.task_id for c in db.query(PlanCheckin).filter(
-            PlanCheckin.student_id == current_user.id,
-            PlanCheckin.check_date == today,
-        ).all() if c.task_id
-    }
+    # 今日已打卡的任务即使已完成也要留在列表里，否则勾选框会消失、无法撤销打卡
+    if checked_map:
+        for t in db.query(PlanTask).join(StudyPlan, StudyPlan.id == PlanTask.plan_id).filter(
+            StudyPlan.student_id == current_user.id,
+            PlanTask.id.in_(list(checked_map.keys())),
+        ).all():
+            merged[t.id] = t
     result = []
     for t in merged.values():
         p = plans.get(t.plan_id)
@@ -447,7 +474,8 @@ def get_today(db: Session = Depends(get_db), current_user: User = Depends(get_cu
             status=t.status.value,
             plan_id=t.plan_id,
             plan_title=p.title if p else "",
-            checked_today=t.id in checked_task_ids,
+            checked_today=t.id in checked_map,
+            checkin_id=checked_map.get(t.id),
         ))
     result.sort(key=lambda x: (x.due_date is None, x.due_date or date.max))
     return result
@@ -690,7 +718,7 @@ async def ai_suggest(
     tasks = task_query.all()
     if not tasks:
         return AISuggestOut(summary="当前没有待处理任务，先去创建学习计划吧", items=[])
-    return await _gen_suggest_by_llm(db, plans, tasks, date.today())
+    return await _gen_suggest_by_llm(db, plans, tasks, local_today())
 
 
 # ==================== 站内提醒（逾期/到期） ====================
@@ -698,7 +726,7 @@ async def ai_suggest(
 @router.get("/reminders")
 def plan_reminders(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """检查逾期任务/到期计划，生成站内通知，返回本次触发列表"""
-    today = date.today()
+    today = local_today()
     triggered = []
     plans = db.query(StudyPlan).filter(
         StudyPlan.student_id == current_user.id,
@@ -751,7 +779,7 @@ def plan_insights(db: Session = Depends(get_db), current_user: User = Depends(ge
     total_plans = len(plans)
     completed_plans = sum(1 for p in plans if p.status == PlanStatus.COMPLETED)
     active_plans = sum(1 for p in plans if p.status == PlanStatus.ACTIVE)
-    today = date.today()
+    today = local_today()
     expired_plans = sum(
         1 for p in plans
         if p.status == PlanStatus.ACTIVE and p.end_date and p.end_date < today

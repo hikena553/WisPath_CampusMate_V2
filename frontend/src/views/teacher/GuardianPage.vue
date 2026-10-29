@@ -1,6 +1,6 @@
 <template>
   <div class="tui-page">
-    <SubPageHeader title="家校沟通" sub="家长零账号可完整留痕" fallback="/teacher">
+    <SubPageHeader title="家校沟通" fallback="/teacher">
       <!-- 移动端吸顶栏「更多」：导出 / 模板 / 导入（桌面端不渲染 #right，改由 TuiPageHero 承载） -->
       <template #right>
         <el-dropdown trigger="click" @command="onHeadCommand">

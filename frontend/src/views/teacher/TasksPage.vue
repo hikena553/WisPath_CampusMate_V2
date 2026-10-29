@@ -1,6 +1,6 @@
 <template>
   <div class="tui-page">
-    <SubPageHeader title="任务日程" sub="智能生成 · 按日期推进" fallback="/teacher" />
+    <SubPageHeader title="任务日程" fallback="/teacher" />
 
     <div class="tui-content">
       <!-- 桌面端头部：本页以「日期」为主轴，头部承担身份与刷新入口 -->

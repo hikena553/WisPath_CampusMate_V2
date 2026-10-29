@@ -210,6 +210,70 @@ export async function fetchProactiveInsight(): Promise<string | null> {
 }
 
 
+// ---------- AI 今日报告（心情 / 任务 / 积累 / 天气 + 运势）----------
+
+export interface ReportWeather {
+  city: string
+  temp: number
+  feels: number
+  desc: string
+  emoji: string
+  high: number
+  low: number
+  rain: number
+}
+
+export interface ReportMood {
+  from: 'today' | 'last_night' | 'none'
+  emotion?: string
+  label: string
+  emoji: string
+  score: number
+  at: string
+  color: string
+}
+
+export interface ReportFortune {
+  level: string
+  score: number
+  keyword: string
+  summary: string
+  lucky_color: string
+  lucky_time: string
+}
+
+export interface ReportSection {
+  key: 'mood' | 'task' | 'achievement' | 'weather' | string
+  title: string
+  items: string[]
+}
+
+export interface DailyReport {
+  date: string
+  greeting: string
+  weather: ReportWeather | null
+  mood: ReportMood
+  fortune: ReportFortune
+  sections: ReportSection[]
+  suggestions: (Pick<ProactiveAction, 'trigger' | 'priority' | 'title' | 'content'> & { when?: string })[]
+  generated_at: string
+}
+
+/** 拉取 AI 今日报告；后端已做规则兜底，失败时返回 null 由页面显示空态 */
+export async function fetchDailyReport(): Promise<DailyReport | null> {
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  try {
+    const resp = await fetch('/api/agent/daily-report', { headers })
+    if (resp.ok) return (await resp.json()) as DailyReport
+  } catch (e) {
+    console.error('获取今日报告失败', e)
+  }
+  return null
+}
+
+
 export async function fetchRecommendations(): Promise<string[]> {
   const headers: Record<string, string> = {}
   const token = getToken()

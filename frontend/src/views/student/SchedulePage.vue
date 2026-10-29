@@ -14,6 +14,13 @@
          （此前主页与子页是同一个 <Transition> 的两个互斥分支，导致「返回主页」时
          主页作为进场页从右侧滑入，看起来像「主页面有滑出动画」，已按此结构消除。）
          桌面端不渲染本块（!isMobile），由下面的 .content-row 承载两栏布局。 -->
+    <!-- 主页固定 Head（v4.1）：与子页同规格——48px fixed + 同底色 + 滚动阴影线，
+         保证「学业中心」标题始终在视口顶部；滚动区由 .dashboard-home 让出高度 -->
+    <div v-if="isMobile && activeTab === 'home'" class="home-bar">
+      <div class="sp-title-wrap">
+        <span class="sp-title">学业中心</span>
+      </div>
+    </div>
     <div v-if="isMobile && activeTab === 'home'" class="dashboard-home">
       <GrowthDashboard
         ref="dashboardRef"
@@ -28,13 +35,29 @@
     <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 =====
          只有本块参与过渡（覆盖式：从右滑入 / 原路向右滑出），主页在 Transition 之外不动。 -->
     <Transition :name="subpageTransitionName" :duration="subpageTransitionName ? 320 : undefined">
-    <div v-if="!isMobile || activeTab !== 'home'" key="content" class="content-row">
+    <div v-if="!isMobile || activeTab !== 'home'" key="content" class="content-row" @scroll.passive="onSubpageScroll">
       <div class="content-main">
-        <!-- 移动端子页面返回栏 -->
-        <div v-if="isMobile" class="subpage-bar" @click="backToHome">
-          <el-icon :size="18"><ArrowLeft /></el-icon>
-          <span class="subpage-title">{{ subPageTitle }}</span>
-          <span class="subpage-spacer"></span>
+        <!-- ===== 移动端子页面：固定顶栏（Head） =====
+             三个子页共用同一个顶栏，高度恒为 48px 且 sticky 吸顶 —— 滚动时不再消失。
+             旧版是一个 38px 的圆角卡片，作为普通流节点躺在滚动内容里，滚 600px 后
+             top 变成 -592（整条滚出视口）。现在 .content-row 仍是滚动容器，
+             顶栏改为 sticky 后贴在它的顶部；内容区自带 8px 上下留白也一并交给滚动区。
+             左右两个 .sp-side 等宽，保证标题真正居中（而不是被右侧占位挤偏）。
+             进入页面后随滚动收起副标题，48px 不变 —— 高度恒定是无障碍要求（避免布局跳动）。 -->
+        <div v-if="isMobile" class="subpage-bar" :class="{ 'is-scrolled': subpageScrolled }">
+          <div class="sp-side sp-left">
+            <button class="sp-back" type="button" aria-label="返回主页" @click="backToHome">
+              <el-icon :size="19"><ArrowLeft /></el-icon>
+            </button>
+          </div>
+          <div class="sp-title-wrap">
+            <span v-if="subPageAccent" class="sp-dot" :style="{ background: subPageAccent }" aria-hidden="true"></span>
+            <span class="sp-txt">
+              <span class="sp-title">{{ subPageTitle }}</span>
+              <span v-if="subPageSub" class="sp-sub">{{ subPageSub }}</span>
+            </span>
+          </div>
+          <div class="sp-side sp-right"></div>
         </div>
         <Transition name="tab-fade" mode="out-in">
         <div v-if="activeTab === 'schedule'" key="schedule" class="schedule-view">
@@ -127,6 +150,11 @@
             <span>加载中...</span>
           </div>
           <template v-else>
+          <!-- v5：结论优先 hero（仿 Apple Health 高亮摘要），图表压缩成辅助 -->
+          <div class="gr-hero">
+            <p class="gr-hero-big">绩点 <b>{{ gradeAnalysis.stats.avg_gpa || '--' }}</b> · {{ gradeAnalysis.stats.gpa_rank ? `排名第 ${gradeAnalysis.stats.gpa_rank}` : '暂无排名' }}<span class="gr-hero-of"> / {{ gradeAnalysis.stats.total_students }} 人</span></p>
+            <p class="gr-hero-sub">均分 {{ gradeAnalysis.stats.avg_score || '--' }} · 总学分 {{ gradeAnalysis.stats.total_credits || '--' }} · 数据详见下方明细</p>
+          </div>
           <!-- 核心指标 -->
           <div class="grade-stats-row">
             <div class="grade-stat-card">
@@ -348,6 +376,53 @@
               <span class="head-sub">设定学期绩点目标并跟踪达成情况</span>
             </div>
             <div class="analytics-body goal-list">
+              <!-- 移动端 v6：里程碑阶梯（抄 Duolingo 关卡进度 + Strava 目标）——
+                   把「距目标还差多少」拆成 4 级刻度，当前绩点落在哪一级、还差几步一目了然。
+                   桌面端仍走下面的表格式 goal-item，结构不动。 -->
+              <template v-if="isMobile">
+                <div
+                  v-for="(sem, idx) in semesters" :key="'gl-' + sem"
+                  class="gl-item" :class="{ 'is-current': idx === 0 }"
+                >
+                  <div class="gl-head">
+                    <span class="gl-sem">{{ semesterLabel(sem) }}</span>
+                    <span v-if="idx === 0" class="gl-badge">当前学期</span>
+                    <span v-else class="gl-badge is-past">{{ glDone(sem) ? '已达成' : '未达成' }}</span>
+                  </div>
+
+                  <template v-if="glTarget(sem) != null">
+                    <div class="gl-track">
+                      <span class="gl-rail" aria-hidden="true"></span>
+                      <span class="gl-fill" :style="{ width: glPct(sem) + '%' }" aria-hidden="true"></span>
+                      <span class="gl-mark" :style="{ left: glPct(sem) + '%' }" aria-hidden="true"></span>
+                      <div
+                        v-for="(n, ni) in glNodes(sem)" :key="ni"
+                        class="gl-node" :class="'is-' + n.state"
+                        :style="{ left: n.pos + '%' }"
+                      >
+                        <i></i>
+                        <b>{{ n.value.toFixed(2) }}</b>
+                      </div>
+                    </div>
+                    <p class="gl-hint" :class="{ 'is-ok': glDone(sem) }">{{ glHint(sem) }}</p>
+                    <div v-if="idx === 0" class="gl-edit">
+                      <span class="gl-edit-label">调整目标</span>
+                      <el-input-number v-model="goalInputs[sem]" :min="0" :max="4" :step="0.1" :precision="2" size="small" controls-position="right" style="width:104px" />
+                      <el-button type="primary" size="small" @click="saveGoalForSem(sem)">保存</el-button>
+                    </div>
+                  </template>
+
+                  <template v-else>
+                    <p class="gl-hint">还没有设定目标绩点</p>
+                    <div v-if="idx === 0" class="gl-edit">
+                      <span class="gl-edit-label">目标绩点</span>
+                      <el-input-number v-model="goalInputs[sem]" :min="0" :max="4" :step="0.1" :precision="2" size="small" controls-position="right" style="width:104px" />
+                      <el-button type="primary" size="small" @click="saveGoalForSem(sem)">保存</el-button>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <template v-else>
               <div v-for="(sem, idx) in semesters" :key="sem" class="goal-item" :class="{ 'is-current': idx === 0 }">
                 <div class="goal-item-header">
                   <span class="goal-sem-name">{{ semesterLabel(sem) }}</span>
@@ -380,6 +455,7 @@
                   </div>
                 </div>
               </div>
+              </template>
             </div>
           </div>
           <el-empty v-if="!grades.length && !upcomingExams.length && !gradeAnalysis.semester_gpa.length" description="暂无考试成绩数据" />
@@ -442,215 +518,227 @@
             <span>加载中...</span>
           </div>
           <template v-else>
-          <!-- 分数头部 -->
-          <div class="score-header">
-            <div class="score-ring-group">
-              <div class="score-ring">
-                <svg viewBox="0 0 120 120" class="score-svg">
-                  <circle cx="60" cy="60" r="52" fill="none" stroke="#f0f2f5" stroke-width="8" />
-                  <circle cx="60" cy="60" r="52" fill="none" stroke="url(#scoreGrad)" stroke-width="8"
-                    :stroke-dasharray="circleLen" :stroke-dashoffset="circleOffset" stroke-linecap="round"
-                    transform="rotate(-90, 60, 60)" />
-                  <defs><linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stop-color="#409eff" /><stop offset="100%" stop-color="#67c23a" />
-                  </linearGradient></defs>
-                </svg>
-                <div class="score-center">
-                  <div class="score-value">{{ profile?.total_score ?? '--' }}</div>
-                  <div class="score-label">综合评分</div>
+          <!-- ===== 状态卡（参考 Keep 9.0「数据概览」健康状态卡） =====
+               原来这里是一个渐变底大卡 + 92px 渐变圆环 + 吉祥物 + 7 个横排数字，占满整屏。
+               现在：一句人话评价 + 一句具体建议 + 一排紧凑数字。色彩只落在评分圆环和
+               警示数字上，卡片本身是白底。 -->
+          <section class="gv-hero" :class="'tone-' + growthTier.tone">
+            <div class="gv-hero-top">
+              <div class="gv-score">
+                <div class="gv-gauge">
+                  <svg viewBox="0 0 60 60" class="gv-gauge-svg" aria-hidden="true">
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="#eef0f3" stroke-width="5" />
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="currentColor" stroke-width="5"
+                      :stroke-dasharray="gaugeLen" :stroke-dashoffset="gaugeOffset" stroke-linecap="round"
+                      transform="rotate(-90, 30, 30)" />
+                  </svg>
+                  <span class="gv-gauge-val">{{ profile?.total_score ?? '--' }}</span>
+                </div>
+                <div class="gv-score-text">
+                  <div class="gv-tier">{{ growthTier.label }}</div>
+                  <div class="gv-advice">{{ growthAdvice }}</div>
                 </div>
               </div>
-              <div class="score-mascot">
-                <img :src="siteMascot" :alt="siteName" draggable="false" />
-              </div>
-            </div>
-            <div class="score-stats">
-              <div class="stat-item" v-for="s in statsCards" :key="s.label">
-                <span class="stat-num">{{ s.value }}</span>
-                <span class="stat-label">{{ s.label }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 两栏：左=图表+标签，右=记录 -->
-          <div class="growth-two-col">
-            <div class="growth-left-col">
-              <!-- 综合能力画像 -->
-              <div class="analytics-card">
-                <div class="analytics-head">
-                  <span class="head-bar"></span>
-                  <span class="head-title">综合能力画像</span>
-                  <span class="head-sub">多维能力评分与成长类型构成</span>
-                </div>
-                <div class="analytics-body duo">
-                  <div class="panel panel-radar">
-                    <div class="panel-title"><el-icon><DataAnalysis /></el-icon>综合能力雷达</div>
-                    <v-chart v-if="profile" :option="radarOption" class="chart radar-chart" autoresize />
-                    <el-empty v-else description="暂无数据" :image-size="48" />
-                  </div>
-                  <div class="panel-divider"></div>
-                  <div class="panel panel-bar">
-                    <div class="panel-title"><el-icon><Histogram /></el-icon>成长类型分布</div>
-                    <div class="chart-unit">单位：数量</div>
-                    <v-chart v-if="profile?.stats_by_type?.length" :option="growthBarOption" class="chart bar-chart" autoresize />
-                    <el-empty v-else description="暂无数据" :image-size="48" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- 成长历程 -->
-              <div class="analytics-card">
-                <div class="analytics-head">
-                  <span class="head-bar"></span>
-                  <span class="head-title">成长历程</span>
-                  <span class="head-sub">月度成长趋势</span>
-                </div>
-                <div class="analytics-body duo">
-                  <div class="panel">
-                    <div class="panel-title"><el-icon><TrendCharts /></el-icon>成长趋势</div>
-                    <div class="chart-unit">单位：记录数</div>
-                    <v-chart v-if="profile?.monthly_trend?.length" :option="growthLineOption" class="chart line-chart" autoresize />
-                    <el-empty v-else description="暂无数据" :image-size="48" />
-                  </div>
-                  <div class="panel-divider"></div>
-                  <div class="panel">
-                    <div class="panel-title"><el-icon><PieChartIcon /></el-icon>成长类型分布</div>
-                    <v-chart v-if="profile?.stats_by_type?.length" :option="growthPieOption" class="chart pie-chart" autoresize />
-                    <el-empty v-else description="暂无数据" :image-size="48" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- 项目展示 -->
-              <div class="projects-section">
-                <div class="section-header">
-                  <span><el-icon style="margin-right:6px"><FolderOpened /></el-icon> 项目展示 <el-tag v-if="projects.length" size="small" type="info" effect="plain" style="margin-left:8px">{{ projects.length }}</el-tag></span>
-                  <div style="display:flex;gap:8px">
-                    <el-button v-if="projects.length > 3" size="small" text type="primary" @click="showAllProjects = !showAllProjects">{{ showAllProjects ? '收起' : '展开更多' }}</el-button>
-                    <el-button type="primary" size="small" @click="openProjectDialog">添加项目</el-button>
-                  </div>
-                </div>
-                <div v-if="projects.length" class="project-grid">
-                  <div v-for="p in visibleProjects" :key="p.id" class="project-card">
-                    <div class="project-top">
-                      <div class="project-icon" :class="p.is_team ? 'team' : 'solo'">
-                        <el-icon :size="22"><UserFilled v-if="p.is_team" /><User v-else /></el-icon>
-                      </div>
-                      <div class="project-info">
-                        <div class="project-name">{{ p.project_name }}</div>
-                        <div class="project-date">{{ p.start_date }} ~ {{ p.end_date || '至今' }}</div>
-                      </div>
-                    </div>
-                    <div v-if="p.is_team && p.team_members" class="project-members">成员: {{ p.team_members }}</div>
-                    <div v-if="p.attachment_url" class="project-attach">
-                      <el-link type="primary" :href="p.attachment_url" target="_blank" :icon="Link">查看附件</el-link>
-                    </div>
-                    <div class="project-actions">
-                      <el-button size="small" text type="primary" @click="editProject(p)">编辑</el-button>
-                      <el-button size="small" text type="danger" @click="handleDeleteProject(p.id)">删除</el-button>
-                    </div>
-                  </div>
-                </div>
-                <el-empty v-else-if="loaded" description="暂无项目" :image-size="60" />
-              </div>
+              <button class="gv-add" type="button" @click="openDialog">
+                <el-icon :size="15"><Plus /></el-icon>
+                <span>记一笔</span>
+              </button>
             </div>
 
-            <div class="growth-right-col">
-              <div class="records-section">
-                <div class="section-header">
-                  <span class="section-header-title"><el-icon style="margin-right:6px"><Collection /></el-icon> 成长记录 <el-tag v-if="growthRecords.length" size="small" type="info" effect="plain" style="margin-left:8px">{{ growthRecords.length }} 条</el-tag></span>
-                  <div style="display:flex;gap:8px">
-                    <el-button v-if="growthRecords.length > 3" size="small" text type="primary" @click="allRecordsVisible = true">查看全部</el-button>
-                    <el-button type="primary" size="small" @click="openDialog">添加记录</el-button>
-                  </div>
-                </div>
-                <div v-if="growthRecords.length" class="records-list records-scroll">
-                  <div v-for="r in growthRecords.slice(0, 3)" :key="r.id" class="record-card record-card-clickable" @click="showRecordDetail(r)">
-                    <div class="record-left">
-                      <div class="record-dot" :style="{ background: dotColor(r.type) }"></div>
-                    </div>
-                    <div class="record-body">
-                      <div class="record-top">
-                        <el-tag :type="typeTagType(r.type)" size="small" effect="dark" round>{{ typeLabel(r.type) }}</el-tag>
-                        <span class="record-date">{{ formatGrowthDate(r.date) }}</span>
-                      </div>
-                      <div class="record-title">{{ r.title }}</div>
-                      <div class="record-meta" v-if="r.description">{{ r.description }}</div>
-                      <div class="record-details" v-if="r.type === 'honor' && r.honor_level">
-                        <el-tag size="small" hit effect="plain">{{ r.honor_level }}</el-tag>
-                      </div>
-                      <div class="record-details" v-else-if="r.type === 'competition'">
-                        <span v-if="r.organizer" class="detail-item">主办方: {{ r.organizer }}</span>
-                        <span v-if="r.competition_level" class="detail-item">等级: {{ r.competition_level }}</span>
-                      </div>
-                      <div class="record-details" v-else-if="r.type === 'practice' && r.practice_type">
-                        <span class="detail-item">{{ r.practice_type }}</span>
-                      </div>
-                      <div class="record-details" v-else-if="r.type === 'paper'">
-                        <span v-if="r.paper_name" class="detail-item">{{ r.paper_name }}</span>
-                        <span v-if="r.paper_type" class="detail-item">[{{ r.paper_type }}]</span>
-                      </div>
-                      <div class="record-details" v-else-if="r.type === 'achievement'">
-                        <span v-if="r.achievement_name" class="detail-item">{{ r.achievement_name }}</span>
-                        <span v-if="r.achievement_type" class="detail-item">[{{ r.achievement_type }}]</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <el-empty v-else description="暂无成长记录" />
+            <!-- 紧凑数字网格：2 行 × 4 列，替代原来占半屏的 7 个横排大字 -->
+            <div class="gv-metrics">
+              <div v-for="m in growthMetrics" :key="m.label" class="gv-metric">
+                <span class="gv-metric-val">{{ m.value }}</span>
+                <span class="gv-metric-label">{{ m.label }}</span>
               </div>
-
-              <!-- 技能与兴趣（重设计） -->
-              <div class="analytics-card skills-card">
-                <div class="analytics-head">
-                  <span class="head-bar"></span>
-                  <span class="head-title">技能与兴趣</span>
-                  <el-button size="small" type="primary" plain class="head-save" @click="saveSkills">保存</el-button>
-                </div>
-                <div class="analytics-body skills-body">
-                  <div class="skills-selected">
-                    <div class="skills-selected-title">已选标签</div>
-                    <div class="skills-tag-list">
-                      <TransitionGroup name="tag-fade">
-                        <span v-for="s in localSkills" :key="'s-' + s" class="skills-tag skills-tag-skill" @click="removeSkill(s)">
-                          {{ s }} <el-icon class="skills-tag-close"><Close /></el-icon>
-                        </span>
-                        <span v-for="s in localInterests" :key="'i-' + s" class="skills-tag skills-tag-interest" @click="removeInterest(s)">
-                          {{ s }} <el-icon class="skills-tag-close"><Close /></el-icon>
-                        </span>
-                      </TransitionGroup>
-                      <Transition name="empty-fade">
-                        <span v-if="showTagEmpty" class="skills-empty">暂无标签，从下方选择或自定义添加</span>
-                      </Transition>
-                    </div>
-                  </div>
-                  <div class="skills-preset-group">
-                    <div class="skills-preset-section">
-                      <div class="skills-preset-label"><el-icon style="margin-right:4px;color:#409eff"><Aim /></el-icon>技能</div>
-                      <div class="skills-preset-tags">
-                        <span v-for="p in skillPresets" :key="p" class="skills-preset-tag" :class="{ active: localSkills.includes(p) }" @click="toggleSkill(p)">{{ p }}</span>
-                      </div>
-                    </div>
-                    <div class="skills-preset-section">
-                      <div class="skills-preset-label"><el-icon style="margin-right:4px;color:#e6a23c"><MagicStick /></el-icon>兴趣</div>
-                      <div class="skills-preset-tags">
-                        <span v-for="p in interestPresets" :key="p" class="skills-preset-tag" :class="{ active: localInterests.includes(p) }" @click="toggleInterest(p)">{{ p }}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="skills-custom">
-                    <el-radio-group v-model="customType" size="small">
-                      <el-radio-button value="skill">技能</el-radio-button>
-                      <el-radio-button value="interest">兴趣</el-radio-button>
-                    </el-radio-group>
-                    <el-input v-model="newTag" size="small" placeholder="自定义标签" @keyup.enter="addCustomTag" style="flex:1" />
-                    <el-button size="small" type="primary" @click="addCustomTag">添加</el-button>
-                  </div>
-                </div>
-              </div>
-
             </div>
-          </div>
+          </section>
+
+          <!-- ===== 坚持日历（参考 Duolingo 连续打卡热力图） =====
+               只占用约 90px 高度，但能把「我这学期一直在记」这件事变成看得见的东西。 -->
+          <section class="gv-card gv-heat">
+            <header class="gv-card-head">
+              <h3 class="gv-card-title">坚持情况</h3>
+              <span class="gv-card-meta" v-if="growthStreak">连续 {{ growthStreak }} 天</span>
+            </header>
+            <div class="gv-heat-body">
+              <div class="gv-heat-grid" role="img" :aria-label="`近 ${growthHeatmap.rangeWeeks} 周共 ${growthHeatmap.totalInRange} 次学习活动，${growthHeatmap.activeDays} 天有记录`">
+                <div v-for="(col, ci) in growthHeatmap.weeks" :key="ci" class="gv-heat-week" role="presentation">
+                  <span
+                    v-for="(cell, di) in col"
+                    :key="di"
+                    class="gv-heat-cell"
+                    :class="[`lv-${cell.level}`, { 'is-today': cell.isToday }]"
+                    :title="cell.isFuture ? '' : cell.title"
+                  ></span>
+                </div>
+              </div>
+              <div class="gv-heat-foot">
+                <span v-if="growthHeatmap.hasAny">近 {{ growthHeatmap.rangeWeeks }} 周 {{ growthHeatmap.totalInRange }} 次 · {{ growthHeatmap.activeDays }} 天</span>
+                <span v-else>还没有记录，打卡一次或记一笔就会出现第一个格子</span>
+                <div class="gv-heat-legend" aria-hidden="true">
+                  <span class="gv-heat-cell lv-0"></span>
+                  <span class="gv-heat-cell lv-1"></span>
+                  <span class="gv-heat-cell lv-2"></span>
+                  <span class="gv-heat-cell lv-3"></span>
+                </div>              </div>
+            </div>
+          </section>
+
+          <!-- ===== 能力画像：小雷达与五维数字**并排**（参考 Keep 上周运动周报） =====
+               原来雷达图单独占 280~400px 高的一整块，五维数字根本看不见，用户只能读图猜数值。 -->
+          <section class="gv-card">
+            <header class="gv-card-head">
+              <h3 class="gv-card-title">能力画像</h3>
+              <span class="gv-card-meta">满分 100</span>
+            </header>
+            <div class="gv-dim-body">
+              <div class="gv-radar">
+                <v-chart v-if="profile?.radar?.length" :option="radarOption" class="gv-radar-chart" autoresize />
+                <el-empty v-else description="暂无数据" :image-size="40" />
+              </div>
+              <div class="gv-dim-list">
+                <div
+                  v-for="d in (profile?.radar ?? [])"
+                  :key="d.name"
+                  class="gv-dim-row"
+                  :class="{ 'is-low': d.name === growthLowestDim && d.value < 80 }"
+                >
+                  <div class="gv-dim-top">
+                    <span class="gv-dim-name">{{ d.name }}</span>
+                    <span class="gv-dim-val">{{ d.value }}</span>
+                  </div>
+                  <div class="gv-dim-track"><div class="gv-dim-fill" :style="{ width: Math.min(100, d.value) + '%' }"></div></div>
+                </div>
+              </div>
+            </div>
+            <p class="gv-insight" v-if="growthAdvice">{{ growthAdvice }}</p>
+          </section>
+
+          <!-- ===== 记录构成：48px 迷你柱状图（参考 Apple Health 噪音模块） =====
+               柱状图从占满一屏压到 48px，把省下的空间给一句结论。 -->
+          <section class="gv-card">
+            <header class="gv-card-head">
+              <h3 class="gv-card-title">记录构成</h3>
+              <span class="gv-card-meta">{{ growthBarInsight }}</span>
+            </header>
+            <div class="gv-mini">
+              <v-chart v-if="profile?.stats_by_type?.length" :option="growthBarOption" class="gv-mini-chart" autoresize />
+              <el-empty v-else description="暂无数据" :image-size="40" />
+            </div>
+          </section>
+
+          <!-- ===== 成长历程：折线压到 110px，饼图去掉（分布已由上面的柱状图承担） ===== -->
+          <section class="gv-card">
+            <header class="gv-card-head">
+              <h3 class="gv-card-title">成长历程</h3>
+              <span class="gv-card-meta">{{ growthTrendInsight }}</span>
+            </header>
+            <div class="gv-mini is-line">
+              <v-chart v-if="profile?.monthly_trend?.length" :option="growthLineOption" class="gv-line-chart" autoresize />
+              <el-empty v-else description="暂无数据" :image-size="40" />
+            </div>
+          </section>
+
+          <!-- 成长记录 -->
+          <section class="gv-card gv-records">
+            <header class="gv-card-head">
+              <h3 class="gv-card-title">成长记录</h3>
+              <span class="gv-card-meta" v-if="growthRecords.length">{{ growthRecords.length }} 条</span>
+              <button v-if="growthRecords.length > 3" class="gv-text-btn" type="button" @click="allRecordsVisible = true">全部</button>
+            </header>
+            <div v-if="growthRecords.length" class="gv-record-list">
+              <button
+                v-for="r in growthRecords.slice(0, 3)"
+                :key="r.id"
+                class="gv-record"
+                type="button"
+                @click="showRecordDetail(r)"
+              >
+                <span class="gv-record-dot" :style="{ background: dotColor(r.type) }"></span>
+                <span class="gv-record-main">
+                  <span class="gv-record-title">{{ r.title }}</span>
+                  <span class="gv-record-sub">{{ typeLabel(r.type) }} · {{ formatGrowthDate(r.date) }}</span>
+                </span>
+                <el-icon class="gv-record-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+            <p v-else class="gv-empty-text">还没有成长记录，点右上角「记一笔」开始</p>
+            <button class="gv-add-block" type="button" @click="openDialog">
+              <el-icon :size="14"><Plus /></el-icon>
+              <span>添加成长记录</span>
+            </button>
+          </section>
+
+          <!-- 项目展示 -->
+          <section class="gv-card">
+            <header class="gv-card-head">
+              <h3 class="gv-card-title">项目展示</h3>
+              <span class="gv-card-meta" v-if="projects.length">{{ projects.length }} 个</span>
+              <button v-if="projects.length > 3" class="gv-text-btn" type="button" @click="showAllProjects = !showAllProjects">{{ showAllProjects ? '收起' : '更多' }}</button>
+            </header>
+            <div v-if="projects.length" class="gv-project-list">
+              <button v-for="p in visibleProjects" :key="p.id" class="gv-project" type="button" @click="editProject(p)">
+                <span class="gv-project-icon" :class="p.is_team ? 'team' : 'solo'">
+                  <el-icon :size="15"><UserFilled v-if="p.is_team" /><User v-else /></el-icon>
+                </span>
+                <span class="gv-project-main">
+                  <span class="gv-project-name">{{ p.project_name }}</span>
+                  <span class="gv-project-sub">{{ p.start_date }} ~ {{ p.end_date || '至今' }}<template v-if="p.is_team && p.team_members"> · {{ p.team_members }}</template></span>
+                </span>
+                <el-icon class="gv-record-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+            <p v-else class="gv-empty-text">还没有项目，可以把课程设计、竞赛作品放进来</p>
+            <button class="gv-add-block" type="button" @click="openProjectDialog">
+              <el-icon :size="14"><Plus /></el-icon>
+              <span>添加项目</span>
+            </button>
+          </section>
+
+          <!-- 技能与兴趣（AI 归纳版）
+               标签不再由学生手动增删：绵小城依据成长档案（成长记录 / 项目作品 / 课程成绩 /
+               对话沉淀）自动归纳，学生只读查看；点击任意标签展开「来源证据」，
+               能直接看到这条标签是从哪一条档案推出来的，避免出现无依据的标签。 -->
+          <section class="gv-card skills-card">
+            <header class="gv-card-head">
+              <h3 class="gv-card-title">技能与兴趣</h3>
+              <span class="gv-card-meta" v-if="aiTags.length">绵小城归纳 · {{ aiTags.length }}</span>
+            </header>
+            <div class="skills-body skills-body-compact">
+              <div v-if="aiTags.length" class="tag-cloud">
+                <button
+                  v-for="t in aiTags"
+                  :key="t.key"
+                  type="button"
+                  class="ai-tag"
+                  :class="[`is-${t.kind}`, { active: activeTagKey === t.key }]"
+                  @click="toggleTagEvidence(t.key)"
+                >
+                  <span class="ai-tag-name">{{ t.name }}</span>
+                  <span class="ai-tag-count">{{ t.evidence.length }}</span>
+                </button>
+              </div>
+              <p v-else class="skills-empty">成长档案还很空，记录一条成长或完成一次打卡后，绵小城会自动归纳标签</p>
+
+              <div v-if="activeTag" class="tag-evidence">
+                <div class="tag-evidence-head">
+                  <span class="tag-evidence-head-title">{{ activeTag.name }} · 来源证据</span>
+                  <button class="tag-evidence-close" type="button" @click="activeTagKey = ''">收起</button>
+                </div>
+                <div v-if="activeTag.evidence.length" class="tag-evidence-list">
+                  <div v-for="(e, i) in activeTag.evidence" :key="i" class="tag-evidence-item">
+                    <span class="tag-evidence-label" :class="`src-${e.source}`">{{ e.label }}</span>
+                    <span class="tag-evidence-main">
+                      <span class="tag-evidence-title">{{ e.title }}</span>
+                      <span class="tag-evidence-detail">{{ e.detail }}<template v-if="e.date"> · {{ e.date }}</template></span>
+                    </span>
+                  </div>
+                </div>
+                <p v-else class="tag-evidence-empty">这个标签来自对话记忆，暂时没有可展示的档案条目</p>
+              </div>
+            </div>
+          </section>
 
           <!-- Dialogs -->
           <el-dialog v-model="projectDialogVisible" :title="editingProject ? '编辑项目' : '添加项目'" width="500px">
@@ -665,6 +753,7 @@
               <el-form-item label="项目成果"><UploadBtn v-model="projectForm.attachment_url" /></el-form-item>
             </el-form>
             <template #footer>
+              <el-button v-if="editingProject" type="danger" text @click="handleDeleteProject(editingProject.id)">删除项目</el-button>
               <el-button @click="projectDialogVisible = false">取消</el-button>
               <el-button type="primary" @click="handleSaveProject">{{ editingProject ? '保存' : '添加' }}</el-button>
             </template>
@@ -885,7 +974,250 @@
             <el-button @click="formulaDialogVisible = false">关闭</el-button>
           </template>
         </el-dialog>
-    </div>
+
+        <!-- ===== 请假服务子页（v3 新增）=====
+            把原工作台的「请假申请 / 证明申请 / 项目申请」三个入口融合成一个子页，
+            顶部用分段控制切换（对照 Apple Health 的「分类浏览」+ iOS 分段控件）。
+            设计沿用子页规范：白卡 + 每页一个识别色（葡萄紫 #6d28d9，与课表赭橙 / 成绩青绿 / 成长靛蓝互不串色），
+            表单项按 8px 节奏收紧，主按钮通栏。
+            注意：这里用 v-if 而非 v-else-if —— 本页与 growth 之间隔着 Transition 边界，
+            链式写法会因中间的独立弹窗元素而编译失败。 -->
+        <div v-if="activeTab === 'service'" key="service" class="service-view">
+          <!-- v5：美团订单流——顶部当前申请进度（无图标），表单收进「发起新申请」二级
+               仅移动端；桌面端保持 v3 的「分段控件 + 常驻表单」原样。 -->
+          <div v-if="isMobile && svCurrent" class="sv-current">
+            <span class="svc-cap">当前进行中的申请</span>
+            <h4 class="svc-title">{{ svCurrent.title }}</h4>
+            <div class="svc-steps">
+              <div class="svc-step done"><i>✓</i><p>已提交</p></div>
+              <div class="svc-step cur"><i></i><p>审批中</p></div>
+              <div class="svc-step"><i></i><p>完成</p></div>
+            </div>
+            <p class="svc-hint">预计 24 小时内出结果，进展会同步到主页心情卡提醒</p>
+          </div>
+          <button v-if="isMobile" type="button" class="sv-cta" @click="svShowForms = !svShowForms">
+            {{ svShowForms ? '收起申请表单' : '＋ 发起新申请' }}
+          </button>
+          <div v-show="isMobile ? svShowForms : true" class="sv-forms">
+          <div class="sv-segment" role="tablist" aria-label="申请类型">
+            <button v-for="t in SERVICE_TABS" :key="t.key" type="button" role="tab"
+              :aria-selected="svTab === t.key"
+              :class="['sv-seg-item', { active: svTab === t.key }]"
+              @click="svTab = t.key">{{ t.label }}</button>
+          </div>
+
+          <!-- 请假 -->
+          <div v-show="svTab === 'leave'" class="sv-card">
+            <div class="sv-tip"><el-icon :size="13"><InfoFilled /></el-icon><span>提交后由辅导员审批，请如实填写</span></div>
+            <div class="sv-field">
+              <label class="sv-label">请假类型</label>
+              <el-select v-model="svLeave.leave_type" placeholder="请选择" style="width:100%">
+                <el-option label="课假" value="课假" /><el-option label="公假" value="公假" /><el-option label="宿假" value="宿假" />
+                <el-option label="事假" value="事假" /><el-option label="病假" value="病假" /><el-option label="其他" value="其他" />
+              </el-select>
+            </div>
+            <div class="sv-row2">
+              <div class="sv-field"><label class="sv-label">开始日期</label>
+                <el-date-picker v-model="svLeave.start_date" type="date" value-format="YYYY-MM-DD" placeholder="开始" style="width:100%" :disabled-date="svDisableStart" /></div>
+              <div class="sv-field"><label class="sv-label">结束日期</label>
+                <el-date-picker v-model="svLeave.end_date" type="date" value-format="YYYY-MM-DD" placeholder="结束" style="width:100%" :disabled-date="svDisableEnd" /></div>
+            </div>
+            <div class="sv-field">
+              <label class="sv-label">请假理由</label>
+              <el-input v-model="svLeave.reason" type="textarea" :rows="3" placeholder="请描述请假原因" />
+            </div>
+            <template v-if="svLeave.leave_type === '课假' || svLeave.leave_type === '公假'">
+              <div class="sv-field"><label class="sv-label">证明材料</label><UploadBtn @uploaded="svLeave.attachments.push($event)" />
+                <div class="sv-files"><el-tag v-for="(f, i) in svLeave.attachments" :key="i" closable @close="svLeave.attachments.splice(i, 1)">{{ svFileName(f) }}</el-tag></div></div>
+            </template>
+            <template v-if="svLeave.leave_type === '宿假'">
+              <div class="sv-row2">
+                <div class="sv-field"><label class="sv-label">宿舍楼</label><el-input v-model="svLeave.dormitory_building" placeholder="如：A栋" /></div>
+                <div class="sv-field"><label class="sv-label">宿舍号</label><el-input v-model="svLeave.dormitory_room" placeholder="如：301" /></div>
+              </div>
+              <div class="sv-field"><label class="sv-label">家长证明</label><UploadBtn v-model="svLeave.parent_proof" /></div>
+            </template>
+            <button class="sv-submit" type="button" :disabled="svSubmitting" @click="svSubmitLeave">{{ svSubmitting ? '提交中…' : '提交申请' }}</button>
+          </div>
+
+          <!-- 证明 -->
+          <div v-show="svTab === 'certificate'" class="sv-card">
+            <div class="sv-field">
+              <label class="sv-label">证明类型</label>
+              <el-select v-model="svCert.certificate_type" placeholder="请选择" style="width:100%">
+                <el-option label="在校证明" value="在校证明" /><el-option label="成绩单" value="成绩单" />
+                <el-option label="在读证明" value="在读证明" /><el-option label="学籍证明" value="学籍证明" /><el-option label="其他" value="其他" />
+              </el-select>
+            </div>
+            <div class="sv-field"><label class="sv-label">用途说明</label><el-input v-model="svCert.content" type="textarea" :rows="3" placeholder="请说明开具证明的用途" /></div>
+            <div class="sv-field"><label class="sv-label">所需份数</label><el-input-number v-model="svCert.quantity" :min="1" :max="20" style="width:100%" /></div>
+            <div class="sv-field"><label class="sv-label">附件材料</label><UploadBtn @uploaded="(u: string) => svCert.attachments.push(u)" />
+              <div class="sv-files"><el-tag v-for="(f, i) in svCert.attachments" :key="i" closable @close="svCert.attachments.splice(i, 1)">{{ svFileName(f) }}</el-tag></div></div>
+            <button class="sv-submit" type="button" :disabled="svSubmitting" @click="svSubmitCert">{{ svSubmitting ? '提交中…' : '提交申请' }}</button>
+          </div>
+
+          <!-- 项目 -->
+          <div v-show="svTab === 'project'" class="sv-card">
+            <div class="sv-field">
+              <label class="sv-label">项目类型</label>
+              <el-select v-model="svProject.project_type" placeholder="请选择" style="width:100%">
+                <el-option label="竞赛项目" value="竞赛项目" /><el-option label="科研项目" value="科研项目" />
+                <el-option label="社会实践" value="社会实践" /><el-option label="创业项目" value="创业项目" />
+                <el-option label="学生工作" value="学生工作" /><el-option label="其他" value="其他" />
+              </el-select>
+            </div>
+            <div class="sv-field"><label class="sv-label">项目名称</label><el-input v-model="svProject.title" placeholder="请输入项目名称" /></div>
+            <div class="sv-row2">
+              <div class="sv-field"><label class="sv-label">指导老师</label><el-input v-model="svProject.advisor" placeholder="姓名" /></div>
+              <div class="sv-field"><label class="sv-label">预算（元）</label><el-input-number v-model="svProject.budget" :min="0" :step="100" style="width:100%" /></div>
+            </div>
+            <div class="sv-field"><label class="sv-label">团队成员</label><el-input v-model="svProject.team_members" placeholder="多个用逗号隔开" /></div>
+            <div class="sv-row2">
+              <div class="sv-field"><label class="sv-label">开始日期</label><el-date-picker v-model="svProject.start_date" type="date" value-format="YYYY-MM-DD" placeholder="开始" style="width:100%" /></div>
+              <div class="sv-field"><label class="sv-label">结束日期</label><el-date-picker v-model="svProject.end_date" type="date" value-format="YYYY-MM-DD" placeholder="结束" style="width:100%" /></div>
+            </div>
+            <div class="sv-field"><label class="sv-label">项目简介</label><el-input v-model="svProject.content" type="textarea" :rows="4" placeholder="项目背景、目标、预期成果" /></div>
+            <div class="sv-field"><label class="sv-label">附件材料</label><UploadBtn @uploaded="(u: string) => svProject.attachments.push(u)" />
+              <div class="sv-files"><el-tag v-for="(f, i) in svProject.attachments" :key="i" closable @close="svProject.attachments.splice(i, 1)">{{ svFileName(f) }}</el-tag></div></div>
+            <button class="sv-submit" type="button" :disabled="svSubmitting" @click="svSubmitProject">{{ svSubmitting ? '提交中…' : '提交申请' }}</button>
+          </div>
+          </div>
+
+          <!-- v5：全部申请记录（请假/证明/项目合并，原「我的申请」并入这里）——仅移动端 -->
+          <div v-if="isMobile" class="sv-records">
+            <div class="ai-sec-head">
+              <h3 class="ai-sec-title">全部申请记录</h3>
+              <span class="ai-sec-count">{{ svRecords.length }} 条</span>
+            </div>
+            <div v-for="r in svRecords" :key="r.kind + '-' + r.id" class="svr-row">
+              <div class="svr-main"><h5>{{ r.title }}</h5><small>{{ r.date }}</small></div>
+              <span class="svr-st" :class="svStatusClass(r.status)">{{ svStatusLabel(r.status) }}</span>
+            </div>
+            <p v-if="!svRecords.length && !svRecordsLoading" class="ai-empty">还没有申请记录</p>
+          </div>
+        </div>
+
+        <!-- ===== 学习计划子页（v4：原 /student/plan 独立路由收编为第 5 个 tab） =====
+             PlanView 以 embedded 模式渲染（隐藏自带顶栏与滚动容器），内容流进本页滚动区。
+             独立 v-if 而非挂进 v-else-if 链：与 service 同理，链中间隔着 Transition 边界。 -->
+        <div v-if="activeTab === 'plan'" key="plan" class="plan-view-wrap">
+          <PlanView embedded />
+        </div>
+
+        <!-- ===== AI 今日报告子页（v5）：心情 / 任务 / 已实现 / 天气 + 运势 =====
+             事实由后端采集（心情今日优先、缺省沿用昨晚；任务含今日与遗留；实时天气），
+             LLM 只负责措辞与重点标注；报告中带重点标注的条目可一键转成学习计划。 -->
+        <div v-if="activeTab === 'ai'" key="ai" class="ai-view">
+          <div v-if="reportLoading && !dailyReport" class="report-loading">
+            <el-icon class="is-loading" :size="18"><Loading /></el-icon>
+            <div>
+              <p class="rl-title">正在生成今日报告…</p>
+              <p class="rl-sub">读取今日心情、任务、成长积累与实时天气</p>
+            </div>
+          </div>
+
+          <template v-else-if="dailyReport">
+            <section class="rp-hero">
+              <div class="rp-hero-top">
+                <div class="rp-hero-left">
+                  <p class="rp-date">{{ reportDateText }}</p>
+                  <h2 class="rp-greet">{{ dailyReport.greeting }}</h2>
+                </div>
+                <div v-if="dailyReport.weather" class="rp-weather" :title="`${dailyReport.weather.city} 实时天气`">
+                  <span class="rp-weather-emoji">{{ dailyReport.weather.emoji }}</span>
+                  <div class="rp-weather-main">
+                    <span class="rp-weather-temp">{{ dailyReport.weather.temp }}℃</span>
+                    <span class="rp-weather-desc">{{ dailyReport.weather.desc }}</span>
+                  </div>
+                  <span class="rp-weather-range">{{ dailyReport.weather.low }}~{{ dailyReport.weather.high }}℃<br />降水 {{ dailyReport.weather.rain }}%</span>
+                </div>
+                <div v-else class="rp-weather rp-weather-off">
+                  <span class="rp-weather-emoji">🌡️</span>
+                  <div class="rp-weather-main"><span class="rp-weather-desc">天气暂不可用</span></div>
+                </div>
+              </div>
+              <div class="rp-chips">
+                <span class="rp-chip" :style="{ '--chip-c': dailyReport.mood.color }">
+                  <span class="rp-chip-emoji">{{ dailyReport.mood.emoji }}</span>
+                  <template v-if="dailyReport.mood.from === 'none'">还没记录心情</template>
+                  <template v-else-if="dailyReport.mood.from === 'last_night'">昨晚 · {{ dailyReport.mood.label }}</template>
+                  <template v-else>今天 · {{ dailyReport.mood.label }}</template>
+                </span>
+                <button type="button" class="rp-chip rp-chip-btn" @click="aiRefresh">
+                  <el-icon :size="11"><MagicStick /></el-icon>重新生成
+                </button>
+              </div>
+            </section>
+
+            <section class="rp-fortune" :class="'rp-tone-' + fortuneTone(dailyReport.fortune.level)">
+              <div class="rp-fortune-head">
+                <div class="rp-fortune-title">
+                  <span class="rp-fortune-label">今日运势</span>
+                  <span class="rp-fortune-level">{{ dailyReport.fortune.level }}</span>
+                </div>
+                <span class="rp-fortune-score">{{ dailyReport.fortune.score }}<small>分</small></span>
+              </div>
+              <div class="rp-fortune-meter" aria-hidden="true">
+                <i :style="{ width: dailyReport.fortune.score + '%' }"></i>
+              </div>
+              <p class="rp-fortune-key"><i class="rp-fortune-dot"></i>今日关键词 · {{ dailyReport.fortune.keyword }}</p>
+              <p v-if="dailyReport.fortune.summary" class="rp-fortune-summary">{{ dailyReport.fortune.summary }}</p>
+              <div class="rp-fortune-meta">
+                <div class="rp-fortune-meta-item">
+                  <small>幸运色</small>
+                  <span>{{ dailyReport.fortune.lucky_color }}</span>
+                </div>
+                <div class="rp-fortune-meta-item">
+                  <small>幸运时段</small>
+                  <span>{{ dailyReport.fortune.lucky_time }}</span>
+                </div>
+              </div>
+            </section>
+
+            <section v-for="sec in dailyReport.sections" :key="sec.key" class="rp-sec">
+              <div class="rp-sec-head">
+                <span class="rp-sec-ico">{{ sectionIcon(sec.key) }}</span>
+                <h3 class="rp-sec-title">{{ sec.title }}</h3>
+              </div>
+              <p v-for="(line, li) in sec.items" :key="li" class="rp-sec-line">
+                <RichMarkText :text="line" />
+              </p>
+            </section>
+
+            <section class="rp-sec rp-suggest">
+              <div class="rp-sec-head">
+                <span class="rp-sec-ico">🎯</span>
+                <h3 class="rp-sec-title">可以加入学习计划的建议</h3>
+                <span class="ai-sec-count">{{ reportSuggestions.length }} 条</span>
+              </div>
+              <ul v-if="reportSuggestions.length" class="ai-action-list">
+                <li v-for="(a, i) in reportSuggestions" :key="i" class="ai-action">
+                  <span class="ai-prio" :style="{ background: aiPrioMeta(a.priority).bg, color: aiPrioMeta(a.priority).ink }">{{ aiPrioMeta(a.priority).label }}</span>
+                  <div class="ai-action-main">
+                    <p class="ai-action-title">
+                      <span v-if="a.when" class="ai-action-when">{{ a.when }}</span>{{ a.title }}
+                    </p>
+                    <p class="ai-action-content"><RichMarkText :text="a.content" /></p>
+                    <button v-if="!aiAdded[i]" type="button" class="ai-add-btn" @click="aiAddToPlan(a, i)">＋ 生成近期计划并加入学习计划</button>
+                    <span v-else class="ai-added">✓ 已加入学习计划</span>
+                  </div>
+                </li>
+              </ul>
+              <p v-else class="ai-empty">今天状态不错，暂时没有需要额外加入计划的事。</p>
+            </section>
+
+            <div class="rp-export-row">
+              <button type="button" class="rp-export-btn" @click="exportReport">
+                <el-icon :size="12"><Download /></el-icon>一键导出
+              </button>
+            </div>
+          </template>
+
+          <p v-else class="ai-empty">今日报告暂时生成失败，下拉刷新或稍后再试。</p>
+        </div>
+        </div>
+
+
     <!-- ===== 右侧垂直标签栏（桌面端），移动端由驾驶舱入口卡片代替 ===== -->
     <div class="page-tabs" v-if="!isMobile">
       <div :class="['page-tab', { active: activeTab === 'schedule' }]" @click="openSubPage('schedule')">
@@ -897,15 +1229,19 @@
       <div :class="['page-tab', { active: activeTab === 'growth' }]" @click="openSubPage('growth')">
         <el-icon><TrendCharts /></el-icon> 成长轨迹
       </div>
-      <div class="page-tab" @click="goPlan">
+      <div :class="['page-tab', { active: activeTab === 'service' }]" @click="openSubPage('service')">
+        <el-icon><Tickets /></el-icon> 请假服务
+      </div>
+      <div :class="['page-tab', { active: activeTab === 'plan' }]" @click="openSubPage('plan')">
         <el-icon><Aim /></el-icon> 学习计划
+      </div>
+      <div :class="['page-tab', { active: activeTab === 'ai' }]" @click="openSubPage('ai')">
+        <el-icon><MagicStick /></el-icon> 今日报告
       </div>
       <div class="page-tab" @click="goPortfolio">
         <el-icon><FolderOpened /></el-icon> 我的作品集
       </div>
-      <div class="page-tab" @click="goEmotion">
-        <el-icon><FirstAidKit /></el-icon> 情绪树洞
-      </div>
+      <!-- v4：情绪树洞淡出（心情卡承接），成长档案并入成长轨迹，桌面标签同步移除 -->
     </div>
     </div>
     </Transition>
@@ -917,25 +1253,32 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
-import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Aim, Grid, PieChart as PieChartIcon, Close, FirstAidKit } from '@element-plus/icons-vue'
+import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, Plus, Tickets, Download } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElCollapseTransition } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { LineChart, BarChart, PieChart, RadarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, MarkLineComponent, LegendComponent, RadarComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import type { Course, Grade, Exam } from '@/types'
+import type { Course, Grade, Exam, LeaveRequestOut, ServiceTicket } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { studentDataCache } from '@/utils/studentDataCache'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSiteConfig } from '@/composables/useSiteConfig'
-import { getGrowthRecords, createGrowthRecord, getGrowthProfile, updateSkills, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
-import type { GrowthProfile, StudentProject } from '@/api/growth'
+import { getGrowthRecords, createGrowthRecord, getGrowthProfile, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
+import type { GrowthProfile, StudentProject, GrowthTagItem } from '@/api/growth'
+import { getStreak, createPlan } from '@/api/plan'
+import type { Streak } from '@/api/plan'
 import type { GrowthRecord } from '@/types'
 import { renderMarkdown } from '@/utils/markdown'
+import { createLeave, getMyLeaves } from '@/api/leave'
+import { createTicket, getTickets } from '@/api/service'
+import { fetchDailyReport, type DailyReport } from '@/api/agent'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
+import RichMarkText from '@/components/common/RichMarkText.vue'
 import GrowthDashboard from '@/components/growth/GrowthDashboard.vue'
+import PlanView from '@/views/student/PlanView.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
@@ -950,12 +1293,10 @@ const { isMobile } = useResponsive()
 const { siteMascot, siteName } = useSiteConfig()
 
 // ===== 驾驶舱直达入口 =====
-function goPlan() { router.push('/student/plan') }
 function goPortfolio() { router.push('/student/portfolio') }
-function goEmotion() { router.push('/student/emotion') }
 
-// ===== 视图状态：home=驾驶舱主页（移动端），schedule/grades/growth=学业子页面 =====
-const tabKeys = ['schedule', 'grades', 'growth'] as const
+// ===== 视图状态：home=主页（移动端），schedule/grades/growth/service=子页面 =====
+const tabKeys = ['schedule', 'grades', 'growth', 'service', 'plan', 'ai'] as const
 const validInitTab = (route.query.tab as string) || ''
 const activeTab = ref<string>(
   (tabKeys as readonly string[]).includes(validInitTab)
@@ -963,9 +1304,254 @@ const activeTab = ref<string>(
     : isMobile.value ? 'home' : 'schedule'
 )
 const subPageTitle = computed(() => {
-  const map: Record<string, string> = { schedule: '课程表', grades: '成绩分析', growth: '成长轨迹' }
+  const map: Record<string, string> = { schedule: '课程表', grades: '成绩分析', growth: '成长轨迹', service: '请假服务', plan: '学习计划', ai: '今日报告' }
   return map[activeTab.value] || '学业中心'
 })
+/** 子页副标题：一句话说清这一页能做什么，滚动后自动收起，48px 高度不变 */
+const subPageSub = computed(() => {
+  const map: Record<string, string> = {
+    schedule: '本周课程 · 时间地点',
+    grades: '学期成绩 · 绩点趋势',
+    growth: '记录 · 画像 · 里程碑',
+    service: '请假 · 证明 · 项目',
+    plan: '目标 · 关卡 · 打卡',
+    ai: '近况分析 · 计划生成',
+  }
+  return map[activeTab.value] || ''
+})
+/** 模块识别色：只用于标题前的 6px 圆点（不铺色块） */
+const subPageAccent = computed(() => {
+  const map: Record<string, string> = {
+    schedule: '#b45309', grades: '#0f7a58', growth: '#1a4fd6',
+    service: '#3d4a57', plan: '#0369a1', ai: '#4f46e5',
+  }
+  return map[activeTab.value] || ''
+})
+
+
+
+// ===== 请假服务子页（v3 新增：融合原工作台的三个申请入口） =====
+const SERVICE_TABS = [
+  { key: 'leave', label: '请假' },
+  { key: 'certificate', label: '证明' },
+  { key: 'project', label: '项目' },
+] as const
+const svTab = ref<'leave' | 'certificate' | 'project'>('leave')
+const svSubmitting = ref(false)
+const svLeave = ref({ leave_type: '', start_date: '', end_date: '', reason: '', dormitory_building: '', dormitory_room: '', parent_proof: '', attachments: [] as string[] })
+const svCert = ref({ certificate_type: '', content: '', quantity: 1, attachments: [] as string[] })
+const svProject = ref({ project_type: '', title: '', advisor: '', team_members: '', start_date: '', end_date: '', budget: 0, content: '', attachments: [] as string[] })
+function svFileName(u: string) { try { return decodeURIComponent(u.split('/').pop() || u).split('?')[0] } catch { return u } }
+function svToday() { return new Date().toISOString().slice(0, 10) }
+function svDisableStart(d: Date) { return d.getTime() < new Date(svToday() + 'T00:00:00').getTime() }
+function svDisableEnd(d: Date) { return svLeave.value.start_date ? d.getTime() < new Date(svLeave.value.start_date + 'T00:00:00').getTime() : svDisableStart(d) }
+function svMapLeaveType(label: string): string {
+  const m: Record<string, string> = { '课假': 'other', '公假': 'competition', '宿假': 'personal', '事假': 'personal', '病假': 'sick', '其他': 'other' }
+  return m[label] || 'other'
+}
+function svResetLeave() { Object.assign(svLeave.value, { leave_type: '', start_date: '', end_date: '', reason: '', dormitory_building: '', dormitory_room: '', parent_proof: '', attachments: [] }) }
+
+async function svSubmitLeave() {
+  const f = svLeave.value
+  if (!f.leave_type || !f.start_date || !f.end_date || !f.reason) { ElMessage.warning('请填写所有必填项'); return }
+  if (f.start_date < svToday()) { ElMessage.error('开始日期不能早于今天'); return }
+  if (f.end_date < f.start_date) { ElMessage.error('结束日期不能早于开始日期'); return }
+  if ((new Date(f.end_date + 'T00:00:00').getTime() - new Date(f.start_date + 'T00:00:00').getTime()) / 86400000 > 14) { ElMessage.error('请假时长不能超过15天'); return }
+  svSubmitting.value = true
+  try {
+    await createLeave({ start_date: f.start_date, end_date: f.end_date, reason: `[${f.leave_type}] ${f.reason}`, leave_type: svMapLeaveType(f.leave_type) })
+    ElMessage.success('请假申请已提交，等待辅导员审批')
+    svResetLeave()
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') } finally { svSubmitting.value = false }
+}
+async function svSubmitCert() {
+  const f = svCert.value
+  if (!f.certificate_type || !f.content) { ElMessage.warning('请填写所有必填项'); return }
+  svSubmitting.value = true
+  try {
+    await createTicket({
+      type: 'certificate', title: f.certificate_type, content: f.content,
+      applicant_name: auth.userName || '', applicant_no: auth.user?.username || '', applicant_college: auth.user?.college || '',
+      form_data: { certificate_type: f.certificate_type, quantity: f.quantity },
+      attachments: f.attachments.length ? f.attachments : undefined,
+    })
+    ElMessage.success('证明申请已提交')
+    Object.assign(f, { certificate_type: '', content: '', quantity: 1, attachments: [] })
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') } finally { svSubmitting.value = false }
+}
+async function svSubmitProject() {
+  const f = svProject.value
+  if (!f.project_type || !f.title || !f.start_date || !f.end_date || !f.content) { ElMessage.warning('请填写所有必填项'); return }
+  if (f.end_date < f.start_date) { ElMessage.error('结束日期不能早于开始日期'); return }
+  svSubmitting.value = true
+  try {
+    await createTicket({
+      type: 'project', title: f.title, content: f.content,
+      applicant_name: auth.userName || '', applicant_no: auth.user?.username || '', applicant_college: auth.user?.college || '',
+      form_data: { project_type: f.project_type, advisor: f.advisor, team_members: f.team_members, start_date: f.start_date, end_date: f.end_date, budget: f.budget },
+      attachments: f.attachments.length ? f.attachments : undefined,
+    })
+    ElMessage.success('项目申请已提交')
+    Object.assign(f, { project_type: '', title: '', advisor: '', content: '', team_members: '', start_date: '', end_date: '', budget: 0, attachments: [] })
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') } finally { svSubmitting.value = false }
+}
+
+// ===== AI 今日报告子页（v5）：心情 / 任务 / 已实现 / 天气 + 运势 =====
+const dailyReport = ref<DailyReport | null>(null)
+const reportLoading = ref(false)
+const aiAdded = ref<Record<number, boolean>>({})
+const reportSuggestions = computed(() => dailyReport.value?.suggestions ?? [])
+
+/** 加载报告；失败时保留旧内容，页面显示空态 */
+async function loadAiFeed() {
+  reportLoading.value = true
+  try {
+    const data = await fetchDailyReport()
+    if (data) {
+      dailyReport.value = data
+      aiAdded.value = {}
+    }
+  } finally { reportLoading.value = false }
+}
+
+function aiRefresh() {
+  void loadAiFeed()
+}
+
+/** 报告日期：2026-10-29 周四 */
+const reportDateText = computed(() => {
+  const d = dailyReport.value?.date
+  if (!d) return ''
+  const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(`${d}T00:00:00`).getDay()]
+  return `${d} ${week}`
+})
+
+/** 四段报告的小图标 */
+function sectionIcon(key: string): string {
+  return ({ review: '🪵', today: '🗓', mood: '💗', task: '🎯', weather: '🌦', achievement: '🏆' } as Record<string, string>)[key] || '·'
+}
+
+/** 运势等级 → 配色档位（上签喜庆、平签稳重、缓行签柔和，不用红色渲染负向） */
+function fortuneTone(level: string): 'great' | 'good' | 'mid' | 'soft' {
+  if (level.includes('上上')) return 'great'
+  if (level.includes('上')) return 'good'
+  if (level.includes('中')) return 'mid'
+  return 'soft'
+}
+
+/** 优先级 → 徽标样式（数字越大越紧急） */
+function aiPrioMeta(p: number): { label: string; bg: string; ink: string } {
+  if (p >= 4) return { label: '紧急', bg: '#fdeaea', ink: '#c0392b' }
+  if (p >= 3) return { label: '需关注', bg: '#fdf3e3', ink: '#b45309' }
+  return { label: '提示', bg: '#e8f1fa', ink: '#0369a1' }
+}
+
+function aiFmtDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+type ReportSuggestion = DailyReport['suggestions'][number]
+
+/** 把一条建议转成 7 天近期计划，写入学习计划 */
+async function aiAddToPlan(a: ReportSuggestion, i: number) {
+  const start = new Date()
+  const end = new Date(Date.now() + 7 * 86400000)
+  try {
+    await createPlan({ title: a.title, objective: a.content, stage: null, start_date: aiFmtDate(start), end_date: aiFmtDate(end), goal_id: null })
+    aiAdded.value = { ...aiAdded.value, [i]: true }
+    ElMessage.success('已生成近期计划并加入学习计划')
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '加入失败，请重试') }
+}
+
+/** 去掉报告里的标注记号，导出为纯文本 */
+function stripReportMarks(text: string): string {
+  return text
+    .replace(/==([^=]+)==/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+}
+
+/** 一键导出今日报告为 Markdown 文件 */
+function exportReport() {
+  const r = dailyReport.value
+  if (!r) return
+  const w = r.weather
+  const lines: string[] = []
+  lines.push(`# AI 今日报告 · ${reportDateText.value}`, '', r.greeting)
+  if (w) lines.push(`天气：${w.city} ${w.temp}℃ ${w.desc}（${w.low}~${w.high}℃，降水 ${w.rain}%）`)
+  const moodText = r.mood.from === 'none' ? '还没记录心情' : r.mood.from === 'last_night' ? `昨晚 · ${r.mood.label}` : `今天 · ${r.mood.label}`
+  lines.push(`心情：${moodText}`)
+
+  lines.push('', `## 今日运势 · ${r.fortune.level} ${r.fortune.score} 分`)
+  if (r.fortune.keyword) lines.push(`关键词：${r.fortune.keyword}`)
+  if (r.fortune.summary) lines.push(r.fortune.summary)
+  lines.push(`幸运色：${r.fortune.lucky_color}　幸运时段：${r.fortune.lucky_time}`)
+
+  for (const sec of r.sections) {
+    lines.push('', `## ${sec.title}`)
+    for (const item of sec.items) lines.push(`- ${stripReportMarks(item)}`)
+  }
+
+  if (r.suggestions.length) {
+    lines.push('', '## 学习计划建议')
+    for (const s of r.suggestions) {
+      lines.push(`- ${s.when ? `[${s.when}] ` : ''}${s.title}：${stripReportMarks(s.content)}`)
+    }
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `AI今日报告_${r.date}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('已导出今日报告')
+}
+
+// ===== 请假服务 v5：美团订单流 + 全部申请记录（「我的申请」已合并进来） =====
+interface SvRecord { kind: 'leave' | 'ticket'; id: number; title: string; date: string; status: string }
+const svRecordsLoading = ref(false)
+const svRecords = ref<SvRecord[]>([])
+const svShowForms = ref(false)
+const svCurrent = computed(() => svRecords.value.find(r => ['pending', 'processing'].includes(r.status)) || null)
+
+function svStatusLabel(st: string): string {
+  const m: Record<string, string> = { pending: '审批中', processing: '处理中', approved: '已通过', rejected: '已退回', completed: '已办结', cancelled: '已取消', returned: '已销假' }
+  return m[st] || st
+}
+function svStatusClass(st: string): string {
+  return ['approved', 'completed', 'returned'].includes(st) ? 'ok' : ['rejected', 'cancelled'].includes(st) ? 'no' : 'ing'
+}
+
+async function loadServiceRecords() {
+  if (svRecordsLoading.value) return
+  svRecordsLoading.value = true
+  try {
+    const [leaves, tickets] = await Promise.all([
+      getMyLeaves(),
+      getTickets({ student_id: auth.user?.id || undefined }).catch(() => [] as ServiceTicket[]),
+    ])
+    const l = (leaves as LeaveRequestOut[]).map(v => ({
+      kind: 'leave' as const, id: v.id,
+      title: `请假 · ${v.start_date}${v.end_date && v.end_date !== v.start_date ? ' ~ ' + v.end_date : ''}`,
+      date: (v.updated_at || v.created_at || '').slice(0, 10),
+      status: v.return_confirmed ? 'returned' : v.status,
+    }))
+    const t = (tickets as ServiceTicket[]).map(v => ({
+      kind: 'ticket' as const, id: v.id, title: v.title,
+      date: (v.updated_at || v.created_at || '').slice(0, 10), status: v.status,
+    }))
+    svRecords.value = [...l, ...t].sort((a, b) => b.date.localeCompare(a.date))
+  } catch { /* 静默：失败时显示空态 */ } finally { svRecordsLoading.value = false }
+}
+
+/** 子页顶栏的滚动收起状态：监听 .content-row 的滚动（它是子页真正的滚动容器） */
+const subpageScrolled = ref(false)
+function onSubpageScroll(e: Event) {
+  const next = ((e.target as HTMLElement)?.scrollTop ?? 0) > 24
+  if (next !== subpageScrolled.value) subpageScrolled.value = next
+}
 
 // ===== 驾驶舱主页 ↔ 学业子页面：覆盖式滑入/滑出 =====
 // 用全局 .subpage（styles/animations.css，全站唯一实现）：子页从右滑入盖住主页，
@@ -1022,60 +1608,103 @@ function shortSem(sem: string) {
   if (parts.length < 3) return sem
   return `${parts[0].slice(2)}-${parts[1].slice(2)}·${parts[2]}`
 }
+/** 分数段配色（v3）：不再用「红黄蓝绿」四色并列，改成同一识别色的深浅梯度。
+    分数段本身就是「好→更好」的有序关系，用梯度表达比用四个色相更准确，
+    也让成绩页只保留青绿一个色系（避免图表五颜六色）。 */
 function distColor(range: string) {
-  if (range === '90-100') return '#67c23a'
-  if (range === '80-89') return '#409eff'
-  if (range === '70-79') return '#e6a23c'
-  if (range === '60-69') return '#f89898'
-  return '#f56c6c'
+  if (range === '90-100') return '#0f7a58'
+  if (range === '80-89') return '#2f9c76'
+  if (range === '70-79') return '#7fc2a8'
+  if (range === '60-69') return '#b8dccc'
+  return '#dce9e3'
 }
 function barWidth(s?: number) { return Math.max(6, Math.min(100, s ?? 0)) + '%' }
-const chartAxis = { fontSize: 11, color: '#999' }
-const chartSplitLine = { lineStyle: { color: '#f0f2f5' } }
+/* v3：成绩页三个图表全部改为「无轴 + 值标图上」的迷你样式，
+   chartAxis / chartSplitLine 两个旧常量已无引用，删除以免 vue-tsc 报 TS6133。 */
 
-const semGpaOption = computed(() => ({
-  tooltip: { trigger: 'axis', confine: true },
-  grid: { left: 36, right: 16, top: 28, bottom: 26 },
-  xAxis: { type: 'category', boundaryGap: false, data: gradeAnalysis.value.semester_gpa.map(s => shortSem(s.semester)), axisLabel: { ...chartAxis, interval: 0 }, axisLine: { lineStyle: { color: '#e5e6eb' } } },
-  yAxis: { type: 'value', min: 0, max: 4, splitLine: chartSplitLine, axisLabel: chartAxis },
-  series: [{
-    type: 'line', smooth: true, symbol: 'circle', symbolSize: 8,
-    data: gradeAnalysis.value.semester_gpa.map(s => s.gpa),
-    lineStyle: { width: 3, color: '#409eff' },
-    itemStyle: { color: '#409eff', borderColor: '#fff', borderWidth: 2 },
-    areaStyle: { color: 'rgba(64,158,255,.1)' },
-    markLine: gradeAnalysis.value.stats.avg_gpa ? {
-      silent: true, symbol: 'none',
-      lineStyle: { color: '#e6a23c', type: 'dashed' },
-      label: { formatter: `总均绩 ${gradeAnalysis.value.stats.avg_gpa}`, fontSize: 10, color: '#e6a23c' },
-      data: [{ yAxis: gradeAnalysis.value.stats.avg_gpa }]
-    } : undefined
-  }],
-  animationDuration: 800
-}))
+const semGpaOption = computed(() => {
+  const gpas = gradeAnalysis.value.semester_gpa.map(s => s.gpa)
+  const hi = Math.max(...gpas, 0.01)
+  const lo = Math.min(...gpas, hi - 0.01)
+  /* y 轴不能写死 0–4：绩点基本都在 3.0–3.8 之间，0–4 的固定区间会把三个点压成一条直线，
+     「趋势」就消失了。这里按实际数据上下各留 0.15 的余量，
+     既让起伏看得见，又不会放大到把 0.03 的波动画成悬崖。
+     刻度与网格线同时隐藏 —— 读者看的是形状，精确值已在点上标出。 */
+  const pad = Math.max(0.12, (hi - lo) * 0.35)
+  const yMin = Math.max(0, +(lo - pad).toFixed(2))
+  const yMax = +Math.min(4, hi + pad * 1.4).toFixed(2)
+  return {
+    tooltip: {
+      trigger: 'axis', confine: true,
+      backgroundColor: 'rgba(255,255,255,0.97)', borderColor: '#e9ebee', borderWidth: 1,
+      textStyle: { color: '#14171a', fontSize: 12 },
+      formatter: (p: any) => `${p[0]?.axisValue}：绩点 <b>${p[0]?.value}</b>`,
+    },
+    grid: { left: 4, right: 10, top: 18, bottom: 2, containLabel: true },
+    xAxis: {
+      type: 'category', boundaryGap: false,
+      data: gradeAnalysis.value.semester_gpa.map(s => shortSem(s.semester)),
+      axisLabel: { fontSize: 10, color: '#6b737c', interval: 0, margin: 6 },
+      axisLine: { lineStyle: { color: '#e9ebee' } }, axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value', min: yMin, max: yMax,
+      axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false },
+      splitLine: { show: false },
+    },
+    series: [{
+      type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+      data: gpas,
+      lineStyle: { width: 2, color: '#0f7a58' },
+      itemStyle: { color: '#0f7a58', borderColor: '#fff', borderWidth: 2 },
+      areaStyle: { color: 'rgba(15, 122, 88, .10)' },
+      label: { show: true, position: 'top', distance: 5, fontSize: 10, color: '#5b6470', formatter: (p: any) => p.value },
+      markLine: gradeAnalysis.value.stats.avg_gpa ? {
+        silent: true, symbol: 'none',
+        lineStyle: { color: '#b9bec6', type: 'dashed' },
+        label: { formatter: `总均绩 ${gradeAnalysis.value.stats.avg_gpa}`, fontSize: 10, color: '#6b737c', position: 'insideStartTop' },
+        data: [{ yAxis: gradeAnalysis.value.stats.avg_gpa }]
+      } : undefined
+    }],
+    animationDuration: 800
+  }
+})
 
 const distOption = computed(() => ({
   tooltip: { trigger: 'axis', confine: true, formatter: (p: any) => `${p[0]?.axisValue}：<b>${p[0]?.value}</b> 门` },
-  grid: { left: 36, right: 16, top: 28, bottom: 26 },
-  xAxis: { type: 'category', data: gradeAnalysis.value.score_distribution.map(d => d.range.replace('0-59', '<60')), axisLabel: chartAxis, axisLine: { lineStyle: { color: '#e5e6eb' } } },
-  yAxis: { type: 'value', minInterval: 1, splitLine: chartSplitLine, axisLabel: chartAxis },
+  grid: { left: 4, right: 6, top: 18, bottom: 2, containLabel: true },
+  xAxis: {
+    type: 'category',
+    data: gradeAnalysis.value.score_distribution.map(d => d.range.replace('0-59', '<60')),
+    axisLabel: { fontSize: 10, color: '#6b737c', margin: 6 },
+    axisLine: { lineStyle: { color: '#e9ebee' } }, axisTick: { show: false },
+  },
+  /* y 轴整条隐去：柱顶已标数值，读者要的是「哪档人多」的相对高低，不是刻度 */
+  yAxis: { type: 'value', minInterval: 1, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } },
   series: [{
     type: 'bar', barWidth: '46%',
-    data: gradeAnalysis.value.score_distribution.map(d => ({ value: d.count, itemStyle: { color: distColor(d.range), borderRadius: [6, 6, 0, 0] } })),
-    label: { show: true, position: 'top', fontSize: 11, color: '#666' }
+    data: gradeAnalysis.value.score_distribution.map(d => ({ value: d.count, itemStyle: { color: distColor(d.range), borderRadius: [4, 4, 0, 0] } })),
+    label: { show: true, position: 'top', fontSize: 10, color: '#5b6470', distance: 4 }
   }],
   animationDuration: 800
 }))
 
 const typeOption = computed(() => ({
   tooltip: { trigger: 'axis', confine: true, formatter: (p: any) => { const t = gradeAnalysis.value.course_type_stats[p[0]?.dataIndex]; return t ? `${t.type}：均分 ${t.avg_score} / 均绩 ${t.avg_gpa} / ${t.count} 门` : '' } },
-  grid: { left: 36, right: 16, top: 28, bottom: 26 },
-  xAxis: { type: 'category', data: gradeAnalysis.value.course_type_stats.map(t => t.type), axisLabel: chartAxis, axisLine: { lineStyle: { color: '#e5e6eb' } } },
-  yAxis: { type: 'value', min: 0, max: 100, splitLine: chartSplitLine, axisLabel: chartAxis },
+  grid: { left: 4, right: 6, top: 18, bottom: 2, containLabel: true },
+  xAxis: {
+    type: 'category', data: gradeAnalysis.value.course_type_stats.map(t => t.type),
+    axisLabel: { fontSize: 10, color: '#6b737c', margin: 6, interval: 0 },
+    axisLine: { lineStyle: { color: '#e9ebee' } }, axisTick: { show: false },
+  },
+  yAxis: {
+    type: 'value', min: 0, max: 100,
+    axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
+  },
   series: [{
     type: 'bar', barWidth: '40%',
-    data: gradeAnalysis.value.course_type_stats.map(t => ({ value: t.avg_score, itemStyle: { color: '#409eff', borderRadius: [6, 6, 0, 0] } })),
-    label: { show: true, position: 'top', fontSize: 11, color: '#666' }
+    data: gradeAnalysis.value.course_type_stats.map(t => ({ value: t.avg_score, itemStyle: { color: '#0f7a58', borderRadius: [4, 4, 0, 0] } })),
+    label: { show: true, position: 'top', fontSize: 10, color: '#5b6470', distance: 4 }
   }],
   animationDuration: 800
 }))
@@ -1133,7 +1762,18 @@ const courseGrid = computed(() => {
     dayBlocks[dayN] = blocks
   }
   const rows = []
-  for (let p = 1; p <= maxPeriod; p++) {
+  /* v3 移动端：只渲染到「本周最后一节课结束的节次」，不再死板铺满 12 节。
+     原来移动端固定 12 行 × 56px ≈ 672px，加上表头整块接近一整屏，
+     一周只有 5~6 节课时下面全是空行，用户要滚很久才能看到下面内容。
+     最少保留 8 节（上午 4 + 下午 4），保证表格看起来是「一天」而不是被截断。 */
+  let lastUsed = 0
+  if (isMobile.value) {
+    for (const day of shownDays) {
+      for (const b of dayBlocks[dayMap[day]] ?? []) lastUsed = Math.max(lastUsed, b.end)
+    }
+  }
+  const rowCount = isMobile.value ? Math.min(maxPeriod, Math.max(8, lastUsed)) : maxPeriod
+  for (let p = 1; p <= rowCount; p++) {
     const cells: any[] = []
     for (const day of shownDays) {
       const blocks = dayBlocks[dayMap[day]]
@@ -1220,15 +1860,21 @@ watch(selectedScheduleSem, () => {
 // ===== 今日课程列高亮 =====
 const todayDayN = new Date().getDay() === 0 ? 7 : new Date().getDay()
 function isTodayCol(day: string) { return isRealtimeView.value && dayMap[day] === todayDayN }
+/* 今天列的课程块再淡一档。旧实现用 base.slice(0,7) 取 #RRGGBB 再加 '3d'，
+   等于把 palette 的 8 位色值截成了不透明色 —— 今天列的色块反而比其它天更实。
+   现在直接对整串色值追加 alpha 后缀，保持同样的「更淡」语义。 */
 function courseCellBg(name: string, day: string) {
   const base = courseColor(name)
-  return isTodayCol(day) ? base.slice(0, 7) + '3d' : base
+  return isTodayCol(day) ? (base.length === 9 ? base.slice(0, 7) + '06' : base) : base
 }
 
 const palette = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#9b59b6', '#1abc9c', '#e67e22', '#2ecc71', '#3498db', '#e74c3c']
 const colorMap: Record<string, string> = {}
 let colorIdx = 0
-function courseColor(name: string) { if (!colorMap[name]) { colorMap[name] = palette[colorIdx % palette.length] + '18'; colorIdx++ } return colorMap[name] }
+/* v3：课程块底色由 palette + '18'（约 9% 不透明度）降到 '0a'（约 4%）。
+   一格 57px 宽、5 个色相铺满整屏时，「彩色」会盖过「课程名」本身；
+   压到几乎白以后，颜色只在左侧 2px 色条上辨认，文字回到第一视觉层。 */
+function courseColor(name: string) { if (!colorMap[name]) { colorMap[name] = palette[colorIdx % palette.length] + '0a'; colorIdx++ } return colorMap[name] }
 function goPrevWeek() { if (currentWeek.value > 1) { slideDir.value = 'right'; weekOffset.value-- } }
 function goNextWeek() { slideDir.value = 'left'; weekOffset.value++ }
 function resetWeek() {
@@ -1397,16 +2043,64 @@ const gradesBySem = computed(() => { const map: Record<string, Grade[]> = {}; fo
 const semStats = computed(() => { const stats: Record<string, { count: number; avg: number; gpa: string; credits: number }> = {}; for (const [sem, gs] of Object.entries(gradesBySem.value)) { const scores = gs.filter(g => g.score != null).map(g => g.score); const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0; const gpa = gs.length ? (gs.reduce((s, g) => s + (g.gpa || 0), 0) / gs.length).toFixed(2) : '0.00'; const credits = gs.reduce((s, g) => s + (g.credit || 0), 0); stats[sem] = { count: gs.length, avg, gpa, credits } } return stats })
 const upcomingExams = computed(() => { const now = new Date(); return exams.value.filter(e => !e.exam_date || new Date(e.exam_date) >= now).sort((a, b) => (a.exam_date || '').localeCompare(b.exam_date || '')) })
 function scoreLevel(s: number) { if (s >= 90) return 'level-a'; if (s >= 80) return 'level-b'; if (s >= 70) return 'level-c'; if (s >= 60) return 'level-d'; return 'level-f' }
-function avgColor(s?: number) { if (!s) return '#999'; if (s >= 90) return '#67c23a'; if (s >= 80) return '#409eff'; if (s >= 70) return '#e6a23c'; return '#f56c6c' }
+function avgColor(s?: number) { if (!s) return '#6b737c'; if (s >= 90) return '#0a5b41'; if (s >= 80) return '#0f7a58'; if (s >= 70) return '#4a5a54'; return '#c2410c' }
 function formatDate(d: string) { if (!d) return ''; const parts = d.split('-'); return parts[1] + '/' + parts[2] }
 function loadGoals() { try { const raw = localStorage.getItem('student_sem_goals'); if (raw) goals.value = JSON.parse(raw) } catch { goals.value = {} } }
+/* ===== 目标计划 v6（移动端）：4 级里程碑 =====
+   刻度取「目标 -0.3 / -0.2 / -0.1 / 目标」，与用户设的目标绑定（改目标即刻重排）；
+   实际绩点用一条填充轨 + 游标标出，节点按「已过 / 当前待过 / 未到」三态着色。 */
+function glGpa(sem: string): number {
+  return parseFloat(String(semStats.value[sem]?.gpa ?? '')) || 0
+}
+function glTarget(sem: string): number | null {
+  const t = goals.value[sem]
+  return t == null ? null : Number(t)
+}
+function glNodes(sem: string) {
+  const target = glTarget(sem)
+  if (target == null) return [] as { value: number; pos: number; state: string }[]
+  const gpa = glGpa(sem)
+  const vals = [-0.3, -0.2, -0.1, 0].map(d => Math.max(0, +(target + d).toFixed(2)))
+  let nextFound = false
+  return vals.map((v, i) => {
+    let state = 'todo'
+    if (gpa > 0 && gpa >= v) state = 'done'
+    else if (!nextFound) { state = 'next'; nextFound = true }
+    return { value: v, pos: (i / (vals.length - 1)) * 100, state }
+  })
+}
+function glPct(sem: string): number {
+  const target = glTarget(sem)
+  if (target == null) return 0
+  const lo = Math.max(0, +(target - 0.3).toFixed(2))
+  const gpa = glGpa(sem)
+  if (target <= lo) return gpa >= target ? 100 : 0
+  if (gpa <= lo) return 0
+  return Math.min(100, Math.round(((gpa - lo) / (target - lo)) * 100))
+}
+function glDone(sem: string): boolean {
+  const t = glTarget(sem)
+  return t != null && glGpa(sem) >= t
+}
+function glHint(sem: string): string {
+  const t = glTarget(sem)
+  if (t == null) return ''
+  const gpa = glGpa(sem)
+  if (!gpa) return '还没有绩点数据'
+  if (gpa >= t) return `已达成目标，超出 ${(gpa - t).toFixed(2)}`
+  const nodes = glNodes(sem)
+  const done = nodes.filter(n => n.state === 'done').length
+  const next = nodes.find(n => n.state === 'next')
+  const gap = (t - gpa).toFixed(2)
+  if (!next) return `差 ${gap} 达成 ${t.toFixed(2)}`
+  return `已过 ${done}/4 级 · 再涨 ${(next.value - gpa).toFixed(2)} 到 ${next.value.toFixed(2)}，差 ${gap} 达标`
+}
 function saveGoalForSem(sem: string) { const val = goalInputs.value[sem]; if (val == null) return; goals.value[sem] = val; localStorage.setItem('student_sem_goals', JSON.stringify(goals.value)); ElMessage.success(`${sem} 目标已保存`) }
 
 // ===== 成长轨迹 =====
-const skillPresets = ['编程开发', 'UI/UX设计', '数据分析', '人工智能', '项目管理', '产品设计', '视频剪辑', '摄影', '写作', '翻译', '演讲', '团队协作', '领导力']
-const interestPresets = ['音乐', '运动', '阅读', '游戏', '旅行', '美食', '电影', '摄影', '绘画', '舞蹈', '编程', '创业', '公益']
 const profile = ref<GrowthProfile | null>(null)
 const growthRecords = ref<GrowthRecord[]>([])
+const planStreak = ref<Streak | null>(null)
 const dialogVisible = ref(false)
 const allRecordsVisible = ref(false)
 const recordDetailVisible = ref(false)
@@ -1447,10 +2141,6 @@ const growthRules = computed(() => {
   }
   return base
 })
-const localSkills = ref<string[]>([])
-const localInterests = ref<string[]>([])
-const newTag = ref('')
-const customType = ref<'skill' | 'interest'>('skill')
 const projects = ref<StudentProject[]>([])
 const visibleProjects = computed(() => showAllProjects.value ? projects.value : projects.value.slice(0, 3))
 const loaded = ref(false)
@@ -1459,22 +2149,19 @@ const projectDialogVisible = ref(false)
 const editingProject = ref<StudentProject | null>(null)
 const projectForm = ref<Record<string, any>>({ project_name: '', start_date: '', end_date: null, is_team: false, team_members: '', attachment_url: '' })
 
-function toggleSkill(s: string) { const idx = localSkills.value.indexOf(s); if (idx >= 0) localSkills.value.splice(idx, 1); else localSkills.value.push(s) }
-function removeSkill(s: string) { localSkills.value = localSkills.value.filter(x => x !== s); syncTagEmpty() }
-function toggleInterest(s: string) { const idx = localInterests.value.indexOf(s); if (idx >= 0) localInterests.value.splice(idx, 1); else localInterests.value.push(s); syncTagEmpty() }
-function removeInterest(s: string) { localInterests.value = localInterests.value.filter(x => x !== s); syncTagEmpty() }
-const showTagEmpty = ref(false)
-let tagEmptyTimer: ReturnType<typeof setTimeout> | null = null
-function syncTagEmpty() {
-  if (tagEmptyTimer) { clearTimeout(tagEmptyTimer); tagEmptyTimer = null }
-  if (!localSkills.value.length && !localInterests.value.length) {
-    tagEmptyTimer = setTimeout(() => { showTagEmpty.value = true }, 280)
-  } else {
-    showTagEmpty.value = false
-  }
-}
-function addCustomTag() { const s = newTag.value.trim(); if (!s) return; if (customType.value === 'skill') { if (!localSkills.value.includes(s)) localSkills.value.push(s) } else { if (!localInterests.value.includes(s)) localInterests.value.push(s) } newTag.value = '' }
-async function saveSkills() { try { await updateSkills({ skills: localSkills.value, interests: localInterests.value }); ElMessage.success('技能/兴趣已保存'); profile.value = await getGrowthProfile() } catch { ElMessage.error('保存失败') } }
+/** 技能与兴趣标签：由绵小城依据成长档案归纳，只读展示；每条标签带来源证据 */
+const aiTags = computed(() => {
+  const p = profile.value
+  const items: GrowthTagItem[] = []
+  if (p?.skill_items?.length) items.push(...p.skill_items)
+  else if (p?.skills?.length) items.push(...p.skills.map(name => ({ name, kind: 'skill' as const, evidence: [] })))
+  if (p?.interest_items?.length) items.push(...p.interest_items)
+  else if (p?.interests?.length) items.push(...p.interests.map(name => ({ name, kind: 'interest' as const, evidence: [] })))
+  return items.map(t => ({ ...t, key: `${t.kind}-${t.name}` }))
+})
+const activeTagKey = ref('')
+const activeTag = computed(() => aiTags.value.find(t => t.key === activeTagKey.value) ?? null)
+function toggleTagEvidence(key: string) { activeTagKey.value = activeTagKey.value === key ? '' : key }
 function openProjectDialog() { editingProject.value = null; projectForm.value = { project_name: '', start_date: '', end_date: null, is_team: false, team_members: '', attachment_url: '' }; projectDialogVisible.value = true }
 function editProject(p: StudentProject) { editingProject.value = p; projectForm.value = { ...p }; projectDialogVisible.value = true }
 async function handleSaveProject() { if (projectFormRef.value) { try { await projectFormRef.value.validate() } catch { return } } try { if (editingProject.value) { await updateProject(editingProject.value.id, projectForm.value as any); ElMessage.success('项目已更新') } else { await createProject(projectForm.value as any); ElMessage.success('项目已添加') } projectDialogVisible.value = false; projects.value = await getProjects() } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '操作失败') } }
@@ -1529,59 +2216,276 @@ const scoreDetail = computed(() => {
 function fdColor(v: number) { if (v >= 80) return '#67c23a'; if (v >= 60) return '#409eff'; if (v >= 40) return '#e6a23c'; return '#f56c6c' }
 function scoreSuggest(dims: { name: string; value: number }[]) { if (!dims.length) return '—'; const min = Math.min(...dims.map(d => d.value)); return dims.filter(d => d.value === min).map(d => d.name).join('、') }
 
-const circleLen = 2 * Math.PI * 52
-const circleOffset = computed(() => { if (!profile.value) return circleLen; return circleLen - (circleLen * Math.min(100, profile.value.total_score) / 100) })
-const statsCards = computed(() => [
-  { label: '成长记录', value: profile.value?.total_records ?? 0 },
-  { label: '技能数量', value: profile.value?.total_skills ?? 0 },
-  { label: '荣誉', value: profile.value?.stats_by_type.find(s => s.name === '荣誉')?.value ?? 0 },
-  { label: '竞赛', value: profile.value?.stats_by_type.find(s => s.name === '竞赛')?.value ?? 0 },
-  { label: '实践', value: profile.value?.stats_by_type.find(s => s.name === '实践')?.value ?? 0 },
-  { label: '论文', value: profile.value?.stats_by_type.find(s => s.name === '论文')?.value ?? 0 },
-  { label: '成果', value: profile.value?.stats_by_type.find(s => s.name === '成果')?.value ?? 0 },
-])
-const radarOption = computed(() => ({
-  tooltip: { trigger: 'item', confine: true, backgroundColor: 'rgba(255,255,255,0.96)', borderColor: '#e8e8e8', borderWidth: 1, textStyle: { color: '#333', fontSize: 13 }, formatter: (params: any) => { const indicators = profile.value?.radar ?? []; const values = params.value ?? []; let html = '<div style="font-weight:600;margin-bottom:6px">' + (params.seriesName || '能力指标') + '</div>'; indicators.forEach((item: any, i: number) => { html += `<div style="display:flex;justify-content:space-between;gap:20px"><span style="color:#888">${item.name}</span><span style="font-weight:600;color:#409eff">${values[i] ?? 0}</span></div>` }); return html } },
-  radar: { indicator: (profile.value?.radar ?? []).map(d => ({ name: d.name, max: 100 })), shape: 'circle', center: ['50%', '50%'], radius: '65%', axisName: { color: '#333', fontSize: 12 }, splitArea: { areaStyle: { color: ['rgba(64,158,255,.03)', 'rgba(64,158,255,.06)'] } } },
-  series: [{ type: 'radar', name: '综合能力', data: [{ value: profile.value?.radar.map(d => d.value) ?? [0, 0, 0, 0, 0] }], areaStyle: { color: 'rgba(64,158,255,.2)' }, lineStyle: { color: '#409eff', width: 2 }, itemStyle: { color: '#409eff' }, symbol: 'circle', symbolSize: 6, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(64,158,255,0.5)' } }, animationDuration: 2000, animationEasing: 'cubicOut' as const, animationDelay: function(idx: number) { return idx * 100 } }],
-  animationDuration: 2000, animationEasing: 'cubicOut' as const,
-}))
-const growthBarOption = computed(() => ({
-  tooltip: { trigger: 'axis', confine: true, formatter: (p: any) => `${p[0]?.axisValue}：<b>${p[0]?.value}</b> 条` },
-  grid: { left: 32, right: 20, top: 20, bottom: 40 },
-  xAxis: { type: 'category', data: (profile.value?.stats_by_type ?? []).map(s => s.name), name: '成长类型', nameLocation: 'center', nameGap: 25, axisLabel: { color: '#666' } },
-  yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
-  series: [{ type: 'bar', data: (profile.value?.stats_by_type ?? []).map((s, i) => ({ value: s.value, itemStyle: { color: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'][i % 5] } })), barWidth: '40%', itemStyle: { borderRadius: [6, 6, 0, 0] }, animationDuration: 1500, animationEasing: 'elasticOut' as const, animationDelay: function(idx: number) { return idx * 200 } }],
-  animationDuration: 1500, animationEasing: 'cubicOut' as const,
-}))
-const growthPieOption = computed(() => {
-  const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de']
+/** 状态卡里的小评分环（r=25，周长 157.08） */
+const gaugeLen = 2 * Math.PI * 25
+const gaugeOffset = computed(() => {
+  const s = Math.min(100, Math.max(0, profile.value?.total_score ?? 0))
+  return gaugeLen - (gaugeLen * s) / 100
+})
+// ===== 成长页 v3：状态卡 / 热力日历 / 图表解读 =====
+// 设计参考 Keep 9.0「数据概览」：状态卡先给一句人话评价和建议，指标放后面。
+// 关键是**不煽情、不数落**——先承认现状，再给一个门槛极低的下一步。
+
+/** 综合评分所在的档位：用于状态卡的标题与识别色 */
+const growthTier = computed(() => {
+  const s = profile.value?.total_score ?? 0
+  if (s >= 85) return { key: 'high', label: '状态很好', tone: 'ok' as const, hint: '继续保持，可以把重心放在拔高上' }
+  if (s >= 70) return { key: 'mid', label: '状态良好', tone: 'accent' as const, hint: '基础扎实，还有一两个方向可以再推一把' }
+  if (s >= 50) return { key: 'low', label: '正在积累', tone: 'warning' as const, hint: '先把记录和标签补起来，评分会跟着动' }
+  return { key: 'empty', label: '等待起步', tone: 'warning' as const, hint: '从一条成长记录开始，其它都会跟着长出来' }
+})
+
+/** 状态卡第二行：最低维度 + 具体可执行的一句话（对标 Keep「表达能力可再练」） */
+const growthAdvice = computed(() => {
+  const dims = profile.value?.radar ?? []
+  if (!dims.length) return ''
+  const low = dims.reduce((a, b) => (a.value <= b.value ? a : b))
+  if (low.value >= 80) return '五个维度都在 80 分以上，很均衡'
+  const tips: Record<string, string> = {
+    学术素养: '补一篇论文或一份荣誉，这一项涨得最快',
+    创新能力: '参加一次竞赛，或登记一个成果',
+    实践能力: '再记一次实践，顺手补两个技能标签',
+    社交素养: '补几项兴趣或多参加一次实践',
+    综合素质: '成长记录和技能都还能再加一些',
+  }
+  return `${low.name} ${low.value} 分，${tips[low.name] ?? '这一项还有提升空间'}`
+})
+
+/** 最低维度的名字（用于在五维列表里点出警示色） */
+const growthLowestDim = computed(() => {
+  const dims = profile.value?.radar ?? []
+  if (!dims.length) return ''
+  return dims.reduce((a, b) => (a.value <= b.value ? a : b)).name
+})
+
+/** 紧凑数字网格：7 个数字改成 4 列 × 2 行，替代原来占半屏的横排大字 */
+const growthMetrics = computed(() => {
+  const p = profile.value
+  const cnt = (n: string) => p?.stats_by_type?.find(s => s.name === n)?.value ?? 0
+  return [
+    { label: '成长记录', value: p?.total_records ?? 0 },
+    { label: '技能', value: p?.total_skills ?? 0 },
+    { label: '荣誉', value: cnt('荣誉') },
+    { label: '竞赛', value: cnt('竞赛') },
+    { label: '实践', value: cnt('实践') },
+    { label: '论文', value: cnt('论文') },
+    { label: '成果', value: cnt('成果') },
+    { label: '兴趣', value: p?.interests?.length ?? 0 },
+  ]
+})
+
+/**
+ * 近 20 周热力日历（Duolingo / GitHub 贡献图的做法）。
+ * 点亮规则：某一天有「学习动作」就点亮 —— 成长记录记一笔算 1 次，学习计划打卡一次也算 1 次。
+ * 格子里存的不是布尔值而是当天的次数，颜色深浅按次数分 4 档：
+ * 0 次=灰、1 次=浅、2~3 次=中、4 次及以上=深；连续天数同时参考成长记录与计划打卡的连击。
+ * 按**自然周**分列（每列一周，周一到周日），20 列共 140 天；未来日期留白不渲染灰块。
+ */
+const HEAT_WEEKS = 20
+const growthHeatmap = computed(() => {
+  const counts = new Map<string, number>()
+  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+  const bump = (d: Date) => counts.set(key(d), (counts.get(key(d)) ?? 0) + 1)
+  const parseDay = (raw: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(raw)
+  }
+  for (const r of growthRecords.value ?? []) {
+    const raw = (r as any).date
+    if (!raw) continue
+    const d = parseDay(String(raw))
+    if (Number.isNaN(d.getTime())) continue
+    bump(d)
+  }
+  // 学习计划打卡同样点亮：坚持情况统计的是「这一天有没有学习动作」，不只是成长记录
+  for (const day of planStreak.value?.days ?? []) {
+    const d = parseDay(day)
+    if (!Number.isNaN(d.getTime())) bump(d)
+  }
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayKey = key(today)
+  // 本周一为第 7 天，往前推 HEAT_WEEKS-1 周 → 共 HEAT_WEEKS 列
+  const mondayOffset = (today.getDay() + 6) % 7
+  const start = new Date(today)
+  start.setDate(today.getDate() - mondayOffset - 7 * (HEAT_WEEKS - 1))
+  start.setHours(0, 0, 0, 0)
+
+  const weeks: { level: number; title: string; isToday: boolean; isFuture: boolean }[][] = []
+  let totalInRange = 0
+  let activeDays = 0
+  for (let w = 0; w < HEAT_WEEKS; w++) {
+    const col: { level: number; title: string; isToday: boolean; isFuture: boolean }[] = []
+    for (let d = 0; d < 7; d++) {
+      const cur = new Date(start)
+      cur.setDate(start.getDate() + w * 7 + d)
+      const c = key(cur)
+      const isFuture = cur > today
+      const n = counts.get(c) ?? 0
+      if (!isFuture && n > 0) { totalInRange += n; activeDays += 1 }
+      col.push({
+        level: isFuture ? -1 : n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3,
+        title: `${cur.getMonth() + 1}月${cur.getDate()}日${n ? ` · ${n} 次` : ''}`,
+        isToday: c === todayKey,
+        isFuture,
+      })
+    }
+    weeks.push(col)
+  }
+
+  const monthLabel = `${start.getMonth() + 1}月`
+  return { weeks, totalInRange, activeDays, rangeWeeks: HEAT_WEEKS, monthLabel, hasAny: totalInRange > 0 }
+})
+
+/** 连续记录天数（Duolingo 式「别断了」的心理锚点），成长记录与计划打卡取较长者 */
+const growthStreak = computed(() => {
+  const days = new Set<string>()
+  for (const r of growthRecords.value ?? []) {
+    const raw = (r as any).date
+    if (!raw) continue
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) continue
+    days.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`)
+  }
+  let streak = 0
+  const cur = new Date()
+  cur.setHours(0, 0, 0, 0)
+  // 今天还没记录不算断 —— 从昨天开始数，符合「今天还有机会」的直觉
+  const started = days.has(`${cur.getFullYear()}-${cur.getMonth() + 1}-${cur.getDate()}`)
+  if (!started) cur.setDate(cur.getDate() - 1)
+  for (let i = 0; i < 400; i++) {
+    const k = `${cur.getFullYear()}-${cur.getMonth() + 1}-${cur.getDate()}`
+    if (!days.has(k)) break
+    streak += 1
+    cur.setDate(cur.getDate() - 1)
+  }
+  return Math.max(streak, planStreak.value?.current ?? 0)
+})
+
+/** 图表解读：每个迷你图配一句话（Keep 的核心做法，图表只是佐证） */
+const growthBarInsight = computed(() => {
+  const stats = profile.value?.stats_by_type ?? []
+  if (!stats.length) return '还没有分类数据'
+  const top = stats.reduce((a, b) => (a.value >= b.value ? a : b))
+  const total = stats.reduce((s, x) => s + x.value, 0) || 1
+  return `${top.name}最多，占 ${Math.round((top.value / total) * 100)}%`
+})
+const growthTrendInsight = computed(() => {
+  const trend = profile.value?.monthly_trend ?? []
+  if (trend.length < 1) return '暂无足够数据'
+  const byMonth = new Map<string, number>()
+  for (const t of trend) byMonth.set(t.month, (byMonth.get(t.month) ?? 0) + t.count)
+  const keys = [...byMonth.keys()].sort()
+  const last = byMonth.get(keys[keys.length - 1]) ?? 0
+  const prev = keys.length > 1 ? (byMonth.get(keys[keys.length - 2]) ?? 0) : 0
+  if (!prev) return `最近记录 ${last} 条`
+  const diff = last - prev
+  if (diff === 0) return `与上月持平，${last} 条`
+  return diff > 0 ? `比上月多 ${diff} 条` : `比上月少 ${-diff} 条`
+})
+
+const radarOption = computed(() => {
+  const rad = profile.value?.radar ?? []
   return {
-    tooltip: { trigger: 'item', confine: true, formatter: '{b}：{c} 条（{d}%）' },
-    legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 12, color: '#666' } },
-    color: colors,
+    animationDuration: 700,
+    animationEasing: 'cubicOut' as const,
+    tooltip: { show: false },
+    radar: {
+      indicator: rad.map(d => ({ name: d.name, max: 100 })),
+      shape: 'polygon',
+      center: ['50%', '50%'],
+      radius: '72%',
+      axisName: { show: false },
+      axisLine: { lineStyle: { color: '#e9ebee' } },
+      splitLine: { lineStyle: { color: '#e9ebee' } },
+      splitArea: { show: false },
+    },
     series: [{
-      type: 'pie', radius: ['40%', '68%'], center: ['50%', '44%'],
-      data: (profile.value?.stats_by_type ?? []).map((s, i) => ({ name: s.name, value: s.value, itemStyle: { color: colors[i % colors.length] } })),
-      label: { show: true, formatter: '{c}条', fontSize: 12, color: '#666' },
-      emphasis: { label: { fontSize: 14, fontWeight: 'bold' }, itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,.15)' } },
-      animationDuration: 1200
-    }]
+      type: 'radar',
+      silent: true,
+      symbol: 'circle',
+      symbolSize: 3,
+      data: [{
+        value: rad.map(d => d.value),
+        lineStyle: { color: '#1a4fd6', width: 1.5 },
+        itemStyle: { color: '#1a4fd6' },
+        areaStyle: { color: 'rgba(26, 79, 214, 0.14)' },
+      }],
+    }],
   }
 })
+const growthBarOption = computed(() => {
+  const stats = profile.value?.stats_by_type ?? []
+  const max = Math.max(1, ...stats.map(s => s.value))
+  return {
+    animationDuration: 700,
+    animationEasing: 'cubicOut' as const,
+    tooltip: { show: false },
+    grid: { left: 0, right: 0, top: 14, bottom: 0, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: stats.map(s => s.name),
+      axisLine: { lineStyle: { color: '#e9ebee' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#6b737c', fontSize: 10, interval: 0, margin: 5 },
+    },
+    yAxis: { type: 'value', show: false, max: max * 1.34 },
+    series: [{
+      type: 'bar',
+      barWidth: '46%',
+      data: stats.map(s => ({ value: s.value, itemStyle: { color: '#1a4fd6', opacity: 0.28 + 0.55 * (s.value / max) } })),
+      itemStyle: { borderRadius: [3, 3, 0, 0] },
+      label: { show: true, position: 'top', color: '#5b6470', fontSize: 10, distance: 2 },
+    }],
+  }
+})
+/**
+ * 成长历程折线（v3）。
+ * 旧版问题：月份用 [...new Set()].sort() 排序，「10月」按字符串排在「5月」前面，
+ * 且 5 条分类型折线 + 底部图例把 110px 的图压得只剩骨架。现在：
+ * - 月份按真实时间顺序排（解析「N月」的数字）；
+ * - 只画一条「每月总记录数」主线，颜色用成长页识别色；
+ * - 不显示图例（单序列不需要），x 轴不显示「月份」轴名（标题已说明）。
+ */
 const growthLineOption = computed(() => {
   const trend = profile.value?.monthly_trend ?? []
-  const months = [...new Set(trend.map(t => t.month))].sort()
-  const types = [...new Set(trend.map(t => t.type))]
-  const colors: Record<string, string> = { honor: '#e6a23c', competition: '#409eff', practice: '#67c23a', paper: '#f56c6c', achievement: '#909399' }
-  const gTypeLabels: Record<string, string> = { honor: '荣誉', competition: '竞赛', practice: '实践', paper: '论文', achievement: '成果' }
+  const byMonth = new Map<string, number>()
+  for (const t of trend) byMonth.set(t.month, (byMonth.get(t.month) ?? 0) + t.count)
+  const monthNum = (m: string) => {
+    const n = parseInt(m.replace(/[^0-9]/g, ''), 10)
+    return Number.isNaN(n) ? 99 : n
+  }
+  const months = [...byMonth.keys()].sort((a, b) => monthNum(a) - monthNum(b))
   return {
-    tooltip: { trigger: 'axis', confine: true, formatter: (p: any) => { let s = `<b>${p[0]?.axisValue}</b><br/>`; p.forEach((i: any) => { s += `${i.marker} ${i.seriesName}：<b>${i.value}</b> 条<br/>` }); return s } }, legend: { data: types.map(t => gTypeLabels[t] || t), bottom: 0 },
-    grid: { left: 32, right: 20, top: 20, bottom: 65 },
-    xAxis: { type: 'category', data: months, name: '月份', nameLocation: 'center', nameGap: 25, axisLabel: { color: '#666' } },
-    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
-    series: types.map(t => ({ name: gTypeLabels[t] || t, type: 'line', smooth: true, data: months.map(m => trend.find(item => item.month === m && item.type === t)?.count ?? 0), itemStyle: { color: colors[t] || '#909399' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: (colors[t] || '#909399') + '40' }, { offset: 1, color: (colors[t] || '#909399') + '05' }] } }, animationDuration: 2000, animationEasing: 'cubicOut' as const, animationDelay: function(idx: number) { return idx * 100 } })),
-    animationDuration: 2000, animationEasing: 'cubicOut' as const,
+    animationDuration: 700,
+    animationEasing: 'cubicOut' as const,
+    tooltip: {
+      trigger: 'axis', confine: true,
+      backgroundColor: 'rgba(255,255,255,0.97)', borderColor: '#e9ebee', borderWidth: 1,
+      textStyle: { color: '#14171a', fontSize: 12 },
+      formatter: (p: any) => `${p[0]?.axisValue}：<b>${p[0]?.value}</b> 条记录`,
+    },
+    /* 折线卡片自带底部内边距，图表里就不再给 bottom，只留 2px 防止线条贴边。
+       x 轴标签靠 containLabel 计算进内边距，这样「5月」不会被卡片下沿切掉。 */
+    grid: { left: 0, right: 6, top: 16, bottom: 2, containLabel: true },
+    xAxis: {
+      type: 'category', boundaryGap: false, data: months,
+      axisLine: { lineStyle: { color: '#e9ebee' } }, axisTick: { show: false },
+      axisLabel: { color: '#6b737c', fontSize: 10, margin: 6 },
+    },
+    yAxis: {
+      type: 'value', minInterval: 1, splitNumber: 2,
+      axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#f2f3f5' } },
+    },
+    series: [{
+      name: '记录数', type: 'line', smooth: true, symbol: 'circle', symbolSize: 4,
+      data: months.map(m => byMonth.get(m) ?? 0),
+      lineStyle: { width: 2, color: '#1a4fd6' },
+      itemStyle: { color: '#1a4fd6' },
+      areaStyle: { color: 'rgba(26, 79, 214, 0.10)' },
+      label: { show: true, position: 'top', fontSize: 10, color: '#5b6470', distance: 4 },
+    }],
   }
 })
 
@@ -1616,14 +2520,16 @@ async function refreshAll() {
     grades.value = gradeList as Grade[]
     exams.value = examList as Exam[]
   } else if (activeTab.value === 'growth') {
-    const [p, recordList, projectList] = await Promise.all([
+    const [p, recordList, projectList, streak] = await Promise.all([
       getGrowthProfile().catch(() => null),
       getGrowthRecords().catch(() => [] as any),
       getProjects().catch(() => [] as any),
+      getStreak().catch(() => null),
     ])
     if (p) profile.value = p
     growthRecords.value = recordList as any
     projects.value = projectList as any
+    if (streak) planStreak.value = streak
   } else {
     await dashboardRef.value?.refresh()
   }
@@ -1688,20 +2594,17 @@ async function loadGradesData() {
   if (grades.value.length) startAiAnalysis()
 }
 
-/** 成长轨迹页签：成长画像 + 成长记录 + 项目 */
+/** 成长轨迹页签：成长画像 + 成长记录 + 项目 + 计划打卡（热力图点亮依据） */
 async function loadGrowthData() {
   if (growthLoaded.value) return
-  const [p, recordList, projectList] = await Promise.all([
+  const [p, recordList, projectList, streak] = await Promise.all([
     getGrowthProfile().catch(() => null),
     getGrowthRecords().catch(() => [] as any),
     getProjects().catch(() => [] as any),
+    getStreak().catch(() => null),
   ])
-  if (p) {
-    profile.value = p
-    localSkills.value = [...(p.skills || [])]
-    localInterests.value = [...(p.interests || [])]
-    syncTagEmpty()
-  }
+  if (p) profile.value = p
+  if (streak) planStreak.value = streak
   growthRecords.value = recordList as any
   projects.value = projectList as any
   loaded.value = true
@@ -1711,11 +2614,13 @@ async function loadGrowthData() {
 /** 页签数据单飞（single-flight）：按需加载与后台预取并发时复用同一次请求，避免重复打接口。
     各加载器自带幂等守卫（scheduleReady / gradesReady / growthLoaded）且内部已吞错（总会 resolve），
     失败也不会悬挂后续调用 */
-const tabLoadPromises: Partial<Record<'schedule' | 'grades' | 'growth', Promise<void>>> = {}
+const tabLoadPromises: Partial<Record<'schedule' | 'grades' | 'growth' | 'ai', Promise<void>>> = {}
 function ensureTabData(tab: string): Promise<void> {
   if (tab === 'schedule') return (tabLoadPromises.schedule ??= loadScheduleData())
   if (tab === 'grades') return (tabLoadPromises.grades ??= loadGradesData())
   if (tab === 'growth') return (tabLoadPromises.growth ??= loadGrowthData())
+  if (tab === 'ai') return (tabLoadPromises.ai ??= loadAiFeed())
+  if (tab === 'service') return loadServiceRecords()
   return Promise.resolve()
 }
 
@@ -1768,17 +2673,495 @@ watch(() => route.query.tab, (val) => {
 /* 主页同样铺不透明底：覆盖式滑入的 0.3s 内子页尚未盖满，若主页透明，
    会从子页右侧露出的缝隙里透出下层容器背景，出现闪色。
    （旧模型由 animations.css 统一给进场页铺底，统一后由调用方各自负责。） */
-.dashboard-home { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; background: var(--dt-bg, #f5faff); }
+.dashboard-home { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; background: var(--dt-bg, #f5f6f7); }
 
-/* 移动端子页面：返回栏 */
-.subpage-bar {
-  display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
-  padding: 9px 14px; background: #fff; border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer;
+/* ===== 主页固定 Head（v4.2）===== 白底 + 永久发丝线，与浅灰页面底形成区分：
+   Head 是唯一常驻的白色横条，滚动内容从它下面穿过（48px 以上被裁掉），边界始终清晰 */
+.home-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; height: 48px; padding: 0 12px; box-sizing: border-box;
+  background: var(--sp-surface, #ffffff);
+  border-bottom: 1px solid var(--sp-border, #e9ebee);
 }
-.subpage-bar .el-icon { color: #409eff; font-weight: 700; }
-.subpage-title { font-size: 15px; font-weight: 700; color: #1f2937; flex: 1; text-align: center; }
-.subpage-spacer { width: 18px; }
+
+/* ===== 子页去卡片化（v4.1）=====
+   与主页同一步调：白卡改为扁平分区——透明底、无阴影无圆角，
+   区与区之间用发丝线分隔；内边距保留，视觉密度不变。
+   成绩面板 / 成长卡片 / 服务表单统一处理；课程表本身是表格不受影响。 */
+@media (max-width: 767px) {
+  .grades-view .panel,
+  .service-view .sv-card {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}
+.grades-view .panel + .panel,
+.service-view .sv-card + .sv-card {
+  border-top: 1px solid var(--sp-border, #e9ebee);
+}
+
+/* ===== 移动端子页设计 token（v3：「中性底 + 模块识别色」） =====
+   用户明确否掉了纯黑白灰：需要有色彩，但不能再回到大面积铺色。
+   规则（对标 Apple Health「白卡片 + 少量强调色指路」）：
+   - 底色、卡片、文字仍是中性灰白，不做彩底；
+   - 每个子页只认领**一个**低饱和识别色，仅用于：小图标、圆点、
+     迷你图表的填充、进度条、当前项指示 —— 不得用于卡片背景或整块区域；
+   - 状态色只有两个：需要关注（赭红）/ 已达成（墨绿）。
+   三页识别色：课程表=赭橙（时间/安排）→ 成绩=青绿（结果）→ 成长=靛蓝（长期） */
+.schedule-page {
+  --sp-bg: #f5f6f7;
+  --sp-surface: #ffffff;
+  --sp-surface-muted: #fafbfc;
+  --sp-ink: #14171a;
+  --sp-ink-2: #5b6470;
+  --sp-ink-3: #6b737c;
+  /* --sp-ink-quiet 仅用于装饰性元素（箭头图标、分隔线、图表网格），**不得承载文字**：
+     它在白卡上的对比度只有 2.24:1，达不到 WCAG 2.2 AA 的 4.5:1。
+     原来这一档被用作 11px 的辅助说明文字，已统一改到 --sp-ink-3（4.81:1）。 */
+  --sp-ink-quiet: #a8aeb6;
+  --sp-border: #e9ebee;
+  --sp-border-strong: #dcdfe4;
+  --sp-warning: #c2410c;
+  --sp-warning-soft: #fdf4ee;
+  --sp-ok: #15803d;
+  --sp-ok-soft: #eef7f1;
+  --sp-radius-lg: 14px;
+  --sp-radius-md: 11px;
+  --sp-radius-sm: 8px;
+  --sp-shadow-card: 0 1px 2px rgba(20, 23, 26, 0.035);
+}
+/* 每页一个识别色：--sp-accent / --sp-accent-soft / --sp-accent-ink */
+.schedule-view { --sp-accent: #b45309; --sp-accent-soft: #fdf3e4; --sp-accent-ink: #8a3f07; }
+/* 课程表的「今天」列底色跟随识别色，而不是原来的青色 #E5F8FC —
+   那是 v1 蓝绿配色的残留，和赭橙识别色放在一起会显脏 */
+.schedule-page { --dt-today-bg: #fdf3e4; }
+.grades-view { --sp-accent: #0f7a58; --sp-accent-soft: #e8f5ef; --sp-accent-ink: #0a5b41; }
+.growth-view { --sp-accent: #1a4fd6; --sp-accent-soft: #edf2fd; --sp-accent-ink: #143da3; }
+/* 请假服务：石墨灰蓝（事务/服务语义，去彩色化），#3d4a57 在白底对比度 ≈ 9.4:1，AA+ */
+.service-view { --sp-accent: #3d4a57; --sp-accent-soft: #f1f3f5; --sp-accent-ink: #2b3440; }
+
+/* ===== 移动端：子页通用骨架（卡片 / 卡片头 / 图表容器） =====
+   旧版每块各写一套圆角+阴影+渐变标题条，这组规则把它们收敛成一套。 */
+@media (max-width: 767px) {
+  /* 卡片：去描边改极淡阴影（描边多了页面会「发灰、发硬」） */
+  .analytics-card,
+  .content-card,
+  .records-section {
+    background: var(--sp-surface);
+    border: 0;
+    border-radius: var(--sp-radius-lg);
+    box-shadow: var(--sp-shadow-card);
+    margin-bottom: 10px;
+  }
+  /* 卡片头：色条 + 标题 + 副标题，去掉淡蓝渐变底 */
+  .analytics-head {
+    padding: 13px 14px 11px;
+    gap: 7px;
+    border-bottom: 0;
+    background: transparent;
+  }
+  .analytics-head .head-bar {
+    width: 3px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--sp-accent);
+  }
+  .analytics-head .head-title { font-size: 14px; font-weight: 500; color: var(--sp-ink); }
+  /* 副标题在移动端不是隐藏，而是降级为一行小字 —— Keep 式的「数据 + 一句解读」靠它 */
+  .analytics-head .head-sub {
+    display: block;
+    font-size: 11px;
+    color: var(--sp-ink-3);
+    font-weight: 400;
+    margin-left: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 45%;
+  }
+  .analytics-body { padding: 0 14px 14px; }
+  .analytics-body.duo { flex-direction: column; }
+  .panel { flex: none; min-width: 0; }
+  .panel-divider { display: none; }
+  .panel-title { display: none; }
+  .chart-unit { display: none; }
+
+  /* 子页之间用 10px 的呼吸，而不是旧的 16~20px */
+  .grades-view, .growth-view { display: flex; flex-direction: column; gap: 0; padding-bottom: 12px; }
+
+  /* ───── 成长页 v3 组件 ─────
+     统一命名 gv-*（growth view），只在移动端生效；桌面端沿用上面的旧版两栏结构。
+     每个组件都遵循同一条约束：白卡 + 中性文字，色彩只出现在识别色的极小面积上。 */
+  .gv-card,
+  .gv-hero {
+    background: var(--sp-surface);
+    border: 1px solid var(--sp-border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(20, 23, 26, .04);
+    margin-bottom: 10px;
+  }
+  .gv-card { padding: 13px 14px 14px; }
+
+  /* 卡片头：标题 + 右侧一句结论（结论优先于图表，这是 Keep 的做法） */
+  .gv-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 18px; }
+  .gv-card-title {
+    font-size: 14px; font-weight: 500; color: var(--sp-ink);
+    margin: 0; line-height: 1.2; flex: none;
+  }
+  .gv-card-meta {
+    font-size: 11px; color: var(--sp-ink-3); line-height: 1.2;
+    margin-left: auto; text-align: right;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .gv-text-btn {
+    margin-left: auto; padding: 2px 8px; border: 0; border-radius: 6px;
+    background: transparent; color: var(--sp-accent);
+    font-size: 12px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .gv-text-btn:active { background: var(--sp-accent-soft); }
+  .gv-card-meta + .gv-text-btn { margin-left: 2px; }
+
+  /* ── 状态卡 ── */
+  .gv-hero { padding: 14px; }
+  .gv-hero-top { display: flex; align-items: flex-start; gap: 10px; }
+  .gv-score { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; }
+  .gv-gauge { position: relative; width: 60px; height: 60px; flex: none; color: var(--sp-accent); }
+  .gv-gauge-svg { width: 60px; height: 60px; display: block; transform: rotate(0deg); }
+  .gv-gauge-svg circle { transition: stroke-dashoffset .7s cubic-bezier(.16,1,.3,1); }
+  .gv-gauge-val {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: 500; color: var(--sp-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .gv-hero.tone-warning .gv-gauge { color: var(--sp-warning); }
+  .gv-hero.tone-ok .gv-gauge { color: var(--sp-ok); }
+  .gv-score-text { min-width: 0; }
+  .gv-tier { font-size: 15px; font-weight: 500; color: var(--sp-ink); line-height: 1.25; }
+  .gv-advice {
+    font-size: 12px; color: var(--sp-ink-2); line-height: 1.45; margin-top: 3px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .gv-add {
+    display: inline-flex; align-items: center; gap: 3px; flex: none;
+    height: 30px; padding: 0 11px; border: 0; border-radius: 15px;
+    background: var(--sp-accent-soft); color: var(--sp-accent-ink);
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: transform .18s ease, opacity .18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .gv-add:active { transform: scale(.96); opacity: .85; }
+
+  /* 紧凑数字网格：4 列 × 2 行，总计约 96px（原来 7 个横排大字要 120px+ 且换行错乱） */
+  .gv-metrics {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px; margin-top: 14px;
+    background: var(--sp-border); border-radius: var(--sp-radius-sm); overflow: hidden;
+  }
+  .gv-metric {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 8px 2px 7px; background: var(--sp-surface-muted);
+  }
+  .gv-metric-val {
+    font-size: 16px; font-weight: 500; color: var(--sp-ink); line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  .gv-metric-label { font-size: 10px; color: var(--sp-ink-3); line-height: 1.2; }
+
+  /* ── 坚持日历（Duolingo / GitHub 贡献图） ──
+     格子改成正方形：宽度跟随列等分但上限 14px，高度由 aspect-ratio 跟随宽度，
+     20 列 × 7 行 = 140 天，比原来 8 列 56 格更密、更小，也更容易看出「哪周断了」。
+     注意不要去掉 max-width：桌面端列宽富余时会撑成巨墙。 */
+  .gv-heat-body { display: flex; flex-direction: column; gap: 8px; }
+  .gv-heat-grid { display: flex; gap: 3px; }
+  .gv-heat-week { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1 1 0; min-width: 0; }
+  .gv-heat-cell {
+    display: block; width: 100%; max-width: 14px; aspect-ratio: 1 / 1;
+    border-radius: 3px; background: #eef0f3; flex: none;
+  }
+  .gv-heat-cell.lv-0 { background: #eef0f3; }
+  .gv-heat-cell.lv-1 { background: color-mix(in srgb, var(--sp-accent) 32%, #ffffff); }
+  .gv-heat-cell.lv-2 { background: color-mix(in srgb, var(--sp-accent) 62%, #ffffff); }
+  .gv-heat-cell.lv-3 { background: var(--sp-accent); }
+  /* 未来日期不渲染成灰块（否则像「一片空白」），直接留白 */
+  .gv-heat-cell.lv--1 { background: transparent; box-shadow: inset 0 0 0 1px #f2f3f5; }
+  .gv-heat-cell.is-today { box-shadow: 0 0 0 1.5px var(--sp-surface), 0 0 0 2.5px var(--sp-ink-quiet); }
+  .gv-heat-foot { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--sp-ink-3); }
+  .gv-heat-legend { display: flex; align-items: center; gap: 3px; margin-left: auto; }
+  .gv-heat-legend .gv-heat-cell { width: 9px; height: 9px; max-width: none; aspect-ratio: auto; }
+
+  /* ── 能力画像：小雷达与五维数字并排 ──
+     雷达只占 96px 宽（原来 280px 高独占一屏），数字与横条在右侧读完。 */
+  .gv-dim-body { display: flex; align-items: center; gap: 12px; }
+  .gv-radar { width: 96px; height: 96px; flex: none; }
+  .gv-radar-chart { width: 96px; height: 96px; }
+  .gv-dim-list { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .gv-dim-row { display: flex; flex-direction: column; gap: 3px; }
+  .gv-dim-top { display: flex; align-items: baseline; gap: 6px; }
+  .gv-dim-name { font-size: 11px; color: var(--sp-ink-2); line-height: 1.2; }
+  .gv-dim-val {
+    margin-left: auto; font-size: 12px; font-weight: 500; color: var(--sp-ink);
+    line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .gv-dim-track { height: 3px; border-radius: 2px; background: #eff1f4; overflow: hidden; }
+  .gv-dim-fill { height: 100%; border-radius: 2px; background: var(--sp-accent); transition: width .5s cubic-bezier(.16,1,.3,1); }
+  /* 最低项用赭红点出来 —— 但只有真的低于 80 分才警示，避免「全员红字」 */
+  .gv-dim-row.is-low .gv-dim-fill { background: var(--sp-warning); }
+  .gv-dim-row.is-low .gv-dim-val { color: var(--sp-warning); }
+  .gv-insight {
+    margin: 10px 0 0; padding-left: 9px;
+    border-left: 2px solid var(--sp-border-strong);
+    font-size: 11px; color: var(--sp-ink-3); line-height: 1.5;
+  }
+
+  /* ── 迷你图表：56px / 104px，配一句解读在后面 ── */
+  .gv-mini { height: 56px; }
+  .gv-mini-chart { width: 100%; height: 56px; }
+  /* 折线比柱状多一行 x 轴标签，容器比图表高 6px，
+     否则「5月」这类底行标签会被卡片 padding 边缘裁掉一半 */
+  .gv-mini.is-line { height: 110px; }
+  .gv-line-chart { width: 100%; height: 110px; }
+
+  /* ── 记录 / 项目：行式列表，比卡片网格省一半高度 ── */
+  .gv-record-list, .gv-project-list { display: flex; flex-direction: column; }
+  .gv-record, .gv-project {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 9px 0; border: 0; border-bottom: 1px solid var(--sp-border);
+    background: transparent; text-align: left; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .gv-record:last-child, .gv-project:last-child { border-bottom: 0; }
+  .gv-record:active, .gv-project:active { background: var(--sp-surface-muted); }
+  .gv-record-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .gv-record-main, .gv-project-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .gv-record-title, .gv-project-name {
+    font-size: 13px; font-weight: 500; color: var(--sp-ink); line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .gv-record-sub, .gv-project-sub {
+    font-size: 11px; color: var(--sp-ink-3); line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .gv-record-arrow { color: var(--sp-ink-quiet); flex: none; }
+  .gv-project-icon {
+    width: 28px; height: 28px; border-radius: 8px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .gv-project-icon.team { background: var(--sp-accent-soft); color: var(--sp-accent-ink); }
+  .gv-project-icon.solo { background: #f2f4f6; color: var(--sp-ink-2); }
+  .gv-empty-text { margin: 2px 0 10px; font-size: 12px; color: var(--sp-ink-3); line-height: 1.5; }
+  .gv-add-block {
+    display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;
+    height: 34px; margin-top: 10px; border: 1px dashed var(--sp-border-strong);
+    border-radius: var(--sp-radius-sm); background: transparent;
+    color: var(--sp-ink-2); font-size: 12px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .gv-add-block:active { background: var(--sp-surface-muted); }
+
+  /* ── 技能与兴趣（移动端，v3 压缩版）──
+     卡片只剩已选标签一行；预设区/自定义输入已移进编辑弹窗（桌面端同样生效）。 */
+  .growth-view .skills-body { display: flex; flex-direction: column; gap: 10px; padding: 0; }
+  .skills-body-compact { padding: 2px 14px 12px !important; gap: 0 !important; }
+  .skills-body-compact .skills-tag-list { min-height: 26px; }
+  .skills-body-compact .skills-tag { padding: 3px 10px; font-size: 11px; }
+  .growth-view .skills-preset-section { background: var(--sp-surface-muted); border-radius: var(--sp-radius-sm); padding: 9px 10px; }
+  .growth-view .skills-preset-label { font-size: 11px; font-weight: 400; color: var(--sp-ink-3); margin-bottom: 7px; }
+  .growth-view .skills-tag-skill { background: var(--sp-accent-soft); color: var(--sp-accent-ink); border-color: transparent; }
+  .growth-view .skills-tag-interest { background: #f2f4f6; color: var(--sp-ink-2); border-color: transparent; }
+  .growth-view .skills-preset-tag { border-color: var(--sp-border); }
+  .growth-view .skills-preset-tag.active { background: var(--sp-accent); border-color: var(--sp-accent); color: #fff; }
+
+  /* ── AI 归纳标签：只读 + 点击展开来源证据 ── */
+  .tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ai-tag {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px;
+    border: 1px solid transparent; border-radius: 999px; font-size: 11px;
+    line-height: 1.2; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: background .15s, box-shadow .15s;
+  }
+  .ai-tag.is-skill { background: var(--sp-accent-soft); color: var(--sp-accent-ink); }
+  .ai-tag.is-interest { background: #f2f4f6; color: var(--sp-ink-2); }
+  .ai-tag.active { box-shadow: inset 0 0 0 1px var(--sp-ink-quiet); }
+  .ai-tag-count {
+    font-size: 10px; min-width: 14px; padding: 0 4px; border-radius: 999px;
+    background: rgba(255, 255, 255, .75); color: inherit; text-align: center;
+  }
+  .tag-evidence {
+    margin-top: 10px; padding: 9px 10px; border-radius: var(--sp-radius-sm);
+    background: var(--sp-surface-muted);
+  }
+  .tag-evidence-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .tag-evidence-head-title { font-size: 11px; color: var(--sp-ink-2); font-weight: 500; }
+  .tag-evidence-close {
+    margin-left: auto; border: 0; background: transparent; padding: 0;
+    font-size: 11px; color: var(--sp-ink-3); cursor: pointer;
+  }
+  .tag-evidence-list { display: flex; flex-direction: column; }
+  .tag-evidence-item {
+    display: flex; align-items: flex-start; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--sp-border);
+  }
+  .tag-evidence-item:last-child { border-bottom: 0; padding-bottom: 0; }
+  .tag-evidence-item:first-child { padding-top: 0; }
+  .tag-evidence-label {
+    flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; line-height: 1.5;
+    background: var(--sp-surface); border: 1px solid var(--sp-border); color: var(--sp-ink-3);
+  }
+  .tag-evidence-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .tag-evidence-title {
+    font-size: 11px; color: var(--sp-ink); line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tag-evidence-detail { font-size: 10px; color: var(--sp-ink-3); line-height: 1.4; }
+  .tag-evidence-empty { margin: 0; font-size: 10px; color: var(--sp-ink-3); line-height: 1.5; }
+
+  /* ───── 成绩页 v3 ───── */
+  /* 四张彩色图标卡 → 一张卡内的 4 列指标；色块只留在图标底上。
+     选择器带上 .grades-view 提高优先级：文件后半段的旧规则用同名选择器
+     写了 repeat(2,1fr)，两者优先级相同、后定义的会赢，故此处必须更高。 */
+  .grades-view .grade-stats-row {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0; margin-bottom: 10px;
+    background: var(--sp-surface); border-radius: var(--sp-radius-lg);
+    box-shadow: var(--sp-shadow-card); overflow: hidden;
+  }
+  .grades-view .grade-stat-card {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    padding: 13px 3px 12px; background: transparent; border: 0; border-radius: 0;
+    box-shadow: none; position: relative; min-height: 0;
+  }
+  .grades-view .grade-stat-card + .grade-stat-card::before {
+    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 1px; height: 26px; background: var(--sp-border);
+  }
+  /* 模板结构是 .grade-stat-card > .stat-icon + .stat-info > (.stat-value + .stat-label)，
+     旧规则按平铺选择器写会全部落空 —— 必须带上 .stat-info 这一层 */
+  .grades-view .grade-stat-card .stat-icon { display: none; }
+  .grades-view .grade-stat-card .stat-info {
+    display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0;
+  }
+  .grades-view .grade-stat-card .stat-value {
+    font-size: 17px; font-weight: 500; color: var(--sp-ink); line-height: 1.2;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .grades-view .grade-stat-card .stat-label {
+    font-size: 10px; color: var(--sp-ink-3); line-height: 1.25;
+    text-align: center; white-space: nowrap;
+  }
+  .grades-view .grade-stat-card .stat-help { display: none; }
+  /* 触屏上点击不再浮起，改为轻微压暗 */
+  .grades-view .grade-stat-card.stat-clickable:active { background: var(--sp-surface-muted); }
+  /* 图表区：两栏并排 → 上下两块，每块 150px 高（原来各 200px） */
+  .grades-view .chart { height: 118px; }
+
+  /* 面板小标题（「学期绩点趋势」「分数段分布」）的图标默认是 Element 蓝，
+     在青绿识别色的页里像一处漏色；统一到 --sp-accent，文字降到 11px / 500 字重，
+     让标题不再和图表抢注意力。 */
+  .grades-view .panel-title {
+    display: flex; align-items: center; gap: 4px;
+    margin-bottom: 2px;
+    font-size: 11px; font-weight: 500; color: var(--sp-ink-3);
+  }
+  .grades-view .panel-title .el-icon { color: var(--sp-accent); font-size: 12px; }
+  .grades-view .panel + .panel { margin-top: 0; }
+  /* 移动端隐藏了 .panel-divider（竖分割线），两张图之间就只剩 0 间距，
+     看起来像同一张图的两个区块。间距给到父容器的 gap 上更稳 ——
+     因为 .panel 是 flex 子项，margin 在 flex 列布局里会被忽略。 */
+  .grades-view .analytics-body.duo { gap: 14px; }
+  .grades-view .analytics-card + .analytics-card { margin-top: 0; }
+  /* 学期选择行 */
+  .grades-view .sem-selector { gap: 9px; }
+  .grades-view .sem-stats-inline { gap: 7px; }
+  /* 成绩网格：更紧凑的行高 */
+  .grade-card { border-radius: var(--sp-radius-sm); }
+  .gc-name { font-size: 12px; }
+}
+
+/* ===== 移动端子页面：固定顶栏（Head） =====
+   设计参考：Apple Health 分类详情页的导航栏（返回箭头 + 居中标题 + 极细分割线）
+   + Keep 9.0 二级页（标题下带一行弱副标题）。
+   硬约束：高度恒为 48px，三页一致；吸顶后**纹丝不动**，内容不得从它上下漏出来。
+
+   三次修正的过程留在这里，避免以后又改回去：
+   1) 旧版是 38px 圆角卡片、position: static，滚 600px 后 top 变成 -592，整条消失；
+   2) 改成 sticky 后位置对了，但**父容器 .content-row 有 padding-top: 8px**，
+      sticky 贴的是 padding 内边界，于是顶栏上方永远留一条 8px 缝，
+      滚过去的卡片圆角从缝里露出来 —— 视觉上就是「顶栏悬空、没固定住」；
+   3) 去掉父容器 padding 后仍有问题：sticky 只是「参与流的固定」，
+      内容是从它**背后**滑过的，于是图表的「5月 / 6月」轴标签会贴着顶栏下沿露出来，
+      像被裁了一半挂在标题底下。根因是滚动层只会裁到自己的边界，
+      不会在顶栏底部多裁 48px。
+   最终方案：**脱离滚动流**。顶栏改 position: fixed 钉在视口顶部，
+   滚动内容用 padding-top 让出 48px，内容就永远滑不到它下面。
+   底色改为实底（半透明会让内容从标题后透出来）。 */
+.subpage-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* z-index 必须高于兄弟内容：父容器 .content-row 是 z-index:1500 的堆叠上下文，
+     子元素的 z-index 只在**这个上下文内部**比较。
+     写 20 时它低于同一上下文里创建了层叠的子页根节点（.growth-view 等有背景），
+     结果滚动内容直接绘制到顶栏之上 —— 标题和下面的轴标签叠在一行，就是这个问题。
+     抬到 100 后仍远低于 popup 基准（2000+），学期选择等弹层照常浮在上面。 */
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 12px;
+  margin: 0;
+  box-sizing: border-box;
+  background: var(--sp-surface, #ffffff);
+  border-bottom: 1px solid var(--sp-border, #e9ebee);
+}
+/* 滚动内容从顶栏下沿「切」过去时，48px 柱状的边界不够明确，
+   加一层极淡的投影把顶栏与内容分开（固定头部有浮起感才不会读成同一块） */
+.subpage-bar::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 4px);
+  height: 5px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(to bottom, rgba(20, 23, 26, 0.055), transparent);
+  transition: opacity 0.2s ease;
+}
+.subpage-bar.is-scrolled::after { opacity: 1; }
+.sp-side { display: flex; align-items: center; width: 48px; flex: none; }
+/* 左槽不加 padding：40px 的返回按钮本身已含 20px 图标 + 四周留白，
+   再叠 padding 会让内容右移，中槽标题随之偏左（实测 -4px）。
+   两槽等宽 48px，标题才在父容器里几何居中。 */
+.sp-left { justify-content: flex-start; }
+.sp-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--sp-ink, #14171a);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.sp-back:active { background: rgba(20, 23, 26, 0.06); transform: scale(0.94); }
+.sp-back:focus-visible { outline: 2px solid var(--sp-accent, #1a4fd6); outline-offset: 1px; }
+.sp-title-wrap { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.sp-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.sp-txt { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.sp-sub {
+  font-size: 9.5px; line-height: 1.1; margin-top: 1px;
+  color: var(--sp-ink-3, #9aa0a8);
+  max-width: 168px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 滚动后收起副标题，Head 高度恒为 48px（避免布局跳动） */
+.subpage-bar.is-scrolled .sp-sub { display: none; }
+.sp-title { font-size: 16px; font-weight: 500; color: var(--sp-ink, #14171a); line-height: 1.15; letter-spacing: 0.01em; white-space: nowrap; }
 
 /* ===== 页签切换动画 ===== */
 .tab-fade-enter-active { transition: opacity .32s cubic-bezier(.16,1,.3,1), transform .32s cubic-bezier(.16,1,.3,1); }
@@ -1803,10 +3186,10 @@ watch(() => route.query.tab, (val) => {
 
 /* ===== 两栏布局 ===== */
 /* 覆盖式滑入时进场的是本容器，必须铺不透明底盖住下面的主页 ——
-   （旧版由 animations.css 的 .push-enter-active 统一铺 #f5faff，统一到 .subpage 后
+   （旧版由 animations.css 的 .push-enter-active 统一铺 #f5f6f7，统一到 .subpage 后
    该职责回到调用方，见 animations.css 注释「滑动的元素必须不透明」）。
    桌面端不参与过渡，此背景同样无害。 */
-.content-row { display: flex; gap: 16px; flex: 1; min-height: 0; background: var(--dt-bg, #f5faff); }
+.content-row { display: flex; gap: 16px; flex: 1; min-height: 0; background: var(--dt-bg, #f5f6f7); }
 .content-main { flex: 1; min-width: 0; max-width: 1200px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
 
 /* ===== 通用卡片 ===== */
@@ -1838,10 +3221,60 @@ watch(() => route.query.tab, (val) => {
 .semester-select :deep(.el-select__placeholder) { font-weight: 600; color: #1a1a2e; }
 .semester-select :deep(.el-select__caret) { color: #909399; transition: transform .3s cubic-bezier(.16,1,.3,1); }
 .semester-select :deep(.el-select__caret.is-reverse) { transform: rotate(180deg); }
+/* 移动端成绩页：学期选择器改「平铺一行 + 右侧细箭头」，
+   不再是一个内嵌灰底胶囊（放进白卡里像输入框，且和下方的指标胶囊重复了「块」的语义）。
+   对照 Apple Health 的分类切换行：无边框、无底色，只靠一条底部细线分隔。 */
+.grades-view .sem-selector .semester-select :deep(.el-select__wrapper) {
+  min-height: 26px;
+  padding: 0 2px;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  font-size: 15px;
+}
+.grades-view .sem-selector .semester-select :deep(.el-select__wrapper:hover) {
+  transform: none;
+  background: transparent;
+  box-shadow: none;
+}
+/* 键盘可达的焦点环不能删，这里改为描在行内文字下方的下划线 */
+.grades-view .sem-selector .semester-select :deep(.el-select__wrapper.is-focused) {
+  background: transparent;
+  box-shadow: 0 1px 0 0 var(--sp-accent) inset;
+}
+.grades-view .sem-selector .semester-select :deep(.el-select__placeholder) {
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--sp-ink);
+}
+.grades-view .sem-selector .semester-select :deep(.el-select__caret) { color: var(--sp-ink-3); }
+/* 门数/均分/均绩/学分：原为四个蓝色胶囊，改成一行极简标签，
+   数值用深墨色 + 等宽数字，标签用 10px 灰字，读起来接近一句注释而不是四个按钮。 */
+.grades-view .sem-stats-inline { gap: 0; }
+.grades-view .sem-stats-inline > span {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--sp-ink-3);
+}
+.grades-view .sem-stats-inline > span + span::before {
+  content: '·';
+  margin: 0 6px;
+  color: var(--sp-border-strong);
+}
+.grades-view .sem-stats-inline b {
+  margin-right: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sp-ink);
+  font-variant-numeric: tabular-nums;
+}
 /* 当天列高亮 */
-.schedule-table thead th.th-today { font-weight: 700; background: #E5F8FC; }
+.schedule-table thead th.th-today { font-weight: 700; background: var(--dt-today-bg, #E5F8FC); }
 .schedule-table .td-today { background: rgba(0,0,0,.025); }
-.course-today { box-shadow: inset 0 0 0 1.5px rgba(64,158,255,.35); }
+.course-today { box-shadow: inset 0 0 0 1.5px rgba(180, 83, 9, .30); }
 .week-nav { display: flex; align-items: center; gap: 6px; }
 .week-nav-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
 .week-nav-btn:hover { background: var(--accent-blue, #409eff); color: #fff; border-color: var(--accent-blue, #409eff); }
@@ -1976,11 +3409,23 @@ watch(() => route.query.tab, (val) => {
 .grade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .grade-card { background: #fff; border-radius: 10px; padding: 14px 16px; border: 1px solid rgba(0,0,0,.04); box-shadow: 0 1px 6px rgba(0,0,0,.02); transition: transform .15s; border-left: 4px solid #ddd; }
 .grade-card:hover { transform: translateY(-2px); }
-.grade-card.level-a { border-left-color: #67c23a; }
-.grade-card.level-b { border-left-color: #409eff; }
-.grade-card.level-c { border-left-color: #e6a23c; }
-.grade-card.level-d { border-left-color: #f56c6c; }
-.grade-card.level-f { border-left-color: #c03636; }
+/* 移动端（.grades-view 作用域）：科目卡的 4px 左侧色条原来是
+   绿/蓝/橙/红四色并列，视觉上像四个互不相关的标签，且色相与「分数高低」没有直觉关联。
+   v3 改成同一个青绿识别色的深浅梯度 —— 分数越高色条越深、越实，
+   色相不跳，只在「深/浅」一个维度上承载有序信息。 */
+.grades-view .grade-card { border-left-width: 3px; }
+.grades-view .grade-card.level-a { border-left-color: #0f7a58; }
+.grades-view .grade-card.level-b { border-left-color: #5aae8d; }
+.grades-view .grade-card.level-c { border-left-color: #a8cdbd; }
+.grades-view .grade-card.level-d { border-left-color: #d9e8e2; }
+.grades-view .grade-card.level-f { border-left-color: #c2410c; }
+.grades-view .grade-card-more {
+  background: #f3f8f6; border: 1px dashed #cfe3db;
+  border-left: 3px solid #0f7a58;
+}
+.grades-view .grade-card-more .more-text,
+.grades-view .grade-card-more .more-icon { color: #0a5b41; }
+.grades-view .grade-card-more .more-arrow { color: #a8cdbd; }
 .grade-card-more { background: linear-gradient(135deg, #f0f5ff 0%, #e8f0fe 100%); border: 1.5px solid #d0e0f5; cursor: pointer; transition: all .25s ease; border-left: 4px solid #409eff; }
 .grade-card-more:hover { background: linear-gradient(135deg, #e0ecff 0%, #d4e6ff 100%); border-color: #409eff; border-left-color: #409eff; box-shadow: 0 4px 14px rgba(64,158,255,.18); transform: translateY(-2px); }
 .grade-card-more .more-text { color: #409eff; }
@@ -1991,11 +3436,25 @@ watch(() => route.query.tab, (val) => {
 .gc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .gc-name { font-size: 14px; font-weight: 600; color: #1a1a2e; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gc-score { font-size: 22px; font-weight: 700; flex-shrink: 0; margin-left: 8px; }
+/* 分数数字的配色（v3）。
+   旧版：≥90 绿 / ≥80 蓝 / ≥70 橙 / 不及格红 —— 四种色相混在同一张网格里，
+   既与青绿识别色冲突，又让「80 分的蓝」和旁边卡片的蓝色图标读起来是同一件事。
+   现在同一个色相里用「深→浅」表达高低，只有不及格保留赭红（颜色之外还有边框与分数本身）。
+   移动端用 .grades-view 前缀覆盖，桌面端保持原样。 */
 .level-a .gc-score { color: #67c23a; }
 .level-b .gc-score { color: #409eff; }
 .level-c .gc-score { color: #e6a23c; }
 .level-d .gc-score { color: #f56c6c; }
 .level-f .gc-score { color: #c03636; }
+.grades-view .level-a .gc-score { color: #0a5b41; }
+.grades-view .level-b .gc-score { color: #0f7a58; }
+/* 70-79 段用中墨色而不是浅灰：浅灰在白卡上读起来像「被禁用」，
+   而 78 分在现实语境里是需要被看见的分数，只是不必和 92 分抢眼。 */
+.grades-view .level-c .gc-score { color: #4a5a54; }
+.grades-view .level-d .gc-score { color: #7c8a84; }
+.grades-view .level-f .gc-score { color: #c2410c; }
+/* 即将考试卡的日期数字：原为品牌蓝，与青绿识别色冲突，改用墨色靠字重区分 */
+.grades-view .ec-date { color: var(--sp-ink); font-weight: 500; font-size: 18px; }
 .gc-meta { display: flex; gap: 12px; font-size: 12px; color: #999; }
 .exam-card { display: flex; gap: 16px; background: var(--bg-page); border-radius: 12px; padding: 12px 16px; border: 1px solid var(--border-light); transition: transform .15s; }
 .exam-card:hover { transform: translateY(-1px); }
@@ -2103,8 +3562,11 @@ watch(() => route.query.tab, (val) => {
 .empty-fade-enter-from { opacity: 0; transform: translateY(-6px); }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .section-header-title { display: flex; align-items: center; line-height: 1; }
-/* 技能与兴趣（重设计） */
+/* 技能与兴趣（重设计）。v3 起移动端卡片压缩为「已选标签一行」，
+   预设与自定义输入移入编辑弹窗；紧凑态 .skills-body-compact 的内边距
+   以 3 个类的优先级压过本条（详见移动端块内注释）。 */
 .skills-card .skills-body { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px !important; }
+.skills-card .skills-body.skills-body-compact { gap: 0 !important; padding: 2px 14px 12px !important; }
 .skills-selected-title { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
 .skills-tag-list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 28px; }
 .skills-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all .2s; }
@@ -2251,8 +3713,66 @@ watch(() => route.query.tab, (val) => {
    原先被拆成两个 @media (max-width: 767px) 块且有 22 条完全重复的声明，
    这里合并为一块：只在该媒体块生效的规则（v-if="!isMobile" 的 .page-tabs、
    已废弃的 .semester-link / .semester-action-card 等）已删除。 */
+  /* ── 请假服务子页（v3）──
+     分段控制：三枚等宽按钮，选中态用识别色胶囊；表单全部收进一张白卡。
+     Element 表单控件在此前的全局主题里偏桌面（32px 高、16px 字），这里统一压到移动尺寸。 */
+  .service-view { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+  .sv-segment {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+    background: #ececef; border-radius: 10px; padding: 3px;
+  }
+  .sv-seg-item {
+    height: 34px; border: 0; border-radius: 8px; background: transparent;
+    font-size: 13px; font-weight: 500; color: var(--sp-ink-2); cursor: pointer;
+    transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .sv-seg-item:active { transform: scale(.97); }
+  .sv-seg-item.active {
+    background: var(--sp-surface); color: var(--sp-accent-ink); font-weight: 600;
+    box-shadow: 0 1px 3px rgba(20, 23, 26, .10);
+  }
+  .sv-seg-item:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 1px; }
+  .sv-card {
+    background: var(--sp-surface, #ffffff); border-radius: var(--sp-radius-lg, 16px);
+    box-shadow: var(--sp-shadow-card, 0 1px 2px rgba(20,23,26,.04)); padding: 14px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .sv-tip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; border-radius: var(--sp-radius-sm);
+    background: var(--sp-accent-soft); font-size: 11px; color: var(--sp-accent-ink);
+  }
+  .sv-tip .el-icon { flex: none; }
+  .sv-field { display: flex; flex-direction: column; gap: 5px; }
+  .sv-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sv-label { font-size: 12px; font-weight: 500; color: var(--sp-ink-2); line-height: 1.2; }
+  .sv-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  /* Element 控件移动端紧凑化：高度 36px、字号 13px、边框收中性灰 */
+  .sv-card :deep(.el-input__wrapper),
+  .sv-card :deep(.el-select__wrapper),
+  .sv-card :deep(.el-textarea__inner) { border-radius: 9px; box-shadow: 0 0 0 1px var(--sp-border-strong) inset; }
+  .sv-card :deep(.el-input__wrapper.is-focus),
+  .sv-card :deep(.el-select__wrapper.is-focused),
+  .sv-card :deep(.el-textarea__inner:focus) { box-shadow: 0 0 0 1.5px var(--sp-accent) inset; }
+  .sv-card :deep(.el-input__inner) { font-size: 13px; }
+  .sv-card :deep(.el-select__placeholder) { font-size: 13px; }
+  .sv-card :deep(.el-textarea__inner) { font-size: 13px; padding: 8px 11px; }
+  .sv-card :deep(.el-input-number) { width: 100%; }
+  .sv-card :deep(.el-input-number .el-input__inner) { text-align: left; }
+  .sv-submit {
+    height: 44px; border: 0; border-radius: 11px;
+    background: var(--sp-accent); color: #fff;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: transform .15s ease, opacity .15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
 @media (max-width: 767px) {
   .schedule-page { padding: 8px 12px 0; --sp-pad-t: 8px; --sp-pad-x: 12px; }
+  /* 主页：整页滚动容器给固定 Head 让出高度（Head 48 + 4 遮罩带） */
+  .schedule-page:not(.has-subpage) { padding-top: 48px; }
+  .dashboard-home { gap: 0; }
   .content-main { max-width: 100%; }
   .content-row { flex-direction: column; }
   /* 移动端覆盖式布局（仅在子页激活时生效，见下方 .has-subpage 条件）。
@@ -2273,15 +3793,42 @@ watch(() => route.query.tab, (val) => {
     right: var(--sp-pad-x, 12px);
     z-index: 1;
   }
+  /* 顶栏 fixed 后不占流内空间。滚动区必须**自己**让出 48px：
+     只给内容加 padding-top 是不够的 —— 内容滚到顶时第一个像素仍在 y=0，
+     紧接着「5月 / 6月」这行轴标签会穿过顶栏下沿露在标题下面（这就是「顶栏没固定住」的观感来源）。
+     把 top 设成 48px 后，滚动区从顶栏下沿开始，内容被真正裁在顶栏之上。
+     水平 12px 交给 .content-main，顶栏自己负责左右内边距。 */
   .content-row {
     position: fixed;
-    inset: 0;
+    top: 48px;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 1500;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 8px 12px 0;
+    padding: 0;
     box-sizing: border-box;
   }
+  .content-row .content-main { padding: 0 12px; }
+  /* 顶部留白给到 14px：滚动时上一张卡的圆角顶边会从这个缝里划过，
+     8px 时露出一条白色弧线，看着像顶栏底部有毛边。加宽后弧线落在阴影带里，不再显眼。 */
+  .content-row .content-main > .schedule-view,
+  .content-row .content-main > .grades-view,
+  .content-row .content-main > .growth-view,
+  .content-row .content-main > .service-view,
+  .content-row .content-main > .plan-view-wrap { padding-top: 14px; }
+
+  /* ── 学习计划子页（v4）：PlanView 以 embedded 模式流进本页滚动区 ── */
+  .plan-view-wrap { padding-bottom: 16px; }
+  .plan-view-wrap :deep(.plan-page) {
+    max-width: 100%; height: auto; overflow: visible;
+    background: transparent; padding: 0 0 8px;
+  }
+
+  .sv-submit:active { transform: scale(.98); opacity: .92; }
+  .sv-submit:disabled { opacity: .55; cursor: default; }
+  .sv-submit:focus-visible { outline: 2px solid var(--sp-accent-ink); outline-offset: 2px; }
 
   /* ── 教学安排工具栏 ── */
   .schedule-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; row-gap: 8px; }
@@ -2299,21 +3846,23 @@ watch(() => route.query.tab, (val) => {
   /* ── 移动端课表 ──
      周末无课时不渲染周六/周日两列（见 visibleDays，仅移动端生效），宽度全部给周一~周五：
      375px 下每列从 ~41px 提升到 ~57px，课程名与教室才读得出来 */
-  .schedule-table thead th { padding: 8px 0; font-size: 11px; }
-  .schedule-table td { height: 56px; }
-  .schedule-table td.cell-filled { padding: 2px; }
-  .schedule-table .period-cell, .schedule-table thead th:first-child { width: 34px !important; min-width: 34px; padding: 6px 0; }
-  .schedule-table .period-cell .period-name { font-size: 10px; white-space: nowrap; }
-  .schedule-table .period-cell .period-time { display: none; }
-  .schedule-course { padding: 2px; border-left-width: 2px; border-radius: 4px; justify-content: flex-start; }
-  .schedule-course .course-name { font-size: 11px; line-height: 1.2; margin-bottom: 0; white-space: normal; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  /* v6：课表格子放大（56 → 76px），节次列 34 → 44px。
+     一格能完整容下「课程名 2~3 行 + 教室」，点到课程的概率也提高了。
+     整个表格随行数自然变长（8 节 ≈ 620px），滚动区本来就独立，不影响其他区块。 */
+  .schedule-table thead th { padding: 10px 0; font-size: 12px; font-weight: 600; }
+  .schedule-table td { height: 76px; }
+  .schedule-table td.cell-filled { padding: 3px; }
+  .schedule-table .period-cell, .schedule-table thead th:first-child { width: 44px !important; min-width: 44px; padding: 8px 2px; }
+  .schedule-table .period-cell .period-name { font-size: 10.5px; white-space: nowrap; letter-spacing: -.2px; }
+  .schedule-table .period-cell .period-time { font-size: 9.5px; margin-top: 1px; }
+  .schedule-course { padding: 5px 3px 4px; border-left-width: 3px; border-radius: 6px; justify-content: flex-start; }
+  .schedule-course .course-name { font-size: 11.5px; line-height: 1.28; margin-bottom: 2px; white-space: normal; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
   .schedule-course .course-teacher { display: none; }
-  .schedule-course .course-loc { font-size: 10px; line-height: 1.15; }
+  .schedule-course .course-loc { font-size: 10px; line-height: 1.2; opacity: .78; }
 
-  /* ── 成绩分析 ── */
-  .grade-stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .grade-stat-card { padding: 12px; }
-  .grade-stat-card .stat-value { font-size: 16px; }
+  /* ── 成绩分析 ──
+     v3：四张彩色图标卡合并为一张卡内的 4 列指标（样式在文件前面的「子页通用骨架」块里）。
+     这里只保留必须留在本媒体块的布局规则，避免和后定义的同名规则互相覆盖。 */
   .grades-detail-row { grid-template-columns: 1fr; }
   .grade-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .grade-card { padding: 10px 12px; }
@@ -2373,18 +3922,8 @@ watch(() => route.query.tab, (val) => {
   .record-card { padding: 12px; }
   .record-title { font-size: 13px; }
 }
-</style>
 
-<!-- 下拉面板挂载在 body 下，需用全局样式覆盖 -->
-<style>
-.semester-select-popper.el-popper {
-  border-radius: 8px;
-  border: 1px solid #e4e7ed;
-  box-shadow: 0 6px 18px rgba(0,0,0,.1);
-}
-.semester-select-popper .el-select-dropdown {
-  overflow: visible;
-}
+@media (max-width: 767px) {
 .semester-select-popper .el-select-dropdown__item {
   border-radius: 6px;
   margin: 2px 6px;
@@ -2423,4 +3962,518 @@ watch(() => route.query.tab, (val) => {
 .mascot-ai-dialog .mascot-ai-sub { font-size: 12px; color: #999; margin-top: 2px; }
 .mascot-ai-dialog .mascot-ai-head .el-button { margin-left: auto; }
 .mascot-ai-dialog .mascot-ai-body { max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* ===== AI 今日报告子页（v5）：心情 / 任务 / 已实现 / 天气 + 运势 ===== */
+.ai-view { display: flex; flex-direction: column; padding-bottom: 20px; }
+
+/* 加载态：居中提示，避免骨架屏在移动端抖动 */
+.report-loading { display: flex; align-items: center; gap: 10px; padding: 44px 16px; color: #6d5df0; }
+.rl-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); }
+.rl-sub { margin: 2px 0 0; font-size: 12px; color: var(--sp-ink-3, #9aa0a8); }
+
+/* 顶部主视觉：问候 + 实时天气 + 心情胶囊 */
+.rp-hero {
+  position: relative; overflow: hidden;
+  padding: 16px 16px 14px; border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(124, 108, 240, 0.16), transparent 60%),
+    radial-gradient(100% 80% at 0% 100%, rgba(255, 196, 120, 0.16), transparent 62%),
+    linear-gradient(160deg, #f7f8ff 0%, #fbf9f6 100%);
+  border: 1px solid rgba(124, 108, 240, 0.10);
+}
+.rp-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.rp-hero-left { min-width: 0; flex: 1; }
+.rp-date { margin: 0; font-size: 11px; letter-spacing: 0.06em; color: var(--sp-ink-3, #9aa0a8); }
+.rp-greet { margin: 5px 0 0; font-size: 19px; line-height: 25px; font-weight: 700; color: var(--sp-ink, #14171a); }
+.rp-weather {
+  flex: none; display: flex; align-items: center; gap: 7px;
+  padding: 8px 10px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 3px rgba(20, 23, 26, 0.05);
+}
+.rp-weather-emoji { font-size: 20px; line-height: 1; }
+.rp-weather-main { display: flex; flex-direction: column; gap: 1px; }
+.rp-weather-temp { font-size: 15px; font-weight: 700; color: var(--sp-ink, #14171a); line-height: 17px; }
+.rp-weather-desc { font-size: 10.5px; color: var(--sp-ink-3, #9aa0a8); line-height: 13px; }
+.rp-weather-range { font-size: 10px; line-height: 14px; color: var(--sp-ink-3, #9aa0a8); text-align: right; }
+.rp-weather-off { opacity: 0.72; }
+
+.rp-chips { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.rp-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--chip-c, #9db4c8) 16%, #ffffff);
+  color: var(--chip-c, #6b7d92);
+  font-size: 11.5px; font-weight: 600; line-height: 16px;
+  border: 1px solid color-mix(in srgb, var(--chip-c, #9db4c8) 34%, transparent);
+}
+.rp-chip-emoji { font-size: 13px; line-height: 1; }
+.rp-chip-btn {
+  --chip-c: #7c6cf0;
+  cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.rp-chip-btn:active { transform: scale(0.97); }
+
+/* 运势卡：中性底 + 单色点缀，避免整块彩色渐变压迫感 */
+.rp-fortune {
+  --fc: #6b8399; --fc-soft: #f0f3f6;
+  margin-top: 12px; padding: 13px 14px 12px;
+  border: 1px solid var(--sp-border, #e9ebee); border-radius: 16px;
+  background: var(--sp-surface, #fff);
+  color: var(--sp-ink, #14171a);
+}
+.rp-tone-great { --fc: #b07c24; --fc-soft: #faf3e3; }
+.rp-tone-good { --fc: #97732c; --fc-soft: #f8f4e9; }
+.rp-tone-mid { --fc: #5b54c9; --fc-soft: #f1effc; }
+.rp-tone-soft { --fc: #6b8399; --fc-soft: #eff3f6; }
+.rp-fortune-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rp-fortune-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rp-fortune-label { font-size: 11px; letter-spacing: 0.06em; color: var(--sp-ink-3, #9aa0a8); }
+.rp-fortune-level {
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--fc-soft); color: var(--fc);
+  font-size: 12px; font-weight: 600; line-height: 17px;
+}
+.rp-fortune-score {
+  font-size: 24px; font-weight: 800; line-height: 1;
+  letter-spacing: -0.02em; color: var(--fc);
+  font-variant-numeric: tabular-nums;
+}
+.rp-fortune-score small { margin-left: 2px; font-size: 10px; font-weight: 500; color: var(--sp-ink-3, #9aa0a8); }
+.rp-fortune-meter { height: 3px; margin-top: 10px; border-radius: 999px; background: #f0f2f4; overflow: hidden; }
+.rp-fortune-meter i { display: block; height: 100%; border-radius: 999px; background: var(--fc); opacity: 0.78; }
+.rp-fortune-key {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 0; font-size: 12px; font-weight: 600; color: var(--sp-ink, #14171a);
+}
+.rp-fortune-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--fc); flex: none; }
+.rp-fortune-summary { margin: 5px 0 0; font-size: 12px; line-height: 18px; color: var(--sp-ink-2, #5b6472); }
+.rp-fortune-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.rp-fortune-meta-item {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+  padding: 7px 9px; border-radius: 10px;
+  background: var(--fc-soft);
+}
+.rp-fortune-meta-item small { font-size: 10px; color: var(--sp-ink-3, #9aa0a8); }
+.rp-fortune-meta-item span {
+  font-size: 12px; font-weight: 600; color: var(--sp-ink, #14171a);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* 四段正文 */
+.rp-sec { padding: 15px 0 3px; }
+.rp-sec + .rp-sec { border-top: 1px solid var(--sp-border, #e9ebee); }
+.rp-sec-head { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+.rp-sec-ico { font-size: 14px; line-height: 1; }
+.rp-sec-title { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--sp-ink, #14171a); }
+.rp-sec-line { margin: 0 0 7px; font-size: 13px; line-height: 20px; color: var(--sp-ink-2, #5b6472); }
+.rp-sec-line:last-child { margin-bottom: 0; }
+
+/* 建议卡：时段 + 优先级，动作按钮保持中性 */
+.rp-suggest { padding-bottom: 4px; }
+.ai-sec-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.ai-sec-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--sp-ink, #14171a); }
+.ai-sec-count { font-size: 12px; color: var(--sp-ink-3, #9aa0a8); }
+.ai-action-list { list-style: none; margin: 0; padding: 0; }
+.ai-action { display: flex; gap: 10px; padding: 10px 0; }
+.ai-action + .ai-action { border-top: 1px solid var(--sp-border, #e9ebee); }
+/* 优先级标签：小号文字胶囊（不能只用颜色传达紧急程度 —— WCAG 1.4.1） */
+.ai-prio {
+  flex: none; align-self: flex-start; margin-top: 1px;
+  padding: 1px 6px; border-radius: 5px;
+  font-size: 10px; line-height: 15px; font-weight: 600;
+  white-space: nowrap;
+}
+.ai-action-main { flex: 1; min-width: 0; }
+.ai-action-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); line-height: 19px; }
+.ai-action-when {
+  display: inline-block; margin-right: 6px; padding: 1px 5px;
+  border-radius: 5px; background: #f3f4f6;
+  color: var(--sp-ink-2, #5b6472);
+  font-size: 10.5px; font-weight: 500; line-height: 15px;
+  vertical-align: 1px;
+}
+.ai-view .ai-sec:first-child { padding-top: 4px; }
+.ai-action-content { margin: 2px 0 0; font-size: 12.5px; line-height: 18px; color: var(--sp-ink-2, #5b6472); }
+.ai-add-btn {
+  margin-top: 8px; padding: 5px 12px;
+  border: 1px solid var(--sp-border, #e9ebee); border-radius: 8px;
+  background: var(--sp-surface, #ffffff);
+  font-family: inherit; font-size: 12px; color: #3730a3; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ai-add-btn:active { transform: scale(0.97); }
+.ai-added { display: inline-block; margin-top: 8px; font-size: 12px; color: #15803d; }
+.ai-empty { margin: 8px 0 4px; font-size: 13px; color: var(--sp-ink-3, #9aa0a8); }
+/* 一键导出：中性描边小按钮，右下角收尾，不与建议卡主色冲突 */
+.rp-export-row { display: flex; justify-content: flex-end; margin-top: 14px; }
+.rp-export-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--sp-border, #e9ebee); border-radius: 9px;
+  background: transparent; color: var(--sp-ink-2, #5b6472);
+  font-family: inherit; font-size: 12px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.rp-export-btn:active { transform: scale(0.97); background: #f7f8f9; }
+
+/* ===== 请假服务 v5（美团订单流，少图标） ===== */
+.sv-current {
+  background: var(--sp-surface, #fff); border-radius: 16px; padding: 15px 16px 13px;
+  box-shadow: 0 1px 2px rgba(20,23,26,.04);
+}
+.svc-cap { font-size: 11.5px; color: var(--sp-ink-3, #9aa0a8); }
+.svc-title { margin: 6px 0 0; font-size: 15px; color: var(--sp-ink, #14171a); }
+.svc-steps { display: flex; margin-top: 14px; }
+.svc-step { flex: 1; text-align: center; position: relative; }
+.svc-step::before { content: ''; position: absolute; top: 10px; left: -50%; width: 100%; height: 2px; background: #e9ebee; }
+.svc-step:first-child::before { display: none; }
+.svc-step.done::before { background: #3d4a57; }
+.svc-step.cur::before { background: linear-gradient(90deg, #3d4a57 0%, #3d4a57 50%, #e9ebee 50%, #e9ebee 100%); }
+.svc-step i {
+  width: 20px; height: 20px; box-sizing: border-box; border-radius: 50%; margin: 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fff; font-style: normal; position: relative; z-index: 1;
+}
+.svc-step.done i { background: #3d4a57; }
+.svc-step.cur i { background: #fff; border: 2px solid #3d4a57; box-shadow: 0 0 0 3px rgba(61,74,87,.12); }
+.svc-step p { font-size: 10.5px; color: var(--sp-ink-3, #9aa0a8); margin: 6px 0 0; }
+.svc-step.cur p { color: #3d4a57; font-weight: 600; }
+.svc-hint { margin: 10px 0 0; font-size: 11px; color: var(--sp-ink-3, #9aa0a8); line-height: 16px; }
+.sv-cta {
+  display: block; width: 100%; padding: 12px 0; margin-top: 2px;
+  border: none; border-radius: 12px; cursor: pointer;
+  background: #1f2328; color: #fff;
+  font-family: inherit; font-size: 14.5px; font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+.sv-cta:active { transform: scale(0.99); }
+.svr-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 13px;
+  background: var(--sp-surface, #fff);
+  border: 1px solid var(--sp-border, #e9ebee);
+  border-radius: 12px;
+}
+.svr-row + .svr-row { margin-top: 8px; }
+.svr-main { flex: 1; min-width: 0; }
+.svr-main h5 { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--sp-ink, #14171a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svr-main small { font-size: 10.5px; color: var(--sp-ink-3, #9aa0a8); }
+.svr-st { font-size: 11px; font-weight: 600; flex: none; }
+.svr-st.ing { color: #b45309; }
+.svr-st.ok { color: #2f9e63; }
+.svr-st.no { color: #b6bac1; }
+
+/* ===== 成绩分析 v5：结论 hero ===== */
+.gr-hero { padding: 2px 2px 12px; }
+.gr-hero-big { margin: 0; font-size: 17px; color: var(--sp-ink, #14171a); font-weight: 600; }
+.gr-hero-big b { font-size: 22px; color: #0f7a58; }
+.gr-hero-of { font-size: 12px; color: var(--sp-ink-3, #9aa0a8); font-weight: 400; }
+.gr-hero-sub { margin: 4px 0 0; font-size: 11.5px; color: var(--sp-ink-3, #9aa0a8); }
+}
+
+
+@media (max-width: 767px) {
+  /* ============================================================
+     学习计划 v5（仅移动端）
+     参考：Forest 森林打卡（深绿情绪 hero）+ Duolingo 关卡路径（纵向节点 rail）
+           滴答清单（今日任务单行清单，无卡片堆）
+     约束：① Head 仍走固定 48px，本区只改内容 ② 计划项之间有路径连贯感
+           ③ 空态不用插画，一行灰字即可 ④ 桌面端完全不受影响
+     ============================================================ */
+  /* ── hero：深绿森林渐变，替代原蓝色 marketing 大块 ── */
+  .plan-view-wrap :deep(.plan-hero) {
+    background: linear-gradient(158deg, #0f3d2e 0%, #1c6b4a 62%, #247a55 100%) !important;
+    border-radius: 16px !important;
+    padding: 15px 16px 13px !important;
+    box-shadow: none !important;
+    margin-bottom: 14px;
+  }
+  .plan-view-wrap :deep(.hero-glow) { display: none !important; }
+  /* 与 48px 子页头重复的「MY PLAN · 学习计划 / 学业中心」在这层隐藏，
+     hero 只留一句价值主张 + 三个数字 + 新建入口，避免同一个标题出现两次。 */
+  .plan-view-wrap :deep(.hero-kicker),
+  .plan-view-wrap :deep(.hero-tag) { display: none !important; }
+  .plan-view-wrap :deep(.hero-title) {
+    margin: 6px 0 0 !important;
+    font-size: 17px !important; line-height: 22px !important;
+    color: #fff !important; font-weight: 600 !important;
+  }
+  .plan-view-wrap :deep(.hero-sub) {
+    margin: 4px 0 0 !important;
+    font-size: 11px !important; line-height: 15px !important;
+    color: rgba(255,255,255,.68) !important;
+  }
+  .plan-view-wrap :deep(.hero-add) {
+    height: 28px !important; padding: 0 12px !important;
+    background: rgba(255,255,255,.16) !important; border: 0 !important;
+    color: #fff !important; font-size: 12px !important;
+  }
+  .plan-view-wrap :deep(.hero-stats) { margin-top: 12px !important; gap: 0 !important; }
+  .plan-view-wrap :deep(.hs-num) { font-size: 19px !important; color: #fff !important; font-weight: 700 !important; }
+  .plan-view-wrap :deep(.hs-label) { font-size: 10px !important; color: rgba(255,255,255,.6) !important; }
+  .plan-view-wrap :deep(.hero-stat-sep) { background: rgba(255,255,255,.16) !important; }
+
+  /* ── 卡片去白底：改为发丝线分区（Duolingo 关卡在卡片内，容器不要卡片套卡片） ── */
+  .plan-view-wrap :deep(.card) {
+    background: transparent !important;
+    border: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+    padding: 0 !important; margin: 0 0 4px !important;
+  }
+  .plan-view-wrap :deep(.card + .card) { border-top: 1px solid var(--sp-border, #e9ebee) !important; padding-top: 14px !important; margin-top: 2px !important; }
+  .plan-view-wrap :deep(.card-head) { padding: 0 0 8px !important; background: none !important; border: 0 !important; }
+  .plan-view-wrap :deep(.card-head .head-bar),
+  .plan-view-wrap :deep(.head-bar) { display: none !important; }
+  .plan-view-wrap :deep(.head-title) { font-size: 13.5px !important; font-weight: 600 !important; color: var(--sp-ink, #14171a) !important; }
+  .plan-view-wrap :deep(.card-head .el-button) { font-size: 11.5px !important; }
+
+  /* 空态：去插画，一行灰字（参考滴答清单空态） */
+  .plan-view-wrap :deep(.empty-block) { padding: 10px 0 4px !important; }
+  .plan-view-wrap :deep(.empty-ico) { display: none !important; }
+  .plan-view-wrap :deep(.empty-msg) { font-size: 12px !important; line-height: 17px !important; color: var(--sp-ink-3, #9aa0a8) !important; }
+
+  /* ── 关卡 rail：每个 plan-card 左侧一枚节点 + 竖线 ── */
+  .plan-view-wrap :deep(.plan-list) { position: relative; padding-left: 20px; }
+  .plan-view-wrap :deep(.plan-list)::before {
+    content: ''; position: absolute; left: 6px; top: 16px; bottom: 14px;
+    width: 2px; background: #dce9c8; border-radius: 1px;
+  }
+  .plan-view-wrap :deep(.plan-card) {
+    position: relative;
+    background: var(--sp-surface, #fff) !important;
+    border: 1px solid var(--sp-border, #e9ebee) !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    padding: 12px 13px !important;
+    margin-bottom: 10px !important;
+  }
+  .plan-view-wrap :deep(.plan-card)::before {
+    content: ''; position: absolute; left: -18px; top: 17px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #58cc02; box-shadow: 0 0 0 3px #fff, 0 0 0 4px #dce9c8;
+    z-index: 1;
+  }
+  .plan-view-wrap :deep(.plan-card.is-done)::before { background: #b8c4b0; }
+  .plan-view-wrap :deep(.plan-card-title) { font-size: 13.5px !important; font-weight: 600 !important; color: var(--sp-ink, #14171a) !important; }
+  .plan-view-wrap :deep(.plan-card-meta) { font-size: 11px !important; color: var(--sp-ink-3, #9aa0a8) !important; gap: 6px !important; }
+  .plan-view-wrap :deep(.plan-list) { display: block; }
+
+  /* ── 空态：去插画，只留一行灰字 ── */
+  .plan-view-wrap :deep(.el-empty) { padding: 12px 0 !important; }
+  .plan-view-wrap :deep(.el-empty__image) { display: none !important; }
+  .plan-view-wrap :deep(.el-empty__description) { margin: 0 !important; }
+  .plan-view-wrap :deep(.el-empty__description p) { font-size: 12px !important; color: var(--sp-ink-3, #9aa0a8) !important; margin: 0 !important; }
+}
+
+@media (max-width: 767px) {
+/* ============================================================
+   成绩分析 v5（仅移动端）：结论优先 + 迷你图表 + 全扁平
+   参考：Apple Health 摘要（结论大字）+ Keep 数据条 + 滴答清单列表
+   设计约束：① 图表不超过 88px，不再独占一屏 ② 无白卡，发丝线分区
+   ③ 课程成绩用列表行而不是九宫格卡片
+   ============================================================ */
+  .grades-view { --gr-ink: #14171a; --gr-ink2: #5b6472; --gr-ink3: #9aa0a8; --gr-line: #e9ebee; }
+
+/* ── 结论区：大数字 + 一行解释，替代四张 stat 卡 ── */
+  .grades-view .gr-hero { padding: 4px 2px 14px; border-bottom: 1px solid var(--gr-line); }
+  .grades-view .gr-hero-big { margin: 0; font-size: 15px; color: var(--gr-ink2); font-weight: 500; }
+  .grades-view .gr-hero-big b { font-size: 30px; font-weight: 700; color: #0f7a58; letter-spacing: -.5px; }
+  .grades-view .gr-hero-of { font-size: 12.5px; color: var(--gr-ink3); font-weight: 400; }
+  .grades-view .gr-hero-sub { margin: 6px 0 0; font-size: 12px; color: var(--gr-ink3); line-height: 17px; }
+
+/* stat 行：极简四列，去白底去边框（保留桌面原样） */
+  .grades-view .grade-stats-row {
+    background: transparent; border: 0; box-shadow: none; border-radius: 0;
+    padding: 12px 0; margin: 0; border-bottom: 1px solid var(--gr-line);
+  }
+  .grades-view .grade-stat-card { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+  .grades-view .stat-icon { display: none; }
+  .grades-view .stat-value { font-size: 17px; font-weight: 600; color: var(--gr-ink); }
+  .grades-view .stat-label { font-size: 10.5px; color: var(--gr-ink3); }
+
+/* ── 分区容器：全部透明 + 发丝线 ── */
+  .grades-view .analytics-card {
+    background: transparent !important; border: 0 !important; box-shadow: none !important;
+    border-radius: 0 !important; margin: 0 !important; padding: 0 !important;
+  }
+  .grades-view .analytics-card + .analytics-card { border-top: 1px solid var(--gr-line); }
+  .grades-view .analytics-head { padding: 14px 0 8px; }
+  .grades-view .analytics-head .head-bar { display: none; }
+  .grades-view .analytics-head .head-title { font-size: 14px; font-weight: 600; color: var(--gr-ink); }
+  .grades-view .analytics-body { padding: 0 0 12px; gap: 0; }
+  .grades-view .analytics-body.duo { flex-direction: column; }
+  .grades-view .panel { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+  .grades-view .panel + .panel { margin-top: 10px; }
+  .grades-view .panel-divider { display: none; }
+  .grades-view .panel-title { font-size: 12px; color: var(--gr-ink3); font-weight: 500; margin-bottom: 4px; }
+  .grades-view .panel-title .el-icon { display: none; }
+
+/* 迷你图表：88px，去掉背景网格感 */
+  .grades-view .chart { height: 88px !important; width: 100%; }
+
+/* 绩点趋势改为「迷你走势条」：容器高度压缩，折线本身足够表达趋势 */
+  .grades-view .analytics-card:nth-of-type(1) .chart { height: 82px !important; }
+
+/* ── 课程画像：折叠行更轻 ── */
+  .grades-view .course-profile-card .analytics-head { padding: 12px 0; }
+  .grades-view .course-rank-item { padding: 7px 0; }
+  .grades-view .cr-group-label { font-size: 11px; margin: 8px 0 2px; }
+  .grades-view .cr-name { font-size: 12.5px; color: var(--gr-ink); }
+  .grades-view .cr-bar { height: 4px; }
+  .grades-view .cr-score { font-size: 12.5px; font-weight: 600; }
+
+/* ── 学期明细：课程改为扁平列表行（替代九宫格卡片） ── */
+  .grades-view .detail-card { border-top: 1px solid var(--gr-line); }
+  .grades-view .sem-selector { padding: 0 0 10px; }
+  .grades-view .grade-grid { display: flex; flex-direction: column; gap: 0; }
+  .grades-view .grade-card {
+    display: flex; align-items: center; gap: 10px;
+    background: transparent !important; border: 0 !important; border-radius: 0 !important;
+    box-shadow: none !important; padding: 11px 2px !important;
+    position: relative;
+  }
+  .grades-view .grade-card + .grade-card { border-top: 1px solid var(--gr-line) !important; }
+  .grades-view .gc-top { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; }
+  .grades-view .gc-name {
+    font-size: 13px; color: var(--gr-ink); font-weight: 500;
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .grades-view .gc-score { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .grades-view .gc-meta {
+    display: flex; gap: 8px; margin: 0; font-size: 10.5px; color: var(--gr-ink3);
+    flex-direction: column; align-items: flex-end; line-height: 1.35;
+  }
+  .grades-view .grade-card-more { justify-content: center; }
+  .grades-view .grade-card-more .gc-name { flex: none; color: #0f7a58; font-size: 12.5px; }
+
+/* 分数等级色：只染分数本身，不给卡片上色 */
+  .grades-view .grade-card.excellent .gc-score { color: #0f7a58; }
+  .grades-view .grade-card.good .gc-score { color: #0369a1; }
+  .grades-view .grade-card.pass .gc-score { color: #b45309; }
+  .grades-view .grade-card.fail .gc-score { color: #c0392b; }
+
+/* ── 覆盖：stat 行与空图表彻底扁平 ── */
+  .grades-view .grade-stats-row > .grade-stat-card,
+  .grades-view .grade-stats-row {
+    background: transparent !important;
+    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+  .grades-view .grade-stats-row { border-bottom: 1px solid var(--gr-line) !important; }
+  .grades-view .grade-stat-card::before { display: none !important; }
+  .grades-view .grade-stat-card { padding: 0 2px !important; align-items: flex-start !important; }
+  .grades-view .stat-value { font-size: 17px; }
+  .grades-view .stat-label { margin-top: 2px; }
+
+  /* 空图表：不占高度，只留一行灰字（el-empty 需 :deep 才能命中） */
+  .grades-view :deep(.el-empty) {
+    padding: 4px 0 !important; margin: 0 !important;
+    display: block !important; height: auto !important; min-height: 0 !important;
+  }
+  .grades-view :deep(.el-empty__image) { display: none !important; height: 0 !important; width: 0 !important; }
+  .grades-view :deep(.el-empty__description) { margin: 0 !important; height: auto !important; }
+  .grades-view :deep(.el-empty__description p) { font-size: 11.5px !important; line-height: 16px !important; color: var(--gr-ink3) !important; margin: 0 !important; }
+  .grades-view :deep(.panel) { min-height: 0 !important; }
+  .grades-view :deep(.analytics-body) { min-height: 0 !important; }
+
+/* 有数据的图表：压缩到 82px，去掉标题行冗余 */
+  .grades-view .panel-title { display: none; }
+  .grades-view .analytics-head .head-sub { display: none; }
+  .grades-view .analytics-body.duo { gap: 8px !important; }
+
+/* 学期明细：选择器 + 明细行更紧凑 */
+  .grades-view .semester-select { max-width: 100%; }
+  .grades-view .sem-stats-inline { display: flex; gap: 10px; font-size: 11.5px; color: var(--gr-ink2); padding: 6px 0 2px; }
+  .grades-view .sem-link-action { font-size: 12px; }
+
+/* 移动端隐藏吉祥物（占位且与扁平风格冲突） */
+  .grades-view .grades-mascot { display: none !important; }
+
+  /* ── 目标计划 v6：4 级里程碑阶梯（抄 Duolingo 关卡进度 + Strava 目标） ──
+     一条 3px 轨道 + 4 个刻度节点，已过节点实心墨绿、当前待过节点赭橙描边、
+     未到节点浅灰；轨道填充到「实际绩点」位置，末端小圆环是实际值游标。 */
+  .gl-item { padding-bottom: 14px; }
+  .gl-item + .gl-item {
+    border-top: 1px solid var(--sp-border, #e9ebee);
+    padding-top: 14px;
+  }
+  .gl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .gl-sem { font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); letter-spacing: -.2px; }
+  .gl-badge {
+    font-size: 10.5px; line-height: 1; padding: 3px 7px; border-radius: 999px;
+    background: #eef1f4; color: #5b6470; font-weight: 500;
+  }
+  .gl-badge.is-past { background: transparent; color: #9aa0a8; padding-left: 0; }
+
+  .gl-track { position: relative; height: 32px; margin: 0 17px 4px; }
+  .gl-rail, .gl-fill {
+    position: absolute; top: 9px; height: 3px; border-radius: 2px;
+  }
+  .gl-rail { left: 0; right: 0; background: #e9ebee; }
+  .gl-fill { left: 0; background: #0f7a58; transition: width .5s cubic-bezier(.16,1,.3,1); }
+  .gl-mark {
+    position: absolute; top: 5.5px; z-index: 2;
+    width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
+    background: #fff; border: 2px solid #0f7a58; transform: translateX(-5px);
+  }
+  .gl-node {
+    position: absolute; top: 0; z-index: 3;
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .gl-node i {
+    width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box;
+    background: #fff; border: 2px solid #cfd5dc; margin-top: 4.5px;
+    transition: background .3s ease, border-color .3s ease;
+  }
+  .gl-node b {
+    margin-top: 4px; font-size: 9.5px; font-weight: 500;
+    color: #9aa0a8; font-variant-numeric: tabular-nums;
+  }
+  .gl-node.is-done i { background: #0f7a58; border-color: #0f7a58; }
+  .gl-node.is-done b { color: #0f7a58; }
+  .gl-node.is-next i { border-color: #b45309; box-shadow: 0 0 0 3px rgba(180, 83, 9, .12); }
+  .gl-node.is-next b { color: #b45309; font-weight: 600; }
+
+  .gl-hint { margin: 4px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--sp-ink-3, #6b737c); }
+  .gl-hint.is-ok { color: #0f7a58; }
+  .gl-edit { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .gl-edit-label { font-size: 11.5px; color: var(--sp-ink-3, #6b737c); }
+  .gl-edit .el-button { margin-left: 0; }
+  /* 保存按钮跟成绩页识别色（青绿）走，不要 Element 默认蓝 */
+  .gl-edit .el-button--primary {
+    background-image: none !important;
+    background-color: #0f7a58 !important;
+    border-color: #0f7a58 !important;
+    color: #fff !important;
+  }
+  .gl-edit .el-button--primary:hover {
+    background-image: none !important;
+    background-color: #0c6448 !important;
+    border-color: #0c6448 !important;
+  }
+}
+
+/* ── 学期选择下拉（teleport 到 body，随父作用域带 data-v 命中） ── */
+.semester-select-popper .el-select-dropdown { overflow: visible; }
+.semester-select-popper .el-select-dropdown__item {
+  border-radius: 6px;
+  margin: 2px 6px;
+  transition: background .2s ease;
+  font-size: 13px;
+  padding: 0 10px;
+  height: 30px;
+  line-height: 30px;
+}
+.semester-select-popper .el-select-dropdown__item:hover { background: #f5f7fa; }
+.semester-select-popper .el-select-dropdown__item.is-selected { color: #409eff; font-weight: 600; background: #ecf5ff; }
+</style>
+
+<!-- 下拉面板挂载在 body 下，需用全局样式覆盖 -->
+<style>
+.semester-select-popper.el-popper {
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 6px 18px rgba(0,0,0,.1);
+}
 </style>

@@ -31,6 +31,7 @@ from .tasks import (
     build_butler_summary_prompt,
     build_conversation_summary_prompt,
     build_crisis_summary_prompt,
+    build_daily_report_prompt,
     build_image_recognize_prompt,
     build_insight_advice_prompt,
     build_leave_analysis_prompt,
@@ -59,6 +60,7 @@ __all__ = [
     # tasks
     "build_butler_chat_prompt", "build_butler_summary_prompt",
     "build_conversation_summary_prompt", "build_crisis_summary_prompt",
+    "build_daily_report_prompt",
     "build_image_recognize_prompt", "build_insight_advice_prompt",
     "build_leave_analysis_prompt", "build_plan_reschedule_prompt",
     "build_plan_stages_prompt", "build_proactive_insight_prompt",

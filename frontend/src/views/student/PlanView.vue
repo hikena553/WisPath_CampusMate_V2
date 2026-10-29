@@ -1,6 +1,7 @@
 <template>
-  <div class="plan-page">
-    <SubPageHeader title="学习计划" fallback="/student" />
+  <div class="plan-page" :class="{ 'is-embedded': embedded }">
+    <!-- embedded 模式（v4 收编为学业中心第 5 个 tab）：隐藏自带顶栏，由父级子页 Head 接管 -->
+    <SubPageHeader v-if="!embedded" title="学习计划" fallback="/student" />
     <!-- 顶部品牌主视觉 -->
     <div class="plan-hero">
       <div class="hero-glow g1"></div>
@@ -10,7 +11,7 @@
         <div class="hero-heading">
           <div class="hero-title-row">
             <span class="hero-kicker">MY PLAN · 学习计划</span>
-            <el-tag class="hero-tag" effect="dark" round>驾驶舱</el-tag>
+            <el-tag class="hero-tag" effect="dark" round>学业中心</el-tag>
           </div>
           <h2 class="hero-title">把大目标，拆成一个个小关卡</h2>
           <p class="hero-sub">逐关消除、提交成果、AI 评估，稳步达成总目标</p>
@@ -514,6 +515,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+
+/** embedded：作为学业中心「学习计划」tab 的内嵌内容渲染（v4）。
+    隐藏自带 SubPageHeader；.plan-page 在 embedded 下由父级样式接管（透明背景、无独立滚动）。 */
+withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowDown, Calendar, WarningFilled, MagicStick, Lock, Check } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
@@ -521,7 +526,7 @@ import {
   getGoals, createGoal, updateGoal, deleteGoal,
   getPlans, createPlan, updatePlan, deletePlan,
   getTasks, createTask, updateTask, deleteTask,
-  createCheckin, getStreak, getToday,
+  createCheckin, deleteCheckin, getStreak, getToday,
   getPlanReminders, getAISuggest, type GrowthGoal, type StudyPlan, type PlanTask,
   type TodayTask, type Streak, type AISuggest,
   getStages, aiGenerateStages, createStage, updateStage, deleteStage, submitStage,
@@ -634,13 +639,11 @@ async function refreshAll() {
 }
 
 onMounted(refreshAll)
-const checkinLoaded = ref(false)
 async function refreshToday() {
   streak.value = await getStreak()
   todayTasks.value = await getToday()
-  if (!checkinLoaded.value) {
-    checkinLoaded.value = true
-  }
+  const all = await getCheckins()
+  totalMinutes.value = all.reduce((s, c) => s + (Number(c.minutes) || 0), 0)
 }
 
 // ---------- 计划 ----------
@@ -929,12 +932,23 @@ async function saveCheckin() {
 }
 
 async function handleCheckinFromToday(t: TodayTask) {
-  if (t.checked_today) return
   if (!t.task_id) return
+  // 勾选 = 打卡；取消勾选 = 撤销当天打卡（误点可修正）
+  if (t.checked_today) {
+    if (!t.checkin_id) return
+    try {
+      await deleteCheckin(t.checkin_id)
+      ElMessage.success('已撤销打卡')
+      await refreshToday()
+      await loadPlans()
+    } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '撤销失败') }
+    return
+  }
   try {
     await createCheckin({ plan_id: t.plan_id, task_id: t.task_id, minutes: 30 })
     ElMessage.success('打卡成功')
     await refreshToday()
+    await loadPlans()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '打卡失败') }
 }
 
@@ -1020,13 +1034,23 @@ function isOverdue(t: PlanTask) {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* embedded：作为学业中心子页 tab 内容流进父级滚动区，不再自建滚动容器与渐变底 */
+.plan-page.is-embedded {
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+  background: transparent;
+  padding: 0 0 8px;
+}
 
 /* 移动端：整屏覆盖子页（与资讯搜索/详情子页同一形式）——
    滑入/滑出时连顶栏与底部导航一起盖住，返回走页面顶部的 SubPageHeader。
    z-index 1500：盖过顶栏(100)/底部导航(1000)，低于 Element Plus 弹层基准(2000+)，
    页内的下拉/日期选择等弹出层不受影响。 */
 @media (max-width: 767px) {
-  .plan-page {
+  /* 仅独立路由（非 embedded）才整屏覆盖；embedded 时它必须留在父级滚动流里，
+     否则 position:fixed 会脱流并盖住学业中心固定 48px 的子页头。 */
+  .plan-page:not(.is-embedded) {
     position: fixed;
     inset: 0;
     z-index: 1500;
@@ -1540,16 +1564,17 @@ function isOverdue(t: PlanTask) {
 .dot-done { background: #0e7a47; box-shadow: 0 0 6px rgba(255,255,255,0.7); }
 
 .candy-hint {
-  margin-top: 10px;
+  margin-top: 12px;
   text-align: center;
   font-size: 12px;
-  color: #b07a52;
-  background: #fff8ef;
-  border: 1px dashed #f3c98b;
+  line-height: 1.5;
+  color: #5b6470;
+  background: #f6f7f9;
+  border: 1px solid #e6e9ee;
   border-radius: 10px;
-  padding: 8px;
+  padding: 9px 10px;
 }
-.candy-hint.is-done { color: #2fae6e; background: #effaf3; border-color: #a8e6c3; }
+.candy-hint.is-done { color: #1f7a4d; background: #f3faf6; border-color: #cbe9d8; }
 
 .stage-detail {
   background: #fafbfe;
@@ -1621,4 +1646,93 @@ function isOverdue(t: PlanTask) {
   padding-bottom: 4px;
 }
 .submit-tip { font-size: 13px; color: #666666; line-height: 1.6; margin-bottom: 10px; }
+/* ============================================================
+   移动端 v6：把「闯关任务流」做成 Duolingo 式关卡路径
+   ------------------------------------------------------------
+   旧版是 `repeat(auto-fill, minmax(74px,1fr))` 的方块网格：一屏 4 列，
+   关卡之间没有任何方位关系，读起来是「一张表格」而不是「一条路」。
+   新版：单列纵向路径 + 左右交错 + 节点连线（虚线路径），
+       已完成=绿✓、当前=橙脉冲、未解锁=灰锁，与 Duolingo 课程地图一致。
+   仅作用于 <=767px，桌面端仍用上面的糖果网格。
+   ============================================================ */
+@media (max-width: 767px) {
+  /* ── 区块重排：进入计划页先看到「关卡地图」，打卡/今日任务退到其后 ── */
+  .content { display: flex; flex-direction: column; }
+  .content > * { order: 5; }
+  .content > .card:nth-child(3) { order: 1; }   /* 我的计划（含关卡路径） */
+  .content > .card:nth-child(1) { order: 2; }   /* 今日打卡 */
+  .content > .card:nth-child(2) { order: 3; }   /* 今日任务 */
+
+  /* ── 路径容器 ── */
+  .candy-grid {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0; padding: 12px 0 4px;
+  }
+
+  /* ── 节点：圆形，内部只有「图标 + 关卡名」两行 ── */
+  .candy-block {
+    width: 78px; height: 78px; aspect-ratio: auto; flex: none;
+    border-radius: 50%; padding: 9px 7px 7px;
+    margin-bottom: 38px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px;
+  }
+  .candy-block:last-child { margin-bottom: 6px; }
+
+  /* 左右交错：奇数右偏、偶数左偏，形成 S 形前进感 */
+  .candy-block:nth-child(odd) { transform: translateX(26px); }
+  .candy-block:nth-child(even) { transform: translateX(-26px); }
+  .candy-block:hover { transform: none; }
+  .candy-block.is-open { transform: none; box-shadow: 0 6px 18px rgba(255, 122, 61, .38); }
+  .candy-block:nth-child(odd).is-open { transform: translateX(26px) scale(1.04); }
+  .candy-block:nth-child(even).is-open { transform: translateX(-26px) scale(1.04); }
+
+  /* ── 节点连线：从底端斜向下一关，虚线更像「路」 ── */
+  .candy-block::after {
+    content: ''; position: absolute; left: 50%; top: 100%;
+    width: 3px; height: 66px; border-radius: 2px;
+    background: #e2e7ed;
+    transform-origin: top center; z-index: 0;
+  }
+  /* 奇数在右、下一关在左 → 线向左下（负角）；偶数反之 */
+  /* 注意方向：rotate(θ) 作用于竖直向下的伪元素时，正角向左、负角向右 */
+  .candy-block:nth-child(odd)::after { transform: rotate(52deg); }
+  .candy-block:nth-child(even)::after { transform: rotate(-52deg); }
+  .candy-block:last-child::after { display: none; }
+  /* 已通关的节点下方的路也标成绿色，视觉上「走过这段路」 */
+  .candy-block.cb-done::after { background: #a9dfc3; }
+
+  /* ── 节点内部元素缩放 ── */
+  .cb-emoji { font-size: 23px; }
+  .cb-face { font-size: 24px; }
+  .cb-ok :deep(svg), .cb-ok .el-icon { width: 22px; height: 22px; }
+  .cb-score { font-size: 19px; }
+  .cb-stars { font-size: 9px; letter-spacing: .5px; margin-top: 1px; }
+  .cb-no {
+    top: 2px; left: 4px; width: 16px; height: 16px;
+    font-size: 10px;
+  }
+  .cb-lock { top: 5px; right: 6px; }
+  .cb-lock :deep(svg), .cb-lock .el-icon { width: 13px; height: 13px; }
+
+  /* 关卡名放进圆里：两行省略，不再压在方块底部 */
+  .cb-title {
+    position: static; left: auto; right: auto; bottom: auto;
+    width: 100%; margin-top: 1px;
+    font-size: 9.5px; line-height: 1.15; font-weight: 700;
+    white-space: normal; text-align: center;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; word-break: break-all;
+  }
+  .candy-block.cb-locked .cb-title { color: #8f97a3; }
+
+  /* ── 顶部进度条：压扁一点，让路径成为首屏主角 ── */
+  .candy-topbar { padding: 9px 11px; margin-bottom: 10px; border-radius: 12px; }
+  .candy-lv-num { font-size: 21px; }
+  .candy-hint { font-size: 11.5px; margin-top: 10px; }
+
+  /* ── 计划卡内部：四个操作按钮在窄屏上换行排列，不再挤成一行 ── */
+  .detail-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .detail-actions .el-button { margin-left: 0 !important; }
+}
 </style>

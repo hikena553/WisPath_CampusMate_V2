@@ -23,6 +23,7 @@ from app.services.llm_service import speech_to_text, _get_client, _get_llm_confi
 from app.services.prompts import build_recommend_questions_prompt
 from app.services.proactive_engine import evaluate_student
 from app.services.proactive_insight import generate_insight, get_cached_insight
+from app.services.daily_report import build_daily_report
 from app.utils.rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -468,3 +469,15 @@ async def get_proactive_insight(user: User = Depends(get_current_user), db: Sess
 
     insight = await generate_insight(user, actions)
     return {"insight": insight, "cached": False}
+
+
+@router.get("/daily-report")
+async def get_daily_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """AI 今日报告：心情（今日优先，缺省沿用昨晚）+ 今日/遗留任务 + 已实现积累 + 实时天气。
+
+    报告含运势、四段带标注的正文，以及可一键加入学习计划的建议。
+    天气/LLM 不可用时自动降级，接口始终返回可渲染的内容。
+    """
+    if user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="今日报告仅学生可用")
+    return await build_daily_report(db, user)

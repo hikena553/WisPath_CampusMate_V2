@@ -58,20 +58,26 @@ const router = createRouter({
         { path: '', component: () => import('@/views/student/HomePage.vue') },
         { path: 'agent', component: () => import('@/views/student/AgentPage.vue') },
         { path: 'campus', component: () => import('@/views/student/CampusPage.vue') },
-        { path: 'growth', name: 'student-growth', component: () => import('@/views/student/GrowthPage.vue'), meta: { keepAlive: false } },
+        // v4：成长档案并入学业中心「成长轨迹」子页（数据同源），旧路由重定向
+        { path: 'growth', name: 'student-growth', redirect: { path: '/student/schedule', query: { tab: 'growth' } } },
       { path: 'resources', name: 'student-resources', component: () => import('@/views/student/ResourcesPage.vue'), meta: { keepAlive: false } },
         { path: 'schedule', component: () => import('@/views/student/SchedulePage.vue') },
-        { path: 'grade', component: () => import('@/views/student/GradeAnalysisPage.vue') },
-        { path: 'grade-analysis', component: () => import('@/views/student/GradeAnalysisPage.vue') },
-        { path: 'service', component: () => import('@/views/student/ServicePage.vue') },
+        // v5：成绩分析并入学业中心「成绩分析」子页，旧路由重定向
+        { path: 'grade', name: 'student-grade', redirect: { path: '/student/schedule', query: { tab: 'grades' } } },
+        { path: 'grade-analysis', name: 'student-grade-analysis', redirect: { path: '/student/schedule', query: { tab: 'grades' } } },
+        // v5：请假服务并入学业中心「请假服务」子页（我的申请记录一并合并），旧路由重定向
+        { path: 'service', name: 'student-service', redirect: { path: '/student/schedule', query: { tab: 'service' } } },
         { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
-        { path: 'plan', name: 'student-plan', component: () => import('@/views/student/PlanView.vue'), meta: { keepAlive: false } },
+        // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
+        { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },
         { path: 'community', name: 'student-community', component: () => import('@/views/student/CommunityView.vue'), meta: { keepAlive: false } },
-        { path: 'emotion', name: 'student-emotion', component: () => import('@/views/student/EmotionTrashPage.vue'), meta: { keepAlive: false } },
+        // v4：情绪树洞淡出，心情卡在学业中心主页承接（打点 + 台账 + AI 提醒），旧路由重定向
+        { path: 'emotion', name: 'student-emotion', redirect: { path: '/student/schedule', query: { tab: 'home' } } },
         // 我的关怀：教师端「人文关怀」的学生侧闭环（激励 / 关怀记录 / 家访记录）
         { path: 'care', name: 'student-care', component: () => import('@/views/student/CarePage.vue'), meta: { keepAlive: false } },
-        { path: 'my-requests', name: 'student-my-requests', component: () => import('@/views/student/MyRequestsPage.vue'), meta: { keepAlive: false } },
+        // v5：「我的申请」并入请假服务子页的申请记录，旧路由重定向
+        { path: 'my-requests', name: 'student-my-requests', redirect: { path: '/student/schedule', query: { tab: 'service' } } },
         { path: 'materials', name: 'student-materials', component: () => import('@/views/student/MaterialArchivePage.vue'), meta: { keepAlive: false } },
         { path: 'feedback', component: () => import('@/views/student/FeedbackPage.vue') },
         { path: 'profile', component: () => import('@/views/student/ProfilePage.vue') },

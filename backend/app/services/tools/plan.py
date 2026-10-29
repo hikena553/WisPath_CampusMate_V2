@@ -17,6 +17,7 @@ from app.models.plan import (
     TaskStatus,
 )
 from app.models.user import User
+from app.services.plan_streak import compute_streak, local_today
 from app.utils.enum_helpers import safe_enum_str
 
 
@@ -29,7 +30,7 @@ _TASK_PRIORITY_NAMES = {"high": "高", "medium": "中", "low": "低"}
 
 
 def _query_plan_overview(db: Session, args: dict, user: User) -> dict:
-    today = date.today()
+    today = local_today()
     goals = db.query(GrowthGoal).filter(
         GrowthGoal.student_id == user.id, GrowthGoal.status == GoalStatus.ACTIVE
     ).order_by(GrowthGoal.created_at.desc()).all()
@@ -62,14 +63,8 @@ def _query_plan_overview(db: Session, args: dict, user: User) -> dict:
         PlanCheckin.student_id == user.id, PlanCheckin.check_date == today
     ).first() is not None
 
-    streak = 0
-    d = today
-    while True:
-        cur = db.query(PlanCheckin).filter(PlanCheckin.student_id == user.id, PlanCheckin.check_date == d).first()
-        if not cur:
-            break
-        streak += 1
-        d = d - timedelta(days=1)
+    # 连击口径与 /plan/streak 一致（今天未打卡时从昨天起算），避免助手与页面数字打架
+    streak = compute_streak(db, user.id, today)["current"]
 
     goals_data = [{"id": g.id, "goal_type": g.goal_type, "title": g.title, "progress": g.progress,
                    "target_date": str(g.target_date) if g.target_date else ""} for g in goals]
@@ -187,7 +182,7 @@ def _query_profile_overview(db: Session, args: dict, user: User) -> dict:
                    "target_date": str(g.target_date) if g.target_date else ""} for g in goals]
 
     record_count = db.query(GrowthRecord).filter(GrowthRecord.student_id == user.id).count()
-    today = date.today()
+    today = local_today()
     checkin_30d = db.query(PlanCheckin).filter(
         PlanCheckin.student_id == user.id, PlanCheckin.check_date >= today - timedelta(days=30)
     ).count()
