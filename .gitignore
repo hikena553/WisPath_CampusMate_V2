@@ -212,3 +212,18 @@ _cleanup_backup_*/
 backend/scripts/
 backend/uv.out
 backend/uv.err
+
+# ---------- One-off Playwright verification scripts & screenshots (added 2026-10-29) ----------
+# 一次性截图/验证脚本与产物，用完即弃，不入库（与 backend/_probe*.py 同类）
+backend/_shot*.py
+backend/_shot*.png
+backend/_verify*.py
+frontend/_shot-app.cjs
+frontend/_verify*.py
+frontend/_harness/
+frontend/_shots/
+frontend/inbox2.html
+# pip 联网安装时的临时解包目录
+backend/pip-unpack-*/
+# 本地数据库手工备份
+backend/*.db.bak*
