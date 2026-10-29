@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.message import Message, MessageSessionPin, MessageSessionHidden
 from app.models.group import Group, GroupMember, GroupMessage
 from app.models.notification import Notification
+from app.models.social import ForumMessage
 from app.models.announcement import UrgencyLevel
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
 from app.services.session_hidden import hidden_watermarks, is_hidden, hide_session
@@ -261,6 +262,12 @@ def get_unread_summary(user: User = Depends(get_current_user), db: Session = Dep
         Notification.user_id == user.id,
         Notification.is_read.is_(False),
     ).count()
+    # 论坛互动未读（评论 / 点赞 / 新粉丝）：与聊天分表统计，
+    # 但导航红点要一次取齐，所以汇总进 total，前端仍可分别展示
+    forum = db.query(ForumMessage).filter(
+        ForumMessage.user_id == user.id,
+        ForumMessage.is_read.is_(False),
+    ).count()
     # 紧急未读（通知 level=urgent）：导航徽标据此切换为强提醒（danger 色）
     urgent_unread = db.query(Notification).filter(
         Notification.user_id == user.id,
@@ -271,8 +278,9 @@ def get_unread_summary(user: User = Depends(get_current_user), db: Session = Dep
         "chat": chat,
         "group": group,
         "notification": notification,
+        "forum": forum,
         "urgent_unread": urgent_unread,
-        "total": chat + group + notification,
+        "total": chat + group + notification + forum,
     }
 
 
@@ -290,6 +298,12 @@ def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(
     groups = db.query(GroupMember).filter(GroupMember.user_id == user.id).update(
         {"last_read_at": now}, synchronize_session=False
     )
+    # 论坛互动消息一并清掉：导航红点代表「所有未读」，点掉后就该全清，
+    # 否则聊天红点消失、互动页签还挂着数字，用户会以为没生效
+    db.query(ForumMessage).filter(
+        ForumMessage.user_id == user.id,
+        ForumMessage.is_read.is_(False),
+    ).update({"is_read": True}, synchronize_session=False)
     db.commit()
     return {"message": "已清除未读", "chat": int(chat or 0), "group": int(groups or 0)}
 

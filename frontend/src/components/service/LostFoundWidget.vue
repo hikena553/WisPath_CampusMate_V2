@@ -360,7 +360,8 @@ onMounted(loadRecent)
 .lf-bubble {
   position: fixed;
   right: 32px;
-  bottom: 32px;
+  /* 停在悬浮胶囊导航（贴底 12px、高 62px）之上 */
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   z-index: 1000;
   cursor: pointer;
 }

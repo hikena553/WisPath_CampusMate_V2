@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <!-- 打开/关闭动画：移动端复用全局 .subpage（styles/animations.css，全站唯一实现）——
+    <!-- 打开/关闭动画：移动端复用全局 .subpage（styles/subpage-transition.css，全站唯一实现）——
          与工作台子页、驾驶舱子页同一套覆盖式动画：不透明子页从右滑入盖住资讯列表，
          主页面不动，返回时原路滑出。桌面端走原有 reader-fade 淡入（居中卡片不适合整页滑入）。 -->
     <Transition :name="panelTransitionName" :duration="panelTransitionName ? 320 : undefined">
@@ -133,7 +133,7 @@ const currentTitle = ref('')
 const isDesktop = ref(window.innerWidth > 767)
 function onResize() { isDesktop.value = window.innerWidth > 767 }
 
-/* ===== 动画：复用全局 .subpage（styles/animations.css，全站唯一实现） =====
+/* ===== 动画：复用全局 .subpage（styles/subpage-transition.css，全站唯一实现） =====
    覆盖式语义：不透明的子页从右滑入盖住主页面，主页面全程不动，返回时原路滑出。
    同一套类名现由三处共用：工作台子页、本阅读器、驾驶舱主页 ↔ 学业子页。
 
@@ -143,7 +143,7 @@ function onResize() { isDesktop.value = window.innerWidth > 767 }
       遮罩在移动端因此改为 background: transparent（纯覆盖，背后不加暗色）。
    2) 桌面端居中卡片不适合整页滑入，走原有 reader-fade 淡入。 */
 
-/** 移动端覆盖式滑入 + 关闭时滑出（复用 styles/animations.css 的 .subpage，全站唯一实现）；
+/** 移动端覆盖式滑入 + 关闭时滑出（复用 styles/subpage-transition.css 的 .subpage，全站唯一实现）；
     桌面端居中卡片不参与（走原有 reader-fade 淡入） */
 const panelTransitionName = computed(() => (isDesktop.value ? 'reader-fade' : 'subpage'))
 
@@ -368,7 +368,7 @@ defineExpose({ open })
 .link-date { font-size: 11.5px; color: var(--dt-text-quiet, #9aa0a6); }
 .link-arrow { color: var(--dt-text-quiet, #c9cdd4); }
 
-/* 覆盖式滑入/滑出（.subpage）定义在 styles/animations.css，全站唯一实现：
+/* 覆盖式滑入/滑出（.subpage）定义在 styles/subpage-transition.css，全站唯一实现：
    与工作台子页、驾驶舱子页共用同一套参数与方向语义。此处不再自带一份。 */
 .reader-fade-enter-active, .reader-fade-leave-active { transition: opacity 0.2s ease; }
 .reader-fade-enter-from, .reader-fade-leave-to { opacity: 0; }

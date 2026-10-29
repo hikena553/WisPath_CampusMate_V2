@@ -163,6 +163,7 @@ import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
 import { useBadgeAward } from '@/composables/useBadgeAward'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useResponsive } from '@/composables/useResponsive'
+import { useDockInset } from '@/composables/useDockInset'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import DesktopPet from '@/components/teacher/DesktopPet.vue'
 import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
@@ -201,7 +202,7 @@ const sidebarCollapsed = ref(false)
  * 此前只统计了单聊未读，导致群消息与站内通知到达时完全没有提示。
  */
 const {
-  total: unreadCount,
+  msgTotal: unreadCount,
   urgentUnread,
   start: startUnreadWatch,
   stop: stopUnreadWatch,
@@ -212,6 +213,8 @@ const {
 const { currentAward, awardRemaining, sync: syncBadgeAwards, consume, skipAll } = useBadgeAward()
 
 const { isMobile } = useResponsive()
+// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
+useDockInset(isMobile)
 
 /**
  * 侧边栏导航项：支持图标组件（Element Plus 图标）或站点 Logo 图片两种形态。
@@ -441,14 +444,9 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
 }
 
-/* 底部导航同样限宽居中，贴合手机容器 */
-.app-mobile :deep(.mobile-tab-bar) {
-  width: 100%;
-  max-width: 440px;
-  margin: 0 auto;
-  left: 0;
-  right: 0;
-}
+/* 底部导航是悬浮胶囊（见 MobileTabBar）：左右内缩、居中由组件自身的
+   left:50% + translateX(-50%) 完成，宽屏预览时胶囊中心与手机容器中心重合，
+   所以这里不再需要把 left/right 拉平到容器宽度。 */
 
 /* ===== 右侧主列：顶栏 → 页签 → 内容区 ===== */
 .main-column { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -643,9 +641,11 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
 
 /* ===== Main ===== */
 .main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
-.main-area.has-bottom-bar { padding-bottom: 56px; }
+/* 底部让位改由 useDockInset() 加到页面根元素上（见该 composable 的注释），
+   外层不再留白，内容才能滚到悬浮胶囊下面 */
+.main-area.has-bottom-bar { padding-bottom: 0; }
 
-/* ===== 移动端五页签：中间绵小城凸起，其余等分（主流移动端底部栏布局） ===== */
+/* ===== 移动端五页签：悬浮胶囊里等分，中间是绵小城 logo 圆托 ===== */
 :deep(.mobile-tab-bar .tab-item) { flex: 1; }
 
 /* ===== 网页端（桌面）整体大小：教师端按 100% 呈现（不再整体缩到 90%） =====

@@ -49,7 +49,11 @@
                 <i class="uh-sep"></i>
                 <span><b>{{ data.earned_count }}</b>勋章</span>
                 <i class="uh-sep"></i>
-                <span><b>{{ friendCount }}</b>好友</span>
+                <span><b>{{ data.following_count }}</b>关注</span>
+                <i class="uh-sep"></i>
+                <span><b>{{ data.follower_count }}</b>粉丝</span>
+                <i class="uh-sep"></i>
+                <span><b>{{ data.friend_count }}</b>好友</span>
               </div>
             </template>
           </section>
@@ -117,15 +121,24 @@
           </div>
         </div>
 
-        <!-- ===== 固定底部操作条 ===== -->
-        <div v-if="data && !error" class="uh-actionbar">
+        <!-- ===== 固定底部操作条：关注 / 发消息（互关即好友） ===== -->
+        <div v-if="data && !error && !isSelf" class="uh-actionbar">
           <button
             type="button"
-            class="uh-btn is-primary"
-            @click="goChat(isFriend ? undefined : greeting)"
+            class="uh-btn"
+            :class="{ 'is-followed': isFollowing, 'is-follow-cta': !isFollowing }"
+            :disabled="followingBusy"
+            @click="toggleFollow"
           >
+            {{ followLabel }}
+          </button>
+          <button type="button" class="uh-btn is-primary" @click="goChat(greeting)">
             发消息
           </button>
+        </div>
+        <!-- 自己看自己：不出现关注按钮，只保留「我的资料」入口语义（发消息给自己没有意义） -->
+        <div v-else-if="data && !error" class="uh-actionbar">
+          <button type="button" class="uh-btn is-primary" @click="close">返回</button>
         </div>
 
         <!-- ===== 二级：勋章墙 ===== -->
@@ -212,10 +225,14 @@
                 </div>
               </div>
 
-              <!-- 删除好友：放在设置列表末尾的独立白色行，随内容滚动，不再吸底 -->
+              <!-- 末尾两行都是「断开」类操作：只影响我的列表 / 关系，对方不受打扰 -->
               <div class="uh-set-group uh-set-del-group">
-                <button type="button" class="uh-cell uh-del" :disabled="removing" @click="removeFriend">
-                  删除好友
+                <button type="button" class="uh-cell" :disabled="removing" @click="removeFriend">
+                  <span class="uh-cell-label">从消息列表移除</span>
+                  <span class="uh-cell-value is-quiet">聊天记录保留</span>
+                </button>
+                <button type="button" class="uh-cell uh-del" :disabled="removing || followingBusy" @click="toggleFollow">
+                  {{ isFollowing ? '取消关注（解除互关）' : '关注 TA' }}
                 </button>
               </div>
             </div>
@@ -233,6 +250,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import BadgeWall from '@/components/profile/BadgeWall.vue'
 import { deleteSession } from '@/api/messages'
+import { followUser, unfollowUser } from '@/api/social'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useUserHomepage } from '@/composables/useUserHomepage'
@@ -281,9 +299,15 @@ const roleLine = computed(() => {
   return d.title || d.department || ''
 })
 
-const friendCount = computed(() => data.value?.stats.find((s) => s.key === 'contacts')?.value ?? 0)
-const isFriend = computed(() => !!data.value?.mutual.has_conversation)
+/** 关注关系：好友 = 互相关注，按钮文案与可执行动作全部由这三个布尔推导 */
+const isFollowing = computed(() => !!data.value?.mutual.is_following)
+const isFriend = computed(() => !!data.value?.mutual.is_friend)
 const isSelf = computed(() => !!data.value && data.value.id === auth.user?.id)
+const followingBusy = ref(false)
+const followLabel = computed(() => {
+  if (isFollowing.value) return isFriend.value ? '互相关注' : '已关注'
+  return data.value?.mutual.is_follower ? '回关' : '关注'
+})
 
 /** 好友设置项（备注 / 特别关心 / 免打扰 / 黑名单）：本地保存，仅自己可见 */
 interface FriendPref {
@@ -372,30 +396,63 @@ const mutualPills = computed(() => {
 const greeting = computed(() => `你好，我是${auth.userName || ''}，想和你认识一下 👋`)
 
 /**
- * 打开与该用户的会话：
- * 教师端落到 /teacher/messages，学生端落到工作台的「消息中心」，
- * 用 query 带上 chat / chatName / draft，由消息页负责打开会话并预填草稿。
+ * 关注 / 取消关注：与消息页通讯录、论坛共用同一套关注关系（/api/social）。
+ * 取消关注会解除互关，先二次确认；成功后就地更新封面上的三个数字，不必重开主页。
  */
+async function toggleFollow() {
+  const d = data.value
+  if (!d || followingBusy.value) return
+  const willFollow = !isFollowing.value
+  if (!willFollow) {
+    try {
+      await ElMessageBox.confirm(
+        `取消关注「${d.name}」？互关关系会一并解除，聊天记录仍然保留。`,
+        '取消关注',
+        { confirmButtonText: '取消关注', cancelButtonText: '再想想', type: 'warning' },
+      )
+    } catch {
+      return
+    }
+  }
+  followingBusy.value = true
+  try {
+    const state = willFollow ? await followUser(d.id) : await unfollowUser(d.id)
+    d.mutual.is_following = state.is_following
+    d.mutual.is_follower = state.is_follower
+    d.mutual.is_friend = state.is_friend
+    d.following_count = state.following
+    d.follower_count = state.followers
+    d.friend_count = state.friends
+    ElMessage.success(willFollow ? (state.is_friend ? '已互关，成为好友' : '已关注') : '已取消关注')
+  } catch {
+    ElMessage.error('操作失败，请稍后重试')
+  } finally {
+    followingBusy.value = false
+  }
+}
+
+/** 打开与该用户的会话：学生端落到消息页，教师端落到教师消息页 */
 function goChat(draft?: string) {
   const d = data.value
   if (!d) return
   if (d.role === 'admin' || auth.user?.role === 'admin') return
   const query: Record<string, string> = { chat: String(d.id), chatName: d.name }
-  if (draft) query.draft = draft
-  const path = auth.user?.role === 'teacher' ? '/teacher/messages' : '/student/workbench'
+  // 已是好友就直接聊；还没互关才预填一句问候，让用户自己按下发送
+  if (draft && !isFriend.value) query.draft = draft
+  const path = auth.user?.role === 'teacher' ? '/teacher/messages' : '/student/messages'
   close()
   router.push({ path, query })
 }
 
-/** 删除好友：二次确认后从我的会话列表移除该联系人（服务端记隐藏水位，对方不受影响） */
+/** 从消息列表移除：只删我这一侧的会话条目（服务端记隐藏水位），关注关系与聊天记录都不动 */
 async function removeFriend() {
   const d = data.value
   if (!d) return
   try {
     await ElMessageBox.confirm(
-      `确定把「${d.name}」从消息列表移除？聊天记录保留、对方不受影响。`,
-      '删除好友',
-      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+      `确定把「${d.name}」从消息列表移除？聊天记录保留、关注关系不变。`,
+      '从消息列表移除',
+      { type: 'warning', confirmButtonText: '移除', cancelButtonText: '取消' },
     )
   } catch {
     return
@@ -405,9 +462,9 @@ async function removeFriend() {
     await deleteSession(`s-${d.id}`)
     if (data.value) data.value.mutual.has_conversation = false
     showSettings.value = false
-    ElMessage.success(`已移除 ${d.name}`)
+    ElMessage.success(`已从消息列表移除 ${d.name}`)
   } catch {
-    ElMessage.error('删除失败，请稍后重试')
+    ElMessage.error('操作失败，请稍后重试')
   } finally {
     removing.value = false
   }
@@ -821,13 +878,24 @@ async function removeFriend() {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .uh-btn:active { background: #f2f3f5; }
-/* 主操作：蓝色实心「发消息」，唯一操作按钮占满整条 */
+/* 主操作：蓝色实心「发消息」 */
 .uh-btn.is-primary {
   border-color: #0099ff;
   background: #0099ff;
   color: #fff;
 }
 .uh-btn.is-primary:active { background: #0088e6; border-color: #0088e6; }
+/* 关注类按钮：未关注是蓝色描边（次级动作），已关注/互关是中性底（可点但克制） */
+.uh-btn.is-follow-cta {
+  border-color: #0099ff;
+  color: #0099ff;
+  background: #fff;
+}
+.uh-btn.is-followed {
+  border-color: #e4e7eb;
+  color: #5c6269;
+  background: #f4f5f7;
+}
 .uh-btn:disabled { opacity: 0.6; }
 
 /* ===== 二级：勋章墙 ===== */

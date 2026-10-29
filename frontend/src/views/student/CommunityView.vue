@@ -6,9 +6,16 @@
       <div>
         <h2 class="community-title">交流社区</h2>
       </div>
-      <el-button type="primary" round @click="openPostDialog()">
-        <el-icon style="margin-right:4px"><Plus /></el-icon>发帖
-      </el-button>
+      <div class="community-actions">
+        <!-- 互动消息：赞 / 收藏 / 评论 / 新粉丝只在这里看，与消息页的聊天彻底分开 -->
+        <button type="button" class="cm-icon-btn" aria-label="互动消息" @click="inboxOpen = true">
+          <el-icon :size="18"><Message /></el-icon>
+          <i v-if="forumUnread" class="cm-icon-badge">{{ forumUnread > 99 ? '99+' : forumUnread }}</i>
+        </button>
+        <el-button type="primary" round @click="openPostDialog()">
+          <el-icon style="margin-right:4px"><Plus /></el-icon>发帖
+        </el-button>
+      </div>
     </div>
 
     <!-- 热帖推荐 -->
@@ -77,6 +84,9 @@
           <span class="stat" :class="{ 'stat-liked': p.liked }">
             <el-icon :size="14"><Star /></el-icon>{{ p.like_count }}
           </span>
+          <span class="stat" :class="{ 'stat-faved': p.favorited }">
+            <el-icon :size="14"><CollectionTag /></el-icon>{{ p.favorite_count }}
+          </span>
         </div>
       </div>
       <div class="pager-row">
@@ -135,6 +145,15 @@
               <div class="author-time">{{ formatTime(detailPost?.created_at) }} · {{ detailPost?.category }}</div>
             </div>
             <el-button size="small" text type="danger" v-if="detailPost?.student_id === myId" @click="removeDetailPost">删除</el-button>
+            <el-button
+              v-else-if="detailPost"
+              size="small"
+              round
+              :type="authorFollowed ? 'info' : 'primary'"
+              :plain="authorFollowed"
+              class="detail-follow"
+              @click="toggleAuthorFollow"
+            >{{ authorFollowed ? '已关注' : '关注' }}</el-button>
           </div>
           <div class="detail-title">{{ detailPost?.title }}</div>
           <div class="detail-content">{{ detailPost?.content }}</div>
@@ -147,6 +166,15 @@
               @click="handleLike"
             >
               <el-icon style="margin-right:3px"><StarFilled /></el-icon>{{ detailPost ? detailPost.like_count : 0 }} 点赞
+            </el-button>
+            <el-button
+              size="small"
+              :type="detailPost?.favorited ? 'primary' : 'default'"
+              :plain="!detailPost?.favorited"
+              round
+              @click="handleFavorite"
+            >
+              <el-icon style="margin-right:3px"><CollectionTag /></el-icon>{{ detailPost ? detailPost.favorite_count : 0 }} 收藏
             </el-button>
             <span class="stat"><el-icon :size="14"><View /></el-icon>{{ detailPost?.view_count || 0 }} 浏览</span>
             <span class="stat"><el-icon :size="14"><ChatLineRound /></el-icon>{{ comments.length }} 评论</span>
@@ -190,21 +218,34 @@
         </div>
       </div>
     </el-drawer>
+
+    <!-- 互动消息面板（论坛侧）：赞 / 收藏 / 评论 / 新粉丝 -->
+    <ForumInboxSheet v-model="inboxOpen" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, View, ChatLineRound, Star, StarFilled } from '@element-plus/icons-vue'
+import { Plus, Search, View, ChatLineRound, Star, StarFilled, Message, CollectionTag } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import ForumInboxSheet from '@/components/community/ForumInboxSheet.vue'
 import { openUserHomepage } from '@/composables/useUserHomepage'
 import {
   getPosts, getPost, createPost, deletePost,
-  toggleLike, getComments, createComment, deleteComment, getHotPosts,
+  toggleLike, toggleFavorite, getComments, createComment, deleteComment, getHotPosts,
   COMMUNITY_CATEGORIES, type CommunityPost, type CommunityComment,
 } from '@/api/community'
 import { useAuthStore } from '@/stores/auth'
+import { useUnreadSummary } from '@/composables/useUnreadSummary'
+import { followUser, unfollowUser, getRelation } from '@/api/social'
+
+const route = useRoute()
+
+/** 互动消息入口的未读红点：与消息页共用同一份全局汇总，但论坛那份单独算 */
+const { forum: forumUnread, refresh: refreshUnread } = useUnreadSummary()
+const inboxOpen = ref(false)
 
 // ---------- 状态 ----------
 const posts = ref<CommunityPost[]>([])
@@ -248,11 +289,26 @@ async function refreshAll() {
 
 onMounted(async () => {
   refreshAll()
+  // 互动消息红点：进页面就取一次，之后由全局 5s 轮询维系
+  void refreshUnread()
   try {
     const auth = useAuthStore()
     myId.value = auth.user?.id ?? null
   } catch { myId.value = null }
+  // 消息页「互动」点进来时带 ?post=<id>：直接打开对应帖子
+  // （关闭抽屉后停留在社区页，用户可继续逛帖子或用底部页签回消息）
+  const postId = Number(route.query.post || 0)
+  if (postId) void openDetail(postId)
 })
+
+// 已经在社区页时再从消息页点一条互动消息：同路由只换 query，需要 watch 兜底
+watch(
+  () => route.query.post,
+  (v) => {
+    const id = Number(v || 0)
+    if (id) void openDetail(id)
+  },
+)
 
 function switchCategory(c: string) {
   filters.category = c
@@ -302,7 +358,37 @@ async function openDetail(id: number) {
     detailPost.value = await getPost(id)
     comments.value = await getComments(id)
     detailVisible.value = true
+    void loadAuthorFollow(detailPost.value?.student_id)
   } catch { ElMessage.error('帖子加载失败') }
+}
+
+/* ===== 作者关注：与消息页通讯录、个人主页共用同一套关注关系 ===== */
+const authorFollowed = ref(false)
+
+async function loadAuthorFollow(authorId?: number) {
+  authorFollowed.value = false
+  if (!authorId || authorId === myId.value) return
+  try {
+    authorFollowed.value = (await getRelation(authorId)).is_following
+  } catch { /* 未登录 / 网络异常时保持未关注态 */ }
+}
+
+async function toggleAuthorFollow() {
+  const authorId = detailPost.value?.student_id
+  if (!authorId || authorId === myId.value) return
+  try {
+    if (authorFollowed.value) {
+      await unfollowUser(authorId)
+      authorFollowed.value = false
+      ElMessage.success('已取消关注')
+    } else {
+      const state = await followUser(authorId)
+      authorFollowed.value = state.is_following
+      ElMessage.success(state.is_friend ? '已互关，成为好友' : '已关注')
+    }
+  } catch {
+    ElMessage.error('操作失败，请稍后重试')
+  }
 }
 
 async function handleLike() {
@@ -314,6 +400,20 @@ async function handleLike() {
   }
   loadPosts()
   loadHot()
+}
+
+async function handleFavorite() {
+  if (!detailPost.value) return
+  try {
+    const res = await toggleFavorite(detailPost.value.id)
+    detailPost.value.favorited = res.favorited
+    detailPost.value.favorite_count = res.count
+    ElMessage.success(res.favorited ? '已收藏' : '已取消收藏')
+    // 列表里的收藏数同步（收藏数字与点赞分开计数）
+    void loadPosts()
+  } catch {
+    ElMessage.error('操作失败，请稍后重试')
+  }
 }
 
 async function submitComment() {
@@ -366,6 +466,38 @@ async function removeDetailPost() {
   margin-bottom: 14px;
 }
 .community-title { margin: 0; font-size: 20px; font-weight: 600; color: #1a1a2e; }
+.community-actions { display: flex; align-items: center; gap: 10px; }
+/* 互动消息入口：与「发帖」同排，未读红点挂在右上角 */
+.cm-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 50%;
+  background: #fff;
+  color: #4b5158;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.cm-icon-btn:hover { background: #f2f4f7; color: #1a1a2e; }
+.cm-icon-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f53f3f;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 16px;
+  text-align: center;
+}
 
 .card {
   background: #fff;
@@ -435,6 +567,7 @@ async function removeDetailPost() {
 .post-stats { display: flex; gap: 18px; margin-top: 8px; }
 .stat { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #999; }
 .stat-liked { color: #e6a23c; }
+.stat-faved { color: #409eff; }
 .pager-row { display: flex; justify-content: center; padding-top: 6px; }
 
 /* 详情 */

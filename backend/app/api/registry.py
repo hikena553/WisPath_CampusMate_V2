@@ -14,6 +14,7 @@ from app.api.upload import router as upload_router
 from app.api.files import router as files_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
+from app.api.social import router as social_router
 from app.api.groups import router as groups_router
 from app.api.announcement import router as announcement_router
 from app.api.admin import router as admin_router
@@ -67,6 +68,7 @@ ROUTERS = [
     upload_router,
     files_router,
     messages_router,
+    social_router,
     groups_router,
     announcement_router,
     admin_router,

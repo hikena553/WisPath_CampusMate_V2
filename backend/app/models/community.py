@@ -17,6 +17,8 @@ class CommunityPost(Base):
     content: Mapped[str] = mapped_column(Text)
     view_count: Mapped[int] = mapped_column(Integer, default=0)
     like_count: Mapped[int] = mapped_column(Integer, default=0)
+    # 收藏与点赞刻意分开：点赞是「我认可」，收藏是「我以后还要回来看」
+    favorite_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     comment_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=datetime.now)
@@ -39,6 +41,18 @@ class CommunityLike(Base):
 
     __tablename__ = "community_likes"
     __table_args__ = (UniqueConstraint("post_id", "student_id", name="uq_post_student"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("community_posts.id"), index=True)
+    student_id: Mapped[int] = mapped_column(index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class CommunityFavorite(Base):
+    """帖子收藏（与点赞同构，一人对一篇只算一次）"""
+
+    __tablename__ = "community_favorites"
+    __table_args__ = (UniqueConstraint("post_id", "student_id", name="uq_post_favorite_student"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("community_posts.id"), index=True)

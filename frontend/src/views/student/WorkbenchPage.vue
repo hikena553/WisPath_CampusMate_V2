@@ -150,7 +150,7 @@
     </template>
 
     <!-- 子页面：办事服务表单
-         动画统一走 styles/animations.css 的 .subpage（覆盖式：子页从右滑入盖住列表，
+         动画统一走 styles/subpage-transition.css 的 .subpage（覆盖式：子页从右滑入盖住列表，
          主页面不动；返回时原路滑出），不再在本文件自带一份 slide-left 定义。 -->
     <transition name="subpage" :duration="320" @after-leave="onSubpageAfterLeave">
       <div v-if="currentPage" :class="['sub-page', { 'chat-mode': isChatMode }]">
@@ -1454,10 +1454,10 @@ function openChat() {
 }
 
 function openMessages() {
-  currentPage.value = 'messages'
-  msgTab.value = 'messages'
-  subpageStack.value = []
-  loadConversations()
+  // 消息已独立成底部页签（/student/messages）：工作台里的「消息中心」入口改为跳转过去，
+  // 不再在这里打开旧版子页，避免同一功能出现两套界面。
+  // 下方 currentPage === 'messages' 分支仅作历史深链（?messages=1 / ?chat=）的兜底保留。
+  router.push('/student/messages')
 }
 
 // ===== 移动端消息中心（TapTap 式）：快捷圆标 / 会话流 / 好友页签 =====
@@ -3730,7 +3730,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   cursor: not-allowed;
 }
 
-/* 子页滑动动画见 styles/animations.css 的 .subpage（全站唯一实现），
+/* 子页滑动动画见 styles/subpage-transition.css 的 .subpage（全站唯一实现），
    此处不再重复定义 slide-left —— 原先本地那份与全局版本参数不同（0.3s ease 一致但
    方向语义、离场定位各写各的），是本次统一要消除的重复。 */
 

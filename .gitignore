@@ -64,6 +64,8 @@ frontend/dist/
 frontend/dist-ssr/
 frontend/.vite/
 frontend/*.local
+# 构建时把 TMPDIR/TEMP/TMP 重定向到项目内，规避 esbuild 清理系统 Temp 报 Access is denied
+frontend/.tmpbuild/
 
 # Vite / TS / test caches
 .vite/

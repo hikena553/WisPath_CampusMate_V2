@@ -1554,7 +1554,7 @@ function onSubpageScroll(e: Event) {
 }
 
 // ===== 驾驶舱主页 ↔ 学业子页面：覆盖式滑入/滑出 =====
-// 用全局 .subpage（styles/animations.css，全站唯一实现）：子页从右滑入盖住主页，
+// 用全局 .subpage（styles/subpage-transition.css，全站唯一实现）：子页从右滑入盖住主页，
 // 返回时原路向右滑出。主页放在 <Transition> **之外**（见模板），所以它全程静止、
 // 不会有任何动画；只有子页在动 —— 与工作台子页、校园资讯阅读器结构一致。
 const subpageTransitionName = computed(() => (isMobile.value ? 'subpage' : ''))
@@ -3170,7 +3170,7 @@ watch(() => route.query.tab, (val) => {
 .tab-fade-leave-to { opacity: 0; transform: translateY(-8px) scale(.995); }
 
 /* ===== 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：覆盖式滑入/滑出 =====
-   动画实现已提取到 styles/animations.css 的 .subpage（全站唯一实现），本页无需再
+   动画实现已提取到 styles/subpage-transition.css 的 .subpage（全站唯一实现），本页无需再
    声明任何动画参数 —— 旧版的 --push-inset-t/--push-inset-x 是「传送带式」用来给
    离场页做内缩对齐的（离场页相对含 padding 的滚动容器 padding box 定位），
    新模型离场页用 inset:0 脱离文档流，不再需要这组变量，故一并移除。 */
@@ -3187,7 +3187,7 @@ watch(() => route.query.tab, (val) => {
 /* ===== 两栏布局 ===== */
 /* 覆盖式滑入时进场的是本容器，必须铺不透明底盖住下面的主页 ——
    （旧版由 animations.css 的 .push-enter-active 统一铺 #f5f6f7，统一到 .subpage 后
-   该职责回到调用方，见 animations.css 注释「滑动的元素必须不透明」）。
+   该职责回到调用方，见 subpage-transition.css 注释「滑动的元素必须不透明」）。
    桌面端不参与过渡，此背景同样无害。 */
 .content-row { display: flex; gap: 16px; flex: 1; min-height: 0; background: var(--dt-bg, #f5f6f7); }
 .content-main { flex: 1; min-width: 0; max-width: 1200px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
@@ -3909,7 +3909,8 @@ watch(() => route.query.tab, (val) => {
   .panel { flex: none; }
   .panel-divider { width: 100%; height: 1px; margin: 14px 12px; }
   /* 右下角绵小城（点击弹出 AI 学情分析） */
-  .grades-mascot { display: block; position: fixed; right: 12px; bottom: 68px; width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
+  /* 底部是悬浮胶囊导航（贴底 12px、高 62px），浮标必须停在胶囊上沿之上 */
+  .grades-mascot { display: block; position: fixed; right: 12px; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
   .grades-mascot:active { transform: scale(.92); }
   .grades-mascot img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.12)); pointer-events: none; }
   @keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }

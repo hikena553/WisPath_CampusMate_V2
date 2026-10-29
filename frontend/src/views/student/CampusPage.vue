@@ -35,11 +35,12 @@
         </button>
         <button
           type="button"
-          class="appbar-btn"
-          aria-label="消息中心"
-          @click="goMessageCenter"
+          class="appbar-btn appbar-btn--dot"
+          aria-label="互动消息"
+          @click="openForumInbox"
         >
           <el-icon><Message /></el-icon>
+          <i v-if="forumUnread" class="appbar-dot">{{ forumUnread > 99 ? '99+' : forumUnread }}</i>
         </button>
       </div>
     </header>
@@ -61,6 +62,16 @@
         @click="openSearch"
       >
         <el-icon><Search /></el-icon>
+      </button>
+      <!-- 桌面端也留互动消息入口：论坛的赞 / 收藏 / 评论只在这里看 -->
+      <button
+        class="hero-head-search hero-head-dot"
+        type="button"
+        aria-label="互动消息"
+        @click="openForumInbox"
+      >
+        <el-icon><Message /></el-icon>
+        <i v-if="forumUnread" class="appbar-dot">{{ forumUnread > 99 ? '99+' : forumUnread }}</i>
       </button>
     </section>
 
@@ -500,9 +511,11 @@
     <ArticleReader ref="readerRef" />
 
     <!-- 移动端全屏搜索子页（移动端页头放大镜的落点；桌面端仍走上面的 el-dialog）：
-         搜索历史 / 搜索发现 / 热榜三段 + 结果视图，资讯池由父页备好传入。
-         点资讯命中条目 → 详情子页盖在本页之上（同 z-index、后挂载者在上），
-         详情返回后仍停留在搜索页，搜索上下文不丢。 -->
+         页面栈是「本页 → 搜索页 → 搜索结果页」三层 —— 搜索页里是历史 / 发现 / 热榜，
+         提交搜索后结果作为独立一层盖上来，返回只退那一层（搜索上下文与历史都保留），
+         再返回才回到本页。资讯池由父页备好传入。
+         点资讯命中条目 → 详情子页盖在搜索页/结果页之上（同 z-index、后挂载者在上），
+         详情返回后仍停留在原层，搜索上下文不丢。 -->
     <CampusSearchPage
       v-if="searchTarget"
       :items="searchPool"
@@ -525,8 +538,8 @@
       @read="onDetailRead"
     />
 
-    <!-- 消息中心覆盖层：全屏盖在资讯页上（路由不动、页签不变），关闭后原地停留 -->
-    <WorkbenchPage v-if="msgCenterOpen" messages-only @closed="msgCenterOpen = false" />
+    <!-- 互动消息面板（论坛侧，与聊天隔离）：页头信封点开的也是这个 -->
+    <ForumInboxSheet v-model="forumInboxOpen" />
   </div>
 </template>
 
@@ -540,8 +553,10 @@ import { tilt } from '@/directives/tilt'
 import ArticleReader from '@/components/campus/ArticleReader.vue'
 import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
 import CampusSearchPage, { type SearchPoolItem } from '@/components/campus/CampusSearchPage.vue'
-// 消息中心覆盖层：复用工作台的 messagesOnly 直达模式（不切路由、不换底部页签）
-import WorkbenchPage from '@/views/student/WorkbenchPage.vue'
+import ForumInboxSheet from '@/components/community/ForumInboxSheet.vue'
+import { useUnreadSummary } from '@/composables/useUnreadSummary'
+// 页头信封 = 论坛互动消息（赞 / 收藏 / 评论 / 新粉丝），只在这里看；
+// 聊天消息（群聊 / 私聊）走底部「消息」页签，两套消息不混排。
 import { getArticleInteractions, type CampusArticleInteract } from '@/api/campus'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
@@ -566,14 +581,17 @@ function goLogin() {
   router.push({ path: '/login', query: { reason: 'login' } })
 }
 
-/** 页头信封 → 消息中心（全屏覆盖层，不切路由/页签）：需要登录态，游客先引导登录 */
-const msgCenterOpen = ref(false)
-function goMessageCenter() {
+/** 页头信封 → 互动消息面板（论坛的赞 / 收藏 / 评论 / 新粉丝）：需登录态，游客先引导登录 */
+const { forum: forumUnread, refresh: refreshUnread } = useUnreadSummary()
+const forumInboxOpen = ref(false)
+
+function openForumInbox() {
   if (isGuestMode()) {
-    void promptLogin('进入消息中心')
+    void promptLogin('查看互动消息')
     return
   }
-  msgCenterOpen.value = true
+  forumInboxOpen.value = true
+  void refreshUnread()
 }
 
 const vTilt = tilt
@@ -2166,6 +2184,8 @@ onMounted(() => {
 }
 .hero-head-search:hover { color: #409eff; background: #f3f7fd; }
 .hero-head-search:focus-visible { outline: 2px solid #409eff; outline-offset: 2px; }
+/* 桌面页头的互动消息信封：与搜索并排，未读红点挂在右上（共用 .appbar-dot） */
+.hero-head-dot { position: relative; }
 
 /* ===== 移动端品牌头牌 =====
    为什么是一条渐变蓝：移动端（≤767px）StudentLayout 会把顶部蓝条整个隐藏，这页是首个
@@ -2286,6 +2306,24 @@ onMounted(() => {
 .appbar-btn:hover { background: rgba(255, 255, 255, .24); border-color: rgba(255, 255, 255, .32); }
 .appbar-btn:active { transform: scale(.93); background: rgba(255, 255, 255, .3); }
 .appbar-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* 互动消息入口：未读数量挂在图标右上角（信封=论坛互动，聊天走底部「消息」页签） */
+.appbar-btn--dot { position: relative; }
+.appbar-dot {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f53f3f;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .18);
+}
 
 /* 游客专属：页头内的登录入口（移动端顶栏被隐藏，没有它游客会找不到回登录页的路径） */
 .appbar-login {

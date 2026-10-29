@@ -68,6 +68,8 @@ const router = createRouter({
         // v5：请假服务并入学业中心「请假服务」子页（我的申请记录一并合并），旧路由重定向
         { path: 'service', name: 'student-service', redirect: { path: '/student/schedule', query: { tab: 'service' } } },
         { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
+        // 消息：原「工作台」页签位，统筹会话（私聊 / 群聊）、通讯录（关注·粉丝·互关好友）与论坛互动消息
+        { path: 'messages', name: 'student-messages', component: () => import('@/views/student/MessagesPage.vue') },
         // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
         { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },

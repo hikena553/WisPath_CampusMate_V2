@@ -30,6 +30,7 @@ from app.models.plan import PlanCheckin
 from app.models.teacher_portfolio import TeacherPortfolioItem
 from app.models.teacher_task import TaskStatus, TeacherTask
 from app.models.user import User, UserRole
+from app.services import social_service
 from app.services.plan_streak import compute_streak
 
 # ══════════════════════════════════════════════════════════
@@ -177,13 +178,8 @@ def collect_metrics(db: Session, user: User) -> dict[str, int]:
         "events": _count(db, LearningEvent, actor_id=uid),
     }
 
-    # 联系人：单向聊过的人（收 + 发）去重计数
-    peers: set[int] = set()
-    for (peer_id,) in db.query(Message.receiver_id).filter(Message.sender_id == uid).distinct():
-        peers.add(peer_id)
-    for (peer_id,) in db.query(Message.sender_id).filter(Message.receiver_id == uid).distinct():
-        peers.add(peer_id)
-    metrics["contacts"] = len(peers)
+    # 好友：互相关注（2026-10 改版后好友 = 互关，不再用「聊过天」代替）
+    metrics["contacts"] = len(social_service.friend_ids(db, uid))
 
     # 综合活跃度：消息 + 群消息 + 学情事件。学习事件的埋点覆盖有限，
     # 若单独作为阈值会把大量真实使用漏掉，故合并成「使用过多少次」的粗粒度指标。
@@ -434,25 +430,34 @@ def _highlights(db: Session, user: User) -> list[dict]:
 
 
 def _mutual(db: Session, viewer: User, target: User) -> dict:
+    """双方关系：群聊 / 学院等弱关系 + 关注关系（好友 = 互关）。
+
+    关注口径与消息页通讯录、论坛完全一致（social_service.relation），
+    主页上看到的「已互关」与消息页好友列表不会打架。
+    """
     common_groups = 0
     has_conversation = False
     if viewer.id != target.id:
         mine = {gid for (gid,) in db.query(GroupMember.group_id).filter(GroupMember.user_id == viewer.id)}
         theirs = {gid for (gid,) in db.query(GroupMember.group_id).filter(GroupMember.user_id == target.id)}
         common_groups = len(mine & theirs)
-        # 是否已建立单聊关系：主页据此在「加为好友 / 删除好友」之间切换按钮语义
+        # 是否已建立单聊关系：仅作弱关系线索（如「曾聊过」），按钮语义改由关注关系决定
         has_conversation = db.query(Message.id).filter(
             or_(
                 and_(Message.sender_id == viewer.id, Message.receiver_id == target.id),
                 and_(Message.sender_id == target.id, Message.receiver_id == viewer.id),
             )
         ).first() is not None
+    rel = social_service.relation(db, viewer.id, target.id)
     return {
         "same_college": bool(viewer.college and viewer.college == target.college),
         "common_groups": common_groups,
         "is_my_tutor": target.id == viewer.tutor_id,
         "is_my_student": target.tutor_id == viewer.id,
         "has_conversation": has_conversation,
+        "is_following": rel["is_following"],
+        "is_follower": rel["is_follower"],
+        "is_friend": rel["is_friend"],
     }
 
 
@@ -460,6 +465,7 @@ def build_homepage(db: Session, viewer: User, target: User) -> dict:
     """聚合他人的个人主页数据（自己看自己也走这里，此时 mutual 全为空）。"""
     metrics = collect_metrics(db, target)
     wall = build_wall(db, target)
+    follow_counts = social_service.counts(db, target.id)
     return {
         "id": target.id,
         "name": target.name,
@@ -475,6 +481,10 @@ def build_homepage(db: Session, viewer: User, target: User) -> dict:
         "badges": wall["earned"] + wall["locked"],
         "earned_count": wall["earned_count"],
         "total_count": wall["total_count"],
+        # 关注 / 粉丝 / 好友（互关）三项公开计数：主页数字区直接展示
+        "following_count": follow_counts["following"],
+        "follower_count": follow_counts["followers"],
+        "friend_count": follow_counts["friends"],
         "stats": _stats_for(target, metrics),
         "highlights": _highlights(db, target),
         "mutual": _mutual(db, viewer, target),

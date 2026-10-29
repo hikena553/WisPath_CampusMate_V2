@@ -23,10 +23,10 @@
             <el-icon :size="16"><Odometer /></el-icon>
             <span>学业中心</span>
           </div>
-          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/workbench') || route.path.startsWith('/student/service') || route.path.startsWith('/student/resources') || route.path.startsWith('/student/community') || route.path.startsWith('/student/feedback') }" @click="navTo('/student/workbench', '使用工作台办事')" style="position:relative">
-            <el-icon :size="16"><Grid /></el-icon>
-            <span>工作台</span>
-            <el-badge v-if="unreadCount" is-dot class="contact-badge" title="点击清除未读提示" @click.stop="clearUnread" />
+          <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/messages') }" @click="navTo('/student/messages', '查看消息')" style="position:relative">
+            <el-icon :size="16"><Message /></el-icon>
+            <span>消息</span>
+            <el-badge v-if="unreadCount" :value="unreadCount > 99 ? '99+' : unreadCount" class="contact-badge" title="点击清除未读提示" @click.stop="clearUnread" />
           </div>
           <div class="nav-item" :class="{ 'nav-active': route.path.startsWith('/student/profile') }" @click="navTo('/student/profile', '进入个人中心')">
             <el-icon :size="16"><User /></el-icon>
@@ -70,7 +70,7 @@
     </main>
 
     <!-- 移动端底部导航栏 -->
-    <MobileTabBar v-if="isMobile" :items="mobileNavItems" :active-key="activeNavKey" @select="handleNavSelect" />
+    <MobileTabBar v-if="isMobile" :items="mobileNavItems" :active-key="activeNavKey" :unread-count="unreadCount" @select="handleNavSelect" />
 
     <!-- 个人主页浮层：消息中心 / 社区等入口调用 openUserHomepage() 即拉起，全端共用一份 -->
     <UserHomepage />
@@ -93,8 +93,9 @@ import { studentDataCache } from '@/utils/studentDataCache'
 import type { Course } from '@/types'
 // 校园资讯 Tab 图标用 Memo（册页/刊物）而不是 PictureFilled（相册）：
 // 这页现在是「资讯流 + 分类 + 互动」，图片图标会把人引到「校园图库」的错误预期。
-import { ChatDotRound, Memo, Grid, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
+import { ChatDotRound, Memo, Message, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
+import { useDockInset } from '@/composables/useDockInset'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import UserHomepage from '@/components/profile/UserHomepage.vue'
 import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
@@ -106,6 +107,8 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
+// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
+useDockInset(isMobile)
 
 // 路由过渡分方向（2026-10 起，与页内子页的覆盖式观感对齐）：
 // 1) 推入（主页 → 快捷子页、子页 ↔ 子页）：.route-subpage —— 新页从右滑入盖住旧页，
@@ -143,11 +146,13 @@ const transitionDuration = computed(() =>
 )
 
 // 移动端底部导航
+// 「工作台」页签位已改为「消息」：会话 / 通讯录 / 论坛互动集中在这里，
+// 办事入口（请假 / 证明 / 失物招领等）暂时保留 /student/workbench 路由但不再占页签。
 const mobileNavItems = [
   { key: 'campus', label: '校园资讯', icon: Memo, route: '/student/campus' },
   { key: 'schedule', label: '学业中心', icon: Odometer, route: '/student/schedule' },
   { key: 'agent', label: '绵小城', iconImg: '/images/校徽_圆形.png', center: true, route: '/student' },
-  { key: 'workbench', label: '工作台', icon: Grid, route: '/student/workbench' },
+  { key: 'messages', label: '消息', icon: Message, route: '/student/messages', badge: true },
   { key: 'profile', label: '个人中心', icon: User, route: '/student/profile' },
 ]
 
@@ -157,7 +162,7 @@ const activeNavKey = computed(() => {
   if (path.startsWith('/student/campus')) return 'campus'
   if (path.startsWith('/student/schedule') || path.startsWith('/student/growth') || path.startsWith('/student/grade') || path.startsWith('/student/plan') || path.startsWith('/student/portfolio')) return 'schedule'
   if (path.startsWith('/student/profile')) return 'profile'
-  if (path.startsWith('/student/workbench') || path.startsWith('/student/service') || path.startsWith('/student/feedback') || path.startsWith('/student/resources') || path.startsWith('/student/community')) return 'workbench'
+  if (path.startsWith('/student/messages')) return 'messages'
   return 'agent'
 })
 
@@ -190,9 +195,11 @@ function goLogin() {
 /**
  * 全局未读提示：单聊 + 群聊 + 站内通知三路汇总（此前漏算站内通知），
  * WS 实时 + 5s 轮询兜底；红点可点击清除。
+ * 用 msgTotal 而不是 total：论坛互动未读归交流社区页的互动消息入口，
+ * 不该让底部「消息」页签亮红点（否则又变成两套消息在同一处提示）。
  */
 const {
-  total: unreadCount,
+  msgTotal: unreadCount,
   start: startUnreadWatch,
   stop: stopUnreadWatch,
   clearAll: clearUnread,
@@ -273,14 +280,9 @@ function logout() {
   }
 }
 
-/* 底部导航同样限宽居中，贴合手机容器 */
-.app-mobile :deep(.mobile-tab-bar) {
-  width: 100%;
-  max-width: 440px;
-  margin: 0 auto;
-  left: 0;
-  right: 0;
-}
+/* 底部导航是悬浮胶囊（见 MobileTabBar）：左右内缩、居中由组件自身的
+   left:50% + translateX(-50%) 完成，宽屏预览时胶囊中心与手机容器中心重合，
+   所以这里不再需要把 left/right 拉平到容器宽度。 */
 
 /* 真机全屏时容器铺满，`.app-shell` 的浅蓝渐变会在卡片四周透出来一圈 —— 那正是
    「页面外一圈蓝边」的另一半。移动布局下把它改成纯白：页面白卡与屏边之间是白色留白，
@@ -332,7 +334,10 @@ function logout() {
 .user-name { font-size: 14px; color: #ffffff; }
 .main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; -ms-overflow-style: none; scrollbar-width: none; }
 .main-area::-webkit-scrollbar { display: none; }
-.main-area.has-bottom-bar { padding-bottom: 56px; }
+/* 底部让位不再由 .main-area 承担：外层内边距会把滚动区整体切短，
+   内容到不了胶囊下面，胶囊就成了「坐在白带上」。改由 useDockInset() 把留白
+   加到页面根元素（滚动容器）上，内容可以滚到胶囊下方，滚到底也不会被遮。 */
+.main-area.has-bottom-bar { padding-bottom: 0; }
 
 .contact-badge { position: absolute; top: 2px; right: 2px; }
 .guest-login-btn {

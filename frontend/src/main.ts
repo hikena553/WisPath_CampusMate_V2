@@ -8,6 +8,8 @@ import App from './App.vue'
 import router from './router'
 import './styles/theme.css'
 import './styles/animations.css'
+// 覆盖式子页（进入 / 退出滑动）的唯一实现：SubPageShell 与该文件配套使用
+import './styles/subpage-transition.css'
 import './styles/responsive.css'
 import './styles/admin-components.css'
 import './styles/teacher-ui.css'

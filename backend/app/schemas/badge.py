@@ -53,14 +53,22 @@ class HighlightOut(BaseModel):
 
 
 class MutualOut(BaseModel):
-    """双方关系：用于个人主页「我们之间」信息条与好友操作按钮。"""
+    """双方关系：用于个人主页「我们之间」信息条与关注按钮。
+
+    2026-10 改版：好友 = 互相关注，按钮语义（关注 / 已关注 / 回关 / 取消关注）
+    全部由 is_following / is_follower / is_friend 三个布尔决定。
+    """
 
     same_college: bool = False
     common_groups: int = 0
     is_my_tutor: bool = False
     is_my_student: bool = False
-    # 是否已建立单聊关系（决定主页显示「加为好友」还是「删除好友」）
+    # 是否曾建立单聊（弱关系线索，仅用于展示「聊过」，不再决定按钮语义）
     has_conversation: bool = False
+    # 我是否关注了 TA / TA 是否关注了我 / 是否互关（好友）
+    is_following: bool = False
+    is_follower: bool = False
+    is_friend: bool = False
 
 
 class UserHomepageOut(BaseModel):
@@ -80,6 +88,10 @@ class UserHomepageOut(BaseModel):
     badges: list[BadgeItemOut]
     earned_count: int
     total_count: int
+    # 关注 / 粉丝 / 好友（互关）三项公开计数
+    following_count: int = 0
+    follower_count: int = 0
+    friend_count: int = 0
     stats: list[StatOut]
     highlights: list[HighlightOut]
     mutual: MutualOut
