@@ -1055,7 +1055,7 @@ const serviceItems = [
 // 学习成长配置
 const resourceItems = [
   { key: 'resources', label: 'AI 资源空间', icon: Collection, color: '#13c2c2', bgColor: 'rgba(19,194,194,0.1)', link: '/student/resources' },
-  { key: 'community', label: '交流社区', icon: ChatDotRound, color: '#722ed1', bgColor: 'rgba(114,46,209,0.1)', link: '/student/community' },
+  { key: 'community', label: '交流社区', icon: ChatDotRound, color: '#722ed1', bgColor: 'rgba(114,46,209,0.1)', link: '/student/campus?tab=community' },
 ]
 
 // 表单数据

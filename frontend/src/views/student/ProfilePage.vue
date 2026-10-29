@@ -116,7 +116,7 @@
                 <span class="pf-quick-icon"><el-icon :size="21"><Collection /></el-icon></span>
                 <span class="pf-quick-label">AI资源空间</span>
               </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/student/community')">
+              <button type="button" class="pf-quick-item" @click="router.push('/student/campus?tab=community')">
                 <span class="pf-quick-icon"><el-icon :size="21"><ChatDotRound /></el-icon></span>
                 <span class="pf-quick-label">交流社区</span>
               </button>

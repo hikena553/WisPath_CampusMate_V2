@@ -73,7 +73,8 @@ const router = createRouter({
         // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
         { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },
-        { path: 'community', name: 'student-community', component: () => import('@/views/student/CommunityView.vue'), meta: { keepAlive: false } },
+        // 交流社区并入校园资讯「交流社区」Tab（帖子流 + 详情 + 发帖），旧路由重定向
+        { path: 'community', name: 'student-community', redirect: { path: '/student/campus', query: { tab: 'community' } } },
         // v4：情绪树洞淡出，心情卡在学业中心主页承接（打点 + 台账 + AI 提醒），旧路由重定向
         { path: 'emotion', name: 'student-emotion', redirect: { path: '/student/schedule', query: { tab: 'home' } } },
         // 我的关怀：教师端「人文关怀」的学生侧闭环（激励 / 关怀记录 / 家访记录）
