@@ -1,24 +1,23 @@
 <template>
   <Teleport to="body">
-    <!-- 移动端全屏搜索子页：动画复用全局 .subpage（styles/animations.css，全站唯一实现）。
-         结构照抄 ArticleReader / ArticleDetailPage：Teleport + Transition(name="subpage") + 根元素 fixed inset:0。
-         取舍同前两者：不用 el-dialog / el-drawer —— 手机上的对话框是「半个页面浮着」的形态，
-         而这页要的是「整页盖上来」的确定性版式，自己写样式可控得多。 -->
+    <!-- 覆盖式全屏子页：动画复用全局 .subpage（styles/animations.css，keyframes 驱动）。
+         结构照抄 ArticleDetailPage：Teleport + Transition(name="subpage") + 根元素 fixed inset:0。
+         只在移动端挂载（父页 openSearch 分流），桌面端继续用对话框搜索。 -->
     <Transition name="subpage" :duration="320" @after-leave="emit('closed')">
       <div
         v-if="visible"
         class="csp-root"
         role="dialog"
         aria-modal="true"
-        aria-label="搜索资讯"
+        aria-label="搜索校园资讯"
       >
-        <!-- ① 顶栏：返回 + 搜索框。搜索框在顶栏内直接可输入，点开即聚焦，
-             不再多一次「点输入框」的点击 —— 打开搜索页的人目的只有一个。 -->
+        <!-- ① 顶栏：返回 + 圆角搜索框。参考稿只放这两个元素，
+             键盘搜索键提交（enterkeyhint=search），不额外放「搜索」按钮。 -->
         <header class="csp-head">
-          <button type="button" class="csp-icon-btn" aria-label="返回" @click="close">
-            <el-icon :size="20"><ArrowLeft /></el-icon>
+          <button type="button" class="csp-back" aria-label="返回" @click="close">
+            <el-icon :size="22"><ArrowLeft /></el-icon>
           </button>
-          <form class="csp-field" role="search" @submit.prevent="onSubmit">
+          <div class="csp-field">
             <el-icon class="csp-field-icon" :size="16"><Search /></el-icon>
             <input
               ref="inputRef"
@@ -26,140 +25,184 @@
               class="csp-input"
               type="search"
               enterkeyhint="search"
-              placeholder="搜索资讯 / 公告"
-              aria-label="搜索资讯"
-            >
+              :placeholder="placeholder"
+              @keyup.enter="runSearch"
+            />
             <button
               v-if="keyword"
               type="button"
               class="csp-clear"
-              aria-label="清空输入"
-              @click="keyword = ''"
+              aria-label="清空关键词"
+              @click="clearKeyword"
             >
-              <el-icon :size="14"><CircleClose /></el-icon>
+              <el-icon :size="15"><CircleCloseFilled /></el-icon>
             </button>
-          </form>
-          <button
-            type="button"
-            class="csp-text-btn"
-            :disabled="!keyword.trim()"
-            @click="onSubmit"
-          >
-            搜索
-          </button>
+          </div>
         </header>
 
+        <!-- ② 滚动区：搜索前是「历史 / 发现 / 热榜」三段；提交后整区换成结果。
+             历史与发现是纯本地状态，热榜吃父页传来的资讯池（含互动计数）。 -->
         <div class="csp-scroll">
-          <!-- ============ 搜索态：结果视图 ============ -->
-          <template v-if="searched">
-            <div v-if="!results.length" class="csp-empty">
-              <el-icon :size="44" class="csp-empty-icon"><Search /></el-icon>
-              <p class="csp-empty-title">没有找到「{{ submitted }}」相关资讯</p>
-              <p class="csp-empty-desc">换个关键词试试，或看看下面的热门内容</p>
-            </div>
-
-            <template v-else>
-              <div class="csp-result-head">
-                找到 <b>{{ results.length }}</b> 条相关资讯
+          <template v-if="!searchDone">
+            <!-- 搜索历史：localStorage 持久化，最新在前。收起时只露两行，
+                 超出才出现展开按钮（参考稿的折叠交互）。
+                 管理态（参考稿）：标题右侧换成「清空 / 完成」，每个 chip 内嵌 ×，
+                 点 chip 本体等同删除 —— 编辑态下误触搜索比误删更烦人。 -->
+            <section v-if="history.length" class="csp-sec">
+              <div class="csp-sec-head">
+                <h2>搜索历史</h2>
+                <div v-if="historyEditing" class="csp-head-actions">
+                  <button type="button" class="csp-text-btn is-muted" @click="clearHistory">清空</button>
+                  <button type="button" class="csp-text-btn" @click="historyEditing = false">完成</button>
+                </div>
+                <button
+                  v-else
+                  type="button"
+                  class="csp-text-btn"
+                  @click="historyEditing = true"
+                >管理</button>
               </div>
-              <ul class="csp-list">
-                <li v-for="item in results" :key="item.url">
-                  <button type="button" class="csp-item" @click="openHit(item)">
-                    <div class="csp-item-main">
-                      <p class="csp-item-title" v-html="highlight(item.title)" />
-                      <div class="csp-item-meta">
-                        <span class="csp-tag">{{ item.sourceLabel }}</span>
-                        <span>{{ item.dateLabel }}</span>
-                        <span v-if="item.view_count" class="csp-meta-dot">
-                          <el-icon :size="12"><View /></el-icon>{{ item.view_count }}
-                        </span>
-                        <span v-if="item.comment_count" class="csp-meta-dot">
-                          <el-icon :size="12"><ChatDotRound /></el-icon>{{ item.comment_count }}
-                        </span>
-                      </div>
-                    </div>
-                    <img
-                      v-if="item.image_url"
-                      class="csp-item-thumb"
-                      :src="item.image_url"
-                      alt=""
-                      loading="lazy"
-                    >
+              <div
+                ref="historyRef"
+                class="csp-history"
+                :class="{ 'is-collapsed': !historyExpanded }"
+              >
+                <div
+                  v-for="h in history"
+                  :key="h"
+                  class="csp-chip"
+                  :class="{ 'is-editing': historyEditing }"
+                >
+                  <button
+                    type="button"
+                    class="csp-chip-text"
+                    :aria-label="historyEditing ? `删除历史：${h}` : `搜索：${h}`"
+                    @click="historyEditing ? removeHistory(h) : quickSearch(h)"
+                  >{{ h }}</button>
+                  <button
+                    v-if="historyEditing"
+                    type="button"
+                    class="csp-chip-del"
+                    aria-label="删除该条历史"
+                    @click="removeHistory(h)"
+                  >
+                    <el-icon :size="14"><Close /></el-icon>
+                  </button>
+                </div>
+                <button
+                  v-if="historyOverflow"
+                  type="button"
+                  class="csp-chip csp-chip-toggle"
+                  :aria-label="historyExpanded ? '收起搜索历史' : '展开搜索历史'"
+                  @click="historyExpanded = !historyExpanded"
+                >
+                  <el-icon :size="14"><ArrowUp v-if="historyExpanded" /><ArrowDown v-else /></el-icon>
+                </button>
+              </div>
+            </section>
+
+            <!-- 搜索发现：从当前资讯池随机抽标题，两列排布；「刷新」重抽一批。
+                 占位符也用第一条发现 —— 搜索框里始终有个「可以搜什么」的活例子。 -->
+            <section v-if="discovery.length" class="csp-sec">
+              <div class="csp-sec-head">
+                <h2>搜索发现</h2>
+                <button
+                  type="button"
+                  class="csp-head-btn"
+                  :class="{ 'is-spinning': discoverySpinning }"
+                  aria-label="换一批发现"
+                  @click="refreshDiscovery"
+                >
+                  <el-icon :size="14"><RefreshRight /></el-icon>
+                  <span>刷新</span>
+                </button>
+              </div>
+              <div class="csp-discovery">
+                <button
+                  v-for="(d, i) in discovery"
+                  :key="d.url + i"
+                  type="button"
+                  class="csp-disc-item"
+                  :title="d.title"
+                  @click="quickSearch(d.title)"
+                >{{ d.title }}</button>
+              </div>
+            </section>
+
+            <!-- 热榜：首格「校园热榜」是全站总榜，其余为各栏目分榜（口径与信息流 Tab 一致）。
+                 排序权重 = 评论×3 + 浏览，没互动过的按日期序兜底（池子本身已按日期倒序，
+                 稳定排序保住这个顺序）。前 3 名彩色序号，有图出缩略图、无图出「#」灰块。 -->
+            <section class="csp-sec">
+              <nav class="csp-hot-tabs" role="tablist" aria-label="热榜分类">
+                <button
+                  v-for="t in HOT_TABS"
+                  :key="t.key"
+                  type="button"
+                  role="tab"
+                  class="csp-hot-tab"
+                  :class="{ 'is-active': hotTab === t.key }"
+                  :aria-selected="hotTab === t.key"
+                  @click="hotTab = t.key"
+                >{{ t.label }}</button>
+              </nav>
+              <ol v-if="hotList.length" class="csp-hot-list">
+                <li v-for="(it, idx) in hotList" :key="it.url">
+                  <button type="button" class="csp-hot-item" @click="openItem(it)">
+                    <span class="csp-rank" :class="`rank-${idx + 1}`">{{ idx + 1 }}</span>
+                    <span v-if="it.image_url" class="csp-hot-thumb">
+                      <img :src="it.image_url" loading="lazy" alt="" />
+                    </span>
+                    <span v-else class="csp-hot-hash" aria-hidden="true">#</span>
+                    <span class="csp-hot-title">{{ it.title }}</span>
+                    <span v-if="isHot(it)" class="csp-tag is-hot">热</span>
+                    <span v-else-if="isNew(it)" class="csp-tag is-new">新</span>
                   </button>
                 </li>
-              </ul>
-            </template>
-
-            <!-- 空结果时把热门兜底也放出来，别让人卡在死路 -->
-            <section v-if="!results.length" class="csp-section">
-              <h3 class="csp-section-title">热门资讯</h3>
-              <ol class="csp-hot">
-                <li
-                  v-for="(item, idx) in hotList"
-                  :key="'hot-e-' + item.url"
-                  class="csp-hot-item"
-                  @click="openHit(item)"
-                >
-                  <span class="csp-hot-rank" :class="rankClass(idx)">{{ idx + 1 }}</span>
-                  <span class="csp-hot-title">{{ item.title }}</span>
-                </li>
               </ol>
+              <p v-else class="csp-empty">暂无上榜内容</p>
             </section>
           </template>
 
-          <!-- ============ 初始态：历史 / 发现 / 热榜 ============ -->
+          <!-- 搜索结果：① 校园资讯（前端过滤，不发请求）。 -->
           <template v-else>
-            <section v-if="searchHistory.length" class="csp-section">
-              <div class="csp-section-head">
-                <h3 class="csp-section-title">搜索历史</h3>
-                <button type="button" class="csp-section-action" @click="clearHistory">
-                  <el-icon :size="14"><Delete /></el-icon>清空
-                </button>
+            <section class="csp-sec">
+              <div class="csp-sec-head">
+                <h2>校园资讯（{{ newsHits.length }}）</h2>
               </div>
-              <div class="csp-chips">
+              <div v-if="newsHits.length" class="csp-result-list">
                 <button
-                  v-for="h in searchHistory"
-                  :key="'h-' + h"
+                  v-for="h in newsHits"
+                  :key="h.url"
                   type="button"
-                  class="csp-chip"
-                  @click="applyKeyword(h)"
+                  class="csp-result"
+                  @click="openItem(h)"
                 >
-                  {{ h }}
+                  <span class="csp-result-title">{{ h.title }}</span>
+                  <span class="csp-result-meta">{{ h.sourceLabel }}<template v-if="h.dateLabel"> · {{ h.dateLabel }}</template></span>
                 </button>
               </div>
+              <p v-else class="csp-empty">没有找到相关资讯</p>
             </section>
 
-            <section class="csp-section">
-              <h3 class="csp-section-title">搜索发现</h3>
-              <div class="csp-chips">
-                <button
-                  v-for="s in discoveries"
-                  :key="'d-' + s"
-                  type="button"
-                  class="csp-chip is-ghost"
-                  @click="applyKeyword(s)"
-                >
-                  {{ s }}
-                </button>
+            <!-- ② 知识库兜底：仅资讯 0 命中时才检索（与原对话框同一层逻辑）。
+                 游客没有检索权限，给登录引导。 -->
+            <section v-if="!newsHits.length" class="csp-sec">
+              <div class="csp-sec-head">
+                <h2>知识库{{ knowledgeLoading ? '' : `（${knowledgeHits.length}）` }}</h2>
               </div>
-            </section>
-
-            <section class="csp-section">
-              <div class="csp-section-head">
-                <h3 class="csp-section-title">热门资讯</h3>
-                <span class="csp-section-sub">近 30 天热度</span>
-              </div>
-              <ol class="csp-hot">
-                <li
-                  v-for="(item, idx) in hotList"
-                  :key="'hot-' + item.url"
-                  class="csp-hot-item"
-                  @click="openHit(item)"
-                >
-                  <span class="csp-hot-rank" :class="rankClass(idx)">{{ idx + 1 }}</span>
-                  <span class="csp-hot-title">{{ item.title }}</span>
-                </li>
-              </ol>
+              <p v-if="knowledgeLoading" class="csp-empty">检索中…</p>
+              <template v-else-if="knowledgeHits.length">
+                <div class="csp-result-list">
+                  <div v-for="(h, i) in knowledgeHits" :key="i" class="csp-result is-static">
+                    <span class="csp-result-title">{{ h.question || h.content || '未命名' }}</span>
+                    <span class="csp-result-meta">{{ h.category || (h.type === 'qa' ? '问答' : '文档') }}</span>
+                  </div>
+                </div>
+              </template>
+              <p v-else-if="isGuestMode()" class="csp-empty">
+                知识库检索需要登录，<a href="javascript:;" class="csp-link" @click.prevent="onGuestLogin">去登录</a>
+              </p>
+              <p v-else class="csp-empty">知识库中也没有找到相关内容</p>
             </section>
           </template>
         </div>
@@ -168,245 +211,309 @@
   </Teleport>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
-import {
-  ArrowLeft, Search, CircleClose, Delete, View, ChatDotRound,
-} from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
-
-/** 搜索池条目：由父页 CampusPage 统一备好（栏目合并流 + 互动计数 + 去公共前缀），
- * 本页只消费、不自己取数 —— 池子规则只维护一处，免得搜索结果与信息流对不上。 */
+<script lang="ts">
+/** 父页准备好的可搜条目（去公共前缀、来源已转中文、互动计数已并入）。
+ * 父页是唯一所有者：来源口径（隐藏栏目 / 去重 / 排序）都在 CampusPage 里做，
+ * 本组件只消费，不重复维护一套过滤规则。 */
 export interface SearchPoolItem {
   title: string
   url: string
+  /** 来源栏目 key（jwc_tzgg …），热榜分榜与详情页跳转都用它 */
   source: string
   sourceLabel: string
-  /** 父页来源数据这两项可能为 null（后端未给图 / 未给日期），这里照实放宽 */
+  /** 原始日期串（2026-10-15 / 2026.04.01 / null），「新」标记用它解析 */
   date: string | null
+  /** 展示用日期（MM-DD），解析不出为空串 */
   dateLabel: string
-  image_url?: string | null
+  image_url: string | null
   comment_count: number
   view_count: number
 }
+</script>
+
+<script setup lang="ts">
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
+import {
+  ArrowLeft, ArrowDown, ArrowUp, CircleCloseFilled,
+  Close, RefreshRight, Search,
+} from '@element-plus/icons-vue'
+import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
+import { isGuestMode } from '@/utils/guest'
+import { promptLogin } from '@/utils/loginGate'
 
 const props = defineProps<{ items: SearchPoolItem[] }>()
-
 const emit = defineEmits<{
-  /** 动画播完、已卸载 */
   (e: 'closed'): void
-  /** 点中一条命中资讯：交由父页打开详情子页（盖在本页之上） */
   (e: 'open', url: string, title: string, source: string): void
 }>()
 
-const HISTORY_KEY = 'campus_search_history'
-const HISTORY_MAX = 10
+/* ==================== 打开 / 关闭 ====================
+   与 ArticleDetailPage 同一套约定：父页 v-if 挂载即打开（onMounted 置 visible），
+   close() 播退场动画，after-leave 才通知父页卸载。 */
 
-const visible = ref(true)
-const keyword = ref('')
-/** 已提交的关键词（回车/点搜索才算一次），与输入框实时值分开：
- * 边打字边出结果会让「搜过了」这个状态含混，历史记录也会被塞进半截词。 */
-const submitted = ref('')
-const searched = ref(false)
-const inputRef = ref<HTMLInputElement | null>(null)
-const searchHistory = ref<string[]>([])
-
-/* ================= 历史 ================= */
-function loadHistory() {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY)
-    const list = raw ? JSON.parse(raw) : []
-    searchHistory.value = Array.isArray(list) ? list.filter((x: unknown) => typeof x === 'string').slice(0, HISTORY_MAX) : []
-  } catch {
-    searchHistory.value = []
-  }
-}
-
-function persist() {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(searchHistory.value))
-  } catch {
-    /* 隐私模式 / 配额满：历史存不下不影响搜索本身，静默降级 */
-  }
-}
-
-function pushHistory(kw: string) {
-  const word = kw.trim()
-  if (!word) return
-  // 重复词提到最前，不产生重复项
-  searchHistory.value = [word, ...searchHistory.value.filter((h) => h !== word)].slice(0, HISTORY_MAX)
-  persist()
-}
-
-async function clearHistory() {
-  try {
-    await ElMessageBox.confirm('确定清空全部搜索历史？', '清空搜索历史', {
-      confirmButtonText: '清空',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return // 取消
-  }
-  searchHistory.value = []
-  persist()
-}
-
-/* ================= 搜索 ================= */
-function onSubmit() {
-  const kw = keyword.value.trim()
-  if (!kw) return
-  submitted.value = kw
-  searched.value = true
-  pushHistory(kw)
-  inputRef.value?.blur()
-}
-
-function applyKeyword(kw: string) {
-  keyword.value = kw
-  onSubmit()
-}
-
-/** 标题命中高亮：只高亮第一处、且做 HTML 转义后再拼，避免标题里的 < > & 破坏结构 */
-function highlight(title: string): string {
-  const kw = submitted.value
-  if (!kw) return escapeHtml(title)
-  const idx = title.toLowerCase().indexOf(kw.toLowerCase())
-  if (idx < 0) return escapeHtml(title)
-  const head = escapeHtml(title.slice(0, idx))
-  const hit = escapeHtml(title.slice(idx, idx + kw.length))
-  const tail = escapeHtml(title.slice(idx + kw.length))
-  return `${head}<em class="csp-hit">${hit}</em>${tail}`
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-const results = computed<SearchPoolItem[]>(() => {
-  const kw = submitted.value.toLowerCase()
-  if (!kw) return []
-  return props.items.filter((i) => (i.title || '').toLowerCase().includes(kw))
-})
-
-/** 热榜：有浏览/评论计数的按热度排，全为 0 的退化为「按日期新→旧」 */
-const hotList = computed<SearchPoolItem[]>(() => {
-  const arr = [...props.items]
-  const hasStat = arr.some((i) => i.view_count || i.comment_count)
-  if (hasStat) {
-    arr.sort(
-      (a, b) =>
-        b.view_count + b.comment_count * 3 - (a.view_count + a.comment_count * 3),
-    )
-  } else {
-    arr.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-  }
-  return arr.slice(0, 10)
-})
-
-/** 搜索发现：从池子里取来源栏目 + 高频词，纯本地推导，不额外请求。
- * 少而准比多而杂有用 —— 8 个左右刚好两行。 */
-const discoveries = computed<string[]>(() => {
-  const stop = new Set([
-    '关于', '通知', '公告', '的', '和', '与', '及', '通知公告', '新闻', '动态',
-    '我校', '学院', '大学', '学校', '开展', '举行', '召开', '组织', '进一步', '做好',
-  ])
-  const freq = new Map<string, number>()
-  for (const item of props.items) {
-    // 中文按 2-4 字切片过粗，这里采用「栏目词 + 标题里的机构/主题词」两路
-    for (const token of item.title.split(/[\s,，。、：:；;！!？?「」《》（）()【】\[\]"“”'']+/)) {
-      const t = token.trim()
-      if (t.length < 2 || t.length > 8 || stop.has(t)) continue
-      freq.set(t, (freq.get(t) || 0) + 1)
-    }
-  }
-  const words = [...freq.entries()]
-    .filter(([, n]) => n >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([w]) => w)
-
-  const labels = [...new Set(props.items.map((i) => i.sourceLabel).filter(Boolean))]
-  return [...labels.slice(0, 4), ...words].slice(0, 8)
-})
-
-function rankClass(idx: number): string {
-  return idx < 3 ? `is-top${idx + 1}` : ''
-}
-
-/* ================= 交互 ================= */
-function openHit(item: SearchPoolItem) {
-  const kw = submitted.value.trim()
-  // 从热榜点进去也算一次意图：有关键词才记，避免把空串写进历史
-  if (kw && searched.value) pushHistory(kw)
-  emit('open', item.url, item.title, item.source)
-}
-
-/** 是否由 popstate 触发关闭 —— 只有「不是」才需要手动把锚记录退掉 */
-let closedByPop = false
+const visible = ref(false)
 
 function close() {
-  closedByPop = false
   visible.value = false
 }
 
-/** 返回键（安卓）/ 浏览器返回手势：先退出搜索页，而不是把整个页面弹走。
- * 本页不是路由，靠压一条同 URL 的历史记录当「锚」：挂载时 pushState 一条，
- * 用户按返回 → 浏览器回到上一条（即原页面）并触发 popstate → 本页关闭。
- * 注意不能用 replaceState 打标记 —— 那样历史长度不变，popstate 永不触发，
- * 返回键会直接把用户弹出整个资讯页，比不处理更糟。
- * 主动点「返回」按钮时（close）不再动历史：visible 变 false 后组件卸载，
- * 那条锚记录已被这次前进覆盖回原页，无需回退，否则会多退一页。 */
-function onPopState() {
-  if (visible.value) {
-    closedByPop = true
-    visible.value = false
+/* ==================== 搜索框 ==================== */
+
+const inputRef = ref<HTMLInputElement | null>(null)
+const keyword = ref('')
+const searchDone = ref(false)
+const newsHits = ref<SearchPoolItem[]>([])
+const knowledgeHits = ref<KnowledgeHit[]>([])
+const knowledgeLoading = ref(false)
+
+/** 占位符用第一条「搜索发现」：搜索框里始终有一个可搜的真实例子（参考稿同款） */
+const placeholder = computed(() => discovery.value[0]?.title || '搜索校园资讯，如：图书馆、放假……')
+
+/** 本页资讯命中：纯前端按标题过滤（池子已按移动端口径去过高教信息 / 系统入口） */
+function filterNews(kw: string): SearchPoolItem[] {
+  const k = kw.toLowerCase()
+  return props.items.filter(i => i.title.toLowerCase().includes(k))
+}
+
+async function loadKnowledge(kw: string) {
+  // 本页已命中就不再打后端：两层语义不同，资讯命中时知识库不给结果也不算缺
+  if (newsHits.value.length || isGuestMode()) return
+  knowledgeLoading.value = true
+  try {
+    knowledgeHits.value = await searchKnowledge(kw)
+  } catch {
+    knowledgeHits.value = []
+  } finally {
+    knowledgeLoading.value = false
   }
 }
 
-watch(visible, (v) => {
-  if (v) return
-  window.removeEventListener('popstate', onPopState)
-  // 点按钮关闭时锚记录还在历史里，退掉它 —— 否则用户下次按返回会「原地不动」一次。
-  // 先摘监听再回退，避免这次 history.back() 又打到自己的 popstate 上。
-  if (!closedByPop) {
-    closedByPop = true
-    history.back()
+function runSearch() {
+  const kw = keyword.value.trim()
+  if (!kw) {
+    searchDone.value = false
+    return
+  }
+  if (keyword.value !== kw) keyword.value = kw
+  newsHits.value = filterNews(kw)
+  searchDone.value = true
+  saveHistory(kw)
+  void loadKnowledge(kw)
+}
+
+function quickSearch(kw: string) {
+  keyword.value = kw
+  runSearch()
+  inputRef.value?.blur()
+}
+
+function clearKeyword() {
+  keyword.value = ''
+  searchDone.value = false
+  newsHits.value = []
+  knowledgeHits.value = []
+  inputRef.value?.focus()
+}
+
+// 关键词被清空（键盘删除 / clearable）＝回到发现页，旧结果留着会让人以为还在搜
+watch(keyword, v => {
+  if (!v.trim() && searchDone.value) {
+    searchDone.value = false
+    newsHits.value = []
+    knowledgeHits.value = []
   }
 })
 
-defineExpose({ close })
+function openItem(it: SearchPoolItem) {
+  emit('open', it.url, it.title, it.source)
+}
 
-/* ================= 初始 ================= */
-loadHistory()
-history.pushState({ ...(history.state || {}), __csp: true }, '')
-window.addEventListener('popstate', onPopState)
+function onGuestLogin() {
+  void promptLogin('检索全校知识库')
+}
 
-nextTick(() => {
-  // 桌面端不自动弹键盘，移动端才聚焦（autoFocus 在 iOS 上会顶起视口导致首帧跳动）
-  if (window.matchMedia('(pointer: coarse)').matches) {
-    inputRef.value?.focus()
+/* ==================== 搜索历史 ==================== */
+
+const HISTORY_KEY = 'wispath_campus_search_history'
+const HISTORY_MAX = 20
+
+const history = ref<string[]>(loadHistory())
+const historyRef = ref<HTMLElement | null>(null)
+const historyExpanded = ref(false)
+const historyOverflow = ref(false)
+/** 管理态：chip 内嵌 ×、标题右侧换「清空 / 完成」（参考稿） */
+const historyEditing = ref(false)
+
+function loadHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string').slice(0, HISTORY_MAX) : []
+  } catch {
+    return []
   }
+}
+
+function persistHistory() {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
+  } catch { /* 隐私模式等存不进去就算了，本次会话内仍可用 */ }
+}
+
+function saveHistory(kw: string) {
+  history.value = [kw, ...history.value.filter(h => h !== kw)].slice(0, HISTORY_MAX)
+  persistHistory()
+}
+
+/** 单条删除（管理态）。删空即无历史可管，顺手退出管理态 */
+function removeHistory(kw: string) {
+  history.value = history.value.filter(h => h !== kw)
+  if (!history.value.length) historyEditing.value = false
+  persistHistory()
+}
+
+/** 清空全量（管理态里的「清空」）。已先进管理态＝一次明确的意图，不再叠二次确认弹窗 */
+function clearHistory() {
+  history.value = []
+  historyExpanded.value = false
+  historyEditing.value = false
+  try {
+    localStorage.removeItem(HISTORY_KEY)
+  } catch { /* 忽略 */ }
+}
+
+/** 收起态量一次有没有超出两行：超了才出现展开按钮。
+ * 展开态不再量（clientHeight 追平 scrollHeight 会误判成没溢出），
+ * 收起按钮由展开时记住的 historyOverflow 兜住。 */
+function measureHistory() {
+  if (historyExpanded.value) return
+  const el = historyRef.value
+  if (!el) return
+  historyOverflow.value = el.scrollHeight > el.clientHeight + 2
+}
+
+watch(() => history.value.length, len => {
+  historyExpanded.value = false
+  if (!len) historyEditing.value = false
+  void nextTick(measureHistory)
+})
+
+// 进/出管理态时 chip 宽度会变（多出 ×），可能多折一行，重量一次才不至于溢出却没展开按钮
+watch(historyEditing, () => { void nextTick(measureHistory) })
+
+/* ==================== 搜索发现 ==================== */
+
+const DISCOVERY_COUNT = 8
+const discovery = ref<SearchPoolItem[]>([])
+const discoverySpinning = ref(false)
+
+function shufflePick() {
+  const arr = [...props.items]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  discovery.value = arr.slice(0, DISCOVERY_COUNT)
+}
+
+function refreshDiscovery() {
+  shufflePick()
+  // 图标转一圈即可，不用等任何真请求：换一批是纯本地操作
+  discoverySpinning.value = true
+  window.setTimeout(() => { discoverySpinning.value = false }, 600)
+}
+
+// 资讯池异步到位（首屏缓存未命中时）后，发现区还是空的才补抽，不打着用户正在看的批次
+watch(() => props.items.length, () => {
+  if (!discovery.value.length) shufflePick()
+})
+
+/* ==================== 热榜 ==================== */
+
+/** 首格是全站总榜，其余与信息流 Tab 同口径（不含「推荐」与「关注」这类聚合页、也不含已下线栏目） */
+const HOT_TABS = [
+  { key: 'all', label: '校园热榜' },
+  { key: 'jwc_jxdt', label: '教学动态' },
+  { key: 'jwc_tzgg', label: '通知公告' },
+  { key: 'jwc_jxjs', label: '教学建设' },
+  { key: 'college_news', label: '学院动态' },
+  { key: 'library', label: '图书馆' },
+] as const
+
+const hotTab = ref<string>('all')
+
+/** 评论权重 ×3：一条评论比一次浏览更能说明「大家在聊」。
+ * 池子已按日期倒序，稳定排序让无互动条目保持「最新优先」的兜底顺序。 */
+const hotList = computed<SearchPoolItem[]>(() => {
+  const pool = hotTab.value === 'all'
+    ? props.items
+    : props.items.filter(i => i.source === hotTab.value)
+  return [...pool]
+    .sort((a, b) => (b.comment_count * 3 + b.view_count) - (a.comment_count * 3 + a.view_count))
+    .slice(0, 10)
+})
+
+/** 「热」：互动量到了一个值得点进去看的量级（阈值故意放低，校园资讯基数小） */
+function isHot(it: SearchPoolItem) {
+  return it.comment_count >= 3 || it.view_count >= 50
+}
+
+/** 「新」：两天内发布的资讯。后端日期有 2026-10-15 与 2026.04.01 两种写法，统一正则解析 */
+function isNew(it: SearchPoolItem) {
+  const m = (it.date || '').match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/)
+  if (!m) return false
+  const t = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime()
+  return Date.now() - t < 48 * 3600 * 1000
+}
+
+/* ==================== 生命周期 ====================
+   body 滚动锁归本页所有。但它不是唯一会碰 body.overflow 的层：盖在本页上的
+   资讯详情子页关闭时会把它复位成 ''，而本页还开着 —— 用 MutationObserver 盯住，
+   只要本页可见就被复位就立刻锁回去，比在每个覆盖层的关闭回调里反向补救可靠。 */
+
+let bodyLockObserver: MutationObserver | null = null
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && visible.value) close()
+}
+
+watch(visible, v => {
+  document.body.style.overflow = v ? 'hidden' : ''
+})
+
+onMounted(() => {
+  visible.value = true
+  shufflePick()
+  void nextTick(measureHistory)
+  window.addEventListener('keydown', onKeydown)
+  bodyLockObserver = new MutationObserver(() => {
+    if (visible.value && document.body.style.overflow !== 'hidden') {
+      document.body.style.overflow = 'hidden'
+    }
+  })
+  bodyLockObserver.observe(document.body, { attributes: true, attributeFilter: ['style'] })
+  // 等滑入动画播完再聚焦：iOS 上动画中途弹键盘会把正在滑入的页面顶得跳动
+  window.setTimeout(() => inputRef.value?.focus(), 350)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  bodyLockObserver?.disconnect()
+  bodyLockObserver = null
+  document.body.style.overflow = ''
 })
 </script>
 
 <style scoped>
-/* ================= 根容器 =================
-   fixed inset:0 的整页覆盖层。z-index 2650 —— 高于 ArticleDetailPage 的 2600：
-   点搜索结果会打开详情子页盖在本页之上，本页必须比它低一档；
-   但仍高于移动端底部导航（1000）与顶栏（100），保证整页压住底部。
-   进出场动画走全局 .subpage（styles/animations.css）。 */
+/* ================= 根容器：与 .adp-root 同一套覆盖式子页骨架 =================
+   进出场动画统一走全局 .subpage（styles/animations.css，keyframes 驱动），本页不再自带。 */
 .csp-root {
   position: fixed;
   inset: 0;
-  z-index: 2650;
+  z-index: 2600;
   display: flex;
   flex-direction: column;
-  background: #f7f8fa;
+  background: #fff;
   color: #1d2129;
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;
@@ -414,310 +521,334 @@ nextTick(() => {
 
 /* ================= 顶栏 ================= */
 .csp-head {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  padding-top: calc(6px + env(safe-area-inset-top, 0px));
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.csp-icon-btn {
-  width: 36px;
-  height: 36px;
+  gap: 10px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
   flex-shrink: 0;
-  display: inline-flex;
+}
+.csp-back {
+  width: 32px;
+  height: 32px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: #4e5969;
+  border: 0;
+  background: none;
+  color: #1d2129;
+  padding: 0;
   cursor: pointer;
-  transition: background-color 0.15s ease;
 }
-.csp-icon-btn:active { background: #f2f3f5; }
-
 .csp-field {
   flex: 1;
   min-width: 0;
+  height: 36px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 10px;
+  gap: 8px;
+  padding: 0 12px;
   border-radius: 18px;
   background: #f2f3f5;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
-.csp-field:focus-within {
-  background: #fff;
-  box-shadow: 0 0 0 1.5px rgba(22, 119, 255, 0.35);
+.csp-field-icon {
+  color: #9ca0a8;
+  flex-shrink: 0;
 }
-
-.csp-field-icon { flex-shrink: 0; color: #86909c; }
-
 .csp-input {
   flex: 1;
   min-width: 0;
-  border: none;
+  border: 0;
   outline: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 16px; /* ≥16px，避免 iOS 聚焦自动放大 */
   color: #1d2129;
-  line-height: 1;
-  /* iOS 输入框小于 16px 会自动缩放页面，这页是真机高频操作，抬到 16px 更稳 */
-  font-size: 16px;
+  height: 100%;
 }
-.csp-input::placeholder { color: #a9aeb8; font-size: 14px; }
-/* 去掉 Safari/Chrome 搜索框自带的清除按钮，统一用自绘的那颗 */
+.csp-input::placeholder { color: #9ca0a8; }
 .csp-input::-webkit-search-cancel-button { display: none; }
-
 .csp-clear {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: #c9cdd4;
-  color: #fff;
-  cursor: pointer;
+  border: 0;
+  background: none;
   padding: 0;
-}
-
-.csp-text-btn {
-  flex-shrink: 0;
-  padding: 0 6px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: #1677ff;
-  font-size: 14px;
-  font-weight: 500;
+  color: #b0b3b8;
+  display: flex;
   cursor: pointer;
 }
-.csp-text-btn:disabled { color: #c9cdd4; cursor: default; }
 
-/* ================= 滚动区 ================= */
+/* ================= 滚动区与公共段落 ================= */
 .csp-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 12px 12px calc(20px + env(safe-area-inset-bottom, 0px));
-  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 4px 16px calc(40px + env(safe-area-inset-bottom, 0px));
 }
-
-.csp-section { margin-bottom: 18px; }
-
-.csp-section-head {
+.csp-scroll::-webkit-scrollbar { display: none; }
+.csp-sec { margin-top: 22px; }
+.csp-sec-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
-
-.csp-section-title {
-  margin: 0 0 10px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1d2129;
+.csp-sec-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111;
 }
-.csp-section-head .csp-section-title { margin-bottom: 0; }
-
-.csp-section-sub { font-size: 12px; color: #a9aeb8; }
-
-.csp-section-action {
-  display: inline-flex;
+.csp-head-btn {
+  display: flex;
   align-items: center;
   gap: 3px;
-  border: none;
-  background: transparent;
-  padding: 2px 4px;
-  font-size: 12px;
-  color: #86909c;
+  border: 0;
+  background: none;
+  padding: 2px;
+  color: #8a8f99;
+  font-size: 13px;
   cursor: pointer;
 }
+.csp-head-btn.is-spinning svg {
+  animation: csp-spin 0.6s ease;
+}
+/* 标题右侧的纯文字动作（管理 / 清空 / 完成），参考稿：次级动作灰、主次动作深 */
+.csp-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.csp-text-btn {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  font-size: 14px;
+  color: #1d2129;
+  cursor: pointer;
+}
+.csp-text-btn.is-muted { color: #9ca0a8; }
+@keyframes csp-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.csp-empty {
+  margin: 6px 0;
+  font-size: 13px;
+  color: #9ca0a8;
+}
+.csp-link {
+  color: var(--el-color-primary, #409eff);
+  text-decoration: none;
+}
 
-/* ================= 关键词胶囊 ================= */
-.csp-chips {
+/* ================= 搜索历史 ================= */
+.csp-history {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-
+.csp-history.is-collapsed {
+  /* 两行 chips（34px 行高 + 8px 间距），溢出部分先藏住 */
+  max-height: 76px;
+  overflow: hidden;
+}
 .csp-chip {
-  max-width: 100%;
-  padding: 7px 13px;
-  border: none;
-  border-radius: 16px;
-  background: #fff;
-  color: #4e5969;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #f2f3f5;
+  color: #333;
   font-size: 13px;
-  line-height: 1.2;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.csp-chip-text {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  max-width: 190px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: background-color 0.15s ease;
+  cursor: pointer;
 }
-.csp-chip:active { background: #e8f3ff; color: #1677ff; }
-.csp-chip.is-ghost { background: #eef0f3; }
+.csp-chip.is-editing {
+  padding-right: 10px;
+}
+.csp-chip.is-editing .csp-chip-text { cursor: default; }
+.csp-chip-del {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 2px;
+  display: flex;
+  align-items: center;
+  color: #a5a9b3;
+  cursor: pointer;
+}
+.csp-chip-toggle {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid #e5e6eb;
+  color: #8a8f99;
+  cursor: pointer;
+}
+
+/* ================= 搜索发现 ================= */
+.csp-discovery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  row-gap: 16px;
+}
+.csp-disc-item {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
 
 /* ================= 热榜 ================= */
-.csp-hot {
-  margin: 0;
-  padding: 4px 12px;
-  list-style: none;
-  background: #fff;
-  border-radius: 12px;
+.csp-hot-tabs {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 6px;
 }
-
+.csp-hot-tabs::-webkit-scrollbar { display: none; }
+.csp-hot-tab {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  padding: 6px 0;
+  font-size: 15px;
+  color: #333;
+  cursor: pointer;
+}
+.csp-hot-tab.is-active {
+  color: #ff4d3a;
+  font-weight: 700;
+}
+.csp-hot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 .csp-hot-item {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 0;
-  border-bottom: 1px solid #f7f8fa;
-  cursor: pointer;
-}
-.csp-hot-item:last-child { border-bottom: none; }
-.csp-hot-item:active .csp-hot-title { color: #1677ff; }
-
-.csp-hot-rank {
-  flex-shrink: 0;
-  width: 18px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  font-style: italic;
-  color: #c9cdd4;
-}
-/* 前三名用热度色区分，弱化其余名次 —— 一眼能看出「谁最热」 */
-.csp-hot-rank.is-top1 { color: #f53f3f; }
-.csp-hot-rank.is-top2 { color: #ff7d00; }
-.csp-hot-rank.is-top3 { color: #ffb400; }
-
-.csp-hot-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #1d2129;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  transition: color 0.15s ease;
-}
-
-/* ================= 结果列表 ================= */
-.csp-result-head {
-  padding: 2px 2px 10px;
-  font-size: 13px;
-  color: #86909c;
-}
-.csp-result-head b { color: #1677ff; font-weight: 600; }
-
-.csp-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.csp-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 12px;
-  border: none;
-  border-bottom: 1px solid #f7f8fa;
-  background: transparent;
+  padding: 10px 0;
+  border: 0;
+  background: none;
   text-align: left;
   cursor: pointer;
 }
-.csp-list li:last-child .csp-item { border-bottom: none; }
-.csp-item:active { background: #fafbfc; }
-
-.csp-item-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.csp-item-title {
-  margin: 0 0 8px;
-  font-size: 15px;
-  line-height: 1.45;
-  font-weight: 500;
-  color: #1d2129;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.csp-item-title :deep(.csp-hit) {
-  font-style: normal;
-  color: #1677ff;
-  font-weight: 600;
-}
-
-.csp-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #a9aeb8;
-}
-
-.csp-tag {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #e8f3ff;
-  color: #1677ff;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.csp-meta-dot {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.csp-item-thumb {
+.csp-rank {
+  width: 24px;
   flex-shrink: 0;
-  width: 84px;
-  height: 60px;
-  border-radius: 8px;
-  object-fit: cover;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #c0c4cc;
+}
+.csp-rank.rank-1 { color: #fe2c55; }
+.csp-rank.rank-2 { color: #ff6a2b; }
+.csp-rank.rank-3 { color: #ff9f2b; }
+.csp-hot-thumb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
   background: #f2f3f5;
 }
-
-/* ================= 空态 ================= */
-.csp-empty {
-  padding: 64px 24px 32px;
-  text-align: center;
+.csp-hot-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
-.csp-empty-icon { color: #c9cdd4; }
-.csp-empty-title {
-  margin: 14px 0 6px;
+.csp-hot-hash {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: #f2f3f5;
+  color: #c0c4cc;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.csp-hot-title {
+  flex: 1;
+  min-width: 0;
   font-size: 15px;
-  font-weight: 500;
-  color: #4e5969;
+  color: #1d2129;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.csp-empty-desc {
-  margin: 0;
-  font-size: 13px;
-  color: #a9aeb8;
-  line-height: 1.6;
+.csp-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+.csp-tag.is-hot {
+  color: #ff4d3a;
+  background: #ffeeec;
+}
+.csp-tag.is-new {
+  color: #0fae6d;
+  background: #e8f8f0;
+}
+
+/* ================= 搜索结果 ================= */
+.csp-result-list { margin-top: -4px; }
+.csp-result {
+  display: block;
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid #f2f3f5;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.csp-result.is-static { cursor: default; }
+.csp-result-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.45;
+  color: #1d2129;
+}
+.csp-result-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #9ca0a8;
 }
 </style>
