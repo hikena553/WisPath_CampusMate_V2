@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+import json
+
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from datetime import date
 
 
@@ -100,6 +102,9 @@ class StudentProjectCreate(BaseModel):
     my_role: str | None = None
     project_link: str | None = None
     description: str | None = None
+    # 作品图片（最多 6 张，首张作封面）；传 URL 数组，落库存 JSON 字符串
+    images: list[str] | None = None
+    cover_url: str | None = None
 
 
 class StudentProjectOut(BaseModel):
@@ -116,5 +121,29 @@ class StudentProjectOut(BaseModel):
     my_role: str | None = None
     project_link: str | None = None
     description: str | None = None
+    images: list[str] = []
+    cover_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("images", "cover_url", mode="before")
+    @classmethod
+    def _parse_images(cls, v, info):
+        """库里 images 是 JSON 字符串；cover_url 是派生字段，取第一张图。"""
+        if info.field_name == "cover_url":
+            return None
+        if not v:
+            return []
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return [str(x) for x in parsed if x] if isinstance(parsed, list) else []
+            except (ValueError, TypeError):
+                return []
+        return v
+
+    @model_validator(mode="after")
+    def _fill_cover(self):
+        if not self.cover_url and self.images:
+            self.cover_url = self.images[0]
+        return self

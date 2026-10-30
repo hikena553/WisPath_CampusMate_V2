@@ -15,11 +15,11 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.plan import (GrowthGoal, StudyPlan, PlanTask, PlanCheckin, PlanStage,
-                             GoalStatus, PlanStatus, TaskStatus, StageStatus)
+                             GoalStatus, PlanStatus, TaskStatus, StageStatus, TaskPriority)
 from app.schemas.plan import (
     GrowthGoalCreate, GrowthGoalUpdate, GrowthGoalOut,
     StudyPlanCreate, StudyPlanUpdate, StudyPlanOut,
-    PlanTaskCreate, PlanTaskUpdate, PlanTaskOut,
+    PlanTaskCreate, PlanTaskUpdate, PlanTaskOut, QuickTaskCreate,
     PlanStageCreate, PlanStageUpdate, PlanStageOut,
     StageSubmitRequest, StageSubmitOut, StageGenerateOut,
     CheckinCreate, CheckinOut, StreakOut, TodayTaskOut,
@@ -287,6 +287,41 @@ def create_task(req: PlanTaskCreate, db: Session = Depends(get_db), current_user
     return out
 
 
+@router.post("/quick-task", response_model=PlanTaskOut)
+def create_quick_task(req: QuickTaskCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """一句话加「今日任务」。
+
+    AI 今日报告、对话里说的「今天做点什么」，都不该新建一个空计划
+    （旧实现 createPlan 出来的计划没有任务，列表里只剩一个空壳），
+    而应该直接成为今天可打卡的一条任务：挂到进行中的计划 + 当前关卡上。
+    """
+    plan = db.query(StudyPlan).filter(
+        StudyPlan.student_id == current_user.id,
+        StudyPlan.status == PlanStatus.ACTIVE,
+    ).order_by(StudyPlan.created_at.desc()).first()
+    if not plan:
+        raise HTTPException(400, "还没有进行中的学习计划，先立一个目标吧")
+    stage = db.query(PlanStage).filter(
+        PlanStage.plan_id == plan.id,
+        PlanStage.status == StageStatus.ACTIVE,
+    ).order_by(PlanStage.order_index).first()
+    task = PlanTask(
+        plan_id=plan.id,
+        stage_id=stage.id if stage else None,
+        title=req.title.strip()[:200],
+        description=req.note,
+        due_date=_parse_date(req.due_date) or local_today(),
+        priority=TaskPriority.MEDIUM,
+        order_index=99,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    out = PlanTaskOut.model_validate(task)
+    out.plan_title = plan.title
+    return out
+
+
 @router.put("/tasks/{task_id}", response_model=PlanTaskOut)
 def update_task(task_id: int, req: PlanTaskUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = db.query(PlanTask).join(StudyPlan, StudyPlan.id == PlanTask.plan_id).filter(
@@ -450,11 +485,20 @@ def get_today(db: Session = Depends(get_db), current_user: User = Depends(get_cu
         StudyPlan.student_id == current_user.id,
         PlanTask.status != TaskStatus.DONE,
     ).all()
-    # 今天到期或逾期未完成 + 高优先级未完成
+    # 今天到期或逾期未完成 + 高优先级未完成 + 当前关卡（active）里的任务
+    # 关卡任务通常不设 due_date（AI 拆解出来的），若不计入今日视图，
+    # 学生就只能看到关卡里躺着任务、今日清单却是空的，主线推不动。
     due_today = [t for t in tasks if t.due_date and t.due_date <= today]
     no_due_high = [t for t in tasks if not t.due_date and t.priority.value == "high"]
+    active_stages = {
+        s.id for s in db.query(PlanStage).join(StudyPlan, StudyPlan.id == PlanStage.plan_id).filter(
+            StudyPlan.student_id == current_user.id,
+            PlanStage.status == StageStatus.ACTIVE,
+        ).all()
+    }
+    stage_tasks = [t for t in tasks if t.stage_id and t.stage_id in active_stages]
     merged: dict[int, PlanTask] = {}
-    for t in due_today + no_due_high:
+    for t in due_today + no_due_high + stage_tasks:
         merged[t.id] = t
     # 今日已打卡的任务即使已完成也要留在列表里，否则勾选框会消失、无法撤销打卡
     if checked_map:
@@ -527,12 +571,36 @@ def list_stages(plan_id: int, db: Session = Depends(get_db), current_user: User 
 
 
 @router.post("/plans/{plan_id}/stages/ai-generate", response_model=StageGenerateOut)
-async def ai_generate_plan_stages(plan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """AI 推理出完成计划的小阶段目标（闯关阶段 + 每阶段任务）。"""
+async def ai_generate_plan_stages(
+    plan_id: int,
+    force: bool = Query(False, description="重新拆解：替换现有全部 AI 关卡"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI 推理出完成计划的小阶段目标（闯关阶段 + 每阶段任务）。
+
+    force=True 时会清空全部 AI 关卡再重新拆解，用于修正旧版空泛拆解；
+    历史打卡记录保留（解除与旧任务的关联），已通关关卡的评分会一并清空；
+    计划里含人工添加的关卡时拒绝，避免误删手动内容。
+    """
     plan = _get_plan_or_404(db, current_user.id, plan_id)
-    existing = db.query(PlanStage).filter(PlanStage.plan_id == plan_id).count()
-    if existing > 0:
-        raise HTTPException(409, "该计划已有阶段，可继续手动添加或直接闯关")
+    existing_stages = db.query(PlanStage).filter(PlanStage.plan_id == plan_id).all()
+    if existing_stages:
+        if not force:
+            raise HTTPException(409, "该计划已有阶段，可继续手动添加或直接闯关")
+        if any(not s.ai_generated for s in existing_stages):
+            raise HTTPException(409, "计划里有手动添加的关卡，不能自动重拆")
+        stage_ids = [s.id for s in existing_stages]
+        stage_tasks = db.query(PlanTask).filter(PlanTask.stage_id.in_(stage_ids)).all()
+        task_ids = [t.id for t in stage_tasks]
+        # 保留打卡历史：只解除与旧任务的关联，打卡天数/时长仍计入统计
+        if task_ids:
+            db.query(PlanCheckin).filter(PlanCheckin.task_id.in_(task_ids)).update(
+                {PlanCheckin.task_id: None}, synchronize_session=False
+            )
+        db.query(PlanTask).filter(PlanTask.stage_id.in_(stage_ids)).delete(synchronize_session=False)
+        db.query(PlanStage).filter(PlanStage.id.in_(stage_ids)).delete(synchronize_session=False)
+        db.commit()
     summary, stage_data = await ai_generate_stages(db, plan, current_user.id)
     created = persist_generated_stages(db, plan, stage_data, current_user.id)
     return StageGenerateOut(summary=summary, stages=[_serialize_stage(db, s) for s in created])

@@ -3,17 +3,22 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from urllib.parse import quote
+from datetime import datetime
 
 from app.core.database import get_db
 from app.core.deps import require_role
 from app.core.security import hash_password, generate_random_password
+from app.models.announcement import UrgencyLevel
+from app.models.notification import NotificationType
+from app.models.password_reset import PasswordResetRequest, PasswordResetStatus
 from app.models.user import User, UserRole
 from app.models.crisis import AIDialogSummary
 from app.schemas.admin import (
     TeacherCreate, TeacherOut, TeacherCreatedOut,
     StudentBriefOut, StudentUpdate, ImportResult,
 )
-from app.services.import_export_service import export_users, import_users
+from app.services.import_export_service import DEFAULT_PASSWORD, export_users, import_users
+from app.services.notification_service import send_notification
 from app.services.scoring import calc_radar_score
 from app.api.admin.common import PaginatedResponse
 
@@ -328,10 +333,44 @@ def reset_password(
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    new_password = generate_random_password()
+    # 该账号若有待处理的忘记密码申请：重置为统一初始密码，同时闭环申请并通知申请人，
+    # 使「顶栏消息 → 学生/教师管理重置」这条链路一次完成，不再需要单独的审核页。
+    pending_requests = (
+        db.query(PasswordResetRequest)
+        .filter(
+            PasswordResetRequest.user_id == target.id,
+            PasswordResetRequest.status == PasswordResetStatus.PENDING,
+        )
+        .order_by(PasswordResetRequest.created_at.desc())
+        .all()
+    )
+    pending = pending_requests[0] if pending_requests else None
+    new_password = DEFAULT_PASSWORD if pending else generate_random_password()
     target.password_hash = hash_password(new_password)
     target.password_changed = False
-    db.commit()
+
+    if pending:
+        handled_at = datetime.now()
+        # 同一账号可能存在多条重复申请，一并闭环，避免顶栏红点残留
+        for item in pending_requests:
+            item.status = PasswordResetStatus.RESET
+            item.handled_by = current_user.id
+            item.handled_at = handled_at
+        db.commit()
+        send_notification(
+            db,
+            target.id,
+            title="密码已重置",
+            content=f"管理员已通过你的密码重置申请，账号密码已恢复为初始密码 {new_password}，请登录后立即修改。",
+            notification_type=NotificationType.SYSTEM,
+            link="/login",
+            related_id=pending.id,
+            sender_id=current_user.id,
+            level=UrgencyLevel.IMPORTANT,
+        )
+    else:
+        db.commit()
+
     return {
         "message": f"已重置 {target.name} 的密码",
         "initial_password": new_password,

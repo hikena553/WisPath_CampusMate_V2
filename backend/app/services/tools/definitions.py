@@ -242,6 +242,19 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "query_study_room",
+            "description": "查询自习室专注计时记录：今日专注总时长、专注次数、近几天每日专注时长与最近学习内容。当学生问'今天学了多久''专注记录了多久''自习时长''最近计时了哪些任务'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "查询最近多少天的每日汇总，默认 7，最大 30"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "query_plan_stages",
             "description": "查询学习计划的闯关关卡（阶段任务流）：各关卡状态、任务完成进度、AI 评分与评估意见。当学生问'计划的关卡''阶段任务''闯关进度''第几关'时调用",
             "parameters": {

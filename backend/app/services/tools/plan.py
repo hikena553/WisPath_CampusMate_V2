@@ -17,6 +17,7 @@ from app.models.plan import (
     TaskStatus,
 )
 from app.models.user import User
+from app.models.study_session import StudySession
 from app.services.plan_streak import compute_streak, local_today
 from app.utils.enum_helpers import safe_enum_str
 
@@ -164,6 +165,51 @@ async def _submit_plan_stage(db: Session, args: dict, user: User) -> dict:
         "evaluation": evaluation,
         "weaknesses": weaknesses,
         "suggestions": suggestions,
+    }
+
+
+# ============ 自习室专注记录工具 ============
+
+
+def _query_study_room(db: Session, args: dict, user: User) -> dict:
+    """今日专注汇总 + 近 N 天每日时长 + 最近专注的学习内容。"""
+    try:
+        days = int(args.get("days") or 7)
+    except (TypeError, ValueError):
+        days = 7
+    days = min(max(days, 1), 30)
+    today = local_today()
+    start = today - timedelta(days=days - 1)
+
+    rows = db.query(StudySession).filter(
+        StudySession.student_id == user.id,
+        StudySession.mode == "focus",
+        StudySession.study_date >= start,
+        StudySession.study_date <= today,
+    ).order_by(StudySession.started_at.desc(), StudySession.id.desc()).all()
+
+    today_rows = [r for r in rows if r.study_date == today]
+    today_minutes = sum(r.actual_minutes for r in today_rows)
+    day_totals: dict[str, int] = {}
+    for r in rows:
+        key = str(r.study_date)
+        day_totals[key] = day_totals.get(key, 0) + r.actual_minutes
+
+    recent = [{
+        "date": str(r.study_date),
+        "task": r.task_title or "专注学习",
+        "minutes": r.actual_minutes,
+    } for r in rows[:5]]
+
+    msg = f"今日专注 {today_minutes} 分钟，共 {len(today_rows)} 次"
+    if rows:
+        msg += f"；近 {days} 天共 {sum(day_totals.values())} 分钟"
+    return {
+        "message": msg,
+        "today_minutes": today_minutes,
+        "today_sessions": len(today_rows),
+        "days": [{"date": d, "minutes": m} for d, m in sorted(day_totals.items())],
+        "recent": recent,
     }
 
 

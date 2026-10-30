@@ -12,14 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.models.community import CommunityPost, CommunityComment, CommunityLike, CommunityFavorite
+from app.models.community import CommunityPost, CommunityComment, CommunityLike
 from app.models.plan import GrowthGoal
-from app.models.social import ForumMessage, ForumMessageKind
-from app.services import social_service
 from app.schemas.community import (
     CommunityPostCreate, CommunityPostUpdate, CommunityPostOut,
-    CommunityCommentCreate, CommunityCommentOut, LikeOut, FavoriteOut,
-    MyCommentOut,
+    CommunityCommentCreate, CommunityCommentOut, LikeOut,
 )
 
 router = APIRouter(prefix="/api/community", tags=["交流社区"])
@@ -33,10 +30,6 @@ def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: b
         CommunityLike.post_id == p.id,
         CommunityLike.student_id == current_user.id,
     ).first() is not None
-    favorited = db.query(CommunityFavorite).filter(
-        CommunityFavorite.post_id == p.id,
-        CommunityFavorite.student_id == current_user.id,
-    ).first() is not None
     return CommunityPostOut(
         id=p.id,
         student_id=p.student_id,
@@ -45,13 +38,11 @@ def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: b
         content=p.content if with_content else p.content[:120] + ("…" if len(p.content) > 120 else ""),
         view_count=p.view_count,
         like_count=p.like_count,
-        favorite_count=getattr(p, "favorite_count", 0) or 0,
         comment_count=p.comment_count,
         created_at=p.created_at,
         author_name=author.name if author else "匿名同学",
         author_avatar=author.avatar if author else None,
         liked=liked,
-        favorited=favorited,
     )
 
 
@@ -144,7 +135,6 @@ def delete_post(post_id: int, db: Session = Depends(get_db), current_user: User 
         raise HTTPException(403, "无权删除他人帖子")
     db.query(CommunityComment).filter(CommunityComment.post_id == post_id).delete()
     db.query(CommunityLike).filter(CommunityLike.post_id == post_id).delete()
-    db.query(CommunityFavorite).filter(CommunityFavorite.post_id == post_id).delete()
     db.delete(post)
     db.commit()
     return {"message": "deleted"}
@@ -169,62 +159,8 @@ def toggle_like(post_id: int, db: Session = Depends(get_db), current_user: User 
         db.add(CommunityLike(post_id=post_id, student_id=current_user.id))
         post.like_count += 1
         liked = True
-        # 点赞是一条「与我互动」消息：写进论坛互动流（forum_messages，与聊天消息分表），
-        # 作者在交流社区页的互动消息里看到，而不是混进聊天会话
-        social_service.push_forum_message(
-            db,
-            user_id=post.student_id,
-            actor=current_user,
-            kind=ForumMessageKind.LIKE,
-            post_id=post.id,
-            post_title=post.title,
-            content=post.title,
-        )
     db.commit()
     return LikeOut(liked=liked, count=post.like_count)
-
-
-@router.post("/posts/{post_id}/favorite", response_model=FavoriteOut)
-def toggle_favorite(post_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """收藏 / 取消收藏（幂等切换）。
-
-    收藏是论坛内部动作，产生的消息只进论坛互动流，不进聊天消息。
-    取消收藏时把还没读的那条收藏消息删掉 —— 对方已经反悔了，
-    作者再收到「某某收藏了你的帖子」只会困惑。
-    """
-    post = db.query(CommunityPost).filter(CommunityPost.id == post_id).first()
-    if not post:
-        raise HTTPException(404, "帖子不存在")
-    existing = db.query(CommunityFavorite).filter(
-        CommunityFavorite.post_id == post_id,
-        CommunityFavorite.student_id == current_user.id,
-    ).first()
-    if existing:
-        db.delete(existing)
-        post.favorite_count = max(0, (post.favorite_count or 0) - 1)
-        db.query(ForumMessage).filter(
-            ForumMessage.user_id == post.student_id,
-            ForumMessage.actor_id == current_user.id,
-            ForumMessage.kind == ForumMessageKind.FAVORITE,
-            ForumMessage.post_id == post_id,
-            ForumMessage.is_read.is_(False),
-        ).delete(synchronize_session=False)
-        favorited = False
-    else:
-        db.add(CommunityFavorite(post_id=post_id, student_id=current_user.id))
-        post.favorite_count = (post.favorite_count or 0) + 1
-        favorited = True
-        social_service.push_forum_message(
-            db,
-            user_id=post.student_id,
-            actor=current_user,
-            kind=ForumMessageKind.FAVORITE,
-            post_id=post.id,
-            post_title=post.title,
-            content=post.title,
-        )
-    db.commit()
-    return FavoriteOut(favorited=favorited, count=post.favorite_count)
 
 
 # ==================== 评论 ====================
@@ -248,33 +184,6 @@ def list_comments(post_id: int, db: Session = Depends(get_db), current_user: Use
     return result
 
 
-@router.get("/my-comments", response_model=list[MyCommentOut])
-def my_comments(
-    limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """我发出的评论（互动消息「我评论的」页签）：带帖子标题快照，按时间倒序。"""
-    rows = (
-        db.query(CommunityComment, CommunityPost.title)
-        .join(CommunityPost, CommunityPost.id == CommunityComment.post_id)
-        .filter(CommunityComment.student_id == current_user.id)
-        .order_by(CommunityComment.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-    return [
-        MyCommentOut(
-            id=c.id,
-            post_id=c.post_id,
-            post_title=title or "已删除的帖子",
-            content=c.content,
-            created_at=c.created_at,
-        )
-        for c, title in rows
-    ]
-
-
 @router.post("/posts/{post_id}/comments", response_model=CommunityCommentOut)
 def create_comment(post_id: int, req: CommunityCommentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post = db.query(CommunityPost).filter(CommunityPost.id == post_id).first()
@@ -285,17 +194,6 @@ def create_comment(post_id: int, req: CommunityCommentCreate, db: Session = Depe
     comment = CommunityComment(post_id=post_id, student_id=current_user.id, content=req.content.strip()[:500])
     post.comment_count += 1
     db.add(comment)
-    # 评论通知走论坛互动流（forum_messages），不进聊天消息表——
-    # 论坛互动在交流社区页单独查看，与「好友聊天」彻底隔离
-    social_service.push_forum_message(
-        db,
-        user_id=post.student_id,
-        actor=current_user,
-        kind=ForumMessageKind.COMMENT,
-        post_id=post.id,
-        post_title=post.title,
-        content=comment.content,
-    )
     db.commit()
     db.refresh(comment)
     out = CommunityCommentOut.model_validate(comment)

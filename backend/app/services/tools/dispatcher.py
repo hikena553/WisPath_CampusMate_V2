@@ -16,6 +16,7 @@ from .plan import (
     _query_plan_overview,
     _query_plan_stages,
     _query_profile_overview,
+    _query_study_room,
     _submit_plan_stage,
 )
 from .reference import _generate_page_scaffold, _search_reference_library
@@ -108,6 +109,7 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "create_lost_found": _create_lost_found,
             # 学习计划 / 作品集 / 社区 / 资源 / 成长画像
             "query_plan_overview": _query_plan_overview,
+            "query_study_room": _query_study_room,
             "query_plan_stages": _query_plan_stages,
             "submit_plan_stage": _submit_plan_stage,
             "query_portfolio": _query_portfolio,

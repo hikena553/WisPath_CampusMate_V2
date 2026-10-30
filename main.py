@@ -47,7 +47,6 @@ _IS_WINDOWS = sys.platform == "win32"
 _win_flags = subprocess.CREATE_NEW_PROCESS_GROUP if _IS_WINDOWS else 0
 
 _stopping = threading.Event()
-_stop_done = False
 _logged_exit = False
 
 # ---------------------------------------------------------------- Windows Job Object
@@ -168,29 +167,6 @@ class Service:
 
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
-
-    def request_stop(self, wait: float = 8.0) -> None:
-        """先请子进程自己优雅退出，别一上来就 taskkill。
-
-        Windows 上 `taskkill /F` 是 TerminateProcess，进程没有机会执行
-        lifespan 收尾：SQLite 的 WAL 不 checkpoint、连接池不 dispose、
-        日志里连"应用已优雅退出"都不会有——事后排查容易误判成崩溃。
-        子进程用 CREATE_NEW_PROCESS_GROUP 启动，因此可以只向它自己的
-        进程组发 CTRL_BREAK_EVENT，uvicorn 会走正常的 shutdown 流程。
-        """
-        if self.proc is None or self.proc.poll() is not None:
-            return
-        try:
-            if _IS_WINDOWS:
-                os.kill(self.proc.pid, signal.CTRL_BREAK_EVENT)
-            else:
-                self.proc.terminate()
-        except (AttributeError, OSError):
-            return
-        try:
-            self.proc.wait(timeout=wait)
-        except subprocess.TimeoutExpired:
-            pass
 
     def kill_tree(self):
         if self.proc is None or self.proc.poll() is not None:
@@ -339,27 +315,14 @@ def _start_frontend():
 
 
 def _stop_all():
-    """停止全部服务：先请各自优雅退出，超时再整棵树强杀（幂等，可被多次调用）。"""
-    global _stop_done
-    if _stop_done:
-        return
-    _stop_done = True
     _stopping.set()
-    # 前端先停（避免它继续往正在关闭的后端打请求），后端最后停
-    for svc in (frontend, backend):
-        svc.request_stop()
     for svc in (frontend, backend):
         svc.kill_tree()
 
 
 def _exit_handler(signum, _frame):
-    """Ctrl+C / 停止按钮 / 终端关闭：先请求优雅退出，再把残留的进程树清掉。
-
-    这个钩子只在"被叫停"时触发（SIGINT = 控制台 Ctrl+C 事件），
-    出现它说明是有人/某个工具主动停了服务，而不是程序自己崩了。
-    """
-    label = "SIGINT（Ctrl+C / 停止按钮）" if signum == signal.SIGINT else f"信号 {signum}"
-    print(f"\n收到 {label}，正在停止前后端（等待优雅退出，最多约 8 秒）...")
+    """Ctrl+C / SIGTERM / 关窗口：先把子进程树清干净再退。"""
+    print(f"\n收到信号 {signum}，正在停止所有服务...")
     _stop_all()
     raise SystemExit(0)
 

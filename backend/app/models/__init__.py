@@ -21,13 +21,12 @@ from app.models.group import Group, GroupMember, GroupMessage
 from app.models.announcement import TeacherAnnouncement, AnnouncementRead, TeacherSchedule
 from app.models.document import Document, DocumentChunk
 from app.models.notification import Notification, NotificationType
-from app.models.social import Follow, ForumMessage, ForumMessageKind
 from app.models.feedback import Feedback, FeedbackType, FeedbackStatus
 from app.models.setting import SystemSetting
 from app.models.profile import StudentProfileSnapshot, ConversationSummary
 from app.models.lost_found import LostFoundItem, LostFoundComment
 from app.models.plan import GrowthGoal, StudyPlan, PlanTask, PlanCheckin, PlanStage
-from app.models.community import CommunityPost, CommunityComment, CommunityLike, CommunityFavorite
+from app.models.community import CommunityPost, CommunityComment, CommunityLike
 from app.models.portfolio import StudentResume
 from app.models.favorite import ResourceFavorite
 from app.models.emotion import EmotionRecord

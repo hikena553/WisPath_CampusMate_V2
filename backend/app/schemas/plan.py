@@ -93,6 +93,13 @@ class PlanTaskCreate(BaseModel):
     order_index: int = 0
 
 
+class QuickTaskCreate(BaseModel):
+    """一句话加今日任务：自动落到进行中的计划 + 当前关卡，due_date 默认今天"""
+    title: str
+    note: str | None = None
+    due_date: str | None = None
+
+
 class PlanTaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None

@@ -551,6 +551,18 @@ async def _llm_sections(facts: dict, weather: dict | None, fortune: dict, user: 
         return None
 
 
+# 这些主动发现动作只是「告知」，不能变成学习任务：
+# 请假审批、上课提醒、里程碑通报、久未互动关怀……
+# 旧实现把所有 actions 一律当建议，导致「请假申请审批中」被一键写进 study_plans。
+# 用黑名单而不是白名单：以后新增的学习类信号默认可以进建议，不会被漏掉。
+NOTICE_TRIGGERS = {
+    "leave_pending", "leave_result",
+    "class_soon", "class_today",
+    "notification", "escalation", "crisis_escalation",
+    "milestone_reached", "prolonged_inactivity", "growth_record_gap",
+}
+
+
 def _suggestions(db: Session, user: User, facts: dict, fortune: dict) -> list[dict]:
     """可一键加入学习计划的建议：优先复用主动发现动作，没有时按遗留任务兜底。"""
     slots = ["上午 09:00-10:00", f"黄金时段 {fortune.get('lucky_time', '')}".strip(), "晚上 20:30-21:00"]
@@ -562,10 +574,12 @@ def _suggestions(db: Session, user: User, facts: dict, fortune: dict) -> list[di
         ]
 
     actions = evaluate_student(db, user, target_role="student")
+    # 只取「能落成学习任务」的动作；通知类（请假/上课/里程碑/关怀）留在消息中心
+    actions = [a for a in actions if a.trigger not in NOTICE_TRIGGERS]
     if actions:
         picked = sorted(actions, key=lambda a: a.priority, reverse=True)[:3]
         return with_slot([
-            {"trigger": a.trigger, "priority": a.priority, "title": a.title, "content": a.content}
+            {"trigger": a.trigger, "kind": "plan", "priority": a.priority, "title": a.title, "content": a.content}
             for a in picked
         ])
 

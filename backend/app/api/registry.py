@@ -14,7 +14,6 @@ from app.api.upload import router as upload_router
 from app.api.files import router as files_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
-from app.api.social import router as social_router
 from app.api.groups import router as groups_router
 from app.api.announcement import router as announcement_router
 from app.api.admin import router as admin_router
@@ -52,6 +51,7 @@ from app.api.reference import router as reference_router
 from app.api.ml_training import router as ml_training_router
 from app.api.badge import router as badge_router
 from app.api.cron_task import router as cron_task_router
+from app.api.study_room import router as study_room_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -68,7 +68,6 @@ ROUTERS = [
     upload_router,
     files_router,
     messages_router,
-    social_router,
     groups_router,
     announcement_router,
     admin_router,
@@ -106,6 +105,7 @@ ROUTERS = [
     ml_training_router,
     badge_router,
     cron_task_router,
+    study_room_router,
 ]
 
 

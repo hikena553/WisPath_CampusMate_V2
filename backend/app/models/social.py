@@ -1,67 +1,57 @@
-"""社交关系：关注 / 粉丝 / 论坛互动消息
+"""社交关系与论坛互动消息。
 
-关注是**单向边**（follower → followee），互相关注即「好友」。
-好友刻意不做成独立实体：它只是 follow 表上的双向关系推导结果，
-因此论坛（帖子评论 / 点赞）、个人主页、消息页通讯录看到的是同一套关系，
-不会出现「主页显示是好友、消息页却查不到」的割裂。
+- Follow：关注关系（user_follows）。「好友」= 互相关注，不再用「聊过天」代替；
+- ForumMessage：论坛互动消息（forum_messages）。点赞 / 收藏 / 评论 / 新粉丝
+  独立成一条流，与聊天消息（messages）彻底分表，避免两种消息混排。
 
-论坛互动（评论 / 点赞 / 收藏 / 关注）单独落 forum_messages，与聊天
-（messages / group_messages）物理隔离：
-- 论坛互动只在「交流社区」页右上角的互动消息里看，消息页只放聊天，两边未读各自统计；
-- 论坛消息带有 actor（触发者）与 post 快照，即使原帖被删也仍可展示，
-  且点开可回到对应帖子或对方主页。
+关注口径与消息页通讯录、个人主页、勋章 metrics.contacts 共用 social_service，
+不得各自实现一套，否则同一个人在不同页面会显示成不同关系。
 """
+import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
 
-def _utcnow() -> datetime:
-    """统一用带时区的 UTC 时间（Python 3.12 起 datetime.utcnow 已弃用）。"""
-    return datetime.now(timezone.utc)
+class ForumMessageKind(str, enum.Enum):
+    LIKE = "like"          # 点赞了你的帖子
+    FAVORITE = "favorite"  # 收藏了你的帖子
+    COMMENT = "comment"    # 评论了你的帖子
+    FOLLOW = "follow"      # 新粉丝
 
 
 class Follow(Base):
-    """一条关注关系：follower 关注了 followee（一人对一人只能有一条）"""
+    """关注关系：follower（关注者）→ following（被关注者）
+
+    一人对同一人只保留一条，重复关注在服务层按幂等处理。
+    """
 
     __tablename__ = "user_follows"
-    __table_args__ = (
-        UniqueConstraint("follower_id", "followee_id", name="uq_user_follow_pair"),
-    )
+    __table_args__ = (UniqueConstraint("follower_id", "following_id", name="uq_follow_pair"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    follower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    followee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-
-
-class ForumMessageKind:
-    """互动类型（用字符串存库，便于后续扩展而不动枚举约束）"""
-
-    COMMENT = "comment"   # 评论了我的帖子
-    LIKE = "like"         # 赞了我的帖子
-    FAVORITE = "favorite" # 收藏了我的帖子
-    FOLLOW = "follow"     # 关注了我
+    follower_id: Mapped[int] = mapped_column(Integer, index=True)
+    following_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class ForumMessage(Base):
-    """论坛互动消息：谁（actor）对我（user）做了什么，与聊天消息互不混排"""
+    """论坛互动消息：接收者（帖子作者 / 被关注者）+ 触发者 + 互动类型"""
 
     __tablename__ = "forum_messages"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # 收件人：被评论 / 被点赞 / 被关注的人
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    # 触发者：评论者 / 点赞者 / 关注者
-    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    kind: Mapped[str] = mapped_column(String(20), index=True)
-    # 关联帖子（关注类消息为空）；帖子被删也不影响消息展示，标题走快照
-    post_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    post_title: Mapped[str] = mapped_column(String(200), default="")
-    # 评论正文 / 点赞对象摘要等快照
-    content: Mapped[str] = mapped_column(Text, default="")
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    actor_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[ForumMessageKind] = mapped_column(
+        SAEnum(ForumMessageKind), default=ForumMessageKind.LIKE, index=True
+    )
+    post_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 标题快照：帖子被删除后消息仍可读，不至于只剩一条空记录
+    post_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

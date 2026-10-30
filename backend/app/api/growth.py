@@ -1,6 +1,8 @@
 from collections import defaultdict
 from datetime import datetime, date
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -162,6 +164,10 @@ def delete_record(record_id: int, db: Session = Depends(get_db), current_user: U
 
 # ---- Project Showcase ----
 
+# 一个项目最多 6 张图：再多作品集里也翻不完，且首张是封面
+MAX_PROJECT_IMAGES = 6
+
+
 @router.get("/projects", response_model=list[StudentProjectOut])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return db.query(StudentProject).filter(
@@ -169,11 +175,21 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
     ).order_by(StudentProject.start_date.desc()).all()
 
 
-@router.post("/projects", response_model=StudentProjectOut)
-def create_project(req: StudentProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def _pack_project_data(req: StudentProjectCreate) -> dict:
+    """把请求体拍平成入库字段：images 数组 → JSON 字符串，cover_url 是派生态不落库。"""
     data = req.model_dump()
+    data.pop("cover_url", None)
+    images = data.get("images")
+    if images is not None:
+        data["images"] = json.dumps([u for u in images if u][:MAX_PROJECT_IMAGES], ensure_ascii=False) if images else None
     data["start_date"] = _parse_date(data["start_date"])
     data["end_date"] = _parse_date(data.get("end_date"))
+    return data
+
+
+@router.post("/projects", response_model=StudentProjectOut)
+def create_project(req: StudentProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    data = _pack_project_data(req)
     project = StudentProject(student_id=current_user.id, **data)
     db.add(project)
     db.commit()
@@ -188,9 +204,7 @@ def update_project(project_id: int, req: StudentProjectCreate, db: Session = Dep
     ).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    data = req.model_dump()
-    data["start_date"] = _parse_date(data["start_date"])
-    data["end_date"] = _parse_date(data.get("end_date"))
+    data = _pack_project_data(req)
     for k, v in data.items():
         setattr(project, k, v)
     db.commit()

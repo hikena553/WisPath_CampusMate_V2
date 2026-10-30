@@ -321,16 +321,19 @@ def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = 
 
     admin_ids = [row[0] for row in db.query(User.id).filter(User.role == UserRole.ADMIN).all()]
     if admin_ids:
+        # 管理员在顶栏消息中点击后直接进入对应人员管理页，按账号聚焦后一键重置
+        manage_page = "学生管理" if user.role == UserRole.STUDENT else "教师管理"
+        manage_link = "/admin/students" if user.role == UserRole.STUDENT else "/admin/teachers"
         send_batch_notifications(
             db,
             admin_ids,
             title="收到密码重置申请",
             content=(
                 f"{user.name}（{user.username}）申请重置密码，联系方式 {_mask_contact(contact_digits)}。"
-                f"请在「密码重置」页审核，通过后将重置为初始密码 {PASSWORD_RESET_INITIAL_PASSWORD}。"
+                f"请在「{manage_page}」中搜索该账号并重置密码，重置后将恢复为初始密码 {PASSWORD_RESET_INITIAL_PASSWORD}。"
             ),
             notification_type=NotificationType.SYSTEM,
-            link="/admin/password-requests",
+            link=f"{manage_link}?focus={user.username}",
             related_id=item.id,
             sender_id=user.id,
             level=UrgencyLevel.IMPORTANT,

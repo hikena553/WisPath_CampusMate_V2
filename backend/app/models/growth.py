@@ -63,3 +63,4 @@ class StudentProject(Base):
     my_role: Mapped[str | None] = mapped_column(String(200), default=None, comment="我的角色")
     project_link: Mapped[str | None] = mapped_column(String(500), default=None, comment="项目链接")
     description: Mapped[str | None] = mapped_column(Text, default=None, comment="项目描述")
+    images: Mapped[str | None] = mapped_column(Text, default=None, comment="作品图片 JSON 数组，首张为封面")
