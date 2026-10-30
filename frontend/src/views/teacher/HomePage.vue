@@ -21,15 +21,6 @@
           </div>
           <div class="hero-actions">
             <span class="hero-sync"><i class="hero-sync-dot" />每 30 秒自动同步</span>
-            <button
-              type="button"
-              class="hero-refresh"
-              aria-label="刷新"
-              :disabled="refreshing"
-              @click="onManualRefresh"
-            >
-              <el-icon :size="16"><Refresh /></el-icon>
-            </button>
           </div>
         </div>
 
@@ -160,9 +151,6 @@
           <span class="hm-sync-hint">
             <i class="hm-sync-dot" />每 30 秒自动同步
           </span>
-          <el-button text circle aria-label="刷新" :loading="refreshing" @click="onManualRefresh">
-            <el-icon :size="18"><Refresh /></el-icon>
-          </el-button>
         </template>
       </HomeTopBanner>
 
@@ -226,7 +214,7 @@
 
     <!-- ===== AI 悬浮按钮 + 决策支持层 ===== -->
     <HomeAiPanel :proactive-actions="proactiveActions" :contact-suggestions="contactSuggestions"
-      :ai-loading="aiLoading" @refresh="loadAiDecisions" />
+      :ai-loading="aiLoading" />
 
     <!-- 发布公告 Dialog -->
     <HomeAnnouncementDialog v-model:visible="createDialogVisible" @created="loadMyAnnouncements" />
@@ -254,13 +242,15 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, type Component } from 'vue'
+// v6.1 弹窗减负：删除确认走底部动作面板
+import { actionConfirm } from '@/composables/useActionSheet'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   UserFilled,
   WarningFilled as WarnIcon,
   Grid, Stamp, Bell, Collection, EditPen, Sunny, Connection,
-  ArrowRight, Refresh, TrendCharts, Clock,
+  ArrowRight, TrendCharts, Clock,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
@@ -272,7 +262,7 @@ import type { DashboardStats, ScheduleItem, ScheduleUrgency, ContactSuggestion, 
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
@@ -282,6 +272,7 @@ import HomeAiPanel from './HomeAiPanel.vue'
 import HomeDesktopSchedule from './HomeDesktopSchedule.vue'
 import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
 import HomeQuickAddTask from './HomeQuickAddTask.vue'
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import HomeAddScheduleDialog from './HomeAddScheduleDialog.vue'
@@ -332,6 +323,9 @@ const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
 // 移动端「去安排」任务管理子页
 const showTodaySubPage = ref(false)
+
+// 移动端「今日任务」子页：打开时让出底部悬浮导航
+useMobileSubPage(computed(() => isMobile.value && showTodaySubPage.value))
 // 任务子页选中日期（默认今天）
 const selectedTaskDate = ref(new Date().toISOString().slice(0, 10))
 // 快捷添加任务弹窗开关（表单状态在 HomeQuickAddTask 内部维护）
@@ -363,7 +357,8 @@ function initFromCache() {
     dataReady.value = true
   }
 }
-initFromCache()
+// 注意：initFromCache 必须在所有 ref（schedules / overdueSchedules 等）声明之后再调用，
+// 否则缓存命中时会命中暂时性死区（TDZ），导致首页 setup 抛错、整页白屏
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -686,7 +681,7 @@ function openCreateDialog() {
 
 async function handleDelete(id: number) {
   try {
-    await ElMessageBox.confirm('确定删除此公告？', '提示')
+    if (!(await actionConfirm('确定删除此公告？', '提示', { danger: true, confirmButtonText: '删除' }))) return
     await deleteAnnouncement(id)
     ElMessage.success('已删除')
     loadMyAnnouncements()
@@ -749,17 +744,7 @@ async function refreshAll() {
 // 移动端下拉刷新：桌面端不响应手势；指示器（吉祥物起跳动画）与消息页共用同一模块
 const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
-/** 桌面端手动刷新：与移动端下拉共用 refreshAll，补上鼠标场景缺失的刷新入口 */
-const refreshing = ref(false)
-async function onManualRefresh() {
-  if (refreshing.value) return
-  refreshing.value = true
-  try {
-    await refreshAll()
-  } finally {
-    refreshing.value = false
-  }
-}
+initFromCache()
 
 onMounted(() => {
   silentRefresh()
@@ -1000,23 +985,6 @@ onUnmounted(() => {
   background: var(--tui-success);
   flex-shrink: 0;
 }
-.hero-refresh {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--tui-border-strong);
-  background: var(--tui-surface);
-  color: var(--tui-text-tertiary);
-  cursor: pointer;
-  transition: border-color 0.16s var(--tui-ease), background-color 0.16s var(--tui-ease);
-}
-.hero-refresh:hover:not(:disabled) { background: var(--tui-surface-muted); color: var(--tui-text); }
-.hero-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-.hero-refresh:focus-visible { outline: 2px solid var(--tui-brand); outline-offset: 2px; }
 
 /* 指标带：四格等宽，各自成卡（浅底 + 发丝描边 + 圆角），靠间距分隔而非分隔线 */
 .hero-metrics {

@@ -138,6 +138,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { Search, Trash2, Plus } from 'lucide-vue-next'
 import { getTeacherList, batchDeleteTeachers, createTeacher, type TeacherInfo } from '@/api/admin'
@@ -145,7 +146,9 @@ import ViewStudentsDrawer from './components/ViewStudentsDrawer.vue'
 import ActionButtons from './components/ActionButtons.vue'
 
 const teachers = ref<TeacherInfo[]>([])
-const searchText = ref('')
+const route = useRoute()
+// 顶栏消息点击「密码重置申请」时通过 ?focus=工号 直达该教师，自动填入搜索条件
+const searchText = ref(typeof route.query.focus === 'string' ? route.query.focus : '')
 const drawerVisible = ref(false)
 const selectedTeacher = ref<TeacherInfo | null>(null)
 const selectedIds = ref<number[]>([])
@@ -178,6 +181,11 @@ const paginatedTeachers = computed(() => teachers.value)
 watch(searchText, () => {
   currentPage.value = 1
   loadTeachers()
+})
+
+// 已停留在此页时，再次点击顶栏消息中的另一个教师，也能切换到对应账号
+watch(() => route.query.focus, (focus) => {
+  if (typeof focus === 'string' && focus) searchText.value = focus
 })
 
 // 当页码或每页条数变化时，重新加载

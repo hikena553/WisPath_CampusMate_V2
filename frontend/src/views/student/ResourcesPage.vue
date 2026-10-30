@@ -1,5 +1,10 @@
 <template>
-  <div class="resources-page">
+  <div class="resources-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="AI 资源空间" fallback="/student" />
     <!-- 吸顶头部：品牌标题 + 操作 + 频道 Tab（移动端横向滚动，参考今日头条/即刻频道栏） -->
     <div class="res-topbar">
@@ -29,6 +34,9 @@
         >{{ t.label }}</div>
       </div>
     </div>
+
+    <!-- 移动端下拉刷新：吉祥物指示器（放在吸顶头部之后，下拉时头部不动） -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <!-- 最新资讯（实时外部聚合） -->
     <div class="res-card feeds-card">
@@ -85,8 +93,8 @@
       </div>
     </div>
 
-    <!-- 订阅源管理对话框（移动端全屏） -->
-    <el-dialog v-model="sourceDialogVisible" title="订阅源管理" width="680px" class="source-dialog">
+    <!-- 订阅源管理（表格重内容：移动端=全屏子页 / 桌面端=弹窗） -->
+    <ResponsivePopup v-model="sourceDialogVisible" title="订阅源管理" width="680px" class="source-dialog">
       <div class="source-tip">数据源已动态化：可启停/编辑内置源，也可添加任意 RSS 订阅或官网链接。点击“保存”后，刷新资讯即生效。</div>
       <div class="src-table-wrap">
         <el-table :data="sources" v-loading="sourceLoading" size="small" max-height="380">
@@ -150,7 +158,7 @@
       <template #footer>
         <el-button @click="sourceDialogVisible = false">关闭</el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
 
     <!-- 为你发现（AI 推荐） -->
     <div class="res-card">
@@ -312,6 +320,11 @@
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { Search, Star, StarFilled, TopRight, Refresh, Share, Setting } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import { useResponsive } from '@/composables/useResponsive'
+// v6.1 弹窗减负：表格类重内容改用全屏子页承接
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { ElMessage } from 'element-plus'
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
 import {
@@ -591,6 +604,20 @@ function openLink(link?: string | null) {
 onMounted(async () => {
   await Promise.all([loadFavorites(), loadRecommend(), browsePage(1), loadFeed(activeFeedTab.value)])
 })
+
+/** 下拉刷新：仅重新拉取列表数据，不触发后端抓取接口（refreshFeeds） */
+async function refreshAll() {
+  await Promise.all([
+    loadFeed(activeFeedTab.value),
+    loadFavorites(),
+    loadRecommend(),
+    browsePage(1),
+  ]).catch(() => {})
+}
+
+// 下拉刷新（移动端）：桌面端不响应手势
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
@@ -604,6 +631,8 @@ onMounted(async () => {
   background: #f5f6fa;
   color: #1a1a2e;
   padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 
 /* 吸顶头部 */

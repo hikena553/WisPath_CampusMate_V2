@@ -1,11 +1,12 @@
 <template>
-  <el-dialog
+  <!-- 修改密码（3 字段：移动端=底部动作面板 / 桌面端=弹窗） -->
+  <ActionSheet
     :model-value="modelValue"
     title="修改密码"
     width="420px"
     :close-on-click-modal="false"
     @update:model-value="onVisibleChange"
-    @closed="reset"
+    
   >
     <el-form :model="form" label-width="96px" @submit.prevent>
       <el-form-item label="旧密码" required>
@@ -28,16 +29,18 @@
       <el-button @click="onVisibleChange(false)">取消</el-button>
       <el-button type="primary" :loading="submitting" @click="submit">确定</el-button>
     </template>
-  </el-dialog>
+  </ActionSheet>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
+// v6.1 弹窗减负：小表单走底部动作面板（移动端）
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import { ElMessage } from 'element-plus'
 import { changePassword } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 
-defineProps<{ modelValue: boolean }>()
+const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'success'): void
@@ -46,6 +49,9 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 const submitting = ref(false)
 const form = reactive({ old_password: '', new_password: '', confirm_password: '' })
+
+// 移动端子页无 closed 事件：显隐变化时同样重置
+watch(() => props.modelValue, (v) => { if (!v) reset() })
 
 function reset() {
   form.old_password = ''

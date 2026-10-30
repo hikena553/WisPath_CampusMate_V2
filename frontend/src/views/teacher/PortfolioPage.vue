@@ -1,9 +1,17 @@
 <template>
-  <div class="tui-page">
+  <div class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel">
     <SubPageHeader
       title="学生成长档案"
       fallback="/teacher"
     />
+
+    <!-- 移动端下拉刷新：指示器插在吸顶栏之后 -->
+    <PullRefreshIndicator v-if="isMobile" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：档案语义色 + 收藏图标；右侧保留本页专属的导出与建档入口 -->
@@ -16,13 +24,13 @@
       >
         <div class="tui-hero-metric is-accent"><b>{{ students.length }}</b><span>名下学生</span></div>
         <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
-        <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
+        <el-button size="small" :icon="Plus" @click="openCreate">新增档案</el-button>
       </TuiPageHero>
 
       <!-- 移动端高频操作 -->
       <div v-if="isMobile" class="tui-actions pf-topbar">
         <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
-        <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
+        <el-button size="small" :icon="Plus" @click="openCreate">新增档案</el-button>
       </div>
 
       <!-- 1. 学生横向选择器 -->
@@ -132,7 +140,7 @@
         <div class="tui-section-head">
           <h3><el-icon><Collection /></el-icon>我的育人档案</h3>
           <span class="tui-section-extra">
-            <el-button size="small" type="primary" :icon="Plus" @click="openCreate">新增档案</el-button>
+            <el-button size="small" :icon="Plus" @click="openCreate">新增档案</el-button>
           </span>
         </div>
         <div class="tui-section-hint">
@@ -201,10 +209,11 @@
       <PortfolioItemDialog v-model="dialogVisible" :item="editing" @saved="load" />
 
       <!-- 成长报告 -->
-      <el-dialog
+      <!-- 成长报告（长列表：移动端=全屏子页） -->
+      <ResponsivePopup
         v-model="reportVisible"
         title="成长报告"
-        :width="isMobile ? '90%' : '400px'"
+        width="400px"
         align-center
         :close-on-click-modal="false"
         class="tui-dialog"
@@ -240,13 +249,16 @@
           <el-button @click="reportVisible = false">关闭</el-button>
           <el-button type="primary" :icon="Printer" @click="printReport">打印 / 导出 PDF</el-button>
         </template>
-      </el-dialog>
+      </ResponsivePopup>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+// v6.1 弹窗减负：报告走全屏子页，删除确认走底部动作面板
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import {
   Clock,
   Collection,
@@ -260,8 +272,10 @@ import {
   Trophy,
   User,
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   deletePortfolioItem,
   getPortfolioItems,
@@ -282,6 +296,9 @@ import PortfolioItemDialog from '@/components/teacher/portfolio/PortfolioItemDia
 defineOptions({ name: 'teacher-portfolio' })
 
 const { isMobile } = useResponsive()
+
+// 移动端下拉刷新：桌面端不响应手势
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 const typeOrder: PortfolioItemType[] = ['case', 'honor', 'training', 'research']
 
@@ -369,15 +386,20 @@ function selectStudent(id: number) {
   activeStudentId.value = id
 }
 
-async function load() {
+async function load(silent = false) {
   loading.value = true
   try {
     items.value = await getPortfolioItems()
   } catch {
-    ElMessage.error('成长档案加载失败')
+    if (!silent) ElMessage.error('成长档案加载失败')
   } finally {
     loading.value = false
   }
+}
+
+/** 下拉刷新：复用档案与学生名单加载，失败不提示 */
+async function refreshAll() {
+  await Promise.all([load(true), loadStudents()])
 }
 
 async function loadStudents() {
@@ -431,9 +453,7 @@ function openEdit(item: PortfolioItem) {
 
 async function handleDelete(item: PortfolioItem) {
   try {
-    await ElMessageBox.confirm(`确定删除「${item.title}」？删除后不再计入成长报告。`, '删除确认', {
-      type: 'warning',
-    })
+    if (!(await actionConfirm(`确定删除「${item.title}」？删除后不再计入成长报告。`, '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   } catch {
     return
   }
@@ -513,6 +533,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
+
 /* 移动端高频操作条 */
 .pf-topbar {
   margin-bottom: 12px;

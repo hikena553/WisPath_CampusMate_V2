@@ -41,8 +41,9 @@
       </div>
       <div class="header-actions">
         <div class="sidebar-menu">
-          <!-- 新建入口：点击直接下滑拉出「工作任务」列表（不再用下拉菜单） -->
+          <!-- 新建入口：点击直接下滑拉出「工作任务」列表（不再用下拉菜单）；教师端移动端隐藏 -->
           <button
+            v-if="!(isTeacher && isMobile)"
             type="button"
             class="menu-row"
             aria-haspopup="listbox"

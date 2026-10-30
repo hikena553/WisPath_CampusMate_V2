@@ -1,5 +1,11 @@
 <template>
-  <div class="campus-page">
+  <div
+    class="campus-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <!-- ===== 页头（桌面 / 移动两套，刻意不合并：两者版式差一整代）=====
          桌面端：白底通栏大标题 + 纯图标搜索；标题本身可点 = 刷新（标题是这页最强的
          「我要看这个」暗示，点它重取比多放一个按钮更省地方）。
@@ -8,7 +14,7 @@
               页头吸顶（sticky）：信息流往下滚时标题与两个入口始终留在顶部；
            ② 白底分类 Tab：选中项黑色粗体 + 3px 黑色下划线，其余灰色，可横向滑动；
               紧跟在页头下方一起吸顶，滚到信息流深处也能直接换分类；
-           ③ 信息流：17px 粗体标题两行 + 13px 灰色元信息，右侧大缩略图，
+           ③ 信息流：15px 粗体标题两行 + 12px 灰色元信息，右侧大缩略图，
               行间 1px 浅灰分割线。
          移动端不提供手动刷新：由 10 分钟模块缓存 + 后端 5 分钟缓存兜住，重进页面即可重新取数。
          不放返回箭头：本页是底部导航的一级 Tab，没有「上一页」可回。 -->
@@ -78,7 +84,8 @@
     <!-- 搜索浮层：先在本页已加载的资讯里过滤，一条都没有再兜到知识库检索。
          这个顺序符合直觉 —— 用户在这页点搜索，多半想找刚看到的某条资讯；
          本页资讯是「校内动态」、知识库是「办事问答」，两层语义不同但都该给到。 -->
-    <el-dialog v-model="searchVisible" title="搜索校园资讯" width="600px">
+    <!-- 搜索（轻内容：移动端=底部动作面板 / 桌面端=弹窗） -->
+    <ActionSheet v-model="searchVisible" title="搜索校园资讯" width="600px">
       <el-input
         v-model="searchKeyword"
         placeholder="搜索资讯标题，如：图书馆、放假、招聘……"
@@ -131,7 +138,7 @@
         </p>
         <p v-else class="search-empty">知识库中也没有找到相关内容</p>
       </div>
-    </el-dialog>
+    </ActionSheet>
 
     <!-- 移动端分类 Tab：横向滑动、选中项深色 + 短下划线（不改字重）。
          与下方信息流共用同一份数据，切换只是换 filter，不重新请求。
@@ -149,7 +156,6 @@
         'is-pager-dragging': pagerDragging,
         'is-pager-resetting': pagerResetting,
         'is-tab-instant': tabClickSwitch,
-        'is-tab-entering': tabsEntering,
       }"
       role="tablist"
       aria-label="资讯分类"
@@ -186,8 +192,16 @@
          邻居页只在拖动开始时挂载（pagerOpen），松手吸附完成后立即卸载，
          页面高度回到当前分类自己的高度，不在底部留多余白区。
          每页 = 一条分类的完整卡片：「推荐」页含顶部大图轮播，「关注」页是空态，其余是纯信息流。
-         轮播自己的拖动仍挂在 .hero-track 上，与分类翻页互不干扰（按压落在轮播图片上
-         不会启动分类拖动；落在卡片其余非交互区域都可以起手换页）。 -->
+         轮播自己的拖动仍挂在 .hero-track 上，与分类翻页互不干扰（按压必须落在
+         .campus-feed 上才会启动分类拖动）。 -->
+    <!-- 下拉刷新指示器：放在两段吸顶头（页头 / 分类 Tab）之后，
+         靠自身高度把信息流下推、吸顶头保持不动（见 usePullRefresh 注释） -->
+    <PullRefreshIndicator
+      v-if="isMobile"
+      :indicator-style="pull.indicatorStyle"
+      :active="pull.active"
+    />
+
     <!-- 裁切层：overflow:hidden 必须挂在「不参与位移」的这一层上。
          挂在会 translate 的轨道上时，裁切框会跟着轨道一起移走 ——
          轨道平移到 ±一页宽时，可视区正好落在裁切框之外，整页变成空白。
@@ -217,13 +231,13 @@
       <div
         v-for="entry in pagerPages"
         :key="entry.key"
-        v-memo="[entry.key, entry.items, entry.slides, entry.key === 'community' ? [communityHot, communityCategory, communitySort, isGuestMode()] : null]"
+        v-memo="[entry.key, entry.items, entry.slides]"
         class="campus-pager-page"
       >
         <!-- 大图轮播：只在「推荐」那一页的顶部渲染。
              图源 = 全部资讯里带 image_url 的最新条目（各来源详情页抓到的正文首图），
              按日期倒序最多 5 张；一张带图的都没有时回落到本地校园风光，避免首屏空一块。
-             点击进资讯详情子页（与信息流一致），不跳出应用。
+             点击进站内阅读器（与信息流一致），不跳出应用。
              按住图片左右拖动即可切换（鼠标 / 触屏同一套 Pointer 事件逻辑）。
              注意：拖动事件挂在 .hero-track（图片区域）上，**不是**外层 section ——
              挂在外层的话，在标题或留白处按下也会拖着整块轮播平移，像是「整个组件可拖」。 -->
@@ -286,54 +300,11 @@
           </div>
         </section>
 
-        <!-- 交流社区：分类筛选 + 排序 + 热帖推荐（只在本 Tab 渲染）。
-             切分类 / 排序只重拉社区帖子（loadCommunityPosts），不触发分页器动作；
-             chips / 热帖行本身是按钮（优先当点击），但它们所在的卡片区域可以
-             起手分类拖动换页（见 onPagerPointerDown 的起手范围）。 -->
-        <template v-if="entry.key === 'community'">
-          <div class="community-chip-row">
-            <button
-              v-for="c in communityCategoryChips"
-              :key="c.value"
-              type="button"
-              class="community-chip"
-              :class="{ 'is-active': communityCategory === c.value }"
-              @click="switchCommunityCategory(c.value)"
-            >{{ c.label }}</button>
-            <span class="community-chip-spacer" />
-            <button
-              type="button"
-              class="community-chip"
-              :class="{ 'is-active': communitySort === 'new' }"
-              @click="switchCommunitySort('new')"
-            >最新</button>
-            <button
-              type="button"
-              class="community-chip"
-              :class="{ 'is-active': communitySort === 'hot' }"
-              @click="switchCommunitySort('hot')"
-            >最热</button>
-          </div>
-          <div v-if="!isGuestMode() && communityHot.length" class="community-hot">
-            <div class="community-hot-head">🔥 热帖推荐</div>
-            <button
-              v-for="h in communityHot"
-              :key="h.id"
-              type="button"
-              class="community-hot-item"
-              @click="openCommunityPost(h.id)"
-            >
-              <span class="community-hot-title">{{ h.title }}</span>
-              <span class="community-hot-count">{{ h.like_count }} 赞</span>
-            </button>
-          </div>
-        </template>
-
         <!-- 信息流：标题两行 + 元信息行 + 右侧缩略图 + 行尾互动数。
              点整行进「资讯详情子页」（正文 + 评论 / 点赞 / 转发），不再直接跳站内阅读器 ——
              只读阅读器留下了「读完了想说两句却说不了」的断点；详情子页把社区那一层补齐，
              正文抓取仍复用后端同一套解析，只是多了一层互动。 -->
-        <section class="campus-feed">
+        <section v-if="!isCustomTab(entry.key)" class="campus-feed">
           <div
             v-for="item in entry.items"
             :key="item.url + item.title"
@@ -380,6 +351,72 @@
           </div>
           <p v-if="!entry.items.length" class="feed-empty">{{ emptyTextOf(entry.key) }}</p>
         </section>
+
+        <!-- 收藏：沿用资讯行的版式（标题 + 来源/时间），点整行跳到原帖 -->
+        <section v-if="entry.key === 'favorites'" class="campus-feed">
+          <p v-if="customTabLoading" class="feed-empty">加载中…</p>
+          <p v-else-if="!myFavorites.length" class="feed-empty">还没有收藏的帖子</p>
+          <template v-else>
+            <div
+              v-for="f in myFavorites"
+              :key="'fav-' + f.id"
+              class="feed-item"
+              role="link"
+              tabindex="0"
+              @click="openFavorite(f)"
+              @keydown.enter.prevent="openFavorite(f)"
+            >
+              <div class="feed-body">
+                <h3 class="feed-title">{{ f.title }}</h3>
+                <div class="feed-meta">
+                  <span class="feed-time">{{ (f.created_at || '').slice(0, 10) }}</span>
+                  <span class="feed-dot">·</span>
+                  <span class="feed-source">{{ f.category || '收藏' }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </section>
+
+        <!-- AI 资源：内容与 AI 资源空间同源（爬取的论文 / 开源榜 / 智能体榜 …），
+             版式沿用校园资讯行（标题 + 元信息行），点整行打开原文。 -->
+        <section v-else-if="entry.key === 'ai_resources'" class="campus-feed ai-feed">
+          <!-- 子频道：论文 / 开源 / 智能体 …，与 AI 资源空间同一套分类口径 -->
+          <div class="ai-channels">
+            <button
+              v-for="c in AI_CHANNELS"
+              :key="c.key"
+              type="button"
+              class="ai-channel"
+              :class="{ 'is-active': aiChannel === c.key }"
+              @click="switchAiChannel(c.key)"
+            >{{ c.label }}</button>
+          </div>
+          <p v-if="aiLoading" class="feed-empty">加载中…</p>
+          <p v-else-if="!aiFeeds.length" class="feed-empty">暂无 AI 资源</p>
+          <template v-else>
+            <div
+              v-for="f in aiFeeds"
+              :key="'res-' + f.source_type + '-' + f.id"
+              class="feed-item"
+              role="link"
+              tabindex="0"
+              @click="openFeed(f)"
+              @keydown.enter.prevent="openFeed(f)"
+            >
+              <div class="feed-body">
+                <h3 class="feed-title">{{ f.title }}</h3>
+                <div class="feed-meta">
+                  <span class="feed-time">{{ feedDateLabel(f.published_at) }}</span>
+                  <span class="feed-dot">·</span>
+                  <span class="feed-source">{{ f.source_name || AI_DEFAULT_SOURCE[f.source_type] }}</span>
+                  <span class="feed-dot">·</span>
+                  <span class="feed-source">{{ aiChannelLabel(f.source_type) }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </section>
       </div>
     </div>
     </div>
@@ -417,6 +454,63 @@
             <span v-if="opensInNewWindow(e.url)" class="entry-external">↗</span>
           </a>
         </div>
+      </div>
+    </section>
+
+    <!-- ② 我的收藏 / AI 资源（与移动端两个 Tab 同一份数据，桌面版式保留入口） -->
+    <section class="campus-section">
+      <div class="section-title">我的收藏</div>
+      <div class="campus-card">
+        <p v-if="customTabLoading" class="feed-empty">加载中…</p>
+        <p v-else-if="!myFavorites.length" class="feed-empty">还没有收藏的帖子</p>
+        <template v-else>
+        <div
+          v-for="f in myFavorites.slice(0, 6)"
+          :key="'d-fav-' + f.id"
+          class="feed-item"
+          role="link"
+          tabindex="0"
+          @click="openFavorite(f)"
+          @keydown.enter.prevent="openFavorite(f)"
+        >
+          <div class="feed-body">
+            <h3 class="feed-title">{{ f.title }}</h3>
+            <div class="feed-meta">
+              <span class="feed-time">{{ (f.created_at || '').slice(0, 10) }}</span>
+              <span class="feed-dot">·</span>
+              <span class="feed-source">{{ f.category || '收藏' }}</span>
+            </div>
+          </div>
+        </div>
+        </template>
+      </div>
+    </section>
+
+    <section class="campus-section">
+      <div class="section-title">AI 资源</div>
+      <div class="campus-card">
+        <p v-if="aiLoading" class="feed-empty">加载中…</p>
+        <p v-else-if="!aiFeeds.length" class="feed-empty">暂无 AI 资源</p>
+        <template v-else>
+        <div
+          v-for="f in aiFeeds.slice(0, 6)"
+          :key="'d-res-' + f.source_type + '-' + f.id"
+          class="feed-item"
+          role="link"
+          tabindex="0"
+          @click="openFeed(f)"
+          @keydown.enter.prevent="openFeed(f)"
+        >
+          <div class="feed-body">
+            <h3 class="feed-title">{{ f.title }}</h3>
+            <div class="feed-meta">
+              <span class="feed-time">{{ feedDateLabel(f.published_at) }}</span>
+              <span class="feed-dot">·</span>
+              <span class="feed-source">{{ f.source_name || AI_DEFAULT_SOURCE[f.source_type] }}</span>
+            </div>
+          </div>
+        </div>
+        </template>
       </div>
     </section>
 
@@ -555,11 +649,9 @@
     <ArticleReader ref="readerRef" />
 
     <!-- 移动端全屏搜索子页（移动端页头放大镜的落点；桌面端仍走上面的 el-dialog）：
-         页面栈是「本页 → 搜索页 → 搜索结果页」三层 —— 搜索页里是历史 / 发现 / 热榜，
-         提交搜索后结果作为独立一层盖上来，返回只退那一层（搜索上下文与历史都保留），
-         再返回才回到本页。资讯池由父页备好传入。
-         点资讯命中条目 → 详情子页盖在搜索页/结果页之上（同 z-index、后挂载者在上），
-         详情返回后仍停留在原层，搜索上下文不丢。 -->
+         搜索历史 / 搜索发现 / 热榜三段 + 结果视图，资讯池由父页备好传入。
+         点资讯命中条目 → 详情子页盖在本页之上（同 z-index、后挂载者在上），
+         详情返回后仍停留在搜索页，搜索上下文不丢。 -->
     <CampusSearchPage
       v-if="searchTarget"
       :items="searchPool"
@@ -582,179 +674,16 @@
       @read="onDetailRead"
     />
 
-    <!-- 交流社区发帖悬浮按钮：移动端所有 Tab 页常驻（发帖是社区的全局入口，
-         不随分类页切换消失；游客点击会先走 openPostDialog 里的登录引导） -->
-    <button
-      v-if="isMobile"
-      type="button"
-      class="community-fab"
-      aria-label="发帖"
-      @click="openPostDialog"
-    >
-      <el-icon :size="24"><Plus /></el-icon>
-    </button>
-
-    <!-- 发帖弹窗（原 /student/community 页的发帖功能并入） -->
-    <el-dialog v-model="postDialogVisible" title="发布帖子" width="540px" :close-on-click-modal="false">
-      <el-form label-width="64px">
-        <el-form-item label="分类" required>
-          <el-radio-group v-model="communityPostForm.category">
-            <el-radio v-for="c in COMMUNITY_CATEGORIES" :key="c" :value="c">{{ c }}</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="标题" required>
-          <el-input v-model="communityPostForm.title" placeholder="一句话说清主题" maxlength="60" show-word-limit />
-        </el-form-item>
-        <el-form-item label="内容" required>
-          <el-input v-model="communityPostForm.content" type="textarea" :rows="6" placeholder="详细描述你的问题或分享内容（支持多行）" maxlength="2000" show-word-limit />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="postDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingPost" @click="saveCommunityPost">发布</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 帖子详情抽屉（原 /student/community 页的详情功能并入）：
-         点信息流社区行 / 热帖行 / 论坛互动深链 ?post= 都落到这里 -->
-    <el-drawer v-model="detailVisible" size="92%" :with-header="false" class="post-drawer">
-      <div class="community-detail">
-        <div class="community-detail-top">
-          <div class="community-detail-head">
-            <el-avatar
-              :size="34"
-              :src="detailPost?.author_avatar || undefined"
-              class="community-author-clickable"
-              title="查看个人主页"
-              @click="openUserHomepage(detailPost?.student_id || 0)"
-            >
-              {{ (detailPost?.author_name || '学').slice(0, 1) }}
-            </el-avatar>
-            <div class="community-detail-author">
-              <div
-                class="community-author-name community-author-clickable"
-                @click="openUserHomepage(detailPost?.student_id || 0)"
-              >{{ detailPost?.author_name || '同学' }}</div>
-              <div class="community-author-time">{{ formatCommunityTime(detailPost?.created_at) }} · {{ detailPost?.category }}</div>
-            </div>
-            <el-button size="small" text type="danger" v-if="detailPost?.student_id === myId" @click="removeCommunityPost">删除</el-button>
-            <el-button
-              v-else-if="detailPost"
-              size="small"
-              round
-              :type="authorFollowed ? 'info' : 'primary'"
-              :plain="authorFollowed"
-              class="community-detail-follow"
-              @click="toggleAuthorFollow"
-            >{{ authorFollowed ? '已关注' : '关注' }}</el-button>
-          </div>
-          <div class="community-detail-title">{{ detailPost?.title }}</div>
-          <div class="community-detail-content">{{ detailPost?.content }}</div>
-          <div class="community-detail-stats">
-            <el-button
-              size="small"
-              :type="detailPost?.liked ? 'warning' : 'default'"
-              :plain="!detailPost?.liked"
-              round
-              @click="handleCommunityLike"
-            >
-              <el-icon style="margin-right:3px"><StarFilled /></el-icon>{{ detailPost ? detailPost.like_count : 0 }} 点赞
-            </el-button>
-            <el-button
-              size="small"
-              :type="detailPost?.favorited ? 'primary' : 'default'"
-              :plain="!detailPost?.favorited"
-              round
-              @click="handleCommunityFavorite"
-            >
-              <el-icon style="margin-right:3px"><CollectionTag /></el-icon>{{ detailPost ? detailPost.favorite_count : 0 }} 收藏
-            </el-button>
-            <span class="community-stat"><el-icon :size="14"><View /></el-icon>{{ detailPost?.view_count || 0 }} 浏览</span>
-            <span class="community-stat"><el-icon :size="14"><ChatDotRound /></el-icon>{{ communityComments.length }} 评论</span>
-          </div>
-        </div>
-
-        <div class="community-comment-section">
-          <div class="community-comment-head">评论 ({{ communityComments.length }})</div>
-          <div v-if="!communityComments.length" class="community-comment-empty">暂无评论，来抢沙发吧</div>
-          <div v-for="c in communityComments" :key="c.id" class="community-comment-item">
-            <el-avatar
-              :size="26"
-              :src="c.author_avatar || undefined"
-              class="community-author-clickable"
-              title="查看个人主页"
-              @click="openUserHomepage(c.student_id)"
-            >
-              {{ (c.author_name || '学').slice(0, 1) }}
-            </el-avatar>
-            <div class="community-comment-body">
-              <div class="community-comment-meta">
-                <span class="community-comment-author community-author-clickable" @click="openUserHomepage(c.student_id)">
-                  {{ c.author_name || '同学' }}
-                </span>
-                <span class="community-comment-time">{{ formatCommunityTime(c.created_at) }}</span>
-                <el-button v-if="c.student_id === myId" size="small" text type="danger" class="community-comment-del" @click="removeCommunityComment(c)">删除</el-button>
-              </div>
-              <div class="community-comment-content">{{ c.content }}</div>
-            </div>
-          </div>
-          <div class="community-comment-input-row">
-            <el-input
-              v-model="commentDraft"
-              placeholder="友善评论，专业交流…"
-              maxlength="500"
-              :disabled="!detailVisible"
-              @keyup.enter="submitCommunityComment"
-            />
-            <el-button type="primary" :loading="sendingComment" @click="submitCommunityComment">发表</el-button>
-          </div>
-        </div>
-      </div>
-    </el-drawer>
-
-    <!-- 桌面端交流社区：社区已并入移动端资讯 Tab，桌面端以弹窗承接
-         （工作台 / 个人中心的社区入口统一带 ?tab=community 落到本页） -->
-    <el-dialog v-model="communityDeskVisible" title="交流社区" width="640px">
-      <div class="community-desk-bar">
-        <button
-          v-for="c in communityCategoryChips"
-          :key="c.value"
-          type="button"
-          class="community-chip"
-          :class="{ 'is-active': communityCategory === c.value }"
-          @click="switchCommunityCategory(c.value)"
-        >{{ c.label }}</button>
-        <span class="community-chip-spacer" />
-        <el-button type="primary" size="small" round @click="openPostDialog">
-          <el-icon style="margin-right:2px"><Plus /></el-icon>发帖
-        </el-button>
-      </div>
-      <div class="community-desk-list">
-        <div v-for="p in communityPosts" :key="p.id" class="community-desk-item" @click="openCommunityPost(p.id)">
-          <div class="community-desk-item-head">
-            <span class="community-desk-cat">{{ p.category }}</span>
-            <span class="community-desk-author">{{ p.author_name || '同学' }}</span>
-            <span class="community-desk-time">{{ formatCommunityTime(p.created_at) }}</span>
-          </div>
-          <div class="community-desk-title">{{ p.title }}</div>
-          <div class="community-desk-stats">
-            <span><el-icon :size="13"><View /></el-icon>{{ p.view_count }}</span>
-            <span><el-icon :size="13"><ChatDotRound /></el-icon>{{ p.comment_count }}</span>
-            <span><el-icon :size="13"><StarFilled /></el-icon>{{ p.like_count }}</span>
-          </div>
-        </div>
-        <p v-if="!communityPosts.length" class="community-desk-empty">{{ emptyTextOf('community') }}</p>
-      </div>
-    </el-dialog>
-
     <!-- 互动消息面板（论坛侧，与聊天隔离）：页头信封点开的也是这个 -->
     <ForumInboxSheet v-model="forumInboxOpen" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onMounted, watch } from 'vue'
-import { ElCarousel, ElMessage, ElMessageBox } from 'element-plus'
+import { ref, computed, reactive, nextTick, onMounted, watch } from 'vue'
+import { ElCarousel } from 'element-plus'
+// v6.1 弹窗减负：搜索改用底部动作面板承接
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import { getImpression } from '@/api/campus'
 import type { ImpressionItem } from '@/types'
 import { getCampusImpressionCache, setCampusImpressionCache } from '@/utils/studentDataCache'
@@ -764,8 +693,9 @@ import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
 import CampusSearchPage, { type SearchPoolItem } from '@/components/campus/CampusSearchPage.vue'
 import ForumInboxSheet from '@/components/community/ForumInboxSheet.vue'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
-// 页头信封 = 论坛互动消息（赞 / 收藏 / 评论 / 新粉丝），只在这里看；
-// 聊天消息（群聊 / 私聊）走底部「消息」页签，两套消息不混排。
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { getArticleInteractions, type CampusArticleInteract } from '@/api/campus'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
@@ -773,20 +703,14 @@ import {
   Notification, DataBoard,
   School, Collection,
   SetUp, Histogram, HomeFilled, OfficeBuilding, Search, Message,
-  ChatDotRound, View, Plus, StarFilled, CollectionTag
+  ChatDotRound, View
 } from '@element-plus/icons-vue'
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
-import {
-  getPosts, getPost, createPost, deletePost, toggleLike, toggleFavorite,
-  getComments, createComment, deleteComment, getHotPosts,
-  COMMUNITY_CATEGORIES, type CommunityPost, type CommunityComment,
-} from '@/api/community'
-import { followUser, unfollowUser, getRelation } from '@/api/social'
+import { getFavorites, getFeeds, type Favorite, type FeedItem as FeedEntry, type FeedSourceType } from '@/api/resources'
 import { isGuestMode } from '@/utils/guest'
 import { promptLogin } from '@/utils/loginGate'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { openUserHomepage } from '@/composables/useUserHomepage'
 
 const router = useRouter()
 const route = useRoute()
@@ -814,37 +738,8 @@ function openForumInbox() {
 const vTilt = tilt
 const isMobile = ref(window.innerWidth <= 767)
 window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 767 })
-
-/**
- * 移动端进入页面时，分类 Tab 直接以最终状态呈现，不播「进入动画」。
- * 动画来源：Tab 首次渲染时滑条位还没量出来（tabMetrics 为空，滑条 opacity 0 /
- * 深色文字裁剪 inset(0 100% 0 0) 全隐藏），nextTick 量取后样式落到终态，
- * 两者的 200ms 过渡就会从空态播到终态 —— 观感是「进场时下划线滑入、文字擦入」。
- * 这段 200ms 过渡是「切分类」的动效，不该在进场时补播，所以进入瞬间挂上
- * is-tab-entering 关掉过渡，量取落位、结算一帧后再放开。
- * 桌面端不渲染这套 Tab，不受影响。
- */
-const tabsEntering = ref(isMobile.value)
-
-/** 量取落位后结算一帧再撤掉「进场免动画」标记，避免撤标记本身触发补间 */
-function settleTabsEntering() {
-  if (!tabsEntering.value) return
-  requestAnimationFrame(() => {
-    void document.body.offsetWidth
-    tabsEntering.value = false
-  })
-}
-
 // 从桌面宽度缩回移动端时 Tab 才重新渲染：落位后再量一次滑条基准
-// （重新渲染同样会经历「空态 → 终态」，按进场处理，直接以终态呈现）
-watch(isMobile, v => {
-  if (!v) return
-  tabsEntering.value = true
-  void nextTick(() => {
-    measureTabs()
-    settleTabsEntering()
-  })
-})
+watch(isMobile, v => { if (v) void nextTick(measureTabs) })
 
 /** 站内阅读器：点击资讯在应用内打开（移动端全屏抽屉），不跳出应用。
     站内阅读需要登录态，游客点击时先引导登录。 */
@@ -870,204 +765,91 @@ interface GalleryImage {
 /** 初始值直接取模块级缓存：二次进入命中时首帧就是真实内容，不会闪空态 */
 const impressionData = ref<ImpressionItem[]>(getCampusImpressionCache() ?? [])
 
+/** 「收藏」Tab：我的收藏（资源收藏接口） */
+const myFavorites = ref<Favorite[]>([])
+/** 「AI资源」Tab：外部资讯中心抓取条目（论文 / 开源榜 / 智能体榜 …），与 AI 资源空间同一份数据 */
+const aiFeedCache = reactive<Partial<Record<FeedSourceType, FeedEntry[]>>>({})
+/** AI资源子频道：默认「论文」，与 AI 资源空间默认频道一致 */
+const aiChannel = ref<FeedSourceType>('papers')
+/** AI资源子频道定义（顺序与 AI 资源空间一致） */
+const AI_CHANNELS: { key: FeedSourceType; label: string }[] = [
+  { key: 'papers', label: '论文' },
+  { key: 'opensource', label: '开源' },
+  { key: 'agents', label: '智能体' },
+  { key: 'news', label: '要闻' },
+  { key: 'ai_news', label: '行业' },
+  { key: 'rankings', label: '权威' },
+  { key: 'cn_ai', label: '国产' },
+]
+/** 每个频道兜底来源名（接口没给 source_name 时用） */
+const AI_DEFAULT_SOURCE: Record<FeedSourceType, string> = {
+  papers: 'arXiv',
+  opensource: '开源项目榜',
+  agents: '智能体榜',
+  news: '权威要闻',
+  ai_news: 'AI 行业',
+  rankings: '权威排行榜',
+  cn_ai: '国产模型',
+}
+const aiFeeds = computed(() => aiFeedCache[aiChannel.value] ?? [])
+/** 这两个非资讯 Tab 的加载态 */
+const customTabLoading = ref(false)
+/** AI资源子频道加载态 */
+const aiLoading = ref(false)
+
+async function loadAiChannel(type: FeedSourceType, force = false) {
+  if (!force && aiFeedCache[type]?.length) return
+  aiLoading.value = true
+  try {
+    const rows = await getFeeds({ source_type: type, limit: 20 })
+    aiFeedCache[type] = Array.isArray(rows) ? rows : []
+  } catch {
+    aiFeedCache[type] = aiFeedCache[type] ?? []
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+function switchAiChannel(type: FeedSourceType) {
+  if (aiChannel.value === type) return
+  aiChannel.value = type
+  void loadAiChannel(type)
+}
+
+/** 频道的分类标签（元信息行里的小标签） */
+function aiChannelLabel(type: FeedSourceType) {
+  return AI_CHANNELS.find(c => c.key === type)?.label || 'AI'
+}
+/** 条目日期：只显示到天，抓取时间对读者没意义 */
+function feedDateLabel(iso: string | null) {
+  if (!iso) return '最近'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '最近'
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+async function loadCustomTabData() {
+  customTabLoading.value = true
+  try {
+    const favs = await getFavorites().catch(() => [] as Favorite[])
+    myFavorites.value = Array.isArray(favs) ? favs : []
+  } finally {
+    customTabLoading.value = false
+  }
+  void loadAiChannel(aiChannel.value)
+}
+
+/** 站内路径直接跳；站外链接新开页签 */
+function openSavedLink(link: string | null) {
+  if (!link) return
+  if (link.startsWith('/')) router.push(link)
+  else window.open(link, '_blank', 'noopener')
+}
+function openFavorite(f: Favorite) { openSavedLink(f.link) }
+function openFeed(f: FeedEntry) { openSavedLink(f.link) }
+
 /** 刷新在途态：桌面端「点标题刷新」用，防重复点击（连点会重复打后端） */
 const refreshing = ref(false)
-
-/* ==================== 交流社区 Tab ====================
-   原 /student/community 独立页已删除，社区完整功能并入本页：
-   帖子流（Tab 信息流）+ 分类筛选 / 排序 + 热帖推荐 + 详情抽屉
-   （点赞 / 收藏 / 评论 / 关注作者 / 删除）+ 发帖弹窗。
-   帖子接口（/api/community/posts）需要登录态，游客不请求、Tab 走空态引导。
-   每次进入本页都重新拉一份（组件随导航重建），page_size 取 20：
-   信息流场景下足够刷，也远低于后端 50 的上限。 */
-const communityPosts = ref<CommunityPost[]>([])
-const communityHot = ref<CommunityPost[]>([])
-const communityCategory = ref('all')
-const communitySort = ref<'new' | 'hot'>('new')
-
-const communityCategoryChips = [
-  { label: '全部', value: 'all' },
-  ...COMMUNITY_CATEGORIES.map(c => ({ label: c, value: c })),
-]
-
-/** 桌面端社区弹窗：桌面版式没有分类 Tab，入口深链 ?tab=community 时用它承接帖子列表 */
-const communityDeskVisible = ref(false)
-
-async function loadCommunityPosts() {
-  if (isGuestMode()) return
-  try {
-    const params: { category?: string; page: number; page_size: number; sort: string } = {
-      page: 1, page_size: 20, sort: communitySort.value,
-    }
-    if (communityCategory.value !== 'all') params.category = communityCategory.value
-    communityPosts.value = await getPosts(params)
-  } catch {
-    /* 网络异常保留旧数据：Tab 上是空态，不至于白屏 */
-  }
-}
-
-async function loadCommunityHot() {
-  if (isGuestMode()) return
-  try { communityHot.value = await getHotPosts(5) } catch { communityHot.value = [] }
-}
-
-function switchCommunityCategory(c: string) {
-  communityCategory.value = c
-  void loadCommunityPosts()
-}
-
-function switchCommunitySort(s: 'new' | 'hot') {
-  communitySort.value = s
-  void loadCommunityPosts()
-}
-
-/* ---------- 帖子详情抽屉（原 CommunityView 的 detail drawer） ---------- */
-const detailVisible = ref(false)
-const detailPost = ref<CommunityPost | null>(null)
-const communityComments = ref<CommunityComment[]>([])
-const commentDraft = ref('')
-const sendingComment = ref(false)
-/* ===== 作者关注：与消息页通讯录、个人主页共用同一套关注关系 ===== */
-const authorFollowed = ref(false)
-const myId = computed(() => auth.user?.id ?? null)
-
-function formatCommunityTime(t: string | null | undefined) {
-  if (!t) return ''
-  const d = new Date(t)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-async function openCommunityPost(id: number) {
-  if (isGuestMode()) {
-    void promptLogin('查看帖子详情')
-    return
-  }
-  try {
-    detailPost.value = await getPost(id)
-    communityComments.value = await getComments(id)
-    detailVisible.value = true
-    void loadAuthorFollow(detailPost.value?.student_id)
-  } catch {
-    ElMessage.error('帖子加载失败')
-  }
-}
-
-async function loadAuthorFollow(authorId?: number) {
-  authorFollowed.value = false
-  if (!authorId || authorId === myId.value) return
-  try {
-    authorFollowed.value = (await getRelation(authorId)).is_following
-  } catch { /* 未登录 / 网络异常时保持未关注态 */ }
-}
-
-async function toggleAuthorFollow() {
-  const authorId = detailPost.value?.student_id
-  if (!authorId || authorId === myId.value) return
-  try {
-    if (authorFollowed.value) {
-      await unfollowUser(authorId)
-      authorFollowed.value = false
-      ElMessage.success('已取消关注')
-    } else {
-      const state = await followUser(authorId)
-      authorFollowed.value = state.is_following
-      ElMessage.success(state.is_friend ? '已互关，成为好友' : '已关注')
-    }
-  } catch {
-    ElMessage.error('操作失败，请稍后重试')
-  }
-}
-
-async function handleCommunityLike() {
-  if (!detailPost.value) return
-  const res = await toggleLike(detailPost.value.id)
-  if (detailPost.value) {
-    detailPost.value.liked = res.liked
-    detailPost.value.like_count = res.count
-  }
-  void loadCommunityPosts()
-  void loadCommunityHot()
-}
-
-async function handleCommunityFavorite() {
-  if (!detailPost.value) return
-  try {
-    const res = await toggleFavorite(detailPost.value.id)
-    if (detailPost.value) {
-      detailPost.value.favorited = res.favorited
-      detailPost.value.favorite_count = res.count
-    }
-    ElMessage.success(res.favorited ? '已收藏' : '已取消收藏')
-    // 列表里的收藏数同步（收藏数字与点赞分开计数）
-    void loadCommunityPosts()
-  } catch {
-    ElMessage.error('操作失败，请稍后重试')
-  }
-}
-
-async function submitCommunityComment() {
-  const content = commentDraft.value.trim()
-  if (!content || !detailPost.value) return
-  sendingComment.value = true
-  try {
-    await createComment(detailPost.value.id, content)
-    commentDraft.value = ''
-    communityComments.value = await getComments(detailPost.value.id)
-    if (detailPost.value) detailPost.value.comment_count = communityComments.value.length
-    void loadCommunityPosts()
-    ElMessage.success('评论成功')
-  } finally { sendingComment.value = false }
-}
-
-async function removeCommunityComment(c: CommunityComment) {
-  await ElMessageBox.confirm('确定删除这条评论吗？', '删除确认', { type: 'warning' })
-  await deleteComment(c.id)
-  communityComments.value = communityComments.value.filter(x => x.id !== c.id)
-  if (detailPost.value) detailPost.value.comment_count = communityComments.value.length
-  void loadCommunityPosts()
-}
-
-async function removeCommunityPost() {
-  if (!detailPost.value) return
-  await ElMessageBox.confirm('确定删除这篇帖子吗？', '删除确认', { type: 'warning' })
-  await deletePost(detailPost.value.id)
-  ElMessage.success('已删除')
-  detailVisible.value = false
-  await Promise.all([loadCommunityPosts(), loadCommunityHot()])
-}
-
-/* ---------- 发帖弹窗（原 CommunityView 的 post dialog） ---------- */
-const postDialogVisible = ref(false)
-const savingPost = ref(false)
-const communityPostForm = reactive({ category: '分享', title: '', content: '' })
-
-function openPostDialog() {
-  if (isGuestMode()) {
-    void promptLogin('发帖')
-    return
-  }
-  communityPostForm.category = '分享'
-  communityPostForm.title = ''
-  communityPostForm.content = ''
-  postDialogVisible.value = true
-}
-
-async function saveCommunityPost() {
-  if (!communityPostForm.title.trim()) return ElMessage.warning('请填写标题')
-  if (!communityPostForm.content.trim()) return ElMessage.warning('请填写内容')
-  savingPost.value = true
-  try {
-    await createPost({
-      category: communityPostForm.category,
-      title: communityPostForm.title.trim(),
-      content: communityPostForm.content.trim(),
-    })
-    ElMessage.success('发布成功')
-    postDialogVisible.value = false
-    await Promise.all([loadCommunityPosts(), loadCommunityHot()])
-  } finally { savingPost.value = false }
-}
 
 function byDateDesc(a: ImpressionItem, b: ImpressionItem) {
   const da = a.date ? Date.parse(a.date) : NaN
@@ -1322,6 +1104,14 @@ async function refreshImpression() {
   }
 }
 
+/** 下拉刷新：重取资讯流并顺带刷新未读（复用现有加载，失败静默） */
+async function refreshAll() {
+  await loadImpression()
+  void refreshUnread()
+}
+
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+
 // ---------------- 头部搜索 ----------------
 
 const SEARCH_HOT_KEYWORDS = ['图书馆', '放假', '招聘', '奖学金', '讲座']
@@ -1502,32 +1292,36 @@ const carouselImages = computed(() => galleryImages)
  *   关注关系与数据源尚未接入，当前 itemsOfTab 固定返回空数组、页面走空态，
  *   后续接后端时只改 itemsOfTab 一处即可（轮播仍只属于推荐页，见 heroSlidesOf）。
  * 其余 5 个与桌面端卡片一一对应：教学动态 / 通知公告 / 教学建设 / 学院动态 / 图书馆。
- * 'community' 是「交流社区」：不是资讯栏目，而是社区帖子流 —— 与其他分类同一条
- *   信息流版式渲染（标题 + 元信息 + 互动数），数据源是 /api/community/posts
- *   （见 feedItemsOf 的 community 分支），点击由 openDetail 打开本页的帖子详情抽屉。
  * 「高教信息」不设 Tab：移动端信息流不展示该栏目的内容（见 itemsOfTab），
  * 与桌面端「高教信息」卡片并列的只剩「教学建设」，那条桌面布局保持不变。
  */
 type FeedTabKey =
   | 'recommend'
   | 'following'
-  | 'community'
   | 'jwc_jxdt'
   | 'jwc_tzgg'
   | 'jwc_jxjs'
   | 'college_news'
   | 'library'
+  | 'favorites'
+  | 'ai_resources'
 
 const FEED_TABS: { key: FeedTabKey; label: string }[] = [
   { key: 'recommend', label: '推荐' },
   { key: 'following', label: '关注' },
-  { key: 'community', label: '交流社区' },
   { key: 'jwc_jxdt', label: '教学动态' },
   { key: 'jwc_tzgg', label: '通知公告' },
   { key: 'jwc_jxjs', label: '教学建设' },
   { key: 'college_news', label: '学院动态' },
   { key: 'library', label: '图书馆' },
+  { key: 'favorites', label: '收藏' },
+  { key: 'ai_resources', label: 'AI资源' },
 ]
+
+/** 这两个 Tab 不是资讯流：数据源是收藏记录 / AI 资源库，模板里单独渲染 */
+function isCustomTab(key: FeedTabKey): boolean {
+  return key === 'favorites' || key === 'ai_resources'
+}
 
 const activeTab = ref<FeedTabKey>('recommend')
 
@@ -1545,9 +1339,6 @@ function itemsOfTab(key: FeedTabKey): ImpressionItem[] {
   // 关注流：关注关系（用户 → 栏目 / 来源）尚未落地，先返回空数组走空态。
   // 后续接入时在这里按「我关注的来源」过滤即可，口径与推荐流保持一致（同样剔除系统入口）。
   if (key === 'following') return []
-  // 交流社区：帖子不来自资讯池（impressionData），真正的数据源在 communityPosts，
-  // 由 feedItemsOf 的 community 分支直接映射，这里返回空数组兜底。
-  if (key === 'community') return []
 
   const all = impressionData.value.filter(i => !MOBILE_HIDDEN_SOURCES.includes(i.source))
   if (key === 'recommend') {
@@ -1908,12 +1699,9 @@ function onPagerPointerDown(e: PointerEvent) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
   if (!e.isPrimary) return
   const target = e.target as HTMLElement | null
-  // 从当前页卡片的任意非交互区域起手：「关注」Tab 只有一条空态文字、「交流社区」Tab
-  // 顶部是筛选 chips + 热帖区（在 .campus-feed 之外）——只认信息流的话这两页
-  // 几乎无处起手滑动。轮播有自己的拖动手势；按钮 / 链接等交互元素优先当点击。
-  if (!target?.closest('.campus-pager-page')) return
-  if (target.closest('.campus-hero-carousel')) return
-  if (target.closest('button, a, input, textarea, select, [contenteditable]')) return
+  // 只从信息流上起手：轮播图片有自己的拖动；行内互动按钮优先当点击
+  if (!target?.closest('.campus-feed')) return
+  if (target.closest('button')) return
   measurePagerWidth()
   // 滑条位置按 Tab 按钮实测宽度算：起手时重新量一次，避免字体 / 宽度变化后对不上
   measureTabs()
@@ -2111,22 +1899,6 @@ interface FeedItem {
  * 卡片分页里每一页都走这里取数，口径与当前页完全一致。
  */
 function feedItemsOf(key: FeedTabKey): FeedItem[] {
-  // 交流社区：帖子映射成信息流行 —— 与资讯行同一套版式（标题两行 + 元信息 + 互动数）。
-  // url 是内部 scheme（community://post/<id>），只作行的 key 与 openDetail 的路由依据，
-  // 不会真的当链接打开；点击由 openDetail 解析出帖子 id 打开本页的详情抽屉。
-  // 互动数直接用帖子自带的 comment_count / view_count，不走 loadInteractions（那是资讯文章的表）。
-  if (key === 'community') {
-    return communityPosts.value.map(p => ({
-      title: p.title,
-      url: `community://post/${p.id}`,
-      image_url: null,
-      timeLabel: relativeTime(p.created_at),
-      sourceLabel: p.category + (p.author_name ? ` · ${p.author_name}` : ''),
-      source: 'community',
-      comment_count: p.comment_count,
-      view_count: p.view_count,
-    }))
-  }
   return itemsOfTab(key).map(i => {
     const s = interactionMap.value[i.url]
     return {
@@ -2149,13 +1921,9 @@ const mobileFeed = computed<FeedItem[]>(() => feedItemsOf(activeTab.value))
  * 信息流空态文案。
  * 「关注」是空态的常客（关注关系还没接，itemsOfTab 固定返回空数组），
  * 单独给一句中性说明；等关注功能落地后，这里换成「还没有关注的栏目」之类的引导文案。
- * 「交流社区」的空态分两种：游客（帖子接口要登录态，引导登录）、登录后真没帖子。
  * 其余分类沿用原文案；「推荐」几乎不会为空，也按普通分类处理，不额外造一句。
  */
 function emptyTextOf(key: FeedTabKey): string {
-  if (key === 'community') {
-    return isGuestMode() ? '登录后查看社区帖子' : '社区里还没有帖子，去发第一帖吧'
-  }
   return key === 'following' ? '还没有关注的内容' : '该分类暂无内容'
 }
 
@@ -2188,7 +1956,7 @@ const HERO_MAX = 5
  *  ① 取全部资讯里**真带图**的条目（按日期倒序）—— 图与标题都来自资讯本身，
  *     点进去就是这篇资讯，这是最有价值的轮播形态；
  *  ② 一张带图的都没有（教学动态抓取失败 / 首次加载未完成）→ 用本地校园风光兜底，
- *     标题用资讯标题，保证首屏不留一块空白，也不影响点击进详情子页。
+ *     标题用资讯标题，保证首屏不留一块空白，也不影响点击进阅读器。
  * 纯前端计算：切 Tab 不产生任何请求。
  */
 function heroSlidesOf(key: FeedTabKey): HeroSlide[] {
@@ -2217,9 +1985,9 @@ function heroSlidesOf(key: FeedTabKey): HeroSlide[] {
   }))
 }
 
-/** 轮播图点击：进资讯详情子页，与信息流整行点击同一落点（兜底风光图也带资讯 url，同样可点） */
+/** 轮播图点击：有 url 就进站内阅读器（兜底风光图也带资讯 url，同样可点） */
 function openHeroSlide(s: HeroSlide) {
-  if (s.url) openDetail(s.url, s.title)
+  if (s.url) openArticle(s.url, s.title)
 }
 
 /* ---------- 大图轮播：按住拖动切换（Pointer Events，鼠标 / 触屏同一套逻辑） ----------
@@ -2228,7 +1996,7 @@ function openHeroSlide(s: HeroSlide) {
      · 按下即暂停自动轮播（避免边拖边自己翻页）；
      · 水平位移超过阈值（10px）才进入「拖动」态，轨道随手指跟手偏移（带阻尼）；
      · 松手按位移与速度决定「翻页」还是「回弹」—— 慢拖过半才翻，快甩超过阈值速度也翻；
-     · 全程没超过阈值 = 一次点击，交给 <a> 的 click 进详情子页；
+     · 全程没超过阈值 = 一次点击，交给 <a> 的 click 进阅读器；
        超过阈值则吞掉随后的 click，避免「拖完手一松就点进了文章」。
    竖直方向交给页面滚动（touch-action: pan-y），不拦截。
    自动轮播用受控 prop `:autoplay` 启停：Element Plus 的 pause/start 不在组件实例上暴露，
@@ -2447,6 +2215,9 @@ function onHeroSlideDragStart(e: DragEvent) {
  */
 const detailTarget = ref<{ url: string; title: string; source: string; from: 'row' | 'comment' | 'repost' } | null>(null)
 
+// 校园资讯的搜索页 / 文章详情 / 论坛信箱属于二级页，打开时让出移动端底部悬浮导航
+useMobileSubPage(computed(() => isMobile.value && (searchTarget.value || !!detailTarget.value || forumInboxOpen.value)))
+
 /**
  * 互动计数表：url → 计数 + 当前用户是否点赞。
  * 组件每次导航都会重建，所以这份表放在**模块级**作用域（与 impression 缓存同理），
@@ -2498,13 +2269,6 @@ function onDetailUpdated(payload: DetailUpdatedPayload) {
  */
 function openDetail(url: string, title?: string, from: 'row' | 'comment' | 'repost' = 'row') {
   if (!url) return
-  // 交流社区帖子：不进资讯详情子页（那是按 URL 抓正文的），直接打开本页的
-  // 帖子详情抽屉（含评论 / 点赞 / 收藏 / 关注作者）。行内「评论」按钮与整行点击
-  // 落到同一处：抽屉里评论框就在详情下方，不用再聚焦一次。
-  if (url.startsWith('community://post/')) {
-    void openCommunityPost(Number(url.slice('community://post/'.length)))
-    return
-  }
   // 来源栏目从信息流项里取：详情页要用它显示顶栏副标题与来源标签
   const source = mobileFeed.value.find(f => f.url === url)?.source || ''
   detailTarget.value = { url, title: title || '', source, from }
@@ -2552,10 +2316,7 @@ watch(
   () => pagerPages.value.map(p => p.items.map(i => i.url).join(',')).join('|'),
   () => {
     if (!isMobile.value) return
-    // 交流社区的行不是资讯文章（url 是 /student/community?post=…），不在互动计数表里，剔除
-    void loadInteractions(
-      pagerPages.value.flatMap(p => p.items.filter(i => i.source !== 'community').map(i => i.url)),
-    )
+    void loadInteractions(pagerPages.value.flatMap(p => p.items.map(i => i.url)))
   },
   { immediate: true },
 )
@@ -2563,17 +2324,16 @@ watch(
 onMounted(() => {
   // 分页宽度要等 DOM 渲染完才能量：吸附位移、边界判断都按它算
   void nextTick(measurePagerWidth)
-  // Tab 滑条同样要等按钮落位后再量；字体异步加载完成后再补量一次。
-  // 移动端首次量取后结算一帧才撤「进场免动画」标记（settleTabsEntering），
-  // 让 Tab 以最终状态直接呈现，不播进入动画；字体就绪后的补量若已离场则不重播。
-  void nextTick(() => {
-    measureTabs()
-    settleTabsEntering()
-  })
-  void document.fonts?.ready.then(() => {
-    measureTabs()
-    settleTabsEntering()
-  })
+  // Tab 滑条同样要等按钮落位后再量；字体异步加载完成后再补量一次
+  void nextTick(measureTabs)
+  void document.fonts?.ready.then(measureTabs)
+  // 收藏 / AI资源 Tab 的数据与资讯流缓存无关，单独拉取（失败静默走空态）
+  void loadCustomTabData()
+  // 深链：个人中心「收藏的帖子」→ /student/campus?tab=favorites
+  const tabParam = route.query.tab
+  if (typeof tabParam === 'string' && FEED_TABS.some(t => t.key === tabParam)) {
+    activeTab.value = tabParam as FeedTabKey
+  }
   // 本页组件在每次导航时都会被重建（StudentLayout 未用 keep-alive），
   // 因此不能用「组件是否已挂载」来判断要不要加载，只能看模块级缓存：
   // - 命中缓存（10 分钟内已加载过）→ 直接复用，不发请求，页面首帧即真实内容，不闪；
@@ -2581,38 +2341,10 @@ onMounted(() => {
   const cached = getCampusImpressionCache()
   if (cached) {
     impressionData.value = cached
-  } else {
-    loadImpression()
+    return
   }
-  // 交流社区 Tab：帖子流与热帖与资讯首屏并行拉取（游客跳过，Tab 走空态引导登录）
-  void loadCommunityPosts()
-  void loadCommunityHot()
-
-  // 深链：?tab=community（原交流社区入口统一落点）→ 移动端直切社区 Tab，桌面端开社区弹窗；
-  // ?post=<id>（论坛互动消息直达，原 /student/community?post= 的承接方）→ 切社区 Tab 并打开帖子详情抽屉
-  if (route.query.tab === 'community') {
-    if (isMobile.value) switchTab('community')
-    else communityDeskVisible.value = true
-  }
-  const linkedPostId = Number(route.query.post || 0)
-  if (linkedPostId) {
-    switchTab('community')
-    void openCommunityPost(linkedPostId)
-  }
+  loadImpression()
 })
-
-// 已在本页时再点论坛互动消息（ForumInbox 推 ?post=）：同路由只换 query，watch 兜底打开。
-// 顺手收起互动消息面板 —— 帖子详情抽屉与面板都挂在 body 上，叠着会互相抢层级。
-watch(
-  () => route.query.post,
-  (v) => {
-    const id = Number(v || 0)
-    if (!id) return
-    forumInboxOpen.value = false
-    if (route.query.tab !== 'community') switchTab('community')
-    void openCommunityPost(id)
-  },
-)
 </script>
 
 <style scoped>
@@ -2825,6 +2557,7 @@ watch(
 .appbar-btn:hover { background: rgba(255, 255, 255, .24); border-color: rgba(255, 255, 255, .32); }
 .appbar-btn:active { transform: scale(.93); background: rgba(255, 255, 255, .3); }
 .appbar-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
 /* 互动消息入口：未读数量挂在图标右上角（信封=论坛互动，聊天走底部「消息」页签） */
 .appbar-btn--dot { position: relative; }
 .appbar-dot {
@@ -3422,6 +3155,8 @@ watch(
     background: transparent;
     /* 卡片轨道左右各挂一页邻居，拖动时会平移出可视区：横向裁掉，避免撑出横向滚动条 */
     overflow-x: hidden;
+    /* 下拉刷新：避免浏览器原生下拉刷新抢手势 */
+    overscroll-behavior-y: contain;
   }
   .campus-page > section, .campus-page > nav { flex-shrink: 0; }
 
@@ -3573,15 +3308,6 @@ watch(
   }
   .campus-tabs.is-pager-dragging .campus-tab-indicator,
   .campus-tabs.is-pager-resetting .campus-tab-indicator {
-    transition: none;
-  }
-  /* 进场免动画：进入页面（或从桌面宽度缩回移动端）Tab 首次量取落位前挂上
-     is-tab-entering —— 滑条与深色文字裁剪都不走过渡，直接以最终状态呈现。
-     没有它，首次量取会把「空态 → 终态」的样式跳变交给 200ms 过渡播出来，
-     观感是进场时下划线滑入、选中文字擦入；切换分类的正常过渡不受影响
-     （量取落位结算一帧后该类即被撤掉，见脚本区 settleTabsEntering）。 */
-  .campus-tabs.is-tab-entering .campus-tab-indicator,
-  .campus-tabs.is-tab-entering .campus-tab-label-dark {
     transition: none;
   }
 
@@ -3820,21 +3546,51 @@ watch(
   }
 
   /* ---------- 信息流 ----------
-     参考稿行式结构：左侧标题两行 + 13px 灰色元信息，右侧 129×97 缩略图，
+     参考稿行式结构：左侧标题两行 + 12px 灰色元信息，右侧 16:9 缩略图，
      每行之间一条 1px #F0F0F0 分割线（不是靠留白分隔）。
      行本身不再设左右内边距（由 .campus-feed 统一给 20px），
      分割线因此从内容左缘延伸到卡片右缘内 20px 处，与参考稿一致。 */
   .campus-feed { display: flex; flex-direction: column; }
+
+  /* ---------- AI资源子频道 ----------
+     横向可滑的胶囊标签行，压在信息流上方。
+     与页面 Tab 区分：Tab 是文字 + 下划线，这里用浅灰胶囊，一眼看出是「二级筛选」。 */
+  .ai-channels {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 0 12px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .ai-channels::-webkit-scrollbar { display: none; }
+  .ai-channel {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid #ebedf0;
+    background: #f7f8fa;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #86909c;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .16s ease, color .16s ease, border-color .16s ease;
+  }
+  .ai-channel:active { opacity: .72; }
+  .ai-channel.is-active {
+    background: #1d2129;
+    border-color: #1d2129;
+    color: #fff;
+    font-weight: 600;
+  }
   .feed-item {
     display: flex;
-    /* 垂直居中而非顶部对齐：单行标题的条目，文字块（标题+元信息 ≈52px）
-       比固定 16:9 缩略图（120×67.5）矮，若顶部对齐，缩略图多出的高度
-       全部堆在元信息下方，形成一段突兀的空白（整行显得虚高）。
-       居中后剩余空间均分到文字块上下，与头条 / 知乎等信息流行为一致；
-       双行标题时文字块比缩略图高，行高仍由文字块决定，不受影响。 */
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
-    padding: 16px 0;
+    padding: 13px 0;
     border-bottom: 1px solid #f0f0f0;
     -webkit-tap-highlight-color: transparent;
     transition: opacity .14s ease;
@@ -3846,7 +3602,7 @@ watch(
      因此整行可点由 @click 承担，键盘可达由 tabindex + Enter 补上。 */
   .feed-item { cursor: pointer; outline: none; }
   .feed-item:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; border-radius: 8px; }
-  .feed-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .feed-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
   /* 行尾互动：图标 + 数字，无底色无边框。热区用 padding 撑到 32px 高，
      但**视觉**上只是 13px 小字，避免评论区数字抢走标题的视觉权重。
      与时间 / 标签同一行：左侧留 12px 起，组内 gap 16px，
@@ -3867,14 +3623,14 @@ watch(
     background: none;
     border: 0;
     font: inherit;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1;
     color: #b2b2b2;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition: color .16s ease, transform .12s ease;
   }
-  .feed-act .el-icon { font-size: 15px; }
+  .feed-act .el-icon { font-size: 14px; }
   .feed-act:active { transform: scale(.9); }
   .feed-act:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 4px; }
   /* 浏览量：只做数字展示（没有可点的去向），去掉按钮的按压反馈 */
@@ -3882,7 +3638,7 @@ watch(
   .feed-act.is-static:active { transform: none; }
   .feed-title {
     margin: 0;
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 600;
     line-height: 1.5;
     color: #1d2129;
@@ -3896,7 +3652,7 @@ watch(
     display: flex;
     align-items: center;
     gap: 0;
-    font-size: 13px;
+    font-size: 12px;
     color: #b2b2b2;
     line-height: 1.2;
   }
@@ -3908,14 +3664,14 @@ watch(
      必须配 object-fit:cover，图片原始比例再怪也只裁不拉伸。 */
   .feed-thumb {
     flex-shrink: 0;
-    width: 120px;
+    width: 104px;
     aspect-ratio: 16 / 9;
     border-radius: 8px;
     overflow: hidden;
     background: #f2f3f5;
     position: relative;
-    /* 垂直位置随 .feed-item 的 align-items:center 居中：
-       单行条目文字块比图矮、双行条目文字块比图高，居中在两种情况下都不留偏侧空白 */
+    /* 缩略图高度小于左侧文字块：顶部对齐，行高由文字块决定 */
+    align-self: flex-start;
   }
   .feed-thumb img {
     position: absolute;
@@ -3946,148 +3702,5 @@ watch(
      因此这里无需再为它们写移动端覆盖样式；
      若后续要恢复某个卡片到移动端，把它移出该 template 并在此补样式即可。 */
 }
-
-/* ==================== 交流社区（并入本页的帖子流 / 详情 / 发帖） ====================
-   这些类同时服务移动端 Tab 卡片与桌面端社区弹窗（详情抽屉两端共用），故放在
-   媒体查询之外，不随移动端断点折叠。 */
-
-/* 分类筛选 + 排序 chips */
-.community-chip-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 12px 16px 2px;
-}
-.community-chip {
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
-  color: #4e5969;
-  font-size: 12px;
-  line-height: 1;
-  padding: 6px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background .15s ease, color .15s ease, border-color .15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.community-chip.is-active {
-  background: #1d2129;
-  border-color: #1d2129;
-  color: #fff;
-}
-.community-chip-spacer { flex: 1; }
-
-/* 热帖推荐：浅橙卡片，与资讯流视觉分层（对齐原社区页 hot-card 的观感） */
-.community-hot {
-  margin: 10px 16px 2px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #fffaf0 0%, #fff 60%);
-  border: 1px solid rgba(230, 162, 60, 0.18);
-}
-.community-hot-head { font-size: 12px; font-weight: 600; color: #b88230; margin-bottom: 4px; }
-.community-hot-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 4px;
-  border: 0;
-  background: none;
-  border-radius: 8px;
-  cursor: pointer;
-  text-align: left;
-  transition: background .2s;
-}
-.community-hot-item:hover { background: rgba(230, 162, 60, 0.08); }
-.community-hot-title {
-  flex: 1;
-  font-size: 13px;
-  color: #1d2129;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.community-hot-count { font-size: 11px; color: #b88230; flex-shrink: 0; }
-
-/* 发帖 FAB：移动端全 Tab 常驻圆钮（与定时任务子页的绿色 FAB 同节奏）。
-   与 dock 栏的间距规则：到 dock 胶囊顶边的垂直间隙 = 到右缘的水平间隙。
-   水平：对齐底部导航「个人中心」页签（第 5 个）的中轴——胶囊 = 容器宽
-   W=min(100vw,440px) 左右各内缩 14px，内部再 0 8px 内边距，5 个页签等分；
-   个人中心中轴距容器右缘 = 14 + 8 + 4.5×(W−44)/5 = 0.1W + 17.6px；
-   FAB 宽 52，中轴对齐后右缘还要收 26px → 右缘间隙 = 0.1W − 8.4px。
-   垂直：dock 胶囊顶边距屏底 12 + 62 = 74px（+安全区），
-   bottom = 74 + 间隙 + 安全区 = 0.1W + 65.6px + 安全区。 */
-.community-fab {
-  position: fixed;
-  right: calc(min(100vw, 440px) * 0.1 - 8.4px);
-  bottom: calc(min(100vw, 440px) * 0.1 + 65.6px + env(safe-area-inset-bottom, 0px));
-  z-index: 30;
-  width: 52px;
-  height: 52px;
-  border: 0;
-  border-radius: 50%;
-  background: #1d2129;
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 18px rgba(29, 33, 41, 0.35);
-  cursor: pointer;
-  transition: transform .15s ease;
-}
-.community-fab:active { transform: scale(0.94); }
-
-/* 帖子详情抽屉（原 CommunityView 的 detail-box，类名加 community- 前缀） */
-.community-detail { padding: 4px 2px; }
-.community-detail-top { border-bottom: 1px solid rgba(0, 0, 0, 0.06); padding-bottom: 14px; }
-.community-detail-head { display: flex; align-items: center; gap: 10px; }
-.community-detail-author { flex: 1; }
-.community-author-name { font-size: 14px; font-weight: 600; color: #1a1a2e; }
-.community-author-time { font-size: 11px; color: #999; margin-top: 2px; }
-.community-author-clickable { cursor: pointer; }
-.community-author-clickable:hover { color: #409eff; }
-.community-detail-title { margin-top: 14px; font-size: 18px; font-weight: 700; color: #1a1a2e; }
-.community-detail-content {
-  margin-top: 10px; font-size: 14px; color: #3a3a4e; line-height: 1.8;
-  white-space: pre-wrap; word-break: break-word;
-}
-.community-detail-stats { display: flex; align-items: center; gap: 18px; margin-top: 14px; }
-.community-stat { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #999; }
-
-/* 评论区 */
-.community-comment-section { padding-top: 14px; }
-.community-comment-head { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 10px; }
-.community-comment-empty { color: #999; font-size: 13px; text-align: center; padding: 22px 0; }
-.community-comment-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px dashed rgba(0, 0, 0, 0.05); }
-.community-comment-body { flex: 1; min-width: 0; }
-.community-comment-meta { display: flex; align-items: center; gap: 8px; }
-.community-comment-author { font-size: 12px; font-weight: 600; color: #555; }
-.community-comment-time { font-size: 11px; color: #bbb; }
-.community-comment-del { margin-left: auto; flex-shrink: 0; }
-.community-comment-content { margin-top: 4px; font-size: 13px; color: #444; line-height: 1.6; word-break: break-word; }
-.community-comment-input-row { display: flex; gap: 8px; margin-top: 14px; }
-
-/* 桌面端社区弹窗（帖子列表 + 筛选 + 发帖入口） */
-.community-desk-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.community-desk-list { max-height: 52vh; overflow-y: auto; }
-.community-desk-item {
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 10px;
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  transition: box-shadow .2s;
-}
-.community-desk-item:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); }
-.community-desk-item-head { display: flex; align-items: center; gap: 8px; }
-.community-desk-cat { font-size: 11px; color: #409eff; border: 1px solid rgba(64, 158, 255, 0.35); border-radius: 999px; padding: 1px 8px; }
-.community-desk-author { font-size: 12px; color: #666; font-weight: 600; }
-.community-desk-time { margin-left: auto; font-size: 11px; color: #bbb; }
-.community-desk-title { margin-top: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; }
-.community-desk-stats { display: flex; gap: 14px; margin-top: 8px; }
-.community-desk-stats span { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #999; }
-.community-desk-empty { color: #999; font-size: 13px; text-align: center; padding: 22px 0; }
 </style>
 

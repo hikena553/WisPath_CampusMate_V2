@@ -1,11 +1,10 @@
 <template>
   <!-- 发布公告 Dialog -->
-  <el-dialog
+  <!-- 发布公告（表单+AI+附件：移动端=全屏子页） -->
+  <ResponsivePopup
     v-model="dialogVisible"
     title="发布公告"
-    :width="isMobile ? '90%' : '380px'"
-    align-center
-    :close-on-click-modal="false"
+    width="380px"
     class="tui-dialog"
   >
     <div class="tui-section-hint">
@@ -45,21 +44,21 @@
       <el-button @click="emit('update:visible', false)">取消</el-button>
       <el-button type="primary" @click="handleCreate">发布</el-button>
     </template>
-  </el-dialog>
+  </ResponsivePopup>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+// v6.1 弹窗减负：公告表单走全屏子页承接
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { createAnnouncement } from '@/api/announcement'
 import { ElMessage } from 'element-plus'
-import { useResponsive } from '@/composables/useResponsive'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ 'update:visible': [value: boolean]; created: [] }>()
 
-const { isMobile } = useResponsive()
 
 const dialogVisible = computed({
   get: () => props.visible,

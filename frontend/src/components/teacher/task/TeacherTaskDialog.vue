@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <ResponsivePopup
     :model-value="modelValue"
     :title="isEdit ? '编辑任务' : '新增任务'"
     width="520px"
@@ -70,11 +70,13 @@
       <el-button @click="emit('update:modelValue', false)">取消</el-button>
       <el-button type="primary" :loading="saving" @click="submit">{{ isEdit ? '保存' : '创建' }}</el-button>
     </template>
-  </el-dialog>
+  </ResponsivePopup>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+// v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { ElMessage } from 'element-plus'
 import { createTeacherTask, updateTeacherTask, type TaskPriority, type TeacherTask } from '@/api/teacherTask'
 import { getStudents, type StudentSummary } from '@/api/teacher'
@@ -169,6 +171,9 @@ async function searchStudents(keyword: string) {
     studentLoading.value = false
   }
 }
+
+// v6.1：移动端子页无 closed 动画事件，用 watch 兜底重置（桌面端 @closed 与之幂等）
+watch(() => props.modelValue, (v) => { if (!v) onClosed() })
 
 function onClosed() {
   form.title = ''

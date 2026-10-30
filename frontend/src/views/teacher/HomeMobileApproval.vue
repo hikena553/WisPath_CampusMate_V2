@@ -249,10 +249,11 @@
     </div>
 
     <!-- 拒绝对话框 -->
-    <el-dialog
+    <!-- 拒绝理由（1 字段：移动端=底部动作面板） -->
+    <ActionSheet
       v-model="approvalRejectVisible"
       title="拒绝理由"
-      :width="isMobile ? '90%' : '380px'"
+      width="380px"
       align-center
       :close-on-click-modal="false"
       class="tui-dialog"
@@ -266,13 +267,13 @@
         <el-button @click="approvalRejectVisible = false">取消</el-button>
         <el-button type="danger" @click="approvalConfirmReject">确认拒绝</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
-    <!-- 工单审批对话框 -->
-    <el-dialog
+    <!-- 工单审批（1 字段：移动端=底部动作面板） -->
+    <ActionSheet
       :title="approvalTicketAction === 'approve' ? '通过申请' : '拒绝申请'"
       v-model="approvalTicketVisible"
-      :width="isMobile ? '90%' : '380px'"
+      width="380px"
       align-center
       :close-on-click-modal="false"
       class="tui-dialog"
@@ -288,21 +289,21 @@
           {{ approvalTicketAction === 'approve' ? '确认通过' : '确认拒绝' }}
         </el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+// v6.1 弹窗减负：单字段审批走底部动作面板
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import { ArrowLeft, CircleCheck, Close, Document, InfoFilled, Loading } from '@element-plus/icons-vue'
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi } from '@/api/service'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
 import { ElMessage } from 'element-plus'
-import { useResponsive } from '@/composables/useResponsive'
 
 const emit = defineEmits<{ close: [] }>()
-const { isMobile } = useResponsive()
 
 // ===== 审批管理子页面 =====
 const approvalActiveTab = ref('pending')

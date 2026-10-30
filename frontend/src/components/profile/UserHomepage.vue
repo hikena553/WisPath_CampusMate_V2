@@ -49,11 +49,7 @@
                 <i class="uh-sep"></i>
                 <span><b>{{ data.earned_count }}</b>勋章</span>
                 <i class="uh-sep"></i>
-                <span><b>{{ data.following_count }}</b>关注</span>
-                <i class="uh-sep"></i>
-                <span><b>{{ data.follower_count }}</b>粉丝</span>
-                <i class="uh-sep"></i>
-                <span><b>{{ data.friend_count }}</b>好友</span>
+                <span><b>{{ friendCount }}</b>好友</span>
               </div>
             </template>
           </section>
@@ -86,59 +82,48 @@
                   :key="b.code"
                   type="button"
                   class="uh-badge"
-                  :class="[`tier-${b.tier}`, { 'is-locked': !b.earned }]"
+                  :class="{ 'is-locked': !b.earned }"
                   :title="b.earned
                     ? `${b.name} · ${b.desc}`
                     : `${b.name} · ${b.target_label}（${b.progress}%）`"
                   @click="showWall = true"
                 >
-                  <span class="uh-badge-disc"><i>{{ b.icon }}</i></span>
+                  <BadgeMedal :icon="b.icon" :tier="b.tier" :earned="b.earned" :size="38" />
                   <span class="uh-badge-name">{{ b.name }}</span>
                 </button>
               </div>
 
-              <!-- 资料 + 近期亮点：合并成同一块白组（关于 TA → 亮点），
-                   组内只用细线与浅灰小标签分区，不再拆成两个独立分区 -->
-              <h3 class="uh-group-label">资料与近期亮点</h3>
+              <!-- 资料：白组行；近期亮点单独成卡片网格，与学生端个人主页的成果卡一致 -->
+              <h3 class="uh-group-label">资料</h3>
               <div class="uh-group">
                 <div v-for="f in aboutFields" :key="f.label" class="uh-cell">
                   <span class="uh-cell-label">{{ f.label }}</span>
                   <span class="uh-cell-value">{{ f.value }}</span>
                 </div>
-                <template v-if="topHighlights.length">
-                  <div class="uh-inline-label">近期亮点</div>
-                  <div v-for="(h, i) in topHighlights" :key="i" class="uh-cell">
-                    <span class="uh-cell-icon">{{ h.icon }}</span>
-                    <span class="uh-cell-stack">
-                      <span class="uh-cell-title">{{ h.title }}</span>
-                      <span class="uh-cell-sub">{{ h.subtitle }}</span>
-                    </span>
-                    <span class="uh-cell-value is-quiet">{{ h.date }}</span>
-                  </div>
-                </template>
+              </div>
+
+              <h3 v-if="topHighlights.length" class="uh-group-label">近期亮点</h3>
+              <div v-if="topHighlights.length" class="uh-hl-grid">
+                <div v-for="(h, i) in topHighlights" :key="i" class="uh-hl-card">
+                  <span class="uh-hl-icon">{{ h.icon }}</span>
+                  <span class="uh-hl-title">{{ h.title }}</span>
+                  <span class="uh-hl-sub">{{ h.subtitle }}</span>
+                  <span class="uh-hl-date">{{ h.date }}</span>
+                </div>
               </div>
             </template>
           </div>
         </div>
 
-        <!-- ===== 固定底部操作条：关注 / 发消息（互关即好友） ===== -->
-        <div v-if="data && !error && !isSelf" class="uh-actionbar">
+        <!-- ===== 固定底部操作条 ===== -->
+        <div v-if="data && !error" class="uh-actionbar">
           <button
             type="button"
-            class="uh-btn"
-            :class="{ 'is-followed': isFollowing, 'is-follow-cta': !isFollowing }"
-            :disabled="followingBusy"
-            @click="toggleFollow"
+            class="uh-btn is-primary"
+            @click="goChat(isFriend ? undefined : greeting)"
           >
-            {{ followLabel }}
-          </button>
-          <button type="button" class="uh-btn is-primary" @click="goChat(greeting)">
             发消息
           </button>
-        </div>
-        <!-- 自己看自己：不出现关注按钮，只保留「我的资料」入口语义（发消息给自己没有意义） -->
-        <div v-else-if="data && !error" class="uh-actionbar">
-          <button type="button" class="uh-btn is-primary" @click="close">返回</button>
         </div>
 
         <!-- ===== 二级：勋章墙 ===== -->
@@ -225,14 +210,10 @@
                 </div>
               </div>
 
-              <!-- 末尾两行都是「断开」类操作：只影响我的列表 / 关系，对方不受打扰 -->
+              <!-- 删除好友：放在设置列表末尾的独立白色行，随内容滚动，不再吸底 -->
               <div class="uh-set-group uh-set-del-group">
-                <button type="button" class="uh-cell" :disabled="removing" @click="removeFriend">
-                  <span class="uh-cell-label">从消息列表移除</span>
-                  <span class="uh-cell-value is-quiet">聊天记录保留</span>
-                </button>
-                <button type="button" class="uh-cell uh-del" :disabled="removing || followingBusy" @click="toggleFollow">
-                  {{ isFollowing ? '取消关注（解除互关）' : '关注 TA' }}
+                <button type="button" class="uh-cell uh-del" :disabled="removing" @click="removeFriend">
+                  删除好友
                 </button>
               </div>
             </div>
@@ -246,11 +227,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+// v6.1 弹窗减负：备注/删除好友等轻交互走底部动作面板
+import { actionPrompt, actionConfirm } from '@/composables/useActionSheet'
 
 import BadgeWall from '@/components/profile/BadgeWall.vue'
+import BadgeMedal from '@/components/profile/BadgeMedal.vue'
 import { deleteSession } from '@/api/messages'
-import { followUser, unfollowUser } from '@/api/social'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useUserHomepage } from '@/composables/useUserHomepage'
@@ -299,15 +282,9 @@ const roleLine = computed(() => {
   return d.title || d.department || ''
 })
 
-/** 关注关系：好友 = 互相关注，按钮文案与可执行动作全部由这三个布尔推导 */
-const isFollowing = computed(() => !!data.value?.mutual.is_following)
-const isFriend = computed(() => !!data.value?.mutual.is_friend)
+const friendCount = computed(() => data.value?.stats.find((s) => s.key === 'contacts')?.value ?? 0)
+const isFriend = computed(() => !!data.value?.mutual.has_conversation)
 const isSelf = computed(() => !!data.value && data.value.id === auth.user?.id)
-const followingBusy = ref(false)
-const followLabel = computed(() => {
-  if (isFollowing.value) return isFriend.value ? '互相关注' : '已关注'
-  return data.value?.mutual.is_follower ? '回关' : '关注'
-})
 
 /** 好友设置项（备注 / 特别关心 / 免打扰 / 黑名单）：本地保存，仅自己可见 */
 interface FriendPref {
@@ -343,18 +320,13 @@ function comingSoon(name: string) {
 async function editRemark() {
   const d = data.value
   if (!d) return
-  try {
-    const { value } = await ElMessageBox.prompt('设置一个仅自己可见的备注名', '备注', {
-      inputValue: pref.value.remark,
-      inputPlaceholder: `例如：同班 ${d.name}`,
-      confirmButtonText: '保存',
-      cancelButtonText: '取消',
-    })
-    pref.value.remark = (value || '').trim()
-    ElMessage.success(pref.value.remark ? '备注已保存' : '备注已清除')
-  } catch {
-    /* 取消 */
-  }
+  const value = await actionPrompt('设置一个仅自己可见的备注名', '备注', pref.value.remark, {
+    placeholder: `例如：同班 ${d.name}`,
+    confirmButtonText: '保存',
+  })
+  if (value === null) return
+  pref.value.remark = (value || '').trim()
+  ElMessage.success(pref.value.remark ? '备注已保存' : '备注已清除')
 }
 
 const earnedBadges = computed(() => (data.value?.badges || []).filter((b) => b.earned))
@@ -396,75 +368,39 @@ const mutualPills = computed(() => {
 const greeting = computed(() => `你好，我是${auth.userName || ''}，想和你认识一下 👋`)
 
 /**
- * 关注 / 取消关注：与消息页通讯录、论坛共用同一套关注关系（/api/social）。
- * 取消关注会解除互关，先二次确认；成功后就地更新封面上的三个数字，不必重开主页。
+ * 打开与该用户的会话：
+ * 教师端落到 /teacher/messages，学生端落到工作台的「消息中心」，
+ * 用 query 带上 chat / chatName / draft，由消息页负责打开会话并预填草稿。
  */
-async function toggleFollow() {
-  const d = data.value
-  if (!d || followingBusy.value) return
-  const willFollow = !isFollowing.value
-  if (!willFollow) {
-    try {
-      await ElMessageBox.confirm(
-        `取消关注「${d.name}」？互关关系会一并解除，聊天记录仍然保留。`,
-        '取消关注',
-        { confirmButtonText: '取消关注', cancelButtonText: '再想想', type: 'warning' },
-      )
-    } catch {
-      return
-    }
-  }
-  followingBusy.value = true
-  try {
-    const state = willFollow ? await followUser(d.id) : await unfollowUser(d.id)
-    d.mutual.is_following = state.is_following
-    d.mutual.is_follower = state.is_follower
-    d.mutual.is_friend = state.is_friend
-    d.following_count = state.following
-    d.follower_count = state.followers
-    d.friend_count = state.friends
-    ElMessage.success(willFollow ? (state.is_friend ? '已互关，成为好友' : '已关注') : '已取消关注')
-  } catch {
-    ElMessage.error('操作失败，请稍后重试')
-  } finally {
-    followingBusy.value = false
-  }
-}
-
-/** 打开与该用户的会话：学生端落到消息页，教师端落到教师消息页 */
 function goChat(draft?: string) {
   const d = data.value
   if (!d) return
   if (d.role === 'admin' || auth.user?.role === 'admin') return
   const query: Record<string, string> = { chat: String(d.id), chatName: d.name }
-  // 已是好友就直接聊；还没互关才预填一句问候，让用户自己按下发送
-  if (draft && !isFriend.value) query.draft = draft
-  const path = auth.user?.role === 'teacher' ? '/teacher/messages' : '/student/messages'
+  if (draft) query.draft = draft
+  const path = auth.user?.role === 'teacher' ? '/teacher/messages' : '/student/workbench'
   close()
   router.push({ path, query })
 }
 
-/** 从消息列表移除：只删我这一侧的会话条目（服务端记隐藏水位），关注关系与聊天记录都不动 */
+/** 删除好友：二次确认后从我的会话列表移除该联系人（服务端记隐藏水位，对方不受影响） */
 async function removeFriend() {
   const d = data.value
   if (!d) return
-  try {
-    await ElMessageBox.confirm(
-      `确定把「${d.name}」从消息列表移除？聊天记录保留、关注关系不变。`,
-      '从消息列表移除',
-      { type: 'warning', confirmButtonText: '移除', cancelButtonText: '取消' },
-    )
-  } catch {
-    return
-  }
+  const ok = await actionConfirm(
+    `确定把「${d.name}」从消息列表移除？聊天记录保留、对方不受影响。`,
+    '删除好友',
+    { danger: true, confirmButtonText: '删除' },
+  )
+  if (!ok) return
   removing.value = true
   try {
     await deleteSession(`s-${d.id}`)
     if (data.value) data.value.mutual.has_conversation = false
     showSettings.value = false
-    ElMessage.success(`已从消息列表移除 ${d.name}`)
+    ElMessage.success(`已移除 ${d.name}`)
   } catch {
-    ElMessage.error('操作失败，请稍后重试')
+    ElMessage.error('删除失败，请稍后重试')
   } finally {
     removing.value = false
   }
@@ -730,44 +666,7 @@ async function removeFriend() {
   font-family: inherit;
   cursor: pointer;
 }
-.uh-badge:active .uh-badge-disc { transform: scale(0.93); }
-.uh-badge-disc {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  padding: 3px;
-  border-radius: 50%;
-  /* 外圈：分级渐变描边 */
-  background: var(--uh-ring);
-  box-shadow: 0 3px 10px var(--uh-glow);
-  transition: transform 0.15s ease;
-}
-.uh-badge-disc i {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 26%, #3a445f 0%, #202737 72%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -3px 8px rgba(0, 0, 0, 0.34);
-  font-style: normal;
-  font-size: 23px;
-  line-height: 1;
-}
-/* 未点亮：环与内芯转灰、徽记降饱和，只做「灰底上的暗章」 */
-.uh-badge.is-locked .uh-badge-disc {
-  background: linear-gradient(140deg, #e6eaf0, #cfd6e0);
-  box-shadow: none;
-}
-.uh-badge.is-locked .uh-badge-disc i {
-  background: #f5f7fa;
-  box-shadow: inset 0 0 0 1px rgba(16, 24, 40, 0.05);
-  filter: grayscale(1);
-  opacity: 0.45;
-}
+.uh-badge:active { transform: scale(0.94); }
 .uh-badge-name {
   max-width: 100%;
   font-size: 10.5px;
@@ -779,11 +678,6 @@ async function removeFriend() {
   white-space: nowrap;
 }
 .uh-badge.is-locked .uh-badge-name { color: #aeb6c2; }
-/* 分级配色：与勋章墙保持同一套色 */
-.tier-bronze { --uh-ring: linear-gradient(140deg, #f7c891, #bb6a2a); --uh-glow: rgba(187, 106, 42, 0.3); }
-.tier-silver { --uh-ring: linear-gradient(140deg, #f1f5f9, #98a6b8); --uh-glow: rgba(152, 166, 184, 0.32); }
-.tier-gold { --uh-ring: linear-gradient(140deg, #ffeeb0, #dfa200); --uh-glow: rgba(223, 162, 0, 0.36); }
-.tier-diamond { --uh-ring: linear-gradient(140deg, #cdefff, #22a0da); --uh-glow: rgba(34, 160, 218, 0.34); }
 
 /* 组标签：直接坐在灰色底上（微信设置页的小标题位置） */
 .uh-group-label {
@@ -800,15 +694,58 @@ async function removeFriend() {
   background: var(--tui-surface, #fff);
 }
 
-/* 组内小标签：把「近期亮点」并进同一块白组，只用浅灰底与细线分区 */
-.uh-inline-label {
-  padding: 9px 16px;
-  border-bottom: 1px solid #f2f4f7;
-  background: #fafbfc;
-  color: #98a2b3;
-  font-size: 11.5px;
+/* 近期亮点：与学生端个人主页成果卡一致的双列卡片 */
+.uh-hl-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.uh-hl-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid #eef0f3;
+  border-radius: 12px;
+  background: var(--tui-surface, #fff);
+  overflow: hidden;
+}
+.uh-hl-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #f5f6f8;
+  font-size: 15px;
+  line-height: 1;
+}
+.uh-hl-title {
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.3px;
+  line-height: 1.35;
+  color: #344054;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.uh-hl-sub {
+  font-size: 11px;
+  color: #98a2b3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uh-hl-date {
+  margin-top: auto;
+  padding-top: 4px;
+  font-size: 10.5px;
+  color: #b0b7c3;
 }
 
 .uh-cell {
@@ -836,16 +773,6 @@ async function removeFriend() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.uh-cell-value.is-quiet { flex: 0 0 auto; }
-.uh-cell-icon { flex-shrink: 0; font-size: 15px; line-height: 1.4; }
-.uh-cell-stack { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.uh-cell-title {
-  color: var(--tui-text, #344054);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.uh-cell-sub { font-size: 11px; color: #98a2b3; }
 
 /* ===== 固定底部操作条：三键通栏（两个描边按钮 + 蓝色主按钮，图一格式） ===== */
 .uh-actionbar {
@@ -878,24 +805,13 @@ async function removeFriend() {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .uh-btn:active { background: #f2f3f5; }
-/* 主操作：蓝色实心「发消息」 */
+/* 主操作：蓝色实心「发消息」，唯一操作按钮占满整条 */
 .uh-btn.is-primary {
   border-color: #0099ff;
   background: #0099ff;
   color: #fff;
 }
 .uh-btn.is-primary:active { background: #0088e6; border-color: #0088e6; }
-/* 关注类按钮：未关注是蓝色描边（次级动作），已关注/互关是中性底（可点但克制） */
-.uh-btn.is-follow-cta {
-  border-color: #0099ff;
-  color: #0099ff;
-  background: #fff;
-}
-.uh-btn.is-followed {
-  border-color: #e4e7eb;
-  color: #5c6269;
-  background: #f4f5f7;
-}
 .uh-btn:disabled { opacity: 0.6; }
 
 /* ===== 二级：勋章墙 ===== */

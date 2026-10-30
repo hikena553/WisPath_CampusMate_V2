@@ -1,6 +1,14 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
-  <div class="tui-page">
+  <div class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel">
     <SubPageHeader title="班级公告" fallback="/teacher" />
+
+    <!-- 移动端下拉刷新：指示器插在吸顶栏之后 -->
+    <PullRefreshIndicator v-if="isMobile" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：广播语义色 + 喇叭图标。
@@ -220,10 +228,11 @@
       </section>
       </template>
 
-      <el-dialog
+      <!-- 发布公告（表单+AI：移动端=全屏子页） -->
+      <ResponsivePopup
         v-model="dialogVisible"
         title="发布公告"
-        :width="isMobile ? '90%' : '380px'"
+        width="380px"
         align-center
         :close-on-click-modal="false"
         class="tui-dialog"
@@ -264,19 +273,24 @@
           <el-button @click="dialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="saving" :disabled="!valid" @click="submit">发布</el-button>
         </template>
-      </el-dialog>
+      </ResponsivePopup>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+// v6.1 弹窗减负：公告表单走全屏子页，删除确认走底部动作面板
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import { Bell, Plus, InfoFilled, Promotion, Top } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   createAnnouncement,
   deleteAnnouncement,
@@ -289,6 +303,9 @@ import {
 defineOptions({ name: 'teacher-announcement' })
 
 const { isMobile } = useResponsive()
+
+// 移动端下拉刷新：桌面端不响应手势
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 const items = ref<AnnouncementItem[]>([])
 /** 触达回执：announcement_id → { read, total, rate }（真实已读口径） */
@@ -386,7 +403,7 @@ function handlePageChange() {
 }
 watch(() => items.value.length, () => { currentPage.value = 1 })
 
-async function load() {
+async function load(silent = false) {
   loading.value = true
   try {
     // 公告列表与触达回执并发拉取；触达接口失败不影响列表展示
@@ -399,10 +416,15 @@ async function load() {
     for (const r of reach?.items || []) map[r.announcement_id] = r
     reachMap.value = map
   } catch {
-    ElMessage.error('公告加载失败')
+    if (!silent) ElMessage.error('公告加载失败')
   } finally {
     loading.value = false
   }
+}
+
+/** 下拉刷新：复用公告列表加载，失败不提示 */
+async function refreshAll() {
+  await load(true)
 }
 
 async function submit() {
@@ -429,7 +451,7 @@ async function submit() {
 
 async function remove(a: AnnouncementItem) {
   try {
-    await ElMessageBox.confirm(`确定删除公告「${a.title}」？`, '删除确认', { type: 'warning' })
+    if (!(await actionConfirm(`确定删除公告「${a.title}」？`, '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   } catch {
     return
   }
@@ -446,6 +468,8 @@ onMounted(load)
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
+
 .an-total { font-size: 11.5px; color: var(--tui-text-quiet); }
 /* 触达明细（已读/应读）：弱化小字，跟在「触达率」后 */
 .an-reach-detail { margin-left: 5px; font-style: normal; font-size: 10.5px; color: var(--tui-text-quiet); }

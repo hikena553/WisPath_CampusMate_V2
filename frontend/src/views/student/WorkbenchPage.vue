@@ -150,7 +150,7 @@
     </template>
 
     <!-- 子页面：办事服务表单
-         动画统一走 styles/subpage-transition.css 的 .subpage（覆盖式：子页从右滑入盖住列表，
+         动画统一走 styles/animations.css 的 .subpage（覆盖式：子页从右滑入盖住列表，
          主页面不动；返回时原路滑出），不再在本文件自带一份 slide-left 定义。 -->
     <transition name="subpage" :duration="320" @after-leave="onSubpageAfterLeave">
       <div v-if="currentPage" :class="['sub-page', { 'chat-mode': isChatMode }]">
@@ -881,7 +881,7 @@
     </transition>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="showDetail" :show-title="false" width="100%" class="detail-dialog" destroy-on-close>
+    <ResponsivePopup v-model="showDetail" title="申请详情" width="600px" class="detail-dialog" destroy-on-close>
       <div v-if="currentDetail" class="detail-content">
         <div class="sheet-handle"></div>
         <!-- 状态头部 -->
@@ -942,15 +942,18 @@
           </button>
         </div>
       </div>
-    </el-dialog>
+    </ResponsivePopup>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+// v6.1 弹窗减负：申请详情走全屏子页，紧急公告/撤销确认走底部动作面板
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+import { actionConfirm, actionAlert } from '@/composables/useActionSheet'
 import { createLeave, getMyLeaves, deleteLeave } from '@/api/leave'
 import { createTicket, getTickets, cancelTicket } from '@/api/service'
 import { getLostFoundItems, createLostFoundItem, getLostFoundItem } from '@/api/lostFound'
@@ -980,6 +983,7 @@ import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useButlerPreview } from '@/composables/useButlerPreview'
 // 下拉刷新（移动端）：手势逻辑与吉祥物指示器与教师端首页 / 消息页共用同一模块
 import { useResponsive } from '@/composables/useResponsive'
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
@@ -1008,6 +1012,9 @@ const currentPage = ref<string | null>(null)
 // 子页返回栈：消息中心 → 通知/文件/聊天 等二级跳转时压栈，
 // 返回键逐级回退（如 通知 → 消息中心 → 最外层），而不是一退就到底
 const subpageStack = ref<string[]>([])
+
+// 工作台内的办事/消息等页内子页属于二级页，打开时让出移动端底部悬浮导航
+useMobileSubPage(computed(() => isMobile.value && !!currentPage.value))
 
 /** 子页跳转：已打开某子页时再进新子页，把当前页压入返回栈 */
 function gotoPage(page: string) {
@@ -1055,7 +1062,7 @@ const serviceItems = [
 // 学习成长配置
 const resourceItems = [
   { key: 'resources', label: 'AI 资源空间', icon: Collection, color: '#13c2c2', bgColor: 'rgba(19,194,194,0.1)', link: '/student/resources' },
-  { key: 'community', label: '交流社区', icon: ChatDotRound, color: '#722ed1', bgColor: 'rgba(114,46,209,0.1)', link: '/student/campus?tab=community' },
+  { key: 'community', label: '交流社区', icon: ChatDotRound, color: '#722ed1', bgColor: 'rgba(114,46,209,0.1)', link: '/student/community' },
 ]
 
 // 表单数据
@@ -1454,10 +1461,10 @@ function openChat() {
 }
 
 function openMessages() {
-  // 消息已独立成底部页签（/student/messages）：工作台里的「消息中心」入口改为跳转过去，
-  // 不再在这里打开旧版子页，避免同一功能出现两套界面。
-  // 下方 currentPage === 'messages' 分支仅作历史深链（?messages=1 / ?chat=）的兜底保留。
-  router.push('/student/messages')
+  currentPage.value = 'messages'
+  msgTab.value = 'messages'
+  subpageStack.value = []
+  loadConversations()
 }
 
 // ===== 移动端消息中心（TapTap 式）：快捷圆标 / 会话流 / 好友页签 =====
@@ -1711,11 +1718,7 @@ function showAnnounceAlert(items: any[]) {
     return
   }
   const msg = sorted.slice(0, 5).map((a: any) => `[${announceUrgencyLabel(a.urgency)}] ${a.title}`).join('\n')
-  ElMessageBox.alert(msg, `紧急公告（${urgentCount} 条）`, {
-    confirmButtonText: '查看公告',
-    type: 'warning',
-    dangerouslyUseHTMLString: false,
-  }).then(() => {
+  actionAlert(msg, `紧急公告（${urgentCount} 条）`, { confirmButtonText: '查看公告' }).then(() => {
     currentPage.value = 'announcements'
   }).catch(() => {})
 }
@@ -1731,10 +1734,10 @@ const announcePolling = usePolling(async () => {
       const notable = items.filter((a: any) => a.urgency !== 'normal')
       const urgent = notable.filter((a: any) => a.urgency === 'urgent')
       if (urgent.length) {
-        ElMessageBox.alert(
+        actionAlert(
           urgent.map((a: any) => `【${a.title}】`).join('\n'),
           '紧急公告',
-          { confirmButtonText: '查看公告', type: 'warning', dangerouslyUseHTMLString: false }
+          { confirmButtonText: '查看公告' }
         ).then(() => {
           currentPage.value = 'announcements'
         }).catch(() => {})
@@ -1822,11 +1825,8 @@ async function submitLeave() {
 }
 
 async function cancelRecord(record: any) {
-  try {
-    await ElMessageBox.confirm('确定要撤销这条申请吗？撤销后将直接删除该记录。', '确认撤销', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' })
-  } catch {
-    return
-  }
+  const ok = await actionConfirm('确定要撤销这条申请吗？撤销后将直接删除该记录。', '确认撤销', { danger: true, confirmButtonText: '撤销' })
+  if (!ok) return
   try {
     if (record._source === 'leave') {
       await deleteLeave(record.id)
@@ -3730,7 +3730,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   cursor: not-allowed;
 }
 
-/* 子页滑动动画见 styles/subpage-transition.css 的 .subpage（全站唯一实现），
+/* 子页滑动动画见 styles/animations.css 的 .subpage（全站唯一实现），
    此处不再重复定义 slide-left —— 原先本地那份与全局版本参数不同（0.3s ease 一致但
    方向语义、离场定位各写各的），是本次统一要消除的重复。 */
 

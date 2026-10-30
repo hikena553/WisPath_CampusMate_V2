@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <ResponsivePopup
     :model-value="modelValue"
     :title="isEdit ? '编辑成长档案' : '新增成长档案'"
     :width="isMobile ? '90%' : '400px'"
@@ -93,11 +93,13 @@
         保存
       </el-button>
     </template>
-  </el-dialog>
+  </ResponsivePopup>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+// v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import {
   Delete, InfoFilled, Medal, Plus, Reading, Suitcase, TrendCharts,
 } from '@element-plus/icons-vue'

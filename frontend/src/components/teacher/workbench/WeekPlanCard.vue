@@ -83,8 +83,8 @@ const rangeLabel = computed(() => {
   return `${f(monday.value)} - ${f(end)}`
 })
 
-async function load() {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
     // 一周可能跨月，取涉及到的月份并合并
     const start = monday.value
@@ -111,7 +111,12 @@ async function load() {
 }
 
 onMounted(load)
-onActivated(load)
+/** 从其它页签切回首页时静默刷新：数据已在，不再亮 loading，避免切页瞬间闪一下 */
+let activatedOnce = false
+onActivated(() => {
+  if (activatedOnce) load(true)
+  else activatedOnce = true
+})
 defineExpose({ reload: load })
 </script>
 

@@ -1,239 +1,244 @@
 <template>
-  <Teleport to="body">
-    <!-- ① 遮罩：只干两件事 —— 桌面端点空白关闭、把背景压暗。
-         刻意不参与滑动，只给一个 0.2s 淡入淡出：遮罩是整屏的，
-         跟着面板一起 translateX 的话会变成一块黑幕横扫过屏幕。 -->
-    <Transition name="fis-mask">
-      <div v-if="modelValue" class="fis-mask" @click="close" />
-    </Transition>
-
-    <!-- ② 面板：进出场直接复用全局 .subpage（styles/subpage-transition.css，全站唯一实现），
-         与资讯详情 / 搜索子页同一套 keyframes、同一时长（0.3s，:duration 给 320 兜底移除）。
-         为什么这里不用 <SubPageShell>：外壳的 .subpage-root 骨架是「fixed inset:0 全屏 + 白底」，
-         只适合整屏子页；本面板桌面端是右侧 420px 抽屉，被塞进全屏骨架后遮罩会一起卷进滑动元素。
-         面板自己贴右边缘、宽度恰好是屏宽（移动端）/ 420px（桌面），
-         于是 keyframes 的 translateX(100%) 在两种版式下都正好把它推出屏幕右侧，
-         一套动画两个断点都对得上，也就不必为两套版式各写一份模板。 -->
-    <Transition name="subpage" :duration="320" @after-leave="onAfterLeave">
-      <section
-        v-if="modelValue"
-        class="fis-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="互动消息"
-      >
-        <!-- 页头按参考设计的结构排：左返回 / 中标题 / 右侧两个动作图标。
-             参考图中间是「好友 | 消息」两个页签，那是聊天 App 的分区；
-             本面板只有互动消息一类，所以居中标题原位保留，不硬造一个空页签。 -->
-        <header class="fis-head">
-          <button type="button" class="fis-icon-btn" :aria-label="isMobile ? '返回' : '关闭'" @click="close">
-            <DtIcon :name="isMobile ? 'back' : 'close'" :size="20" />
+  <!-- 互动消息面板：论坛侧（赞 / 收藏 / 评论 / 新粉丝）。
+       与聊天消息彻底分开——这里只展示「谁对我的帖子做了什么」，
+       点一条直接落到对应帖子（?post=<id>），交流社区页负责打开详情。 -->
+  <el-drawer
+    v-model="open"
+    :with-header="false"
+    :size="isMobile ? '100%' : '420px'"
+    class="forum-inbox-drawer"
+    append-to-body
+    @open="onOpen"
+  >
+    <div class="fi-root">
+      <header class="fi-head">
+        <div class="fi-title-row">
+          <span class="fi-title">互动消息</span>
+          <button v-if="unreadTotal" type="button" class="fi-read-all" @click="markAllRead">全部已读</button>
+          <button type="button" class="fi-close" aria-label="关闭" @click="open = false">
+            <el-icon :size="16"><Close /></el-icon>
           </button>
-          <h2 class="fis-title">互动消息</h2>
-          <div class="fis-actions">
-            <button type="button" class="fis-icon-btn" aria-label="搜索" @click="inboxRef?.openSearch()">
-              <DtIcon name="search" :size="19" />
-            </button>
-            <button
-              v-if="unreadTotal > 0"
-              type="button"
-              class="fis-icon-btn"
-              aria-label="全部标为已读"
-              @click="inboxRef?.readAll()"
-            >
-              <DtIcon name="check" :size="20" />
-            </button>
-          </div>
-        </header>
-        <div class="fis-body">
-          <ForumInbox ref="inboxRef" @open-profile="onOpenProfile" @unread-change="onUnreadChange" />
         </div>
-      </section>
-    </Transition>
-  </Teleport>
+        <div class="fi-tabs">
+          <button
+            v-for="t in tabs"
+            :key="t.value"
+            type="button"
+            :class="['fi-tab', { active: activeTab === t.value }]"
+            @click="switchTab(t.value)"
+          >
+            {{ t.label }}
+            <i v-if="countOf(t.value)" class="fi-tab-dot">{{ countOf(t.value) > 99 ? '99+' : countOf(t.value) }}</i>
+          </button>
+        </div>
+      </header>
+
+      <div class="fi-body">
+        <div v-if="loading" class="fi-hint">加载中…</div>
+        <div v-else-if="!list.length" class="fi-empty">
+          <el-icon :size="28"><Message /></el-icon>
+          <p>还没有互动消息</p>
+          <span>别人赞、收藏或评论你的帖子时会出现在这里</span>
+        </div>
+        <div v-else class="fi-list">
+          <button
+            v-for="item in list"
+            :key="item.id"
+            type="button"
+            :class="['fi-item', { unread: !item.is_read }]"
+            @click="openItem(item)"
+          >
+            <el-avatar :size="34" :src="item.actor_avatar || undefined" class="fi-avatar">
+              {{ (item.actor_name || '同学').slice(0, 1) }}
+            </el-avatar>
+            <div class="fi-main">
+              <div class="fi-line">
+                <b class="fi-actor">{{ item.actor_name || '同学' }}</b>
+                <span class="fi-action">{{ actionText(item.kind) }}</span>
+                <span v-if="item.post_title" class="fi-post">《{{ item.post_title }}》</span>
+              </div>
+              <p v-if="item.kind === 'comment' && item.content" class="fi-quote">{{ item.content }}</p>
+              <span class="fi-time">{{ formatTime(item.created_at) }}</span>
+            </div>
+            <i v-if="!item.is_read" class="fi-unread-dot" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </el-drawer>
 </template>
 
 <script setup lang="ts">
-/**
- * 互动消息面板（论坛侧）
- *
- * 论坛的赞 / 收藏 / 评论 / 新粉丝只在这里出现，消息页只管群聊、私聊、通知——
- * 两套消息用两套表、两个入口，互不混排。
- * 入口是交流社区页右上角的信封图标（校园资讯页头那枚信封也指向这里）。
- *
- * 版式：移动端整屏覆盖（与消息页聊天子页同一套观感），桌面端右侧 420px 抽屉。
- * 进场 / 退场沿用全站覆盖式子页的那套滑入动画（styles/subpage-transition.css），
- * 面板贴右边缘，所以「从右侧滑入、原路滑出」在两个断点下都成立。
- */
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import DtIcon from '@/components/common/DtIcon.vue'
-import ForumInbox from '@/components/messages/ForumInbox.vue'
+import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { Message, Close } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { openUserHomepage } from '@/composables/useUserHomepage'
-import { lockBodyScroll } from '@/utils/bodyScrollLock'
+import {
+  getForumMessages,
+  markForumRead,
+  type ForumKind,
+  type ForumMessageOut,
+} from '@/api/social'
 
 const props = defineProps<{ modelValue: boolean }>()
-const emit = defineEmits<{
-  (e: 'update:modelValue', v: boolean): void
-  (e: 'unread-change', total: number): void
-}>()
+const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
 
+const router = useRouter()
 const { isMobile } = useResponsive()
-const { refresh: refreshUnread } = useUnreadSummary()
-const inboxRef = ref<InstanceType<typeof ForumInbox> | null>(null)
-/** 未读总数：页头「全部标为已读」按钮的出现条件（0 时不占位） */
+const { forum, refresh: refreshUnread } = useUnreadSummary()
+
+const open = computed({
+  get: () => props.modelValue,
+  set: (v: boolean) => emit('update:modelValue', v),
+})
+
+type TabValue = 'all' | ForumKind
+const tabs: Array<{ label: string; value: TabValue }> = [
+  { label: '全部', value: 'all' },
+  { label: '赞', value: 'like' },
+  { label: '收藏', value: 'favorite' },
+  { label: '评论', value: 'comment' },
+  { label: '关注', value: 'follow' },
+]
+
+const activeTab = ref<TabValue>('all')
+const list = ref<ForumMessageOut[]>([])
+const loading = ref(false)
 const unreadTotal = ref(0)
+/** 各类型的未读条数（页签角标）：一次全量请求本地分组，避免 5 次请求 */
+const allUnread = ref<ForumMessageOut[]>([])
 
-function close() {
-  emit('update:modelValue', false)
-  // 关掉面板时顺手刷新全局未读，入口红点与已读状态保持一致
-  void refreshUnread()
+const unreadCounts = computed(() => {
+  const map: Record<string, number> = { all: 0, like: 0, favorite: 0, comment: 0, follow: 0 }
+  for (const m of allUnread.value) {
+    map.all += 1
+    map[m.kind] = (map[m.kind] || 0) + 1
+  }
+  return map
+})
+
+function countOf(tab: TabValue) {
+  return unreadCounts.value[tab] || 0
 }
 
-function onOpenProfile(userId: number) {
-  close()
-  openUserHomepage(userId)
+function actionText(kind: ForumKind) {
+  return (
+    { like: '赞了你的帖子', favorite: '收藏了你的帖子', comment: '评论了你的帖子', follow: '关注了你' }[kind] ||
+    '与你互动'
+  )
 }
 
-/** 面板内「全部已读 / 单条已读」后立刻同步入口徽标，不必等 5s 轮询 */
-function onUnreadChange(total: number) {
-  unreadTotal.value = total
-  emit('unread-change', total)
-  void refreshUnread()
+function formatTime(t: string) {
+  if (!t) return ''
+  const d = new Date(t)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = Date.now()
+  const diff = Math.max(0, now - d.getTime())
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3600_000)} 小时前`
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/* ==================== 滚动锁 ====================
-   面板自己内部滚动，背后页面不该跟着动。用引用计数版（utils/bodyScrollLock）：
-   信封面板可能与资讯详情 / 搜索子页叠在一起，各层各持一把锁，互不拆台。
-   退场动画播完才解锁，否则滑出的 0.3s 里背景就能被拖动。 */
-let releaseScrollLock: (() => void) | null = null
+async function load(keepTab = false) {
+  loading.value = true
+  try {
+    const [rows, unread] = await Promise.all([
+      getForumMessages({ kind: activeTab.value === 'all' ? undefined : (activeTab.value as ForumKind), limit: 50 }),
+      getForumMessages({ unread_only: true, limit: 100 }),
+    ])
+    list.value = rows
+    allUnread.value = unread
+    unreadTotal.value = unread.length
+    if (!keepTab) emit('update:modelValue', true)
+  } catch {
+    list.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+async function switchTab(tab: TabValue) {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  await load(true)
+}
+
+async function markAllRead() {
+  try {
+    await markForumRead()
+  } finally {
+    allUnread.value = []
+    unreadTotal.value = 0
+    list.value = list.value.map((m) => ({ ...m, is_read: true }))
+    forum.value = 0
+    void refreshUnread()
+  }
+}
+
+/** 打开某条：评论/赞/收藏 → 对应帖子；新粉丝 → 对方主页 */
+function openItem(item: ForumMessageOut) {
+  if (item.kind === 'follow') {
+    open.value = false
+    void openUserHomepage(item.actor_id)
+    return
+  }
+  if (!item.post_id) return
+  open.value = false
+  router.push({ name: 'student-community', query: { post: String(item.post_id) } })
+}
+
+async function onOpen() {
+  // 打开即把当前互动流全部标记已读：与 QQ / 微博的「进箱即读」一致，
+  // 导航红点与社区页角标立刻归零，列表保留未读底色供回溯
+  await load()
+  if (unreadTotal.value) void markAllRead()
+}
 
 watch(
   () => props.modelValue,
-  async (open) => {
-    if (!open) return // 关闭方向等 after-leave
-    await nextTick()
-    if (!releaseScrollLock) releaseScrollLock = lockBodyScroll()
+  (v) => {
+    if (!v) return
+    void onOpen()
   },
-  { immediate: true },
 )
 
-function onAfterLeave() {
-  releaseScrollLock?.()
-  releaseScrollLock = null
-}
-
-/* ==================== Esc ====================
-   与返回箭头同语义：面板里有分类/搜索子页时先退子页（ForumInbox.handleEsc
-   返回 true 表示已消费），子页退完再关面板。 */
-function onKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape' || !props.modelValue) return
-  if (inboxRef.value?.handleEsc()) return
-  close()
-}
-
-onMounted(() => window.addEventListener('keydown', onKeydown))
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown)
-  releaseScrollLock?.()
-  releaseScrollLock = null
+// 兜底：未读角标与全局汇总可能因轮询时序不同步，打开时以明细为准
+watch(forum, (v) => {
+  if (v > unreadTotal.value) void load(true)
 })
-
-defineExpose({ reload: () => inboxRef.value?.reload() })
 </script>
 
 <style scoped>
-/* ================= 遮罩 =================
-   桌面端压暗背景 + 点空白关闭；移动端整屏面板会盖住它，所以透明（见文末媒体查询）——
-   滑动过程中露出来的必须是下层页面，而不是一层浅灰。 */
-.fis-mask {
-  position: fixed;
-  inset: 0;
-  /* 盖过底部悬浮胶囊（1000），低于 Element 弹层（2000+） */
-  z-index: 1500;
-  background: rgba(0, 0, 0, .28);
-}
-.fis-mask-enter-active,
-.fis-mask-leave-active { transition: opacity .2s ease; }
-.fis-mask-enter-from,
-.fis-mask-leave-to { opacity: 0; }
-
-/* ================= 面板 =================
-   贴右边缘固定：移动端 width:100%，桌面端 420px。
-   宽度就是「被推出屏幕」所需的位移，所以全局 .subpage 的 translateX(100%)
-   在两种版式下都恰好滑到屏幕外，不需要再写一份移动端专用 keyframes。 */
-.fis-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1501;
-  display: flex;
-  flex-direction: column;
-  width: 420px;
-  max-width: 100%;
-  background: var(--dt-surface, #fff);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, .12);
-  -webkit-tap-highlight-color: transparent;
-}
-/* 页头：左返回 / 中标题 / 右动作。标题绝对居中——两侧按钮数量不等时
-   （未读为 0 时右侧只剩搜索），flex 居中会把标题推歪。 */
-.fis-head {
-  position: relative;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 56px;
-  padding: 0 8px 0 10px;
-  border-bottom: 1px solid var(--dt-divider, rgba(0, 0, 0, .06));
-}
-.fis-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--dt-text, #171a1d);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.fis-icon-btn:hover { background: var(--dt-hover, rgba(0, 0, 0, .04)); }
-.fis-title {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--dt-text, #171a1d);
-  pointer-events: none;
-}
-.fis-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-}
-.fis-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  padding-top: 10px;
-}
-
-@media (max-width: 767px) {
-  .fis-mask { background: transparent; }
-  .fis-panel {
-    width: 100%;
-    box-shadow: none;
-  }
-  .fis-head { height: 50px; }
-}
+.fi-root { display: flex; flex-direction: column; height: 100%; background: #fff; color: #1f2329; }
+.fi-head { padding: 18px 18px 10px; border-bottom: 1px solid #f0f1f3; }
+.fi-title-row { display: flex; align-items: center; gap: 10px; }
+.fi-title { font-size: 16px; font-weight: 600; flex: 1; }
+.fi-read-all { border: none; background: none; color: #6b7280; font-size: 12px; cursor: pointer; }
+.fi-read-all:hover { color: #111827; text-decoration: underline; }
+.fi-close { border: none; background: #f4f5f7; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: #6b7280; }
+.fi-tabs { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
+.fi-tabs::-webkit-scrollbar { display: none; }
+.fi-tab { position: relative; border: 1px solid transparent; background: #f5f6f8; color: #4b5563; font-size: 12px; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.fi-tab.active { background: #111827; color: #fff; }
+.fi-tab-dot { position: absolute; top: -5px; right: -4px; background: #111827; color: #fff; font-size: 10px; line-height: 1; padding: 2px 4px; border-radius: 6px; font-style: normal; }
+.fi-tab.active .fi-tab-dot { background: #fff; color: #111827; }
+.fi-body { flex: 1; overflow-y: auto; padding: 6px 0 20px; }
+.fi-hint, .fi-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #9aa0a6; font-size: 13px; padding: 56px 24px; text-align: center; }
+.fi-empty p { margin: 4px 0 0; color: #4b5563; font-size: 14px; }
+.fi-empty span { font-size: 12px; }
+.fi-item { position: relative; width: 100%; display: flex; gap: 10px; align-items: flex-start; padding: 12px 18px; background: none; border: none; border-bottom: 1px solid #f5f6f8; text-align: left; cursor: pointer; }
+.fi-item:hover { background: #fafbfc; }
+.fi-item.unread { background: #f7f8fa; }
+.fi-avatar { flex-shrink: 0; background: #e9ebee; color: #6b7280; font-size: 13px; }
+.fi-main { flex: 1; min-width: 0; }
+.fi-line { font-size: 13px; line-height: 1.5; color: #4b5563; }
+.fi-actor { color: #111827; font-weight: 600; margin-right: 4px; }
+.fi-post { color: #111827; margin-left: 4px; }
+.fi-quote { margin: 4px 0 0; font-size: 12px; color: #6b7280; background: #f4f5f7; border-radius: 6px; padding: 6px 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fi-time { display: inline-block; margin-top: 4px; font-size: 11px; color: #9aa0a6; }
+.fi-unread-dot { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 7px; height: 7px; border-radius: 50%; background: #111827; }
 </style>

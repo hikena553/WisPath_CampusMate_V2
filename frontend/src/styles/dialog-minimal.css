@@ -1,0 +1,93 @@
+/* ============================================================
+   v6 弹窗重设计 · 方案A「极简卡片」
+   参考对象：Notion / Linear
+   适用范围：
+   1) 学业中心 / 我的资料在桌面端残余的 el-dialog（移动端已由
+      ResponsivePopup 全屏子页承接，不会再出现遮罩弹窗）；
+   2) 全局 ElMessageBox 确认框（删除确认、退出确认等「不得已保留」的弹窗）。
+   原则：白底细边框、14px 圆角、柔和投影、黑色主按钮、紧凑字距。
+   ============================================================ */
+
+/* ---- 学业中心 / 我的资料 页内弹窗 ---- */
+.schedule-page .el-dialog,
+.profile-wrapper .el-dialog {
+  border-radius: 14px;
+  border: 1px solid #e6e8ee;
+  box-shadow: 0 16px 48px rgba(20, 24, 40, 0.14);
+}
+.schedule-page .el-dialog__title,
+.profile-wrapper .el-dialog__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #1c1e21;
+}
+.schedule-page .el-dialog__headerbtn,
+.profile-wrapper .el-dialog__headerbtn {
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #f1f2f6;
+}
+.schedule-page .el-dialog__headerbtn:hover,
+.profile-wrapper .el-dialog__headerbtn:hover { background: #e5e7ee; }
+.schedule-page .el-dialog__headerbtn .el-dialog__close,
+.profile-wrapper .el-dialog__headerbtn .el-dialog__close {
+  color: #6b7078;
+  font-size: 14px;
+  font-weight: 600;
+}
+.schedule-page .el-dialog__footer,
+.profile-wrapper .el-dialog__footer {
+  border-top: 1px solid #eef0f4;
+  background: #fafbfc;
+}
+.schedule-page .el-dialog .el-button,
+.profile-wrapper .el-dialog .el-button {
+  border-radius: 8px;
+  font-weight: 600;
+}
+.schedule-page .el-dialog .el-button--primary,
+.profile-wrapper .el-dialog .el-button--primary {
+  background: #1c1e21;
+  border-color: #1c1e21;
+}
+.schedule-page .el-dialog .el-button--primary:hover,
+.schedule-page .el-dialog .el-button--primary:focus,
+.profile-wrapper .el-dialog .el-button--primary:hover,
+.profile-wrapper .el-dialog .el-button--primary:focus {
+  background: #33363b;
+  border-color: #33363b;
+}
+
+/* ---- 全局确认框（ElMessageBox）：删除确认 / 退出登录等 ---- */
+.el-message-box {
+  border-radius: 14px;
+  border: 1px solid #e6e8ee;
+  box-shadow: 0 16px 48px rgba(20, 24, 40, 0.16);
+  max-width: min(86vw, 380px);
+}
+.el-message-box__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1c1e21;
+}
+.el-message-box__content {
+  font-size: 13.5px;
+  color: #4a4f58;
+}
+.el-message-box__btns .el-button {
+  border-radius: 8px;
+  font-weight: 600;
+}
+.el-message-box__btns .el-button--primary {
+  background: #1c1e21;
+  border-color: #1c1e21;
+}
+.el-message-box__btns .el-button--primary:hover,
+.el-message-box__btns .el-button--primary:focus {
+  background: #33363b;
+  border-color: #33363b;
+}

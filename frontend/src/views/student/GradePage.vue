@@ -1,5 +1,14 @@
 <template>
-  <div class="grade-page">
+  <div
+    class="grade-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
+    <!-- 移动端下拉刷新：吉祥物指示器（与教师端首页 / 学生工作台共用同一模块） -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+
     <div class="stats-row">
       <div class="stat-box" v-for="s in statItems" :key="s.label">
         <span class="stat-num" :style="{ color: s.color }">{{ s.value }}</span>
@@ -74,6 +83,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { getGrades, getExams } from '@/api/academic'
 import { Location, WarningFilled, CircleCheckFilled } from '@element-plus/icons-vue'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import type { Grade, Exam } from '@/types'
 
 const activeTab = ref('grades')
@@ -160,10 +172,22 @@ onMounted(async () => {
   grades.value = await getGrades() as any
   exams.value = await getExams() as any
 })
+
+// 下拉刷新（移动端）：重新拉取成绩与考试安排，失败静默
+async function refreshAll() {
+  try {
+    const [g, e] = await Promise.all([getGrades(), getExams()])
+    grades.value = g as any
+    exams.value = e as any
+  } catch {}
+}
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
-.grade-page { max-width: 1200px; margin: 0 auto; padding: 8px 0 24px; height: 100%; overflow-y: auto; box-sizing: border-box; }
+.grade-page { max-width: 1200px; margin: 0 auto; padding: 8px 0 24px; height: 100%; overflow-y: auto; box-sizing: border-box; overscroll-behavior-y: contain; }
 
 /* 统计数据 */
 .stats-row { display: flex; gap: 12px; margin-bottom: 20px; }

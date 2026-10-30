@@ -1,6 +1,14 @@
 <template>
-  <div class="my-req-page">
+  <div
+    class="my-req-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="我的申请" fallback="/student" />
+    <!-- 移动端下拉刷新：指示器放在吸顶头之后，头部保持不动 -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <el-tabs v-model="activeTab" class="req-tabs" @tab-change="() => load()">
       <el-tab-pane label="请假申请" name="leave" />
@@ -54,12 +62,17 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+// v6.1 弹窗减负：撤销确认走底部动作面板
+import { actionConfirm } from '@/composables/useActionSheet'
 import { useRoute } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import { getMyLeaves, deleteLeave } from '@/api/leave'
 import { getTickets, cancelTicket } from '@/api/service'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
 
 const route = useRoute()
@@ -85,19 +98,31 @@ async function load() {
 }
 
 async function revokeLeave(r: LeaveRequestOut) {
-  try { await ElMessageBox.confirm('确定撤销这条请假申请吗？', '撤销申请', { type: 'warning' }) } catch { return }
+  if (!(await actionConfirm('确定撤销这条请假申请吗？', '撤销申请', { danger: true, confirmButtonText: '撤销' }))) return
   try { await deleteLeave(r.id); ElMessage.success('已撤销'); load() } catch { ElMessage.error('撤销失败') }
 }
 
 async function revokeTicket(t: ServiceTicket) {
-  try { await ElMessageBox.confirm('确定撤销这条工单吗？', '撤销工单', { type: 'warning' }) } catch { return }
+  if (!(await actionConfirm('确定撤销这条工单吗？', '撤销工单', { danger: true, confirmButtonText: '撤销' }))) return
   try { await cancelTicket(t.id); ElMessage.success('已撤销'); load() } catch { ElMessage.error('撤销失败') }
 }
 onMounted(load)
+
+// 下拉刷新（移动端）：复用请假 / 工单加载，失败静默
+async function refreshAll() {
+  await load()
+}
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
 .my-req-page { width: 100%; max-width: 480px; min-width: 0; margin: 0 auto; min-height: 100%; background: #f5f7fb; padding-bottom: 40px; }
+/* 移动端：页面自身即滚动容器，下拉刷新才能接管顶部手势 */
+@media (max-width: 767px) {
+  .my-req-page { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; }
+}
 .topbar {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between;

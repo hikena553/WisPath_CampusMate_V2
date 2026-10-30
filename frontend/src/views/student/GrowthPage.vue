@@ -1,6 +1,13 @@
 <template>
-  <div class="growth-page">
+  <div class="growth-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="成长档案" fallback="/student" />
+    <!-- 移动端下拉刷新：吉祥物指示器（与学业中心 / 工作台共用同一模块） -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
     <div class="score-header">
       <div class="score-ring">
         <svg viewBox="0 0 120 120" class="score-svg">
@@ -222,7 +229,8 @@
       </div>
     </div>
 
-    <el-dialog v-model="recordDetailVisible" title="成长记录详情" width="560px" class="growth-dialog">
+    <!-- 成长记录详情（重内容：移动端=全屏子页 / 桌面端=弹窗） -->
+    <ResponsivePopup v-model="recordDetailVisible" title="成长记录详情" width="560px" class="growth-dialog">
       <div v-if="viewingRecord" class="project-detail">
         <div class="detail-head">
           <el-tag :type="typeTagType(viewingRecord.type)" size="small" effect="dark" round>{{ typeLabel(viewingRecord.type) }}</el-tag>
@@ -262,9 +270,10 @@
       <template #footer>
         <el-button @click="recordDetailVisible = false">关闭</el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
 
-    <el-dialog v-model="dialogVisible" :title="'添加成长记录 — ' + typeLabel(form.type)" width="600px" class="growth-dialog">
+    <!-- 添加成长记录（多字段表单：移动端=全屏子页） -->
+    <ResponsivePopup v-model="dialogVisible" :title="'添加成长记录 — ' + typeLabel(form.type)" width="600px" class="growth-dialog">
       <el-form ref="growthFormRef" :model="form" label-width="100px" :rules="growthRules">
         <el-row :gutter="20">
           <el-col :span="12">
@@ -418,14 +427,19 @@
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleAdd">确认添加</el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+// v6.1 弹窗减负：详情与表单走全屏子页承接
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import { useResponsive } from '@/composables/useResponsive'
 import { DataAnalysis, Histogram, TrendCharts, DataLine, Collection, Link, ArrowRight, Calendar, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import VChart from 'vue-echarts'
@@ -727,6 +741,22 @@ onMounted(async () => {
   loadPlanInsights()
 })
 
+/** 下拉刷新：重拉画像 / 技能 / 成长记录 / 计划洞察，失败静默不弹提示 */
+async function refreshAll() {
+  try {
+    const p = await getGrowthProfile()
+    profile.value = p
+    localSkills.value = [...(p.skills || [])]
+    localInterests.value = [...(p.interests || [])]
+  } catch { /* 静默 */ }
+  try { records.value = await getGrowthRecords() as any } catch { /* 静默 */ }
+  await loadPlanInsights()
+}
+
+// 下拉刷新（移动端）：桌面端不响应手势
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+
 async function handleAdd() {
   if (growthFormRef.value) {
     try { await growthFormRef.value.validate() } catch { return }
@@ -762,6 +792,8 @@ async function handleAdd() {
   box-sizing: border-box;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 
 /* 移动端：整屏覆盖子页（与资讯搜索/详情子页同一形式）——

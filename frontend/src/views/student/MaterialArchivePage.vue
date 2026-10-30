@@ -1,5 +1,11 @@
 <template>
-  <div class="material-page">
+  <div
+    class="material-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="材料档案" fallback="/student">
       <template #right>
         <div class="add" @click="openUpload">
@@ -7,6 +13,8 @@
         </div>
       </template>
     </SubPageHeader>
+    <!-- 移动端下拉刷新：指示器放在吸顶头之后，头部保持不动 -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <!-- 分类筛选 -->
     <div class="cat-row">
@@ -42,8 +50,8 @@
       <el-empty v-else description="还没有材料，点击右上角 + 上传归档" :image-size="90" />
     </div>
 
-    <!-- 上传弹窗 -->
-    <el-dialog v-model="uploadVisible" title="上传材料" width="92%" :append-to-body="true">
+    <!-- 上传材料（4 字段小表单：移动端=底部动作面板 / 桌面端=弹窗） -->
+    <ActionSheet v-model="uploadVisible" title="上传材料" width="480px">
       <el-form label-position="top">
         <el-form-item label="材料标题" required>
           <el-input v-model="form.title" placeholder="如：录取通知书、英语四级成绩单" maxlength="60" />
@@ -76,16 +84,22 @@
         <el-button @click="uploadVisible = false">取消</el-button>
         <el-button type="primary" :loading="uploading" @click="submit">上传归档</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+// v6.1 弹窗减负：上传小表单走底部动作面板，删除确认用 actionConfirm
+import ActionSheet from '@/components/common/ActionSheet.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import { Plus, UploadFilled } from '@element-plus/icons-vue'
 import { getMyMaterials, createMaterial, deleteMaterial } from '@/api/material'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import type { Material } from '@/types'
 
 const list = ref<Material[]>([])
@@ -150,14 +164,26 @@ function preview(m: Material) {
   window.open(m.file_url, '_blank')
 }
 async function remove(m: Material) {
-  try { await ElMessageBox.confirm('确定删除这条材料吗？', '删除材料', { type: 'warning' }) } catch { return }
+  if (!(await actionConfirm('确定删除这条材料吗？', '删除材料', { danger: true, confirmButtonText: '删除' }))) return
   try { await deleteMaterial(m.id); ElMessage.success('已删除'); load() } catch { ElMessage.error('删除失败') }
 }
 onMounted(load)
+
+// 下拉刷新（移动端）：复用材料列表加载，失败静默
+async function refreshAll() {
+  await load()
+}
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
 .material-page { width: 100%; max-width: 480px; min-width: 0; margin: 0 auto; min-height: 100%; background: #f5f7fb; padding-bottom: 40px; }
+/* 移动端：页面自身即滚动容器，下拉刷新才能接管顶部手势 */
+@media (max-width: 767px) {
+  .material-page { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; }
+}
 .topbar {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between;

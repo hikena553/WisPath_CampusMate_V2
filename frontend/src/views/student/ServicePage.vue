@@ -1,8 +1,18 @@
 <template>
-  <div class="service-page">
+  <div
+    class="service-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="办事服务" fallback="/student" />
+
     <!-- left: form area -->
     <div class="form-area">
+      <!-- 移动端下拉刷新：指示器放在吸顶头之后，头部保持不动 -->
+      <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+
       <div class="page-header">
         <h2>办事服务</h2>
         <p class="subtitle">一站式在线申请，提交后等待辅导员审批</p>
@@ -232,6 +242,9 @@ import { getTickets, createTicket, cancelTicket } from '@/api/service'
 import { getMyLeaves, createLeave, deleteLeave } from '@/api/leave'
 import { createFeedback, type FeedbackCreate } from '@/api/feedback'
 import { useAuthStore } from '@/stores/auth'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
 import LostFoundWidget from '@/components/service/LostFoundWidget.vue'
 import type { ServiceTicket, LeaveRequestOut } from '@/types'
@@ -360,6 +373,14 @@ onMounted(async () => {
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
 })
+
+// 下拉刷新（移动端）：重新拉取申请记录，失败静默
+async function refreshAll() {
+  await loadAll()
+}
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 // 监听路由 query 变化
 watch(() => route.query.type, (val) => {
@@ -586,6 +607,8 @@ async function handleCancel(row: any) {
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 .service-page::-webkit-scrollbar { display: none; }
 .form-area {

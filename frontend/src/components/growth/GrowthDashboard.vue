@@ -16,32 +16,55 @@
         <button v-if="!coursesLoading && todayCourses.length" type="button" class="gd-tc-all" @click="openSchedule">全部课程 ›</button>
       </div>
       <p class="gd-tc-line">
-        {{ coursesLoading ? '正在读取课表…' : `${todayCourses.length} 节课` }}<template v-if="!coursesLoading && nDueToday"> ·
-          <b class="gd-tc-due">{{ nDueToday }} 项作业今天截止</b></template><template v-else-if="!coursesLoading && pendingTodos"> ·
-          <b class="gd-tc-due">{{ pendingTodos }} 项待办</b></template>
+        <span class="gd-tc-line-in">
+          <span v-if="coursesLoading" class="gd-tc-loading">正在读取课表…</span>
+          <template v-else><b class="gd-tc-num">{{ todayCourses.length }}</b><span class="gd-tc-lbl">节课</span><span
+            v-if="nDueToday || pendingTodos"
+            class="gd-tc-due-wrap"
+          ><i class="gd-tc-sep">·</i><b class="gd-tc-num is-due">{{ nDueToday || pendingTodos }}</b><span class="gd-tc-lbl is-due">{{ nDueToday ? '项作业今天截止' : '项待办' }}</span></span></template>
+        </span>
       </p>
-      <template v-if="!coursesLoading && todayCourses.length">
-        <div
-          v-for="c in todayCardCourses"
-          :key="c.id"
-          class="gd-tl-row"
-          :class="{ 'is-live': isCourseLive(c), 'is-done': isCourseDone(c) }"
-        >
-          <p class="gd-tl-time">{{ timeLabel(c.start_period) }}</p>
-          <div class="gd-tl-main">
-            <p class="gd-tl-name">{{ c.name }}</p>
-            <p class="gd-tl-meta">
-              <template v-if="isCourseLive(c)">进行中{{ c.location ? ' · ' + c.location : '' }}</template>
-              <template v-else>{{ c.location || '待上课' }}</template>
+      <div class="gd-tc-body">
+        <div class="gd-tc-main">
+          <template v-if="!coursesLoading && todayCourses.length">
+            <div
+              v-for="c in todayCardCourses"
+              :key="c.id"
+              class="gd-tl-row"
+              :class="{ 'is-live': isCourseLive(c), 'is-done': isCourseDone(c) }"
+            >
+              <p class="gd-tl-time">{{ timeLabel(c.start_period) }}</p>
+              <div class="gd-tl-main">
+                <p class="gd-tl-name">{{ c.name }}</p>
+                <p class="gd-tl-meta">
+                  <template v-if="isCourseLive(c)">进行中{{ c.location ? ' · ' + c.location : '' }}</template>
+                  <template v-else>{{ c.location || '待上课' }}</template>
+                </p>
+              </div>
+            </div>
+            <p v-if="todayCourses.length > todayCardCourses.length" class="gd-tl-more">
+              还有 {{ todayCourses.length - todayCardCourses.length }} 节课 ›
             </p>
-          </div>
+          </template>
+          <p v-else-if="!coursesLoading" class="gd-tc-empty">{{ nextSummary }}</p>
         </div>
-        <p v-if="todayCourses.length > todayCardCourses.length" class="gd-tl-more">
-          还有 {{ todayCourses.length - todayCardCourses.length }} 节课 ›
-        </p>
-      </template>
-      <p v-else-if="!coursesLoading" class="gd-tc-empty">{{ nextSummary }}</p>
-      <button type="button" class="gd-tc-cta" @click="openSchedule">开始今天的学习</button>
+        <!-- 产品形象指引：放在卡片右侧留白，点击查看课程表；主 CTA 进入自习室 -->
+        <button type="button" class="gd-tc-guide" aria-label="查看课程表" @click="openSchedule">
+          <img :src="siteMascot" :alt="siteName" class="gd-tc-guide-img" draggable="false" />
+          <span class="gd-tc-guide-hint">查看课表 ›</span>
+        </button>
+      </div>
+      <!-- 吉祥物云朵气泡：挂到卡片上（固定贴在标题行右侧），不参与卡片排版，
+           内容单行居中，保证文字永远落在云朵内侧 -->
+      <span class="gd-tc-guide-bubble" aria-hidden="true">
+        <!-- viewBox 按路径实际包围盒收紧（x≈1~101 / y≈0~49），让云朵正好铺满气泡盒，
+             文字居中才会落在云朵的视觉中心 -->
+        <svg class="gd-tc-guide-cloud" viewBox="-1 -1 104 51" preserveAspectRatio="none">
+          <path d="M18 9C12 6 5 11 6 18C1 24 2 33 8 36C9 43 17 46 24 42C28 47 37 48 43 43C48 48 57 49 63 44C69 48 78 47 82 41C90 43 97 38 96 30C101 24 99 15 92 12C90 5 82 3 75 7C69 2 60 1 54 5C47 0 37 0 31 5C24 1 16 3 12 9Z" />
+        </svg>
+        <b class="gd-tc-guide-bubble-text">{{ todayBrief }}</b>
+      </span>
+      <button type="button" class="gd-tc-cta" @click="emit('open', 'study')">开始今天的学习</button>
     </section>
 
     <!-- 速览条：把今天/本周最关心的四个数字摊在同一行，避免首页只有一张卡显得空 -->
@@ -140,8 +163,8 @@
       <el-icon class="gd-ai-chev" :size="13"><ArrowRight /></el-icon>
     </button>
 
-    <!-- ===== 更多：单排横向滑动入口（v4.3）
-         入口数量超过一屏后横向滑动查看，内容不足一屏时整排居中，
+    <!-- ===== 更多：单行滑动入口（v4.5）
+         只保留一行，一屏展示 5 个，超出部分左右滑动查看，
          保留彩色软底图标，让首页功能密度更高但不形成第二张卡片 -->
     <nav class="gd-flat gd-more" aria-label="功能入口">
       <div class="gd-flat-head">
@@ -179,7 +202,8 @@
     </nav>
 
     <!-- 心情台账弹窗：30 天日历点阵 + 近期记录列表 -->
-    <el-dialog v-model="ledgerVisible" title="心情台账 · 近 30 天" width="92%" class="gd-ledger-dialog">
+    <!-- 心情台账（中等内容：移动端=底部动作面板，最大 78vh 可滚） -->
+    <ActionSheet v-model="ledgerVisible" title="心情台账 · 近 30 天" width="480px" class="gd-ledger-dialog">
       <div class="gd-ledger-grid">
         <div
           v-for="d in ledgerDays" :key="d.date"
@@ -200,7 +224,7 @@
           <span class="gd-ledger-tm">{{ moodTime(r.created_at) }}</span>
         </li>
       </ul>
-    </el-dialog>
+    </ActionSheet>
   </div>
 </template>
 
@@ -218,6 +242,8 @@ import { fetchEmotionHistory, recordEmotion, type EmotionRecordItem } from '@/ap
 import type { Course } from '@/types'
 import { studentDataCache } from '@/utils/studentDataCache'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+// v6.1 弹窗减负：心情台账等轻内容改用底部动作面板承接
+import ActionSheet from '@/components/common/ActionSheet.vue'
 
 const props = withDefaults(defineProps<{
   courses?: Course[]
@@ -234,7 +260,7 @@ const props = withDefaults(defineProps<{
   coursesLoading: false,
 })
 
-const emit = defineEmits<{ (e: 'open', tab: 'schedule' | 'grades' | 'growth' | 'service' | 'plan' | 'ai'): void }>()
+const emit = defineEmits<{ (e: 'open', tab: 'schedule' | 'grades' | 'growth' | 'service' | 'plan' | 'study' | 'ai'): void }>()
 const router = useRouter()
 const { siteMascot, siteName } = useSiteConfig()
 
@@ -308,6 +334,7 @@ const nextSummary = computed(() => {
   const c = nextCourse.value
   return `${timeLabel(c.start_period)} ${c.name}${c.location ? ' · ' + c.location : ''}`
 })
+
 const nextCourse = computed(() =>
   props.isHoliday ? null : (todayCourses.value.find(c => toMin(c.start_period) >= nowMin) || null)
 )
@@ -500,6 +527,29 @@ async function loadStreak() {
   } catch { /* 失败保持 0 */ }
 }
 
+/**
+ * 吉祥物气泡：只放一句贴合当下心情的短句，不再提醒待办/作业数量。
+ * 文案统一控制在 8 个汉字以内（12px 字号约 96px），保证一定能完整落在云朵里，
+ * 因此 CSS 用单行居中 + 固定气泡尺寸，不做自动换行。
+ */
+const todayBrief = computed(() => {
+  if (props.isHoliday) return '假期快乐呀'
+  if (props.coursesLoading) return '今天也要加油啊'
+  const mood = moodValue.value
+  if (mood === 5) return '今天心情超棒'
+  if (mood === 4) return '心情不错，真好'
+  if (mood === 3) return '平静也是一种好'
+  if (mood === 2) return '有点低落，抱抱'
+  if (mood === 1) return '难过也没关系哦'
+  const hour = now.getHours()
+  if (hour < 6) return '这么晚，早点睡'
+  if (hour < 11) return '早上好，加油'
+  if (hour < 14) return '记得好好吃饭'
+  if (hour < 18) return '下午也要元气哦'
+  if (hour < 23) return '今天辛苦啦'
+  return '早点休息哦'
+})
+
 onMounted(() => { loadDiscover(); loadTodayTasks(); loadMood(); loadStreak() })
 
 /** 下拉刷新（父组件学业中心首页调用）：重拉 AI 主动发现 / 今日任务 / 心情 / 打卡，同步刷新缓存 */
@@ -539,35 +589,72 @@ defineExpose({ refresh })
 .gd-skel { background: #eef0f3; border-radius: 6px; animation: gd-pulse 1.4s ease-in-out infinite; }
 @keyframes gd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
-/* ===== 日期行 ===== */
-.gd-today { padding: 4px 2px 10px; }
+/* ===== 日期行：做成紧凑圆角日期胶囊，不再占满整行的直角块 ===== */
+.gd-today { display: flex; padding: 2px 2px 12px; }
 .gd-today-date {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--gd-border);
   font-size: 12px;
   line-height: 17px;
   color: var(--gd-ink-3);
-  min-width: 0;
 }
 .gd-today-date b { font-weight: 600; color: var(--gd-ink-2); }
 
 /* ===== 今日学业卡（主页唯一白卡） ===== */
 .gd-today-card {
+  position: relative;
   padding: 14px;
   background: var(--gd-surface);
   border: 1px solid var(--gd-border);
   border-radius: var(--gd-radius-lg);
   box-shadow: var(--gd-shadow-card);
 }
-.gd-tc-head { display: flex; align-items: center; justify-content: space-between; }
+/* 右侧给气泡留出通道，避免「全部课程」按钮被云朵压住 */
+.gd-tc-head { display: flex; align-items: center; justify-content: space-between; padding-right: 136px; }
 .gd-tc-cap { margin: 0; font-size: 11.5px; color: var(--gd-ink-3); }
 .gd-tc-all {
   border: none; background: transparent; padding: 0;
   font-family: inherit; font-size: 12px; color: var(--gd-accent); cursor: pointer;
 }
-.gd-tc-line { margin: 5px 0 10px; font-size: 19px; line-height: 27px; font-weight: 600; letter-spacing: -0.4px; color: var(--gd-ink); }
-.gd-tc-due { color: #8a5a12; font-weight: 600; }
+/* 右侧留给云朵气泡，标题文字不伸到气泡下方，避免遮挡；固定两行高度并垂直居中，
+   让卡片在「0 节课」单行和有作业两行时结构一致，吉祥物不会忽高忽低。
+   数字放大加粗做视觉重点，单位/说明用小字，文案长时靠小字与紧间距压在一行内 */
+.gd-tc-line {
+  display: flex;
+  align-items: center;
+  margin: 5px 0 10px;
+  padding-right: 136px;
+  min-height: 54px;
+  font-size: 14px;
+  line-height: 27px;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  color: var(--gd-ink-2);
+}
+/* 标题始终单行：数字在前，尽量靠压缩小字与间距塞进一行，不换行 */
+.gd-tc-line-in {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gd-tc-num { font-size: 21px; font-weight: 700; letter-spacing: -0.6px; color: var(--gd-ink); }
+.gd-tc-num.is-due { color: #8a5a12; }
+.gd-tc-lbl { margin-left: 3px; font-size: 14px; font-weight: 500; color: var(--gd-ink-2); }
+.gd-tc-lbl.is-due { color: #8a5a12; font-weight: 600; }
+.gd-tc-loading { font-size: 15px; font-weight: 600; color: var(--gd-ink); }
+.gd-tc-due-wrap { white-space: nowrap; }
+.gd-tc-sep { margin: 0 5px; font-style: normal; font-weight: 400; font-size: 13px; color: #c2c6cc; }
 .gd-tc-empty { margin: 2px 0 10px; font-size: 13px; color: var(--gd-ink-3); }
 .gd-tl-row {
   display: flex; align-items: flex-start; gap: 10px;
@@ -582,9 +669,102 @@ defineExpose({ refresh })
 .gd-tl-row.is-live .gd-tl-name { color: var(--gd-accent); }
 .gd-tl-meta { margin: 0; font-size: 11px; line-height: 15px; color: var(--gd-ink-3); }
 .gd-tl-more { margin: 0 0 8px 13px; font-size: 11.5px; color: var(--gd-ink-3); }
+
+/* 今日课程主体：左侧课表时间线，右侧产品形象指引 */
+.gd-tc-body { display: flex; align-items: flex-start; gap: 10px; margin-top: 2px; }
+.gd-tc-main { flex: 1; min-width: 0; }
+.gd-tc-guide {
+  position: relative;
+  flex: none;
+  width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: -22px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.gd-tc-guide-img { width: 40px; height: 40px; object-fit: contain; }
+/* 气泡固定在卡片标题行右侧（脱离排版），云朵轮廓用 SVG 路径描出；
+   尺寸固定 + 文案单行居中，文字四周留足 14px 内边距，永远落在云朵内侧 */
+.gd-tc-guide-bubble {
+  position: absolute;
+  top: 22px;
+  right: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 128px;
+  height: 52px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  filter: drop-shadow(0 2px 3px rgba(20, 23, 26, 0.10));
+  animation: gd-bubble-wave 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.gd-tc-guide-cloud {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.gd-tc-guide-cloud path {
+  fill: #f7f8fa;
+  stroke: #e3e6ea;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+.gd-tc-guide-bubble-text {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--gd-ink-2);
+  text-align: center;
+  white-space: nowrap;
+}
+@keyframes gd-bubble-wave {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-1.5px) rotate(-0.6deg); }
+}
+/* 小屏（≤340px）整体收窄：气泡变窄、标题字号下调，避免「N 项作业今天截止」顶到云朵 */
+@media (max-width: 340px) {
+  .gd-tc-guide-bubble { width: 114px; padding: 0 14px; }
+  .gd-tc-line {
+    padding-right: 118px;
+    min-height: 48px;
+    line-height: 24px;
+  }
+  /* 小屏再压一档小字与间距，保证整句仍在一行内 */
+  .gd-tc-num { font-size: 18px; }
+  .gd-tc-lbl { font-size: 12.5px; }
+  .gd-tc-sep { margin: 0 3px; }
+  /* 小屏云朵更矮，吉祥物少提一点，避免贴住云朵 */
+  .gd-tc-guide { margin-top: -17px; }
+}
+.gd-tc-guide-hint {
+  font-size: 9.5px;
+  line-height: 1;
+  color: #9aa0a8;
+  letter-spacing: .2px;
+}
+.gd-tc-guide:active { opacity: .7; }
+@media (prefers-reduced-motion: reduce) {
+  .gd-tc-guide-bubble { animation: none; }
+}
+
 .gd-tc-cta {
   display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 38px; margin-top: 4px;
+  width: 100%; height: 38px; margin-top: 10px;
   border: none; border-radius: var(--gd-radius-sm);
   background: var(--gd-ink); color: #fff;
   font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
@@ -825,25 +1005,27 @@ defineExpose({ refresh })
 .gd-ai-entry-sub { font-size: 12px; line-height: 17px; color: var(--gd-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gd-ai-chev { color: var(--gd-ink-quiet); flex: none; }
 
-/* ===== 更多：单排横向滑动入口 ===== */
+/* ===== 更多：单行自适应入口，一屏 5 个，左右滑动看剩余 ===== */
 .gd-tile-scroll {
-  margin: 10px -2px 0;
+  margin: 10px 0 0;
   overflow-x: auto; overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  scroll-snap-type: x proximity;
-  /* 两侧渐隐：让滑出屏幕的入口自然淡掉，而不是被硬生生切一半 */
-  mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 16px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 16px), transparent 100%);
+  scroll-snap-type: x mandatory;
+  /* 右侧渐隐：提示后面还有入口，可继续滑动 */
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 12px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 12px), transparent 100%);
 }
 .gd-tile-scroll::-webkit-scrollbar { display: none; }
 .gd-tile-track {
-  display: flex; align-items: flex-start; justify-content: center;
-  gap: 12px; width: max-content; min-width: 100%;
-  padding: 2px 2px 2px;
+  display: flex; align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0;
 }
 .gd-tile {
-  flex: none; width: 58px; scroll-snap-align: center;
+  flex: 0 0 calc((100% - 32px) / 5);
+  scroll-snap-align: start;
+  min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   padding: 0; border: none; background: transparent; cursor: pointer;
   font-family: inherit; -webkit-tap-highlight-color: transparent;
@@ -856,7 +1038,7 @@ defineExpose({ refresh })
   transition: transform 0.2s ease;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
 }
-.gd-tile-label { font-size: 11px; line-height: 15px; color: var(--gd-ink-2); white-space: nowrap; }
+.gd-tile-label { max-width: 100%; font-size: 11px; line-height: 15px; color: var(--gd-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===== 心情台账弹窗 ===== */
 .gd-ledger-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }

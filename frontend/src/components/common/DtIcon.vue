@@ -151,9 +151,6 @@ const ICONS: Record<string, string> = {
   // 日历（任务 / 日程）
   calendar:
     '<rect x="3.8" y="5.2" width="16.4" height="15" rx="2.2"/><path d="M3.8 9.6h16.4"/><path d="M8.4 3.6v3.2M15.6 3.6v3.2"/><path d="M7.6 13.6h2.8M13.6 13.6h2.8M7.6 17h2.8"/>',
-  // @（提及）。取自 lucide at-sign（ISC），24 网格同系；只能描边使用，filled 下会糊成实心
-  at:
-    '<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>',
 }
 
 const markup = computed(() => ICONS[props.name] || ICONS.message)

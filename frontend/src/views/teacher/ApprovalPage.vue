@@ -1,28 +1,26 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
-  <div class="tui-page">
-    <SubPageHeader title="审批管理" fallback="/teacher">
-      <template #right>
-        <el-button text circle aria-label="刷新" @click="loadData()">
-          <el-icon :size="19"><Refresh /></el-icon>
-        </el-button>
-      </template>
-    </SubPageHeader>
+  <div
+    class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
+    <SubPageHeader title="审批管理" fallback="/teacher" />
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：待办语义色（琥珀）+ 印章图标。
            本页已有「待处理总览」四宫格作为导航型指标区，头部不再重复挂数字，
-           只承担页面身份与刷新入口。 -->
+           只承担页面身份入口。 -->
       <TuiPageHero
         v-if="!isMobile"
         title="审批管理"
         sub="请假、办事、材料一站式处理，按办理链路推进"
         :icon="Stamp"
         tone="warn"
-      >
-        <el-button text circle aria-label="刷新" @click="loadData()">
-          <el-icon :size="18"><Refresh /></el-icon>
-        </el-button>
-      </TuiPageHero>
+      />
 
       <!-- 桌面端概览带：把「审批链路 + 学生聚焦条」提到 hero 之下、类别 Tab 之上，
            作为进入具体待办前的一条横向概览——先看流程走到哪一步、当前聚焦的是谁，
@@ -157,10 +155,16 @@
             end-hint="已经是最后一条待批请假了"
           >
             <template #default="{ row }">
-              <div class="mobile-card">
+              <div class="mobile-card ap-ticket">
+                <!-- 状态横幅 -->
+                <div class="ap-ticket-banner">
+                  <el-icon :size="14"><Document /></el-icon>
+                  <span>请假申请 · 待审批</span>
+                  <el-tag size="small" effect="plain" class="ap-ticket-type">{{ typeLabel(row.leave_type) }}</el-tag>
+                </div>
                 <div class="mobile-card-header">
                   <span class="mobile-card-student">{{ row.student_name }}</span>
-                  <el-tag size="small" effect="plain">{{ typeLabel(row.leave_type) }}</el-tag>
+                  <span class="ap-ticket-no">单号 #{{ row.id }}</span>
                 </div>
                 <div class="mobile-card-body">
                   <div class="mobile-card-row">
@@ -168,33 +172,52 @@
                     <span class="mobile-card-value">{{ row.start_date }} ~ {{ row.end_date }}</span>
                   </div>
                   <div class="mobile-card-row" v-if="row.reason">
-                    <span class="mobile-card-label">原因</span>
+                    <span class="mobile-card-label">事由</span>
                     <span class="mobile-card-value mobile-card-reason">{{ row.reason }}</span>
                   </div>
-                  <div class="mobile-card-row" v-if="analysisMap[row.id]">
-                    <span class="mobile-card-label">AI 分析</span>
-                    <span class="mobile-card-value">
-                      <el-tag :type="analysisMap[row.id].suggestion === 'approve' ? 'success' : 'danger'" size="small" effect="plain">
-                        {{ analysisMap[row.id].suggestion === 'approve' ? '建议通过' : '建议拒绝' }}
-                      </el-tag>
-                      <span class="mobile-ai-reason">{{ analysisMap[row.id].reason }}</span>
-                    </span>
+                </div>
+
+                <!-- AI 辅助审批面板 -->
+                <div class="ap-ai">
+                  <div class="ap-ai-head">
+                    <span class="ap-ai-ic"><el-icon :size="16"><MagicStick /></el-icon></span>
+                    <div>
+                      <div class="ap-ai-title">AI 辅助审批</div>
+                      <div class="ap-ai-sub">基于出勤率与历史请假记录</div>
+                    </div>
+                    <el-tag
+                      v-if="analysisMap[row.id]"
+                      :type="analysisMap[row.id].suggestion === 'approve' ? 'success' : 'danger'"
+                      size="small" effect="dark" class="ap-ai-verdict"
+                    >
+                      {{ analysisMap[row.id].suggestion === 'approve' ? '建议通过' : '建议拒绝' }}
+                    </el-tag>
+                    <el-tag v-else type="info" size="small" effect="plain" class="ap-ai-verdict">
+                      <el-icon class="is-loading"><Loading /></el-icon> 分析中
+                    </el-tag>
                   </div>
-                  <div class="mobile-card-row" v-else>
-                    <span class="mobile-card-label">AI 分析</span>
-                    <span class="mobile-card-value">
-                      <el-tag type="info" size="small" effect="plain" class="analyzing-tag">
-                        <el-icon class="is-loading"><Loading /></el-icon> 分析中
-                      </el-tag>
-                    </span>
+                  <div v-if="analysisMap[row.id]" class="ap-ai-body">
+                    <p class="ap-ai-reason">{{ analysisMap[row.id].reason }}</p>
+                    <div class="ap-ai-adopt">
+                      <button
+                        type="button"
+                        class="ap-ai-adopt-btn"
+                        :class="analysisMap[row.id].suggestion === 'approve' ? 'is-approve' : 'is-reject'"
+                        @click="analysisMap[row.id].suggestion === 'approve' ? handleApprove(row) : showReject(row)"
+                      >
+                        <el-icon :size="13"><MagicStick /></el-icon>
+                        采纳建议，{{ analysisMap[row.id].suggestion === 'approve' ? '直接通过' : '去填写驳回理由' }}
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div class="mobile-card-actions">
+
+                <div class="mobile-card-actions ap-ticket-actions">
+                  <el-button type="danger" size="small" plain @click="showReject(row)">
+                    <el-icon><Close /></el-icon> 驳回
+                  </el-button>
                   <el-button type="success" size="small" @click="handleApprove(row)">
                     <el-icon><Check /></el-icon> 通过
-                  </el-button>
-                  <el-button type="danger" size="small" plain @click="showReject(row)">
-                    <el-icon><Close /></el-icon> 拒绝
                   </el-button>
                 </div>
               </div>
@@ -746,10 +769,11 @@
     </div>
 
     <!-- ===================== 办事申请详情（先看清再审批） ===================== -->
-    <el-dialog
+    <!-- 办事申请详情（重内容：移动端=全屏子页 / 桌面端=弹窗） -->
+    <ResponsivePopup
       v-model="ticketDetailVisible"
       title="办事申请详情"
-      :width="isMobile ? '92%' : '420px'"
+      width="420px"
       align-center
       destroy-on-close
       class="ap-dialog"
@@ -814,13 +838,13 @@
           @click="reviewFromDetail(ticketDetailTarget, 'approve')"
         >通过申请</el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
 
-    <!-- ===================== 请假拒绝 ===================== -->
-    <el-dialog
+    <!-- ===================== 请假拒绝（1 字段：移动端=底部动作面板） ===================== -->
+    <ActionSheet
       v-model="rejectVisible"
       title="拒绝请假"
-      :width="isMobile ? '90%' : '380px'"
+      width="380px"
       align-center
       :close-on-click-modal="false"
       class="ap-dialog"
@@ -842,13 +866,13 @@
         <el-button @click="rejectVisible = false">取消</el-button>
         <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
-    <!-- ===================== 材料驳回 ===================== -->
-    <el-dialog
+    <!-- ===================== 材料驳回（1 字段：移动端=底部动作面板） ===================== -->
+    <ActionSheet
       v-model="rejectMaterialVisible"
       title="驳回材料"
-      :width="isMobile ? '90%' : '380px'"
+      width="380px"
       align-center
       :close-on-click-modal="false"
       class="ap-dialog"
@@ -866,13 +890,13 @@
         <el-button @click="rejectMaterialVisible = false">取消</el-button>
         <el-button type="danger" @click="confirmMaterialReject">确认驳回</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
-    <!-- ===================== 办事申请 通过 / 拒绝 ===================== -->
-    <el-dialog
+    <!-- ===================== 办事申请 通过 / 拒绝（1 字段：移动端=底部动作面板） ===================== -->
+    <ActionSheet
       :title="ticketReviewAction === 'approve' ? '通过办事申请' : '拒绝办事申请'"
       v-model="ticketReviewVisible"
-      :width="isMobile ? '90%' : '380px'"
+      width="380px"
       align-center
       :close-on-click-modal="false"
       class="ap-dialog"
@@ -895,14 +919,19 @@
           {{ ticketReviewAction === 'approve' ? '确认通过' : '确认拒绝' }}
         </el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+// v6.1 弹窗减负：详情走全屏子页，单字段审批走底部动作面板
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSteps, { type TuiStepItem } from '@/components/common/TuiSteps.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
@@ -910,8 +939,8 @@ import ApprovalCardStack from '@/components/teacher/ui/ApprovalCardStack.vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Tickets, CircleCheck, CircleClose, Stamp,
-  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, Refresh, User,
-  View, Paperclip, Clock, DataAnalysis
+  InfoFilled, Loading, Check, Close, FolderOpened, PieChart, Histogram, User,
+  View, Paperclip, Clock, DataAnalysis, MagicStick
 } from '@element-plus/icons-vue'
 import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi, claimTicket } from '@/api/service'
@@ -920,6 +949,9 @@ import type { LeaveRequestOut, ServiceTicket } from '@/types'
 import { useResponsive } from '@/composables/useResponsive'
 
 const { isMobile } = useResponsive()
+
+/** 移动端下拉刷新：手动刷新按钮已移除，统一由下拉手势触发 */
+const pull = usePullRefresh(loadData, { enabled: () => isMobile.value })
 
 const route = useRoute()
 const router = useRouter()
@@ -1467,6 +1499,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
 /* ========== 卡片（对齐 tui 规范：白卡 + 发丝边 + 弱阴影） ========== */
 .section-card {
   background: var(--tui-surface);
@@ -2006,4 +2039,69 @@ onMounted(() => {
     overflow-y: auto;
   }
 }
+</style>
+
+<style scoped>
+/* ================= 票据卡 + AI 辅助审批（移动端） ================= */
+.ap-ticket { display: flex; flex-direction: column; overflow: hidden; }
+.ap-ticket-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -14px -14px 10px;
+  padding: 9px 14px;
+  background: var(--tui-brand-soft, #eff4ff);
+  color: var(--tui-brand-strong, #1d4ed8);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ap-ticket-type { margin-left: auto; }
+.ap-ticket-no { margin-left: auto; font-size: 11px; color: var(--tui-text-quiet, #98a2b3); font-variant-numeric: tabular-nums; }
+
+.ap-ai {
+  background: linear-gradient(160deg, #f4f3ff, #fbfaff);
+  border: 1px solid #ded9f8;
+  border-radius: 14px;
+  padding: 12px 13px;
+  margin-top: 10px;
+}
+.ap-ai-head { display: flex; align-items: center; gap: 9px; }
+.ap-ai-ic {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #7f56d9;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ap-ai-title { font-size: 13px; font-weight: 700; color: #3b2c72; }
+.ap-ai-sub { font-size: 10.5px; color: var(--tui-text-tertiary, #98a2b3); margin-top: 1px; }
+.ap-ai-verdict { margin-left: auto; flex-shrink: 0; }
+.ap-ai-body { margin-top: 10px; border-top: 1px dashed #ded9f8; padding-top: 10px; }
+.ap-ai-reason { margin: 0; font-size: 12px; color: #475467; line-height: 1.65; }
+.ap-ai-adopt { margin-top: 10px; }
+.ap-ai-adopt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  color: #fff;
+  background: #7f56d9;
+}
+.ap-ai-adopt-btn.is-approve { background: var(--tui-success, #079455); }
+.ap-ai-adopt-btn.is-reject { background: var(--tui-danger, #d92d20); }
+.ap-ai-adopt-btn:active { opacity: 0.85; }
+.ap-ticket-actions { margin-top: auto; padding-top: 12px; }
+.ap-ticket-actions .el-button { flex: 1; }
 </style>

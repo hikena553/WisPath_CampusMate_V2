@@ -1,6 +1,14 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
-  <div class="tui-page">
+  <div
+    class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="人文关怀中心" fallback="/teacher" />
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：指标本身可点击下钻（点数字即跳到对应清单 / 台账） -->
@@ -90,9 +98,7 @@
           <section ref="todoRef" class="tui-section cc-todo" :class="{ 'is-flash': todoFlash }">
             <div class="tui-section-head">
               <h3><el-icon><AlarmClock /></el-icon>待办关怀清单</h3>
-              <div class="tui-section-extra">
-                <el-button class="cc-add" size="small" :icon="Refresh" @click="loadAll">刷新</el-button>
-              </div>
+              <div class="tui-section-extra" />
             </div>
             <TuiSegmented :model-value="todoTab" :options="todoOptions" @update:model-value="onTodoTab" />
 
@@ -520,7 +526,6 @@
           <h3><el-icon><ChatDotRound /></el-icon>求助受理</h3>
           <div class="tui-section-extra">
             <span class="cc-count">{{ shownHelp.length }} 条</span>
-            <el-button class="cc-add" size="small" :icon="Refresh" @click="loadHelp">刷新</el-button>
           </div>
         </div>
         <div class="tui-section-hint">
@@ -589,11 +594,11 @@
         @saved="onCareSaved"
       />
 
-      <!-- 补充回访记录 -->
-      <el-dialog
+      <!-- 补充回访记录（1 文本+1 单选：移动端=底部动作面板） -->
+      <ActionSheet
         v-model="followUpVisible"
         title="补充回访记录"
-        :width="isMobile ? '90%' : '420px'"
+        width="420px"
         align-center
         :close-on-click-modal="false"
         destroy-on-close
@@ -630,13 +635,13 @@
           <el-button @click="followUpVisible = false">取消</el-button>
           <el-button type="primary" :loading="followUpSaving" :disabled="!followUpForm.text.trim()" @click="submitFollowUp">保存</el-button>
         </template>
-      </el-dialog>
+      </ActionSheet>
 
-      <!-- 求助受理：回复弹窗 -->
-      <el-dialog
+      <!-- 求助受理（1 文本+1 单选：移动端=底部动作面板） -->
+      <ActionSheet
         v-model="replyVisible"
         title="受理求助"
-        :width="isMobile ? '90%' : '440px'"
+        width="440px"
         align-center
         :close-on-click-modal="false"
         destroy-on-close
@@ -673,22 +678,27 @@
           <el-button @click="replyVisible = false">取消</el-button>
           <el-button type="primary" :loading="replySaving" :disabled="!replyForm.reply.trim()" @click="submitReply">提交回复</el-button>
         </template>
-      </el-dialog>
+      </ActionSheet>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, type Component } from 'vue'
+// v6.1 弹窗减负：小弹窗走底部动作面板，删除确认用 actionConfirm
+import ActionSheet from '@/components/common/ActionSheet.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import {
   AlarmClock, ArrowLeft, ArrowRight, Calendar, ChatDotRound, ChatLineRound, CircleCheck,
   DataLine, HomeFilled, InfoFilled, Message, Notebook, Plus, Refresh, Star, Sunny,
   TrendCharts,
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import {
@@ -742,6 +752,9 @@ interface Warmer {
 const { isMobile } = useResponsive()
 const route = useRoute()
 const router = useRouter()
+
+/** 移动端下拉刷新：手动刷新按钮已移除，统一由下拉手势触发 */
+const pull = usePullRefresh(loadAll, { enabled: () => isMobile.value })
 
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 /** 家校概览统计窗口（天） */
@@ -1177,7 +1190,7 @@ async function handleGenerate() {
 /* ================= 台账增删 / 回访闭环 ================= */
 async function removeEvent(e: CareEvent) {
   try {
-    await ElMessageBox.confirm(`确定删除「${e.title}」？`, '删除确认', { type: 'warning' })
+    if (!(await actionConfirm(`确定删除「${e.title}」？`, '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   } catch {
     return
   }
@@ -1188,7 +1201,7 @@ async function removeEvent(e: CareEvent) {
 
 async function removeVisit(v: HomeVisit) {
   try {
-    await ElMessageBox.confirm(`确定删除 ${v.student_name} 的家访记录？`, '删除确认', { type: 'warning' })
+    if (!(await actionConfirm(`确定删除 ${v.student_name} 的家访记录？`, '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   } catch {
     return
   }
@@ -1242,7 +1255,7 @@ async function submitFollowUp() {
 
 async function removePraise(p: Praise) {
   try {
-    await ElMessageBox.confirm(`确定删除 ${p.student_name} 的激励记录？`, '删除确认', { type: 'warning' })
+    if (!(await actionConfirm(`确定删除 ${p.student_name} 的激励记录？`, '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   } catch {
     return
   }
@@ -1365,6 +1378,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
 /* ===== 头部指标可点击 ===== */
 .cc-hero-metric {
   border: 1px solid var(--tui-border);

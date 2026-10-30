@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <ResponsivePopup
     :model-value="modelValue"
     title="发起问卷"
     :width="isMobile ? '90%' : '400px'"
@@ -79,11 +79,13 @@
       <el-button @click="emit('update:modelValue', false)">取消</el-button>
       <el-button type="primary" :loading="saving" :disabled="!valid" @click="submit">创建</el-button>
     </template>
-  </el-dialog>
+  </ResponsivePopup>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+// v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { Delete, InfoFilled, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'

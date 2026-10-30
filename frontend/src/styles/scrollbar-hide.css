@@ -1,0 +1,64 @@
+/* ============================================================
+   全局滚动条隐藏（页面 + 弹窗）
+   目标：隐藏所有容器（页面、侧滑抽屉、弹窗内容区、消息列表等）
+   右侧出现的滚动条，滚动行为本身保持不变。
+   重点保障移动端（iOS/Android WebView、微信内置浏览器）体验。
+
+   技术说明：
+   - WebKit/Blink（Chrome/Safari/Edge/国产浏览器/移动端 WebView）：
+     ::-webkit-scrollbar { display:none } 即可彻底隐藏；
+   - Firefox：scrollbar-width: none；
+   - 旧版 IE/Edge Legacy：-ms-overflow-style: none；
+   - 全部加 !important，用于覆盖散落在各页面/组件里显式
+     画滚动条的规则（如 admin OrgFlowCanvas 的 .flow-scroll）。
+   - 只隐藏滚动条外观，overflow 滚动能力不受影响。
+   ============================================================ */
+
+/* 兜底：html/body 根滚动条（移动端一般不显示，桌面端一并隐藏） */
+html {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+html::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* 全局：所有元素的所有滚动条（含页面容器、弹窗、抽屉、横向滑动条） */
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ---- Element Plus 弹窗体系（重点覆盖） ----
+   遮罩层可滚动的容器、弹窗本体、弹窗内容区、消息确认框 */
+.el-overlay-dialog,
+.el-overlay-dialog::-webkit-scrollbar,
+.el-dialog,
+.el-dialog::-webkit-scrollbar,
+.el-dialog__body,
+.el-dialog__body::-webkit-scrollbar,
+.el-message-box,
+.el-message-box::-webkit-scrollbar,
+.el-drawer__body,
+.el-drawer__body::-webkit-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.el-dialog__body::-webkit-scrollbar,
+.el-overlay-dialog::-webkit-scrollbar,
+.el-message-box::-webkit-scrollbar,
+.el-drawer__body::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* 防止隐藏滚动条后桌面端出现多余留白（gutter） */
+* {
+  scrollbar-gutter: auto !important;
+}

@@ -1,6 +1,15 @@
 <template>
-  <div class="emotion-page">
+  <div
+    class="emotion-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="情绪树洞" fallback="/student" />
+    <!-- 移动端下拉刷新：指示器放在吸顶头之后，头部保持不动 -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+
     <!-- 头部主视觉 -->
     <div class="emotion-hero">
       <div class="hero-glow g1"></div>
@@ -124,13 +133,11 @@
     </div>
 
     <!-- 发起求助弹窗 -->
-    <el-dialog
+    <!-- 求助辅导员（2 字段：移动端=底部动作面板） -->
+    <ActionSheet
       v-model="helpVisible"
       title="求助辅导员"
-      width="90%"
-      align-center
-      :close-on-click-modal="false"
-      destroy-on-close
+      width="440px"
       class="help-dialog"
     >
       <div class="help-form">
@@ -170,14 +177,17 @@
         <el-button @click="helpVisible = false">取消</el-button>
         <el-button type="primary" :loading="helpSaving" :disabled="!helpForm.content.trim()" @click="submitHelp">提交求助</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+// v6.1 弹窗减负：求助小表单与清空确认走底部动作面板
+import ActionSheet from '@/components/common/ActionSheet.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Delete, ChatDotRound } from '@element-plus/icons-vue'
 import { fetchEmotionStats, fetchEmotionHistory, clearEmotions, type EmotionStats, type EmotionRecordItem } from '@/api/emotion'
 import {
@@ -186,6 +196,9 @@ import {
   type HelpRequest, type HelpCategory,
 } from '@/api/helpRequest'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
 // AI 助手称谓取自站点配置（管理端「自我称谓」）
 const { agentName } = useSiteConfig()
@@ -293,15 +306,7 @@ async function loadAll() {
 }
 
 async function handleClear() {
-  try {
-    await ElMessageBox.confirm('确定要清空情绪记录吗？历史情绪记录将被删除。', '清空记录', {
-      confirmButtonText: '确定清空',
-      cancelButtonText: '再想想',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+  if (!(await actionConfirm('确定要清空情绪记录吗？历史情绪记录将被删除。', '清空记录', { danger: true, confirmButtonText: '确定清空', cancelButtonText: '再想想' }))) return
   try {
     await clearEmotions()
     ElMessage.success('已清空情绪记录')
@@ -312,6 +317,14 @@ async function handleClear() {
 }
 
 onMounted(loadAll)
+
+// 下拉刷新（移动端）：复用树洞数据加载，失败静默
+async function refreshAll() {
+  await loadAll()
+}
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
@@ -320,6 +333,8 @@ onMounted(loadAll)
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: #f6f9ff;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 
 /* 移动端：整屏覆盖子页（与资讯搜索/详情子页同一形式）——

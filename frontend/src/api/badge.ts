@@ -53,12 +53,8 @@ export interface HomepageMutual {
   common_groups: number
   is_my_tutor: boolean
   is_my_student: boolean
-  /** 是否曾建立单聊（弱关系线索，不再决定按钮语义） */
+  /** 是否已建立单聊关系：决定主页显示「加为好友」还是「删除好友」 */
   has_conversation: boolean
-  /** 我是否关注了 TA / TA 是否关注了我 / 是否互关（好友） */
-  is_following: boolean
-  is_follower: boolean
-  is_friend: boolean
 }
 
 export interface UserHomepage {
@@ -76,10 +72,6 @@ export interface UserHomepage {
   badges: BadgeItem[]
   earned_count: number
   total_count: number
-  /** 关注 / 粉丝 / 好友（互关）三项公开计数 */
-  following_count: number
-  follower_count: number
-  friend_count: number
   stats: HomepageStat[]
   highlights: HomepageHighlight[]
   mutual: HomepageMutual

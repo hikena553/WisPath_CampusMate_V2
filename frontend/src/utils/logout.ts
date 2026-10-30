@@ -7,8 +7,8 @@
 import { h } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { SwitchButton } from '@element-plus/icons-vue'
-import router from '@/router'
 import { useAuthStore } from '@/stores/auth'
+import { markLoggingOut, markForcedLogout } from '@/utils/token'
 
 /** 弹窗内容：图标徽章 + 标题 + 说明。每次调用重新创建 VNode，避免复用同一实例 */
 function renderContent() {
@@ -36,8 +36,18 @@ export async function confirmLogout(): Promise<boolean> {
     // 取消 / 关闭：保持当前登录态不变
     return false
   }
-  // logout() 内部已同步清理本地登录态，无需等待服务端撤销完成即可跳转
-  useAuthStore().logout()
-  router.replace('/login')
+  // 必须先等服务端撤销 Cookie 并清理本地登录态，再做「整页跳转」：
+  // SPA 内跳 /login 时守卫可能用残留 Cookie 探活成功把用户弹回角色首页，
+  // 而整页跳转等价于用户手动刷新，能彻底丢弃残留的页面与守卫状态，
+  // 这正是「必须手动刷新才是真退出」的痛点所在。
+  markLoggingOut(true)
+  try {
+    await useAuthStore().logout()
+  } finally {
+    // 无论服务端撤销是否成功，都记录「用户已主动退出」：
+    // 即使 Cookie 因网络问题残留，刷新后守卫也不会再把用户自动登回来
+    markForcedLogout()
+    window.location.replace('/login')
+  }
   return true
 }

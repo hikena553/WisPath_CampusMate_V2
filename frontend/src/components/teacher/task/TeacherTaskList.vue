@@ -82,8 +82,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+// v6.1 弹窗减负：删除确认走底部动作面板
+import { actionConfirm } from '@/composables/useActionSheet'
 import { CircleCheck, InfoFilled, List, Plus } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   deleteTeacherTask,
   getTeacherTasks,
@@ -245,13 +247,7 @@ function openEdit(task: TeacherTask) {
 
 /** 删除任务（二次确认） */
 async function handleDelete(task: TeacherTask) {
-  try {
-    await ElMessageBox.confirm(`确定删除任务「${task.title}」吗？该操作不可撤销。`, '删除任务', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-    })
-  } catch {
+  if (!(await actionConfirm(`确定删除任务「${task.title}」吗？该操作不可撤销。`, '删除任务', { danger: true, confirmButtonText: '删除' }))) {
     return
   }
   try {

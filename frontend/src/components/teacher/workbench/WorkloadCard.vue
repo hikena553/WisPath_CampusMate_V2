@@ -67,8 +67,8 @@ function pct(n: number) {
   return `${Math.round((n / t) * 100)}%`
 }
 
-async function load() {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   const [w, s, l] = await Promise.allSettled([
     getWorkloadStats(),
     getTeacherTaskSummary(),
@@ -81,7 +81,12 @@ async function load() {
 }
 
 onMounted(load)
-onActivated(load)
+/** 从其它页签切回首页时静默刷新：数据已在，不再亮 loading，避免切页瞬间闪一下 */
+let activatedOnce = false
+onActivated(() => {
+  if (activatedOnce) load(true)
+  else activatedOnce = true
+})
 defineExpose({ reload: load })
 </script>
 

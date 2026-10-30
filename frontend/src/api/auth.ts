@@ -67,7 +67,8 @@ export function getCurrentIdentity() {
   return request.get<CurrentIdentity>('/auth/me', { skipAuthRedirect: true })
 }
 
-/** 退出登录：服务端撤销当前 token（Bearer 或 httpOnly Cookie）并清除 Cookie */
+/** 退出登录：服务端撤销当前 token（Bearer 或 httpOnly Cookie）并清除 Cookie。
+ * 设置超时：退出流程需要等服务端撤销 Cookie 后再跳转，避免请求挂起导致无法退出。 */
 export function logoutApi() {
-  return request.post<{ message: string }>('/auth/logout')
+  return request.post<{ message: string }>('/auth/logout', undefined, { timeout: 5000 })
 }

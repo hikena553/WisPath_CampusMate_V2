@@ -1,6 +1,14 @@
 <template>
-  <div class="care-page">
+  <div
+    class="care-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="我的关怀" fallback="/student" />
+    <!-- 移动端下拉刷新：指示器放在吸顶头之后，头部保持不动 -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <!-- 顶部概览 -->
     <div class="care-hero">
@@ -110,6 +118,9 @@ import {
   type MyCarePraise, type MyCareRecord, type MyCareSummary, type MyCareVisit,
 } from '@/api/careStudent'
 import { FOLLOW_UP_STATUS_LABEL, VISIT_METHOD_LABEL } from '@/api/careCenter'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
 const RECORD_TYPE_LABEL: Record<MyCareRecord['record_type'], string> = {
   care: '关怀记录',
@@ -129,7 +140,8 @@ function fmtTime(d: string) {
   return d ? d.slice(0, 16).replace('T', ' ') : ''
 }
 
-onMounted(async () => {
+// 拉取关怀数据：首页首屏与下拉刷新共用，失败静默
+async function refreshAll() {
   const [s, p, r, v] = await Promise.allSettled([
     getMyCareSummary(),
     getMyCarePraises(),
@@ -140,7 +152,12 @@ onMounted(async () => {
   if (p.status === 'fulfilled') praises.value = p.value
   if (r.status === 'fulfilled') records.value = r.value
   if (v.status === 'fulfilled') visits.value = v.value
-})
+}
+
+onMounted(refreshAll)
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
@@ -152,6 +169,8 @@ onMounted(async () => {
   overflow-y: auto;
   box-sizing: border-box;
   scrollbar-width: none;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 .care-page::-webkit-scrollbar { display: none; }
 

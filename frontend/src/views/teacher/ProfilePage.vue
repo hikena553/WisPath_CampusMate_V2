@@ -2,7 +2,13 @@
   <div class="profile-wrapper" :class="{ 'is-web': !isMobile }">
     <!-- ===== 移动端主页面：封面头部（身份悬浮于背景之上）+ 分组菜单（桌面端改由左侧导航承担） ===== -->
     <transition v-if="isMobile" :name="slideDirection">
-      <div v-if="!currentPage" key="main" class="profile-page">
+      <div v-if="!currentPage" key="main" class="profile-page"
+        @touchstart.passive="pull.onStart"
+        @touchmove="pull.onMove"
+        @touchend="pull.onEnd"
+        @touchcancel="pull.onCancel">
+        <!-- 移动端下拉刷新：本页无吸顶头，指示器置于封面之前 -->
+        <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
         <!-- 个人中心头部：抖音范式封面 —— 顶部悬浮操作、头像压住封面下边缘、姓名与工号贴在封面右下 -->
         <section class="pf-hero" :class="{ 'is-photo': !!bannerUrl }" :style="heroBannerStyle" @click="openPage('banner')">
           <div class="pf-hero-scrim"></div>
@@ -86,48 +92,50 @@
               <span class="pf-tag">资料完整度 {{ profileCompletion }}%</span>
             </div>
 
-            <!-- 快捷入口行：横向滑动，一屏放不下时左右滑（勋章已移到头像右侧的勋章条） -->
+            <!-- 快捷入口行：一屏固定 5 个，其余左右滑查看（勋章已移到头像右侧的勋章条） -->
             <nav class="pf-quick">
-              <button type="button" class="pf-quick-item" @click="openPage('profile')">
-                <span class="pf-quick-icon"><el-icon :size="21"><User /></el-icon></span>
-                <span class="pf-quick-label">我的资料</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="openPage('announcements')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Bell /></el-icon></span>
-                <span class="pf-quick-label">校园公告</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/teacher/tasks')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Calendar /></el-icon></span>
-                <span class="pf-quick-label">待办任务</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/teacher/approval')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Tickets /></el-icon></span>
-                <span class="pf-quick-label">请假审批</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/teacher/crisis')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Warning /></el-icon></span>
-                <span class="pf-quick-label">学生预警</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/teacher/guardian')">
-                <span class="pf-quick-icon"><el-icon :size="21"><ChatDotRound /></el-icon></span>
-                <span class="pf-quick-label">家校沟通</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/teacher/survey')">
-                <span class="pf-quick-icon"><el-icon :size="21"><EditPen /></el-icon></span>
-                <span class="pf-quick-label">匿名互评</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/teacher/portfolio')">
-                <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
-                <span class="pf-quick-label">成长档案</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="openPage('theme')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Sunny /></el-icon></span>
-                <span class="pf-quick-label">主题设置</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="openPage('help')">
-                <span class="pf-quick-icon"><el-icon :size="21"><QuestionFilled /></el-icon></span>
-                <span class="pf-quick-label">使用帮助</span>
-              </button>
+              <div class="pf-quick-track">
+                <button type="button" class="pf-quick-item" @click="openPage('profile')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><User /></el-icon></span>
+                  <span class="pf-quick-label">我的资料</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="openPage('announcements')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><Bell /></el-icon></span>
+                  <span class="pf-quick-label">校园公告</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/teacher/tasks')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><Calendar /></el-icon></span>
+                  <span class="pf-quick-label">待办任务</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/teacher/approval')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><Tickets /></el-icon></span>
+                  <span class="pf-quick-label">请假审批</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/teacher/crisis')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><Warning /></el-icon></span>
+                  <span class="pf-quick-label">学生预警</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/teacher/guardian')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><ChatDotRound /></el-icon></span>
+                  <span class="pf-quick-label">家校沟通</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/teacher/survey')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><EditPen /></el-icon></span>
+                  <span class="pf-quick-label">匿名互评</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/teacher/portfolio')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
+                  <span class="pf-quick-label">成长档案</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="openPage('theme')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><Sunny /></el-icon></span>
+                  <span class="pf-quick-label">主题设置</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="openPage('help')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><QuestionFilled /></el-icon></span>
+                  <span class="pf-quick-label">使用帮助</span>
+                </button>
+              </div>
             </nav>
           </div>
 
@@ -311,6 +319,25 @@
 
         <!-- 账号与安全（抖音设置页范式）：只读展示 + 点按行弹窗编辑，不再铺一屏输入框 -->
         <div v-if="activeTab === 'profile'" class="sub-page-content set-page">
+          <!-- 头像：编辑资料页里的头等行——大圆头像 + 相机角标，一眼知道能点 -->
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row set-row-ava" @click="triggerAvatarInput">
+                <span class="set-row-label">头像</span>
+                <span class="set-row-value">
+                  <span class="pf-ava-wrap">
+                    <el-avatar :size="46" :src="profileForm.avatar" class="pf-ava">
+                      {{ profileForm.name?.[0] || '?' }}
+                    </el-avatar>
+                    <span class="pf-ava-cam"><el-icon :size="10"><Camera /></el-icon></span>
+                  </span>
+                </span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+            <input ref="avatarInputRef" type="file" accept="image/*" style="display:none" @change="onAvatarSelect" />
+          </div>
+
           <div v-for="g in accGroups" :key="g.title" class="set-group">
             <div class="set-group-title">{{ g.title }}</div>
             <div class="set-list">
@@ -347,39 +374,68 @@
           <div v-else class="badge-placeholder">勋章数据加载中…</div>
         </div>
 
-        <!-- 修改密码 -->
-        <div v-if="activeTab === 'password'" class="sub-page-content">
-          <el-form :model="passwordForm" label-width="80px" class="sub-form">
-            <el-form-item label="旧密码" required>
-              <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
-            </el-form-item>
-            <el-form-item label="新密码" required>
-              <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20位" />
-            </el-form-item>
-            <el-form-item label="确认密码" required>
-              <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入" />
-            </el-form-item>
-            <el-form-item label="验证码" required>
-              <div class="captcha-row">
-                <el-input v-model="passwordForm.captcha" placeholder="请输入验证码" maxlength="4" />
-                <div class="captcha-code" @click="refreshCaptcha">{{ captchaCode }}</div>
-              </div>
-            </el-form-item>
-          </el-form>
-          <div class="sub-page-footer">
-            <el-button type="primary" class="footer-btn" @click="handleChangePassword" :loading="changingPassword">确定</el-button>
+        <!-- 修改密码：参考 GitHub / Telegram 的安全设置页，单卡片表单 + 强度提示 -->
+        <div v-if="activeTab === 'password'" class="sub-page-content sp-page">
+          <div class="sp-card">
+            <div class="sp-head">
+              <h3 class="sp-title">修改登录密码</h3>
+              <p class="sp-desc">建议每 3 个月更换一次，使用 6-20 位字母与数字组合，修改后需重新登录。</p>
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">旧密码</span>
+              <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入当前密码" />
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">新密码</span>
+              <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20 位字母 / 数字组合" />
+              <span v-if="passwordForm.new_password" class="sp-meter">
+                <i v-for="n in 3" :key="n" class="sp-meter-bar" :class="{ 'is-on': passwordStrength >= n }"></i>
+                <em class="sp-meter-text">强度 {{ passwordStrengthText }}</em>
+              </span>
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">确认新密码</span>
+              <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="请再次输入新密码" />
+              <span v-if="passwordMismatch" class="sp-error">两次输入的新密码不一致</span>
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">图形验证码</span>
+              <span class="sp-captcha">
+                <el-input v-model="passwordForm.captcha" placeholder="输入右侧 4 位字符" maxlength="4" />
+                <button type="button" class="sp-captcha-code" @click="refreshCaptcha">{{ captchaCode }}</button>
+              </span>
+            </div>
           </div>
+
+          <button type="button" class="sp-submit" :disabled="changingPassword" @click="handleChangePassword">
+            {{ changingPassword ? '正在保存…' : '保存新密码' }}
+          </button>
         </div>
 
-        <!-- 校园公告 -->
-        <div v-if="activeTab === 'announcements'" class="sub-page-content">
-          <div v-loading="loadingAnnouncements" class="announcement-list">
-            <div v-if="announcements.length === 0 && !loadingAnnouncements" class="empty-announcement">暂无校园公告</div>
-            <a v-for="(item, index) in announcements" :key="'a' + index" :href="item.url || '#'" target="_blank" class="announcement-item">
-              <div class="announcement-title">{{ item.title }}</div>
-              <div class="announcement-date">{{ item.date }}</div>
-            </a>
+        <!-- 校园公告：单条独立卡片，点击在站内阅读（与学生端资讯页同一套阅读器） -->
+        <div v-if="activeTab === 'announcements'" class="sub-page-content set-page">
+          <div v-loading="loadingAnnouncements" class="ann-cards">
+            <button
+              v-for="(item, index) in announcements"
+              :key="'a' + index"
+              type="button"
+              class="ann-card"
+              @click="openAnnouncement(item)"
+            >
+              <span class="ann-card-date">{{ item.date }}</span>
+              <span class="ann-card-title">{{ stripAnnPrefix(item.title) }}</span>
+              <span class="ann-card-foot">
+                校园公告
+                <el-icon :size="13"><ArrowRight /></el-icon>
+              </span>
+            </button>
+            <p v-if="announcements.length === 0 && !loadingAnnouncements" class="ann-empty">暂无校园公告</p>
           </div>
+          <ArticleReader ref="articleReader" />
         </div>
 
         <!-- 使用帮助 -->
@@ -534,11 +590,11 @@
     </div>
 
     <!-- 账号与安全：字段编辑弹窗（抖音「点按设置项 → 就地编辑」范式） -->
-    <el-dialog
+    <!-- 字段编辑（单字段：移动端=底部动作面板） -->
+    <ActionSheet
       v-model="editVisible"
       :title="editField ? `修改${editField.label}` : ''"
-      :width="isMobile ? '86%' : '420px'"
-      align-center
+      width="420px"
     >
       <el-input
         v-if="editField && editField.type === 'text'"
@@ -560,7 +616,7 @@
         <el-button @click="editVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmFieldEdit">确定</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
     <!-- 勋章放大查看 -->
     <BadgeDetail :badge="badgeDetail" @close="badgeDetail = null" />
@@ -569,6 +625,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+// v6.1 弹窗减负：单字段编辑走底部动作面板
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -576,6 +634,7 @@ import { updateProfile, changePassword } from '@/api/user'
 import { uploadFile } from '@/api/upload'
 import { getAnnouncements } from '@/api/campus'
 import type { Announcement } from '@/types'
+import ArticleReader from '@/components/campus/ArticleReader.vue'
 import { getMyBadgeWall, type BadgeItem, type BadgeWall as BadgeWallData } from '@/api/badge'
 import { syncQuickAccount } from '@/utils/quickLogin'
 import { confirmLogout } from '@/utils/logout'
@@ -592,6 +651,9 @@ import BadgeDetail from '@/components/profile/BadgeDetail.vue'
 import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useResponsive } from '@/composables/useResponsive'
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
   QuestionFilled, Bell, Camera, User, Check, Plus, Medal,
@@ -602,11 +664,17 @@ const router = useRouter()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
 
+/** 移动端下拉刷新：重载教师画像统计与勋章墙（桌面端不响应手势） */
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+
 // 关于页品牌信息与站点配置同源
 const { siteName, siteLogo, agentName } = useSiteConfig()
 
 // 页面状态
 const currentPage = ref<string | null>(null)
+
+// 移动端个人中心的各设置子页：打开时让出底部悬浮导航
+useMobileSubPage(computed(() => isMobile.value && !!currentPage.value))
 const slideDirection = ref('slide-left')
 
 // 表单状态
@@ -675,11 +743,57 @@ function refreshCaptcha() {
   captchaCode.value = generateCaptcha()
 }
 
+/** 新密码强度：长度、字母数字组合、符号各计一档，最多 3 档 */
+const passwordStrength = computed(() => {
+  const p = passwordForm.new_password
+  if (!p) return 0
+  let score = 0
+  if (p.length >= 6) score++
+  if (p.length >= 10 || (/[a-zA-Z]/.test(p) && /\d/.test(p))) score++
+  if (p.length >= 10 && /[a-zA-Z]/.test(p) && /\d/.test(p)) score++
+  return Math.min(3, score)
+})
+const passwordStrengthText = computed(() => ['弱', '一般', '较强', '很强'][passwordStrength.value])
+const passwordMismatch = computed(() =>
+  !!passwordForm.confirm_password && passwordForm.confirm_password !== passwordForm.new_password
+)
+
 const profileForm = reactive({
   username: '', name: '', college: '', gender: '', age: 18,
   hometown: '', phone: '', qq: '', className: '', political_status: '',
-  title: '', department: '', signature: ''
+  title: '', department: '', avatar: '', signature: ''
 })
+
+/** 头像行：点按触发文件选择，选好后上传并暂存，点击保存后正式生效 */
+const avatarInputRef = ref<HTMLInputElement>()
+function triggerAvatarInput() {
+  avatarInputRef.value?.click()
+}
+
+async function onAvatarSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    input.value = ''
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过 5MB')
+    input.value = ''
+    return
+  }
+  try {
+    const { url } = await uploadFile(file)
+    profileForm.avatar = url
+    ElMessage.success('头像已更新，点击保存后生效')
+  } catch {
+    ElMessage.error('上传失败')
+  } finally {
+    input.value = ''
+  }
+}
 
 /**
  * 账号与安全：字段描述表（抖音设置项范式）。
@@ -766,6 +880,24 @@ function confirmFieldEdit() {
 // 校园公告
 const announcements = ref<Announcement[]>([])
 const loadingAnnouncements = ref(false)
+const articleReader = ref<InstanceType<typeof ArticleReader> | null>(null)
+
+/** 去掉多篇公告共有的「关于…的通知」式前缀，标题更易扫读 */
+function stripAnnPrefix(title: string) {
+  return title
+    .replace(/^关于印发/g, '')
+    .replace(/^关于/g, '')
+    .replace(/的通知$/, '')
+    .trim() || title
+}
+
+function openAnnouncement(item: Announcement) {
+  if (!item.url) {
+    ElMessage.info('该公告暂未提供正文链接')
+    return
+  }
+  articleReader.value?.open(item.url, item.title)
+}
 
 /** 身份背景（移动端 .pf-hero 与桌面端横幅共用）：优先用已上传图片，否则用预设渐变 */
 const heroBannerStyle = computed(() =>
@@ -863,6 +995,7 @@ function fillProfileForm() {
   profileForm.political_status = (u as any).political_status || ''
   profileForm.title = (u as any).title || ''
   profileForm.department = (u as any).department || ''
+  profileForm.avatar = (u as any).avatar || ''
   profileForm.signature = (u as any).signature || ''
 }
 
@@ -968,6 +1101,7 @@ async function handleSaveProfile() {
       political_status: profileForm.political_status || null,
       title: profileForm.title || null,
       department: profileForm.department || null,
+      avatar: profileForm.avatar || null,
       signature: profileForm.signature || null,
     })
     auth.updateUser(updated as any)
@@ -1139,6 +1273,11 @@ async function loadOverviewData() {
   if (stats) classStats.value = stats
   completionLoading.value = false
   studentsLoading.value = false
+}
+
+/** 下拉刷新：复用概览统计与勋章墙加载，失败静默 */
+async function refreshAll() {
+  await Promise.all([loadOverviewData(), refreshBadges()])
 }
 
 onMounted(() => {
@@ -1443,10 +1582,25 @@ onMounted(() => {
 .footer-btn { min-width: 96px; }
 @media (max-width: 767px) {
   .footer-btn { width: 100%; }
+  /* 保存按钮与学生端一致：移动端黑底白字，需抬升特异性覆盖 admin-components 的蓝色主按钮 */
+  .main-area .sub-page-footer .footer-btn.el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
+    background: #14171a;
+    background-image: none;
+    border-color: #14171a;
+    color: #fff;
+  }
+  .main-area .sub-page-footer .footer-btn.el-button--primary:not(.is-link):not(.is-text):not(.is-plain):hover,
+  .main-area .sub-page-footer .footer-btn.el-button--primary:not(.is-link):not(.is-text):not(.is-plain):focus {
+    background: #2a2f34;
+    background-image: none;
+    border-color: #2a2f34;
+    color: #fff;
+  }
 }
 
 /* 桌面端表单区域宽度受控，避免输入框横跨整页 */
-.profile-wrapper.is-web .sub-form { max-width: 520px; }
+.profile-wrapper.is-web .sp-card,
+.profile-wrapper.is-web .sp-submit { max-width: 520px; }
 
 /* 滑动动画 */
 .slide-left-enter-active,
@@ -1475,6 +1629,8 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   overflow-y: auto;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
   background: var(--tui-bg);
   padding: 0;
 }
@@ -1496,7 +1652,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 16px;
   background: #fff;
   border-bottom: 1px solid #f0f0f0;
   flex-shrink: 0;
@@ -1509,7 +1665,7 @@ onMounted(() => {
 }
 
 .sub-page-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #1a1a1a;
 }
@@ -1521,105 +1677,120 @@ onMounted(() => {
 .sub-page-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
 }
 
-.sub-form {
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px 10px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+/* ===== 修改密码：单卡片表单，参考 GitHub / Telegram 安全设置 ===== */
+.sp-card {
+  padding: 18px 16px;
+  border: 1px solid var(--tui-border);
+  border-radius: 16px;
+  background: var(--tui-surface);
 }
-
-/* 验证码 */
-.captcha-row {
-  display: flex;
-  gap: 12px;
-  width: 100%;
+.sp-head { display: block; }
+.sp-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tui-text);
 }
-
-.captcha-row .el-input {
-  flex: 1;
+.sp-desc {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tui-text-tertiary);
 }
-
-.captcha-code {
-  width: 96px;
-  height: 36px;
+.sp-field { display: block; margin-top: 16px; }
+.sp-label {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  gap: 6px;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tui-text-secondary);
+}
+.sp-page :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  background: var(--tui-surface-sunken);
+  box-shadow: 0 0 0 1px var(--tui-border) inset;
+  padding: 6px 12px;
+}
+.sp-page :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--tui-text-tertiary) inset;
+}
+
+/* 密码强度：三档中性色进度条 */
+.sp-meter { display: flex; align-items: center; gap: 5px; margin-top: 8px; }
+.sp-meter-bar {
+  width: 26px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--tui-border);
+  transition: background 0.2s;
+}
+.sp-meter-bar.is-on { background: var(--tui-text); }
+.sp-meter-text {
+  margin-left: 4px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--tui-text-tertiary);
+}
+.sp-error {
+  display: block;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: #d9534f;
+}
+.sp-captcha { display: flex; gap: 10px; }
+.sp-captcha .el-input { flex: 1; }
+.sp-captcha-code {
+  flex-shrink: 0;
+  width: 96px;
+  height: 40px;
+  border: 1px solid var(--tui-border);
+  border-radius: 10px;
+  background: var(--tui-surface-sunken);
+  color: var(--tui-text);
+  font-family: inherit;
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: 8px;
-  border-radius: 8px;
+  letter-spacing: 4px;
   cursor: pointer;
-  user-select: none;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
 }
-
-/* 表单样式优化 */
-.sub-form :deep(.el-form-item) {
-  margin-bottom: 12px;
-}
-
-.sub-form :deep(.el-form-item__label) {
-  font-size: 13px;
-  color: #333;
-  font-weight: 500;
-  line-height: 36px;
-}
-
-.sub-form :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px #e4e7ed inset;
-  padding: 2px 10px;
-  transition: all 0.2s;
-}
-
-.sub-form :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #c0c4cc inset;
-}
-
-.sub-form :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #409eff inset;
-}
-
-.sub-form :deep(.el-select .el-input__wrapper) {
-  border-radius: 10px;
-}
-
-.sub-form :deep(.el-textarea__inner) {
-  border-radius: 8px;
-  padding: 8px;
-  resize: none;
-}
-
-.sub-form :deep(.el-input-number) {
+.sp-captcha-code:active { opacity: 0.7; }
+.sp-submit {
   width: 100%;
+  height: 44px;
+  margin-top: 18px;
+  border: none;
+  border-radius: 12px;
+  background: var(--tui-text);
+  color: var(--tui-bg);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
-
-.sub-form :deep(.el-input-number .el-input__wrapper) {
-  border-radius: 10px;
-}
+.sp-submit:active { opacity: 0.86; }
+.sp-submit:disabled { opacity: 0.45; cursor: default; }
 
 .sub-page-footer {
-  padding: 10px 0 4px;
-  margin-top: 4px;
+  padding: 14px 0;
+  margin-top: 8px;
 }
 
 .sub-page-footer .el-button {
-  height: 38px;
-  border-radius: 10px;
-  font-size: 13px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 500;
 }
 
 /* 个人中心头部（抖音范式）：封面通栏、顶部悬浮操作、头像压住封面下边缘 */
 .pf-hero {
   position: relative;
-  min-height: 178px;
+  min-height: 160px;
   padding: 10px 16px 0;
   background-color: #d8dee6;
   background-size: cover;
@@ -1961,23 +2132,28 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-/* 快捷入口：单行横向滑动，超出屏幕的功能靠左右滑查看 */
+/* 快捷入口：单行横向滑动，一屏固定 5 个，其余功能靠左右滑查看 */
 .pf-quick {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
   margin-top: 14px;
   padding: 12px 16px 6px;
   border-top: 1px solid var(--tui-border);
+}
+/* 滚动交给内部轨道：外层带 16px 页边距，若让外层滚动，第 6 个入口会在右侧内边距里露出局部 */
+.pf-quick-track {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-.pf-quick::-webkit-scrollbar { display: none; }
+.pf-quick-track::-webkit-scrollbar { display: none; }
 .pf-quick-item {
-  flex: 0 0 62px;
+  /* 5 个等分铺满轨道可视区，gap 共 4 个 12px */
+  flex: 0 0 calc((100% - 48px) / 5);
+  min-width: 0;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
@@ -2002,10 +2178,13 @@ onMounted(() => {
   background: #fa5151;
 }
 .pf-quick-label {
+  max-width: 100%;
   font-size: 10.5px;
   line-height: 1.2;
   color: var(--tui-text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ===== 内容面板：圆角上浮，压住封面底边，形成「悬浮于背景之上」的层次 =====
@@ -2097,6 +2276,26 @@ onMounted(() => {
   white-space: nowrap;
 }
 .pf-row-arrow { color: #cbd0d8; flex-shrink: 0; }
+/* 头像行：大圆头像 + 相机角标（组件本身桌面/移动共用） */
+.set-row-ava { padding: 10px 2px; }
+.pf-ava-wrap { position: relative; display: inline-flex; }
+.pf-ava {
+  border: 2px solid #fff;
+  background: linear-gradient(135deg, #7d6cf2, #5747cc);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px #e6eae7, 0 1px 5px rgba(20, 24, 22, .10);
+}
+.pf-ava-cam {
+  position: absolute; right: -3px; bottom: -3px;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: #14171a; color: #fff;
+  border: 2px solid #fff;
+}
+
 /* 页脚说明：收住列表下方的灰底空白，避免页面尾部大段留白 */
 .pf-foot-note {
   margin: 6px 0 0;
@@ -2274,17 +2473,17 @@ onMounted(() => {
   gap: 16px;
   justify-content: center;
   background: #fff;
-  border-radius: 12px;
-  padding: 14px 12px;
+  border-radius: 16px;
+  padding: 24px 16px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
 .theme-option {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 12px;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: 16px;
   border: 2px solid transparent;
   transition: all 0.2s;
   background: #f9fafb;
@@ -2294,14 +2493,14 @@ onMounted(() => {
   background: rgba(64,158,255,0.05);
 }
 .theme-option span {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: #333;
 }
 .theme-preview {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
   border: 2px solid #eee;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
@@ -2314,9 +2513,9 @@ onMounted(() => {
   gap: 8px;
   margin-top: 12px;
   padding: 10px 12px;
-  background: #f0f8ff;
+  background: var(--tui-surface-sunken);
   border-radius: 10px;
-  color: #409eff;
+  color: var(--tui-text-tertiary);
   font-size: 12px;
 }
 
@@ -2324,64 +2523,64 @@ onMounted(() => {
 .about-header {
   text-align: center;
   background: #fff;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 12px;
+  border-radius: 16px;
+  padding: 24px 16px;
+  margin-bottom: 16px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
 .about-logo {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.1);
 }
 .about-name {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
   color: #1a1a1a;
 }
 .about-version {
   font-size: 12px;
   color: #999;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .about-slogan {
-  font-size: 13px;
+  font-size: 14px;
   color: #666;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .about-section {
   background: #fff;
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 12px;
+  border-radius: 16px;
+  padding: 16px 14px;
+  margin-bottom: 16px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
 .about-section-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #1a1a1a;
-  margin-bottom: 8px;
-  padding-left: 8px;
+  margin-bottom: 10px;
+  padding-left: 10px;
   border-left: 3px solid #409eff;
 }
 .about-text {
-  font-size: 13px;
+  font-size: 14px;
   color: #666;
-  line-height: 1.7;
+  line-height: 1.8;
   text-align: justify;
 }
 .about-features {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 .feature-item {
-  padding: 6px 12px;
+  padding: 8px 16px;
   background: linear-gradient(135deg, #f0f8ff 0%, #e8f4ff 100%);
-  border-radius: 16px;
-  font-size: 12px;
+  border-radius: 20px;
+  font-size: 13px;
   color: #409eff;
   border: 1px solid rgba(64,158,255,0.15);
 }
@@ -2394,13 +2593,13 @@ onMounted(() => {
   flex: 1;
 }
 .team-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #1a1a1a;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .team-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: #666;
   line-height: 1.6;
 }
@@ -2408,20 +2607,20 @@ onMounted(() => {
 /* 帮助 */
 .help-content {
   background: #fff;
-  border-radius: 12px;
-  padding: 4px 12px;
+  border-radius: 16px;
+  padding: 8px 16px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
 .help-item {
-  padding: 10px 0;
+  padding: 14px 0;
   border-bottom: 1px solid #f5f5f5;
 }
 .help-item:last-child { border-bottom: none; }
 .help-question {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #1a1a1a;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2430,59 +2629,71 @@ onMounted(() => {
   content: '';
   display: inline-block;
   width: 4px;
-  height: 14px;
+  height: 16px;
   background: linear-gradient(135deg, #409eff 0%, #67c23a 100%);
   border-radius: 2px;
   flex-shrink: 0;
 }
 .help-answer {
-  font-size: 13px;
+  font-size: 14px;
   color: #666;
-  line-height: 1.6;
+  line-height: 1.8;
   padding-left: 12px;
 }
 
-/* 公告列表 */
-.announcement-list {
-  background: #fff;
+/* 公告卡片：每条独立成卡；宽度跟随子页容器（父级已有 16px 页边距），横屏时居中收窄 */
+.ann-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 0 16px;
+  box-sizing: border-box;
+}
+.ann-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px;
+  text-align: left;
+  font-family: inherit;
+  border: 1px solid #eef0f3;
   border-radius: 12px;
-  padding: 4px 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  min-height: 100px;
+  background: var(--tui-surface, #fff);
+  cursor: pointer;
 }
-
-.empty-announcement {
-  text-align: center;
-  color: #999;
-  padding: 24px 0;
-  font-size: 13px;
+.ann-card:active { background: #fafbfc; }
+.ann-card-date {
+  font-size: 11px;
+  color: #98a2b3;
+  font-variant-numeric: tabular-nums;
 }
-
-.announcement-item {
-  display: block;
-  padding: 10px 0;
-  border-bottom: 1px solid #f5f5f5;
-  text-decoration: none;
-}
-
-.announcement-item:last-child {
-  border-bottom: none;
-}
-
-.announcement-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
+.ann-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
   line-height: 1.5;
-  margin-bottom: 4px;
+  color: #344054;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-
-.announcement-date {
+.ann-card-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
   font-size: 11px;
-  color: #ccc;
+  color: #b0b7c3;
+}
+
+.ann-empty {
+  margin: 0;
+  padding: 26px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--tui-text-quiet);
 }
 </style>

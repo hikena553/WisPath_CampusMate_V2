@@ -72,6 +72,7 @@
           </el-breadcrumb>
         </div>
         <div class="topbar-right">
+          <AdminMessageBell />
           <span class="topbar-clock">{{ now }}</span>
         </div>
       </header>
@@ -112,11 +113,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { confirmLogout } from '@/utils/logout'
+import AdminMessageBell from '@/views/admin/components/AdminMessageBell.vue'
 import {
   House, Library, TriangleAlert,
   User, Users, Building2,
   CalendarDays, MessageSquare, Settings,
-  LogOut, PanelLeftClose, PanelLeftOpen, X, Boxes, Rss, Activity, KeyRound
+  LogOut, PanelLeftClose, PanelLeftOpen, X, Boxes, Rss, Activity
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -233,7 +235,6 @@ const navGroups: NavGroup[] = [
     label: '系统管理',
     items: [
       { path: '/admin/courses', label: '课程表管理', icon: CalendarDays },
-      { path: '/admin/password-requests', label: '密码重置', icon: KeyRound },
       { path: '/admin/feedbacks', label: '反馈管理', icon: MessageSquare },
       { path: '/admin/system', label: '系统监控', icon: Activity },
       { path: '/admin/settings', label: '系统设置', icon: Settings },

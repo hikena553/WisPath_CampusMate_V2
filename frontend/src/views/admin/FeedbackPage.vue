@@ -184,12 +184,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { Search, RefreshCw, MessageSquare, Eye, X, Clock, Loader2, CircleCheck, CircleX } from 'lucide-vue-next'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getFeedbacks, getFeedbackWordCloud, replyFeedback, type Feedback, type FeedbackWord } from '@/api/feedback'
+import { getFeedbacks, getFeedback, getFeedbackWordCloud, replyFeedback, type Feedback, type FeedbackWord } from '@/api/feedback'
 import FeedbackWordCloud from '@/components/feedback/FeedbackWordCloud.vue'
 
+const route = useRoute()
 const loading = ref(false)
 const submitting = ref(false)
 const statsLoading = ref(true)
@@ -332,6 +334,8 @@ async function handleSubmitReply() {
     })
     ElMessage.success('回复成功')
     replyDialogVisible.value = false
+    // 通知顶栏消息组件刷新，已处理的反馈从消息列表移除
+    window.dispatchEvent(new Event('admin:messages-refresh'))
     loadFeedbacks()
   } catch (error) {
     ElMessage.error('回复失败')
@@ -352,6 +356,7 @@ async function handleReject(feedback: Feedback) {
       status: 'rejected'
     })
     ElMessage.success('已拒绝')
+    window.dispatchEvent(new Event('admin:messages-refresh'))
     loadFeedbacks()
   } catch {}
 }
@@ -383,9 +388,39 @@ async function loadFeedbacks() {
   }
 }
 
+/** 顶栏消息点击某条反馈时，通过 ?focus=<id> 直接定位并打开回复 */
+const focusId = computed(() => {
+  const raw = route.query.focus
+  const id = typeof raw === 'string' ? Number(raw) : NaN
+  return Number.isFinite(id) ? id : null
+})
+
+async function applyFocus() {
+  const id = focusId.value
+  if (!id) return
+  filters.status = 'pending'
+  await loadFeedbacks()
+  let target = feedbacks.value.find(f => f.id === id)
+  if (!target) {
+    try {
+      target = await getFeedback(id)
+    } catch {
+      target = undefined
+    }
+  }
+  if (!target) return
+  if (target.status === 'pending' || target.status === 'processing') openReplyDialog(target)
+  else openDetail(target)
+}
+
 onMounted(() => {
-  loadFeedbacks()
-  loadWordCloud()
+  if (focusId.value) void applyFocus()
+  else void loadFeedbacks()
+  void loadWordCloud()
+})
+
+watch(focusId, (id) => {
+  if (id) void applyFocus()
 })
 </script>
 

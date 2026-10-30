@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <ResponsivePopup
     :model-value="modelValue"
     :title="guardian ? '编辑联系人' : '新增联系人'"
     :width="isMobile ? '90%' : '380px'"
@@ -68,11 +68,13 @@
       <el-button @click="emit('update:modelValue', false)">取消</el-button>
       <el-button type="primary" :loading="saving" :disabled="!form.name.trim()" @click="submit">保存</el-button>
     </template>
-  </el-dialog>
+  </ResponsivePopup>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+// v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { InfoFilled, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'

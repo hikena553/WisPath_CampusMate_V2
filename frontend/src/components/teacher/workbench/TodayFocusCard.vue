@@ -4,153 +4,175 @@
       <div class="tf-title">
         <el-icon class="tf-ic"><Sunrise /></el-icon>
         <span>今日重点</span>
-        <span class="tf-title-sub">我的待办与待批事项</span>
+        <span class="tf-title-sub">先处理最要紧的一件事</span>
       </div>
       <button class="tf-more" @click="emit('navigate', '/teacher/tasks')">
         全部任务<el-icon :size="12"><ArrowRight /></el-icon>
       </button>
     </div>
 
-    <!-- 指标带仅移动端：移动端概览 KPI 只放班级维度统计，个人待办数字落在这里；
-         桌面端这些数字已统一收敛到页头主控台的指标带（避免上下两块数字带重复），
-         卡片只保留事项清单本身。 -->
-    <div v-if="isMobile" class="tf-metrics">
-      <button class="tf-metric" @click="emit('navigate', '/teacher/tasks?filter=overdue')">
-        <span class="tf-num" :class="{ danger: summary.overdue > 0 }">{{ summary.overdue }}</span>
-        <span class="tf-lb">逾期未办</span>
-      </button>
-      <button class="tf-metric" @click="emit('navigate', '/teacher/tasks?filter=today')">
-        <span class="tf-num">{{ summary.today }}</span>
-        <span class="tf-lb">今日到期</span>
-      </button>
-      <button class="tf-metric" @click="emit('navigate', '/teacher/approval')">
-        <span class="tf-num" :class="{ warn: pendingLeaves.length > 0 }">{{ pendingLeaves.length }}</span>
-        <span class="tf-lb">待批请假</span>
-      </button>
-    </div>
-
-    <!-- 本周推进进度（仅桌面端）：桌面仪表盘第一屏就能看到「办了多少 / 还剩多少」。
-         移动端保持原有卡片结构不变，故不渲染。
-         使用教师端统一进度构件（宽度由 --pct 驱动，无过渡动效，不与首页零动效约束冲突） -->
-    <div v-if="!isMobile" class="tf-rate">
-      <span class="tf-rate-lb">本周推进</span>
-      <div class="tui-progress-track">
-        <span class="tui-progress-fill" :style="{ '--pct': weekRate }" />
+    <!-- 今日重点 = 待批请假 + 未闭环心理预警 + 逾期任务，按学生聚合后的最高优先级事项 -->
+    <div class="tf-focus">
+      <div class="tf-num-wrap">
+        <span class="tf-num">{{ focusCount }}</span>
+        <span class="tf-num-lb">项待办</span>
       </div>
-      <span class="tf-rate-val">{{ summary.done_this_week }} / {{ weekTotal }}</span>
-    </div>
-
-    <div class="tf-list">
-      <div v-if="!loading && !rows.length" class="tf-empty">今天没有需要处理的事项</div>
-      <button v-for="row in rows" :key="row.key" class="tf-item" @click="emit('navigate', row.link)">
-        <span class="tf-tag" :class="`is-${row.kind}`">{{ row.tagText }}</span>
-        <span class="tf-item-title">{{ row.title }}</span>
-        <span v-if="row.sub" class="tf-item-sub">{{ row.sub }}</span>
-        <el-icon :size="13" class="tf-arrow"><ArrowRight /></el-icon>
+      <div class="tf-focus-body">
+        <span class="tf-focus-title">优先处理</span>
+        <span class="tf-focus-sub">{{ priorityText }}</span>
+      </div>
+      <button v-if="focusLink" class="tf-go" type="button" @click="emit('navigate', focusLink)">
+        立即处理
       </button>
     </div>
+
+    <div v-if="breakdown" class="tf-breakdown">{{ breakdown }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onActivated, onMounted, ref } from 'vue'
 import { ArrowRight, Sunrise } from '@element-plus/icons-vue'
-import {
-  getTeacherTaskSummary,
-  getTeacherTasks,
-  type TeacherTask,
-  type TeacherTaskSummary,
-} from '@/api/teacherTask'
+import { getTeacherTasks, type TeacherTask } from '@/api/teacherTask'
 import { getPendingLeaves } from '@/api/leave'
-import { useResponsive } from '@/composables/useResponsive'
-import type { LeaveRequestOut } from '@/types'
+import { getAlerts } from '@/api/crisis'
+import type { CrisisAlert, LeaveRequestOut } from '@/types'
 
 const emit = defineEmits<{ navigate: [path: string] }>()
 
-const { isMobile } = useResponsive()
-
 const loading = ref(false)
-const summary = ref<TeacherTaskSummary>({
-  pending: 0,
-  overdue: 0,
-  today: 0,
-  done_this_week: 0,
-  total: 0,
-})
 const overdueTasks = ref<TeacherTask[]>([])
-const todayTasks = ref<TeacherTask[]>([])
 const pendingLeaves = ref<LeaveRequestOut[]>([])
+const alerts = ref<CrisisAlert[]>([])
 
-interface FocusRow {
-  kind: 'overdue' | 'today' | 'leave'
+interface FocusItem {
+  kind: 'alert' | 'leave' | 'overdue'
   key: string
+  student: string
+  /** 该事项的动作名，如「请假审批」「心理跟进」 */
+  action: string
   title: string
-  sub: string
   link: string
-  tagText: string
+  /** 越大越优先：高危预警 > 逾期任务 > 待批请假 */
+  weight: number
 }
 
-/** 逾期任务 → 今日任务 → 待批请假，按 id 去重后取前 5 条 */
-const rows = computed<FocusRow[]>(() => {
-  const out: FocusRow[] = []
-  const seenTask = new Set<number>()
+/** 预警等级权重：sever=高危 > moderate=中度 > mild=轻度；normal 不计入今日重点 */
+const LEVEL_WEIGHT: Record<string, number> = { severe: 6, moderate: 4, mild: 3 }
+
+const items = computed<FocusItem[]>(() => {
+  const out: FocusItem[] = []
+
+  for (const a of alerts.value) {
+    if (a.resolved) continue
+    const weight = LEVEL_WEIGHT[a.level]
+    if (!weight) continue
+    out.push({
+      kind: 'alert',
+      key: `a-${a.id}`,
+      student: a.student_name,
+      action: '心理跟进',
+      title: a.summary,
+      link: `/teacher/crisis?student_id=${a.student_id}&alert_id=${a.id}`,
+      weight,
+    })
+  }
+
   for (const t of overdueTasks.value) {
-    if (seenTask.has(t.id)) continue
-    seenTask.add(t.id)
     out.push({
       kind: 'overdue',
       key: `t-${t.id}`,
+      student: t.student_name || '',
+      action: '逾期任务',
       title: t.title,
-      sub: t.student_name,
       link: `/teacher/tasks?filter=overdue&task=${t.id}`,
-      tagText: '逾期',
+      weight: 5,
     })
   }
-  for (const t of todayTasks.value) {
-    if (seenTask.has(t.id)) continue
-    seenTask.add(t.id)
-    out.push({
-      kind: 'today',
-      key: `t-${t.id}`,
-      title: t.title,
-      sub: t.student_name,
-      link: `/teacher/tasks?filter=today&task=${t.id}`,
-      tagText: '今日',
-    })
-  }
-  const seenLeave = new Set<number>()
-  for (const l of pendingLeaves.value.slice(0, 3)) {
-    if (seenLeave.has(l.id)) continue
-    seenLeave.add(l.id)
+
+  for (const l of pendingLeaves.value) {
     out.push({
       kind: 'leave',
       key: `l-${l.id}`,
+      student: l.student_name,
+      action: '请假审批',
       title: `${l.student_name} 提交请假申请`,
-      sub: `${l.start_date} ~ ${l.end_date}`,
       link: '/teacher/approval',
-      tagText: '请假',
+      weight: 2,
     })
   }
-  return out.slice(0, 5)
+
+  return out
 })
 
-/** 本周推进进度：已办结占总量的比例（总量 = 本周办结 + 当前待处理） */
-const weekTotal = computed(() => summary.value.done_this_week + summary.value.pending)
-const weekRate = computed(() => (weekTotal.value ? summary.value.done_this_week / weekTotal.value : 0))
+const focusCount = computed(() => items.value.length)
 
-async function load() {
-  loading.value = true
+/** 人均优先级：把同一学生的事项合起来，取分数最高的那位学生作为「优先处理」对象 */
+const priority = computed(() => {
+  const groups = new Map<string, { name: string; score: number; actions: string[]; first: FocusItem }>()
+  for (const item of items.value) {
+    const name = item.student || ''
+    if (!name) continue
+    const g = groups.get(name)
+    if (g) {
+      g.score += item.weight
+      if (!g.actions.includes(item.action)) g.actions.push(item.action)
+    } else {
+      groups.set(name, {
+        name,
+        score: item.weight,
+        actions: [item.action],
+        first: item,
+      })
+    }
+  }
+  let top: { name: string; score: number; actions: string[]; first: FocusItem } | null = null
+  for (const g of groups.values()) {
+    if (!top || g.score > top.score) top = g
+  }
+  return top
+})
+
+const priorityText = computed(() => {
+  const p = priority.value
+  if (!p) {
+    // 没有学生维度的事项（纯个人任务）时直接展示分数最高的那条
+    const first = [...items.value].sort((a, b) => b.weight - a.weight)[0]
+    return first ? first.title : '今天没有需要优先处理的事项'
+  }
+  return `${p.name}的${p.actions.join('与')}`
+})
+
+const focusLink = computed(() => {
+  const p = priority.value
+  if (p) return p.first.link
+  return [...items.value].sort((a, b) => b.weight - a.weight)[0]?.link || ''
+})
+
+/** 口径说明：让「N 项」可被拆开核对，不做无来源的大数字 */
+const breakdown = computed(() => {
+  const count = (kind: FocusItem['kind']) => items.value.filter((i) => i.kind === kind).length
+  const parts: string[] = []
+  const lv = count('leave')
+  const al = count('alert')
+  const od = count('overdue')
+  if (lv) parts.push(`${lv} 条请假审批`)
+  if (al) parts.push(`${al} 条心理预警跟进`)
+  if (od) parts.push(`${od} 项逾期任务`)
+  return parts.join(' · ')
+})
+
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
-    const [s, od, td, lv] = await Promise.allSettled([
-      getTeacherTaskSummary(),
-      getTeacherTasks({ due: 'overdue', limit: 5 }),
-      getTeacherTasks({ due: 'today', limit: 5 }),
+    const [od, lv, al] = await Promise.allSettled([
+      getTeacherTasks({ due: 'overdue', limit: 100 }),
       getPendingLeaves(),
+      getAlerts(false),
     ])
-    if (s.status === 'fulfilled') summary.value = s.value
     if (od.status === 'fulfilled') overdueTasks.value = od.value
-    if (td.status === 'fulfilled') todayTasks.value = td.value
     if (lv.status === 'fulfilled') pendingLeaves.value = lv.value
+    if (al.status === 'fulfilled') alerts.value = al.value
   } catch {
     // 首页卡片各自容错，单块失败不影响其它
   } finally {
@@ -159,7 +181,12 @@ async function load() {
 }
 
 onMounted(load)
-onActivated(load)
+/** 从其它页签切回首页时静默刷新：数据已在，不再亮 loading，避免切页瞬间闪一下 */
+let activatedOnce = false
+onActivated(() => {
+  if (activatedOnce) load(true)
+  else activatedOnce = true
+})
 defineExpose({ reload: load })
 </script>
 
@@ -174,7 +201,7 @@ defineExpose({ reload: load })
   margin-bottom: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .tf-head {
@@ -202,8 +229,8 @@ defineExpose({ reload: load })
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: color-mix(in srgb, #2563eb 12%, #fff);
-  color: #2563eb;
+  background: var(--tui-surface-muted);
+  color: #475467;
   font-size: 13px;
   flex-shrink: 0;
 }
@@ -227,110 +254,82 @@ defineExpose({ reload: load })
   font-family: inherit;
   flex-shrink: 0;
 }
-.tf-more:hover { color: var(--tui-brand); }
+.tf-more:hover { color: var(--tui-text-secondary); }
 
-.tf-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-.tf-metric {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: flex-start;
-  min-width: 0;
-  background: var(--tui-surface-muted);
-  border: none;
-  border-radius: var(--tui-radius-xs);
-  padding: 9px 12px;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-}
-.tf-metric:hover { background: var(--tui-surface-sunken); }
-.tf-num {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tui-text);
-  line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-}
-.tf-num.danger { color: #d92d20; }
-.tf-num.warn { color: #b54708; }
-.tf-lb {
-  font-size: 11.5px;
-  color: var(--tui-text-quiet);
-}
-
-/* 本周推进进度行 */
-.tf-rate {
+/* 今日重点主体：左侧数字 + 中间优先事项 + 右侧动作，单行读完 */
+.tf-focus {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-.tf-rate-lb {
-  flex-shrink: 0;
-  font-size: 11.5px;
-  color: var(--tui-text-quiet);
-}
-.tf-rate-val {
-  flex-shrink: 0;
-  font-size: 11.5px;
-  color: var(--tui-text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.tf-list {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.tf-empty {
-  font-size: 12.5px;
-  color: var(--tui-text-quiet);
-  padding: 6px 0;
-}
-.tf-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 9px;
+  gap: 12px;
+  padding: 12px 12px;
   border-radius: var(--tui-radius-xs);
-  background: var(--tui-surface-muted);
   border: 1px solid var(--tui-border);
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
+  background: var(--tui-surface-muted);
 }
-.tf-item:hover { border-color: var(--tui-brand); }
-.tf-tag {
+.tf-num-wrap {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  padding-right: 12px;
+  border-right: 1px solid var(--tui-border);
+}
+.tf-num {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: #1f2329;
+  font-variant-numeric: tabular-nums;
+}
+.tf-num-lb {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--tui-text-quiet);
+}
+.tf-focus-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tf-focus-title {
   font-size: 11px;
   font-weight: 600;
-  line-height: 1.4;
-  padding: 1px 7px;
-  border-radius: 999px;
+  letter-spacing: 0.3px;
+  color: var(--tui-text-quiet);
 }
-.tf-tag.is-overdue { background: #fef3f2; color: #d92d20; }
-.tf-tag.is-today { background: #eff4ff; color: #1d4ed8; }
-.tf-tag.is-leave { background: #fffaeb; color: #b54708; }
-.tf-item-title {
-  font-size: 12.5px;
-  color: var(--tui-text-secondary);
+.tf-focus-sub {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #2b3245;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.tf-item-sub {
+/* 主操作：黑底白字，避开蓝色实心按钮 */
+.tf-go {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 7px 13px;
+  border: none;
+  border-radius: 8px;
+  background: #1f2329;
+  color: #fff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.tf-go:active { background: #101318; }
+
+.tf-breakdown {
   font-size: 11.5px;
   color: var(--tui-text-quiet);
-  flex-shrink: 0;
-}
-.tf-arrow {
-  margin-left: auto;
-  color: var(--tui-text-quiet);
-  flex-shrink: 0;
+  padding-left: 1px;
 }
 </style>

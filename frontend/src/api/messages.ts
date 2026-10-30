@@ -58,11 +58,11 @@ export interface UnreadSummary {
   chat: number
   group: number
   notification: number
-  /** 论坛互动未读（赞 / 收藏 / 评论 / 新粉丝）：只在交流社区页展示，不计入消息页红点 */
-  forum?: number
   /** 紧急未读通知数（导航强提醒） */
   urgent_unread?: number
   total: number
+  /** 论坛互动未读（评论/点赞/收藏/新粉丝），可选 */
+  forum?: number
 }
 
 /** 全局未读汇总：单聊 + 群聊 + 站内通知，导航红点一次取齐 */

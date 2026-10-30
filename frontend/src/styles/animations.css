@@ -128,16 +128,80 @@
 .stagger-10 { animation-delay: 0.3s; animation-fill-mode: both; }
 
 /* ============================================================================
-   Page Transition - 子页面「覆盖式」滑入/滑出
+   Page Transition - 子页面「覆盖式」滑入/滑出（全站唯一实现）
    ============================================================================
-   2026-10 已抽出到独立文件 styles/subpage-transition.css（动画 + 子页骨架 +
-   复用说明一并搬走），此处只保留这行索引，避免两份定义再次跑偏：
+   适用所有「主页面不动、子页盖上来」的场景，调用点共用：
+   1) 工作台子页（WorkbenchPage 办事服务表单）
+   2) 校园资讯站内阅读器（ArticleReader，移动端；桌面端另有 reader-fade 淡入）
+   3) 驾驶舱主页 ↔ 学业子页（SchedulePage）
+   4) 资讯详情子页（ArticleDetailPage）
+   5) 校园搜索子页（CampusSearchPage）
+   6) 快捷空间子页路由过渡（StudentLayout 的 .route-subpage，见下一节）
 
-   - 直接复用：<SubPageShell v-model="visible"> … </SubPageShell>
-     （components/common/SubPageShell.vue）
-   - 只要动画：<Transition name="subpage" :duration="320">
-   - 类名：.subpage-enter-active / .subpage-leave-active / .subpage-root
-   ============================================================================ */
+   为什么只留这一套：此前仓里同时存在多种「子页滑入」的写法（本文件的
+   push/subpage-slide/page-slide、WorkbenchPage 的 .slide-left、ArticleReader 的
+   reader-overlay、SchedulePage 的 .slide-left/.slide-right），类名不同、
+   时长从 .18s 到 .45s 不等、方向语义还分「传送带」与「覆盖」两种，维护时极易改错。
+   现已统一为本文件这一套，其余各处改为引用这里的类名。
+
+   行为（覆盖式，2026-10 与搜索/详情子页先行落地的方案对齐后全站统一）：
+   - 子页从右侧滑入盖住主页面，主页面全程不动；
+   - 返回时子页原路向右滑出；
+   - 进场与退场**同向**（都是 translateX(100%)）—— 这是「覆盖式」的标志，
+     与「传送带式」（两页反向位移、同时在场）恰好相反，不要改成反向。
+
+   为什么用 keyframes 动画而不是 transition 驱动（2026-10 从 transition 改来）：
+   1) 首帧可靠性：iOS Safari / 微信 WKWebView 在「元素首帧还没画就改类」时会把
+      enter-from 当初始样式直接跳过 —— transition 靠不住；animation 只要元素被
+      插入就一定会播，不依赖首帧，两个平台一致（此前详情页为此单独自建了一套
+      基类 animation，现已收编到这里）；
+   2) 关闭时机：进场动画还在播（打开后 300ms 内）就点返回时，运行中的 animation
+      会压住 transition 的启动，元素会直接跳到 translateX(100%) 瞬间消失
+      （Edge 实测复现）；全程由 animation 驱动后任何时刻关闭都平滑；
+   3) 观感一致：旧实现里 reduced-motion 把 transition 关成「无动画」，而详情/搜索
+      页的 animation 照播 —— 同一个 App 两种子页观感分裂（内置浏览器恒为
+      reduce，差异在面板里每次都可见）。统一为 animation 后各处一致；覆盖式滑入
+      是本 App 的核心导航动效，有意不随系统 reduced-motion 消失。
+
+   关键实现约束：
+   1) 滑动的元素必须**不透明**且铺满内容区，否则会看到下层页面透出来；
+   2) 离场元素只加 pointer-events:none，**不要**加 position/inset/overflow
+      （原因见下方 .subpage-leave-active 的详细注释，三处调用点各有各的坏法）；
+   3) 时长 0.3s；调用方给 <Transition> 传 :duration="320"（0.3s + 20ms 余量）
+      兜底移除离场元素，避免其滞留在文档流里；
+   4) keyframes 的 from/to 都要显式写：只写 to 时隐式 from 取「底层值」，退场期间
+      底层值若被别的规则改掉会瞬移（详情页踩过：from=to 全程恒为终点、视觉等于瞬移）。 */
+.subpage-enter-active {
+  transition: none;
+  animation: subpage-slide-in 0.3s ease backwards;
+  will-change: transform;
+}
+.subpage-leave-active {
+  /* 离场元素停止响应点击：0.3s 内新旧两页同时在位，不设这条会让离场页挡住新页的首次点击。
+     只保留 pointer-events，绝不加 position/inset/overflow —— 这三条是「传送带式」旧模型的
+     遗留，在覆盖式模型下会把调用点搞坏，且坏法各不相同（都已实测踩过）：
+     1) 工作台 .sub-page 自己是 position:fixed；组件 <style scoped> 编译出的
+        .sub-page[data-v-x] 特异性 (0,2,0) 高于本文件全局类 (0,1,0)，于是 absolute 被压掉，
+        离场页继续以不透明全屏 fixed 停留 0.3s，把正在滑入的进场页整个盖住 → 「动画没了」。
+     2) 驾驶舱 .content-row / .dashboard-home 都没声明 position，absolute 真实生效：
+        它们是 .schedule-page（flex column + overflow-y:auto）的 flex item，一脱流就
+        导致容器内容高度塌陷、滚动位置被重置，且 absolute 的包含块是 padding box，
+        inset:0 会让离场页相对内容偏移 12~16px → 滑动时错位跳动。
+     3) 阅读器 .reader-mask 也是 fixed（同样压掉 absolute），只是因为不透明视觉放在
+        内层 .reader-panel 上才侥幸没暴露 —— 属于「碰巧没事」，不能作为保留 absolute 的理由。
+     结论：覆盖式模型下离场元素无需脱流（两页都在动，0.3s 后即被 :duration 移除），
+     唯一真正需要的是 pointer-events:none —— 它不依赖 position，因而不会被上述特异性之争影响。 */
+  pointer-events: none;
+  transition: none;
+  animation: subpage-slide-out 0.3s ease forwards;
+}
+@keyframes subpage-slide-in {
+  from { transform: translateX(100%); }
+}
+@keyframes subpage-slide-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
 
 /* ============================================================================
    Route Transition - 路由级整页切换专用（StudentLayout 的 <router-view>）

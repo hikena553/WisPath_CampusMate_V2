@@ -11,9 +11,6 @@
         <div class="ai-sub" :class="{ 'is-alert': highCount > 0 }">{{ highText }}</div>
       </div>
       <div class="ai-head-ops">
-        <button class="ai-icon-btn" type="button" aria-label="刷新智能提示" :disabled="aiLoading" @click="emit('refresh')">
-          <el-icon :size="16"><Refresh /></el-icon>
-        </button>
         <button class="ai-go" type="button" @click="goInsights">
           查看详情<el-icon :size="12"><ArrowRight /></el-icon>
         </button>
@@ -42,7 +39,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight, ChatDotRound, Refresh } from '@element-plus/icons-vue'
+import { ArrowRight, ChatDotRound } from '@element-plus/icons-vue'
 import type { ProactiveAction } from '@/api/agent'
 import type { ContactSuggestion } from '@/api/teacher'
 import { useSiteConfig } from '@/composables/useSiteConfig'
@@ -53,10 +50,8 @@ const { siteMascot, siteName } = useSiteConfig()
 const props = defineProps<{
   proactiveActions: ProactiveAction[]
   contactSuggestions: ContactSuggestion[]
-  aiLoading: boolean
+  aiLoading?: boolean
 }>()
-
-const emit = defineEmits<{ refresh: []; converted: [count: number] }>()
 
 const router = useRouter()
 
@@ -119,21 +114,6 @@ function goInsights() {
   gap: 6px;
   flex-shrink: 0;
 }
-.ai-icon-btn {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--tui-text-quiet);
-  cursor: pointer;
-}
-.ai-icon-btn:hover { background: var(--tui-surface-muted); color: var(--tui-brand); }
-.ai-icon-btn:disabled { color: #b6bcc5; cursor: default; }
-.ai-icon-btn:disabled:hover { background: transparent; }
 .ai-go {
   display: inline-flex;
   align-items: center;

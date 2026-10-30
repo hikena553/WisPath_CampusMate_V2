@@ -6,7 +6,7 @@
         工作记录
         <span v-if="records.length" class="cr-count">{{ records.length }} 条</span>
       </div>
-      <el-button type="primary" size="small" round :icon="Plus" @click="openCreate">新增记录</el-button>
+      <el-button size="small" round :icon="Plus" class="cr-add-btn" @click="openCreate">新增记录</el-button>
     </div>
 
     <!-- 加载态 -->
@@ -51,8 +51,10 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+// v6.1 弹窗减负：删除确认走底部动作面板
+import { actionConfirm } from '@/composables/useActionSheet'
 import { Lock, Notebook, Plus } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   CARE_TYPE_LABEL,
   deleteCareRecord,
@@ -101,13 +103,7 @@ function onSaved() {
 }
 
 async function handleDelete(r: CareRecord) {
-  try {
-    await ElMessageBox.confirm('确定删除这条工作记录？删除后不再计入工作量统计。', '删除确认', {
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+  if (!(await actionConfirm('确定删除这条工作记录？删除后不再计入工作量统计。', '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   try {
     await deleteCareRecord(r.id)
     ElMessage.success('已删除')
@@ -152,6 +148,18 @@ defineExpose({ reload: load })
   font-size: 12px;
   font-weight: 400;
   color: #98a2b3;
+}
+
+.cr-add-btn {
+  background: #1f2329;
+  border-color: #1f2329;
+  color: #fff;
+}
+.cr-add-btn:hover,
+.cr-add-btn:focus {
+  background: #101318;
+  border-color: #101318;
+  color: #fff;
 }
 
 .cr-empty {

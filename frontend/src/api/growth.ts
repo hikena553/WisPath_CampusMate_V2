@@ -61,6 +61,10 @@ export interface StudentProject {
   my_role: string | null
   project_link: string | null
   description: string | null
+  /** 作品图片（最多 6 张），首张为封面 */
+  images: string[]
+  /** 后端派生的封面地址 = images[0] */
+  cover_url: string | null
 }
 
 export function getProjects() {

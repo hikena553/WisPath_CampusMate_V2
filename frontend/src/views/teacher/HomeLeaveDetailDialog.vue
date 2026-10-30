@@ -1,10 +1,10 @@
 <template>
   <!-- 待批请假弹窗 -->
-  <el-dialog
+  <!-- 待处理事项（短列表：移动端=底部动作面板） -->
+  <ActionSheet
     v-model="dialogVisible"
     title="待处理事项"
-    :width="isMobile ? '90%' : '380px'"
-    align-center
+    width="380px"
     class="tui-dialog"
   >
     <div class="tui-section-hint">
@@ -20,19 +20,19 @@
       </div>
       <el-button text size="small" type="primary" @click.stop="emit('navigate')">详情</el-button>
     </div>
-  </el-dialog>
+  </ActionSheet>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+// v6.1 弹窗减负：短列表提示走底部动作面板
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import { InfoFilled } from '@element-plus/icons-vue'
-import { useResponsive } from '@/composables/useResponsive'
 import type { LeaveRequestOut } from '@/types'
 
 const props = defineProps<{ visible: boolean; leaves: LeaveRequestOut[] }>()
 const emit = defineEmits<{ 'update:visible': [value: boolean]; navigate: [] }>()
 
-const { isMobile } = useResponsive()
 
 const dialogVisible = computed({
   get: () => props.visible,

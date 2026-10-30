@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { Close } from '@element-plus/icons-vue'
+import { Close, ArrowLeft } from '@element-plus/icons-vue'
 import BadgeMedal from './BadgeMedal.vue'
 import type { BadgeItem, BadgeTier } from '@/api/badge'
+import { useResponsive } from '@/composables/useResponsive'
 
 /**
  * 勋章放大查看：点击任何勋章后浮起的独立查看层，
- * 只做「看」这一件事 —— 大尺寸勋章 + 名称 + 说明 + 获得时间/解锁进度，
- * 点遮罩、点关闭或按 Esc 退出。
+ * 只做「看」这一件事 —— 大尺寸勋章 + 名称 + 说明 + 获得时间/解锁进度。
+ * v6 弹窗重设计：桌面端保持居中卡片浮层；移动端改为全屏子页（返回栏 + 内容），不再用遮罩弹窗。
  */
 const props = defineProps<{ badge: BadgeItem | null }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
+const { isMobile } = useResponsive()
 
 const TIER_LABEL: Record<BadgeTier, string> = {
   bronze: '铜质勋章',
@@ -43,8 +45,9 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
+    <!-- 桌面端：居中卡片浮层 -->
     <Transition name="bd-fade">
-      <div v-if="badge" class="bd-mask" @click.self="emit('close')">
+      <div v-if="badge && !isMobile" class="bd-mask" @click.self="emit('close')">
         <div class="bd-panel" role="dialog" :aria-label="badge.name">
           <button type="button" class="bd-close" aria-label="关闭" @click="emit('close')">
             <el-icon :size="15"><Close /></el-icon>
@@ -68,6 +71,39 @@ onUnmounted(() => {
             </div>
             <div class="bd-track"><i :style="{ width: badge.progress + '%' }"></i></div>
             <p class="bd-tip">继续积累成长值即可点亮这枚勋章</p>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 移动端：全屏子页承接（与 ResponsivePopup 同一交互范式） -->
+    <Transition name="bd-sheet">
+      <div v-if="badge && isMobile" class="bdm-page" role="dialog" :aria-label="badge.name">
+        <header class="bdm-appbar">
+          <button type="button" class="bdm-back" aria-label="返回" @click="emit('close')">
+            <el-icon :size="20"><ArrowLeft /></el-icon>
+          </button>
+          <div class="bdm-title">勋章详情</div>
+        </header>
+        <div class="bdm-body">
+          <div class="bd-stage bd-stage-m" :class="[`tier-${badge.tier}`, { 'is-locked': !badge.earned }]">
+            <BadgeMedal :icon="badge.icon" :tier="badge.tier" :earned="badge.earned" :size="128" />
+          </div>
+          <div class="bdm-card">
+            <span class="bd-tier">{{ tierLabel }}</span>
+            <h3 class="bd-name">{{ badge.name }}</h3>
+            <p class="bd-desc">{{ badge.desc }}</p>
+            <div v-if="badge.earned" class="bd-status">
+              已获得<template v-if="awardedDate"> · {{ awardedDate }}</template>
+            </div>
+            <div v-else class="bd-progress">
+              <div class="bd-progress-head">
+                <span>{{ badge.target_label }}</span>
+                <b>{{ badge.progress }}%</b>
+              </div>
+              <div class="bd-track"><i :style="{ width: badge.progress + '%' }"></i></div>
+              <p class="bd-tip">继续积累成长值即可点亮这枚勋章</p>
+            </div>
           </div>
         </div>
       </div>
@@ -204,4 +240,70 @@ onUnmounted(() => {
 .bd-fade-enter-active .bd-panel, .bd-fade-leave-active .bd-panel { transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
 .bd-fade-enter-from, .bd-fade-leave-to { opacity: 0; }
 .bd-fade-enter-from .bd-panel, .bd-fade-leave-to .bd-panel { transform: scale(0.94) translateY(6px); }
+
+/* ===== 移动端：全屏子页 ===== */
+.bdm-page {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #f7f8fa;
+  overflow: hidden;
+}
+.bdm-appbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 12px;
+  background: #fff;
+  border-bottom: 1px solid #e9ebee;
+}
+.bdm-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #1f2430;
+}
+.bdm-back:active { background: rgba(20, 23, 26, 0.06); }
+.bdm-title { font-size: 15px; font-weight: 600; color: #1f2430; }
+.bdm-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 28px 16px 32px;
+}
+/* 移动端舞台：白卡内呈现，光晕随卡片走 */
+.bd-stage-m {
+  background: #fff;
+  border-radius: 20px;
+  padding: 26px 0 10px;
+  border: 1px solid #eef0f4;
+}
+.bdm-card {
+  margin-top: 12px;
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid #eef0f4;
+  padding: 20px 18px 18px;
+  text-align: center;
+}
+.bdm-card .bd-name { margin-top: 10px; }
+.bdm-card .bd-status { margin-top: 16px; }
+
+.bd-sheet-enter-active, .bd-sheet-leave-active { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0.32, 1); }
+.bd-sheet-enter-from, .bd-sheet-leave-to { transform: translateY(100%); }
 </style>

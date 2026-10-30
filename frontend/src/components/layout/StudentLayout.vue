@@ -69,8 +69,8 @@
       </router-view>
     </main>
 
-    <!-- 移动端底部导航栏 -->
-    <MobileTabBar v-if="isMobile" :items="mobileNavItems" :active-key="activeNavKey" :unread-count="unreadCount" @select="handleNavSelect" />
+    <!-- 移动端底部导航栏：只在「一级页面」显示（见 showTabBar） -->
+    <MobileTabBar v-if="showTabBar" :items="mobileNavItems" :active-key="activeNavKey" :unread-count="unreadCount" @select="handleNavSelect" />
 
     <!-- 个人主页浮层：消息中心 / 社区等入口调用 openUserHomepage() 即拉起，全端共用一份 -->
     <UserHomepage />
@@ -96,6 +96,7 @@ import type { Course } from '@/types'
 import { ChatDotRound, Memo, Message, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useDockInset } from '@/composables/useDockInset'
+import { hasOpenSubPage } from '@/composables/useMobileSubPage'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import UserHomepage from '@/components/profile/UserHomepage.vue'
 import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
@@ -107,8 +108,6 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
-// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
-useDockInset(isMobile)
 
 // 路由过渡分方向（2026-10 起，与页内子页的覆盖式观感对齐）：
 // 1) 推入（主页 → 快捷子页、子页 ↔ 子页）：.route-subpage —— 新页从右滑入盖住旧页，
@@ -165,6 +164,31 @@ const activeNavKey = computed(() => {
   if (path.startsWith('/student/messages')) return 'messages'
   return 'agent'
 })
+
+/**
+ * 底部悬浮导航只属于「一级页面」：即底部五个页签自身对应的路由。
+ * 二级及更深层的页面（作品集 / 资源空间 / 我的关怀 / 材料归档 / 工作台 / 反馈等）
+ * 一律不挂全局导航 —— 它们的返回由上页或子页自己的返回链路承担，
+ * 否则子页里会出现与当前上下文无关的页签，还会压住子页底部内容。
+ * 页内下钻的子页（学生详情、个人中心设置等）通过 useMobileSubPage 登记，
+ * 打开期间同样隐藏导航。
+ */
+const TAB_BAR_ROUTES = new Set([
+  '/student',
+  '/student/agent',
+  '/student/campus',
+  '/student/schedule',
+  '/student/messages',
+  '/student/profile',
+  // 工作台（办事服务）虽已不占页签，但仍是模块落地页（入群等流程会直达此处），
+  // 页面本身没有返回键，保留导航避免「进得来出不去」；它的办事子页仍按二级处理。
+  '/student/workbench',
+])
+
+const showTabBar = computed(() => isMobile.value && TAB_BAR_ROUTES.has(route.path) && !hasOpenSubPage.value)
+
+// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
+useDockInset(showTabBar)
 
 function handleNavSelect(item: { route: string; label?: string }) {
   if (item.route.startsWith('/student/campus')) {
@@ -257,6 +281,8 @@ function logout() {
   /* 底部导航选中态变量：MobileTabBar 是学生/教师共用组件，
      这里只覆盖学生端，其它端仍是品牌蓝 */
   --tab-active-color: #14171a;
+  --tab-active-chip: #f0f1f4;
+  --tab-idle-color: #4b5158;
   --tab-center-bg: radial-gradient(circle at 32% 26%, #ffffff 0%, #f7f8f9 58%, #eef0f2 100%);
   --tab-center-glow: rgba(20, 23, 26, 0.06);
   --tab-center-ring: rgba(20, 23, 26, 0.10);

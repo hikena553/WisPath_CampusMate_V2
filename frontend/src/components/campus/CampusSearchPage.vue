@@ -11,8 +11,8 @@
     @after-leave="emit('closed')"
   >
     <div class="csp-root">
-      <!-- ① 顶栏：返回 + 圆角搜索框。参考稿只放这两个元素，
-           键盘搜索键提交（enterkeyhint=search），不额外放「搜索」按钮。 -->
+      <!-- ① 顶栏：返回 + 圆角搜索框 + 「搜索」文字按钮。
+           键盘搜索键（enterkeyhint=search）与右侧按钮是同一动作：都走 runSearch()。 -->
       <header class="csp-head">
         <button type="button" class="csp-back" aria-label="返回" @click="close">
           <el-icon :size="22"><ArrowLeft /></el-icon>
@@ -38,6 +38,7 @@
             <el-icon :size="15"><CircleCloseFilled /></el-icon>
           </button>
         </div>
+        <button type="button" class="csp-go" @click="runSearch">搜索</button>
       </header>
 
       <!-- ② 第二层：搜索页（历史 / 发现 / 热榜）。
@@ -227,6 +228,7 @@
                 <el-icon :size="15"><CircleCloseFilled /></el-icon>
               </button>
             </div>
+            <button type="button" class="csp-go" @click="runSearch">搜索</button>
           </header>
 
           <!-- 分类条：左侧 Tab 可横向滚动，右侧「筛选」钉在右边缘。
@@ -1018,6 +1020,23 @@ onBeforeUnmount(() => {
   display: flex;
   cursor: pointer;
 }
+/* 「搜索」按钮：简约文字款，点击等同键盘回车提交。
+   不做底色外框，靠字重与留白和输入框区分；两个顶栏（搜索页 / 结果页）共用，
+   flex-shrink 防止被长关键词挤压。 */
+.csp-go {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+.csp-go:active { opacity: 0.55; }
 /* 结果页顶栏的输入框改白底描边（参考稿）：灰底胶囊留给搜索页的「待输入」态，
    描边框对应「正在看这批结果、随时改词」的阅读态，两层不至于长得一模一样。 */
 .csp-head--result .csp-field {

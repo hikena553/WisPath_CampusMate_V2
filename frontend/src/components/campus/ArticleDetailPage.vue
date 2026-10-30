@@ -1,264 +1,265 @@
 <template>
-  <!-- 覆盖式全屏子页：骨架 / 进出场动画 / Esc / body 滚动锁全部由 SubPageShell 提供
-       （动画本体在 styles/subpage-transition.css，全站唯一实现）。本组件只管页面内容。
-       取舍：不用 el-dialog / el-drawer —— 它们自带居中、遮罩、body 滚动锁与 z-index 体系，
-       而这页要的是「手机上整页盖上来、桌面端 760px 居中」的确定性版式，自己写样式可控得多。
-       close-on-esc 关掉：本页 Esc 有分级语义（先关转发面板、再退整页），
-       统一交给脚本里的 onKeydown，避免两处监听各关一次。 -->
-  <SubPageShell
-    v-model="visible"
-    :style="rootStyle"
-    :aria-label="'资讯详情：' + (data?.title || props.title || '')"
-    :close-on-esc="false"
-    @after-leave="emit('closed')"
-  >
-    <div class="adp-root">
-      <!-- ① 顶栏：返回 / 「资讯详情」/ 分享
-           顶栏只有一行固定文案，不带副标题。
-           为什么不用完整文章标题当主标题：35 字以上的校园通知名在 390px 下必然被截成
-           「…学业…」这种半截串，既读不完还要占两行；完整标题在下方正文区展示一次就够，
-           顶栏只承担「我在哪、从哪回去」，重复一次反而更乱。
-           来源栏目（通知公告/教学动态…）改到正文区标题下方的标签里展示，不占顶栏高度。 -->
-      <header class="adp-head" :class="{ 'is-scrolled': scrolled }">
-        <button type="button" class="adp-icon-btn" aria-label="返回" @click="close">
-          <el-icon :size="20"><ArrowLeft /></el-icon>
-        </button>
-        <div class="adp-head-title">
-          <div class="adp-head-main">资讯详情</div>
-        </div>
-        <!-- 右上角：分享。原先这里是「在浏览器打开」——
-             对一个校园通知详情页来说，「把这条发给同学」远比「跳出去用浏览器开」高频，
-             而且外跳与详情页「不跳出应用」的定位相悖。 -->
-        <button type="button" class="adp-icon-btn" aria-label="分享" @click="onShare">
-          <el-icon :size="18"><Share /></el-icon>
-        </button>
-      </header>
-
-      <!-- ② 滚动区：文章主体 + 互动区 + 评论区同处一个容器。
-           为什么合并成一个滚动条：详情页的阅读动线就是「读正文 → 点赞评论 → 看评论」，
-           拆成上固定下滚动或内部锚点滚动，会让键盘弹出与 iOS 回弹各管一段，反而更乱。
-           底部输入栏用 sticky 贴在滚动区末尾（见 .adp-composer），无需额外占位。 -->
-      <div ref="scrollRef" class="adp-scroll" @scroll.passive="onScroll">
-        <!-- 加载骨架 -->
-        <div v-if="loading" class="adp-skeleton">
-          <div class="sk-line w70" />
-          <div class="sk-line w50" />
-          <div class="sk-gap" />
-          <div class="sk-line w100" />
-          <div class="sk-line w95" />
-          <div class="sk-line w90" />
-          <div class="sk-line w100" />
-          <div class="sk-line w60" />
-        </div>
-
-        <!-- 错误态 -->
-        <div v-else-if="error" class="adp-state">
-          <el-icon :size="44" class="adp-state-icon"><DocumentDelete /></el-icon>
-          <p class="adp-state-title">页面暂不可用</p>
-          <p class="adp-state-desc">{{ error }}</p>
-          <div class="adp-state-btns">
-            <button type="button" class="adp-btn primary" @click="reload">
-              <el-icon :size="15"><Refresh /></el-icon> 重试
-            </button>
-            <button type="button" class="adp-btn" @click="openExternal(currentUrl)">浏览器打开</button>
+  <Teleport to="body">
+    <!-- 覆盖式全屏子页：动画复用全局 .subpage（styles/animations.css，全站唯一实现）。
+         结构照抄 ArticleReader：Teleport + Transition(name="subpage") + 根元素 fixed inset:0。
+         取舍：不用 el-dialog / el-drawer —— 它们自带居中、遮罩、body 滚动锁与 z-index 体系，
+         而这页要的是「手机上整页盖上来、桌面端 760px 居中」的确定性版式，自己写样式可控得多。 -->
+    <Transition name="subpage" :duration="320" @after-leave="emit('closed')">
+      <div
+        v-if="visible"
+        class="adp-root"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="'资讯详情：' + (data?.title || props.title || '')"
+        :style="rootStyle"
+      >
+        <!-- ① 顶栏：返回 / 「资讯详情」/ 分享
+             顶栏只有一行固定文案，不带副标题。
+             为什么不用完整文章标题当主标题：35 字以上的校园通知名在 390px 下必然被截成
+             「…学业…」这种半截串，既读不完还要占两行；完整标题在下方正文区展示一次就够，
+             顶栏只承担「我在哪、从哪回去」，重复一次反而更乱。
+             来源栏目（通知公告/教学动态…）改到正文区标题下方的标签里展示，不占顶栏高度。 -->
+        <header class="adp-head" :class="{ 'is-scrolled': scrolled }">
+          <button type="button" class="adp-icon-btn" aria-label="返回" @click="close">
+            <el-icon :size="20"><ArrowLeft /></el-icon>
+          </button>
+          <div class="adp-head-title">
+            <div class="adp-head-main">资讯详情</div>
           </div>
-        </div>
+          <!-- 右上角：分享。原先这里是「在浏览器打开」——
+               对一个校园通知详情页来说，「把这条发给同学」远比「跳出去用浏览器开」高频，
+               而且外跳与详情页「不跳出应用」的定位相悖。 -->
+          <button type="button" class="adp-icon-btn" aria-label="分享" @click="onShare">
+            <el-icon :size="18"><Share /></el-icon>
+          </button>
+        </header>
 
-        <template v-else-if="data">
-          <!-- 标题 + 元信息 + 正文，一屏读到底。
-               正文直接在本页渲染：详情页就是用户点进资讯后想读到的东西，
-               再放一个「阅读全文」让他多点一次是多余的一跳。
-               抓取失败时正文区就地降级，互动与评论照常可用。 -->
-          <article class="adp-article">
-            <h1 class="adp-title">{{ data.title || headerTitle }}</h1>
-            <div class="adp-meta">
-              <span v-if="sourceLabel" class="adp-source-tag">{{ sourceLabel }}</span>
-              <span v-if="data.date" class="adp-meta-text">{{ data.date }}</span>
-              <span v-if="viewCount" class="adp-meta-text">{{ viewCount }} 浏览</span>
-            </div>
+        <!-- ② 滚动区：文章主体 + 互动区 + 评论区同处一个容器。
+             为什么合并成一个滚动条：详情页的阅读动线就是「读正文 → 点赞评论 → 看评论」，
+             拆成上固定下滚动或内部锚点滚动，会让键盘弹出与 iOS 回弹各管一段，反而更乱。
+             底部输入栏用 sticky 贴在滚动区末尾（见 .adp-composer），无需额外占位。 -->
+        <div ref="scrollRef" class="adp-scroll" @scroll.passive="onScroll">
+          <!-- 加载骨架 -->
+          <div v-if="loading" class="adp-skeleton">
+            <div class="sk-line w70" />
+            <div class="sk-line w50" />
+            <div class="sk-gap" />
+            <div class="sk-line w100" />
+            <div class="sk-line w95" />
+            <div class="sk-line w90" />
+            <div class="sk-line w100" />
+            <div class="sk-line w60" />
+          </div>
 
-            <!-- 正文：后端已做脚本 / 事件属性净化。
-                 ref 用于渲染后加工 DOM（表格包横滑壳、署名行打标），见 enhanceContent()。 -->
-            <div
-              v-if="data.kind === 'article'"
-              ref="contentRef"
-              class="adp-content"
-              v-html="data.content_html || ''"
-            />
-
-            <!-- 抓取失败：正文区降级为一行提示，互动与评论仍可用 -->
-            <div v-else-if="data.kind === 'error'" class="adp-inline-state">
-              <el-icon :size="30" class="adp-state-icon"><DocumentDelete /></el-icon>
-              <p class="adp-inline-title">正文暂不可用</p>
-              <p class="adp-inline-desc">校站页面暂时打不开，可稍后重试。</p>
-              <button type="button" class="adp-mini-btn" @click="reload">重试</button>
-            </div>
-
-            <!-- 列表页（无正文）：展示可点进的文章清单 -->
-            <div v-else class="adp-links">
-              <p v-if="!data.links.length" class="adp-empty-line">该页面没有可读正文</p>
-              <button
-                v-for="(l, i) in data.links || []"
-                :key="l.url + i"
-                type="button"
-                class="adp-link-row"
-                @click="openSource(l.url)"
-              >
-                <span class="adp-link-text">{{ l.title }}</span>
-                <span class="adp-link-meta">
-                  <span v-if="l.date" class="adp-link-date">{{ l.date }}</span>
-                  <el-icon :size="14" class="adp-link-arrow"><ArrowRight /></el-icon>
-                </span>
+          <!-- 错误态 -->
+          <div v-else-if="error" class="adp-state">
+            <el-icon :size="44" class="adp-state-icon"><DocumentDelete /></el-icon>
+            <p class="adp-state-title">页面暂不可用</p>
+            <p class="adp-state-desc">{{ error }}</p>
+            <div class="adp-state-btns">
+              <button type="button" class="adp-btn primary" @click="reload">
+                <el-icon :size="15"><Refresh /></el-icon> 重试
               </button>
+              <button type="button" class="adp-btn" @click="openExternal(currentUrl)">浏览器打开</button>
             </div>
+          </div>
 
-            <!-- 附件下载：校站把附件下载区放在正文容器之外，正文里只剩一行
-                 「附件：xxx名单」纯文字，真实地址由后端单独解析返回。
-                 这里补一张下载卡片，点击直接走校站下载中转（新标签页，不打断阅读）。 -->
-            <div v-if="attachments.length" class="adp-attachments">
-              <a
-                v-for="a in attachments"
-                :key="a.url"
-                class="adp-attachment"
-                :href="a.url"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <el-icon :size="18" class="adp-attachment-icon"><Download /></el-icon>
-                <span class="adp-attachment-name">{{ a.name }}</span>
-                <span class="adp-attachment-action">下载</span>
-              </a>
-            </div>
-          </article>
+          <template v-else-if="data">
+            <!-- 标题 + 元信息 + 正文，一屏读到底。
+                 正文直接在本页渲染：详情页就是用户点进资讯后想读到的东西，
+                 再放一个「阅读全文」让他多点一次是多余的一跳。
+                 抓取失败时正文区就地降级，互动与评论照常可用。 -->
+            <article class="adp-article">
+              <h1 class="adp-title">{{ data.title || headerTitle }}</h1>
+              <div class="adp-meta">
+                <span v-if="sourceLabel" class="adp-source-tag">{{ sourceLabel }}</span>
+                <span v-if="data.date" class="adp-meta-text">{{ data.date }}</span>
+                <span v-if="viewCount" class="adp-meta-text">{{ viewCount }} 浏览</span>
+              </div>
 
-          <!-- ④ 评论区 -->
-          <section class="adp-comments">
-            <h2 class="adp-comments-head">{{ commentCount > 0 ? '共 ' + commentCount + ' 条评论' : '评论' }}</h2>
+              <!-- 正文：后端已做脚本 / 事件属性净化。
+                   ref 用于渲染后加工 DOM（表格包横滑壳、署名行打标），见 enhanceContent()。 -->
+              <div
+                v-if="data.kind === 'article'"
+                ref="contentRef"
+                class="adp-content"
+                v-html="data.content_html || ''"
+              />
 
-            <div v-if="commentsLoading" class="adp-comments-loading">
-              <div class="sk-line w80" />
-              <div class="sk-line w60" />
-            </div>
-            <div v-else-if="commentsError" class="adp-comments-state">
-              <span>{{ commentsError }}</span>
-              <button type="button" class="adp-mini-btn" @click="loadComments">重试</button>
-            </div>
-            <p v-else-if="!comments.length" class="adp-comments-empty">还没有评论，来说点什么吧</p>
-            <ul v-else class="adp-comment-list">
-              <li v-for="c in comments" :key="c.id" class="adp-comment">
-                <el-avatar :size="34" :src="c.author_avatar || undefined" :style="{ background: avatarBg(c) }">
-                  {{ firstChar(c) }}
-                </el-avatar>
-                <div class="adp-comment-main">
-                  <div class="adp-comment-top">
-                    <span class="adp-comment-name">{{ c.author_name || '同学' }}</span>
-                    <span class="adp-comment-time">{{ relativeTime(c.created_at) }}</span>
-                    <button
-                      v-if="c.mine"
-                      type="button"
-                      class="adp-comment-del"
-                      :disabled="deletingId === c.id"
-                      @click="onDeleteComment(c)"
-                    >
-                      删除
-                    </button>
+              <!-- 抓取失败：正文区降级为一行提示，互动与评论仍可用 -->
+              <div v-else-if="data.kind === 'error'" class="adp-inline-state">
+                <el-icon :size="30" class="adp-state-icon"><DocumentDelete /></el-icon>
+                <p class="adp-inline-title">正文暂不可用</p>
+                <p class="adp-inline-desc">校站页面暂时打不开，可稍后重试。</p>
+                <button type="button" class="adp-mini-btn" @click="reload">重试</button>
+              </div>
+
+              <!-- 列表页（无正文）：展示可点进的文章清单 -->
+              <div v-else class="adp-links">
+                <p v-if="!data.links.length" class="adp-empty-line">该页面没有可读正文</p>
+                <button
+                  v-for="(l, i) in data.links || []"
+                  :key="l.url + i"
+                  type="button"
+                  class="adp-link-row"
+                  @click="openSource(l.url)"
+                >
+                  <span class="adp-link-text">{{ l.title }}</span>
+                  <span class="adp-link-meta">
+                    <span v-if="l.date" class="adp-link-date">{{ l.date }}</span>
+                    <el-icon :size="14" class="adp-link-arrow"><ArrowRight /></el-icon>
+                  </span>
+                </button>
+              </div>
+
+              <!-- 附件下载：校站把附件下载区放在正文容器之外，正文里只剩一行
+                   「附件：xxx名单」纯文字，真实地址由后端单独解析返回。
+                   这里补一张下载卡片，点击直接走校站下载中转（新标签页，不打断阅读）。 -->
+              <div v-if="attachments.length" class="adp-attachments">
+                <a
+                  v-for="a in attachments"
+                  :key="a.url"
+                  class="adp-attachment"
+                  :href="a.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <el-icon :size="18" class="adp-attachment-icon"><Download /></el-icon>
+                  <span class="adp-attachment-name">{{ a.name }}</span>
+                  <span class="adp-attachment-action">下载</span>
+                </a>
+              </div>
+            </article>
+
+            <!-- ④ 评论区 -->
+            <section class="adp-comments">
+              <h2 class="adp-comments-head">{{ commentCount > 0 ? '共 ' + commentCount + ' 条评论' : '评论' }}</h2>
+
+              <div v-if="commentsLoading" class="adp-comments-loading">
+                <div class="sk-line w80" />
+                <div class="sk-line w60" />
+              </div>
+              <div v-else-if="commentsError" class="adp-comments-state">
+                <span>{{ commentsError }}</span>
+                <button type="button" class="adp-mini-btn" @click="loadComments">重试</button>
+              </div>
+              <p v-else-if="!comments.length" class="adp-comments-empty">还没有评论，来说点什么吧</p>
+              <ul v-else class="adp-comment-list">
+                <li v-for="c in comments" :key="c.id" class="adp-comment">
+                  <el-avatar :size="34" :src="c.author_avatar || undefined" :style="{ background: avatarBg(c) }">
+                    {{ firstChar(c) }}
+                  </el-avatar>
+                  <div class="adp-comment-main">
+                    <div class="adp-comment-top">
+                      <span class="adp-comment-name">{{ c.author_name || '同学' }}</span>
+                      <span class="adp-comment-time">{{ relativeTime(c.created_at) }}</span>
+                      <button
+                        v-if="c.mine"
+                        type="button"
+                        class="adp-comment-del"
+                        :disabled="deletingId === c.id"
+                        @click="onDeleteComment(c)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                    <p class="adp-comment-text">{{ c.content }}</p>
                   </div>
-                  <p class="adp-comment-text">{{ c.content }}</p>
-                </div>
-              </li>
-            </ul>
-          </section>
-        </template>
-      </div>
-
-      <!-- ⑤ 底部输入栏：**滚动区之外**的独立一行。
-           曾经放在滚动区里用 sticky 常驻，结果在部分浏览器下（截图实测 Edge）
-           sticky 没有生效，输入栏直接叠在正文中间，把「三、具体要求」那块盖住了。
-           现在改为 flex 列布局里的固定一行：不参与滚动、永远不会盖住内容，
-           也不用再靠估算高度给滚动区垫留白。 -->
-      <div v-if="data && !error" ref="composerRef" class="adp-composer">
-        <div class="adp-input-wrap">
-          <textarea
-            ref="textareaRef"
-            v-model="draft"
-            class="adp-textarea"
-            rows="1"
-            :maxlength="500"
-            placeholder="说点什么…"
-            @input="autoGrow"
-            @focus="autoGrow"
-          />
-          <span class="adp-count">{{ draft.length }}/500</span>
+                </li>
+              </ul>
+            </section>
+          </template>
         </div>
-        <button type="button" class="adp-send" :disabled="!canSend" @click="submitComment">
-          {{ sending ? '发送中' : '发送' }}
-        </button>
-        <!-- 互动计数排在发送右侧：正文与评论之间不再单独占一条大按钮行，
-             把「点赞 / 收藏 / 评论数」收进这条常驻的输入栏，滚动到哪儿都能点。
-             数字按真实值显示（0 也显示），与信息流的计数口径一致。 -->
-        <div class="adp-bar-acts">
-          <button
-            type="button"
-            class="adp-bar-act"
-            :class="{ 'is-on': liked }"
-            :aria-pressed="liked"
-            aria-label="点赞"
-            @click="onLike"
-          >
-            <el-icon :size="19" :class="['adp-like-icon', { 'is-pop': likePop }]">
-              <StarFilled v-if="liked" />
-              <Star v-else />
-            </el-icon>
-            <span class="adp-bar-num">{{ likeCount }}</span>
-          </button>
-          <button
-            type="button"
-            class="adp-bar-act is-fav"
-            :class="{ 'is-on': favorited }"
-            :aria-pressed="favorited"
-            aria-label="收藏"
-            @click="onFavorite"
-          >
-            <el-icon :size="19"><CollectionTag /></el-icon>
-            <span class="adp-bar-num">{{ favoriteCount }}</span>
-          </button>
-          <button type="button" class="adp-bar-act" aria-label="评论" @click="focusComposer">
-            <el-icon :size="19"><ChatDotRound /></el-icon>
-            <span class="adp-bar-num">{{ commentCount }}</span>
-          </button>
-        </div>
-      </div>
 
-      <!-- ⑥ 转发层：自己画遮罩 + 底部面板（不用 el-dialog，避免组件库默认样式接管版式） -->
-      <Transition name="adp-pop">
-        <div v-if="repostVisible" class="adp-sheet-mask" @click.self="closeRepost">
-          <div class="adp-sheet">
-            <div class="adp-sheet-head">
-              <span class="adp-sheet-title">转发到</span>
-              <button type="button" class="adp-sheet-close" aria-label="关闭" @click="closeRepost">
-                <el-icon :size="16"><Close /></el-icon>
-              </button>
-            </div>
-            <p class="adp-sheet-desc">分享给同学，转发记录会保留</p>
+        <!-- ⑤ 底部输入栏：**滚动区之外**的独立一行。
+             曾经放在滚动区里用 sticky 常驻，结果在部分浏览器下（截图实测 Edge）
+             sticky 没有生效，输入栏直接叠在正文中间，把「三、具体要求」那块盖住了。
+             现在改为 flex 列布局里的固定一行：不参与滚动、永远不会盖住内容，
+             也不用再靠估算高度给滚动区垫留白。 -->
+        <div v-if="data && !error" ref="composerRef" class="adp-composer">
+          <div class="adp-input-wrap">
             <textarea
-              v-model="repostText"
-              class="adp-sheet-textarea"
-              rows="3"
-              :maxlength="120"
-              placeholder="说点什么（选填）"
+              ref="textareaRef"
+              v-model="draft"
+              class="adp-textarea"
+              rows="1"
+              :maxlength="500"
+              placeholder="说点什么…"
+              @input="autoGrow"
+              @focus="autoGrow"
             />
-            <div class="adp-sheet-count">{{ repostText.length }}/120</div>
-            <button type="button" class="adp-btn primary block" :disabled="reposting" @click="submitRepost">
-              {{ reposting ? '转发中…' : '确认转发' }}
+            <span class="adp-count">{{ draft.length }}/500</span>
+          </div>
+          <button type="button" class="adp-send" :disabled="!canSend" @click="submitComment">
+            {{ sending ? '发送中' : '发送' }}
+          </button>
+          <!-- 互动计数排在发送右侧：正文与评论之间不再单独占一条大按钮行，
+               把「点赞 / 收藏 / 评论数」收进这条常驻的输入栏，滚动到哪儿都能点。
+               数字按真实值显示（0 也显示），与信息流的计数口径一致。 -->
+          <div class="adp-bar-acts">
+            <button
+              type="button"
+              class="adp-bar-act"
+              :class="{ 'is-on': liked }"
+              :aria-pressed="liked"
+              aria-label="点赞"
+              @click="onLike"
+            >
+              <el-icon :size="19" :class="['adp-like-icon', { 'is-pop': likePop }]">
+                <StarFilled v-if="liked" />
+                <Star v-else />
+              </el-icon>
+              <span class="adp-bar-num">{{ likeCount }}</span>
             </button>
-            <button type="button" class="adp-copy-link" @click="copyLink">
-              <el-icon :size="14"><Link /></el-icon> 复制链接
+            <button
+              type="button"
+              class="adp-bar-act is-fav"
+              :class="{ 'is-on': favorited }"
+              :aria-pressed="favorited"
+              aria-label="收藏"
+              @click="onFavorite"
+            >
+              <el-icon :size="19"><CollectionTag /></el-icon>
+              <span class="adp-bar-num">{{ favoriteCount }}</span>
+            </button>
+            <button type="button" class="adp-bar-act" aria-label="评论" @click="focusComposer">
+              <el-icon :size="19"><ChatDotRound /></el-icon>
+              <span class="adp-bar-num">{{ commentCount }}</span>
             </button>
           </div>
         </div>
-      </Transition>
-    </div>
-  </SubPageShell>
+
+        <!-- ⑥ 转发层：自己画遮罩 + 底部面板（不用 el-dialog，避免组件库默认样式接管版式） -->
+        <Transition name="adp-pop">
+          <div v-if="repostVisible" class="adp-sheet-mask" @click.self="closeRepost">
+            <div class="adp-sheet">
+              <div class="adp-sheet-head">
+                <span class="adp-sheet-title">转发到</span>
+                <button type="button" class="adp-sheet-close" aria-label="关闭" @click="closeRepost">
+                  <el-icon :size="16"><Close /></el-icon>
+                </button>
+              </div>
+              <p class="adp-sheet-desc">分享给同学，转发记录会保留</p>
+              <textarea
+                v-model="repostText"
+                class="adp-sheet-textarea"
+                rows="3"
+                :maxlength="120"
+                placeholder="说点什么（选填）"
+              />
+              <div class="adp-sheet-count">{{ repostText.length }}/120</div>
+              <button type="button" class="adp-btn primary block" :disabled="reposting" @click="submitRepost">
+                {{ reposting ? '转发中…' : '确认转发' }}
+              </button>
+              <button type="button" class="adp-copy-link" @click="copyLink">
+                <el-icon :size="14"><Link /></el-icon> 复制链接
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -293,8 +294,6 @@ import {
   type CampusArticleComment,
   type CampusArticleDetail,
 } from '@/api/campus'
-// 覆盖式子页外壳：落位 + 进出场动画 + Esc + 滚动锁（与 styles/subpage-transition.css 配套）
-import SubPageShell from '@/components/common/SubPageShell.vue'
 
 /* 注意：getArticleDetail / getArticleComments / toggleArticleLike / createArticleComment /
    deleteArticleComment / repostArticle 及它们的类型由 Lead 并行在 @/api/campus 补齐；
@@ -860,11 +859,10 @@ watch(
   },
 )
 
-// 打开时复位滚动位置与键盘偏移。
-// body 滚动锁已交给 SubPageShell（引用计数版，关闭动画播完才解锁），这里不再自己写
-// document.body.style.overflow —— 否则详情页关掉时会把还开着的搜索页的锁一起抹掉。
+// 打开时锁定背景滚动（关闭 / 卸载时恢复），保证 iOS 上不会滚到列表层
 watch(visible, async (v) => {
   await nextTick()
+  document.body.style.overflow = v ? 'hidden' : ''
   if (v) {
     scrolled.value = false
     syncKeyboard()
@@ -891,6 +889,7 @@ onBeforeUnmount(() => {
     vv.removeEventListener('scroll', syncKeyboard)
     vv = null
   }
+  document.body.style.overflow = ''
 })
 
 /**
@@ -916,18 +915,20 @@ defineExpose({ reload, open, openAnd, close })
 
 <style scoped>
 /* ================= 根容器 =================
-   整屏骨架（fixed inset:0 / 不透明白底 / 裁切溢出 / z-index 2600）由 SubPageShell 的
-   .subpage-root 提供（styles/subpage-transition.css）。这里这一层是**页面自己的内容列**：
-   flex:1 填满外壳，内部仍是「顶栏 + 滚动区」的纵向布局。
-   为什么内容不直接挂在 <SubPageShell> 根节点上：外壳的根节点在子组件模板里渲染，
-   父组件的 scoped 样式打不到它；放进默认插槽才落在本组件的作用域内。 */
+   fixed inset:0 的整页覆盖层。z-index 2600 高于移动端底部导航（MobileTabBar 的 1000）
+   与顶栏（100）；本页内部的 ElMessage 会落在组件库自己的更高层级，仍可见。
+   进出场动画统一走全局 .subpage（styles/animations.css，keyframes 驱动）——
+   本页曾是全站第一处 animation 驱动的子页，方案验证后已收编进全局，不再自带一份。 */
 .adp-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  background: #fff;
   color: #1d2129;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
 }
 
 /* ================= 顶栏 ================= */
@@ -1525,9 +1526,7 @@ defineExpose({ reload, open, openAnd, close })
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* 根节点的滑动**不**在这里关：进出场动画由 SubPageShell 的 .subpage-* 驱动，
-     按全站约定有意不随 reduced-motion 消失（内置浏览器恒为 reduce，
-     关掉就等于这个 App 在面板里完全没有子页动效）。装饰性动效在下面各条内关闭。 */
+  .adp-root { animation: none !important; }
   .adp-pop-enter-active,
   .adp-pop-leave-active,
   .adp-pop-enter-active .adp-sheet,

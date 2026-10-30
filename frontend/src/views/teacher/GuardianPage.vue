@@ -1,5 +1,10 @@
 <template>
-  <div class="tui-page">
+  <div class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel">
     <SubPageHeader title="家校沟通" fallback="/teacher">
       <!-- 移动端吸顶栏「更多」：导出 / 模板 / 导入（桌面端不渲染 #right，改由 TuiPageHero 承载） -->
       <template #right>
@@ -17,6 +22,9 @@
         </el-dropdown>
       </template>
     </SubPageHeader>
+
+    <!-- 移动端下拉刷新：指示器插在吸顶栏之后 -->
+    <PullRefreshIndicator v-if="isMobile" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：沟通语义色 + 会话图标；右侧保留本页专属的「学生选择器 + 更多」 -->
@@ -98,7 +106,7 @@
             <h3><el-icon><User /></el-icon>家长联系人</h3>
             <div class="tui-section-extra">
               <span class="gp-count">{{ guardians.length }} 人</span>
-              <el-button size="small" type="primary" :icon="Plus" @click="openGuardianCreate">新增联系人</el-button>
+              <el-button size="small" :icon="Plus" @click="openGuardianCreate">新增联系人</el-button>
             </div>
           </div>
           <div class="tui-section-hint">
@@ -248,7 +256,7 @@
             <h3><el-icon><User /></el-icon>家长联系人</h3>
             <div class="tui-section-extra">
               <span class="gp-count">{{ guardians.length }} 人</span>
-              <el-button size="small" type="primary" :icon="Plus" @click="openGuardianCreate">新增联系人</el-button>
+              <el-button size="small" :icon="Plus" @click="openGuardianCreate">新增联系人</el-button>
             </div>
           </div>
           <div class="tui-section-hint">
@@ -415,12 +423,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, type Component } from 'vue'
+// v6.1 弹窗减负：删除/撤销确认与导入结果走底部动作面板
+import { actionConfirm, actionAlert } from '@/composables/useActionSheet'
 import {
   ChatDotRound, ChatLineRound, Document, Download, InfoFilled, Link, Lock, Message,
   MoreFilled, Phone, Plus, Search, Upload, User,
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import { getStudents, type StudentSummary } from '@/api/teacher'
@@ -457,6 +469,9 @@ const STATUS_OPTIONS: GuardianContactStatus[] = ['draft', 'sent', 'pending', 'fa
 const { isMobile } = useResponsive()
 const route = useRoute()
 const router = useRouter()
+
+// 移动端下拉刷新：桌面端不响应手势
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 /* ===== 学生选择器（服务端搜索 + 300ms 防抖） ===== */
 const studentOptions = ref<StudentSummary[]>([])
@@ -612,6 +627,11 @@ async function loadAll() {
   await Promise.all([loadGuardians(), loadLogs(), loadOverview()])
 }
 
+/** 下拉刷新：复用家长联系人 / 台账 / 概览加载，失败静默 */
+async function refreshAll() {
+  await loadAll()
+}
+
 /** 台账操作（删除 / 导入）后的局部刷新：不动联系人，避免整页抖动 */
 async function refreshLedger() {
   await Promise.all([loadLogs(), loadOverview()])
@@ -708,7 +728,7 @@ function openQuickLog(g: Guardian, channel: GuardianChannel) {
 
 async function removeGuardian(g: Guardian) {
   try {
-    await ElMessageBox.confirm(`确定删除联系人「${g.name}」？`, '删除确认', { type: 'warning' })
+    if (!(await actionConfirm(`确定删除联系人「${g.name}」？`, '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   } catch {
     return
   }
@@ -740,7 +760,7 @@ async function copyLink(link: ShareLink) {
 
 async function revoke(link: ShareLink) {
   try {
-    await ElMessageBox.confirm('撤销后家长将无法再打开该链接，确定撤销？', '撤销确认', { type: 'warning' })
+    if (!(await actionConfirm('撤销后家长将无法再打开该链接，确定撤销？', '撤销确认', { danger: true, confirmButtonText: '撤销' }))) return
   } catch {
     return
   }
@@ -751,7 +771,7 @@ async function revoke(link: ShareLink) {
 
 async function removeLog(log: ContactLog) {
   try {
-    await ElMessageBox.confirm('确定删除这条沟通记录？', '删除确认', { type: 'warning' })
+    if (!(await actionConfirm('确定删除这条沟通记录？', '删除确认', { danger: true, confirmButtonText: '删除' }))) return
   } catch {
     return
   }
@@ -829,11 +849,10 @@ async function handleImportFile(e: Event) {
     const parts = [`<b>成功导入 ${res.created} 条</b>`]
     if (res.skipped.length) parts.push(`跳过 ${res.skipped.length} 条：<br/>${res.skipped.map(escapeHtml).join('<br/>')}`)
     if (res.errors.length) parts.push(`失败 ${res.errors.length} 条：<br/>${res.errors.map(escapeHtml).join('<br/>')}`)
-    await ElMessageBox.alert(parts.join('<br/><br/>'), '导入结果', {
+    await actionAlert(parts.join('<br/><br/>'), '导入结果', {
       dangerouslyUseHTMLString: true,
-      type: res.errors.length ? 'warning' : 'success',
       confirmButtonText: '知道了',
-    }).catch(() => { /* 用户关闭弹窗不视为失败 */ })
+    }).catch(() => { /* 用户关闭面板不视为失败 */ })
     ElMessage.success(`导入完成：新增 ${res.created} 条`)
   } catch {
     ElMessage.error('导入失败，请检查文件格式')
@@ -877,6 +896,8 @@ onMounted(initPage)
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
+
 .gp-picker { margin-bottom: 10px; }
 .gp-select { width: 240px; }
 .gp-count { font-size: 11.5px; color: var(--tui-text-quiet); }

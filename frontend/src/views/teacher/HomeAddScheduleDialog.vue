@@ -1,17 +1,12 @@
 <template>
-  <el-dialog
+  <!-- 添加日程（3 字段：移动端=底部动作面板） -->
+  <ActionSheet
     v-model="visibleModel"
+    title="添加日程"
     width="460px"
-    align-center
-    :close-on-click-modal="false"
     class="schedule-dialog"
   >
-    <template #header>
-      <div class="sd-header">
-        <span class="sd-title">添加日程</span>
-        <span class="sd-sub">写下要安排的事，到期后会出现在今日重点</span>
-      </div>
-    </template>
+    <div class="sd-sub" style="margin:-4px 0 10px">写下要安排的事，到期后会出现在今日重点</div>
 
     <ScheduleFormFields
       :date="date"
@@ -28,11 +23,13 @@
         保存日程
       </el-button>
     </template>
-  </el-dialog>
+  </ActionSheet>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+// v6.1 弹窗减负：小表单走底部动作面板
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import { createTeacherSchedule } from '@/api/teacher'
 import type { ScheduleUrgency } from '@/api/teacher'
 import { ElMessage } from 'element-plus'

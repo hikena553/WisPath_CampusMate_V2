@@ -1,5 +1,10 @@
 <template>
-  <div class="portfolio-page">
+  <div class="portfolio-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="作品集" sub="项目 · 证书 · 简历" accent="#b45309" fallback="/student">
       <!-- 移动端：AI 建议压成 Head 右侧图标按钮，避免正文顶部再顶一个蓝色大按钮 -->
       <template #right>
@@ -8,6 +13,8 @@
         </button>
       </template>
     </SubPageHeader>
+    <!-- 移动端下拉刷新：吉祥物指示器（与学业中心 / 工作台共用同一模块） -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
     <!-- 顶部标题（桌面端） -->
     <div class="portfolio-header">
       <div>
@@ -29,8 +36,29 @@
         </el-badge>
       </div>
       <div v-if="!projects.length" class="empty-tip">还没有项目经历，点击「添加项目」记录你的第一个项目吧</div>
-      <div v-for="p in projects" :key="p.id" class="project-card">
-        <div class="project-head">
+      <div class="projects-wall">
+        <div v-for="p in projects" :key="p.id" class="project-card" :class="{ 'has-cover': !!projectCover(p) }">
+          <!-- 移动端作品墙封面（桌面端隐藏，桌面保持原列表卡样式） -->
+          <div class="project-cover">
+            <el-image
+              v-if="projectCover(p)"
+              :src="projectCover(p)" fit="cover" class="project-cover-img"
+              :preview-src-list="p.images && p.images.length ? p.images : [projectCover(p)]"
+              preview-teleported
+            />
+            <div v-else class="project-cover-fallback"><span>{{ (p.project_name || '#').slice(0, 1) }}</span></div>
+            <div class="project-cover-grad" aria-hidden="true"></div>
+            <span v-if="(p.images?.length || 0) > 1" class="project-cover-badge">{{ p.images!.length }} 图</span>
+            <div class="project-cover-txt">
+              <b>{{ p.project_name }}</b>
+              <i>{{ [p.my_role, p.is_team ? '团队' : ''].filter(Boolean).join(' · ') || formatDate(p.start_date) }}</i>
+            </div>
+            <span class="project-cover-acts">
+              <button type="button" @click.stop="openProjectDialog(p)">编辑</button>
+              <button type="button" @click.stop="removeProject(p)">删除</button>
+            </span>
+          </div>
+          <div class="project-head">
           <div class="project-title">
             {{ p.project_name }}
             <el-tag v-if="p.is_team" size="small" type="primary" effect="light" round>团队</el-tag>
@@ -58,6 +86,7 @@
           </el-link>
         </div>
       </div>
+      </div><!-- /.projects-wall -->
     </div>
 
     <!-- 证书荣誉 -->
@@ -96,8 +125,8 @@
       </div>
     </div>
 
-    <!-- 个人简历 -->
-    <div class="card">
+    <!-- 个人简历（移动端已抽至「我的资料」页管理，此处桌面端保留） -->
+    <div class="card resume-section">
       <div class="card-head">
         <span class="head-bar"></span>
         <span class="head-title">个人简历</span>
@@ -125,8 +154,8 @@
       </div>
     </div>
 
-    <!-- 项目弹窗 -->
-    <el-dialog v-model="projectDialogVisible" :title="projectForm.id ? '编辑项目' : '添加项目'" width="520px" :close-on-click-modal="false">
+    <!-- 项目弹窗（多字段重表单：移动端=全屏子页 / 桌面端=弹窗） -->
+    <ResponsivePopup v-model="projectDialogVisible" :title="projectForm.id ? '编辑项目' : '添加项目'" width="520px">
       <el-form label-width="72px">
         <el-form-item label="项目名称" required>
           <el-input v-model="projectForm.project_name" placeholder="例如：校园二手交易小程序" maxlength="60" />
@@ -155,6 +184,26 @@
         <el-form-item label="附件地址">
           <el-input v-model="projectForm.attachment_url" placeholder="https:// 附件 / 截图地址，选填" maxlength="200" />
         </el-form-item>
+        <el-form-item label="项目图片">
+          <div class="img-upload-wrap">
+            <div class="img-upload-row">
+              <div v-for="(img, i) in projectForm.images" :key="img + i" class="img-thumb">
+                <el-image :src="img" fit="cover" class="img-thumb-img" :preview-src-list="projectForm.images" :initial-index="i" preview-teleported />
+                <button type="button" class="img-thumb-del" aria-label="移除图片" @click="projectForm.images.splice(i, 1)">✕</button>
+                <span v-if="i === 0" class="img-thumb-cover">封面</span>
+              </div>
+              <el-upload
+                v-if="projectForm.images.length < 6"
+                :show-file-list="false"
+                :before-upload="uploadProjectImage"
+                accept="image/*"
+              >
+                <button type="button" class="img-add-btn" aria-label="添加图片"><el-icon :size="18"><Plus /></el-icon></button>
+              </el-upload>
+            </div>
+            <p class="img-upload-hint">最多 6 张，第一张将作为作品墙封面展示</p>
+          </div>
+        </el-form-item>
         <el-form-item label="项目描述">
           <el-input v-model="projectForm.description" type="textarea" :rows="3" placeholder="项目背景、职责与成果（可点击右上角 AI 优化建议生成）" maxlength="500" />
         </el-form-item>
@@ -163,10 +212,10 @@
         <el-button @click="projectDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingProject" @click="saveProject">保存</el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
 
-    <!-- 证书弹窗 -->
-    <el-dialog v-model="certDialogVisible" :title="certForm.id ? '编辑证书' : '添加证书'" width="520px" :close-on-click-modal="false">
+    <!-- 证书弹窗（多字段表单：移动端=全屏子页 / 桌面端=弹窗） -->
+    <ResponsivePopup v-model="certDialogVisible" :title="certForm.id ? '编辑证书' : '添加证书'" width="520px">
       <el-form label-width="72px">
         <el-form-item label="证书名称" required>
           <el-input v-model="certForm.title" placeholder="例如：蓝桥杯省赛一等奖" maxlength="60" />
@@ -199,10 +248,10 @@
         <el-button @click="certDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingCert" @click="saveCert">保存</el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
 
-    <!-- AI 优化建议弹窗 -->
-    <el-dialog v-model="aiDialogVisible" title="AI 优化建议" width="540px">
+    <!-- AI 优化建议弹窗（轻内容：移动端=底部动作面板） -->
+    <ActionSheet v-model="aiDialogVisible" title="AI 优化建议" width="540px">
       <div class="ai-tip">选择项目后，AI 将基于 STAR 法则生成一段结构化项目描述，并给出简历优化建议。生成的描述可直接填入项目编辑弹窗。</div>
       <el-select v-model="aiProjectId" placeholder="选择项目" style="width:100%" @change="genAISuggest">
         <el-option v-for="p in projects" :key="p.id" :label="p.project_name" :value="p.id" />
@@ -214,7 +263,7 @@
         <div class="ai-result-label ai-result-label2">简历优化建议</div>
         <div class="ai-result-text">{{ aiResult.resume_tips }}</div>
       </div>
-    </el-dialog>
+    </ActionSheet>
   </div>
 </template>
 
@@ -223,6 +272,13 @@ import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Link, Paperclip, MagicStick } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import { useResponsive } from '@/composables/useResponsive'
+// v6.1 弹窗减负：重表单走全屏子页，轻内容走底部动作面板，删除确认用 actionConfirm（简历相关弹窗保持原样）
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+import ActionSheet from '@/components/common/ActionSheet.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import {
   getProjects, createProject, updateProject, deleteProject,
   type StudentProject,
@@ -274,18 +330,38 @@ async function refreshAll() {
 }
 onMounted(refreshAll)
 
+// 下拉刷新（移动端）：复用 refreshAll 重拉项目 / 证书 / 简历，桌面端不响应手势
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+
 // ---------- 项目 ----------
 const projectDialogVisible = ref(false)
 const savingProject = ref(false)
 const projectForm = reactive<any>({
   id: null, project_name: '', my_role: '', tech_stack: '', start_date: '', end_date: null,
   is_team: false, team_members: '', project_link: '', attachment_url: '', description: '',
+  images: [] as string[],
 })
+
+/** 作品墙封面：后端 cover_url 优先，其次第一张图 */
+function projectCover(p: StudentProject): string {
+  return p.cover_url || (p.images && p.images[0]) || ''
+}
+
+async function uploadProjectImage(file: File) {
+  if (projectForm.images.length >= 6) { ElMessage.warning('最多上传 6 张图片'); return false }
+  try {
+    const res = await uploadFile(file)
+    projectForm.images.push(res.url)
+    ElMessage.success('图片已上传')
+  } catch { ElMessage.error('图片上传失败') }
+  return false
+}
 
 function openProjectDialog(p?: StudentProject) {
   Object.assign(projectForm, p
-    ? { ...p }
-    : { id: null, project_name: '', my_role: '', tech_stack: '', start_date: '', end_date: null, is_team: false, team_members: '', project_link: '', attachment_url: '', description: '' })
+    ? { ...p, images: Array.isArray(p.images) ? [...p.images] : [] }
+    : { id: null, project_name: '', my_role: '', tech_stack: '', start_date: '', end_date: null, is_team: false, team_members: '', project_link: '', attachment_url: '', description: '', images: [] })
   projectDialogVisible.value = true
 }
 
@@ -310,6 +386,7 @@ async function saveProject() {
       project_link: projectForm.project_link || null,
       attachment_url: projectForm.attachment_url || null,
       description: projectForm.description || null,
+      images: projectForm.images?.length ? [...projectForm.images] : null,
     }
     if (projectForm.id) await updateProject(projectForm.id, payload)
     else await createProject(payload)
@@ -320,7 +397,8 @@ async function saveProject() {
 }
 
 async function removeProject(p: StudentProject) {
-  await ElMessageBox.confirm(`确定删除项目「${p.project_name}」吗？`, '删除确认', { type: 'warning' })
+  const ok = await actionConfirm(`确定删除项目「${p.project_name}」吗？`, '删除确认', { danger: true, confirmButtonText: '删除' })
+  if (!ok) return
   await deleteProject(p.id)
   ElMessage.success('已删除')
   await refreshAll()
@@ -373,7 +451,8 @@ async function saveCert() {
 }
 
 async function removeCert(c: Certificate) {
-  await ElMessageBox.confirm(`确定删除证书「${c.title}」吗？`, '删除确认', { type: 'warning' })
+  const ok = await actionConfirm(`确定删除证书「${c.title}」吗？`, '删除确认', { danger: true, confirmButtonText: '删除' })
+  if (!ok) return
   await deleteCertificate(c.id)
   ElMessage.success('已删除')
   await refreshAll()
@@ -482,6 +561,8 @@ function copyToProjectForm() {
     z-index: 1500;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+    overscroll-behavior-y: contain;
   }
   .portfolio-page > .tui-appbar {
     position: sticky;
@@ -574,6 +655,34 @@ function copyToProjectForm() {
 .uploading-tip { font-size: 12px; color: #999; }
 .cert-upload-preview { width: 80px; height: 56px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06); }
 
+/* 项目多图上传（编辑弹窗，桌面/移动共用） */
+.img-upload-wrap { width: 100%; }
+.img-upload-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.img-thumb { position: relative; width: 72px; height: 54px; }
+.img-thumb-img { width: 100%; height: 100%; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.08); }
+.img-thumb-del {
+  position: absolute; top: -6px; right: -6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 0; background: rgba(0, 0, 0, 0.55); color: #fff;
+  font-size: 10px; line-height: 18px; padding: 0; cursor: pointer;
+}
+.img-thumb-cover {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: rgba(31, 122, 77, 0.85); color: #fff;
+  font-size: 9px; line-height: 15px; text-align: center;
+  border-radius: 0 0 8px 8px;
+}
+.img-add-btn {
+  width: 72px; height: 54px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px dashed #c0c4cc; border-radius: 8px;
+  background: #fafafa; color: #909399; cursor: pointer;
+}
+.img-upload-hint { margin: 6px 0 0; font-size: 11px; color: #999; }
+
+/* 作品墙封面（仅移动端渲染，桌面隐藏） */
+.project-cover { display: none; }
+
 /* AI 建议 */
 .ai-tip { font-size: 12px; color: #999; margin-bottom: 12px; line-height: 1.6; }
 .ai-result { margin-top: 14px; }
@@ -642,110 +751,73 @@ function copyToProjectForm() {
     height: auto;
   }
 
-  /* 仓库卡 */
-  .portfolio-page .project-card {
-    background: var(--sp-surface, #fff);
-    border: 1px solid #e4e7eb;
-    border-radius: 12px;
-    box-shadow: none;
-    padding: 12px 14px 13px;
-    margin: 0 0 8px;
+  /* ===== Behance 风作品墙：两列封面网格，标题压在封面底部渐变上 ===== */
+  .portfolio-page .projects-wall {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 9px;
   }
-  .portfolio-page .project-head {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
+  .portfolio-page .project-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
     margin: 0;
   }
-  .portfolio-page .project-title {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #0969da;
-    line-height: 20px;
+  /* 桌面列表卡内容整体让位给封面 */
+  .portfolio-page .project-card > .project-head,
+  .portfolio-page .project-card > .project-meta,
+  .portfolio-page .project-card > .project-tags,
+  .portfolio-page .project-card > .project-desc,
+  .portfolio-page .project-card > .project-links { display: none; }
+
+  .portfolio-page .project-cover {
+    display: block;
+    position: relative;
+    aspect-ratio: 4 / 5;
+    border-radius: 14px;
     overflow: hidden;
-    text-overflow: ellipsis;
+    background: #eef1f4;
   }
-  /* 空心 repo 圆点（GitHub 仓库图标简化） */
-  .portfolio-page .project-title::before {
-    content: '';
-    width: 12px; height: 12px;
-    flex: none;
-    border: 1.5px solid #9aa0a8;
-    border-radius: 50%;
+  .portfolio-page .project-cover-img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .portfolio-page .project-cover-img :deep(img) { width: 100%; height: 100%; object-fit: cover; }
+  /* 无图项目：同比例浅绿渐变 + 首字占位，保证墙面对齐 */
+  .portfolio-page .project-cover-fallback {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #e3f1ea 0%, #c9e4d7 100%);
   }
-  .portfolio-page .project-title .el-tag {
-    font-size: 10px;
-    height: 16px;
-    line-height: 14px;
-    padding: 0 5px;
-    border-radius: 4px;
-    background: #eef2f6;
-    border-color: transparent;
-    color: #5b6472;
-    font-weight: 400;
+  .portfolio-page .project-cover-fallback span { font-size: 30px; font-weight: 700; color: rgba(31, 122, 77, 0.45); }
+  .portfolio-page .project-cover-grad {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 46%;
+    background: linear-gradient(180deg, rgba(10, 14, 12, 0) 0%, rgba(10, 14, 12, 0.62) 100%);
   }
-  /* 编辑/删除收起为轻量文字，靠右 */
-  .portfolio-page .project-actions { flex: none; display: flex; gap: 2px; }
-  .portfolio-page .project-actions .el-button {
-    font-size: 11.5px;
-    padding: 0 4px;
-    height: 20px;
+  .portfolio-page .project-cover-badge {
+    position: absolute; top: 8px; left: 8px;
+    padding: 2px 7px; border-radius: 999px;
+    background: rgba(12, 16, 14, 0.55); color: #fff;
+    font-size: 10px; line-height: 14px;
+    backdrop-filter: blur(4px);
   }
-
-  .portfolio-page .project-desc {
-    margin: 6px 0 0;
-    font-size: 12px;
-    line-height: 1.55;
-    color: #6a737d;
+  .portfolio-page .project-cover-txt { position: absolute; left: 10px; right: 10px; bottom: 9px; color: #fff; }
+  .portfolio-page .project-cover-txt b {
+    display: block; font-size: 12.5px; font-weight: 600; line-height: 17px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-
-  /* 元信息行：语言点 + 技术栈，仿 GitHub repo meta */
-  .portfolio-page .project-tags {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 9px;
+  .portfolio-page .project-cover-txt i {
+    display: block; margin-top: 2px; font-style: normal; font-size: 10px; line-height: 14px;
+    color: rgba(255, 255, 255, 0.78);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .portfolio-page .project-tags::before {
-    content: '';
-    width: 9px; height: 9px;
-    border-radius: 50%;
-    background: #3178c6;
-    flex: none;
+  .portfolio-page .project-cover-acts { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
+  .portfolio-page .project-cover-acts button {
+    padding: 3px 8px;
+    border: 0; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92); color: #1f7a4d;
+    font-size: 10.5px; font-weight: 600; line-height: 14px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
-  .portfolio-page .project-tags .tag-item {
-    border: 0;
-    background: transparent;
-    padding: 0;
-    height: auto;
-    font-size: 11px;
-    color: #6a737d;
-  }
-  .portfolio-page .project-tags .tag-item + .tag-item::before {
-    content: '·';
-    margin-right: 8px;
-    color: #c9ccd2;
-  }
-
-  /* 时间/角色行并入元信息行（压缩为单行灰字） */
-  .portfolio-page .project-meta {
-    display: flex;
-    gap: 10px;
-    margin: 6px 0 0;
-    font-size: 10.5px;
-    color: #9aa0a8;
-    line-height: 15px;
-  }
-  .portfolio-page .project-meta .meta-item { margin: 0; }
-
-  .portfolio-page .project-links { margin-top: 8px; }
-  .portfolio-page .project-links .el-link { font-size: 11.5px; }
+  .portfolio-page .project-cover-acts button:active { opacity: 0.75; }
 
   /* 证书卡：同语言，标题不用蓝色（非仓库） */
   .portfolio-page .cert-card {
@@ -759,14 +831,8 @@ function copyToProjectForm() {
   .portfolio-page .cert-title { font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); }
   .portfolio-page .cert-meta { margin-top: 5px; font-size: 11px; color: #9aa0a8; }
 
-  /* 简历：极简行 */
-  .portfolio-page .resume-card,
-  .portfolio-page .resume-item {
-    background: var(--sp-surface, #fff);
-    border: 1px solid #e4e7eb;
-    border-radius: 12px;
-    box-shadow: none;
-  }
+  /* 简历管理已抽至「我的资料」页（ProfilePage），移动端整块隐藏 */
+  .portfolio-page .card.resume-section { display: none; }
 
   .portfolio-page .empty-tip {
     padding: 16px 2px;

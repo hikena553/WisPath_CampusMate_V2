@@ -35,7 +35,13 @@
     <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 =====
          只有本块参与过渡（覆盖式：从右滑入 / 原路向右滑出），主页在 Transition 之外不动。 -->
     <Transition :name="subpageTransitionName" :duration="subpageTransitionName ? 320 : undefined">
-    <div v-if="!isMobile || activeTab !== 'home'" key="content" class="content-row" @scroll.passive="onSubpageScroll">
+    <div v-if="!isMobile || activeTab !== 'home'" key="content" class="content-row"
+      @scroll.passive="onSubpageScroll"
+      @touchstart.passive="subPull.onStart"
+      @touchmove="subPull.onMove"
+      @touchend="subPull.onEnd"
+      @touchcancel="subPull.onCancel"
+    >
       <div class="content-main">
         <!-- ===== 移动端子页面：固定顶栏（Head） =====
              三个子页共用同一个顶栏，高度恒为 48px 且 sticky 吸顶 —— 滚动时不再消失。
@@ -43,7 +49,7 @@
              top 变成 -592（整条滚出视口）。现在 .content-row 仍是滚动容器，
              顶栏改为 sticky 后贴在它的顶部；内容区自带 8px 上下留白也一并交给滚动区。
              左右两个 .sp-side 等宽，保证标题真正居中（而不是被右侧占位挤偏）。
-             进入页面后随滚动收起副标题，48px 不变 —— 高度恒定是无障碍要求（避免布局跳动）。 -->
+             顶栏只保留主标题，高度恒为 48px（避免布局跳动）。 -->
         <div v-if="isMobile" class="subpage-bar" :class="{ 'is-scrolled': subpageScrolled }">
           <div class="sp-side sp-left">
             <button class="sp-back" type="button" aria-label="返回主页" @click="backToHome">
@@ -51,14 +57,12 @@
             </button>
           </div>
           <div class="sp-title-wrap">
-            <span v-if="subPageAccent" class="sp-dot" :style="{ background: subPageAccent }" aria-hidden="true"></span>
-            <span class="sp-txt">
-              <span class="sp-title">{{ subPageTitle }}</span>
-              <span v-if="subPageSub" class="sp-sub">{{ subPageSub }}</span>
-            </span>
+            <span class="sp-title">{{ subPageTitle }}</span>
           </div>
           <div class="sp-side sp-right"></div>
         </div>
+        <!-- 子页下拉刷新：指示器放在吸顶栏之后，顶栏保持不动，其下内容整体下移 -->
+        <PullRefreshIndicator v-if="isMobile" :indicator-style="subPull.indicatorStyle" :active="subPull.active" />
         <Transition name="tab-fade" mode="out-in">
         <div v-if="activeTab === 'schedule'" key="schedule" class="schedule-view">
           <div v-if="!scheduleReady" class="loading-box">
@@ -93,7 +97,7 @@
                       <thead>
                         <tr>
                           <th>节次</th>
-                          <th v-for="d in visibleDays" :key="d" :class="{ 'th-today': isTodayCol(d) }">{{ d }}</th>
+                          <th v-for="d in visibleDays" :key="d" :class="{ 'th-today': isTodayCol(d), 'th-weekend': isWeekendCol(d) }">{{ d }}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -103,8 +107,8 @@
                             <div class="period-time">{{ periodTimeLabel(row.period) }}</div>
                           </td>
                           <template v-for="(cell, ci) in row.cells" :key="ci">
-                            <td v-if="cell.empty" :class="{ 'td-today': isTodayCol(cell.day) }"></td>
-                            <td v-else :rowspan="cell.rowspan" :class="['cell-filled', { 'td-today': isTodayCol(cell.day) }]">
+                            <td v-if="cell.empty" :class="{ 'td-today': isTodayCol(cell.day), 'td-weekend': isWeekendCol(cell.day) }"></td>
+                            <td v-else :rowspan="cell.rowspan" :class="['cell-filled', { 'td-today': isTodayCol(cell.day), 'td-weekend': isWeekendCol(cell.day) }]">
                               <div class="schedule-course" :class="{ 'course-today': isTodayCol(cell.day) }" :style="{ borderLeftColor: courseColor(cell.course.name).slice(0,7), background: courseCellBg(cell.course.name, cell.day) }"
                                 @mouseenter="onCourseEnter(cell.course, $event)" @mouseleave="onCourseLeave" @click="onCourseClick(cell.course, $event)">
                                 <div class="course-name">{{ cell.course.name }}</div>
@@ -153,6 +157,20 @@
           <!-- v5：结论优先 hero（仿 Apple Health 高亮摘要），图表压缩成辅助 -->
           <div class="gr-hero">
             <p class="gr-hero-big">绩点 <b>{{ gradeAnalysis.stats.avg_gpa || '--' }}</b> · {{ gradeAnalysis.stats.gpa_rank ? `排名第 ${gradeAnalysis.stats.gpa_rank}` : '暂无排名' }}<span class="gr-hero-of"> / {{ gradeAnalysis.stats.total_students }} 人</span></p>
+            <!-- v8 移动端（对齐 grades-1 版式）：一行小字 + 一条迷你走势，不再用三枚灰格子 -->
+            <p v-if="isMobile" class="gr-inline-stats">
+              <span><b>{{ gradeAnalysis.stats.total_courses || '--' }}</b> 门</span>
+              <span>均分 <b>{{ gradeAnalysis.stats.avg_score || '--' }}</b></span>
+              <span>总学分 <b>{{ gradeAnalysis.stats.total_credits || '--' }}</b></span>
+            </p>
+            <div v-if="isMobile && gradeAnalysis.semester_gpa.length > 1" class="gr-spark-wrap">
+              <v-chart :option="sparkOption" class="gr-spark" autoresize />
+              <div class="gr-spark-foot">
+                <span>{{ shortSem(gradeAnalysis.semester_gpa[0]?.semester || '') }}</span>
+                <span>学期绩点走势</span>
+                <span>{{ shortSem(gradeAnalysis.semester_gpa[gradeAnalysis.semester_gpa.length - 1]?.semester || '') }}</span>
+              </div>
+            </div>
             <p class="gr-hero-sub">均分 {{ gradeAnalysis.stats.avg_score || '--' }} · 总学分 {{ gradeAnalysis.stats.total_credits || '--' }} · 数据详见下方明细</p>
           </div>
           <!-- 核心指标 -->
@@ -178,8 +196,8 @@
             </div>
           </div>
 
-          <!-- 成绩趋势 -->
-          <div class="analytics-card">
+          <!-- 成绩趋势：桌面保留；移动端走势已压进 hero，不再占一张卡 -->
+          <div v-if="!isMobile" class="analytics-card trend-card">
             <div class="analytics-head">
               <span class="head-bar"></span>
               <span class="head-title">成绩趋势</span>
@@ -198,10 +216,25 @@
                 <el-empty v-else description="暂无数据" :image-size="48" />
               </div>
             </div>
+            <!-- v7 移动端：分数段由「第 2 张柱状图」压成一条分段进度条，
+                 同样的信息只占 1/4 高度（图表够用就好，不为每类数据各开一张图） -->
+            <div v-if="isMobile && gradeAnalysis.score_distribution.length" class="gr-dist">
+              <div class="gr-dist-bar" aria-hidden="true">
+                <span
+                  v-for="d in gradeAnalysis.score_distribution" :key="'gs' + d.range"
+                  :style="{ flexGrow: d.count || 0.0001, background: distSegColor(d.range) }"
+                ></span>
+              </div>
+              <div class="gr-dist-legend">
+                <span v-for="d in gradeAnalysis.score_distribution" :key="'gl' + d.range">
+                  <i :style="{ background: distSegColor(d.range) }"></i>{{ d.range }}<b>{{ d.count }}</b>
+                </span>
+              </div>
+            </div>
           </div>
 
           <!-- 课程画像（移动端默认折叠，点击标题行展开，带高度过渡动画） -->
-          <div class="analytics-card course-profile-card" :class="{ 'is-open': courseProfileOpen }">
+          <div v-if="!isMobile" class="analytics-card course-profile-card" :class="{ 'is-open': courseProfileOpen }">
             <div class="analytics-head" @click="toggleCourseProfile">
               <span class="head-bar"></span>
               <span class="head-title">课程画像</span>
@@ -289,8 +322,8 @@
                 </div>
                 <el-empty v-else description="该学期暂无成绩" :image-size="48" />
 
-                <!-- 全部成绩弹窗 -->
-                <el-dialog v-model="allGradesVisible" title="全部成绩明细" width="900px" top="6vh">
+                <!-- 全部成绩弹窗（移动端=全屏子页 / 桌面端=方案A弹窗，下同） -->
+                <ResponsivePopup v-model="allGradesVisible" title="全部成绩明细" width="900px" top="6vh">
                   <div class="grade-grid grade-grid-all">
                     <div v-for="g in gradesBySem[selectedSem]" :key="'a-' + g.id" class="grade-card" :class="scoreLevel(g.score)">
                       <div class="gc-top">
@@ -306,7 +339,7 @@
                   <template #footer>
                     <el-button @click="allGradesVisible = false">关闭</el-button>
                   </template>
-                </el-dialog>
+                </ResponsivePopup>
               </div>
             </div>
             <div class="grades-side-col">
@@ -330,7 +363,7 @@
                 </div>
               </div>
               <!-- AI 学情智能分析（侧栏） -->
-              <div class="analytics-card side-ai-card">
+              <div v-if="!isMobile" class="analytics-card side-ai-card">
                 <div class="analytics-head">
                   <span class="head-bar"></span>
                   <span class="head-title">AI 学情分析</span>
@@ -376,50 +409,56 @@
               <span class="head-sub">设定学期绩点目标并跟踪达成情况</span>
             </div>
             <div class="analytics-body goal-list">
-              <!-- 移动端 v6：里程碑阶梯（抄 Duolingo 关卡进度 + Strava 目标）——
-                   把「距目标还差多少」拆成 4 级刻度，当前绩点落在哪一级、还差几步一目了然。
+              <!-- 移动端 v7：目标圆环（参考 Apple Fitness / Keep 目标卡）——
+                   环形达成度 + 当前/目标两项数字 + 一句差值结论，比刻度轨道更快读懂。
                    桌面端仍走下面的表格式 goal-item，结构不动。 -->
               <template v-if="isMobile">
                 <div
-                  v-for="(sem, idx) in semesters" :key="'gl-' + sem"
-                  class="gl-item" :class="{ 'is-current': idx === 0 }"
+                  v-for="(sem, idx) in semesters" :key="'gp-' + sem"
+                  class="gp-item" :class="{ 'is-current': idx === 0 }"
                 >
-                  <div class="gl-head">
-                    <span class="gl-sem">{{ semesterLabel(sem) }}</span>
-                    <span v-if="idx === 0" class="gl-badge">当前学期</span>
-                    <span v-else class="gl-badge is-past">{{ glDone(sem) ? '已达成' : '未达成' }}</span>
+                  <div class="gp-head">
+                    <span class="gp-sem">{{ semesterLabel(sem) }}</span>
+                    <span v-if="idx === 0" class="gp-badge">当前学期</span>
+                    <span v-else class="gp-badge is-past" :class="{ 'is-ok': glDone(sem) }">{{ glDone(sem) ? '已达成' : '未达成' }}</span>
                   </div>
 
-                  <template v-if="glTarget(sem) != null">
-                    <div class="gl-track">
-                      <span class="gl-rail" aria-hidden="true"></span>
-                      <span class="gl-fill" :style="{ width: glPct(sem) + '%' }" aria-hidden="true"></span>
-                      <span class="gl-mark" :style="{ left: glPct(sem) + '%' }" aria-hidden="true"></span>
-                      <div
-                        v-for="(n, ni) in glNodes(sem)" :key="ni"
-                        class="gl-node" :class="'is-' + n.state"
-                        :style="{ left: n.pos + '%' }"
-                      >
-                        <i></i>
-                        <b>{{ n.value.toFixed(2) }}</b>
+                  <div class="gp-body">
+                    <div class="gp-ring" :class="{ 'is-empty': glTarget(sem) == null, 'is-done': glDone(sem) }">
+                      <svg viewBox="0 0 76 76" class="gp-ring-svg" aria-hidden="true">
+                        <circle class="gp-ring-bg" cx="38" cy="38" r="31" />
+                        <circle class="gp-ring-fg" cx="38" cy="38" r="31"
+                          :stroke-dasharray="GP_CIRC"
+                          :stroke-dashoffset="GP_CIRC - GP_CIRC * glRate(sem) / 100"
+                          transform="rotate(-90 38 38)" />
+                      </svg>
+                      <div class="gp-ring-val">
+                        <b>{{ glRateText(sem) }}</b>
+                        <span>达成度</span>
                       </div>
                     </div>
-                    <p class="gl-hint" :class="{ 'is-ok': glDone(sem) }">{{ glHint(sem) }}</p>
-                    <div v-if="idx === 0" class="gl-edit">
-                      <span class="gl-edit-label">调整目标</span>
-                      <el-input-number v-model="goalInputs[sem]" :min="0" :max="4" :step="0.1" :precision="2" size="small" controls-position="right" style="width:104px" />
-                      <el-button type="primary" size="small" @click="saveGoalForSem(sem)">保存</el-button>
+                    <div class="gp-figs">
+                      <div class="gp-fig">
+                        <span>当前绩点</span>
+                        <b>{{ glGpa(sem) ? glGpa(sem).toFixed(2) : '--' }}</b>
+                      </div>
+                      <div class="gp-fig">
+                        <span>目标绩点</span>
+                        <b>{{ glTargetText(sem) }}</b>
+                      </div>
+                      <p class="gp-delta" :class="glDone(sem) ? 'is-ok' : 'is-todo'">{{ glDeltaText(sem) }}</p>
                     </div>
-                  </template>
+                  </div>
 
-                  <template v-else>
-                    <p class="gl-hint">还没有设定目标绩点</p>
-                    <div v-if="idx === 0" class="gl-edit">
-                      <span class="gl-edit-label">目标绩点</span>
-                      <el-input-number v-model="goalInputs[sem]" :min="0" :max="4" :step="0.1" :precision="2" size="small" controls-position="right" style="width:104px" />
-                      <el-button type="primary" size="small" @click="saveGoalForSem(sem)">保存</el-button>
+                  <div v-if="idx === 0" class="gp-edit">
+                    <span class="gp-edit-label">目标绩点</span>
+                    <div class="gp-stepper">
+                      <button type="button" aria-label="降低目标" @click="stepGoal(sem, -0.1)">−</button>
+                      <b>{{ (goalInputs[sem] ?? 3.5).toFixed(2) }}</b>
+                      <button type="button" aria-label="提高目标" @click="stepGoal(sem, 0.1)">+</button>
                     </div>
-                  </template>
+                    <button type="button" class="gp-save" @click="saveGoalForSem(sem)">保存</button>
+                  </div>
                 </div>
               </template>
               <template v-else>
@@ -465,8 +504,8 @@
             <img :src="siteMascot" :alt="siteName" draggable="false" />
           </div>
 
-          <!-- 移动端：AI 学情分析弹窗 -->
-          <el-dialog v-model="mascotDialogVisible" title="AI 学情分析" width="92%" top="6vh" class="mascot-ai-dialog">
+          <!-- 移动端：AI 学情分析（全屏子页承接） -->
+          <ResponsivePopup v-model="mascotDialogVisible" title="AI 学情分析" width="92%" top="6vh" class="mascot-ai-dialog">
             <div class="mascot-ai-head">
               <img :src="siteMascot" :alt="siteName" draggable="false" />
               <div class="mascot-ai-head-text">
@@ -505,7 +544,7 @@
             <template #footer>
               <el-button @click="mascotDialogVisible = false">关闭</el-button>
             </template>
-          </el-dialog>
+          </ResponsivePopup>
           </template>
 
         </div>
@@ -741,7 +780,7 @@
           </section>
 
           <!-- Dialogs -->
-          <el-dialog v-model="projectDialogVisible" :title="editingProject ? '编辑项目' : '添加项目'" width="500px">
+          <ResponsivePopup v-model="projectDialogVisible" :title="editingProject ? '编辑项目' : '添加项目'" width="500px">
             <el-form ref="projectFormRef" :model="projectForm" label-width="100px" :rules="projectRules">
               <el-form-item label="项目名称" prop="project_name"><el-input v-model="projectForm.project_name" placeholder="请输入项目名称，如：基于大数据的智慧校园平台" /></el-form-item>
               <el-row :gutter="20">
@@ -757,9 +796,9 @@
               <el-button @click="projectDialogVisible = false">取消</el-button>
               <el-button type="primary" @click="handleSaveProject">{{ editingProject ? '保存' : '添加' }}</el-button>
             </template>
-          </el-dialog>
+          </ResponsivePopup>
 
-          <el-dialog v-model="dialogVisible" :title="'添加成长记录 — ' + typeLabel(form.type)" width="600px" class="growth-dialog">
+          <ResponsivePopup v-model="dialogVisible" :title="'添加成长记录 — ' + typeLabel(form.type)" width="600px" class="growth-dialog">
             <el-form ref="growthFormRef" :model="form" label-width="100px" :rules="growthRules">
               <el-row :gutter="20">
                 <el-col :span="12">
@@ -820,10 +859,10 @@
               <el-button @click="dialogVisible = false">取消</el-button>
               <el-button type="primary" @click="handleAdd">确认添加</el-button>
             </template>
-          </el-dialog>
+          </ResponsivePopup>
 
           <!-- 查看全部成长记录 -->
-          <el-dialog v-model="allRecordsVisible" title="全部成长记录" width="680px" top="5vh">
+          <ResponsivePopup v-model="allRecordsVisible" title="全部成长记录" width="680px" top="5vh">
             <div class="all-records-scroll">
               <div v-for="r in growthRecords" :key="r.id" class="record-card">
                 <div class="record-left">
@@ -857,10 +896,10 @@
                 </div>
               </div>
             </div>
-          </el-dialog>
+          </ResponsivePopup>
 
-          <!-- 成长记录详情弹窗 -->
-          <el-dialog v-model="recordDetailVisible" :title="recordDetail?.title || '记录详情'" width="420px" top="8vh" class="record-detail-dialog">
+          <!-- 成长记录详情（小内容：移动端=底部动作面板 / 桌面端=方案A弹窗） -->
+          <ActionSheet v-model="recordDetailVisible" :title="recordDetail?.title || '记录详情'" width="420px" class="record-detail-dialog">
             <template v-if="recordDetail">
               <div class="rd-header">
                 <el-tag :type="typeTagType(recordDetail.type)" size="small" effect="dark" round>{{ typeLabel(recordDetail.type) }}</el-tag>
@@ -894,14 +933,14 @@
             <template #footer>
               <el-button @click="recordDetailVisible = false">关闭</el-button>
             </template>
-          </el-dialog>
+          </ActionSheet>
           </template>
 
         </div>
         </Transition>
 
-        <!-- 计算规则说明弹窗（独立于各页签，始终可触发） -->
-        <el-dialog v-model="formulaDialogVisible" :title="formulaDialogTitle" width="700px" top="6vh" class="formula-dialog">          <!-- GPA 计算规则 -->
+        <!-- 计算规则说明（小内容：移动端=底部动作面板 / 桌面端=方案A弹窗；独立于各页签，始终可触发） -->
+        <ActionSheet v-model="formulaDialogVisible" :title="formulaDialogTitle" width="700px" class="formula-dialog">          <!-- GPA 计算规则 -->
           <template v-if="formulaDialogType === 'gpa'">
             <div class="formula-tip">
               <el-icon><InfoFilled /></el-icon>
@@ -973,7 +1012,7 @@
           <template #footer>
             <el-button @click="formulaDialogVisible = false">关闭</el-button>
           </template>
-        </el-dialog>
+        </ActionSheet>
 
         <!-- ===== 请假服务子页（v3 新增）=====
             把原工作台的「请假申请 / 证明申请 / 项目申请」三个入口融合成一个子页，
@@ -1101,7 +1140,12 @@
              PlanView 以 embedded 模式渲染（隐藏自带顶栏与滚动容器），内容流进本页滚动区。
              独立 v-if 而非挂进 v-else-if 链：与 service 同理，链中间隔着 Transition 边界。 -->
         <div v-if="activeTab === 'plan'" key="plan" class="plan-view-wrap">
-          <PlanView embedded />
+          <PlanView ref="planRef" embedded />
+        </div>
+
+        <!-- ===== 自习室子页：番茄钟计时 + 今日/历史专注记录 ===== -->
+        <div v-if="activeTab === 'study'" key="study" class="study-view-wrap">
+          <StudyRoomPanel />
         </div>
 
         <!-- ===== AI 今日报告子页（v5）：心情 / 任务 / 已实现 / 天气 + 运势 =====
@@ -1109,10 +1153,22 @@
              LLM 只负责措辞与重点标注；报告中带重点标注的条目可一键转成学习计划。 -->
         <div v-if="activeTab === 'ai'" key="ai" class="ai-view">
           <div v-if="reportLoading && !dailyReport" class="report-loading">
-            <el-icon class="is-loading" :size="18"><Loading /></el-icon>
-            <div>
-              <p class="rl-title">正在生成今日报告…</p>
-              <p class="rl-sub">读取今日心情、任务、成长积累与实时天气</p>
+            <div class="rl-stage">
+              <span class="rl-ring rl-ring-outer"></span>
+              <span class="rl-ring rl-ring-inner"></span>
+              <span class="rl-spark s1"></span>
+              <span class="rl-spark s2"></span>
+              <span class="rl-spark s3"></span>
+              <div class="rl-mascot-wrap">
+                <span class="rl-shadow"></span>
+                <img :src="siteMascot" :alt="siteName" class="rl-mascot" draggable="false" />
+              </div>
+              <span class="rl-badge">AI</span>
+            </div>
+            <p class="rl-title">绵小城正在帮你整理今天</p>
+            <p class="rl-sub">{{ reportLoadingStep }}</p>
+            <div class="rl-progress" aria-hidden="true">
+              <i v-for="(_, i) in reportSteps" :key="i" :class="{ on: i <= reportStep }"></i>
             </div>
           </div>
 
@@ -1137,9 +1193,9 @@
                 </div>
               </div>
               <div class="rp-chips">
-                <span class="rp-chip" :style="{ '--chip-c': dailyReport.mood.color }">
-                  <span class="rp-chip-emoji">{{ dailyReport.mood.emoji }}</span>
-                  <template v-if="dailyReport.mood.from === 'none'">还没记录心情</template>
+                <span class="rp-chip" :style="{ '--chip-c': dailyReport.mood?.color || '#9aa0a8' }">
+                  <span class="rp-chip-emoji">{{ dailyReport.mood?.emoji || '🙂' }}</span>
+                  <template v-if="!dailyReport.mood || dailyReport.mood.from === 'none'">还没记录心情</template>
                   <template v-else-if="dailyReport.mood.from === 'last_night'">昨晚 · {{ dailyReport.mood.label }}</template>
                   <template v-else>今天 · {{ dailyReport.mood.label }}</template>
                 </span>
@@ -1187,7 +1243,7 @@
             <section class="rp-sec rp-suggest">
               <div class="rp-sec-head">
                 <span class="rp-sec-ico">🎯</span>
-                <h3 class="rp-sec-title">可以加入学习计划的建议</h3>
+                <h3 class="rp-sec-title">可以加入今天要做的建议</h3>
                 <span class="ai-sec-count">{{ reportSuggestions.length }} 条</span>
               </div>
               <ul v-if="reportSuggestions.length" class="ai-action-list">
@@ -1198,8 +1254,8 @@
                       <span v-if="a.when" class="ai-action-when">{{ a.when }}</span>{{ a.title }}
                     </p>
                     <p class="ai-action-content"><RichMarkText :text="a.content" /></p>
-                    <button v-if="!aiAdded[i]" type="button" class="ai-add-btn" @click="aiAddToPlan(a, i)">＋ 生成近期计划并加入学习计划</button>
-                    <span v-else class="ai-added">✓ 已加入学习计划</span>
+                    <button v-if="!aiAdded[i]" type="button" class="ai-add-btn" @click="aiAddToPlan(a, i)">＋ 加入今天要做</button>
+                    <span v-else class="ai-added">✓ 已加入今天要做</span>
                   </div>
                 </li>
               </ul>
@@ -1235,6 +1291,9 @@
       <div :class="['page-tab', { active: activeTab === 'plan' }]" @click="openSubPage('plan')">
         <el-icon><Aim /></el-icon> 学习计划
       </div>
+      <div :class="['page-tab', { active: activeTab === 'study' }]" @click="openSubPage('study')">
+        <el-icon><Timer /></el-icon> 自习室
+      </div>
       <div :class="['page-tab', { active: activeTab === 'ai' }]" @click="openSubPage('ai')">
         <el-icon><MagicStick /></el-icon> 今日报告
       </div>
@@ -1253,8 +1312,8 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
-import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, Plus, Tickets, Download } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, ElCollapseTransition } from 'element-plus'
+import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, Plus, Tickets, Download, Timer, Aim } from '@element-plus/icons-vue'
+import { ElMessage, ElCollapseTransition } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { LineChart, BarChart, PieChart, RadarChart } from 'echarts/charts'
@@ -1265,10 +1324,11 @@ import { useAuthStore } from '@/stores/auth'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { studentDataCache } from '@/utils/studentDataCache'
 import { useResponsive } from '@/composables/useResponsive'
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { getGrowthRecords, createGrowthRecord, getGrowthProfile, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
 import type { GrowthProfile, StudentProject, GrowthTagItem } from '@/api/growth'
-import { getStreak, createPlan } from '@/api/plan'
+import { getStreak, createQuickTask, getPlans, createTask } from '@/api/plan'
 import type { Streak } from '@/api/plan'
 import type { GrowthRecord } from '@/types'
 import { renderMarkdown } from '@/utils/markdown'
@@ -1279,8 +1339,14 @@ import UploadBtn from '@/components/upload/UploadBtn.vue'
 import RichMarkText from '@/components/common/RichMarkText.vue'
 import GrowthDashboard from '@/components/growth/GrowthDashboard.vue'
 import PlanView from '@/views/student/PlanView.vue'
+import StudyRoomPanel from '@/components/growth/StudyRoomPanel.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+// v6 弹窗重设计：移动端以全屏子页承接弹窗内容，桌面端保持 el-dialog（方案A 极简卡片样式）
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+// v6.1 弹窗减负：小内容走底部动作面板，确认类交互用 actionConfirm（移动端=底部面板 / 桌面端=ElMessageBox）
+import ActionSheet from '@/components/common/ActionSheet.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 
 use([LineChart, BarChart, PieChart, RadarChart, GridComponent, TooltipComponent, MarkLineComponent, LegendComponent, RadarComponent, CanvasRenderer])
 
@@ -1296,37 +1362,21 @@ const { siteMascot, siteName } = useSiteConfig()
 function goPortfolio() { router.push('/student/portfolio') }
 
 // ===== 视图状态：home=主页（移动端），schedule/grades/growth/service=子页面 =====
-const tabKeys = ['schedule', 'grades', 'growth', 'service', 'plan', 'ai'] as const
+const tabKeys = ['schedule', 'grades', 'growth', 'service', 'plan', 'study', 'ai'] as const
 const validInitTab = (route.query.tab as string) || ''
 const activeTab = ref<string>(
   (tabKeys as readonly string[]).includes(validInitTab)
     ? validInitTab
     : isMobile.value ? 'home' : 'schedule'
 )
+/** 子页标题：仅保留主标题，不再挂副标题与彩色圆点 */
 const subPageTitle = computed(() => {
-  const map: Record<string, string> = { schedule: '课程表', grades: '成绩分析', growth: '成长轨迹', service: '请假服务', plan: '学习计划', ai: '今日报告' }
+  const map: Record<string, string> = { schedule: '课程表', grades: '成绩分析', growth: '成长轨迹', service: '请假服务', plan: '学习计划', study: '自习室', ai: '今日报告' }
   return map[activeTab.value] || '学业中心'
 })
-/** 子页副标题：一句话说清这一页能做什么，滚动后自动收起，48px 高度不变 */
-const subPageSub = computed(() => {
-  const map: Record<string, string> = {
-    schedule: '本周课程 · 时间地点',
-    grades: '学期成绩 · 绩点趋势',
-    growth: '记录 · 画像 · 里程碑',
-    service: '请假 · 证明 · 项目',
-    plan: '目标 · 关卡 · 打卡',
-    ai: '近况分析 · 计划生成',
-  }
-  return map[activeTab.value] || ''
-})
-/** 模块识别色：只用于标题前的 6px 圆点（不铺色块） */
-const subPageAccent = computed(() => {
-  const map: Record<string, string> = {
-    schedule: '#b45309', grades: '#0f7a58', growth: '#1a4fd6',
-    service: '#3d4a57', plan: '#0369a1', ai: '#4f46e5',
-  }
-  return map[activeTab.value] || ''
-})
+
+// 学业中心的各功能子页属于二级页，打开时让出移动端底部悬浮导航
+useMobileSubPage(computed(() => isMobile.value && activeTab.value !== 'home'))
 
 
 
@@ -1400,14 +1450,38 @@ async function svSubmitProject() {
 const dailyReport = ref<DailyReport | null>(null)
 const reportLoading = ref(false)
 const aiAdded = ref<Record<number, boolean>>({})
-const reportSuggestions = computed(() => dailyReport.value?.suggestions ?? [])
+/** 通知类的主动发现动作只是「告知」，不能一键变任务：请假审批、上课提醒、里程碑通报等 */
+const NOTICE_TRIGGERS = new Set([
+  'leave_pending', 'leave_result', 'class_soon', 'class_today',
+  'notification', 'escalation', 'crisis_escalation',
+  'milestone_reached', 'prolonged_inactivity', 'growth_record_gap',
+])
+const reportSuggestions = computed(() =>
+  (dailyReport.value?.suggestions ?? []).filter(s => !NOTICE_TRIGGERS.has(s.trigger)),
+)
+
+// 加载动画文案：让等待过程像「绵小城」真的在一步步干活，而不是一个普通转圈
+const reportSteps = ['读取今天的打卡与心情', '盘点任务和成长积累', '结合实时天气', '排好今天的学习节奏', '把重点标出来']
+const reportStep = ref(0)
+const reportLoadingStep = computed(() => reportSteps[reportStep.value] ?? reportSteps[0])
+let reportStepTimer: ReturnType<typeof setInterval> | null = null
+watch(reportLoading, (busy) => {
+  if (reportStepTimer) { clearInterval(reportStepTimer); reportStepTimer = null }
+  reportStep.value = 0
+  if (!busy) return
+  reportStepTimer = setInterval(() => {
+    if (reportStep.value < reportSteps.length - 1) reportStep.value += 1
+  }, 1400)
+})
+onUnmounted(() => { if (reportStepTimer) clearInterval(reportStepTimer) })
 
 /** 加载报告；失败时保留旧内容，页面显示空态 */
 async function loadAiFeed() {
   reportLoading.value = true
   try {
     const data = await fetchDailyReport()
-    if (data) {
+    // 接口异常时可能返回 [] / {}，直接塞进来会让整页读 fortune.level 崩溃，先做结构校验
+    if (data && !Array.isArray(data) && data.fortune && data.date) {
       dailyReport.value = data
       aiAdded.value = {}
     }
@@ -1452,15 +1526,25 @@ function aiFmtDate(d: Date) {
 
 type ReportSuggestion = DailyReport['suggestions'][number]
 
-/** 把一条建议转成 7 天近期计划，写入学习计划 */
+/** 把一条建议变成「今天要做」的一条任务（不再新建空计划） */
 async function aiAddToPlan(a: ReportSuggestion, i: number) {
-  const start = new Date()
-  const end = new Date(Date.now() + 7 * 86400000)
+  const due = aiFmtDate(new Date())
   try {
-    await createPlan({ title: a.title, objective: a.content, stage: null, start_date: aiFmtDate(start), end_date: aiFmtDate(end), goal_id: null })
-    aiAdded.value = { ...aiAdded.value, [i]: true }
-    ElMessage.success('已生成近期计划并加入学习计划')
-  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '加入失败，请重试') }
+    await createQuickTask({ title: a.title, note: a.content, due_date: due })
+  } catch (e: any) {
+    // 后端尚未更新到 quick-task 时，退回到「挂到进行中计划」的普通任务，行为一致
+    try {
+      const plans = await getPlans('active')
+      const plan = plans[0]
+      if (!plan) throw new Error('no active plan')
+      await createTask({ plan_id: plan.id, title: a.title, description: a.content, due_date: due, priority: 'medium' })
+    } catch {
+      ElMessage.error(e?.response?.data?.detail || '加入失败，请重试')
+      return
+    }
+  }
+  aiAdded.value = { ...aiAdded.value, [i]: true }
+  ElMessage.success('已加入今天要做')
 }
 
 /** 去掉报告里的标注记号，导出为纯文本 */
@@ -1492,9 +1576,9 @@ function exportReport() {
     for (const item of sec.items) lines.push(`- ${stripReportMarks(item)}`)
   }
 
-  if (r.suggestions.length) {
+  if (reportSuggestions.value.length) {
     lines.push('', '## 学习计划建议')
-    for (const s of r.suggestions) {
+    for (const s of reportSuggestions.value) {
       lines.push(`- ${s.when ? `[${s.when}] ` : ''}${s.title}：${stripReportMarks(s.content)}`)
     }
   }
@@ -1554,7 +1638,7 @@ function onSubpageScroll(e: Event) {
 }
 
 // ===== 驾驶舱主页 ↔ 学业子页面：覆盖式滑入/滑出 =====
-// 用全局 .subpage（styles/subpage-transition.css，全站唯一实现）：子页从右滑入盖住主页，
+// 用全局 .subpage（styles/animations.css，全站唯一实现）：子页从右滑入盖住主页，
 // 返回时原路向右滑出。主页放在 <Transition> **之外**（见模板），所以它全程静止、
 // 不会有任何动画；只有子页在动 —— 与工作台子页、校园资讯阅读器结构一致。
 const subpageTransitionName = computed(() => (isMobile.value ? 'subpage' : ''))
@@ -1566,6 +1650,7 @@ function resetPageScroll() { if (pageEl.value) pageEl.value.scrollTop = 0 }
 
 // 下拉刷新（移动端）：手势逻辑与吉祥物指示器与教师端首页 / 学生工作台共用同一模块
 const dashboardRef = ref<InstanceType<typeof GrowthDashboard> | null>(null)
+const planRef = ref<InstanceType<typeof PlanView> | null>(null)
 
 function openSubPage(tab: string) {
   if (activeTab.value === tab) return
@@ -1576,6 +1661,8 @@ function backToHome() {
   if (activeTab.value === 'home') return
   if (isMobile.value) resetPageScroll()
   activeTab.value = 'home'
+  // 回首页时同步一次速览数据（待办/心情/打卡可能在子页里刚变过）
+  if (isMobile.value) void dashboardRef.value?.refresh()
 }
 
 // ===== 移动端：课程画像折叠（默认收起，点击标题行展开；桌面端恒为展开） =====
@@ -1595,7 +1682,9 @@ const gradeAnalysis = ref<GradeAnalysis>({
 async function loadGradeAnalysis() {
   try {
     const data = await getGradeAnalysis(auth.user?.id || 0)
-    gradeAnalysis.value = data
+    /* 兜底合并：接口异常返回空对象/数组时直接赋值会让 gradeAnalysis.stats 变成 undefined，
+       模板里任何 stats.avg_gpa 都会抛错并让整页白屏。这里用默认值兜住缺字段的部分。 */
+    gradeAnalysis.value = { ...gradeAnalysis.value, ...(data && !Array.isArray(data) ? data : {}) }
   } catch (error) {
     console.error('加载成绩分析失败:', error)
   }
@@ -1619,8 +1708,45 @@ function distColor(range: string) {
   return '#dce9e3'
 }
 function barWidth(s?: number) { return Math.max(6, Math.min(100, s ?? 0)) + '%' }
+/** 分数段分段条用色：沿用图表同一套青绿梯度，只有「不及格」段换成告警赭红。 */
+function distSegColor(range: string) {
+  if (range === '0-59' || range === '不及格') return '#c2410c'
+  return distColor(range)
+}
 /* v3：成绩页三个图表全部改为「无轴 + 值标图上」的迷你样式，
    chartAxis / chartSplitLine 两个旧常量已无引用，删除以免 vue-tsc 报 TS6133。 */
+
+/** hero 里的迷你走势：无轴、无网格，只留一条线与数据点（够看清楚「在涨」即可） */
+const sparkOption = computed(() => {
+  const rows = gradeAnalysis.value.semester_gpa
+  const gpas = rows.map(s => Number(s.gpa) || 0)
+  const hi = Math.max(...gpas, 0.01)
+  const lo = Math.min(...gpas, hi - 0.01)
+  const pad = Math.max(0.04, (hi - lo) * 0.7)
+  return {
+    /* 左右各留 22：首尾两个点的数值标签会画到网格外，不留就被 canvas 裁成 "i.21 / 3.4:" */
+    grid: { left: 22, right: 22, top: 14, bottom: 6 },
+    xAxis: { type: 'category', boundaryGap: false, show: false, data: rows.map(s => s.semester) },
+    yAxis: { type: 'value', show: false, min: lo - pad, max: hi + pad },
+    series: [{
+      type: 'line', smooth: 0.4, data: gpas, clip: false,
+      symbol: 'circle', symbolSize: 6,
+      itemStyle: { color: '#0f7a58', borderColor: '#fff', borderWidth: 1.5 },
+      lineStyle: { width: 2, color: '#0f7a58' },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{ offset: 0, color: 'rgba(15,122,88,.16)' }, { offset: 1, color: 'rgba(15,122,88,0)' }],
+        },
+      },
+      label: {
+        show: true, position: 'top', distance: 4,
+        fontSize: 10, color: '#0f7a58',
+        formatter: (pt: any) => Number(pt.value).toFixed(2),
+      },
+    }],
+  }
+})
 
 const semGpaOption = computed(() => {
   const gpas = gradeAnalysis.value.semester_gpa.map(s => s.gpa)
@@ -1728,18 +1854,14 @@ const maxPeriod = 12
 const dayMap: Record<string, number> = { '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 7 }
 
 /**
- * 本周实际要显示的星期列。桌面端固定周一~周日（信息密度低，7 列更利于横向对照）；
- * 移动端 375px 下 7 列会把每列压到 ~41px，课程名和教室读不出来，
- * 因此无课的周末列不占位：只要周六或周日任一有课就两天一起显示，避免出现"周五 + 周日"这种断列。
+ * 本周要显示的星期列。桌面端与移动端都固定周一~周日（7 列全显示）。
+ * 旧版移动端会在「周六周日都没课」时把两列砍掉——用户看不到周末，就没法确认
+ * 周末到底有没有课（也会误以为课表坏了）。现在改成始终 7 列：
+ * 390px 下节次列收到 40px，每天仍分到 ~46px，课程名 4 字可整行放下，
+ * 周末列加一层极浅灰底把它和「工作日」区分开。
  */
-const visibleDays = computed(() => {
-  if (!isMobile.value) return days
-  const wk = currentWeek.value
-  const hasWeekend = courses.value.some(c =>
-    (c.day_of_week === 6 || c.day_of_week === 7) && wk >= c.week_start && wk <= c.week_end,
-  )
-  return hasWeekend ? days : days.slice(0, 5)
-})
+const visibleDays = computed(() => days)
+const isWeekendCol = (d: string) => d === '周六' || d === '周日'
 
 const courseGrid = computed(() => {
   const wk = currentWeek.value
@@ -2046,9 +2168,9 @@ function scoreLevel(s: number) { if (s >= 90) return 'level-a'; if (s >= 80) ret
 function avgColor(s?: number) { if (!s) return '#6b737c'; if (s >= 90) return '#0a5b41'; if (s >= 80) return '#0f7a58'; if (s >= 70) return '#4a5a54'; return '#c2410c' }
 function formatDate(d: string) { if (!d) return ''; const parts = d.split('-'); return parts[1] + '/' + parts[2] }
 function loadGoals() { try { const raw = localStorage.getItem('student_sem_goals'); if (raw) goals.value = JSON.parse(raw) } catch { goals.value = {} } }
-/* ===== 目标计划 v6（移动端）：4 级里程碑 =====
-   刻度取「目标 -0.3 / -0.2 / -0.1 / 目标」，与用户设的目标绑定（改目标即刻重排）；
-   实际绩点用一条填充轨 + 游标标出，节点按「已过 / 当前待过 / 未到」三态着色。 */
+/* ===== 目标计划 v7（移动端）：目标圆环 =====
+   达成度 = 实际绩点 / 目标绩点（上限 100%），比 v6 的 4 级刻度更直观；
+   未设目标或暂无绩点时环为空态灰，并给出对应提示。 */
 function glGpa(sem: string): number {
   return parseFloat(String(semStats.value[sem]?.gpa ?? '')) || 0
 }
@@ -2056,45 +2178,37 @@ function glTarget(sem: string): number | null {
   const t = goals.value[sem]
   return t == null ? null : Number(t)
 }
-function glNodes(sem: string) {
-  const target = glTarget(sem)
-  if (target == null) return [] as { value: number; pos: number; state: string }[]
+function glRate(sem: string): number {
+  const t = glTarget(sem)
   const gpa = glGpa(sem)
-  const vals = [-0.3, -0.2, -0.1, 0].map(d => Math.max(0, +(target + d).toFixed(2)))
-  let nextFound = false
-  return vals.map((v, i) => {
-    let state = 'todo'
-    if (gpa > 0 && gpa >= v) state = 'done'
-    else if (!nextFound) { state = 'next'; nextFound = true }
-    return { value: v, pos: (i / (vals.length - 1)) * 100, state }
-  })
+  if (t == null || t <= 0 || gpa <= 0) return 0
+  return Math.min(100, Math.round((gpa / t) * 100))
 }
-function glPct(sem: string): number {
-  const target = glTarget(sem)
-  if (target == null) return 0
-  const lo = Math.max(0, +(target - 0.3).toFixed(2))
+function glRateText(sem: string): string {
+  return (glTarget(sem) == null || glGpa(sem) <= 0) ? '--' : `${glRate(sem)}%`
+}
+function glTargetText(sem: string): string {
+  const t = glTarget(sem)
+  return t == null ? '未设定' : t.toFixed(2)
+}
+function glDeltaText(sem: string): string {
+  const t = glTarget(sem)
+  if (t == null) return '还没有设定目标绩点'
   const gpa = glGpa(sem)
-  if (target <= lo) return gpa >= target ? 100 : 0
-  if (gpa <= lo) return 0
-  return Math.min(100, Math.round(((gpa - lo) / (target - lo)) * 100))
+  if (!gpa) return '暂无绩点数据'
+  if (gpa >= t) return `已达成，超出 ${(gpa - t).toFixed(2)}`
+  return `还差 ${(t - gpa).toFixed(2)} 达标`
 }
 function glDone(sem: string): boolean {
   const t = glTarget(sem)
   return t != null && glGpa(sem) >= t
 }
-function glHint(sem: string): string {
-  const t = glTarget(sem)
-  if (t == null) return ''
-  const gpa = glGpa(sem)
-  if (!gpa) return '还没有绩点数据'
-  if (gpa >= t) return `已达成目标，超出 ${(gpa - t).toFixed(2)}`
-  const nodes = glNodes(sem)
-  const done = nodes.filter(n => n.state === 'done').length
-  const next = nodes.find(n => n.state === 'next')
-  const gap = (t - gpa).toFixed(2)
-  if (!next) return `差 ${gap} 达成 ${t.toFixed(2)}`
-  return `已过 ${done}/4 级 · 再涨 ${(next.value - gpa).toFixed(2)} 到 ${next.value.toFixed(2)}，差 ${gap} 达标`
+function stepGoal(sem: string, delta: number) {
+  const cur = Number(goalInputs.value[sem] ?? 3.5)
+  goalInputs.value[sem] = Math.min(4, Math.max(0, Math.round((cur + delta) * 10) / 10))
 }
+/** 目标环周长（r=31），供 SVG stroke-dasharray 使用 */
+const GP_CIRC = 2 * Math.PI * 31
 function saveGoalForSem(sem: string) { const val = goalInputs.value[sem]; if (val == null) return; goals.value[sem] = val; localStorage.setItem('student_sem_goals', JSON.stringify(goals.value)); ElMessage.success(`${sem} 目标已保存`) }
 
 // ===== 成长轨迹 =====
@@ -2165,7 +2279,7 @@ function toggleTagEvidence(key: string) { activeTagKey.value = activeTagKey.valu
 function openProjectDialog() { editingProject.value = null; projectForm.value = { project_name: '', start_date: '', end_date: null, is_team: false, team_members: '', attachment_url: '' }; projectDialogVisible.value = true }
 function editProject(p: StudentProject) { editingProject.value = p; projectForm.value = { ...p }; projectDialogVisible.value = true }
 async function handleSaveProject() { if (projectFormRef.value) { try { await projectFormRef.value.validate() } catch { return } } try { if (editingProject.value) { await updateProject(editingProject.value.id, projectForm.value as any); ElMessage.success('项目已更新') } else { await createProject(projectForm.value as any); ElMessage.success('项目已添加') } projectDialogVisible.value = false; projects.value = await getProjects() } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '操作失败') } }
-async function handleDeleteProject(id: number) { try { await ElMessageBox.confirm('确定删除该项目？', '确认'); await deleteProject(id); ElMessage.success('已删除'); projects.value = await getProjects() } catch {} }
+async function handleDeleteProject(id: number) { try { const ok = await actionConfirm('确定删除该项目？', '确认', { danger: true, confirmButtonText: '删除' }); if (!ok) return; await deleteProject(id); ElMessage.success('已删除'); projects.value = await getProjects() } catch {} }
 function typeLabel(t: string) { const labels: Record<string, string> = { honor: '荣誉', competition: '竞赛', practice: '实践', paper: '论文', achievement: '成果' }; return labels[t] || t }
 function typeTagType(t: string) { const types: Record<string, string> = { honor: 'warning', competition: 'primary', practice: 'success', paper: 'danger', achievement: 'info' }; return types[t] || 'default' }
 function dotColor(t: string) { const colors: Record<string, string> = { honor: '#e6a23c', competition: '#409eff', practice: '#67c23a', paper: '#f56c6c', achievement: '#909399' }; return colors[t] || '#bbb' }
@@ -2512,14 +2626,16 @@ async function refreshAll() {
     scheduleReady.value = true
     computeWeekBase()
   }
-  if (activeTab.value === 'grades') {
+  const tab = activeTab.value
+  if (tab === 'grades') {
     const [gradeList, examList] = await Promise.all([
       getGrades().catch(() => [] as any),
       getExams().catch(() => [] as any),
+      loadGradeAnalysis(),
     ])
     grades.value = gradeList as Grade[]
     exams.value = examList as Exam[]
-  } else if (activeTab.value === 'growth') {
+  } else if (tab === 'growth') {
     const [p, recordList, projectList, streak] = await Promise.all([
       getGrowthProfile().catch(() => null),
       getGrowthRecords().catch(() => [] as any),
@@ -2530,13 +2646,20 @@ async function refreshAll() {
     growthRecords.value = recordList as any
     projects.value = projectList as any
     if (streak) planStreak.value = streak
-  } else {
+  } else if (tab === 'plan') {
+    await planRef.value?.refreshAll?.()
+  } else if (tab === 'service') {
+    await loadServiceRecords()
+  } else if (tab === 'home') {
     await dashboardRef.value?.refresh()
   }
+  // schedule：课程已在上方刷新；study / ai 无额外数据源
 }
 
-// 下拉刷新：桌面端不响应手势；指示器复用消息页的吉祥物起跳动画
-const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+// 下拉刷新：主页用根容器、子页用 .content-row 各自的滚动位置判定；
+// 两端共用同一套手势逻辑与吉祥物指示器（与教师端首页 / 消息页一致）
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value && activeTab.value === 'home' })
+const subPull = usePullRefresh(refreshAll, { enabled: () => isMobile.value && activeTab.value !== 'home' })
 
 /** 页签切换时补拉该页签的数据（每个页签只请求一次） */
 watch(activeTab, (tab) => {
@@ -3152,15 +3275,6 @@ watch(() => route.query.tab, (val) => {
 .sp-back:active { background: rgba(20, 23, 26, 0.06); transform: scale(0.94); }
 .sp-back:focus-visible { outline: 2px solid var(--sp-accent, #1a4fd6); outline-offset: 1px; }
 .sp-title-wrap { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 7px; }
-.sp-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.sp-txt { display: flex; flex-direction: column; align-items: center; min-width: 0; }
-.sp-sub {
-  font-size: 9.5px; line-height: 1.1; margin-top: 1px;
-  color: var(--sp-ink-3, #9aa0a8);
-  max-width: 168px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* 滚动后收起副标题，Head 高度恒为 48px（避免布局跳动） */
-.subpage-bar.is-scrolled .sp-sub { display: none; }
 .sp-title { font-size: 16px; font-weight: 500; color: var(--sp-ink, #14171a); line-height: 1.15; letter-spacing: 0.01em; white-space: nowrap; }
 
 /* ===== 页签切换动画 ===== */
@@ -3170,7 +3284,7 @@ watch(() => route.query.tab, (val) => {
 .tab-fade-leave-to { opacity: 0; transform: translateY(-8px) scale(.995); }
 
 /* ===== 驾驶舱主页 ↔ 学业子页面（我的学业三个入口）：覆盖式滑入/滑出 =====
-   动画实现已提取到 styles/subpage-transition.css 的 .subpage（全站唯一实现），本页无需再
+   动画实现已提取到 styles/animations.css 的 .subpage（全站唯一实现），本页无需再
    声明任何动画参数 —— 旧版的 --push-inset-t/--push-inset-x 是「传送带式」用来给
    离场页做内缩对齐的（离场页相对含 padding 的滚动容器 padding box 定位），
    新模型离场页用 inset:0 脱离文档流，不再需要这组变量，故一并移除。 */
@@ -3187,7 +3301,7 @@ watch(() => route.query.tab, (val) => {
 /* ===== 两栏布局 ===== */
 /* 覆盖式滑入时进场的是本容器，必须铺不透明底盖住下面的主页 ——
    （旧版由 animations.css 的 .push-enter-active 统一铺 #f5f6f7，统一到 .subpage 后
-   该职责回到调用方，见 subpage-transition.css 注释「滑动的元素必须不透明」）。
+   该职责回到调用方，见 animations.css 注释「滑动的元素必须不透明」）。
    桌面端不参与过渡，此背景同样无害。 */
 .content-row { display: flex; gap: 16px; flex: 1; min-height: 0; background: var(--dt-bg, #f5f6f7); }
 .content-main { flex: 1; min-width: 0; max-width: 1200px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
@@ -3844,21 +3958,29 @@ watch(() => route.query.tab, (val) => {
   .week-nav-btn { width: 40px; height: 40px; }
 
   /* ── 移动端课表 ──
-     周末无课时不渲染周六/周日两列（见 visibleDays，仅移动端生效），宽度全部给周一~周五：
-     375px 下每列从 ~41px 提升到 ~57px，课程名与教室才读得出来 */
-  /* v6：课表格子放大（56 → 76px），节次列 34 → 44px。
-     一格能完整容下「课程名 2~3 行 + 教室」，点到课程的概率也提高了。
-     整个表格随行数自然变长（8 节 ≈ 620px），滚动区本来就独立，不影响其他区块。 */
+     v7：周六周日**始终显示**（旧版无课就隐藏，用户以为课表缺列）。
+     390px 下：节次列 40px + 7 天 × ~46px = 366px，正好铺满，不用横向滚动；
+     周末列压一层极浅灰底，和周一~周五区分开。
+     v6 起格高 76px、课名字号 11.5px，一格能容下「课名 2~4 行 + 教室」。 */
+  /* v7 起 7 列常显，横向像素要省出来：卡片左右内边距 16 → 6，
+     表格可宽 354px（节次 40 + 7×44.9），课名一行能放 3 个字 */
+  .schedule-view .content-card { padding: 12px 6px 10px !important; }
+  .schedule-view .schedule-toolbar { padding: 0 8px 0; }
   .schedule-table thead th { padding: 10px 0; font-size: 12px; font-weight: 600; }
+  .schedule-table thead th.th-weekend { color: #8b929c; background: #f7f8f9; }
   .schedule-table td { height: 76px; }
+  .schedule-table td.td-weekend { background: rgba(15, 23, 42, .018); }
   .schedule-table td.cell-filled { padding: 3px; }
-  .schedule-table .period-cell, .schedule-table thead th:first-child { width: 44px !important; min-width: 44px; padding: 8px 2px; }
-  .schedule-table .period-cell .period-name { font-size: 10.5px; white-space: nowrap; letter-spacing: -.2px; }
-  .schedule-table .period-cell .period-time { font-size: 9.5px; margin-top: 1px; }
-  .schedule-course { padding: 5px 3px 4px; border-left-width: 3px; border-radius: 6px; justify-content: flex-start; }
-  .schedule-course .course-name { font-size: 11.5px; line-height: 1.28; margin-bottom: 2px; white-space: normal; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+  .schedule-table .period-cell, .schedule-table thead th:first-child { width: 40px !important; min-width: 40px; padding: 8px 1px; }
+  .schedule-table .period-cell .period-name { font-size: 10px; white-space: nowrap; letter-spacing: -.3px; }
+  .schedule-table .period-cell .period-time { font-size: 9px; margin-top: 1px; letter-spacing: -.2px; }
+  .schedule-course { padding: 5px 2px 4px; border-left-width: 3px; border-radius: 6px; justify-content: flex-start; }
+  .schedule-course .course-name { font-size: 11px; line-height: 1.22; letter-spacing: -.2px; margin-bottom: 2px; white-space: normal; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
   .schedule-course .course-teacher { display: none; }
-  .schedule-course .course-loc { font-size: 10px; line-height: 1.2; opacity: .78; }
+  .schedule-course .course-loc {
+    font-size: 9px; line-height: 1.2; letter-spacing: -.2px; opacity: .78;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
 
   /* ── 成绩分析 ──
      v3：四张彩色图标卡合并为一张卡内的 4 列指标（样式在文件前面的「子页通用骨架」块里）。
@@ -3909,8 +4031,7 @@ watch(() => route.query.tab, (val) => {
   .panel { flex: none; }
   .panel-divider { width: 100%; height: 1px; margin: 14px 12px; }
   /* 右下角绵小城（点击弹出 AI 学情分析） */
-  /* 底部是悬浮胶囊导航（贴底 12px、高 62px），浮标必须停在胶囊上沿之上 */
-  .grades-mascot { display: block; position: fixed; right: 12px; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
+  .grades-mascot { display: block; position: fixed; right: 12px; bottom: 68px; width: 64px; height: 64px; z-index: 50; cursor: pointer; animation: mascot-bob 3s ease-in-out infinite; }
   .grades-mascot:active { transform: scale(.92); }
   .grades-mascot img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.12)); pointer-events: none; }
   @keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
@@ -3967,10 +4088,53 @@ watch(() => route.query.tab, (val) => {
 /* ===== AI 今日报告子页（v5）：心情 / 任务 / 已实现 / 天气 + 运势 ===== */
 .ai-view { display: flex; flex-direction: column; padding-bottom: 20px; }
 
-/* 加载态：居中提示，避免骨架屏在移动端抖动 */
-.report-loading { display: flex; align-items: center; gap: 10px; padding: 44px 16px; color: #6d5df0; }
+/* 今日报告加载：绵小城站在轨道里一步步整理今天，替代通用转圈 */
+.report-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 16px 52px; text-align: center;
+}
+.rl-stage { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.rl-ring { position: absolute; border-radius: 50%; }
+.rl-ring-outer { inset: 0; border: 1px dashed rgba(99, 91, 201, 0.24); animation: rlSpin 9s linear infinite; }
+.rl-ring-inner {
+  inset: 17px; border: 1px solid rgba(20, 23, 26, 0.05);
+  background: radial-gradient(circle at 50% 44%, #f3f4fc 0%, #fafbfc 62%, rgba(250, 251, 252, 0) 74%);
+  animation: rlPulse 2.6s ease-in-out infinite;
+}
+.rl-mascot-wrap { position: relative; width: 72px; height: 72px; z-index: 2; animation: rlBob 2.2s ease-in-out infinite; }
+.rl-mascot { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(20, 23, 26, 0.1)); user-select: none; -webkit-user-drag: none; }
+.rl-shadow {
+  position: absolute; left: 50%; bottom: -8px; width: 34px; height: 7px;
+  transform: translateX(-50%); border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(20, 23, 26, 0.16), rgba(20, 23, 26, 0) 70%);
+  animation: rlShadow 2.2s ease-in-out infinite;
+}
+.rl-badge {
+  position: absolute; right: 20px; top: 27px; z-index: 3;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 4px;
+  border-radius: 6px; background: #14171a; color: #fff;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
+  animation: rlBadge 2.2s ease-in-out infinite;
+}
+.rl-spark { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #c9c5f2; }
+.rl-spark.s1 { left: 18px; top: 30px; animation: rlTwinkle 2.4s ease-in-out infinite; }
+.rl-spark.s2 { right: 22px; bottom: 30px; width: 3px; height: 3px; animation: rlTwinkle 2.4s 0.6s ease-in-out infinite; }
+.rl-spark.s3 { left: 28px; bottom: 24px; width: 2.5px; height: 2.5px; animation: rlTwinkle 2.4s 1.2s ease-in-out infinite; }
 .rl-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); }
-.rl-sub { margin: 2px 0 0; font-size: 12px; color: var(--sp-ink-3, #9aa0a8); }
+.rl-sub { min-height: 17px; margin: 5px 0 0; font-size: 12px; color: var(--sp-ink-3, #9aa0a8); }
+.rl-progress { display: flex; gap: 5px; margin-top: 12px; }
+.rl-progress i { width: 16px; height: 3px; border-radius: 999px; background: #e9ebee; transition: width 0.3s ease, background 0.3s ease; }
+.rl-progress i.on { width: 20px; background: #14171a; }
+@keyframes rlSpin { to { transform: rotate(360deg); } }
+@keyframes rlPulse { 0%, 100% { transform: scale(0.96); opacity: 0.8; } 50% { transform: scale(1.04); opacity: 1; } }
+@keyframes rlBob { 0%, 100% { transform: translateY(2px) rotate(-1.5deg); } 50% { transform: translateY(-5px) rotate(1.5deg); } }
+@keyframes rlShadow { 0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.55; } 50% { transform: translateX(-50%) scaleX(0.7); opacity: 0.26; } }
+@keyframes rlBadge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes rlTwinkle { 0%, 100% { opacity: 0.2; transform: scale(0.7); } 50% { opacity: 0.9; transform: scale(1.3); } }
+@media (prefers-reduced-motion: reduce) {
+  .rl-ring-outer, .rl-ring-inner, .rl-mascot-wrap, .rl-shadow, .rl-badge, .rl-spark { animation: none; }
+}
 
 /* 顶部主视觉：问候 + 实时天气 + 心情胶囊 */
 .rp-hero {
@@ -4177,282 +4341,247 @@ watch(() => route.query.tab, (val) => {
 
 @media (max-width: 767px) {
   /* ============================================================
-     学习计划 v5（仅移动端）
-     参考：Forest 森林打卡（深绿情绪 hero）+ Duolingo 关卡路径（纵向节点 rail）
-           滴答清单（今日任务单行清单，无卡片堆）
-     约束：① Head 仍走固定 48px，本区只改内容 ② 计划项之间有路径连贯感
-           ③ 空态不用插画，一行灰字即可 ④ 桌面端完全不受影响
+     学习计划 v8（仅移动端）
+     v5~v7 曾在这一层用几十条 :deep 覆盖把 PlanView 的桌面结构「掰」成移动布局，
+     层级脆弱（改一处模板就要跟着调覆盖）。v8 起移动端由 PlanView 自己的
+     .pm-* 结构渲染（v-if="isMobile"），这里只留最外层容器的最小约束。
+     评测基准：Forest（今日工作量）/ Duolingo（闯关节点）/ 滴答清单（今日清单）
      ============================================================ */
-  /* ── hero：深绿森林渐变，替代原蓝色 marketing 大块 ── */
-  .plan-view-wrap :deep(.plan-hero) {
-    background: linear-gradient(158deg, #0f3d2e 0%, #1c6b4a 62%, #247a55 100%) !important;
-    border-radius: 16px !important;
-    padding: 15px 16px 13px !important;
-    box-shadow: none !important;
-    margin-bottom: 14px;
-  }
-  .plan-view-wrap :deep(.hero-glow) { display: none !important; }
-  /* 与 48px 子页头重复的「MY PLAN · 学习计划 / 学业中心」在这层隐藏，
-     hero 只留一句价值主张 + 三个数字 + 新建入口，避免同一个标题出现两次。 */
-  .plan-view-wrap :deep(.hero-kicker),
-  .plan-view-wrap :deep(.hero-tag) { display: none !important; }
-  .plan-view-wrap :deep(.hero-title) {
-    margin: 6px 0 0 !important;
-    font-size: 17px !important; line-height: 22px !important;
-    color: #fff !important; font-weight: 600 !important;
-  }
-  .plan-view-wrap :deep(.hero-sub) {
-    margin: 4px 0 0 !important;
-    font-size: 11px !important; line-height: 15px !important;
-    color: rgba(255,255,255,.68) !important;
-  }
-  .plan-view-wrap :deep(.hero-add) {
-    height: 28px !important; padding: 0 12px !important;
-    background: rgba(255,255,255,.16) !important; border: 0 !important;
-    color: #fff !important; font-size: 12px !important;
-  }
-  .plan-view-wrap :deep(.hero-stats) { margin-top: 12px !important; gap: 0 !important; }
-  .plan-view-wrap :deep(.hs-num) { font-size: 19px !important; color: #fff !important; font-weight: 700 !important; }
-  .plan-view-wrap :deep(.hs-label) { font-size: 10px !important; color: rgba(255,255,255,.6) !important; }
-  .plan-view-wrap :deep(.hero-stat-sep) { background: rgba(255,255,255,.16) !important; }
-
-  /* ── 卡片去白底：改为发丝线分区（Duolingo 关卡在卡片内，容器不要卡片套卡片） ── */
-  .plan-view-wrap :deep(.card) {
-    background: transparent !important;
-    border: 0 !important; box-shadow: none !important; border-radius: 0 !important;
-    padding: 0 !important; margin: 0 0 4px !important;
-  }
-  .plan-view-wrap :deep(.card + .card) { border-top: 1px solid var(--sp-border, #e9ebee) !important; padding-top: 14px !important; margin-top: 2px !important; }
-  .plan-view-wrap :deep(.card-head) { padding: 0 0 8px !important; background: none !important; border: 0 !important; }
-  .plan-view-wrap :deep(.card-head .head-bar),
-  .plan-view-wrap :deep(.head-bar) { display: none !important; }
-  .plan-view-wrap :deep(.head-title) { font-size: 13.5px !important; font-weight: 600 !important; color: var(--sp-ink, #14171a) !important; }
-  .plan-view-wrap :deep(.card-head .el-button) { font-size: 11.5px !important; }
-
-  /* 空态：去插画，一行灰字（参考滴答清单空态） */
-  .plan-view-wrap :deep(.empty-block) { padding: 10px 0 4px !important; }
-  .plan-view-wrap :deep(.empty-ico) { display: none !important; }
-  .plan-view-wrap :deep(.empty-msg) { font-size: 12px !important; line-height: 17px !important; color: var(--sp-ink-3, #9aa0a8) !important; }
-
-  /* ── 关卡 rail：每个 plan-card 左侧一枚节点 + 竖线 ── */
-  .plan-view-wrap :deep(.plan-list) { position: relative; padding-left: 20px; }
-  .plan-view-wrap :deep(.plan-list)::before {
-    content: ''; position: absolute; left: 6px; top: 16px; bottom: 14px;
-    width: 2px; background: #dce9c8; border-radius: 1px;
-  }
-  .plan-view-wrap :deep(.plan-card) {
-    position: relative;
-    background: var(--sp-surface, #fff) !important;
-    border: 1px solid var(--sp-border, #e9ebee) !important;
-    border-radius: 12px !important;
-    box-shadow: none !important;
-    padding: 12px 13px !important;
-    margin-bottom: 10px !important;
-  }
-  .plan-view-wrap :deep(.plan-card)::before {
-    content: ''; position: absolute; left: -18px; top: 17px;
-    width: 9px; height: 9px; border-radius: 50%;
-    background: #58cc02; box-shadow: 0 0 0 3px #fff, 0 0 0 4px #dce9c8;
-    z-index: 1;
-  }
-  .plan-view-wrap :deep(.plan-card.is-done)::before { background: #b8c4b0; }
-  .plan-view-wrap :deep(.plan-card-title) { font-size: 13.5px !important; font-weight: 600 !important; color: var(--sp-ink, #14171a) !important; }
-  .plan-view-wrap :deep(.plan-card-meta) { font-size: 11px !important; color: var(--sp-ink-3, #9aa0a8) !important; gap: 6px !important; }
-  .plan-view-wrap :deep(.plan-list) { display: block; }
-
-  /* ── 空态：去插画，只留一行灰字 ── */
-  .plan-view-wrap :deep(.el-empty) { padding: 12px 0 !important; }
-  .plan-view-wrap :deep(.el-empty__image) { display: none !important; }
-  .plan-view-wrap :deep(.el-empty__description) { margin: 0 !important; }
-  .plan-view-wrap :deep(.el-empty__description p) { font-size: 12px !important; color: var(--sp-ink-3, #9aa0a8) !important; margin: 0 !important; }
+  .plan-view-wrap { padding-bottom: 16px; }
 }
 
 @media (max-width: 767px) {
 /* ============================================================
-   成绩分析 v5（仅移动端）：结论优先 + 迷你图表 + 全扁平
-   参考：Apple Health 摘要（结论大字）+ Keep 数据条 + 滴答清单列表
-   设计约束：① 图表不超过 88px，不再独占一屏 ② 无白卡，发丝线分区
-   ③ 课程成绩用列表行而不是九宫格卡片
+   成绩分析 v7（仅移动端）：白卡分组 + 信息去重
+   参考：Apple Health「摘要卡」+ Strava 分段数据条 + 滴答清单紧列表
+   设计约束：
+   ① 一个数字只出现一次 —— hero 已含 绩点/排名/均分/学分/门数，
+     原来那排四连 stat 卡（第 8 名 / 3.42 / 84.5 / 38）是纯重复，移动端整块删掉；
+   ② 每个主题一张白卡（14px 圆角 + 1px 描边 + 10px 间距），不再用发丝线把
+     一整条长内容切成七八段，滚动时看不清「哪里是新的一块」；
+   ③ 分数段分布不再单开第二张柱状图，压成一条分段进度条：信息不丢，高度 1/4；
+   ④ 学期成绩回到 2 列小卡（比一行一条的长列表更好扫读，也更像「卡片」）。
    ============================================================ */
-  .grades-view { --gr-ink: #14171a; --gr-ink2: #5b6472; --gr-ink3: #9aa0a8; --gr-line: #e9ebee; }
+  .grades-view { --gr-ink: #14171a; --gr-ink2: #5b6472; --gr-ink3: #9aa0a8; --gr-line: #e9ebee; gap: 10px; }
 
-/* ── 结论区：大数字 + 一行解释，替代四张 stat 卡 ── */
-  .grades-view .gr-hero { padding: 4px 2px 14px; border-bottom: 1px solid var(--gr-line); }
-  .grades-view .gr-hero-big { margin: 0; font-size: 15px; color: var(--gr-ink2); font-weight: 500; }
-  .grades-view .gr-hero-big b { font-size: 30px; font-weight: 700; color: #0f7a58; letter-spacing: -.5px; }
-  .grades-view .gr-hero-of { font-size: 12.5px; color: var(--gr-ink3); font-weight: 400; }
-  .grades-view .gr-hero-sub { margin: 6px 0 0; font-size: 12px; color: var(--gr-ink3); line-height: 17px; }
-
-/* stat 行：极简四列，去白底去边框（保留桌面原样） */
-  .grades-view .grade-stats-row {
-    background: transparent; border: 0; box-shadow: none; border-radius: 0;
-    padding: 12px 0; margin: 0; border-bottom: 1px solid var(--gr-line);
-  }
-  .grades-view .grade-stat-card { background: transparent !important; border: 0 !important; box-shadow: none !important; }
-  .grades-view .stat-icon { display: none; }
-  .grades-view .stat-value { font-size: 17px; font-weight: 600; color: var(--gr-ink); }
-  .grades-view .stat-label { font-size: 10.5px; color: var(--gr-ink3); }
-
-/* ── 分区容器：全部透明 + 发丝线 ── */
+/* ── 统一卡壳 ── */
   .grades-view .analytics-card {
-    background: transparent !important; border: 0 !important; box-shadow: none !important;
-    border-radius: 0 !important; margin: 0 !important; padding: 0 !important;
+    background: #fff !important;
+    border: 1px solid var(--gr-line) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important;
+    margin: 0 !important;
+    padding: 0 14px !important;
   }
-  .grades-view .analytics-card + .analytics-card { border-top: 1px solid var(--gr-line); }
-  .grades-view .analytics-head { padding: 14px 0 8px; }
+  .grades-view .analytics-head { padding: 13px 0 6px; }
   .grades-view .analytics-head .head-bar { display: none; }
   .grades-view .analytics-head .head-title { font-size: 14px; font-weight: 600; color: var(--gr-ink); }
+  .grades-view .analytics-head .head-sub { display: none; }
   .grades-view .analytics-body { padding: 0 0 12px; gap: 0; }
-  .grades-view .analytics-body.duo { flex-direction: column; }
-  .grades-view .panel { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
-  .grades-view .panel + .panel { margin-top: 10px; }
+  .grades-view .analytics-body.duo { flex-direction: column; gap: 8px; }
+  .grades-view .panel { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; min-height: 0 !important; }
+  .grades-view .panel + .panel { margin-top: 0; }
   .grades-view .panel-divider { display: none; }
-  .grades-view .panel-title { font-size: 12px; color: var(--gr-ink3); font-weight: 500; margin-bottom: 4px; }
-  .grades-view .panel-title .el-icon { display: none; }
+  .grades-view .panel-title { display: none; }
 
-/* 迷你图表：88px，去掉背景网格感 */
-  .grades-view .chart { height: 88px !important; width: 100%; }
+/* ── hero 卡：一个结论 + 三枚数字格 ── */
+  .grades-view .gr-hero {
+    background: #fff;
+    border: 1px solid var(--gr-line);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    padding: 15px 14px;
+    margin: 0 !important;
+  }
+  .grades-view .gr-hero-big { margin: 0; font-size: 13px; color: var(--gr-ink2); font-weight: 500; line-height: 1.2; }
+  .grades-view .gr-hero-big b { font-size: 31px; font-weight: 700; color: #0f7a58; letter-spacing: -1px; vertical-align: -2px; }
+  .grades-view .gr-hero-of { font-size: 12px; color: var(--gr-ink3); font-weight: 400; }
+  .grades-view .gr-hero-sub { display: none; }
+  /* v8：三枚灰格子改成 grades-1 那种行内统计（3 门 · 均分 89 · 学分 10） */
+  .grades-view .gr-inline-stats {
+    display: flex; flex-wrap: wrap; gap: 6px 14px;
+    margin: 10px 0 0; font-size: 11.5px; color: var(--gr-ink3);
+  }
+  .grades-view .gr-inline-stats b { font-weight: 600; color: var(--gr-ink2); font-variant-numeric: tabular-nums; }
 
-/* 绩点趋势改为「迷你走势条」：容器高度压缩，折线本身足够表达趋势 */
-  .grades-view .analytics-card:nth-of-type(1) .chart { height: 82px !important; }
+  /* 迷你走势：56px 一条线，替掉整张趋势卡 */
+  .grades-view .gr-spark-wrap { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f0f3f2; }
+  .grades-view .gr-spark { height: 56px; width: 100%; }
+  .grades-view .gr-spark-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 2px; font-size: 10px; color: var(--gr-ink3);
+  }
 
-/* ── 课程画像：折叠行更轻 ── */
-  .grades-view .course-profile-card .analytics-head { padding: 12px 0; }
+/* ── 四连 stat 卡：数字与 hero 完全重复，移动端不显示 ── */
+  .grades-view .grade-stats-row,
+  .grades-view .grade-stats-row > .grade-stat-card { display: none !important; }
+
+/* ── 趋势卡：折线 96px + 分段条 ── */
+  .grades-view .chart { height: 96px !important; width: 100%; }
+  .grades-view .trend-card .analytics-body.duo .panel:nth-child(3) { display: none; }
+  .grades-view .gr-dist { padding: 0 0 13px; }
+  .grades-view .gr-dist-bar { display: flex; gap: 2px; height: 8px; }
+  .grades-view .gr-dist-bar span { border-radius: 3px; min-width: 5px; }
+  /* 分段颜色由 distSegColor() 内联给出，与折线图共用同一套青绿梯度 */
+  .grades-view .gr-dist-legend { display: flex; flex-wrap: wrap; gap: 5px 13px; margin-top: 9px; }
+  .grades-view .gr-dist-legend span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--gr-ink3); }
+  .grades-view .gr-dist-legend i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+  .grades-view .gr-dist-legend b { font-weight: 600; color: var(--gr-ink2); font-variant-numeric: tabular-nums; }
+
+/* ── 成绩分析空图表：不上插画，只留一行灰字 ── */
+  .grades-view :deep(.el-empty) {
+    padding: 6px 0 !important; margin: 0 !important;
+    display: block !important; height: auto !important; min-height: 0 !important;
+  }
+  .grades-view :deep(.el-empty__image) { display: none !important; height: 0 !important; width: 0 !important; }
+  .grades-view :deep(.el-empty__description) { margin: 0 !important; height: auto !important; }
+  .grades-view :deep(.el-empty__description p) { font-size: 11.5px !important; line-height: 16px !important; color: var(--gr-ink3) !important; margin: 0 !important; }
+
+/* ── 课程画像：折叠头 + 两列细条 ── */
+  .grades-view .course-profile-card .analytics-head { padding: 13px 0; }
+  .grades-view .course-profile-card.is-open .analytics-head { padding-bottom: 4px; }
   .grades-view .course-rank-item { padding: 7px 0; }
   .grades-view .cr-group-label { font-size: 11px; margin: 8px 0 2px; }
   .grades-view .cr-name { font-size: 12.5px; color: var(--gr-ink); }
   .grades-view .cr-bar { height: 4px; }
   .grades-view .cr-score { font-size: 12.5px; font-weight: 600; }
 
-/* ── 学期明细：课程改为扁平列表行（替代九宫格卡片） ── */
-  .grades-view .detail-card { border-top: 1px solid var(--gr-line); }
-  .grades-view .sem-selector { padding: 0 0 10px; }
-  .grades-view .grade-grid { display: flex; flex-direction: column; gap: 0; }
+/* ── 学期明细：学期胶囊 + 2 列课程小卡 ── */
+  .grades-view .detail-card .analytics-head { padding-bottom: 4px; }
+  .grades-view .sem-selector { padding: 2px 0 11px; gap: 8px; }
+  .grades-view .semester-select { max-width: 100%; }
+  .grades-view .sem-stats-inline { font-size: 11.5px; color: var(--gr-ink2); padding: 2px 0 0; }
+  .grades-view .sem-link-action {
+    font-size: 11.5px; font-weight: 500;
+    color: var(--gr-ink2); background: #f4f6f7;
+    padding: 6px 10px; border-radius: 8px;
+  }
+  .grades-view .sem-link-action .el-icon { color: #0f7a58; }
+  .grades-view .grade-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    padding-bottom: 13px;
+    margin: 0 !important;
+  }
   .grades-view .grade-card {
-    display: flex; align-items: center; gap: 10px;
-    background: transparent !important; border: 0 !important; border-radius: 0 !important;
-    box-shadow: none !important; padding: 11px 2px !important;
+    display: block !important;
+    background: #fff !important;
+    border: 1px solid var(--gr-line) !important;
+    border-left: 3px solid #d9e8e2 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+    padding: 10px 11px 9px !important;
     position: relative;
   }
-  .grades-view .grade-card + .grade-card { border-top: 1px solid var(--gr-line) !important; }
-  .grades-view .gc-top { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; }
-  .grades-view .gc-name {
-    font-size: 13px; color: var(--gr-ink); font-weight: 500;
-    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .grades-view .gc-score { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .grades-view .grade-card.level-a { border-left-color: #0f7a58 !important; }
+  .grades-view .grade-card.level-b { border-left-color: #5aae8d !important; }
+  .grades-view .grade-card.level-c { border-left-color: #a8cdbd !important; }
+  .grades-view .grade-card.level-d { border-left-color: #cfd8d4 !important; }
+  .grades-view .grade-card.level-f { border-left-color: #c2410c !important; }
+  .grades-view .grade-card:active { background: #fafbfb !important; }
+  .grades-view .gc-top { display: flex !important; align-items: baseline !important; gap: 6px !important; margin: 0 !important; }
+  .grades-view .gc-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--gr-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grades-view .gc-score { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
   .grades-view .gc-meta {
-    display: flex; gap: 8px; margin: 0; font-size: 10.5px; color: var(--gr-ink3);
-    flex-direction: column; align-items: flex-end; line-height: 1.35;
+    display: flex !important; flex-direction: row !important;
+    justify-content: flex-start !important; align-items: center !important;
+    gap: 8px !important; margin: 5px 0 0 !important;
+    font-size: 10.5px; color: var(--gr-ink3); line-height: 1.2;
   }
-  .grades-view .grade-card-more { justify-content: center; }
+  .grades-view .grade-card-more { display: flex !important; align-items: center; justify-content: center; flex-direction: column; gap: 4px; }
+  .grades-view .grade-card-more .gc-top { justify-content: center; }
   .grades-view .grade-card-more .gc-name { flex: none; color: #0f7a58; font-size: 12.5px; }
+  .grades-view .grade-card-more .gc-meta { justify-content: center !important; }
 
-/* 分数等级色：只染分数本身，不给卡片上色 */
+/* 分数等级色：只染分数本身 */
   .grades-view .grade-card.excellent .gc-score { color: #0f7a58; }
   .grades-view .grade-card.good .gc-score { color: #0369a1; }
   .grades-view .grade-card.pass .gc-score { color: #b45309; }
   .grades-view .grade-card.fail .gc-score { color: #c0392b; }
 
-/* ── 覆盖：stat 行与空图表彻底扁平 ── */
-  .grades-view .grade-stats-row > .grade-stat-card,
-  .grades-view .grade-stats-row {
-    background: transparent !important;
-    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
-  }
-  .grades-view .grade-stats-row { border-bottom: 1px solid var(--gr-line) !important; }
-  .grades-view .grade-stat-card::before { display: none !important; }
-  .grades-view .grade-stat-card { padding: 0 2px !important; align-items: flex-start !important; }
-  .grades-view .stat-value { font-size: 17px; }
-  .grades-view .stat-label { margin-top: 2px; }
+/* ── 即将考试：单条卡（保持白卡 + 日期块） ── */
+  .grades-view .exam-card { border-radius: 10px; }
+  .grades-view .side-exam-card .analytics-body { padding-bottom: 12px; }
 
-  /* 空图表：不占高度，只留一行灰字（el-empty 需 :deep 才能命中） */
-  .grades-view :deep(.el-empty) {
-    padding: 4px 0 !important; margin: 0 !important;
-    display: block !important; height: auto !important; min-height: 0 !important;
-  }
-  .grades-view :deep(.el-empty__image) { display: none !important; height: 0 !important; width: 0 !important; }
-  .grades-view :deep(.el-empty__description) { margin: 0 !important; height: auto !important; }
-  .grades-view :deep(.el-empty__description p) { font-size: 11.5px !important; line-height: 16px !important; color: var(--gr-ink3) !important; margin: 0 !important; }
-  .grades-view :deep(.panel) { min-height: 0 !important; }
-  .grades-view :deep(.analytics-body) { min-height: 0 !important; }
-
-/* 有数据的图表：压缩到 82px，去掉标题行冗余 */
-  .grades-view .panel-title { display: none; }
-  .grades-view .analytics-head .head-sub { display: none; }
-  .grades-view .analytics-body.duo { gap: 8px !important; }
-
-/* 学期明细：选择器 + 明细行更紧凑 */
-  .grades-view .semester-select { max-width: 100%; }
-  .grades-view .sem-stats-inline { display: flex; gap: 10px; font-size: 11.5px; color: var(--gr-ink2); padding: 6px 0 2px; }
-  .grades-view .sem-link-action { font-size: 12px; }
-
-/* 移动端隐藏吉祥物（占位且与扁平风格冲突） */
+/* 移动端隐藏吉祥物（由右下角悬浮入口承载 AI 报告） */
   .grades-view .grades-mascot { display: none !important; }
 
-  /* ── 目标计划 v6：4 级里程碑阶梯（抄 Duolingo 关卡进度 + Strava 目标） ──
-     一条 3px 轨道 + 4 个刻度节点，已过节点实心墨绿、当前待过节点赭橙描边、
-     未到节点浅灰；轨道填充到「实际绩点」位置，末端小圆环是实际值游标。 */
-  .gl-item { padding-bottom: 14px; }
-  .gl-item + .gl-item {
+  /* ── 目标计划 v7：目标圆环卡（参考 Apple Fitness / Keep 的目标达成卡） ──
+     左侧环形达成度，右侧当前 / 目标两项数字 + 一句差值结论；
+     当前学期下方是一条轻量步进器（− / + 调整 0.1），保存走中性实心按钮。 */
+  .gp-item { padding-bottom: 14px; }
+  .gp-item + .gp-item {
     border-top: 1px solid var(--sp-border, #e9ebee);
     padding-top: 14px;
   }
-  .gl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-  .gl-sem { font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); letter-spacing: -.2px; }
-  .gl-badge {
+  .gp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .gp-sem { font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); letter-spacing: -.2px; }
+  .gp-badge {
     font-size: 10.5px; line-height: 1; padding: 3px 7px; border-radius: 999px;
     background: #eef1f4; color: #5b6470; font-weight: 500;
   }
-  .gl-badge.is-past { background: transparent; color: #9aa0a8; padding-left: 0; }
+  .gp-badge.is-past { background: transparent; color: #9aa0a8; padding-left: 0; }
+  .gp-badge.is-ok { color: #0f7a58; }
 
-  .gl-track { position: relative; height: 32px; margin: 0 17px 4px; }
-  .gl-rail, .gl-fill {
-    position: absolute; top: 9px; height: 3px; border-radius: 2px;
+  .gp-body { display: flex; align-items: center; gap: 18px; }
+  .gp-ring { position: relative; width: 84px; height: 84px; flex: none; }
+  .gp-ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .gp-ring-bg { fill: none; stroke: #eef0f2; stroke-width: 7; }
+  .gp-ring-fg {
+    fill: none; stroke: #0f7a58; stroke-width: 7; stroke-linecap: round;
+    transition: stroke-dashoffset .6s cubic-bezier(.16, 1, .3, 1);
   }
-  .gl-rail { left: 0; right: 0; background: #e9ebee; }
-  .gl-fill { left: 0; background: #0f7a58; transition: width .5s cubic-bezier(.16,1,.3,1); }
-  .gl-mark {
-    position: absolute; top: 5.5px; z-index: 2;
-    width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
-    background: #fff; border: 2px solid #0f7a58; transform: translateX(-5px);
+  .gp-ring.is-empty .gp-ring-fg { stroke: #d8dde3; }
+  .gp-ring-val {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px;
   }
-  .gl-node {
-    position: absolute; top: 0; z-index: 3;
-    transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center;
+  .gp-ring-val b {
+    font-size: 16px; line-height: 18px; font-weight: 650; color: var(--sp-ink, #14171a);
+    font-variant-numeric: tabular-nums;
   }
-  .gl-node i {
-    width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box;
-    background: #fff; border: 2px solid #cfd5dc; margin-top: 4.5px;
-    transition: background .3s ease, border-color .3s ease;
-  }
-  .gl-node b {
-    margin-top: 4px; font-size: 9.5px; font-weight: 500;
-    color: #9aa0a8; font-variant-numeric: tabular-nums;
-  }
-  .gl-node.is-done i { background: #0f7a58; border-color: #0f7a58; }
-  .gl-node.is-done b { color: #0f7a58; }
-  .gl-node.is-next i { border-color: #b45309; box-shadow: 0 0 0 3px rgba(180, 83, 9, .12); }
-  .gl-node.is-next b { color: #b45309; font-weight: 600; }
+  .gp-ring-val span { font-size: 9.5px; color: var(--sp-ink-3, #6b737c); }
+  .gp-ring.is-done .gp-ring-val b { color: #0f7a58; }
 
-  .gl-hint { margin: 4px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--sp-ink-3, #6b737c); }
-  .gl-hint.is-ok { color: #0f7a58; }
-  .gl-edit { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-  .gl-edit-label { font-size: 11.5px; color: var(--sp-ink-3, #6b737c); }
-  .gl-edit .el-button { margin-left: 0; }
-  /* 保存按钮跟成绩页识别色（青绿）走，不要 Element 默认蓝 */
-  .gl-edit .el-button--primary {
-    background-image: none !important;
-    background-color: #0f7a58 !important;
-    border-color: #0f7a58 !important;
-    color: #fff !important;
+  .gp-figs { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .gp-fig { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .gp-fig span { font-size: 11.5px; color: var(--sp-ink-3, #6b737c); }
+  .gp-fig b {
+    font-size: 15px; font-weight: 600; color: var(--sp-ink, #14171a);
+    font-variant-numeric: tabular-nums;
   }
-  .gl-edit .el-button--primary:hover {
-    background-image: none !important;
-    background-color: #0c6448 !important;
-    border-color: #0c6448 !important;
+  .gp-delta { margin: 4px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--sp-ink-3, #6b737c); }
+  .gp-delta.is-ok { color: #0f7a58; }
+  .gp-delta.is-todo { color: #b45309; }
+
+  .gp-edit {
+    display: flex; align-items: center; gap: 10px; margin-top: 12px;
+    padding-top: 12px; border-top: 1px dashed #eef0f2;
   }
+  .gp-edit-label { font-size: 11.5px; color: var(--sp-ink-3, #6b737c); }
+  .gp-stepper {
+    display: flex; align-items: center;
+    border: 1px solid var(--sp-border-strong, #dcdfe4); border-radius: 8px;
+    background: #fff; overflow: hidden;
+  }
+  .gp-stepper button {
+    width: 28px; height: 28px; border: none; background: transparent;
+    color: var(--sp-ink-2, #5b6470); font-size: 15px; line-height: 1;
+    font-family: inherit; cursor: pointer;
+  }
+  .gp-stepper button:active { background: #f2f4f6; }
+  .gp-stepper b {
+    min-width: 42px; text-align: center; font-size: 13px; font-weight: 600;
+    color: var(--sp-ink, #14171a); font-variant-numeric: tabular-nums;
+  }
+  .gp-save {
+    margin-left: auto; height: 28px; padding: 0 14px;
+    border: none; border-radius: 8px;
+    background: var(--sp-ink, #14171a); color: #fff;
+    font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .gp-save:active { opacity: .85; }
 }
 
 /* ── 学期选择下拉（teleport 到 body，随父作用域带 data-v 命中） ── */

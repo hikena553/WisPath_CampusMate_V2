@@ -1,5 +1,9 @@
 <template>
-  <div class="students-page">
+  <div class="students-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel">
     <!-- ============ 桌面端（保持原样） ============ -->
     <template v-if="!isMobile">
       <!-- 学生页头：品牌形象 + 页面标题 + 实时状态 + 更多操作 -->
@@ -374,6 +378,9 @@
         </div>
       </header>
 
+      <!-- 移动端下拉刷新：指示器必须插在吸顶页头之后，页头才能留在原位不动 -->
+      <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+
       <!-- 概况便当格（Bento Grid）：模块化磁贴，每格只做一件事 -->
       <section class="bento">
         <div class="bento-tile bento-tile-lg">
@@ -464,9 +471,15 @@
             <button v-for="c in scoreChips" :key="c.value" class="ms-chip" :class="{ active: filterScore === c.value }" @click="filterScore = c.value">{{ c.label }}</button>
           </div>
         </div>
+        <div class="ms-drawer-group">
+          <div class="ms-drawer-label">技能画像</div>
+          <div class="ms-filter-chips">
+            <button v-for="c in skillChips" :key="c.value" class="ms-chip" :class="{ active: filterSkill === c.value }" @click="filterSkill = c.value">{{ c.label }}</button>
+          </div>
+        </div>
         <div class="ms-drawer-actions">
-          <el-button text type="info" @click="clearFilters">清除筛选</el-button>
-          <el-button type="primary" @click="showFilterSheet = false">完成</el-button>
+          <el-button text class="ms-clear-btn" @click="clearFilters">清除筛选</el-button>
+          <el-button class="ms-confirm-btn" @click="showFilterSheet = false">完成</el-button>
         </div>
       </div>
     </el-drawer>
@@ -479,12 +492,52 @@
           <span class="mobile-detail-title">{{ detail.name }} - 学生详情</span>
           <div style="width:36px"></div>
         </div>
-        <div class="mobile-detail-body">
-          <div class="mobile-profile">
-            <el-avatar :size="44" :src="detail.avatar || undefined">{{ detail.name[0] }}</el-avatar>
-            <div class="mobile-profile-info">
-              <strong>{{ detail.name }}</strong>
-              <small>{{ detail.college || '未分配' }} · {{ detail.username }}</small>
+        <div class="mobile-detail-body"
+          @touchstart.passive="detailPull.onStart"
+          @touchmove="detailPull.onMove"
+          @touchend="detailPull.onEnd"
+          @touchcancel="detailPull.onCancel">
+          <PullRefreshIndicator :indicator-style="detailPull.indicatorStyle" :active="detailPull.active" />
+          <!-- 方案A：档案头卡（渐变 + 身份风险标签 + 主页入口） -->
+          <div class="mstu-hero">
+            <div class="mstu-hero-r1">
+              <el-avatar :size="52" :src="detail.avatar || undefined" class="mstu-hero-avatar">{{ detail.name[0] }}</el-avatar>
+              <div class="mstu-hero-id">
+                <div class="mstu-hero-name">{{ detail.name }}</div>
+                <div class="mstu-hero-meta">{{ detail.college || '未分配' }} · {{ detail.username }}</div>
+              </div>
+              <button type="button" class="mstu-hero-home" @click="openStudentHome">
+                <el-icon :size="13"><MagicStick /></el-icon>TA 的主页
+              </button>
+            </div>
+            <div class="mstu-hero-tags">
+              <span v-if="detailSummary?.crisis_level" class="is-risk">重点关注 · {{ crisisLevelLabel(detailSummary.crisis_level) }}</span>
+              <span v-if="detailSummary?.score !== undefined">综合评分 {{ detailSummary.score }}</span>
+              <span>成长成果 {{ detail.growth_records.length }}</span>
+              <span>请假 {{ detail.leave_requests.length }}</span>
+            </div>
+          </div>
+          <!-- KPI 四格 -->
+          <div class="mstu-kpi">
+            <div class="k"><b>{{ detail.growth_records.length }}</b><i>成长成果</i></div>
+            <div class="k"><b>{{ detail.projects.length }}</b><i>项目</i></div>
+            <div class="k"><b :class="pendingCrisisCount ? 'is-bad' : ''">{{ pendingCrisisCount }}</b><i>待处理预警</i></div>
+            <div class="k"><b>{{ detailSummary?.score ?? '—' }}</b><i>综合评分</i></div>
+          </div>
+          <!-- 风险卡置顶（SLA 响应时效） -->
+          <div v-if="topCrisis" class="mstu-risk">
+            <div class="mstu-risk-head">
+              <el-icon :size="15" class="mstu-risk-ic"><WarningFilled /></el-icon>
+              <span class="mstu-risk-title">{{ crisisLabel(topCrisis.level) }}预警 · 待处理</span>
+              <time class="mstu-risk-time">{{ formatTime(topCrisis.created_at) }}</time>
+            </div>
+            <p class="mstu-risk-desc">{{ topCrisis.summary }}</p>
+            <div class="mstu-risk-foot">
+              <div class="mstu-sla">
+                <div class="lb"><span>响应时效</span><b>{{ slaLabel(topCrisis.created_at) }}</b></div>
+                <div class="bar"><i :style="{ width: slaPct(topCrisis.created_at) + '%' }" /></div>
+              </div>
+              <button type="button" class="mstu-risk-btn" @click="gotoCrisisCenter(topCrisis)">去处置</button>
             </div>
           </div>
           <div class="mobile-tabbar" role="tablist" aria-label="学生详情分区">
@@ -652,8 +705,107 @@
       </div>
     </transition>
 
-    <!-- 导入学生数据 Dialog -->
-    <el-dialog v-model="importVisible" title="导入学生数据" width="90%" :close-on-click-modal="false" class="ms-dialog" align-center>
+    <!-- QQ 风格学生主页（教师查看学生的「个人空间」） -->
+    <transition name="slide-right-in">
+      <div v-if="homeVisible && detail" class="qhome">
+        <header class="qhome-bar">
+          <el-button text circle @click="homeVisible = false"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
+          <span class="qhome-bar-title">{{ detail.name }}的主页</span>
+          <el-button text circle @click="ElMessage({ message: '更多操作（演示）', type: 'info' })"><el-icon :size="18"><MoreFilled /></el-icon></el-button>
+        </header>
+
+        <div class="qhome-body">
+          <!-- 封面 -->
+          <div class="qhome-cover">
+            <div class="qhome-cover-actions">
+              <button type="button" @click="detailSummary && openContact(detailSummary)">打声招呼</button>
+              <button type="button" @click="ElMessage({ message: '更换封面（演示）', type: 'info' })">更换封面</button>
+            </div>
+          </div>
+
+          <!-- 头像 + 身份 -->
+          <div class="qhome-head">
+            <el-avatar :size="72" :src="detail.avatar || undefined" class="qhome-avatar">{{ detail.name[0] }}</el-avatar>
+            <div class="qhome-name-row">
+              <span class="qhome-name">{{ detail.name }}</span>
+              <span class="qhome-lv">LV.{{ homeLevel }}</span>
+            </div>
+            <div class="qhome-qid">学号：<b>{{ detail.username }}</b> · {{ detail.college || '未分配' }}</div>
+            <p class="qhome-sig">{{ homeMotto }}</p>
+          </div>
+
+          <!-- 数据带 -->
+          <div class="qhome-stats">
+            <div class="s"><b>{{ detail.growth_records.length }}</b><i>成果</i></div>
+            <div class="s"><b>{{ detail.projects.length }}</b><i>项目</i></div>
+            <div class="s"><b>{{ detailSummary?.score ?? '—' }}</b><i>评分</i></div>
+            <div class="s"><b>{{ detail.leave_requests.length }}</b><i>请假</i></div>
+          </div>
+
+          <!-- 徽章墙 -->
+          <template v-if="homeBadges.length">
+            <div class="qhome-sec">徽章墙</div>
+            <div class="qhome-badges tui-scroll-hidden">
+              <div v-for="b in homeBadges" :key="b.name" class="qhome-badge">
+                <span class="qhome-badge-ic" :class="`tone-${b.tone}`"><el-icon :size="16"><MagicStick /></el-icon></span>
+                <span>{{ b.name }}</span>
+              </div>
+            </div>
+          </template>
+
+          <!-- 相册 -->
+          <template v-if="detail.projects.length">
+            <div class="qhome-sec">项目相册<span class="spacer">{{ detail.projects.length }} 个</span></div>
+            <div class="qhome-photos">
+              <div v-for="(p, i) in detail.projects.slice(0, 5)" :key="p.id" class="qhome-photo"
+                :style="{ background: PHOTO_TONES[i % PHOTO_TONES.length] }">
+                <el-icon :size="18"><Picture /></el-icon>
+              </div>
+              <button v-if="detail.projects.length > 5" type="button" class="qhome-photo more"
+                @click="ElMessage({ message: '完整相册（演示）', type: 'info' })">
+                <el-icon :size="16"><Picture /></el-icon>{{ detail.projects.length }} 张
+              </button>
+            </div>
+          </template>
+
+          <!-- 动态流（成长记录） -->
+          <div class="qhome-sec">TA 的动态</div>
+          <template v-if="homePosts.length">
+            <article v-for="(po, i) in homePosts" :key="po.id" class="qhome-post">
+              <div class="qhome-post-head">
+                <el-avatar :size="36" :src="detail.avatar || undefined">{{ detail.name[0] }}</el-avatar>
+                <div>
+                  <div class="qhome-post-name">{{ detail.name }}</div>
+                  <div class="qhome-post-time">{{ po.date }} · {{ growthLabel(po.type) }}</div>
+                </div>
+              </div>
+              <div class="qhome-post-text">{{ po.title }}</div>
+              <p v-if="po.description" class="qhome-post-desc">{{ po.description }}</p>
+              <div v-if="i % 3 !== 2" class="qhome-post-imgs" :class="i % 3 === 0 ? 'g1' : 'g2'">
+                <div v-for="n in (i % 3 === 0 ? 1 : 2)" :key="n" class="qhome-pimg"
+                  :style="{ background: PHOTO_TONES[(i + n) % PHOTO_TONES.length] }">
+                  <el-icon :size="15"><Picture /></el-icon>成长瞬间
+                </div>
+              </div>
+              <div class="qhome-post-ops">
+                <button type="button" class="qhome-op" :class="{ liked: likedPosts[po.id] }" @click="toggleLike(po)">
+                  <svg class="qhome-like" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>{{ likedPosts[po.id] ? '已赞' : '点赞' }} {{ po.likeN + (likedPosts[po.id] ? 1 : 0) }}
+                </button>
+                <button type="button" class="qhome-op" @click="ElMessage({ message: '评论（演示）', type: 'info' })">
+                  <el-icon :size="15"><ChatLineRound /></el-icon>评论 {{ po.cmtN }}
+                </button>
+                <button type="button" class="qhome-op" @click="ElMessage({ message: '已收藏该动态（演示）', type: 'success' })">
+                  <el-icon :size="15"><Star /></el-icon>收藏
+                </button>
+              </div>
+            </article>
+          </template>
+          <el-empty v-else description="TA 还没有发布动态" :image-size="56" />
+        </div>
+      </div>
+    </transition>
+    <!-- 导入学生数据（上传+预览：移动端=全屏子页） -->
+    <ResponsivePopup v-model="importVisible" title="导入学生数据" width="560px" class="ms-dialog">
       <div class="ms-import-tip">
         <p>请上传 CSV 文件，表头需包含「姓名、学号」两列，可选「学院、性别、班级」。导入的账号默认密码为 123456。</p>
         <el-link type="primary" :underline="false" @click="handleDownloadTemplate">
@@ -683,7 +835,7 @@
           {{ importing ? '导入中...' : `确认导入（${importRows.length}）` }}
         </el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
 
     <!-- 移动端：班级数据分析子页（与学生相关的数据维度） -->
     <ClassAnalyticsMobile v-if="isMobile && showAnalyticsPage" :class-stats="classStats" :eval-data="evalData"
@@ -698,10 +850,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
+// v6.1 弹窗减负：导入流程走全屏子页承接
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Search, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
   Filter, Download, Upload, DataAnalysis, MoreFilled,
+  MagicStick, WarningFilled, ChatLineRound, Star, Picture,
 } from '@element-plus/icons-vue'
 import {
   getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats, importStudents,
@@ -717,12 +872,19 @@ import ClassAnalyticsPanel from '@/components/teacher/analytics/ClassAnalyticsPa
 import ClassAnalyticsMobile from '@/components/teacher/analytics/ClassAnalyticsMobile.vue'
 import ClassAnalysisDialog from '@/components/teacher/analytics/ClassAnalysisDialog.vue'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
 defineOptions({ name: 'teacher-students' })
 
 const { isMobile } = useResponsive()
 const route = useRoute()
 const router = useRouter()
+
+// 移动端下拉刷新：主列表与统计、学生详情各自一个手势实例（桌面端不响应）
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
+const detailPull = usePullRefresh(refreshDetail, { enabled: () => isMobile.value })
 
 // 吉祥物与站点名称取自站点配置：管理端变更后教师端同步
 const { siteMascot, siteName } = useSiteConfig()
@@ -732,6 +894,8 @@ const students = ref<(StudentSummary & { score?: number })[]>([])
 const loaded = ref(false)
 const detailVisible = ref(false)
 const detail = ref<StudentDetail | null>(null)
+/** 打开详情时的列表摘要（含 score / crisis_level，详情接口不返回这两个字段） */
+const detailSummary = ref<StudentSummary | null>(null)
 const detailTab = ref('skills')
 /** 移动端详情分区：横向滚动胶囊标签，替代拥挤的下划线 tabs */
 const detailTabs = [
@@ -817,6 +981,9 @@ const classStats = ref<ClassStats>({
   political_stats: {}, hometown_stats: {}, crisis_trend: [],
 })
 const showAnalyticsPage = ref(false)
+
+// 移动端页内二级页面（学生详情 / 班级分析）：打开时让出底部悬浮导航
+useMobileSubPage(computed(() => isMobile.value && (detailVisible.value || showAnalyticsPage.value)))
 
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 
@@ -933,6 +1100,11 @@ const scoreChips = [
   { label: '及格≥60', value: 'average' },
   { label: '不及格', value: 'poor' },
 ]
+const skillChips = [
+  { label: '全部', value: '' },
+  { label: '有技能', value: 'has' },
+  { label: '无技能', value: 'none' },
+]
 
 const hasActiveFilter = computed(() => {
   return filterCrisis.value || filterGrowth.value || filterScore.value || filterSkill.value
@@ -1025,6 +1197,19 @@ async function loadDashboard() {
   try {
     conversations.value = await getConversations()
   } catch {}
+}
+
+/** 下拉刷新：静默重载学生名单与统计，失败不提示 */
+async function refreshAll() {
+  await Promise.all([loadStudents(), loadDashboard()])
+}
+
+/** 学生详情下拉刷新：重拉当前详情，失败保持原样 */
+async function refreshDetail() {
+  if (!detail.value) return
+  try {
+    detail.value = await getStudentDetail(detail.value.id)
+  } catch { /* ignore */ }
 }
 
 /** 页头「更多」菜单：导入 / 导出 */
@@ -1192,10 +1377,79 @@ function scoreClass(score: number) {
 
 async function openDetail(s: StudentSummary) {
   try {
+    detailSummary.value = s
     detail.value = await getStudentDetail(s.id)
     detailVisible.value = true
     detailTab.value = 'skills'
   } catch {}
+}
+
+/** 置顶风险卡：最高优先级的未处理预警 */
+const topCrisis = computed(() => {
+  const first = sortedCrisis.value.find((a) => !a.resolved)
+  return first || null
+})
+
+/** SLA 响应时效：以 48 小时为响应窗口，展示已流逝时间与进度 */
+const SLA_WINDOW_H = 48
+function slaHours(iso: string): number {
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return 0
+  return Math.max(0, (Date.now() - t) / 3600000)
+}
+function slaLabel(iso: string): string {
+  const h = slaHours(iso)
+  if (h < 1) return '刚刚产生'
+  if (h < 24) return `已等待 ${Math.floor(h)} 小时`
+  return `已等待 ${Math.floor(h / 24)} 天 ${Math.floor(h % 24)} 小时`
+}
+function slaPct(iso: string): number {
+  return Math.min(100, Math.round((slaHours(iso) / SLA_WINDOW_H) * 100))
+}
+
+/* ================= QQ 风格学生主页 ================= */
+const homeVisible = ref(false)
+const likedPosts = ref<Record<number, boolean>>({})
+const PHOTO_TONES = ['#85b7eb', '#5dcaa5', '#a78bfa', '#f0997b', '#ed93b1']
+
+function openStudentHome() {
+  homeVisible.value = true
+}
+
+/** 等级：按成长成果数折算，纯展示用 */
+const homeLevel = computed(() => 3 + ((detail.value?.growth_records.length || 0) % 5))
+
+/** 个性格言：优先兴趣标签，其次最近一条成长记录，兜底默认 */
+const homeMotto = computed(() => {
+  const d = detail.value
+  if (!d) return ''
+  const interests = d.skills_json?.interests
+  if (interests?.length) return `兴趣：${interests.slice(0, 3).join(' · ')}`
+  return d.growth_records?.[0]?.title || '这个人很懒，什么都没有留下。'
+})
+
+/** 徽章墙：技能名取前 6 个 */
+const homeBadges = computed(() => {
+  const skills = detail.value?.skills_json?.skills || []
+  const tones = ['brand', 'success', 'violet', 'warn', 'cyan', 'danger']
+  return skills.slice(0, 6).map((sk: { name: string }, i: number) => ({
+    name: sk.name,
+    tone: tones[i % tones.length],
+  }))
+})
+
+/** 动态流：成长记录转动态，点赞数为演示用确定性假数据 */
+const homePosts = computed(() =>
+  (detail.value?.growth_records || []).map((r: any, i: number) => ({
+    ...r,
+    likeN: (r.id * 7 + i * 3) % 18,
+    cmtN: (r.id + i) % 5,
+  }))
+)
+
+function toggleLike(post: { id: number }) {
+  likedPosts.value[post.id] = !likedPosts.value[post.id]
+  ElMessage({ message: likedPosts.value[post.id] ? '已点赞，学生端会收到提醒' : '已取消点赞', type: 'success' })
 }
 
 function openContact(s: StudentSummary) {
@@ -1262,6 +1516,8 @@ onUnmounted(() => {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
   padding: 0 16px 24px;
   background: #f6f7f9;
   /* 静默边框令牌：用 1px 发丝线取代阴影与重背景 */
@@ -1614,7 +1870,8 @@ onUnmounted(() => {
 .ms-filter-btn {
   display: flex; align-items: center; gap: 4px;
   height: 34px; padding: 0 11px; border-radius: 17px;
-  background: #fff; color: #1677ff; font-size: 13px; cursor: pointer; flex-shrink: 0;
+  background: #fff; color: #1f2329; font-size: 13px; cursor: pointer; flex-shrink: 0;
+  border: 1px solid #e5e7eb;
 }
 .ms-filter-btn:active { opacity: 0.7; }
 
@@ -1626,8 +1883,9 @@ onUnmounted(() => {
 .ms-chip {
   flex-shrink: 0; padding: 5px 13px; border-radius: 16px; border: none;
   background: #fff; color: #555; font-size: 12.5px; cursor: pointer;
+  border: 1px solid #e5e7eb;
 }
-.ms-chip.active { background: #1677ff; color: #fff; font-weight: 600; }
+.ms-chip.active { background: #1f2329; color: #fff; font-weight: 600; border-color: #1f2329; }
 
 /* ===== 导入学生数据 ===== */
 .ms-import-tip { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 14px; }
@@ -1656,6 +1914,15 @@ onUnmounted(() => {
 .ms-drawer-label { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 12px; }
 .ms-filter-chips { display: flex; flex-wrap: wrap; gap: 10px; }
 .ms-drawer-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.ms-drawer-actions .ms-clear-btn { color: #8a94a6; }
+.ms-drawer-actions .ms-clear-btn:hover { color: #1f2329; background: transparent; }
+.ms-drawer-actions .ms-confirm-btn {
+  background: #1f2329; border-color: #1f2329; color: #fff;
+  border-radius: 8px; font-weight: 600;
+}
+.ms-drawer-actions .ms-confirm-btn:hover {
+  background: #101318; border-color: #101318; color: #fff;
+}
 
 /* 移动端右滑动画 */
 .slide-right-in-enter-active,
@@ -1672,7 +1939,7 @@ onUnmounted(() => {
   padding: 6px 10px; background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
 }
 .mobile-detail-title { font-size: 14px; font-weight: 600; color: #1a1a1a; }
-.mobile-detail-body { flex: 1; overflow-y: auto; padding: 14px; }
+.mobile-detail-body { flex: 1; overflow-y: auto; overscroll-behavior-y: contain; padding: 14px; }
 .mobile-profile {
   display: flex; align-items: center; gap: 12px; padding: 14px;
   background: #fff; border-radius: 12px; margin-bottom: 12px;
@@ -1831,4 +2098,266 @@ onUnmounted(() => {
   .app-head-title { font-size: 18px; }
   .app-head-sub { font-size: 12px; margin-top: 3px; }
 }
+
+/* ================= 方案A：档案头卡 + KPI + 风险置顶 ================= */
+.mstu-hero {
+  background: linear-gradient(150deg, #1d4ed8, #2563eb 55%, #3b82f6);
+  border-radius: 20px;
+  padding: 16px;
+  color: #fff;
+}
+.mstu-hero-r1 { display: flex; align-items: center; gap: 12px; }
+.mstu-hero-avatar { flex-shrink: 0; background: rgba(255, 255, 255, 0.22); border: 2px solid rgba(255, 255, 255, 0.45); color: #fff; font-size: 18px; font-weight: 700; }
+.mstu-hero-id { flex: 1; min-width: 0; }
+.mstu-hero-name { font-size: 17px; font-weight: 700; line-height: 1.3; }
+.mstu-hero-meta { font-size: 11.5px; opacity: 0.85; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mstu-hero-home {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  padding: 6px 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.mstu-hero-home:active { background: rgba(255, 255, 255, 0.28); }
+.mstu-hero-tags { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.mstu-hero-tags span { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); }
+.mstu-hero-tags span.is-risk { background: rgba(255, 255, 255, 0.92); color: #d92d20; font-weight: 700; }
+
+.mstu-kpi {
+  display: flex;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--sp-line);
+  padding: 12px 0;
+  margin-top: 12px;
+}
+.mstu-kpi .k { flex: 1; text-align: center; position: relative; }
+.mstu-kpi .k + .k::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--sp-line); }
+.mstu-kpi b { font-size: 17px; font-weight: 700; display: block; color: #101828; font-variant-numeric: tabular-nums; }
+.mstu-kpi b.is-bad { color: var(--tui-danger); }
+.mstu-kpi i { font-style: normal; font-size: 10.5px; color: #98a2b3; }
+
+.mstu-risk {
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-left: 4px solid var(--tui-danger);
+  border-radius: 16px;
+  padding: 13px 14px;
+  margin-top: 12px;
+}
+.mstu-risk-head { display: flex; align-items: center; gap: 8px; }
+.mstu-risk-ic { color: var(--tui-danger); }
+.mstu-risk-title { flex: 1; font-size: 13.5px; font-weight: 700; color: var(--tui-danger); }
+.mstu-risk-time { font-size: 11px; color: #98a2b3; }
+.mstu-risk-desc { margin: 7px 0 0; font-size: 12px; color: #475467; line-height: 1.6; }
+.mstu-risk-foot { display: flex; align-items: flex-end; gap: 10px; margin-top: 10px; }
+.mstu-sla { flex: 1; min-width: 0; }
+.mstu-sla .lb { font-size: 11px; color: #98a2b3; display: flex; justify-content: space-between; margin-bottom: 5px; }
+.mstu-sla .lb b { color: var(--tui-danger); font-weight: 600; }
+.mstu-sla .bar { height: 5px; border-radius: 999px; background: var(--tui-danger-soft); overflow: hidden; }
+.mstu-sla .bar i { display: block; height: 100%; border-radius: 999px; background: var(--tui-danger); transition: width 0.4s var(--tui-ease); }
+.mstu-risk-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--tui-danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 15px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.mstu-risk-btn:active { opacity: 0.85; }
+
+/* ================= QQ 风格学生主页 ================= */
+.qhome {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  flex-direction: column;
+  background: #f2f4f7;
+}
+.qhome-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+  background: transparent;
+}
+.qhome-bar-title { flex: 1; text-align: center; font-size: 15px; font-weight: 600; color: #101828; }
+.qhome-body { flex: 1; overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: 32px; }
+.qhome-cover {
+  height: 128px;
+  background: linear-gradient(130deg, #12b7f5, #4f8df7 60%, #6a7cf7);
+  position: relative;
+  overflow: hidden;
+  margin-top: -54px;
+}
+.qhome-cover::after {
+  content: '';
+  position: absolute;
+  right: -30px;
+  top: -40px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+}
+.qhome-cover::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  bottom: -60px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+.qhome-cover-actions { position: absolute; top: 66px; right: 12px; display: flex; gap: 8px; z-index: 4; }
+.qhome-cover-actions button {
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.qhome-head { padding: 0 14px; margin-top: -36px; position: relative; z-index: 2; }
+.qhome-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 24px;
+  border: 3px solid #fff;
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(150deg, #4f8df7, #12b7f5);
+  box-shadow: 0 2px 10px rgba(15, 17, 21, 0.06);
+}
+.qhome-name-row { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; }
+.qhome-name { font-size: 19px; font-weight: 700; color: #0f1115; }
+.qhome-lv {
+  font-size: 10.5px;
+  color: #b4780a;
+  background: linear-gradient(120deg, #ffe9c2, #ffd98a);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-weight: 600;
+}
+.qhome-qid { font-size: 11.5px; color: #98a2b3; margin-top: 3px; }
+.qhome-qid b { color: #475467; font-weight: 600; }
+.qhome-sig { font-size: 12.5px; color: #475467; margin: 7px 0 0; line-height: 1.55; }
+.qhome-stats {
+  display: flex;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--sp-line);
+  padding: 12px 0;
+  margin: 14px 14px 0;
+}
+.qhome-stats .s { flex: 1; text-align: center; position: relative; }
+.qhome-stats .s + .s::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--sp-line); }
+.qhome-stats b { font-size: 16px; font-weight: 700; display: block; color: #101828; font-variant-numeric: tabular-nums; }
+.qhome-stats i { font-style: normal; font-size: 10.5px; color: #98a2b3; }
+.qhome-sec { display: flex; align-items: center; gap: 7px; margin: 16px 16px 9px; font-size: 13px; font-weight: 700; color: #101828; }
+.qhome-sec .spacer { margin-left: auto; font-size: 11px; font-weight: 400; color: #98a2b3; }
+.qhome-badges { display: flex; gap: 8px; overflow-x: auto; padding: 0 14px 2px; scrollbar-width: none; }
+.qhome-badges::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.qhome-badge {
+  flex: none;
+  width: 76px;
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-radius: 12px;
+  text-align: center;
+  padding: 10px 4px 8px;
+  box-shadow: 0 1px 2px rgba(15, 17, 21, 0.04);
+}
+.qhome-badge-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin-bottom: 4px;
+  color: #fff;
+}
+.qhome-badge-ic.tone-brand { background: #2563eb; }
+.qhome-badge-ic.tone-success { background: #079455; }
+.qhome-badge-ic.tone-violet { background: #7f56d9; }
+.qhome-badge-ic.tone-warn { background: #dc6803; }
+.qhome-badge-ic.tone-cyan { background: #0e9384; }
+.qhome-badge-ic.tone-danger { background: #d92d20; }
+.qhome-badge > span:last-child { font-size: 10.5px; color: #667085; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qhome-photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 0 14px; }
+.qhome-photo {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #fff;
+  border: none;
+  font-size: 11px;
+  font-family: inherit;
+}
+.qhome-photo.more { background: #fff; border: 1px dashed #d0d5dd; color: #98a2b3; flex-direction: column; }
+.qhome-post {
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 17, 21, 0.04);
+  padding: 13px 14px;
+  margin: 0 14px 10px;
+}
+.qhome-post-head { display: flex; align-items: center; gap: 9px; }
+.qhome-post-name { font-size: 13.5px; font-weight: 700; color: #101828; }
+.qhome-post-time { font-size: 11px; color: #98a2b3; }
+.qhome-post-text { font-size: 13px; line-height: 1.6; color: #101828; margin-top: 8px; }
+.qhome-post-desc { font-size: 12px; color: #667085; line-height: 1.6; margin: 5px 0 0; }
+.qhome-post-imgs { display: grid; gap: 6px; margin-top: 9px; }
+.qhome-post-imgs.g1 { grid-template-columns: 1fr; }
+.qhome-post-imgs.g2 { grid-template-columns: 1fr 1fr; }
+.qhome-pimg {
+  height: 92px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  gap: 6px;
+  font-size: 12px;
+}
+.qhome-post-ops { display: flex; border-top: 1px solid var(--sp-line); margin-top: 11px; padding-top: 9px; }
+.qhome-op {
+  flex: 1;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #98a2b3;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+}
+.qhome-op.liked { color: #12b7f5; font-weight: 600; }
+.qhome-op + .qhome-op { border-left: 1px solid var(--sp-line); }
 </style>

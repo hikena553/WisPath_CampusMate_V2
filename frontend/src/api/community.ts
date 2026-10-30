@@ -8,14 +8,11 @@ export interface CommunityPost {
   content: string
   view_count: number
   like_count: number
-  /** 收藏数与点赞分开计数：点赞是认可，收藏是留着回看 */
-  favorite_count: number
   comment_count: number
   created_at: string | null
   author_name: string | null
   author_avatar: string | null
   liked: boolean
-  favorited: boolean
 }
 
 export interface CommunityComment {
@@ -54,11 +51,6 @@ export function toggleLike(postId: number) {
   return request.post<{ liked: boolean; count: number }>(`/community/posts/${postId}/like`)
 }
 
-/** 收藏 / 取消收藏（切换；收藏会给作者发一条论坛互动消息，不进聊天） */
-export function toggleFavorite(postId: number) {
-  return request.post<{ favorited: boolean; count: number }>(`/community/posts/${postId}/favorite`)
-}
-
 export function getComments(postId: number) {
   return request.get<CommunityComment[]>(`/community/posts/${postId}/comments`)
 }
@@ -69,19 +61,6 @@ export function createComment(postId: number, content: string) {
 
 export function deleteComment(commentId: number) {
   return request.delete(`/community/comments/${commentId}`)
-}
-
-/** 我发出的评论（互动消息「我评论的」页签） */
-export interface MyComment {
-  id: number
-  post_id: number
-  post_title: string
-  content: string
-  created_at: string | null
-}
-
-export function getMyComments(limit = 50) {
-  return request.get<MyComment[]>('/community/my-comments', { params: { limit } })
 }
 
 export function getHotPosts(limit = 5) {

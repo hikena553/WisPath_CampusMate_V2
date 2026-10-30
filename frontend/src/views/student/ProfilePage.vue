@@ -2,7 +2,21 @@
   <div class="profile-wrapper">
     <!-- 主页面 -->
     <transition :name="slideDirection">
-      <div v-if="!currentPage" key="main" class="profile-page">
+      <div
+        v-if="!currentPage"
+        key="main"
+        class="profile-page"
+        @touchstart.passive="pull.onStart"
+        @touchmove="pull.onMove"
+        @touchend="pull.onEnd"
+        @touchcancel="pull.onCancel"
+      >
+        <!-- 下拉刷新指示器：主页面滚动层最上方（封面区在它之后，一起下移） -->
+        <PullRefreshIndicator
+          v-if="isMobile"
+          :indicator-style="pull.indicatorStyle"
+          :active="pull.active"
+        />
         <!-- 个人中心头部：抖音范式封面 —— 顶部悬浮操作、头像压住封面下边缘、姓名与学号贴在封面右下 -->
         <section class="pf-hero" :class="{ 'is-photo': !!bannerUrl }" :style="heroBannerStyle" @click="openPage('banner')">
           <div class="pf-hero-scrim"></div>
@@ -13,8 +27,8 @@
               更换背景
             </button>
             <span class="pf-top-icons">
-              <button type="button" class="pf-top-icon" title="成长档案" @click.stop="router.push('/student/growth')">
-                <el-icon :size="16"><TrendCharts /></el-icon>
+              <button type="button" class="pf-top-icon" title="设置" @click.stop="openPage('settings')">
+                <el-icon :size="16"><Setting /></el-icon>
               </button>
             </span>
           </div>
@@ -94,92 +108,119 @@
               <span class="pf-tag">画像完整度 {{ imageComplete }}%</span>
             </div>
 
-            <!-- 快捷入口行：横向滑动，一屏放不下时左右滑（勋章已移到头像右侧的勋章条） -->
+            <!-- 快捷入口行：一屏固定 5 个，其余左右滑查看（勋章已移到头像右侧的勋章条） -->
             <nav class="pf-quick">
-              <button type="button" class="pf-quick-item" @click="openPage('profile')">
-                <span class="pf-quick-icon"><el-icon :size="21"><User /></el-icon></span>
-                <span class="pf-quick-label">我的资料</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/student/growth')">
-                <span class="pf-quick-icon"><el-icon :size="21"><TrendCharts /></el-icon></span>
-                <span class="pf-quick-label">成长档案</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/student/plan')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Calendar /></el-icon></span>
-                <span class="pf-quick-label">学习计划</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/student/portfolio')">
-                <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
-                <span class="pf-quick-label">我的作品集</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/student/resources')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Collection /></el-icon></span>
-                <span class="pf-quick-label">AI资源空间</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="router.push('/student/campus?tab=community')">
-                <span class="pf-quick-icon"><el-icon :size="21"><ChatDotRound /></el-icon></span>
-                <span class="pf-quick-label">交流社区</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="openPage('theme')">
-                <span class="pf-quick-icon"><el-icon :size="21"><Sunny /></el-icon></span>
-                <span class="pf-quick-label">主题设置</span>
-              </button>
-              <button type="button" class="pf-quick-item" @click="openPage('help')">
-                <span class="pf-quick-icon"><el-icon :size="21"><QuestionFilled /></el-icon></span>
-                <span class="pf-quick-label">使用帮助</span>
-              </button>
+              <div class="pf-quick-track">
+                <button type="button" class="pf-quick-item" @click="openPage('profile')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><User /></el-icon></span>
+                  <span class="pf-quick-label">我的资料</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/student/growth')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><TrendCharts /></el-icon></span>
+                  <span class="pf-quick-label">成长档案</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/student/plan')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><Calendar /></el-icon></span>
+                  <span class="pf-quick-label">学习计划</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="router.push('/student/portfolio')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
+                  <span class="pf-quick-label">我的作品集</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="openPage('badges')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><Medal /></el-icon></span>
+                  <span class="pf-quick-label">勋章墙</span>
+                </button>
+                <button type="button" class="pf-quick-item" @click="openPage('feedback')">
+                  <span class="pf-quick-icon"><el-icon :size="21"><ChatLineSquare /></el-icon></span>
+                  <span class="pf-quick-label">意见反馈</span>
+                </button>
+              </div>
             </nav>
           </div>
 
-          <!-- 客服与帮助 -->
-          <h3 class="pf-section-title">客服与帮助</h3>
-          <section class="pf-section">
-            <div class="pf-list">
-              <button type="button" class="pf-row" @click="openPage('feedback')">
-                <span class="pf-row-icon is-violet"><el-icon :size="17"><ChatDotRound /></el-icon></span>
-                <span class="pf-row-label">意见反馈</span>
-                <span class="pf-row-hint">帮助我们改进</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+          <!-- 收藏的帖子 & 项目经历：同一行 Tab 切换（左右滑可换）+ 下方向下铺开的卡片 -->
+          <div class="pf-cards-area">
+            <div class="pf-cards-tabs" role="tablist" aria-label="个人内容">
+              <button
+                type="button"
+                role="tab"
+                class="pf-cards-tab"
+                :class="{ 'is-active': cardTab === 'projects' }"
+                :aria-selected="cardTab === 'projects'"
+                @click="cardTab = 'projects'"
+              >
+                项目经历
               </button>
-              <button type="button" class="pf-row" @click="openPage('help')">
-                <span class="pf-row-icon is-cyan"><el-icon :size="17"><QuestionFilled /></el-icon></span>
-                <span class="pf-row-label">使用帮助</span>
-                <span class="pf-row-hint">新手引导</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
+              <button
+                type="button"
+                role="tab"
+                class="pf-cards-tab"
+                :class="{ 'is-active': cardTab === 'favorites' }"
+                :aria-selected="cardTab === 'favorites'"
+                @click="cardTab = 'favorites'"
+              >
+                收藏的帖子
               </button>
             </div>
-          </section>
 
-          <!-- 设置与隐私 -->
-          <h3 class="pf-section-title">设置与隐私</h3>
-          <section class="pf-section">
-            <div class="pf-list">
-              <button type="button" class="pf-row" @click="openPage('password')">
-                <span class="pf-row-icon is-violet"><el-icon :size="17"><Lock /></el-icon></span>
-                <span class="pf-row-label">修改密码</span>
-                <span class="pf-row-hint">定期更换更安全</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
-              </button>
-              <button type="button" class="pf-row" @click="openPage('theme')">
-                <span class="pf-row-icon is-warn"><el-icon :size="17"><Sunny /></el-icon></span>
-                <span class="pf-row-label">主题设置</span>
-                <span class="pf-row-hint">{{ currentTheme === 'dark' ? '深色' : '浅色' }}</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
-              </button>
-              <button type="button" class="pf-row" @click="openPage('about')">
-                <span class="pf-row-icon"><el-icon :size="17"><InfoFilled /></el-icon></span>
-                <span class="pf-row-label">关于{{ agentName }}</span>
-                <span class="pf-row-hint">v1.0.0</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
-              </button>
-              <button type="button" class="pf-row" @click="logout">
-                <span class="pf-row-icon is-danger"><el-icon :size="17"><SwitchButton /></el-icon></span>
-                <span class="pf-row-label">退出登录</span>
-                <span class="pf-row-hint">学号 {{ auth.user?.username || '—' }}</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
-              </button>
+            <!-- 左右滑动切换：项目经历在前，向左滑（dx<0）到收藏，向右滑回项目经历 -->
+            <div
+              class="pf-cards-body"
+              @touchstart="onSwipeStart"
+              @touchmove="onSwipeMove"
+              @touchend="onSwipeEnd"
+              @pointerdown="onPointerStart"
+              @pointerup="onPointerEnd"
+            >
+              <template v-if="cardTab === 'favorites'">
+                <div v-if="favLoading" class="pf-cards-loading">加载中…</div>
+                <div v-else-if="!favorites.length" class="pf-cards-empty">还没有收藏任何帖子</div>
+                <div v-else class="pf-media-grid">
+                  <div
+                    v-for="fav in favorites.slice(0, 4)"
+                    :key="fav.id"
+                    class="pf-media-card"
+                    @click="router.push('/student/campus?tab=favorites')"
+                  >
+                    <div class="pf-media-cover" :class="`tone-${fav.id % 5}`">
+                      <span class="pf-media-cover-text">{{ fav.category || '帖子' }}</span>
+                      <span v-if="fav.category" class="pf-media-tag">{{ fav.category }}</span>
+                    </div>
+                    <div class="pf-media-title">{{ fav.title }}</div>
+                    <div class="pf-media-meta">
+                      <el-icon :size="11"><Star /></el-icon>
+                      <span>{{ fav.created_at ? fav.created_at.slice(0, 10) : '已收藏' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <template v-else>
+                <div v-if="projLoading" class="pf-cards-loading">加载中…</div>
+                <div v-else-if="!projects.length" class="pf-cards-empty">还没有项目经历</div>
+                <div v-else class="pf-media-grid">
+                  <div
+                    v-for="p in projects.slice(0, 4)"
+                    :key="p.id"
+                    class="pf-media-card"
+                    @click="router.push('/student/portfolio')"
+                  >
+                    <div class="pf-media-cover" :class="`tone-${p.id % 5}`">
+                      <img v-if="p.cover_url" :src="p.cover_url" :alt="p.project_name" loading="lazy" />
+                      <span v-else class="pf-media-cover-text">{{ p.tech_stack || '项目' }}</span>
+                      <span v-if="p.is_team" class="pf-media-tag">团队</span>
+                    </div>
+                    <div class="pf-media-title">{{ p.project_name }}</div>
+                    <div class="pf-media-meta">
+                      <el-icon :size="11"><Folder /></el-icon>
+                      <span>{{ p.start_date.slice(0, 7) }}{{ p.end_date ? ' ~ ' + p.end_date.slice(0, 7) : ' 至今' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
-          </section>
+          </div>
 
           <p class="pf-foot-note">{{ agentName }} · 智慧校园服务平台 v1.0.0</p>
         </div>
@@ -198,6 +239,67 @@
           <div class="sub-page-placeholder"></div>
         </div>
 
+        <!-- 设置（抖音设置页范式）：灰底 + 白色圆角卡片 + 无图标纯文字行 + 居中退出登录 -->
+        <div v-if="currentPage === 'settings'" class="sub-page-content set-page">
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="openPage('profile')">
+                <span class="set-row-label">账号与安全</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="set-row" @click="openPage('password')">
+                <span class="set-row-label">修改密码</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="set-row" @click="openPage('banner')">
+                <span class="set-row-label">更换背景</span>
+                <span class="set-row-value is-empty">个人主页封面</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="openPage('theme')">
+                <span class="set-row-label">主题设置</span>
+                <span class="set-row-value">{{ currentTheme === 'dark' ? '深色' : '浅色' }}</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="set-row" @click="openPage('feedback')">
+                <span class="set-row-label">意见反馈</span>
+                <span class="set-row-value is-empty">帮助我们改进</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="set-row" @click="openPage('help')">
+                <span class="set-row-label">使用帮助</span>
+                <span class="set-row-value is-empty">新手引导</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="openPage('about')">
+                <span class="set-row-label">关于{{ agentName }}</span>
+                <span class="set-row-value">v1.0.0</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row set-row-logout" @click="logout">
+                <span class="set-row-label">退出登录</span>
+              </button>
+            </div>
+          </div>
+
+          <p class="set-version">{{ agentName }} v1.0.0</p>
+        </div>
+
         <!-- 账号与安全（抖音设置页范式）：只读展示 + 点按行弹窗编辑，不再铺一屏输入框 -->
         <div v-if="currentPage === 'profile'" class="sub-page-content set-page">
           <!-- 头像：抖音「编辑资料」里的一行，右侧直接显示当前头像 -->
@@ -206,9 +308,12 @@
               <button type="button" class="set-row" @click="triggerAvatarInput">
                 <span class="set-row-label">头像</span>
                 <span class="set-row-value">
-                  <el-avatar :size="28" :src="profileForm.avatar" shape="square" class="set-row-avatar">
-                    {{ profileForm.name?.[0] || '?' }}
-                  </el-avatar>
+                  <span class="pf-ava-wrap">
+                    <el-avatar :size="44" :src="profileForm.avatar" class="pf-ava">
+                      {{ profileForm.name?.[0] || '?' }}
+                    </el-avatar>
+                    <span class="pf-ava-cam"><el-icon :size="10"><Camera /></el-icon></span>
+                  </span>
                 </span>
                 <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
@@ -236,8 +341,35 @@
             </div>
           </div>
 
-          <div class="sub-page-footer">
-            <el-button type="primary" @click="handleSaveProfile" :loading="saving" style="width:100%">保存</el-button>
+          <!-- 我的简历（仅移动端）：上传条 + 文件卡列表 + 底部「导出简历」向导入口 -->
+          <div class="set-group pf-resume-group">
+            <div class="set-group-title">我的简历</div>
+            <button type="button" class="pf-resume-upload" @click="triggerResumeUpload">
+              <span class="pf-resume-uplus"><el-icon :size="16"><Plus /></el-icon></span>
+              <span class="pf-resume-utext"><b>上传简历文件</b><i>支持 PDF / DOC / DOCX</i></span>
+              <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+            </button>
+            <div v-for="r in resumes" :key="r.id" class="pf-resume-file">
+              <span class="pf-resume-badge" :data-ext="fileExt(r.filename)">{{ fileExt(r.filename) }}</span>
+              <span class="pf-resume-info">
+                <b>{{ r.filename }}</b>
+                <i>{{ r.is_current ? '当前使用 · 投递时优先展示' : '点击「设为当前」作为主力简历' }}</i>
+              </span>
+              <span class="pf-resume-acts">
+                <button type="button" @click.stop="previewResume(r)">预览</button>
+                <button v-if="!r.is_current" type="button" @click.stop="makeCurrent(r)">设为当前</button>
+                <button type="button" class="is-danger" @click.stop="removeResume(r)">删除</button>
+              </span>
+            </div>
+            <div v-if="!resumes.length" class="pf-resume-empty">还没有简历：可上传文件，或用下方「导出简历」一键生成专属简历</div>
+            <input ref="resumeInputRef" type="file" accept=".pdf,.doc,.docx" style="display:none" @change="onResumeFileChange" />
+          </div>
+
+          <div class="sub-page-footer pf-profile-foot">
+            <el-button type="primary" class="pf-save-btn" @click="handleSaveProfile" :loading="saving">保存</el-button>
+            <button type="button" class="pf-export-btn" @click="resumeWizardVisible = true">
+              <el-icon :size="15"><Document /></el-icon>导出简历
+            </button>
           </div>
         </div>
 
@@ -252,69 +384,98 @@
           <div v-else class="badge-placeholder">勋章数据加载中…</div>
         </div>
 
-        <!-- 修改密码 -->
-        <div v-if="currentPage === 'password'" class="sub-page-content">
-          <el-form :model="passwordForm" label-width="80px" class="sub-form">
-            <el-form-item label="旧密码" required>
-              <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
-            </el-form-item>
-            <el-form-item label="新密码" required>
-              <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20位" />
-            </el-form-item>
-            <el-form-item label="确认密码" required>
-              <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入" />
-            </el-form-item>
-            <el-form-item label="验证码" required>
-              <div class="captcha-row">
-                <el-input v-model="passwordForm.captcha" placeholder="请输入验证码" maxlength="4" />
-                <div class="captcha-code" @click="refreshCaptcha">{{ captchaCode }}</div>
-              </div>
-            </el-form-item>
-          </el-form>
-          <div class="sub-page-footer">
-            <el-button type="primary" @click="handleChangePassword" :loading="changingPassword" style="width:100%">确定</el-button>
-          </div>
-        </div>
+        <!-- 修改密码（同教师端）：单卡片表单 + 密码强度提示 -->
+        <div v-if="currentPage === 'password'" class="sub-page-content sp-page">
+          <div class="sp-card">
+            <div class="sp-head">
+              <h3 class="sp-title">修改登录密码</h3>
+              <p class="sp-desc">建议每 3 个月更换一次，使用 6-20 位字母与数字组合，修改后需重新登录。</p>
+            </div>
 
-        <!-- 意见反馈 -->
-        <div v-if="currentPage === 'feedback'" class="sub-page-content">
-          <!-- 提交表单 -->
-          <div class="form-group">
-            <div class="form-group-title">提交反馈</div>
-            <el-form :model="feedbackForm" label-width="70px" class="sub-form">
-              <el-form-item label="反馈类型">
-                <el-select v-model="feedbackForm.type" style="width:100%">
-                  <el-option label="问题反馈" value="bug" /><el-option label="功能建议" value="feature" />
-                  <el-option label="投诉" value="complaint" /><el-option label="其他" value="other" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="标题"><el-input v-model="feedbackForm.title" placeholder="请简要描述" maxlength="100" /></el-form-item>
-              <el-form-item label="内容"><el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述" /></el-form-item>
-              <el-form-item label="联系方式"><el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱，方便我们联系您" /></el-form-item>
-            </el-form>
-            <div class="sub-page-footer">
-              <el-button type="primary" @click="submitFeedback" :loading="submitting" style="width:100%">提交</el-button>
+            <div class="sp-field">
+              <span class="sp-label">旧密码</span>
+              <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入当前密码" />
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">新密码</span>
+              <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="6-20 位字母 / 数字组合" />
+              <span v-if="passwordForm.new_password" class="sp-meter">
+                <i v-for="n in 3" :key="n" class="sp-meter-bar" :class="{ 'is-on': passwordStrength >= n }"></i>
+                <em class="sp-meter-text">强度 {{ passwordStrengthText }}</em>
+              </span>
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">确认新密码</span>
+              <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="请再次输入新密码" />
+              <span v-if="passwordMismatch" class="sp-error">两次输入的新密码不一致</span>
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">图形验证码</span>
+              <span class="sp-captcha">
+                <el-input v-model="passwordForm.captcha" placeholder="输入右侧 4 位字符" maxlength="4" />
+                <button type="button" class="sp-captcha-code" @click="refreshCaptcha">{{ captchaCode }}</button>
+              </span>
             </div>
           </div>
 
-          <!-- 历史记录 -->
-          <div class="form-group">
-            <div class="form-group-title">历史反馈</div>
-            <div v-loading="loadingFeedback" class="feedback-list">
+          <button type="button" class="sp-submit" :disabled="changingPassword" @click="handleChangePassword">
+            {{ changingPassword ? '正在保存…' : '保存新密码' }}
+          </button>
+        </div>
+
+        <!-- 意见反馈（同教师端）：单卡片表单 + 历史记录卡片 -->
+        <div v-if="currentPage === 'feedback'" class="sub-page-content sp-page">
+          <div class="sp-card">
+            <div class="sp-head">
+              <h3 class="sp-title">提交反馈</h3>
+              <p class="sp-desc">描述遇到的问题或想要的功能，提交后可在下方查看处理进度与官方回复。</p>
+            </div>
+
+            <div class="sp-field">
+              <span class="sp-label">反馈类型</span>
+              <el-select v-model="feedbackForm.type" style="width:100%">
+                <el-option label="问题反馈" value="bug" /><el-option label="功能建议" value="feature" />
+                <el-option label="投诉" value="complaint" /><el-option label="其他" value="other" />
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <span class="sp-label">标题</span>
+              <el-input v-model="feedbackForm.title" placeholder="请简要描述" maxlength="100" />
+            </div>
+            <div class="sp-field">
+              <span class="sp-label">内容</span>
+              <el-input v-model="feedbackForm.content" type="textarea" :rows="4" placeholder="请详细描述" />
+            </div>
+            <div class="sp-field">
+              <span class="sp-label">联系方式</span>
+              <el-input v-model="feedbackForm.contact" placeholder="手机号/邮箱，方便我们联系您" />
+            </div>
+          </div>
+
+          <button type="button" class="sp-submit" :disabled="submitting" @click="submitFeedback">
+            {{ submitting ? '正在提交…' : '提交反馈' }}
+          </button>
+
+          <div class="fb-history">
+            <h3 class="fb-history-title">历史反馈</h3>
+            <div v-loading="loadingFeedback" class="fb-list">
               <div v-if="feedbackList.length === 0 && !loadingFeedback" class="empty-feedback">暂无反馈记录</div>
-              <div v-for="item in feedbackList" :key="item.id" class="feedback-item">
-                <div class="feedback-header">
-                  <span class="feedback-type">{{ getTypeLabel(item.type) }}</span>
-                  <el-tag :type="getStatusType(item.status)" size="small">{{ getStatusLabel(item.status) }}</el-tag>
+              <article v-for="item in feedbackList" :key="item.id" class="fb-card">
+                <div class="fb-card-head">
+                  <span class="fb-type">{{ getTypeLabel(item.type) }}</span>
+                  <span class="fb-status" :class="`is-${item.status}`">{{ getStatusLabel(item.status) }}</span>
                 </div>
-                <div class="feedback-title">{{ item.title }}</div>
-                <div class="feedback-content">{{ item.content }}</div>
-                <div v-if="item.reply" class="feedback-reply">
-                  <div class="reply-label">官方回复：</div>
-                  <div class="reply-content">{{ item.reply }}</div>
+                <div class="fb-title">{{ item.title }}</div>
+                <div class="fb-content">{{ item.content }}</div>
+                <div v-if="item.reply" class="fb-reply">
+                  <div class="fb-reply-label">官方回复</div>
+                  <div class="fb-reply-text">{{ item.reply }}</div>
                 </div>
-                <div class="feedback-time">{{ item.created_at?.slice(0, 10) }}</div>
-              </div>
+                <div class="fb-time">{{ item.created_at?.slice(0, 10) }}</div>
+              </article>
             </div>
           </div>
         </div>
@@ -345,13 +506,16 @@
           </div>
         </div>
 
-        <!-- 主题设置 -->
+        <!-- 主题设置（同教师端：仅浅色模式 + 说明） -->
         <div v-if="currentPage === 'theme'" class="sub-page-content">
           <div class="theme-options">
             <div class="theme-option" :class="{ active: currentTheme === 'light' }" @click="setTheme('light')">
               <div class="theme-preview light-preview"></div>
               <span>浅色模式</span>
             </div>
+          </div>
+          <div class="theme-hint">
+            <span>当前系统仅支持浅色模式</span>
           </div>
         </div>
 
@@ -465,12 +629,11 @@
       </div>
     </transition>
 
-    <!-- 账号与安全：字段编辑弹窗（抖音「点按设置项 → 就地编辑」范式） -->
-    <el-dialog
+    <!-- 账号与安全：字段编辑（单字段小内容：移动端=底部动作面板 / 桌面端=弹窗） -->
+    <ActionSheet
       v-model="editVisible"
       :title="editField ? `修改${editField.label}` : ''"
       width="86%"
-      align-center
     >
       <el-input
         v-if="editField && editField.type === 'text'"
@@ -492,10 +655,10 @@
         <el-button @click="editVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmFieldEdit">确定</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
-    <!-- 头像裁剪 -->
-    <el-dialog v-model="avatarCropVisible" title="裁剪头像" width="420px" :close-on-click-modal="false" @opened="onAvatarCropOpened">
+    <!-- 头像裁剪（交互工具：移动端=底部动作面板 / 桌面端=弹窗） -->
+    <ActionSheet v-model="avatarCropVisible" title="裁剪头像" width="420px">
       <div class="crop-container">
         <img ref="avatarCropImgRef" style="max-width:100%;display:block" />
       </div>
@@ -503,24 +666,28 @@
         <el-button @click="cancelAvatarCrop">取消</el-button>
         <el-button type="primary" @click="handleAvatarCropConfirm">确认裁剪</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
     <!-- 勋章放大查看 -->
     <BadgeDetail :badge="badgeDetail" @close="badgeDetail = null" />
+
+    <!-- 导出简历向导：问答 → 匹配度 → 模板（真实预览）→ 生成 DOCX/PDF -->
+    <ResumeExportWizard v-model="resumeWizardVisible" @generated="loadResumes" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
 import { useAuthStore } from '@/stores/auth'
 import { updateProfile, getTeachers, changePassword } from '@/api/user'
 import { createFeedback, getFeedbacks } from '@/api/feedback'
 import { uploadFile } from '@/api/upload'
-import { getGrowthProfile, getProjects, type GrowthProfile } from '@/api/growth'
+import { getGrowthProfile, getProjects, type GrowthProfile, type StudentProject } from '@/api/growth'
+import { getFavorites, type Favorite } from '@/api/resources'
 import { getGoals } from '@/api/plan'
 import { getMyBadgeWall, type BadgeItem, type BadgeWall as BadgeWallData } from '@/api/badge'
 import { syncQuickAccount } from '@/utils/quickLogin'
@@ -530,15 +697,24 @@ import BadgeMedal from '@/components/profile/BadgeMedal.vue'
 import BadgeDetail from '@/components/profile/BadgeDetail.vue'
 import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
+import { useResponsive } from '@/composables/useResponsive'
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+// v6.1 弹窗减负：单字段编辑/裁剪等轻交互走底部动作面板（简历向导与简历删除确认保持原样）
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import {
-  ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
-  ChatDotRound, QuestionFilled, Camera, Check, Plus,
-  User, TrendCharts, Calendar, FolderOpened, Collection
+  ArrowRight, ArrowLeft,
+  ChatLineSquare, Camera, Check, Plus, Setting, Document,
+  User, TrendCharts, Calendar, FolderOpened, Medal, Star, Folder
 } from '@element-plus/icons-vue'
+import { getResumes, createResume, setCurrentResume, deleteResume, type Resume } from '@/api/portfolio'
+import ResumeExportWizard from '@/components/resume/ResumeExportWizard.vue'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const { isMobile } = useResponsive()
 
 // 关于页品牌信息与站点配置同源
 const { siteName, siteLogo, agentName } = useSiteConfig()
@@ -546,6 +722,9 @@ const { siteName, siteLogo, agentName } = useSiteConfig()
 // 页面状态
 const currentPage = ref<string | null>(null)
 const slideDirection = ref('slide-left')
+
+// 个人中心的设置等页内子页打开时，让出移动端底部悬浮导航（一级页面才该有页签）
+useMobileSubPage(computed(() => isMobile.value && !!currentPage.value))
 
 // 表单状态
 const saving = ref(false)
@@ -591,6 +770,62 @@ const growthStats = reactive({
 // 成长画像（供 AI 驾驶舱与推荐使用）
 const growthProfile = ref<GrowthProfile | null>(null)
 const goalCount = ref(0)
+
+// 收藏的帖子 & 项目经历（个人中心卡片展示）
+const favorites = ref<Favorite[]>([])
+const projects = ref<StudentProject[]>([])
+const favLoading = ref(false)
+const projLoading = ref(false)
+
+/** 卡片区当前 Tab：项目经历在前，收藏在后 */
+const cardTab = ref<'projects' | 'favorites'>('projects')
+
+/**
+ * 左右滑动切换（触摸为主，鼠标拖拽辅助）。
+ * 用 touchmove 判定而不是只靠 touchend：手指拖动时页面可能开始纵向滚动，
+ * 一旦触发 pointercancel 就收不到 pointerup，touchend 反而是可靠的落点。
+ */
+let swipeStartX: number | null = null
+function swipeBegin(x: number) { swipeStartX = x }
+function swipeCheck(x: number) {
+  if (swipeStartX === null) return
+  const dx = x - swipeStartX
+  if (Math.abs(dx) < 40) return
+  // 项目在前、收藏在后：从右往左滑（dx<0）→ 收藏；从左往右滑 → 项目经历
+  cardTab.value = dx < 0 ? 'favorites' : 'projects'
+  swipeStartX = null
+}
+function onSwipeStart(e: TouchEvent) {
+  const t = e.touches[0]
+  if (t) swipeBegin(t.clientX)
+}
+function onSwipeMove(e: TouchEvent) {
+  const t = e.touches[0]
+  if (t) swipeCheck(t.clientX)
+}
+function onSwipeEnd(e: TouchEvent) {
+  const t = e.changedTouches[0]
+  if (t) swipeCheck(t.clientX)
+  swipeStartX = null
+}
+// 鼠标（桌面端预览）拖动：只认 mouse，避免和触摸事件重复触发
+function onPointerStart(e: PointerEvent) {
+  if (e.pointerType === 'mouse') swipeBegin(e.clientX)
+}
+function onPointerEnd(e: PointerEvent) {
+  if (e.pointerType !== 'mouse') return
+  swipeCheck(e.clientX)
+  swipeStartX = null
+}
+
+async function loadFavorites() {
+  favLoading.value = true
+  try {
+    favorites.value = await getFavorites()
+  } catch { favorites.value = [] }
+  finally { favLoading.value = false }
+}
+
 const imageComplete = computed(() => {
   let score = 0
   if ((growthProfile.value?.skills?.length || 0) > 0) score += 30
@@ -601,14 +836,17 @@ const imageComplete = computed(() => {
 })
 
 async function loadGrowth() {
+  projLoading.value = true
   try {
     const [p, pros, goals] = await Promise.all([getGrowthProfile(), getProjects(), getGoals()])
     growthProfile.value = p
+    projects.value = pros || []
     growthStats.awards = p?.total_records || 0
     growthStats.skills = p?.total_skills || 0
     growthStats.projects = pros?.length || 0
     goalCount.value = goals?.length || 0
   } catch { /* ignore */ }
+  finally { projLoading.value = false }
 }
 
 // 勋章墙（等级 / 已获得 / 待解锁进度）
@@ -632,6 +870,21 @@ async function refreshBadges() {
 
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '', captcha: '' })
 const captchaCode = ref('')
+
+/** 新密码强度：0~3 格（长度 6+、字母数字混排、长度 10+ 各计一格） */
+const passwordStrength = computed(() => {
+  const v = passwordForm.new_password || ''
+  let s = 0
+  if (v.length >= 6) s += 1
+  if (/[a-zA-Z]/.test(v) && /\d/.test(v)) s += 1
+  if (v.length >= 10) s += 1
+  return Math.min(s, 3)
+})
+const passwordStrengthText = computed(() => ['弱', '一般', '较强', '强'][passwordStrength.value] || '弱')
+/** 两次输入不一致（确认框为空时不提示，避免一进来就报红） */
+const passwordMismatch = computed(
+  () => !!passwordForm.confirm_password && passwordForm.new_password !== passwordForm.confirm_password,
+)
 
 function generateCaptcha() {
   const chars = '0123456789'
@@ -747,6 +1000,7 @@ const loadingFeedback = ref(false)
 // 页面标题
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
+    settings: '设置',
     profile: '账号与安全',
     badges: '我的勋章',
     password: '修改密码',
@@ -778,6 +1032,7 @@ function openPage(page: string) {
       profileForm.avatar = (u as any).avatar || ''
       profileForm.signature = (u as any).signature || ''
     }
+    loadResumes()          // 进资料页即刷新「我的简历」列表
   }
   slideDirection.value = 'slide-left'
   currentPage.value = page
@@ -787,6 +1042,72 @@ function openPage(page: string) {
 function closePage() {
   slideDirection.value = 'slide-right'
   currentPage.value = null
+}
+
+// ==================== 我的简历（资料页内管理 + 导出向导入口） ====================
+const resumes = ref<Resume[]>([])
+const resumeInputRef = ref<HTMLInputElement>()
+const resumeWizardVisible = ref(false)
+
+async function loadResumes() {
+  try { resumes.value = await getResumes() } catch { /* 资料页不因简历接口失败而阻塞 */ }
+}
+
+function triggerResumeUpload() { resumeInputRef.value?.click() }
+
+/** 文件类型徽标文本：简历卡左侧的 PDF / DOC 小方块 */
+function fileExt(name: string) {
+  const m = /\.([a-z0-9]+)$/i.exec(name || '')
+  return (m?.[1] || 'file').toUpperCase().slice(0, 4)
+}
+
+async function onResumeFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''            // 允许重复选同一个文件
+  if (!file) return
+  if (file.size > 10 * 1024 * 1024) { ElMessage.warning('文件不能超过 10MB'); return }
+  const loading = ElMessage({ message: '上传中…', duration: 0 })
+  try {
+    const up = await uploadFile(file)
+    await createResume({ filename: file.name, url: up.url, file_size: file.size })
+    await loadResumes()
+    ElMessage.success('简历已上传')
+  } catch {
+    ElMessage.error('上传失败，请重试')
+  } finally {
+    loading.close()
+  }
+}
+
+function previewResume(r: Resume) {
+  if (!r.url) return
+  window.open(r.url, '_blank', 'noopener')
+}
+
+async function makeCurrent(r: Resume) {
+  try {
+    await setCurrentResume(r.id)
+    await loadResumes()
+    ElMessage.success('已设为当前简历')
+  } catch {
+    ElMessage.error('设置失败，请重试')
+  }
+}
+
+async function removeResume(r: Resume) {
+  try {
+    await ElMessageBox.confirm(`删除「${r.filename}」？`, '删除简历', {
+      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
+    })
+  } catch { return }
+  try {
+    await deleteResume(r.id)
+    await loadResumes()
+    ElMessage.success('已删除')
+  } catch {
+    ElMessage.error('删除失败，请重试')
+  }
 }
 
 function selectPresetBanner(color: string) {
@@ -886,6 +1207,11 @@ function onAvatarCropOpened() {
     background: false,
   })
 }
+
+// 打开后初始化裁剪器（ActionSheet 移动端无 opened 事件，watch+nextTick 两端统一触发）
+watch(avatarCropVisible, (v) => {
+  if (v) nextTick(() => onAvatarCropOpened())
+})
 
 function cancelAvatarCrop() {
   avatarCropVisible.value = false
@@ -1028,25 +1354,25 @@ function getStatusLabel(status: string) {
   return labels[status] || status
 }
 
-function getStatusType(status: string) {
-  const types: Record<string, string> = {
-    pending: 'warning',
-    replied: 'success',
-    resolved: 'info'
-  }
-  return types[status] || 'info'
+// 下拉刷新：复用主页面已有的加载函数（画像统计 / 勋章 / 收藏 / 简历），失败静默
+async function refreshAll() {
+  await Promise.all([loadGrowth(), refreshBadges(), loadFavorites(), loadResumes()])
 }
+
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 onMounted(async () => {
   try { teachers.value = await getTeachers() } catch {}
   refreshCaptcha()
   loadFeedbacks()
   loadGrowth()
+  loadFavorites()
+  loadResumes()
   refreshBadges()
   applyTheme('light')
   // 支持外部跳转直达子页（如工作台"意见反馈"入口）
   const page = route.query.page as string | undefined
-  if (page && ['profile', 'badges', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
+  if (page && ['settings', 'profile', 'badges', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
     openPage(page)
   }
 })
@@ -1135,26 +1461,6 @@ onMounted(async () => {
   padding: 16px;
 }
 
-.sub-form {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px 14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-
-/* 表单分组 */
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #999;
-  margin-bottom: 10px;
-  padding-left: 4px;
-}
-
 /* 头像裁剪容器 */
 .crop-container {
   max-height: 320px;
@@ -1163,78 +1469,109 @@ onMounted(async () => {
   justify-content: center;
 }
 
-/* 验证码 */
-.captcha-row {
-  display: flex;
-  gap: 12px;
-  width: 100%;
+/* ===== 单卡片表单（同教师端）：修改密码 / 意见反馈 ===== */
+.sp-card {
+  padding: 18px 16px;
+  border: 1px solid var(--tui-border);
+  border-radius: 16px;
+  background: var(--tui-surface);
 }
-
-.captcha-row .el-input {
-  flex: 1;
+.sp-head { display: block; }
+.sp-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tui-text);
 }
-
-.captcha-code {
-  width: 100px;
-  height: 40px;
+.sp-desc {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tui-text-tertiary);
+}
+.sp-field { display: block; margin-top: 16px; }
+.sp-label {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  user-select: none;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+  gap: 6px;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tui-text-secondary);
 }
-
-/* 表单样式优化 */
-.sub-form :deep(.el-form-item) {
-  margin-bottom: 20px;
-}
-
-.sub-form :deep(.el-form-item__label) {
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-  line-height: 40px;
-}
-
-.sub-form :deep(.el-input__wrapper) {
+.sp-page :deep(.el-input__wrapper),
+.sp-page :deep(.el-select .el-input__wrapper) {
   border-radius: 10px;
-  box-shadow: 0 0 0 1px #e4e7ed inset;
-  padding: 4px 12px;
-  transition: all 0.2s;
+  background: var(--tui-surface-sunken);
+  box-shadow: 0 0 0 1px var(--tui-border) inset;
+  padding: 6px 12px;
 }
-
-.sub-form :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #c0c4cc inset;
+.sp-page :deep(.el-input__wrapper.is-focus),
+.sp-page :deep(.el-select .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--tui-text-tertiary) inset;
 }
-
-.sub-form :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #409eff inset;
-}
-
-.sub-form :deep(.el-select .el-input__wrapper) {
+.sp-page :deep(.el-textarea__inner) {
   border-radius: 10px;
-}
-
-.sub-form :deep(.el-textarea__inner) {
-  border-radius: 10px;
-  padding: 12px;
+  background: var(--tui-surface-sunken);
+  box-shadow: 0 0 0 1px var(--tui-border) inset;
+  padding: 10px 12px;
   resize: none;
 }
 
-.sub-form :deep(.el-input-number) {
-  width: 100%;
+/* 密码强度：三档中性色进度条 */
+.sp-meter { display: flex; align-items: center; gap: 5px; margin-top: 8px; }
+.sp-meter-bar {
+  width: 26px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--tui-border);
+  transition: background 0.2s;
 }
-
-.sub-form :deep(.el-input-number .el-input__wrapper) {
+.sp-meter-bar.is-on { background: var(--tui-text); }
+.sp-meter-text {
+  margin-left: 4px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--tui-text-tertiary);
+}
+.sp-error {
+  display: block;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: #d9534f;
+}
+.sp-captcha { display: flex; gap: 10px; }
+.sp-captcha .el-input { flex: 1; }
+.sp-captcha-code {
+  flex-shrink: 0;
+  width: 96px;
+  height: 40px;
+  border: 1px solid var(--tui-border);
   border-radius: 10px;
+  background: var(--tui-surface-sunken);
+  color: var(--tui-text);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  cursor: pointer;
 }
+.sp-captcha-code:active { opacity: 0.7; }
+.sp-submit {
+  width: 100%;
+  height: 44px;
+  margin-top: 18px;
+  border: none;
+  border-radius: 12px;
+  background: var(--tui-text);
+  color: var(--tui-bg);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sp-submit:active { opacity: 0.86; }
+.sp-submit:disabled { opacity: 0.45; cursor: default; }
 
 .sub-page-footer {
   padding: 14px 0;
@@ -1251,7 +1588,7 @@ onMounted(async () => {
 /* ===== 个人中心头部（抖音范式）：封面通栏、顶部悬浮操作、头像压住封面下边缘 ===== */
 .pf-hero {
   position: relative;
-  min-height: 178px;
+  min-height: 154px;
   padding: 10px 16px 0;
   background-color: #d8dee6;
   background-size: cover;
@@ -1327,7 +1664,7 @@ onMounted(async () => {
   z-index: 2;
   left: 106px;
   right: 16px;
-  bottom: 18px;
+  bottom: 26px;
 }
 .pf-hero-id-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .pf-cast-name {
@@ -1585,28 +1922,34 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-/* 快捷入口：单行横向滑动，超出屏幕的功能靠左右滑查看 */
+/* 快捷入口：单行横向滑动，一屏固定 5 个，其余功能靠左右滑查看 */
 .pf-quick {
+  margin-top: 14px;
+  padding: 14px 16px 10px;
+  border-top: 1px solid var(--tui-border);
+}
+/* 滚动交给内部轨道：外层带 16px 页边距，若让外层滚动，第 6 个入口会在右侧内边距里露出局部 */
+.pf-quick-track {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin-top: 14px;
-  padding: 12px 16px 6px;
-  border-top: 1px solid var(--tui-border);
+  /* 首尾各贴齐页面 16px 页边距，5 个格子等分整行宽度，不留两侧空白 */
+  gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-.pf-quick::-webkit-scrollbar { display: none; }
+.pf-quick-track::-webkit-scrollbar { display: none; }
 .pf-quick-item {
-  flex: 0 0 62px;
+  /* 5 个等分铺满轨道可视区；多留 1px，避免亚像素舍入把第 5 个挤出可视区 */
+  flex: 0 0 calc((100% - 33px) / 5);
+  min-width: 0;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   padding: 0;
   border: none;
   background: none;
@@ -1626,10 +1969,13 @@ onMounted(async () => {
   background: #fa5151;
 }
 .pf-quick-label {
+  max-width: 100%;
   font-size: 10.5px;
   line-height: 1.2;
   color: var(--tui-text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ===== 内容面板：圆角上浮，压住封面底边，形成「悬浮于背景之上」的层次 =====
@@ -1746,62 +2092,246 @@ onMounted(async () => {
   color: var(--tui-text-quiet);
 }
 
-/* ===== 设置项列表（抖音设置页范式）：左标签 + 右值 + 箭头 ===== */
-.set-page .set-group { margin-bottom: 10px; }
-.set-page .set-group-title {
-  margin: 0 0 6px 16px;
-  font-size: 12.5px;
+/* ===== 收藏的帖子 & 项目经历：同一行 Tab 切换 + 向下铺开的封面卡 ===== */
+.pf-cards-area { padding: 12px 16px 0; }
+
+/* Tab 行：两个标题同一水平线，选中态加粗 + 短下划线（抖音「作品 / 喜欢」范式） */
+.pf-cards-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.pf-cards-tab {
+  position: relative;
+  padding: 0 0 7px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tui-text-quiet);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.pf-cards-tab.is-active {
   font-weight: 600;
-  letter-spacing: 0.3px;
-  color: #8b929e;
+  color: var(--tui-text);
+}
+.pf-cards-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.pf-cards-body { margin-top: 10px; touch-action: pan-y; }
+.pf-cards-loading,
+.pf-cards-empty {
+  padding: 16px 8px;
+  font-size: 12.5px;
+  color: var(--tui-text-quiet);
+  text-align: center;
+}
+
+/* 两列网格，数据向下铺开（不再横向滑动） */
+.pf-media-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 10px;
+}
+.pf-media-card { min-width: 0; cursor: pointer; }
+.pf-media-card:active { opacity: 0.72; }
+
+/* 封面：16:9，圆角 8px；无图时用低饱和渐变 + 分类文字占位（同 B 站专栏封面） */
+.pf-media-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #eef1f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pf-media-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pf-media-cover-text {
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #fff;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 五种低饱和渐变轮换，避免一片同色 */
+.pf-media-cover.tone-0 { background: linear-gradient(135deg, #8ea2c6, #5f739c); }
+.pf-media-cover.tone-1 { background: linear-gradient(135deg, #9ab6a4, #6b8d78); }
+.pf-media-cover.tone-2 { background: linear-gradient(135deg, #c2a68e, #96795f); }
+.pf-media-cover.tone-3 { background: linear-gradient(135deg, #a89cc0, #7a6b96); }
+.pf-media-cover.tone-4 { background: linear-gradient(135deg, #90aab8, #637f8f); }
+.pf-media-tag {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(10, 12, 16, 0.56);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 10px;
+  line-height: 1.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 标题：B 站式两行截断，封面下 6px */
+.pf-media-title {
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.42;
+  color: var(--tui-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 元信息：灰字小图标一行，同 B 站「播放量 · 弹幕数」位置 */
+.pf-media-meta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--tui-text-quiet);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ===== 设置项列表（抖音设置页范式）=====
+   灰底画布 + 白色圆角卡片，行内只有「左标签 / 右值 / 箭头」三段；
+   分隔线内缩到文字起点，卡片之间靠灰色间隙分块，不用分组标题与彩色图标。 */
+.set-page { padding: 12px 12px 28px; }
+.set-page .set-group { margin-bottom: 12px; }
+.set-page .set-group-title {
+  margin: 0 0 8px 4px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  color: var(--tui-text-quiet);
 }
 .set-page .set-list {
   background: var(--tui-surface);
   border: none;
-  border-radius: 0;
+  border-radius: 12px;
   box-shadow: none;
   overflow: hidden;
 }
 .set-page .set-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  padding: 13px 16px;
+  min-height: 54px;
+  padding: 0 16px;
   border: none;
-  border-bottom: 1px solid var(--tui-border);
   background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.set-page .set-row:last-child { border-bottom: none; }
-.set-page .set-row:active { background: var(--tui-surface-muted); }
+/* 分隔线：距左 16px 起（与文字对齐），右端通到卡片边缘 */
+.set-page .set-row + .set-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: var(--tui-border);
+  transform: scaleY(0.5);
+  transform-origin: top;
+}
+.set-page .set-row:active { background: #f5f5f5; }
 .set-page .set-row.is-readonly { cursor: default; }
 .set-page .set-row.is-readonly:active { background: transparent; }
 .set-page .set-row-label {
   flex-shrink: 0;
-  font-size: 13.5px;
+  font-size: 15px;
+  font-weight: 400;
   color: var(--tui-text);
+  line-height: 1.3;
 }
 .set-page .set-row-value {
   flex: 1;
   min-width: 0;
   text-align: right;
   font-size: 13px;
-  color: var(--tui-text-tertiary);
+  color: var(--tui-text-quiet);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .set-page .set-row-value.is-empty { color: var(--tui-text-quiet); }
-.set-page .set-row-arrow { color: #cbd0d8; flex-shrink: 0; }
-.set-page .set-row-avatar {
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--tui-surface-muted);
-  color: var(--tui-text-tertiary);
-  font-size: 12px;
+.set-page .set-row-arrow { color: #c7ccd4; flex-shrink: 0; }
+/* 退出登录：抖音式独立白卡片，整行居中、无箭头 */
+.set-page .set-row-logout {
+  justify-content: center;
+  min-height: 52px;
+}
+.set-page .set-row-logout .set-row-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--tui-danger);
+}
+.set-page .set-version {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 11.5px;
+  letter-spacing: 0.2px;
+  color: var(--tui-text-quiet);
+}
+.set-page .pf-ava-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.set-page .pf-ava {
+  border: 2px solid #fff;
+  background: linear-gradient(135deg, #7d6cf2, #5747cc);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px #e6eae7, 0 1px 5px rgba(20, 24, 22, .10);
+}
+.set-page .pf-ava-cam {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #14171a;
+  color: #fff;
+  border: 2px solid #fff;
 }
 
 /* ===== 更换背景（抖音背景选择器范式）：实时预览 + 背景宫格 ===== */
@@ -1957,6 +2487,18 @@ onMounted(async () => {
 }
 .light-preview { background: linear-gradient(135deg, #fff 0%, #f5f7fa 100%); }
 
+.theme-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--tui-surface-sunken);
+  border-radius: 10px;
+  color: var(--tui-text-tertiary);
+  font-size: 12px;
+}
 
 /* 关于 */
 .about-header {
@@ -2080,79 +2622,204 @@ onMounted(async () => {
   padding-left: 12px;
 }
 
-/* 反馈列表 */
-.feedback-list {
-  background: #fff;
-  border-radius: 16px;
-  padding: 8px 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  min-height: 100px;
+/* 历史反馈：标题 + 一卡一条 */
+.fb-history { margin-top: 22px; }
+
+.fb-history-title {
+  margin: 0 0 10px 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--tui-text-quiet);
 }
+
+.fb-list { min-height: 96px; }
 
 .empty-feedback {
-  text-align: center;
-  color: #999;
   padding: 32px 0;
-  font-size: 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--tui-text-quiet);
 }
 
-.feedback-item {
-  padding: 13px 0;
-  border-bottom: 1px solid #f5f5f5;
+.fb-card {
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1px solid var(--tui-border);
+  border-radius: 14px;
+  background: var(--tui-surface);
 }
 
-.feedback-item:last-child {
-  border-bottom: none;
-}
-
-.feedback-header {
+.fb-card-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 8px;
 }
 
-.feedback-type {
-  font-size: 12px;
-  color: #409eff;
-  font-weight: 500;
+.fb-type {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--tui-text-tertiary);
 }
 
-.feedback-title {
+.fb-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tui-surface-sunken);
+  font-size: 11px;
+  color: var(--tui-text-tertiary);
+}
+
+.fb-status.is-pending { color: var(--tui-text); }
+.fb-status.is-replied,
+.fb-status.is-resolved { color: var(--tui-text-secondary); }
+
+.fb-title {
   font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--tui-text);
 }
 
-.feedback-content {
-  font-size: 13px;
-  color: #666;
-  line-height: 1.6;
-  margin-bottom: 8px;
+.fb-content {
+  margin-top: 5px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--tui-text-secondary);
 }
 
-.feedback-reply {
-  background: #f5f7fa;
-  border-radius: 8px;
+.fb-reply {
+  margin-top: 10px;
   padding: 10px 12px;
-  margin-bottom: 8px;
+  border-left: 2px solid var(--tui-border-strong);
+  border-radius: 0 10px 10px 0;
+  background: var(--tui-surface-sunken);
 }
 
-.reply-label {
-  font-size: 12px;
-  color: #999;
+.fb-reply-label {
   margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tui-text-tertiary);
 }
 
-.reply-content {
-  font-size: 13px;
-  color: #333;
-  line-height: 1.6;
+.fb-reply-text {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--tui-text);
 }
 
-.feedback-time {
-  font-size: 12px;
-  color: #ccc;
+.fb-time {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+}
+
+/* ── 我的简历 + 双按钮页脚（仅移动端生效；桌面端资料页保持原样）── */
+.pf-resume-group,
+.pf-export-btn { display: none; }
+/* 桌面端：保存按钮仍是整宽（与原版一致） */
+.pf-profile-foot .pf-save-btn { width: 100%; }
+
+@media (max-width: 767px) {
+  /* 下拉刷新：避免浏览器原生下拉刷新抢手势 */
+  .profile-page { overscroll-behavior-y: contain; }
+  .pf-resume-group { display: block; }
+  /* 上传条：虚线框整条可点 */
+  .pf-resume-upload {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 11px 12px;
+    border: 1.5px dashed #c9d2cd; border-radius: 12px;
+    background: #fafcfb;
+    text-align: left; font-family: inherit;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .pf-resume-upload:active { background: #f1f6f3; }
+  .pf-resume-uplus {
+    flex: none; width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 9px;
+    background: #14171a; color: #fff;
+  }
+  .pf-resume-utext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pf-resume-utext b { font-size: 13px; font-weight: 600; color: #14171a; }
+  .pf-resume-utext i { font-style: normal; font-size: 11px; color: #98a1a8; }
+  .pf-resume-upload .set-row-arrow { color: #c0c7c3; }
+
+  /* 文件卡：类型徽标 + 名称/状态 + 文字操作 */
+  .pf-resume-file {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 2px;
+    border-bottom: 1px solid #f1f4f2;
+  }
+  .pf-resume-file:last-of-type { border-bottom: 0; }
+  .pf-resume-badge {
+    flex: none;
+    min-width: 34px; padding: 0 6px; height: 22px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    background: #eef1f4; color: #5b6472;
+    font-size: 9.5px; font-weight: 700; letter-spacing: .4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pf-resume-badge[data-ext="PDF"] { background: #fdecea; color: #c53a30; }
+  .pf-resume-badge[data-ext="DOC"], .pf-resume-badge[data-ext="DOCX"] { background: #e8f0fe; color: #2f5fd0; }
+  .pf-resume-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pf-resume-info b {
+    font-size: 12.5px; font-weight: 500; color: #14171a;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pf-resume-info i { font-style: normal; font-size: 10.5px; color: #98a1a8; }
+  .pf-resume-acts { flex: none; display: inline-flex; gap: 2px; }
+  .pf-resume-acts button {
+    border: 0; background: transparent; padding: 4px 6px;
+    font-size: 12px; font-family: inherit; color: #0f7a58;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .pf-resume-acts button.is-danger { color: #c53a30; }
+  .pf-resume-acts button:active { opacity: .65; }
+  .pf-resume-empty {
+    padding: 12px 2px 4px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--tui-text-tertiary, #999);
+  }
+
+  /* 页脚：保存 + 导出简历 同款黑底白字（导出在保存右侧）。
+     注意：admin-components.css 里 .main-area .el-button--primary:not(...) 蓝渐变
+     特异性 (0,5,0) 会盖掉普通覆盖，这里用带 :not 链的同源选择器抬到 (0,7,0)。 */
+  .pf-profile-foot { display: flex; gap: 10px; }
+  .pf-profile-foot .pf-save-btn,
+  .main-area .pf-profile-foot .pf-save-btn.el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
+    flex: 1; width: auto; margin-left: 0;
+    background: #14171a;
+    background-image: none;
+    border-color: #14171a;
+    color: #fff;
+  }
+  .pf-profile-foot .pf-save-btn:hover,
+  .pf-profile-foot .pf-save-btn:focus,
+  .main-area .pf-profile-foot .pf-save-btn.el-button--primary:not(.is-link):not(.is-text):not(.is-plain):hover,
+  .main-area .pf-profile-foot .pf-save-btn.el-button--primary:not(.is-link):not(.is-text):not(.is-plain):focus {
+    background: #2a2f34; background-image: none; border-color: #2a2f34; color: #fff;
+  }
+  .pf-export-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    /* 与保存按钮(el-button)完全同款：responsive.css 移动端给 .el-button 设了
+       min-height:44px、admin-components 设了 8px 圆角，这里对齐保持一致观感 */
+    height: 44px;
+    border: 1px solid #14171a;
+    border-radius: var(--ad-control-radius, 8px);
+    background: #14171a;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pf-export-btn:active { background: #2a2f34; border-color: #2a2f34; }
 }
 </style>

@@ -1,9 +1,17 @@
 <template>
-  <div class="tui-page">
+  <div class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel">
     <SubPageHeader
       title="问卷中心"
       fallback="/teacher"
     />
+
+    <!-- 移动端下拉刷新：指示器插在吸顶栏之后 -->
+    <PullRefreshIndicator v-if="isMobile" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：问卷语义色 + 编辑图标；右侧是本页的回收概况与发起入口 -->
@@ -17,12 +25,12 @@
         <div class="tui-hero-metric is-accent"><b>{{ openSurveys.length }}</b><span>进行中</span></div>
         <div class="tui-hero-metric"><b>{{ mySurveys.length }}</b><span>我发起的</span></div>
         <div class="tui-hero-metric"><b>{{ overall.rate }}%</b><span>回收率</span></div>
-        <el-button size="small" type="primary" :icon="Plus" @click="createVisible = true">发起问卷</el-button>
+        <el-button size="small" :icon="Plus" @click="createVisible = true">发起问卷</el-button>
       </TuiPageHero>
 
       <!-- 移动端高频操作 -->
       <div v-if="isMobile" class="tui-actions sv-topbar">
-        <el-button size="small" type="primary" :icon="Plus" @click="createVisible = true">发起问卷</el-button>
+        <el-button size="small" :icon="Plus" @click="createVisible = true">发起问卷</el-button>
       </div>
 
       <!-- 回收率环形进度卡 -->
@@ -253,10 +261,11 @@
 
       <SurveyFillDialog v-model="fillVisible" :survey="filling" @saved="loadAll" />
 
-      <el-dialog
+      <!-- 聚合结果（长内容：移动端=全屏子页） -->
+      <ResponsivePopup
         v-model="resultVisible"
         :title="resultTitle"
-        :width="isMobile ? '90%' : '400px'"
+        width="400px"
         align-center
         :close-on-click-modal="false"
         class="tui-dialog"
@@ -270,16 +279,20 @@
           <span class="tui-empty-title">统计中…</span>
         </div>
         <SurveyResultPanel v-else-if="result" :result="result" />
-      </el-dialog>
+      </ResponsivePopup>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+// v6.1 弹窗减负：结果查看走全屏子页承接
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { EditPen, InfoFilled, Lock, Plus, Tickets, TrendCharts } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getMySurveyResults,
@@ -307,6 +320,9 @@ defineOptions({ name: 'teacher-survey' })
 
 const { isMobile } = useResponsive()
 const auth = useAuthStore()
+
+// 移动端下拉刷新：桌面端不响应手势
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 const tab = ref('join')
 const surveys = ref<PeerSurvey[]>([])
@@ -367,12 +383,12 @@ function statusTag(status: SurveyStatus) {
   return status === 'open' ? 'success' : status === 'draft' ? 'info' : 'warning'
 }
 
-async function loadAll() {
+async function loadAll(silent = false) {
   loading.value = true
   try {
     surveys.value = await listSurveys()
   } catch {
-    ElMessage.error('问卷列表加载失败')
+    if (!silent) ElMessage.error('问卷列表加载失败')
   } finally {
     loading.value = false
   }
@@ -381,6 +397,11 @@ async function loadAll() {
   } catch {
     mineResults.value = []
   }
+}
+
+/** 下拉刷新：复用问卷列表与受众统计加载，失败不提示 */
+async function refreshAll() {
+  await Promise.all([loadAll(true), loadAudience()])
 }
 
 async function loadAudience() {
@@ -451,6 +472,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
+
 /* 移动端高频操作条 */
 .sv-topbar {
   margin-bottom: 12px;

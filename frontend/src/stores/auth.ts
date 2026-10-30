@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { UserInfo } from '@/types'
-import { setToken, setUser, getToken, getUser, removeToken } from '@/utils/token'
+import {
+  setToken,
+  setUser,
+  getToken,
+  getUser,
+  removeToken,
+  clearForcedLogout,
+} from '@/utils/token'
 import { isGuestMode, setGuestMode } from '@/utils/guest'
 import { logoutApi } from '@/api/auth'
 import { useAgentStore, useTeacherAgentStore } from './agent'
@@ -31,6 +38,8 @@ export const useAuthStore = defineStore('auth', () => {
     setGuestMode(false)
     setToken(t)
     setUser(u as unknown as Record<string, unknown>)
+    // 重新登录成功：解除「已主动退出」的强制标记
+    clearForcedLogout()
     resetUserState()
   }
 
@@ -54,23 +63,23 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    // 本地清理必须最先同步执行：调用方（各退出入口）随后会立即 router.push，
-    // 若此时凭证仍在，路由守卫会判定为「已登录」并把 /login 重定向回角色首页，
-    // 表现为「先跳回某个页面、等接口 401 后才真正退出」。
-    // 先清理当前用户分区（此时 user 信息尚在），再清除凭证
-    useAgentStore().clearMessages()
-    useTeacherAgentStore().clearMessages()
-    token.value = null
-    user.value = null
-    guest.value = false
-    setGuestMode(false)
-    removeToken()
-    // 再通知服务端撤销 token（Bearer 或 httpOnly Cookie，Cookie 此时仍随请求发出），
-    // 失败不阻断本地登出
+    // 1) 先撤销服务端凭证并等它真正完成：httpOnly Cookie 只有随响应删除后，
+    //    后续 /auth/me 探活才会失败。若不等就跳转，守卫会用仍有效的 Cookie 把登录态复活。
     try {
       await logoutApi()
     } catch {
-      // 网络异常/凭证已失效：本地已清理，无需处理
+      // 服务端撤销失败（断网/超时）：本地仍照常清理，退出标记由调用方统一设置
+    }
+    // 2) 清理本地登录态。业务 store 清理即便异常，也必须保证凭证与用户缓存被移除
+    try {
+      useAgentStore().clearMessages()
+      useTeacherAgentStore().clearMessages()
+    } finally {
+      token.value = null
+      user.value = null
+      guest.value = false
+      setGuestMode(false)
+      removeToken()
     }
   }
 

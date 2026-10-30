@@ -94,6 +94,8 @@ async function handleReset() {
     const res = await resetPassword(props.userId)
     ElMessage.success(res.message)
     showDialog.value = false
+    // 重置成功后通知顶栏消息组件刷新，已闭环的重置申请红点即时消失
+    window.dispatchEvent(new Event('admin:messages-refresh'))
     emit('resetSuccess')
   } catch {
     ElMessage.error('重置密码失败')

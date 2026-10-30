@@ -37,6 +37,13 @@ const EASE = 'cubic-bezier(.22,.61,.36,1)'
 const SETTLE = `.26s ${EASE}`
 /** 刷新指示器的最短停留时间，避免接口极快时"闪一下" */
 const MIN_SPIN = 420
+/**
+ * 刷新指示器的最长停留时间。
+ * 项目 axios 实例未设全局 timeout，个别慢接口（如教师首页的 AI 联系人建议，走 LLM 实测 6s+）
+ * 会把 onRefresh 挂住，吉祥物就一直停在起跳态——表现为"下拉刷新卡住不回去"。
+ * 到时只收起指示器，刷新 Promise 继续在后台跑完（数据照常更新），不阻塞页面。
+ */
+const MAX_SPIN = 6000
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -63,6 +70,7 @@ export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, opti
   const dragging = ref(false)
   const refreshing = ref(false)
   let startY = 0
+  let startX = 0
   let tracking = false
 
   /** 已拉过阈值：松手即刷新（页面用它触发吉祥物起跳） */
@@ -84,6 +92,7 @@ export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, opti
     if (insideFixedLayer(e.target, el)) return
     if (el.scrollTop > 0) return
     startY = e.touches[0].clientY
+    startX = e.touches[0].clientX
     tracking = true
   }
 
@@ -91,6 +100,14 @@ export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, opti
     if (!tracking) return
     const el = e.currentTarget as HTMLElement
     const delta = e.touches[0].clientY - startY
+    const deltaX = e.touches[0].clientX - startX
+    // 横向手势优先交还原生（资讯页的横向翻页、Tab 横滑）：纵向位移没有明显占优就不接管
+    if (Math.abs(deltaX) > Math.abs(delta)) {
+      tracking = false
+      dragging.value = false
+      distance.value = 0
+      return
+    }
     // 手指向上，或过程中已经滚离顶部：放弃接管，交还原生滚动
     if (delta <= 0 || el.scrollTop > 0) {
       tracking = false
@@ -116,8 +133,12 @@ export function usePullRefresh(onRefresh: () => Promise<unknown> | unknown, opti
     refreshing.value = true
     distance.value = threshold
     try {
-      // 刷新失败由调用方静默兜底，指示器照常收起
-      await Promise.all([Promise.resolve().then(onRefresh).catch(() => {}), wait(MIN_SPIN)])
+      // 刷新失败由调用方静默兜底，指示器照常收起；
+      // 超过 MAX_SPIN 只收起指示器（onRefresh 继续后台跑），避免慢接口卡住吉祥物
+      await Promise.all([
+        Promise.race([Promise.resolve().then(onRefresh).catch(() => {}), wait(MAX_SPIN)]),
+        wait(MIN_SPIN),
+      ])
     } finally {
       refreshing.value = false
       distance.value = 0

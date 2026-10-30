@@ -827,10 +827,10 @@ async function addTaskFromPopup() {
     cursor: not-allowed;
   }
 
-  /* 快速添加：加号悬浮按钮（固定在底部中央，让开悬浮胶囊导航） */
+  /* 快速添加：加号悬浮按钮（固定在底部中央） */
   .task-quick-add-fab {
     position: fixed;
-    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    bottom: 76px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 102;

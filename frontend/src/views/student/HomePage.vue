@@ -36,7 +36,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getStudentAnnouncements, getUnreadCount, markAnnouncementRead, type AnnouncementItem } from '@/api/announcement'
-import { ElMessageBox } from 'element-plus'
+// v6.1 弹窗减负：公告提醒用底部动作面板替代居中弹窗
+import { actionAlert } from '@/composables/useActionSheet'
 import ChatShell from '@/components/agent/ChatShell.vue'
 
 const router = useRouter()
@@ -74,10 +75,10 @@ async function checkUnread() {
     if (fresh.length) {
       fresh.forEach((a) => urgentShown.add(a.id))
       try {
-        await ElMessageBox.alert(
+        await actionAlert(
           fresh.map((a) => `【${a.title}】\n${a.content}`).join('\n\n'),
           '紧急公告',
-          { confirmButtonText: '我知道了', type: 'warning', dangerouslyUseHTMLString: false }
+          { confirmButtonText: '我知道了' }
         )
       } catch {
         /* 用户关闭弹窗也视为已知晓，继续走已读标记 */
@@ -89,10 +90,7 @@ async function checkUnread() {
 }
 
 function showAnnouncementDetail(a: AnnouncementItem) {
-  ElMessageBox.alert(a.content, a.title, {
-    confirmButtonText: '我知道了',
-    type: a.urgency === 'urgent' ? 'warning' : 'info',
-  })
+  actionAlert(a.content, a.title, { confirmButtonText: '我知道了' })
   markAnnouncementRead(a.id).catch(() => {})
   unreadAnnouncements.value = unreadAnnouncements.value.filter(x => x.id !== a.id)
 }

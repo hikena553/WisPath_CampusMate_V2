@@ -1,7 +1,15 @@
 <template>
-  <div class="tui-page">
+  <div class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel">
     <!-- 移动端吸顶栏（首页下钻的子页面，返回回首页） -->
     <SubPageHeader title="全部功能" fallback="/teacher" />
+
+    <!-- 移动端下拉刷新：指示器插在吸顶栏之后，吸顶栏下拉时保持不动 -->
+    <PullRefreshIndicator v-if="isMobile" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：功能总览语义色 + 宫格图标 -->
@@ -79,6 +87,8 @@ import { useResponsive } from '@/composables/useResponsive'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
 import { getDashboardStats, type DashboardStats } from '@/api/teacher'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   ArrowRight, Bell, ChatDotRound, Collection, Connection, EditPen, Grid, InfoFilled,
   Notebook, Search, Stamp, Sunny, WarningFilled,
@@ -89,6 +99,9 @@ defineOptions({ name: 'teacher-features' })
 const router = useRouter()
 const { siteName } = useSiteConfig()
 const { isMobile } = useResponsive()
+
+// 移动端下拉刷新：桌面端不响应手势
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 const keyword = ref('')
 
@@ -169,6 +182,15 @@ onMounted(async () => {
   }
 })
 
+/** 下拉刷新：重拉角标统计（countOf 的数据来源），失败静默 */
+async function refreshAll() {
+  try {
+    applyStats(await getDashboardStats())
+  } catch {
+    /* 角标拉取失败保持原值 */
+  }
+}
+
 /** 搜索：按名称 / 分区名 / 说明匹配，命中后仅保留命中的模块 */
 const visibleGroups = computed(() => {
   const kw = keyword.value.trim()
@@ -185,6 +207,8 @@ const visibleGroups = computed(() => {
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
+
 /* 移动端收小页边距，与吸顶栏 10px 内边距对齐 */
 @media (max-width: 767px) {
   .tui-content {

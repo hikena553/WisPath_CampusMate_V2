@@ -193,39 +193,29 @@ export function resetPassword(userId: number) {
   return request.post<{ message: string }>(`/admin/reset-password/${userId}`)
 }
 
-// ===== 密码重置申请（忘记密码） =====
-export interface PasswordResetRequestItem {
-  id: number
-  user_id: number
-  username: string
-  name: string
-  contact: string
-  reason: string | null
-  status: 'pending' | 'reset' | 'rejected'
-  admin_note: string | null
+// ===== 顶栏消息中心（密码重置申请 / 待处理反馈） =====
+export interface AdminMessageItem {
+  id: string
+  kind: 'password_reset' | 'feedback' | 'system'
+  level: 'urgent' | 'important' | 'normal'
+  title: string
+  content: string
+  link: string | null
   created_at: string
-  handled_at: string | null
 }
 
-export interface PasswordResetRequestList {
-  items: PasswordResetRequestItem[]
-  total: number
-  pending: number
-  page: number
-  page_size: number
-  total_pages: number
+export interface AdminMessageOverview {
+  items: AdminMessageItem[]
+  /** 待处理事项总数（顶栏红点） */
+  unread: number
+  counts: { password_reset: number; feedback: number }
 }
 
-export function getPasswordResetRequests(params?: { status?: string } & PaginationParams) {
-  return request.get<PasswordResetRequestList>('/admin/password-reset-requests', { params })
+export function getAdminMessages() {
+  return request.get<AdminMessageOverview>('/admin/messages')
 }
 
-export function approvePasswordReset(id: number) {
-  return request.post<{ message: string; initial_password: string }>(
-    `/admin/password-reset-requests/${id}/approve`
-  )
-}
-
+/** 驳回（忽略）某条忘记密码申请，申请人会收到站内通知 */
 export function rejectPasswordReset(id: number, note?: string) {
   return request.post<{ message: string }>(`/admin/password-reset-requests/${id}/reject`, null, {
     params: { note },

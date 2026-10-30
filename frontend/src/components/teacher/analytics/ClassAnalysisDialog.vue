@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <ResponsivePopup
     v-model="visibleModel"
     class="mascot-analysis-dialog tui-dialog"
     :width="isMobile ? '90%' : '400px'"
@@ -42,11 +42,13 @@
         </el-button>
       </div>
     </template>
-  </el-dialog>
+  </ResponsivePopup>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+// v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { InfoFilled, MagicStick, Refresh } from '@element-plus/icons-vue'
 import { renderMarkdown } from '@/utils/markdown'
 import { useSiteConfig } from '@/composables/useSiteConfig'

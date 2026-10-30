@@ -1,68 +1,45 @@
-import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import type { Ref } from 'vue'
+import { onBeforeUnmount, onMounted, watch, type Ref } from 'vue'
 
 /**
- * 悬浮胶囊导航的「底部让位」
+ * 底部悬浮胶囊（MobileTabBar）占位的统一实现
  *
- * 背景：移动端底部导航是一个透明的悬浮胶囊（见 components/responsive/MobileTabBar.vue，
- * 离底 12px、高 62px）。原先把 86px 留白加在 `.main-area` 的 padding-bottom 上，
- * 那是**外层**内边距：滚动区被整体切短，内容永远到不了胶囊下方，
- * 于是胶囊看起来像坐在一条空白带上，而不是浮在内容上。
+ * 为什么不能给 .main-area 加 padding-bottom：
+ * 外层内边距会把滚动区整体切短，内容永远滚不到胶囊下方，胶囊就像「坐在白带上」。
+ * 所以留白要加在**页面根元素**（滚动容器）上 —— 这样内容可以滚到胶囊底下，
+ * 滚到底时最后一行也不会被胶囊遮住。
  *
- * 现在把这段留白加到**页面根元素**上：
- * - 根元素自己滚动时（campus / schedule / workbench / profile 等）：padding-bottom
- *   属于可滚动区间，内容可以滚到胶囊下面（真悬浮），滚到底时最后一块内容
- *   又能滑到胶囊上方，不会被遮住；
- * - 根元素是 flex 列（对话页这类）：留白退化成固定占位，输入栏照旧停在胶囊上方。
- *
- * 跳过 `position: fixed` 的整屏覆盖子页（资讯详情、搜索结果、作品集等）：它们本身
- * 就压在整个应用之上（含胶囊），强行加内边距只会在底部多出一条白边。
- *
- * 路由切换时新旧两个页面会同时在 DOM 里（Transition 默认「同时在场」），
- * 所以按「所有直接子元素」逐个处理，避免只认 firstElementChild 时补错节点。
+ * 只在移动端生效；桌面端胶囊不渲染，留白必须为 0。
+ * 82px = 胶囊高度 62px + 底部间距 12px + 8px 呼吸位；安全区单独叠加。
  */
-const DOCK_INSET = 'calc(86px + env(safe-area-inset-bottom, 0px))'
+const STYLE_ID = 'dock-inset-style'
+
+const CSS = `
+html.dock-inset .main-area > *:not(.no-dock-inset) {
+  box-sizing: border-box;
+  padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+}
+`
+
+function ensureStyle() {
+  if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = CSS
+  document.head.appendChild(style)
+}
 
 export function useDockInset(isMobile: Ref<boolean>) {
-  const route = useRoute()
-  const padded = new Set<HTMLElement>()
-
-  function resetAll() {
-    for (const el of padded) {
-      el.style.removeProperty('padding-bottom')
-      el.style.removeProperty('box-sizing')
-    }
-    padded.clear()
+  function apply(on: boolean) {
+    if (typeof document === 'undefined') return
+    document.documentElement.classList.toggle('dock-inset', on)
   }
 
-  async function apply() {
-    // 等页面组件挂上来再量，否则碰到的还是上一个路由的根节点
-    await nextTick()
-    const main = document.querySelector('.main-area')
-    if (!isMobile.value || !main) {
-      resetAll()
-      return
-    }
-    const roots = Array.from(main.children) as HTMLElement[]
-    for (const el of Array.from(padded)) {
-      if (!roots.includes(el)) {
-        el.style.removeProperty('padding-bottom')
-        el.style.removeProperty('box-sizing')
-        padded.delete(el)
-      }
-    }
-    for (const el of roots) {
-      if (getComputedStyle(el).position === 'fixed') continue
-      el.style.setProperty('padding-bottom', DOCK_INSET)
-      // 页面根元素常写死 height:100%，必须按 border-box 算，否则整体高度会被撑出 86px
-      el.style.setProperty('box-sizing', 'border-box')
-      padded.add(el)
-    }
-  }
+  onMounted(() => {
+    ensureStyle()
+    apply(!!isMobile.value)
+  })
 
-  onMounted(apply)
-  watch(() => route.fullPath, apply, { flush: 'post' })
-  watch(isMobile, apply)
-  onBeforeUnmount(resetAll)
+  watch(isMobile, (v) => apply(!!v))
+
+  onBeforeUnmount(() => apply(false))
 }

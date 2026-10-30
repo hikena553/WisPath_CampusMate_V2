@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getUser, setUser, removeToken } from '@/utils/token'
+import { getUser, setUser, removeToken, isLoggingOut, isForcedLogout } from '@/utils/token'
 import { isGuestMode } from '@/utils/guest'
 import { getCurrentIdentity } from '@/api/auth'
 
@@ -69,12 +69,11 @@ const router = createRouter({
         { path: 'service', name: 'student-service', redirect: { path: '/student/schedule', query: { tab: 'service' } } },
         { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
         // 消息：原「工作台」页签位，统筹会话（私聊 / 群聊）、通讯录（关注·粉丝·互关好友）与论坛互动消息
-        { path: 'messages', name: 'student-messages', component: () => import('@/views/student/MessagesPage.vue') },
+        { path: 'messages', name: 'student-messages', component: () => import('@/views/student/MessagesPage.vue'), meta: { keepAlive: false } },
         // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
         { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },
-        // 交流社区并入校园资讯「交流社区」Tab（帖子流 + 详情 + 发帖），旧路由重定向
-        { path: 'community', name: 'student-community', redirect: { path: '/student/campus', query: { tab: 'community' } } },
+        { path: 'community', name: 'student-community', component: () => import('@/views/student/CommunityView.vue'), meta: { keepAlive: false } },
         // v4：情绪树洞淡出，心情卡在学业中心主页承接（打点 + 台账 + AI 提醒），旧路由重定向
         { path: 'emotion', name: 'student-emotion', redirect: { path: '/student/schedule', query: { tab: 'home' } } },
         // 我的关怀：教师端「人文关怀」的学生侧闭环（激励 / 关怀记录 / 家访记录）
@@ -122,7 +121,8 @@ const router = createRouter({
         { path: 'references', name: 'admin-references', meta: { title: '开源参考复用' }, component: () => import('@/views/admin/ReferenceLibraryPage.vue') },
         { path: 'teachers', meta: { title: '教师管理' }, component: () => import('@/views/admin/TeachersPage.vue') },
         { path: 'students', meta: { title: '学生管理' }, component: () => import('@/views/admin/StudentsPage.vue') },
-        { path: 'password-requests', name: 'admin-password-requests', meta: { title: '密码重置' }, component: () => import('@/views/admin/PasswordRequestsPage.vue') },
+        // 密码重置申请已并入顶栏消息中心，处理入口在学生 / 教师管理，旧链接重定向
+        { path: 'password-requests', redirect: '/admin/students' },
         { path: 'organizations', meta: { title: '院系班级' }, component: () => import('@/views/admin/OrganizationsPage.vue') },
         { path: 'courses', meta: { title: '课程表管理' }, component: () => import('@/views/admin/CourseSchedulePage.vue') },
         { path: 'crisis', name: 'admin-crisis', meta: { title: '危机预警' }, component: () => import('@/views/admin/CrisisMonitorPage.vue') },
@@ -142,6 +142,10 @@ const router = createRouter({
  * - 拉取失败（token 失效/网络）返回 null，由守卫统一拒绝。
  */
 async function ensureUser(): Promise<Record<string, unknown> | null> {
+  // 退出登录期间/用户已主动退出后不做探活：服务端撤销 Cookie 可能有延迟，
+  // 此时 /auth/me 仍可能返回成功，会把刚清理的登录态重新写回并跳回角色首页
+  //（表现为「要刷新才退出」或「刷新后又登进去」）
+  if (isLoggingOut() || isForcedLogout()) return null
   const cached = getUser()
   if (cached && cached.id) return cached
   try {

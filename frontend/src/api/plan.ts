@@ -94,6 +94,11 @@ export function updateTask(id: number, data: Partial<PlanTask>) {
   return request.put<PlanTask>(`/plan/tasks/${id}`, data)
 }
 
+/** 一句话加今日任务：后端自动挂到进行中的计划 + 当前关卡，due 默认今天 */
+export function createQuickTask(data: { title: string; note?: string | null; due_date?: string | null }) {
+  return request.post<PlanTask>('/plan/quick-task', data)
+}
+
 export function deleteTask(id: number) {
   return request.delete(`/plan/tasks/${id}`)
 }
@@ -123,8 +128,10 @@ export function getStages(plan_id: number) {
   return request.get<PlanStage[]>(`/plan/plans/${plan_id}/stages`)
 }
 
-export function aiGenerateStages(plan_id: number) {
-  return request.post<{ summary: string; stages: PlanStage[] }>(`/plan/plans/${plan_id}/stages/ai-generate`)
+export function aiGenerateStages(plan_id: number, force = false) {
+  return request.post<{ summary: string; stages: PlanStage[] }>(
+    `/plan/plans/${plan_id}/stages/ai-generate${force ? '?force=true' : ''}`,
+  )
 }
 
 export function createStage(data: { plan_id: number; title: string; goal?: string | null; order_index?: number }) {

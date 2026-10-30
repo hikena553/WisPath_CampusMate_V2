@@ -718,45 +718,45 @@ onBeforeUnmount(() => {
   }
 
   .login-body {
-    max-width: 460px;
-    padding: 40px 40px 34px;
-    border-radius: 26px;
+    max-width: 380px;
+    padding: 28px 30px 24px;
+    border-radius: 20px;
     background: #ffffff;
-    box-shadow: 0 30px 80px rgba(17, 17, 17, 0.07), 0 2px 6px rgba(17, 17, 17, 0.03);
+    box-shadow: 0 20px 56px rgba(17, 17, 17, 0.07), 0 2px 6px rgba(17, 17, 17, 0.03);
   }
 
   .brand {
     padding-top: 0;
   }
   .brand-logo {
-    width: 74px;
-    height: 74px;
-    border-radius: 22px;
+    width: 56px;
+    height: 56px;
+    border-radius: 17px;
     box-shadow: none;
   }
   .brand h1 {
-    margin-top: 22px;
-    font-size: 28px;
+    margin-top: 14px;
+    font-size: 22px;
   }
   .brand p {
-    margin-top: 10px;
-    font-size: 14px;
+    margin-top: 6px;
+    font-size: 12.5px;
   }
 
   .reason-bar {
-    margin-top: 20px;
-    font-size: 12.5px;
+    margin-top: 14px;
+    font-size: 12px;
   }
   .reset-banner {
-    margin-top: 24px;
+    margin-top: 16px;
   }
 
   .form {
-    margin-top: 26px;
-    gap: 14px;
+    margin-top: 18px;
+    gap: 10px;
   }
   .field input {
-    height: 56px;
+    height: 48px;
     background: #f7f7f8;
     border-color: #f0f0f2;
   }
@@ -764,18 +764,26 @@ onBeforeUnmount(() => {
     background: #ffffff;
   }
   .btn-primary {
-    height: 56px;
-    font-size: 16.5px;
+    height: 48px;
+    font-size: 15.5px;
   }
 
   .guest-link {
-    margin-top: 18px;
+    margin-top: 12px;
   }
   .other {
-    margin-top: 30px;
+    margin-top: 22px;
+  }
+  .quick-row {
+    gap: 44px;
+    margin-top: 14px;
+  }
+  .quick-circle {
+    width: 46px;
+    height: 46px;
   }
   .agree {
-    margin-top: 26px;
+    margin-top: 18px;
   }
 }
 </style>

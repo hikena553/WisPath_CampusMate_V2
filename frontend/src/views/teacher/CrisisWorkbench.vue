@@ -1,12 +1,14 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
-  <div class="tui-page">
-    <SubPageHeader title="心理预警工作台" fallback="/teacher">
-      <template #right>
-        <el-button text circle aria-label="刷新" :loading="loading" @click="loadAlerts">
-          <el-icon :size="19"><Refresh /></el-icon>
-        </el-button>
-      </template>
-    </SubPageHeader>
+  <div
+    class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
+    <SubPageHeader title="心理预警工作台" fallback="/teacher" />
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：风险语义色 + 处置态势指标（移动端由 SubPageHeader 承担标题） -->
@@ -20,9 +22,6 @@
         <div class="tui-hero-metric is-accent"><b>{{ unresolved.length }}</b><span>待处置</span></div>
         <div class="tui-hero-metric"><b>{{ highRisk.length }}</b><span>高危未闭环</span></div>
         <div class="tui-hero-metric"><b>{{ followingUp }}</b><span>随访中</span></div>
-        <el-button text circle aria-label="刷新" :loading="loading" @click="loadAlerts">
-          <el-icon :size="18"><Refresh /></el-icon>
-        </el-button>
       </TuiPageHero>
 
       <!-- ===================== 桌面端骨架：处置态势分析 + 三列泳道看板 =====================
@@ -267,10 +266,11 @@
       </template>
 
       <!-- 干预弹窗 -->
-      <el-dialog
+      <!-- 预警干预处置（表单+AI：移动端=全屏子页） -->
+      <ResponsivePopup
         v-model="dialogVisible"
         title="预警干预处置"
-        :width="isMobile ? '90%' : '380px'"
+        width="380px"
         align-center
         :close-on-click-modal="false"
         class="tui-dialog"
@@ -318,33 +318,40 @@
           <el-button @click="dialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="submitting" @click="submitIntervene">保存处置</el-button>
         </template>
-      </el-dialog>
+      </ResponsivePopup>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+// v6.1 弹窗减负：处置表单走全屏子页，闭环确认走底部动作面板
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import CrisisAnalytics from '@/components/teacher/crisis/CrisisAnalytics.vue'
 import {
-  Refresh,
   WarningFilled,
   Close,
   InfoFilled,
   AlarmClock,
   List,
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { getAlerts, resolveAlert, interveneAlert, getCrisisAnalytics } from '@/api/crisis'
 import type { CrisisAlert } from '@/types'
 import type { CrisisAnalytics as CrisisAnalyticsData } from '@/api/crisis'
 
 const { isMobile } = useResponsive()
+
+/** 移动端下拉刷新：手动刷新按钮已移除，统一由下拉手势触发 */
+const pull = usePullRefresh(loadAlerts, { enabled: () => isMobile.value })
 
 const route = useRoute()
 const router = useRouter()
@@ -576,7 +583,7 @@ async function submitIntervene() {
 
 async function handleResolve(row: CrisisAlert) {
   try {
-    await ElMessageBox.confirm(`确认将「${row.student_name}」的预警标记为已闭环？`, '闭环确认', { type: 'warning' })
+    if (!(await actionConfirm(`确认将「${row.student_name}」的预警标记为已闭环？`, '闭环确认', { confirmButtonText: '确认闭环' }))) return
   } catch {
     return
   }
@@ -593,6 +600,7 @@ onMounted(loadAlerts)
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
 .wb-total { font-size: 11.5px; color: var(--tui-text-quiet); }
 
 /* ===== 桌面端 三列泳道看板 ===== */

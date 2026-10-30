@@ -1,6 +1,14 @@
 <template>
-  <div class="tui-page">
+  <div
+    class="tui-page"
+    :class="{ 'pull-enabled': isMobile }"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="AI 主动洞察" fallback="/teacher" />
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
       <!-- 桌面端特色头部：洞察语义色 + 数据分析图标。
@@ -11,11 +19,7 @@
         sub="绵小城为你整理的班级信号与建议联系对象，逐条处置后即转为跟进任务"
         :icon="DataAnalysis"
         tone="violet"
-      >
-        <el-button text circle aria-label="刷新" :loading="loading" @click="load">
-          <el-icon :size="18"><Refresh /></el-icon>
-        </el-button>
-      </TuiPageHero>
+      />
 
       <!-- 洞察指标网格 -->
       <section class="tui-section">
@@ -176,8 +180,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Calendar, DataAnalysis, InfoFilled, MagicStick, Refresh, User } from '@element-plus/icons-vue'
+import { ArrowRight, Calendar, DataAnalysis, InfoFilled, MagicStick, User } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
 import { useResponsive } from '@/composables/useResponsive'
@@ -189,6 +195,9 @@ defineOptions({ name: 'teacher-ai-insights' })
 const router = useRouter()
 const route = useRoute()
 const { isMobile } = useResponsive()
+
+/** 移动端下拉刷新：手动刷新按钮已移除，统一由下拉手势触发 */
+const pull = usePullRefresh(load, { enabled: () => isMobile.value })
 
 const loading = ref(false)
 const proactiveActions = ref<ProactiveAction[]>([])
@@ -344,6 +353,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.tui-page.pull-enabled { overscroll-behavior-y: contain; }
 .ai-seg { margin-bottom: 12px; }
 .ai-count { font-size: 11.5px; color: var(--tui-text-quiet); }
 

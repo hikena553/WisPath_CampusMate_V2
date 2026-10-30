@@ -128,6 +128,7 @@
         </router-view>
       </main>
       <MobileTabBar
+        v-if="showTabBar"
         :items="mobileNavItems"
         :active-key="activeNavKey"
         :unread-count="unreadCount"
@@ -164,6 +165,7 @@ import { useBadgeAward } from '@/composables/useBadgeAward'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useResponsive } from '@/composables/useResponsive'
 import { useDockInset } from '@/composables/useDockInset'
+import { hasOpenSubPage } from '@/composables/useMobileSubPage'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import DesktopPet from '@/components/teacher/DesktopPet.vue'
 import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
@@ -198,8 +200,8 @@ const cachedNames = ['teacher-home', 'teacher-students']
 
 const sidebarCollapsed = ref(false)
 /**
- * 全局未读提示（导航红点）：单聊 + 群聊 + 站内通知三路汇总，WS 实时 + 5s 轮询兜底。
- * 此前只统计了单聊未读，导致群消息与站内通知到达时完全没有提示。
+ * 全局未读提示（导航红点）：只统计单聊 + 群聊未读，WS 实时 + 5s 轮询兜底。
+ * 站内通知在消息中心「通知」页内单独计数，不再让「消息」导航在无聊天消息时误亮红点。
  */
 const {
   msgTotal: unreadCount,
@@ -213,8 +215,6 @@ const {
 const { currentAward, awardRemaining, sync: syncBadgeAwards, consume, skipAll } = useBadgeAward()
 
 const { isMobile } = useResponsive()
-// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
-useDockInset(isMobile)
 
 /**
  * 侧边栏导航项：支持图标组件（Element Plus 图标）或站点 Logo 图片两种形态。
@@ -309,6 +309,27 @@ const activeNavKey = computed(() => {
   return 'home'
 })
 
+/**
+ * 底部悬浮导航只属于「一级页面」：即底部五个页签自身对应的路由。
+ * 二级及更深层的页面（任务清单 / 审批 / 心理预警 / 成长档案 / 问卷互评 /
+ * 家校沟通 / 人文关怀 / 班级公告 / 功能总览等）一律不挂全局导航 ——
+ * 它们的返回由子页顶栏的返回键与面包屑承担。
+ * 页内下钻的子页（学生详情、学生分析、个人中心设置、聊天详情、今日任务）
+ * 通过 useMobileSubPage 登记，打开期间同样隐藏导航。
+ */
+const TAB_BAR_ROUTES = new Set([
+  '/teacher',
+  '/teacher/students',
+  '/teacher/agent',
+  '/teacher/messages',
+  '/teacher/profile',
+])
+
+const showTabBar = computed(() => isMobile.value && TAB_BAR_ROUTES.has(route.path) && !hasOpenSubPage.value)
+
+// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
+useDockInset(showTabBar)
+
 function handleNavSelect(item: any) {
   router.push(item.route)
 }
@@ -398,6 +419,10 @@ const teacherIdentity = computed(() => {
 // 布局创建时立即启动预加载（比 onMounted 更早，确保子页面 setup 阶段缓存已就绪）
 prefetchDashboardData()
 
+// 下拉弹层（el-dropdown）会被 teleport 到 body，不在本布局 DOM 内，
+// 因此在 body 上打一个端口标记类，供 teacher-ui.css 把下拉浮层样式限定在教师端
+document.body.classList.add('teacher-app')
+
 onMounted(() => {
   startUnreadWatch()
   // 勋章结算延后于首屏请求，避免抢占带宽
@@ -406,6 +431,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopUnreadWatch()
   if (clockTimer) window.clearInterval(clockTimer)
+  document.body.classList.remove('teacher-app')
 })
 
 function goTo(path: string) { router.push(path) }
@@ -434,6 +460,15 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
   display: flex;
   height: 100vh;
   background: #f4f6fa;
+
+  /* 底部导航选中态变量：与学生端统一为近黑选中色 + 灰阶圆托 */
+  --tab-active-color: #14171a;
+  --tab-active-chip: #f0f1f4;
+  --tab-idle-color: #4b5158;
+  --tab-center-bg: radial-gradient(circle at 32% 26%, #ffffff 0%, #f7f8f9 58%, #eef0f2 100%);
+  --tab-center-glow: rgba(20, 23, 26, 0.06);
+  --tab-center-ring: rgba(20, 23, 26, 0.10);
+  --tab-center-glow-strong: rgba(20, 23, 26, 0.10);
 }
 
 /* 移动(App)模式：宽屏下模拟手机容器，居中限宽，交互限制在窄屏内 */

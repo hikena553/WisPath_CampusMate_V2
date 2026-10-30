@@ -1792,3 +1792,105 @@ button.tui-stat:active { transform: scale(0.98); }
 @media (max-width: 767px) {
   .tui-progress-hero { grid-template-columns: 1fr; gap: 16px; justify-items: center; text-align: center; }
 }
+
+/* =========================================================================
+   ▼ v7 下拉弹层（Dropdown Popper）：统一为圆角矩形浮层
+   -------------------------------------------------------------------------
+   背景：教师端大量 el-dropdown（导出台账 / 导入模板 / 群管理 / 更多操作等）
+   默认沿用 Element Plus 的直角菜单（4px 圆角 + 通栏蓝色 hover），
+   与全站 8–18px 圆角、黑白灰的扁平规范割裂，观感像系统级弹窗。
+   做法：浮层本体 16px 圆角 + 发丝描边 + 一档柔和投影；菜单项改为 10px
+   圆角胶囊行，hover 只用中性浅灰底，不使用主题蓝底；去掉指向性小三角。
+   作用域：popper 被 teleport 到 body，故用 TeacherLayout 挂载的
+   `body.teacher-app` 标记类限定，学生端 / 管理端不受影响。
+   ========================================================================= */
+body.teacher-app .el-dropdown__popper.el-popper {
+  border-radius: 16px;
+  border: 1px solid var(--tui-border-strong);
+  background: var(--tui-surface);
+  box-shadow: var(--tui-shadow-3);
+  padding: 6px;
+}
+/* 圆角浮层不再需要小三角，去掉后整体是一块完整的圆角卡片 */
+body.teacher-app .el-dropdown__popper .el-popper__arrow { display: none; }
+body.teacher-app .el-dropdown__popper .el-dropdown-menu {
+  min-width: 148px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+}
+body.teacher-app .el-dropdown-menu__item {
+  margin: 2px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--tui-text-secondary);
+  transition: background-color 0.16s var(--tui-ease), color 0.16s var(--tui-ease);
+}
+body.teacher-app .el-dropdown-menu__item i { margin-right: 8px; }
+body.teacher-app .el-dropdown-menu__item:not(.is-disabled):hover,
+body.teacher-app .el-dropdown-menu__item:not(.is-disabled):focus {
+  background: var(--tui-surface-sunken);
+  color: var(--tui-text);
+}
+/* 分组分割线：不跟随胶囊圆角，改用内缩发丝线，保持整块浮层的圆角轮廓 */
+body.teacher-app .el-dropdown-menu__item--divided {
+  position: relative;
+  margin-top: 10px;
+  border-top: none;
+}
+body.teacher-app .el-dropdown-menu__item--divided::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 4px;
+  right: 4px;
+  height: 1px;
+  background: var(--tui-border-strong);
+}
+@media (max-width: 767px) {
+  body.teacher-app .el-dropdown__popper.el-popper { border-radius: 14px; padding: 5px; }
+  body.teacher-app .el-dropdown-menu__item { padding: 10px 12px; font-size: 13.5px; }
+}
+/* ============================================================
+   教师端主操作按钮统一为黑白灰：不再使用蓝色实心/蓝色文字
+   仅作用于 teacher-app 端口，不影响学生端与管理员端
+   ============================================================ */
+body.teacher-app .el-button--primary:not(.is-text):not(.is-link) {
+  background: #1f2329;
+  border-color: #1f2329;
+  color: #fff;
+}
+body.teacher-app .el-button--primary:not(.is-text):not(.is-link):hover,
+body.teacher-app .el-button--primary:not(.is-text):not(.is-link):focus {
+  background: #101318;
+  border-color: #101318;
+  color: #fff;
+}
+body.teacher-app .el-button--primary.is-plain {
+  background: var(--tui-surface);
+  border-color: var(--tui-border-strong);
+  color: var(--tui-text-secondary);
+}
+body.teacher-app .el-button--primary.is-plain:hover,
+body.teacher-app .el-button--primary.is-plain:focus {
+  background: var(--tui-surface-muted);
+  border-color: var(--tui-border-strong);
+  color: var(--tui-text);
+}
+body.teacher-app .el-button.is-text.el-button--primary {
+  color: var(--tui-text-secondary);
+}
+body.teacher-app .el-button.is-text.el-button--primary:hover,
+body.teacher-app .el-button.is-text.el-button--primary:focus {
+  color: var(--tui-text);
+  background: transparent;
+}
+body.teacher-app .el-link.el-link--primary {
+  color: var(--tui-text-secondary);
+}
+body.teacher-app .el-link.el-link--primary:hover {
+  color: var(--tui-text);
+}

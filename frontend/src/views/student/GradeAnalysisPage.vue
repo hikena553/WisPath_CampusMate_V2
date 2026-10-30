@@ -1,6 +1,15 @@
 <template>
-  <div class="grade-analysis-page">
+  <div
+    class="grade-analysis-page"
+    @touchstart.passive="pull.onStart"
+    @touchmove="pull.onMove"
+    @touchend="pull.onEnd"
+    @touchcancel="pull.onCancel"
+  >
     <SubPageHeader title="成绩分析" fallback="/student" />
+    <!-- 移动端下拉刷新：指示器放在吸顶头之后，头部保持不动 -->
+    <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+
     <div class="page-header">
       <h2 class="text-gradient">成绩分析</h2>
       <p class="subtitle">详细的成绩统计与趋势分析</p>
@@ -127,6 +136,9 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
 import { useAuthStore } from '@/stores/auth'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
 use([CanvasRenderer, LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -323,6 +335,14 @@ async function loadAnalysis() {
 onMounted(() => {
   loadAnalysis()
 })
+
+// 下拉刷新（移动端）：复用成绩分析加载，失败静默
+async function refreshAll() {
+  await loadAnalysis()
+}
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
@@ -330,6 +350,8 @@ onMounted(() => {
   padding: 24px;
   height: 100%;
   overflow-y: auto;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 
 .page-header {

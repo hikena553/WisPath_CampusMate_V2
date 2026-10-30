@@ -7,15 +7,6 @@
       </button>
       <div class="msg-appbar-title">{{ mobileViewTitle }}</div>
       <div class="msg-appbar-actions">
-        <button
-          class="msg-appbar-btn"
-          type="button"
-          aria-label="刷新列表"
-          :class="{ 'is-busy': sidebarRefreshing }"
-          @click="onHeaderRefresh"
-        >
-          <DtIcon name="refresh" :size="19" />
-        </button>
         <el-dropdown
           v-if="mobileView === 'messages'"
           trigger="click"
@@ -74,9 +65,6 @@
               </el-dropdown-item>
               <el-dropdown-item command="addFriend">
                 <DtIcon name="user" :size="15" /> 发起会话
-              </el-dropdown-item>
-              <el-dropdown-item command="refresh" divided>
-                <DtIcon name="refresh" :size="15" :class="{ 'is-busy': sidebarRefreshing }" /> 刷新列表
               </el-dropdown-item>
               <el-dropdown-item command="clearUnread">
                 <DtIcon name="bell" :size="15" /> 清除未读提示
@@ -896,7 +884,8 @@
     </div>
 
     <!-- ============= 添加好友弹窗 ============= -->
-    <el-dialog v-model="showAddFriend" class="dt-dialog-limit" title="选择联系人" width="440px" :fullscreen="isMobile" :close-on-click-modal="false" @opened="focusAddFriendInput">
+    <!-- 选择联系人（搜索+列表：移动端=全屏子页 / 桌面端=弹窗） -->
+    <ResponsivePopup v-model="showAddFriend" class="dt-dialog-limit" title="选择联系人" width="440px" @opened="focusAddFriendInput">
       <div class="add-friend-dialog">
         <div class="add-friend-search-box">
           <el-input ref="addFriendInputRef" v-model="addFriendSearch" placeholder="输入学号、工号或姓名搜索"
@@ -936,10 +925,11 @@
           </div>
         </div>
       </div>
-    </el-dialog>
+    </ResponsivePopup>
 
     <!-- ============= 创建群聊弹窗 ============= -->
-    <el-dialog v-model="showCreateGroup" class="dt-dialog-limit" title="发起群聊" width="440px" :fullscreen="isMobile" :close-on-click-modal="false">
+    <!-- 发起群聊（表单+选人：移动端=全屏子页） -->
+    <ResponsivePopup v-model="showCreateGroup" class="dt-dialog-limit" title="发起群聊" width="440px">
       <div class="create-group-form">
         <el-input v-model="newGroupName" placeholder="请输入群名称" maxlength="20" show-word-limit size="large" />
         <div class="member-search-box" style="margin-top:14px">
@@ -988,10 +978,11 @@
         <el-button @click="showCreateGroup = false">取消</el-button>
         <el-button type="primary" @click="handleCreateGroup" :disabled="!newGroupName.trim()">创建</el-button>
       </template>
-    </el-dialog>
+    </ResponsivePopup>
 
     <!-- ============= 添加群成员弹窗 ============= -->
-    <el-dialog v-model="showAddMember" class="dt-dialog-limit" title="邀请成员" width="440px" :fullscreen="isMobile" :close-on-click-modal="false">
+    <!-- 邀请成员（搜索选人：移动端=全屏子页） -->
+    <ResponsivePopup v-model="showAddMember" class="dt-dialog-limit" title="邀请成员" width="440px">
       <el-input v-model="addMemberSearch" placeholder="搜索用户" clearable @input="searchMembersToAdd">
         <template #prefix><DtIcon name="search" :size="15" /></template>
       </el-input>
@@ -1005,10 +996,11 @@
           <DtIcon name="plus" :size="18" style="color: var(--dt-primary)" />
         </div>
       </div>
-    </el-dialog>
+    </ResponsivePopup>
 
     <!-- ============= 群成员列表弹窗（群主/管理员可移除成员） ============= -->
-    <el-dialog v-model="showGroupMembers" class="dt-dialog-limit" title="群成员" width="380px" :fullscreen="isMobile">
+    <!-- 群成员（列表：移动端=全屏子页） -->
+    <ResponsivePopup v-model="showGroupMembers" class="dt-dialog-limit" title="群成员" width="380px">
       <div class="group-members-list">
         <div v-for="m in groupMembers" :key="m.user_id" class="group-member-item">
           <el-avatar :size="36" class="conv-avatar-clickable" title="查看个人主页" @click="openUserHomepage(m.user_id)">{{ m.user_name[0] }}</el-avatar>
@@ -1028,10 +1020,11 @@
           </el-button>
         </div>
       </div>
-    </el-dialog>
+    </ResponsivePopup>
 
     <!-- ============= 群管理弹窗 ============= -->
-    <el-dialog v-model="showManageGroup" class="dt-dialog-limit" title="群管理" width="500px" :fullscreen="isMobile" :close-on-click-modal="false" @opened="onManageDialogOpened">
+    <!-- 群管理（公告+成员+操作：移动端=全屏子页） -->
+    <ResponsivePopup v-model="showManageGroup" class="dt-dialog-limit" title="群管理" width="500px" @opened="onManageDialogOpened">
       <div class="manage-group-dialog">
         <!-- 群公告 -->
         <div class="manage-section">
@@ -1172,7 +1165,7 @@
           </div>
         </div>
       </div>
-    </el-dialog>
+    </ResponsivePopup>
 
     <!-- ============= 移动端：群设置子页面（钉钉式：成员九宫格 + 信息/管理分组卡片） ============= -->
     <div v-if="isMobile && groupSubPage === 'settings'" class="group-sub-page">
@@ -1325,13 +1318,14 @@
     </div>
 
     <!-- 群名称修改弹窗（钉钉式单行输入） -->
-    <el-dialog v-model="showRenameGroup" title="修改群名称" width="330px" :close-on-click-modal="false">
+    <!-- 修改群名称（单输入：移动端=底部动作面板） -->
+    <ActionSheet v-model="showRenameGroup" title="修改群名称" width="330px">
       <el-input v-model="groupNameInput" maxlength="50" show-word-limit placeholder="请输入群名称" @keyup.enter="saveGroupName" />
       <template #footer>
         <el-button @click="showRenameGroup = false">取消</el-button>
         <el-button type="primary" :loading="savingGroupName" @click="saveGroupName">保存</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
     <!-- ============= 移动端：群公告子页面 ============= -->
     <div v-if="isMobile && groupSubPage === 'announcement'" class="group-sub-page">
@@ -1411,7 +1405,8 @@
     </div>
 
     <!-- ============= 群头像裁剪弹窗 ============= -->
-    <el-dialog v-model="showGroupCrop" title="裁剪群头像" width="420px" :fullscreen="isMobile" :close-on-click-modal="false" @opened="onGroupCropOpened">
+    <!-- 裁剪群头像（移动端=底部动作面板） -->
+    <ActionSheet v-model="showGroupCrop" title="裁剪群头像" width="420px" @opened="onGroupCropOpened">
       <div class="group-crop-box">
         <img ref="groupCropImgRef" style="max-width:100%;display:block" />
       </div>
@@ -1419,7 +1414,7 @@
         <el-button @click="cancelGroupCrop">取消</el-button>
         <el-button type="primary" :loading="uploadingGroupAvatar" @click="confirmGroupCrop">确认</el-button>
       </template>
-    </el-dialog>
+    </ActionSheet>
 
     <!-- ============= 图片预览 ============= -->
     <Transition name="fade">
@@ -1472,8 +1467,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+// v6.1 弹窗减负：列表/表单走全屏子页，裁剪走底部动作面板
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+// v6.1 弹窗减负：单输入面板与删除确认走底部动作面板
+import ActionSheet from '@/components/common/ActionSheet.vue'
+import { actionConfirm } from '@/composables/useActionSheet'
 import { useRoute, useRouter } from 'vue-router'
 import { useResponsive } from '@/composables/useResponsive'
+import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { useAuthStore } from '@/stores/auth'
 import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin, deleteSession, getSharedFiles, type SharedFile } from '@/api/messages'
 import {
@@ -1504,7 +1505,7 @@ import ButlerChat from '@/components/butler/ButlerChat.vue'
 import DtIcon from '@/components/common/DtIcon.vue'
 import { openUserHomepage } from '@/composables/useUserHomepage'
 import { getToken } from '@/utils/token'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
 import QRCode from 'qrcode'
 import {
@@ -1553,6 +1554,9 @@ const conversations = ref<any[]>([])
 const groups = ref<GroupOut[]>([])
 
 const activeId = ref<number | null>(null)
+
+// 移动端聊天详情是页内二级页面：打开时让出底部悬浮导航，把整屏留给会话
+useMobileSubPage(computed(() => isMobile.value && activeId.value !== null))
 const activeName = ref('')
 const activeType = ref<'single' | 'group' | 'butler'>('single')
 const messages = ref<any[]>([])
@@ -1675,13 +1679,7 @@ async function handleDeleteSession(item: { _key: string; _type: string; name: st
   const tip = item._type === 'group'
     ? `「${item.name}」将从会话列表移除，群聊与聊天记录都还在，群里有新消息会重新出现。`
     : `「${item.name}」将从会话列表移除，聊天记录保留，对方不受影响，对方再来消息会重新出现。`
-  try {
-    await ElMessageBox.confirm(tip, '删除会话', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-    })
-  } catch { return }
+  if (!(await actionConfirm(tip, '删除会话', { danger: true, confirmButtonText: '删除' }))) return
   try {
     await deleteSession(item._key)
     swipedKey.value = null
@@ -1878,6 +1876,12 @@ const showManageQr = ref(false)
 const groupFileInputRef = ref<HTMLInputElement>()
 const groupAvatarInputRef = ref<HTMLInputElement>()
 const showGroupCrop = ref(false)
+// v6.1：移动端子页无 opened 事件，用 watch 兜底初始化（桌面端 @opened 与之幂等）
+watch([showAddFriend, showManageGroup, showGroupCrop], ([a, m, c]) => {
+  if (a) nextTick(focusAddFriendInput)
+  if (m) nextTick(onManageDialogOpened)
+  if (c) nextTick(onGroupCropOpened)
+})
 const pendingGroupAvatarSrc = ref('')
 const uploadingGroupAvatar = ref(false)
 let groupCropper: Cropper | null = null
@@ -1971,7 +1975,7 @@ async function handleRemoveMember(uid: number, name: string) {
   const target = groupMembers.value.find((m) => m.user_id === uid)
   if (target && target.role === 'owner') { ElMessage.warning('群主不可被移除'); return }
   try {
-    await ElMessageBox.confirm(`确定将「${name}」移出群聊吗？`, '移除成员', { type: 'warning' })
+    if (!(await actionConfirm(`确定将「${name}」移出群聊吗？`, '移除成员', { danger: true, confirmButtonText: '移出' }))) return
   } catch { return /* 用户取消 */ }
   try {
     await removeGroupMember(activeId.value, uid)
@@ -3024,7 +3028,6 @@ async function onPaste(e: ClipboardEvent) {
 function handleHeaderAction(cmd: string) {
   if (cmd === 'createGroup') { showCreateGroup.value = true }
   else if (cmd === 'addFriend') { showAddFriend.value = true }
-  else if (cmd === 'refresh') { void onHeaderRefresh() }
   else if (cmd === 'clearUnread') { if (hasUnread.value) void handleClearUnread() }
 }
 
@@ -3066,18 +3069,6 @@ async function refreshChat() {
 // 手势仅在移动端生效：桌面端不做下拉刷新交互
 const sidebarPull = usePullRefresh(refreshSidebar, { enabled: () => isMobile.value })
 const chatPull = usePullRefresh(refreshChat, { enabled: () => isMobile.value })
-
-/** 桌面端刷新按钮：与移动端下拉走同一条 refreshSidebar 链路，加一个忙碌态防重复点击 */
-const sidebarRefreshing = ref(false)
-async function onHeaderRefresh() {
-  if (sidebarRefreshing.value) return
-  sidebarRefreshing.value = true
-  try {
-    await refreshSidebar()
-  } finally {
-    sidebarRefreshing.value = false
-  }
-}
 
 onMounted(async () => {
   document.addEventListener('click', onGlobalClick)

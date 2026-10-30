@@ -1,12 +1,8 @@
 /**
  * 全局未读提示（导航红点数据源）
  *
- * 汇总「单聊 + 群聊 + 站内通知」三路未读，供各端布局常驻使用。
- * 取值口径与消息中心一致：免打扰的群不计入。
- *
- * 论坛互动未读（forum）也一起取回，但**不计入消息页红点**：
- * 消息页只管群聊 / 私聊 / 通知，论坛的赞、收藏、评论在新粉丝都归交流社区页的
- * 互动消息入口（`msgTotal` 才是导航徽标用的数）。
+ * 汇总「单聊 + 群聊 + 站内通知」三路未读，供消息中心页内计数使用；
+ * 「消息」导航红点只取单聊 + 群聊（见 msgTotal），通知在消息中心「通知」页内单独展示。
  *
  * 更新策略（双通道，保证「有新消息一定有提示」）：
  * 1) WebSocket 实时事件（new_message / new_group_message / 通知写入后）立即刷新；
@@ -14,7 +10,7 @@
  *
  * 模块级单例：布局常驻，多端（教师/学生）共用同一份计数，避免重复请求。
  */
-import { computed, ref } from 'vue'
+import { ref, computed } from 'vue'
 import { getUnreadSummary, clearAllUnread } from '@/api/messages'
 import { markAllNotificationsRead } from '@/api/notification'
 import { getToken } from '@/utils/token'
@@ -22,14 +18,14 @@ import { getToken } from '@/utils/token'
 const chat = ref(0)
 const group = ref(0)
 const notification = ref(0)
-/** 论坛互动未读（赞 / 收藏 / 评论 / 新粉丝）：归交流社区页 */
-const forum = ref(0)
 /** 紧急未读通知数：存在时导航徽标切为强提醒（danger） */
 const urgentUnread = ref(0)
 const total = ref(0)
-
-/** 消息页口径的未读合计（不含论坛互动）：底部/顶栏「消息」徽标用它 */
-const msgTotal = computed(() => (chat.value || 0) + (group.value || 0) + (notification.value || 0))
+/** 论坛互动未读（评论/点赞/收藏/新粉丝）：归交流社区页的互动消息入口，不计入消息红点 */
+const forum = ref(0)
+/** 消息红点口径：单聊 + 群聊；站内通知只在消息中心「通知」页内单独计数，
+ *  避免没有聊天消息时，仅因存在未读通知就让「消息」导航常亮红点 */
+const msgTotal = computed(() => chat.value + group.value)
 
 // 在线状态：user_id → 是否在线。由「列表接口初值 + WebSocket presence 事件」共同维护，
 // 供消息页单聊绿点与群聊在线人数实时刷新。
@@ -47,9 +43,9 @@ async function refresh() {
     chat.value = s.chat || 0
     group.value = s.group || 0
     notification.value = s.notification || 0
-    forum.value = s.forum || 0
     urgentUnread.value = s.urgent_unread || 0
     total.value = s.total || 0
+    forum.value = (s as any).forum || 0
   } catch {
     /* 静默失败：保留上一次计数，避免网络抖动导致红点闪没 */
   }
@@ -137,12 +133,13 @@ async function clearAll() {
     notification.value = 0
     urgentUnread.value = 0
     total.value = 0
+    forum.value = 0
   }
 }
 
 export function useUnreadSummary() {
   return {
-    chat, group, notification, forum, urgentUnread, total, msgTotal,
+    chat, group, notification, urgentUnread, total, forum, msgTotal,
     refresh, start, stop, clearAll,
     onlineMap, presenceTick, isOnline, syncPresence,
   }

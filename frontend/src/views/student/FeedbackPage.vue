@@ -41,7 +41,17 @@
       <div class="history-section">
         <div class="history-card">
           <h3>我的反馈</h3>
-          <div class="feedback-list" v-loading="loading">
+          <div
+            class="feedback-list"
+            v-loading="loading"
+            @touchstart.passive="pull.onStart"
+            @touchmove="pull.onMove"
+            @touchend="pull.onEnd"
+            @touchcancel="pull.onCancel"
+          >
+            <!-- 移动端下拉刷新：反馈记录列表是真正的滚动容器（标题在容器外，保持不动） -->
+            <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+
             <div v-if="feedbacks.length === 0" class="empty-state">
               <el-empty description="暂无反馈记录" :image-size="60" />
             </div>
@@ -70,6 +80,9 @@ import { ref, onMounted } from 'vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import { ElMessage } from 'element-plus'
 import { createFeedback, getFeedbacks, type Feedback, type FeedbackCreate } from '@/api/feedback'
+import { useResponsive } from '@/composables/useResponsive'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -170,6 +183,14 @@ async function loadFeedbacks() {
 onMounted(() => {
   loadFeedbacks()
 })
+
+// 下拉刷新（移动端）：复用反馈记录加载，失败静默
+async function refreshAll() {
+  await loadFeedbacks()
+}
+
+const { isMobile } = useResponsive()
+const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 </script>
 
 <style scoped>
@@ -234,6 +255,8 @@ onMounted(() => {
 .feedback-list {
   max-height: 500px;
   overflow-y: auto;
+  /* 下拉刷新接管顶部下拉手势，需屏蔽浏览器原生下拉刷新 */
+  overscroll-behavior-y: contain;
 }
 
 .feedback-item {

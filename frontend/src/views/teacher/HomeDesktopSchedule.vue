@@ -70,7 +70,7 @@
         </el-tab-pane>
         <el-tab-pane label="班级公告" name="class">
           <div class="tab-header">
-            <el-button type="primary" size="small" @click="emit('create')">发布公告</el-button>
+            <el-button size="small" @click="emit('create')">发布公告</el-button>
           </div>
           <div class="announcement-list">
             <div v-if="myAnnouncements.length === 0" class="empty-tip-small">暂无公告</div>
