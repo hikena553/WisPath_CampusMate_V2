@@ -90,6 +90,10 @@
     pick: { portfolio: 'u1' },  // 成长档案选中学生
     tasksDone: {},        // 任务勾选态
     sheet: null,          // { key, ctx }
+    /* v3 */
+    stuTab: 'overview',   // 学生详情锚点 Tab
+    stuLike: {},          // 主页点赞态
+    activeStudent: null,  // 当前查看的学生 id
   };
   let CONVS = [];
 
@@ -396,6 +400,197 @@
   }
 
   /* =====================================================================
+     v3：学生 Tab —— 学生列表 → 学生详情（档案头卡 + 锚点 Tab）→ QQ 风格主页
+     ===================================================================== */
+  function renderStudents() {
+    const list = window.DB.myStudents;
+    const risk = list.filter((s) => s.risk);
+    const byClass = {};
+    list.forEach((s) => { (byClass[s.className] = byClass[s.className] || []).push(s); });
+    const row = (s) => '<button class="row" data-open-student="' + s.id + '">' +
+        '<span class="avatar ' + (s.tone || 'tone-slate') + '">' + esc(s.name[0]) + '</span>' +
+        '<span class="row-main"><span class="row-label">' + esc(s.name) +
+          (s.risk ? ' <span class="tag tag-danger" style="margin-left:4px">重点关注</span>' : '') + '</span>' +
+          '<span class="row-desc">' + esc(s.className) + ' · ' + esc(s.username) + '</span></span>' +
+        icon('chevron-right', 16, 'row-arrow') + '</button>';
+    const riskBody = risk.length
+      ? '<div class="group-title">重点关注<span class="spacer">' + risk.length + ' 人</span></div><div class="list">' + risk.map(row).join('') + '</div>'
+      : '';
+    const clsBody = Object.keys(byClass).map((c) =>
+      '<div class="group-title">' + esc(c) + '<span class="spacer">' + byClass[c].length + ' 人</span></div>' +
+      '<div class="list">' + byClass[c].map(row).join('') + '</div>').join('');
+    return '<header class="mc-head"><div class="mc-head-row">' +
+        '<span class="mc-title">学生</span><span class="spacer"></span>' +
+        '<button class="icon-btn" data-action="toast" data-msg="搜索学生（原型演示）">' + icon('search', 20) + '</button>' +
+      '</div></header>' +
+      '<div class="content">' +
+        '<div class="search" style="margin-bottom:4px">' + icon('search', 16) +
+          '<input placeholder="搜索姓名 / 学号" readonly data-action="toast" data-msg="学生搜索（原型演示）"></div>' +
+        riskBody + clsBody +
+        '<div class="legacy-note">点击学生进入「学生详情」（档案头卡 + 概览 / 课业 / 考勤 / 档案锚点），详情头卡可一键跳转 TA 的 QQ 风格个人主页。</div>' +
+      '</div>';
+  }
+
+  function buildStuDetail(p) {
+    const all = window.DB.studentDetail || {};
+    const rich = all[p.id] || {};
+    const g = all._generic || {};
+    const d = {
+      kpis: rich.kpis || g.kpis || [],
+      risk: rich.risk || (p.risk ? { level: '重点关注', title: '在校表现波动', source: '辅导员标记',
+        desc: '该生被标记为重点关注，请结合近期出勤、测评与谈心记录综合评估。', sla: '建议本周完成一次谈心', pct: 50 } : null),
+      grades: rich.grades || g.grades || [],
+      attendance: rich.attendance || g.attendance || [],
+      dynamics: rich.dynamics || g.dynamics || [],
+      records: rich.records || g.records || [],
+    };
+    return d;
+  }
+
+  function renderStudentDetail() {
+    const p = findPerson(state.activeStudent) || { name: '学生', tone: 'tone-slate', className: '—', username: '—' };
+    const d = buildStuDetail(p);
+    const tab = state.stuTab || 'overview';
+    const tabs = [['overview', '概览'], ['study', '课业'], ['attend', '考勤'], ['record', '档案']];
+    const risk = d.risk
+      ? '<div class="stu-card risk-card">' +
+          '<div class="rc-head">' + icon('shield-alert', 17) + '<span class="rc-title">' + esc(d.risk.level) + ' · ' + esc(d.risk.title) + '</span>' + tag(d.risk.level, 'danger') + '</div>' +
+          '<div class="rc-desc">' + esc(d.risk.desc) + '</div>' +
+          '<div style="font-size:11px;color:var(--tui-text-quiet);margin-top:6px">' + esc(d.risk.source) + '</div>' +
+          '<div class="sla-line"><div class="lb"><span>' + esc(d.risk.sla) + '</span><b>处置进度 ' + d.risk.pct + '%</b></div>' +
+            '<div class="bar"><i style="width:' + d.risk.pct + '%"></i></div></div>' +
+          '<button class="btn btn-ghost btn-sm" style="margin-top:11px;color:var(--tui-danger);border-color:#f4c7c3" data-open-sub="crisis">' + icon('arrow-right', 14) + '去跟进处置</button>' +
+        '</div>'
+      : '';
+
+    let body = '';
+    if (tab === 'overview') {
+      body = risk +
+        '<div class="stu-card"><div class="stu-card-t">' + icon('book-open', 15) + '近期成绩<span class="spacer">查看全部 ›</span></div>' +
+          d.grades.map((r) => '<div class="mini-row"><span class="nm">' + esc(r.k) + '</span><span class="sc ' + (r.tone || '') + '">' + esc(r.v) + '</span></div>').join('') +
+        '</div>' +
+        '<div class="stu-card"><div class="stu-card-t">' + icon('activity', 15) + '最近动态<span class="spacer">成长轨迹 ›</span></div>' +
+          d.dynamics.map((r) => '<div class="mini-row"><span class="dot" style="background:' +
+            ({ danger: 'var(--tui-danger)', warn: 'var(--tui-warn)', success: 'var(--tui-success)', brand: 'var(--tui-brand)', violet: 'var(--tui-violet)', cyan: 'var(--tui-cyan)' }[r.dot] || 'var(--tui-brand)') +
+            '"></span><span class="nm">' + esc(r.k) + '</span><time>' + esc(r.t) + '</time></div>').join('') +
+        '</div>';
+    } else if (tab === 'study') {
+      body = '<div class="stu-card"><div class="stu-card-t">' + icon('graduation-cap', 15) + '成绩单<span class="spacer">本学期</span></div>' +
+          d.grades.map((r) => '<div class="mini-row"><span class="nm">' + esc(r.k) + '</span><span class="sc ' + (r.tone || '') + '">' + esc(r.v) + '</span></div>').join('') +
+        '</div>' +
+        '<div class="stu-card"><div class="stu-card-t">' + icon('chart-line', 15) + '学业趋势</div>' +
+          '<div class="mini-row"><span class="nm">学分绩点</span><span class="sc">' + esc((d.kpis[1] || {}).v || '—') + '</span></div>' +
+          '<div class="mini-row"><span class="nm">挂科课程</span><span class="sc ' + (p.risk ? 'bad' : '') + '">' + (p.risk ? '1 门' : '0 门') + '</span></div>' +
+          '<div class="mini-row"><span class="nm">出勤率</span><span class="sc">' + esc((d.kpis[0] || {}).v || '—') + '</span></div>' +
+        '</div>';
+    } else if (tab === 'attend') {
+      body = '<div class="stu-card"><div class="stu-card-t">' + icon('calendar-check', 15) + '考勤记录<span class="spacer">近 30 天</span></div>' +
+          d.attendance.map((r) => '<div class="mini-row"><span class="nm">' + esc(r.k) + '</span><span class="sc ' + (r.tone === 'bad' ? 'bad' : r.tone === 'good' ? 'good' : r.tone === 'warn' ? 'bad' : '') + '" style="' + (r.tone === 'warn' ? 'color:var(--tui-warn)' : '') + '">' + esc(r.v) + '</span></div>').join('') +
+        '</div>';
+    } else {
+      body = '<div class="tl" style="margin-top:12px">' + d.records.map((r) => {
+        const t = TONE[r.tone] || TONE.brand;
+        return '<div class="tl-item"><span class="tl-node" style="background:' + t.bg + ';color:' + t.fg + '">' + icon(r.icon, 13) + '</span>' +
+          '<div class="tl-card"><div class="tl-head"><span class="tl-title" style="flex:1">' + esc(r.k) + '</span><span class="tl-date">' + esc(r.t) + '</span></div></div></div>';
+      }).join('') + '</div>';
+    }
+
+    return '<header class="appbar">' +
+        '<button class="appbar-back" data-back>' + icon('arrow-left', 20) + '</button>' +
+        '<div class="appbar-title">学生详情<small>' + esc(p.className) + '</small></div>' +
+        '<div class="appbar-actions"><button class="icon-btn" data-action="toast" data-msg="更多操作（原型演示）">' + icon('ellipsis', 19) + '</button></div>' +
+      '</header>' +
+      '<div class="content">' +
+        '<div class="stu-hero">' +
+          '<div class="stu-hero-r1">' +
+            '<span class="avatar ' + (p.tone || 'tone-slate') + '">' + esc((p.name || '?')[0]) + '</span>' +
+            '<div><div class="stu-hero-name">' + esc(p.name) + '</div>' +
+              '<div class="stu-hero-meta">' + esc(p.className) + ' · 学号 ' + esc(p.username) + '</div></div>' +
+            '<button class="stu-hero-home" data-open-student-home="' + p.id + '">' + icon('sparkles', 13) + 'TA 的主页</button>' +
+          '</div>' +
+          '<div class="stu-hero-tags">' +
+            (p.risk ? '<span>重点关注</span>' : '<span>在校正常</span>') +
+            '<span>' + esc(p.className) + '</span>' +
+            '<span>我的学生</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="stu-kpi">' + d.kpis.map((k) =>
+          '<div class="k"><b' + (k.tone ? ' style="color:var(--tui-' + (k.tone === 'violet' ? 'violet' : k.tone) + ')"' : '') + '>' + esc(k.v) + '</b><i>' + esc(k.k) + '</i></div>').join('') +
+        '</div>' +
+        '<div class="stu-tabs">' + tabs.map(([k, l]) =>
+          '<button class="' + (tab === k ? 'on' : '') + '" data-stu-tab="' + k + '">' + l + '</button>').join('') + '</div>' +
+        body +
+        '<div class="legacy-note">学生详情数据聚合自后端 Attendance / Grade / Crisis / TeacherPortfolio 模型；「TA 的主页」为学生端个人空间的教师视角只读版。</div>' +
+      '</div>';
+  }
+
+  function renderStudentHome() {
+    const p = findPerson(state.activeStudent) || { name: '学生', tone: 'tone-slate', username: '—', className: '—' };
+    const pg = (window.DB.studentPages || {})[p.id] || { motto: '这个人很懒，什么都没有留下。', likes: 0, visitors: 0, badges: [], photos: 0, posts: [] };
+    const IMG_TONES = ['#85b7eb', '#5dcaa5', '#a78bfa', '#f0997b', '#ed93b1'];
+    const likedKey = 'home:' + p.id;
+    const isLiked = !!state.stuLike[likedKey];
+    const badgeEls = pg.badges.map((b) => {
+      const t = TONE[b.tone] || TONE.brand;
+      return '<div class="qq-badge"><span class="row-icon" style="width:32px;height:32px;border-radius:50%;margin:0 auto 4px;background:' + t.bg + ';color:' + t.fg + '">' + icon(b.icon, 16) + '</span><span>' + esc(b.label) + '</span></div>';
+    }).join('');
+    const photoEls = Array.from({ length: Math.min(pg.photos, 5) }).map((_, i) =>
+      '<div class="qq-photo" style="background:' + IMG_TONES[i % IMG_TONES.length] + '">' + icon('image', 18) + '</div>').join('') +
+      '<button class="qq-photo more" data-action="toast" data-msg="相册（原型演示）">' + icon('image', 16) + pg.photos + ' 张</button>';
+    const postEls = pg.posts.map((po) => {
+      const liked = !!state.stuLike[po.id];
+      const imgs = po.imgs
+        ? '<div class="qq-post-imgs ' + (po.imgs > 1 ? 'g2' : 'g1') + '">' +
+          Array.from({ length: po.imgs }).map((_, i) =>
+            '<div class="qq-pimg" style="background:' + IMG_TONES[(i + pg.photos) % IMG_TONES.length] + '">' + icon('image', 16) + '动态配图</div>').join('') + '</div>'
+        : '';
+      return '<div class="qq-post">' +
+        '<div class="qq-post-head"><span class="avatar ' + (p.tone || 'tone-slate') + '">' + esc((p.name || '?')[0]) + '</span>' +
+          '<div><div class="qq-post-name">' + esc(p.name) + '</div><div class="qq-post-time">' + esc(po.time) + '</div></div></div>' +
+        '<div class="qq-post-text">' + esc(po.text) + '</div>' + imgs +
+        '<div class="qq-post-ops">' +
+          '<button class="qq-op' + (liked ? ' liked' : '') + '" data-qq-like="' + po.id + '">' + icon('thumbs-up', 15) + (liked ? '已赞 ' : '点赞 ') + (po.likeN + (liked ? 1 : 0)) + '</button>' +
+          '<button class="qq-op" data-action="toast" data-msg="评论（原型演示）">' + icon('message-square', 15) + '评论 ' + po.cmtN + '</button>' +
+          '<button class="qq-op" data-action="toast" data-msg="已收藏该动态（原型演示）">' + icon('star', 15) + '收藏</button>' +
+        '</div></div>';
+    }).join('');
+
+    return '<header class="appbar" style="position:absolute;top:0;left:0;right:0;z-index:6;background:transparent;box-shadow:none;pointer-events:none">' +
+        '<button class="appbar-back" data-back style="pointer-events:auto">' + icon('arrow-left', 20) + '</button>' +
+        '<div class="appbar-actions" style="pointer-events:auto"><button class="icon-btn" data-action="toast" data-msg="更多（原型演示）" style="background:rgba(255,255,255,.25);color:#fff">' + icon('ellipsis', 19) + '</button></div>' +
+      '</header>' +
+      '<div class="qq-wrap">' +
+        '<div class="qq-cover"><div class="qq-cover-bar">' +
+          '<button data-action="toast" data-msg="打招呼（原型演示）">打声招呼</button>' +
+          '<button data-action="toast" data-msg="更换封面（原型演示）">更换封面</button>' +
+        '</div></div>' +
+        '<div class="qq-head">' +
+          '<span class="qq-avatar" style="background:' + (TONE[p.tone] || TONE.brand).fg + '">' + esc((p.name || '?')[0]) + '</span>' +
+          '<div class="qq-name-row"><span class="qq-name">' + esc(p.name) + '</span><span class="qq-lv">LV.' + (3 + (p.id.length % 4)) + '</span></div>' +
+          '<div class="qq-qid">学号：<b>' + esc(p.username) + '</b> · ' + esc(p.className) + '</div>' +
+          '<div class="qq-sig">' + esc(pg.motto) + '</div>' +
+        '</div>' +
+        '<div style="padding:0 14px">' +
+          '<div class="qq-stats">' +
+            '<div class="s"><b>' + pg.likes + '</b><i>获赞</i></div>' +
+            '<div class="s"><b>' + pg.visitors + '</b><i>被访客</i></div>' +
+            '<div class="s"><b>' + pg.posts.length + '</b><i>动态</i></div>' +
+            '<div class="s"><b>' + pg.photos + '</b><i>照片</i></div>' +
+          '</div>' +
+          '<div class="qq-sec">展示墙<span class="spacer">QQ 风格徽章 · 与成长档案互通 ›</span></div>' +
+          '<div class="qq-badges">' + badgeEls + '</div>' +
+          '<div class="qq-sec">精选照片<span class="spacer">共 ' + pg.photos + ' 张 ›</span></div>' +
+          '<div class="qq-photos">' + photoEls + '</div>' +
+          '<div class="qq-sec">TA 的动态</div>' + postEls +
+        '</div>' +
+      '</div>' +
+      '<div class="act-dock">' +
+        '<button class="btn btn-ghost" style="flex:1" data-open-student="' + p.id + '">' + icon('user', 16) + '学生详情</button>' +
+        '<button class="btn btn-primary" style="flex:1" data-action="chat-with" data-id="' + p.id + '">' + icon('message-circle', 16) + '发消息</button>' +
+      '</div>';
+  }
+
+  /* =====================================================================
      二级页：聊天 / 群设置 / 成员 / 人员 / 全部功能
      ===================================================================== */
   function findConv(id) { return CONVS.filter((c) => c.id === id)[0]; }
@@ -528,10 +723,16 @@
         '</div>' +
         (p.risk ? '<div class="notice notice-danger" style="margin-top:12px">' + icon('triangle-alert', 15) +
           '<span>该生处于「重点关注」状态：近 7 天出勤下降，心理测评异常，建议尽快跟进。</span></div>' : '') +
-        '<div class="item-ops" style="border-top:none;margin-top:14px">' +
-          '<button class="btn btn-ghost" data-open-sub="portfolio">' + icon('award', 16) + '成长档案</button>' +
-          '<button class="btn btn-primary" data-action="chat-with" data-id="' + p.id + '">' + icon('message-circle', 16) + '发消息</button>' +
-        '</div>' +
+        (isStudent
+          ? '<div class="item-ops" style="border-top:none;margin-top:14px">' +
+              '<button class="btn btn-ghost" data-open-student-home="' + p.id + '">' + icon('sparkles', 16) + 'TA 的主页</button>' +
+              '<button class="btn btn-ghost" data-open-student="' + p.id + '">' + icon('user', 16) + '学生详情</button>' +
+              '<button class="btn btn-primary" data-action="chat-with" data-id="' + p.id + '">' + icon('message-circle', 16) + '发消息</button>' +
+            '</div>'
+          : '<div class="item-ops" style="border-top:none;margin-top:14px">' +
+              '<button class="btn btn-ghost" data-open-sub="portfolio">' + icon('award', 16) + '成长档案</button>' +
+              '<button class="btn btn-primary" data-action="chat-with" data-id="' + p.id + '">' + icon('message-circle', 16) + '发消息</button>' +
+            '</div>') +
       '</div>';
   }
 
@@ -987,48 +1188,50 @@
   }
 
   /* =====================================================================
-     ⑧ 今日任务 —— 完成度 + 可勾选清单
+     ⑧ 今日任务（v3：时间轴式）—— 日期条 + 逾期/时段分组时间轴
      ===================================================================== */
   function renderTasks(m) {
-    const totalDone = m.progress.done;
-    const total = m.progress.total;
-    const rate = pct(totalDone, total);
-    const hero = '<div class="mod-hero">' +
-      '<div style="display:flex;align-items:center;gap:10px">' +
-        '<div class="ring" style="width:64px;height:64px;background:conic-gradient(var(--mod-color) 0 ' + rate + '%, var(--tui-surface-sunken) ' + rate + '% 100%)">' +
-          '<div class="ring-mid"><div class="ring-num" style="color:var(--mod-color);font-size:15px">' + rate + '%</div></div></div>' +
-        '<div style="flex:1;min-width:0"><div class="mod-hero-title">今日完成 ' + totalDone + ' / ' + total + ' 项</div>' +
-          '<div class="mod-hero-sub">还有 ' + (total - totalDone) + ' 项待办，其中 1 项已逾期</div>' +
-          '<div class="bar-wrap" style="margin-top:10px">' + bar(rate) + '</div></div>' +
-      '</div>' +
-    '</div>';
+    const prog = m.progress;
+    const rate = pct(prog.done, prog.total);
+    const strip = '<div class="date-strip">' + m.dateStrip.map((d) =>
+      '<div class="day-cell' + (d.on ? ' on' : '') + '">' + esc(d.w) + '<b>' + esc(d.d) + '</b></div>').join('') + '</div>';
 
-    const groups = m.groups.map((g) => {
-      const rows = g.items.map((it) => {
+    const secs = m.timeline.map((sec) => {
+      const toneMap = { danger: 'var(--tui-danger)', success: 'var(--tui-success)', brand: 'var(--tui-brand)', quiet: 'var(--tui-text-tertiary)' };
+      const tone = toneMap[sec.tone] || 'var(--tui-text-tertiary)';
+      const items = sec.items.map((it) => {
         const done = state.tasksDone[it.id] != null ? state.tasksDone[it.id] : it.done;
-        const a = TONE[it.priTone] || TONE.brand;
-        return '<div class="task' + (done ? ' done' : '') + (it.priority === '高' ? ' pri-high' : '') + '" data-task-toggle="' + it.id + '">' +
-          '<span class="tick">' + (done ? icon('check', 13) : '') + '</span>' +
-          '<span style="flex:1;min-width:0">' +
-            '<span class="task-title">' + esc(it.title) + '</span>' +
-            '<span class="task-meta">' +
-              '<span class="tag ' + (tagCls[it.priTone] || '') + '">' + esc(it.priority) + '优先</span>' +
-              '<span class="meta-chip">' + icon('clock', 12) + esc(it.due) + '</span>' +
-              '<span class="meta-chip">' + icon('link', 12) + esc(it.from) + '</span>' +
-            '</span>' +
-          '</span>' +
+        const nodeCls = sec.tone === 'danger' ? ' urgent' : (sec.tone === 'success' ? ' now' : '');
+        return '<div class="tlt' + nodeCls + '">' +
+          '<div class="tl-time">' + esc(it.t) + (it.priority === '高' ? '<span style="color:var(--tui-danger)">· 高优先</span>' : '') + '</div>' +
+          '<div class="tcard" data-task-toggle="' + it.id + '">' +
+            '<span class="tick"' + (done ? ' style="background:var(--tui-success);box-shadow:none;border-color:var(--tui-success)"' : '') + '>' + (done ? icon('check', 13) : '') + '</span>' +
+            '<div style="flex:1;min-width:0">' +
+              '<div class="task-title"' + (done ? ' style="color:var(--tui-text-quiet);text-decoration:line-through"' : '') + '>' + esc(it.title) + '</div>' +
+              '<div class="task-meta">' +
+                '<span class="tag ' + (tagCls[it.priTone] || '') + '">' + esc(it.priority) + '优先</span>' +
+                '<span class="meta-chip">' + icon('link', 12) + esc(it.from) + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<span style="align-self:center;color:var(--tui-text-quiet)">' + icon('chevron-right', 15) + '</span>' +
+          '</div>' +
         '</div>';
       }).join('');
-      return '<div class="sect-title">' + esc(g.title) + '<span class="spacer">' + g.items.length + ' 项</span></div>' +
-        '<div class="list">' + rows + '</div>';
+      return '<div class="tlg">' +
+          (sec.tone === 'danger' ? icon('triangle-alert', 13) : '') + esc(sec.title) +
+          '<span class="tlg-n" style="background:' + tone + '">' + sec.items.length + '</span>' +
+          (sec.tone === 'danger' ? '<span style="margin-left:auto;font-size:11px;font-weight:400;color:var(--tui-text-quiet)">建议优先处理</span>' : '') +
+        '</div>' +
+        '<div class="tl">' + items + '</div>';
     }).join('');
 
     return modHead(m) + modWrap('tasks',
-      hero +
-      statRow(m.stats.map((s, i) => Object.assign({ icon: ['list-checks', 'hourglass', 'calendar-check'][i] }, s))) +
-      segBar('tasks', m.segments) +
-      '<div style="margin-top:12px">' + groups + '</div>' +
-      '<div class="legacy-note">任务来自后端 TeacherTask 模型，与审批 / 预警 / 关怀模块联动：审批待办、预警跟进会自动生成对应任务。</div>'
+      strip +
+      '<div class="prog-line">今日完成 ' + prog.done + ' / ' + prog.total +
+        '<div class="bar"><i style="width:' + rate + '%"></i></div><em>' + rate + '%</em>' +
+      '</div>' +
+      secs +
+      '<div class="legacy-note">任务来自后端 TeacherTask 模型，与审批 / 预警 / 关怀模块联动；逾期任务红色置顶，点击卡片可勾选完成，时间节点自动按截止时间归组。</div>'
     ) + modFab('tasks', m);
   }
 
@@ -1157,12 +1360,39 @@
     approval: function (ctx) {
       const m = window.DB.modules.approval;
       const it = m.items.filter((x) => x.id === ctx)[0] || m.items[0];
+      /* v3：AI 辅助审批 */
+      const ai = it.ai || m.aiFallback;
+      const adopted = state.chip.apResult === ai.suggest;
+      const aiChecks = ai.checks.map((c) =>
+        '<div class="ai-check"><span style="display:flex;color:' + (c.ok ? 'var(--tui-success)' : 'var(--tui-warn)') + '">' +
+          icon(c.ok ? 'circle-check' : 'triangle-alert', 14) + '</span>' +
+          '<span class="ai-check-k">' + esc(c.k) + '</span><span class="ai-check-v">' + esc(c.v) + '</span></div>').join('');
+      const aiBlock =
+        '<div class="ai-assist">' +
+          '<div class="ai-assist-head">' +
+            '<span class="ai-assist-ic">' + icon('brain', 17) + '</span>' +
+            '<div style="flex:1;min-width:0"><div class="ai-assist-title">绵小城 AI 审批助手</div>' +
+              '<div class="ai-assist-sub">自动核验材料与历史数据 · 置信度 ' + ai.confidence + '%</div></div>' +
+            (adopted ? tag('已采纳', 'success') : '') +
+          '</div>' +
+          '<div class="ai-assist-body">' + esc(ai.summary) + '</div>' +
+          '<div class="ai-checks">' + aiChecks + '</div>' +
+          '<div class="ai-verdict"><span class="ai-verdict-k">建议结论</span>' +
+            '<span class="ai-verdict-v" style="color:' + (ai.suggest === '同意' ? 'var(--tui-success)' : 'var(--tui-danger)') + '">' + esc(ai.suggest) + '</span>' +
+            '<span class="ai-assist-sub" style="margin-left:auto">仅供参考 · 教师确认</span></div>' +
+          '<div class="ai-assist-body">' + esc(ai.reason) + '</div>' +
+          '<button class="btn ' + (adopted ? 'btn-ghost' : 'btn-primary') + ' btn-sm" style="margin-top:11px" data-ai-adopt="' + esc(ai.suggest) + '">' +
+            icon('wand-sparkles', 15) + (adopted ? '已采纳 AI 建议' : '采纳建议并填充审批意见') + '</button>' +
+        '</div>';
       const flow = it.flow.map((s) => '<div class="flow-step ' + s.state + '"><span class="flow-dot"></span>' +
         '<div class="flow-k">' + esc(s.k) + '</div><div class="flow-t">' + esc(s.t) + '</div></div>').join('');
       const files = it.files.length ? it.files.map((f) =>
         '<div class="file-row"><span class="fi" style="background:var(--tui-surface-sunken);color:var(--tui-text-secondary)">' + icon(f.icon, 15) + '</span>' +
         '<span style="flex:1;min-width:0"><span class="fname">' + esc(f.name) + '</span><br><span class="fsize">' + esc(f.size) + '</span></span>' +
         icon('eye', 15, 'row-arrow') + '</div>').join('') : '<div class="frow-main ph" style="text-align:left">无附件</div>';
+      const opinion = state.chip.apResult === '驳回'
+        ? '证明材料不完整，请补充后重新提交。'
+        : (adopted ? ai.opinion : '');
       return {
         icon: 'clipboard-check', title: '审批处理', sub: it.student + ' · ' + it.type,
         body:
@@ -1180,10 +1410,11 @@
           '<div class="fgroup" style="padding:0 0 0">' + files + '</div>' +
           '<div class="sect-title">审批流程</div>' +
           '<div class="detail-block"><div class="flow" style="margin-top:0;border-top:none;padding-top:0">' + flow + '</div></div>' +
+          aiBlock +
           '<div class="sect-title">审批意见</div>' +
           chips('apResult', ['同意', '驳回', '转办学工处']) +
           '<div class="sect-title">意见说明</div>' +
-          '<textarea class="ftarea" placeholder="驳回时必填，如「证明材料不完整，请补充后重新提交」">' + (state.chip.apResult === '驳回' ? '证明材料不完整，请补充后重新提交。' : '') + '</textarea>' +
+          '<textarea class="ftarea" placeholder="驳回时必填，如「证明材料不完整，请补充后重新提交」">' + esc(opinion) + '</textarea>' +
           '<div class="sheet-tip" style="margin-top:12px">' + icon('info', 14) +
             '<span>同意后自动推送给学生与学工处，并计入学生请假台账；驳回将退回学生重新提交。</span></div>',
         foot: '<button class="btn btn-ghost" data-sheet-close>稍后处理</button>' +
@@ -1454,6 +1685,8 @@
       case 'group': return renderGroupSettings();
       case 'contact': return renderContact();
       case 'people': return renderPeople();
+      case 'student': return renderStudentDetail();
+      case 'studenthome': return renderStudentHome();
       case 'sub': return renderSubPage();
       default: return '';
     }
@@ -1477,7 +1710,7 @@
     $$('.screen').forEach((s) => s.classList.toggle('active', s.dataset.screen === state.tab));
     if (state.tab === 'home') $('#screen-home').innerHTML = renderHome();
     else if (state.tab === 'messages') $('#screen-messages').innerHTML = renderMessages();
-    else if (state.tab === 'students') $('#screen-students').innerHTML = renderPlaceholder('students');
+    else if (state.tab === 'students') $('#screen-students').innerHTML = renderStudents();
     else if (state.tab === 'agent') $('#screen-agent').innerHTML = renderPlaceholder('agent');
     else if (state.tab === 'profile') $('#screen-profile').innerHTML = renderProfile();
     $$('.tab-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.tab));
@@ -1594,6 +1827,39 @@
     // 成长档案：选择学生
     const pick = closest('[data-pick-student]');
     if (pick) { state.pick.portfolio = pick.dataset.pickStudent; render(); return; }
+
+    // v3：学生详情 / 学生主页
+    const stu = closest('[data-open-student]');
+    if (stu) {
+      state.activeStudent = stu.dataset.openStudent;
+      state.stuTab = 'overview'; state.sheet = null;
+      state.layers.push({ type: 'student' }); render(); return;
+    }
+    const stuTab = closest('[data-stu-tab]');
+    if (stuTab) { state.stuTab = stuTab.dataset.stuTab; render(); return; }
+    const stuHome = closest('[data-open-student-home]');
+    if (stuHome) {
+      if (stuHome.dataset.openStudentHome) state.activeStudent = stuHome.dataset.openStudentHome;
+      state.sheet = null;
+      state.layers.push({ type: 'studenthome' }); render(); return;
+    }
+    // v3：QQ 风格主页点赞
+    const qlike = closest('[data-qq-like]');
+    if (qlike) {
+      const k = qlike.dataset.qqLike;
+      state.stuLike[k] = !state.stuLike[k];
+      render();
+      toast(state.stuLike[k] ? '已点赞，学生端会收到提醒' : '已取消点赞');
+      return;
+    }
+    // v3：AI 辅助审批 · 采纳建议
+    const adopt = closest('[data-ai-adopt]');
+    if (adopt) {
+      state.chip.apResult = adopt.dataset.aiAdopt;
+      render();
+      toast('已采纳 AI 建议：' + adopt.dataset.aiAdopt + '，意见已填充');
+      return;
+    }
 
     // 任务勾选
     const task = closest('[data-task-toggle]');

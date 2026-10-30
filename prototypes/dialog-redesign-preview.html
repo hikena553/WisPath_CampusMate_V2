@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>弹窗重设计预览 · 学业中心 / 我的资料</title>
+<style>
+/* ============================================================
+   弹窗重设计交互预览
+   4 种风格：A 极简卡片 / B 底部抽屉 / C 玻璃拟态 / D 活力渐变
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  background: #f3f4f8; color: #1c1e21; font-size: 14px;
+  transition: background .3s;
+}
+
+/* ---------- 顶部风格切换栏 ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(255,255,255,.9); backdrop-filter: blur(14px);
+  border-bottom: 1px solid #e8eaf0; padding: 12px 20px;
+}
+.topbar h1 { font-size: 16px; font-weight: 700; }
+.topbar .sub { font-size: 12px; color: #8a8f99; margin-top: 2px; }
+.style-tabs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.style-tab {
+  border: 1.5px solid #e2e5ec; background: #fff; color: #444;
+  padding: 8px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  transition: all .2s; font-weight: 500;
+}
+.style-tab:hover { border-color: #b9c0ff; }
+.style-tab.on { background: #1c1e21; color: #fff; border-color: #1c1e21; }
+.style-tab small { display: block; font-weight: 400; font-size: 11px; opacity: .75; margin-top: 1px; }
+
+/* ---------- 入口区 ---------- */
+.wrap { max-width: 960px; margin: 0 auto; padding: 20px 20px 80px; }
+.page-sec { margin-top: 22px; }
+.sec-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+.sec-title .bar { width: 4px; height: 16px; border-radius: 2px; background: linear-gradient(180deg,#5b7cfa,#8b5cf6); }
+.launch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.launch {
+  background: #fff; border: 1px solid #e8eaf0; border-radius: 14px;
+  padding: 14px; cursor: pointer; text-align: left; transition: all .18s;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.launch:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(30,40,80,.08); border-color: #d5daf5; }
+.launch .ico { font-size: 20px; }
+.launch .nm { font-weight: 600; font-size: 13.5px; color: #1c1e21; }
+.launch .ds { font-size: 11.5px; color: #9298a3; }
+
+/* ---------- 通用遮罩 + 弹窗骨架 ---------- */
+.mask {
+  position: fixed; inset: 0; z-index: 100; display: none;
+  background: rgba(17,20,28,.45);
+  align-items: center; justify-content: center; padding: 20px;
+}
+.mask.show { display: flex; animation: fadeIn .22s ease; }
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes popIn { from { opacity: 0; transform: scale(.94) translateY(14px) } to { opacity: 1; transform: none } }
+.dlg {
+  background: #fff; border-radius: 18px; width: 100%; max-width: 560px;
+  max-height: 86vh; display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(15,20,40,.22);
+  animation: popIn .26s cubic-bezier(.34,1.4,.64,1);
+}
+.dlg.wide { max-width: 760px; }
+.dlg.narrow { max-width: 420px; }
+.dlg-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 20px 12px; flex-shrink: 0;
+}
+.dlg-title { font-size: 16px; font-weight: 700; flex: 1; }
+.dlg-x {
+  width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+  background: #f1f2f6; color: #6b7078; font-size: 14px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.dlg-x:hover { background: #e5e7ee; color: #1c1e21; }
+.dlg-body { padding: 4px 20px 16px; overflow-y: auto; flex: 1; min-height: 0; }
+.dlg-body::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+.dlg-body::-webkit-scrollbar-thumb { background: #d6d9e0; border-radius: 3px; }
+.dlg-body { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+.dlg-foot {
+  display: flex; gap: 10px; justify-content: flex-end; align-items: center;
+  padding: 12px 20px 16px; border-top: 1px solid #f0f1f5; flex-shrink: 0;
+}
+.dlg-foot .left { margin-right: auto; }
+
+/* ---------- 按钮 ---------- */
+.btn {
+  border: none; cursor: pointer; border-radius: 10px; padding: 9px 18px;
+  font-size: 13.5px; font-weight: 600; transition: all .15s;
+  background: #f1f2f6; color: #444;
+}
+.btn:hover { filter: brightness(.97); }
+.btn.pri { background: #4f6ef2; color: #fff; }
+.btn.pri:hover { background: #3f5be0; }
+.btn.ghost { background: transparent; color: #4f6ef2; }
+.btn.danger-t { background: transparent; color: #e5484d; }
+.btn.danger { background: #e5484d; color: #fff; }
+.btn.sm { padding: 6px 13px; font-size: 12.5px; border-radius: 8px; }
+.btn.blk { width: 100%; padding: 12px; font-size: 14.5px; border-radius: 12px; }
+
+/* ---------- 表单 ---------- */
+.fld { margin-bottom: 14px; }
+.fld label { display: block; font-size: 12.5px; font-weight: 600; color: #5a5f6a; margin-bottom: 6px; }
+.fld label .req { color: #e5484d; margin-left: 2px; }
+.fld input[type=text], .fld input[type=date], .fld input[type=number], .fld select, .fld textarea {
+  width: 100%; border: 1.5px solid #e3e5ec; border-radius: 10px; padding: 10px 12px;
+  font-size: 14px; font-family: inherit; outline: none; background: #fafbfc; transition: border .15s;
+}
+.fld input:focus, .fld select:focus, .fld textarea:focus { border-color: #4f6ef2; background: #fff; box-shadow: 0 0 0 3px rgba(79,110,242,.1); }
+.fld input.err, .fld select.err, .fld textarea.err { border-color: #e5484d; }
+.fld .err-tip { color: #e5484d; font-size: 11.5px; margin-top: 4px; display: none; }
+.fld.has-err .err-tip { display: block; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }
+.switch-row span { font-size: 13.5px; font-weight: 500; }
+.sw { width: 44px; height: 26px; border-radius: 13px; background: #d8dbe3; border: none; cursor: pointer; position: relative; transition: background .2s; }
+.sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.sw.on { background: #4f6ef2; }
+.sw.on::after { transform: translateX(18px); }
+.upload-box {
+  border: 1.5px dashed #cdd2df; border-radius: 10px; padding: 12px; text-align: center;
+  color: #8a8f99; font-size: 12.5px; cursor: pointer; transition: all .15s; background: #fafbfc;
+}
+.upload-box:hover { border-color: #4f6ef2; color: #4f6ef2; }
+.upload-box.has { border-style: solid; border-color: #b9e5c0; color: #2e9e44; background: #f4fbf5; }
+
+/* ---------- 标签 ---------- */
+.tag { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+.tag.honor { background: #fff3e0; color: #e08a00; }
+.tag.comp { background: #ede7ff; color: #7c4dff; }
+.tag.prac { background: #e3f5e8; color: #2e9e44; }
+.tag.paper { background: #e1f0ff; color: #2b7de0; }
+.tag.achv { background: #fde7ef; color: #d63384; }
+.tag.plain { background: #f1f2f6; color: #6b7078; }
+
+/* ============================================================
+   风格 A · 极简卡片（Notion / Linear 风）
+   ============================================================ */
+body[data-style="a"] { background: #fafafa; }
+body[data-style="a"] .mask { background: rgba(20,22,28,.32); }
+body[data-style="a"] .dlg { border-radius: 14px; border: 1px solid #e6e8ee; box-shadow: 0 16px 48px rgba(20,24,40,.14); }
+body[data-style="a"] .dlg-head { padding: 18px 22px 10px; }
+body[data-style="a"] .dlg-title { font-size: 15px; letter-spacing: .2px; }
+body[data-style="a"] .dlg-x { background: transparent; font-size: 16px; }
+body[data-style="a"] .dlg-foot { border-top: 1px solid #eef0f4; background: #fafbfc; }
+body[data-style="a"] .btn.pri { background: #1c1e21; }
+body[data-style="a"] .btn.pri:hover { background: #33363b; }
+body[data-style="a"] .btn { border-radius: 8px; }
+body[data-style="a"] .fld input, body[data-style="a"] .fld select, body[data-style="a"] .fld textarea { border-radius: 8px; }
+
+/* ============================================================
+   风格 B · 底部抽屉（微信 / 抖音移动端风）
+   ============================================================ */
+body[data-style="b"] { background: #ededed; }
+body[data-style="b"] .mask { align-items: flex-end; padding: 0; }
+body[data-style="b"] .dlg { max-width: 560px; border-radius: 20px 20px 0 0; animation: sheetUp .32s cubic-bezier(.32,.72,.32,1); box-shadow: 0 -8px 40px rgba(0,0,0,.18); }
+@keyframes sheetUp { from { transform: translateY(100%) } to { transform: none } }
+body[data-style="b"] .dlg::before { content: ''; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 36px; height: 4px; border-radius: 2px; background: #d9dce3; }
+body[data-style="b"] .dlg { position: relative; }
+body[data-style="b"] .dlg-head { padding: 24px 20px 10px; justify-content: center; position: relative; }
+body[data-style="b"] .dlg-title { font-size: 15.5px; text-align: center; }
+body[data-style="b"] .dlg-x { position: absolute; right: 14px; top: 18px; background: #f2f3f5; }
+body[data-style="b"] .dlg-foot { padding: 12px 20px calc(16px + env(safe-area-inset-bottom)); }
+body[data-style="b"] .btn { border-radius: 12px; }
+body[data-style="b"] .btn.pri { background: #07c160; }
+body[data-style="b"] .btn.pri:hover { background: #06ad56; }
+
+/* ============================================================
+   风格 C · 玻璃拟态（macOS / Vision 风）
+   ============================================================ */
+body[data-style="c"] {
+  background: linear-gradient(135deg, #c7d2fe 0%, #e0e7ff 25%, #fce7f3 55%, #dbeafe 100%);
+}
+body[data-style="c"] .mask { background: rgba(30,30,60,.25); backdrop-filter: blur(4px); }
+body[data-style="c"] .dlg {
+  background: rgba(255,255,255,.68); backdrop-filter: blur(28px) saturate(1.7);
+  -webkit-backdrop-filter: blur(28px) saturate(1.7);
+  border: 1px solid rgba(255,255,255,.75); border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(80,70,180,.22), inset 0 1px 0 rgba(255,255,255,.9);
+}
+body[data-style="c"] .dlg-head { padding: 18px 22px 10px; }
+body[data-style="c"] .dlg-title { font-weight: 800; }
+body[data-style="c"] .dlg-x { background: rgba(255,255,255,.6); backdrop-filter: blur(8px); }
+body[data-style="c"] .dlg-foot { border-top: 1px solid rgba(255,255,255,.5); }
+body[data-style="c"] .fld input, body[data-style="c"] .fld select, body[data-style="c"] .fld textarea {
+  background: rgba(255,255,255,.55); border-color: rgba(255,255,255,.9); border-radius: 12px;
+}
+body[data-style="c"] .launch { background: rgba(255,255,255,.55); backdrop-filter: blur(10px); border-color: rgba(255,255,255,.7); }
+body[data-style="c"] .topbar { background: rgba(255,255,255,.5); border-bottom-color: rgba(255,255,255,.5); }
+body[data-style="c"] .btn { border-radius: 12px; }
+body[data-style="c"] .btn.pri { background: linear-gradient(135deg,#6366f1,#a855f7); }
+body[data-style="c"] .card, body[data-style="c"] .g-card, body[data-style="c"] .rec-item { background: rgba(255,255,255,.6); }
+
+/* ============================================================
+   风格 D · 活力渐变（Keep / B站 风）
+   ============================================================ */
+body[data-style="d"] { background: #f6f7fb; }
+body[data-style="d"] .mask { background: rgba(10,14,30,.5); }
+body[data-style="d"] .dlg { border-radius: 20px; overflow: hidden; }
+body[data-style="d"] .dlg-head {
+  background: linear-gradient(120deg,#5b7cfa 0%, #8b5cf6 60%, #d946ef 100%);
+  padding: 18px 20px 14px; margin: 0;
+}
+body[data-style="d"] .dlg-title { color: #fff; font-size: 16.5px; font-weight: 800; }
+body[data-style="d"] .dlg-x { background: rgba(255,255,255,.22); color: #fff; }
+body[data-style="d"] .dlg-x:hover { background: rgba(255,255,255,.35); color: #fff; }
+body[data-style="d"] .dlg-body { padding-top: 16px; }
+body[data-style="d"] .dlg-foot { border-top: none; background: #fafbff; }
+body[data-style="d"] .btn.pri { background: linear-gradient(120deg,#5b7cfa,#8b5cf6); border-radius: 999px; }
+body[data-style="d"] .btn { border-radius: 999px; }
+body[data-style="d"] .fld input, body[data-style="d"] .fld select, body[data-style="d"] .fld textarea { border-radius: 12px; }
+
+/* ============================================================
+   各弹窗内容样式
+   ============================================================ */
+/* 成绩卡片 */
+.grade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 10px; }
+.g-card { border: 1px solid #eef0f4; border-radius: 12px; padding: 12px 14px; background: #fbfcfe; }
+.g-card .gc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.g-card .gc-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-card .gc-score { font-size: 20px; font-weight: 800; }
+.g-card .gc-meta { display: flex; gap: 10px; margin-top: 6px; font-size: 11.5px; color: #9298a3; }
+.g-card.good .gc-score { color: #2e9e44; } .g-card.mid .gc-score { color: #e08a00; } .g-card.low .gc-score { color: #e5484d; }
+.sem-chips { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.sem-chip { border: 1.5px solid #e3e5ec; background: #fff; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; cursor: pointer; color: #5a5f6a; }
+.sem-chip.on { background: #4f6ef2; border-color: #4f6ef2; color: #fff; font-weight: 600; }
+body[data-style="b"] .sem-chip.on { background: #07c160; border-color: #07c160; }
+
+/* AI 分析 */
+.ai-hero { text-align: center; padding: 8px 0 14px; }
+.ai-hero .ai-emoji { font-size: 40px; }
+.ai-hero p { color: #8a8f99; font-size: 13px; margin-top: 6px; }
+.skeleton { margin-top: 8px; }
+.skeleton .sk-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg,#eef0f5 25%,#e0e3ea 50%,#eef0f5 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; margin-bottom: 10px; }
+@keyframes shimmer { to { background-position: -200% 0 } }
+.ai-report h4 { font-size: 14px; margin: 12px 0 6px; display: flex; align-items: center; gap: 6px; }
+.ai-report p, .ai-report li { font-size: 13px; color: #4a4f58; line-height: 1.75; }
+.ai-report ul { padding-left: 18px; }
+.ai-report .hl { color: #4f6ef2; font-weight: 600; }
+
+/* 记录列表 */
+.rec-item { display: flex; gap: 12px; padding: 12px 4px; border-bottom: 1px solid #f2f3f7; cursor: pointer; border-radius: 10px; transition: background .15s; }
+.rec-item:hover { background: #f7f8fc; }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+.rec-main { flex: 1; min-width: 0; }
+.rec-top { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.rec-date { font-size: 11.5px; color: #9298a3; }
+.rec-title { font-size: 14px; font-weight: 600; }
+.rec-sub { font-size: 12px; color: #8a8f99; margin-top: 3px; }
+.rec-arrow { color: #c3c8d2; align-self: center; }
+
+/* 详情 */
+.kv { display: flex; padding: 9px 0; border-bottom: 1px dashed #eef0f4; font-size: 13.5px; }
+.kv:last-child { border-bottom: none; }
+.kv .k { width: 76px; color: #9298a3; flex-shrink: 0; }
+.kv .v { flex: 1; font-weight: 500; }
+
+/* 计算规则 */
+.tip-bar { display: flex; gap: 8px; background: #eef3ff; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; color: #3d55b8; line-height: 1.6; margin-bottom: 14px; }
+.tip-bar.warn { background: #fff7e8; color: #9a6b00; }
+.formula-box { border: 1px solid #eef0f4; border-radius: 12px; padding: 14px; margin-bottom: 14px; background: #fbfcfe; }
+.formula-box .fb-t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.formula-box .fb-f { font-family: "SF Mono", Consolas, monospace; font-size: 12.5px; background: #f0f2f8; border-radius: 8px; padding: 10px 12px; color: #3d3f8f; line-height: 1.6; }
+.formula-box .fb-sub { font-size: 12px; color: #8a8f99; margin-top: 8px; }
+.dim-row { margin-bottom: 12px; }
+.dim-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+.dim-top b { font-size: 13px; }
+.dim-bar { height: 8px; border-radius: 4px; background: #eef0f5; overflow: hidden; }
+.dim-bar i { display: block; height: 100%; border-radius: 4px; transition: width .5s ease; }
+.dim-f { font-size: 11px; color: #a0a5b0; margin-top: 4px; font-family: Consolas, monospace; }
+.tabs { display: flex; gap: 6px; background: #f1f2f6; padding: 4px; border-radius: 10px; margin-bottom: 14px; }
+.tabs button { flex: 1; border: none; background: transparent; padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer; color: #6b7078; font-weight: 500; }
+.tabs button.on { background: #fff; color: #1c1e21; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.f-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.f-table th { text-align: left; color: #9298a3; font-weight: 500; padding: 7px 8px; border-bottom: 1px solid #eef0f4; }
+.f-table td { padding: 8px; border-bottom: 1px solid #f4f5f9; }
+.f-table .low-gpa { color: #e5484d; font-weight: 700; }
+
+/* 头像裁剪 */
+.crop-stage {
+  position: relative; width: 100%; aspect-ratio: 1; max-width: 300px; margin: 0 auto 14px;
+  border-radius: 14px; overflow: hidden; background: #14161c; touch-action: none; user-select: none;
+}
+.crop-stage img { position: absolute; top: 0; left: 0; will-change: transform; pointer-events: none; }
+.crop-stage .ring { position: absolute; inset: 10%; border-radius: 50%; box-shadow: 0 0 0 200vmax rgba(10,12,18,.55); border: 2px dashed rgba(255,255,255,.65); pointer-events: none; }
+.crop-hint { text-align: center; color: #9298a3; font-size: 12px; margin-bottom: 12px; }
+.zoom-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.zoom-row input[type=range] { flex: 1; accent-color: #4f6ef2; }
+.crop-result { text-align: center; }
+.crop-result img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 3px solid #4f6ef2; }
+
+/* 勋章 */
+.badge-hero { text-align: center; padding: 10px 0 4px; }
+.badge-hero .b-ico { font-size: 64px; filter: drop-shadow(0 6px 16px rgba(230,160,20,.45)); }
+.badge-hero .b-nm { font-size: 18px; font-weight: 800; margin-top: 8px; }
+.badge-hero .b-time { font-size: 12px; color: #9298a3; margin-top: 4px; }
+.badge-desc { background: #fff8ea; border-radius: 12px; padding: 12px 14px; font-size: 13px; color: #7a5b10; line-height: 1.7; margin-top: 14px; }
+.badge-progress { margin-top: 12px; }
+
+/* Toast */
+#toast {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%) translateY(-20px);
+  background: rgba(20,22,28,.88); color: #fff; padding: 10px 20px; border-radius: 999px;
+  font-size: 13.5px; z-index: 300; opacity: 0; pointer-events: none; transition: all .3s cubic-bezier(.34,1.4,.64,1);
+  backdrop-filter: blur(8px); box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 确认弹窗 */
+.confirm-ico { text-align: center; font-size: 40px; margin-bottom: 6px; }
+.confirm-text { text-align: center; font-size: 14px; color: #4a4f58; line-height: 1.7; padding: 0 8px 8px; }
+
+/* 简易列表（项目） */
+.proj-item { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid #f2f3f7; }
+.proj-item .pi-main { flex: 1; min-width: 0; }
+.proj-item .pi-nm { font-size: 14px; font-weight: 600; }
+.proj-item .pi-sub { font-size: 12px; color: #8a8f99; margin-top: 3px; }
+.proj-item .pi-ops { display: flex; gap: 6px; }
+.icon-btn { border: 1px solid #e3e5ec; background: #fff; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; }
+.icon-btn:hover { border-color: #4f6ef2; color: #4f6ef2; }
+.icon-btn.del:hover { border-color: #e5484d; color: #e5484d; }
+
+/* 资料页预览条 */
+.pf-card { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #e8eaf0; border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+.pf-card img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.pf-card .pf-nm { font-size: 15px; font-weight: 700; }
+.pf-card .pf-sub { font-size: 12px; color: #9298a3; margin-top: 2px; }
+.pf-kv { display: flex; justify-content: space-between; background: #fff; border: 1px solid #e8eaf0; border-radius: 12px; padding: 13px 16px; margin-bottom: 8px; font-size: 13.5px; }
+.pf-kv b { font-weight: 600; }
+.pf-kv .edit-link { color: #4f6ef2; font-size: 12.5px; cursor: pointer; font-weight: 500; }
+</style>
+</head>
+<body data-style="a">
+
+<div class="topbar">
+  <h1>🎨 弹窗重设计预览</h1>
+  <div class="sub">学业中心 + 我的资料 · 除「导出简历」外的全部弹窗 · 以下功能均为真实可交互演示</div>
+  <div class="style-tabs">
+    <button class="style-tab on" data-s="a" onclick="setStyle('a')">方案 A · 极简卡片<small>Notion / Linear 风</small></button>
+    <button class="style-tab" data-s="b" onclick="setStyle('b')">方案 B · 底部抽屉<small>微信 / 抖音移动端风</small></button>
+    <button class="style-tab" data-s="c" onclick="setStyle('c')">方案 C · 玻璃拟态<small>macOS / Vision 风</small></button>
+    <button class="style-tab" data-s="d" onclick="setStyle('d')">方案 D · 活力渐变<small>Keep / B站 风</small></button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="pf-card">
+    <img id="pfAvatar" src="" alt="头像">
+    <div style="flex:1">
+      <div class="pf-nm">林小城</div>
+      <div class="pf-sub">计算机学院 · 软件工程 2023 级 · <span id="pfCollegeTxt">计算机学院</span></div>
+    </div>
+  </div>
+
+  <div class="page-sec">
+    <div class="sec-title"><span class="bar"></span>学业中心弹窗</div>
+    <div class="launch-grid">
+      <button class="launch" onclick="openDlg('dlg-grades')"><span class="ico">📊</span><span class="nm">全部成绩明细</span><span class="ds">学期筛选 + 成绩卡片</span></button>
+      <button class="launch" onclick="openDlg('dlg-ai')"><span class="ico">🤖</span><span class="nm">AI 学情分析</span><span class="ds">模拟流式生成 + 重新分析</span></button>
+      <button class="launch" onclick="openProject()"><span class="ico">📁</span><span class="nm">添加 / 编辑项目</span><span class="ds">表单校验 + 增删改</span></button>
+      <button class="launch" onclick="openRecord()"><span class="ico">✏️</span><span class="nm">添加成长记录</span><span class="ds">5 类动态表单</span></button>
+      <button class="launch" onclick="openDlg('dlg-records')"><span class="ico">🗂️</span><span class="nm">全部成长记录</span><span class="ds">点任意一条进详情</span></button>
+      <button class="launch" onclick="openFormula('gpa')"><span class="ico">🧮</span><span class="nm">GPA / 评分说明</span><span class="ds">双页签 + 明细表</span></button>
+    </div>
+  </div>
+
+  <div class="page-sec">
+    <div class="sec-title"><span class="bar"></span>我的资料弹窗</div>
+    <div class="launch-grid">
+      <button class="launch" onclick="openField('nickname')"><span class="ico">📝</span><span class="nm">修改昵称</span><span class="ds">文本输入型弹窗</span></button>
+      <button class="launch" onclick="openField('age')"><span class="ico">🔢</span><span class="nm">修改年龄</span><span class="ds">数字步进型弹窗</span></button>
+      <button class="launch" onclick="openField('college')"><span class="ico">🎓</span><span class="nm">修改学院</span><span class="ds">下拉选择型弹窗</span></button>
+      <button class="launch" onclick="openCrop()"><span class="ico">🖼️</span><span class="nm">裁剪头像</span><span class="ds">拖拽 + 缩放 + 圆形预览</span></button>
+      <button class="launch" onclick="openDlg('dlg-badge')"><span class="ico">🏅</span><span class="nm">勋章详情</span><span class="ds">放大查看 + 进度</span></button>
+    </div>
+  </div>
+
+  <div style="margin-top:18px; font-size:12px; color:#a0a5b0; text-align:center;">💡 切换顶部风格后，再点开任意弹窗即可看到同款功能在不同风格下的效果</div>
+</div>
+
+<!-- ================= 弹窗：全部成绩明细 ================= -->
+<div class="mask" id="dlg-grades">
+  <div class="dlg wide">
+    <div class="dlg-head"><div class="dlg-title">全部成绩明细</div><button class="dlg-x" onclick="closeDlg('dlg-grades')">✕</button></div>
+    <div class="dlg-body">
+      <div class="sem-chips" id="semChips"></div>
+      <div class="grade-grid" id="gradeGrid"></div>
+    </div>
+    <div class="dlg-foot"><button class="btn" onclick="closeDlg('dlg-grades')">关闭</button></div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：AI 学情分析 ================= -->
+<div class="mask" id="dlg-ai">
+  <div class="dlg">
+    <div class="dlg-head"><div class="dlg-title">🤖 AI 学情分析</div><button class="dlg-x" onclick="closeDlg('dlg-ai')">✕</button></div>
+    <div class="dlg-body">
+      <div id="aiContent"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" id="aiBtn" onclick="runAi()">✨ 开始分析</button>
+      <button class="btn" onclick="closeDlg('dlg-ai')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：添加/编辑项目 ================= -->
+<div class="mask" id="dlg-project">
+  <div class="dlg">
+    <div class="dlg-head"><div class="dlg-title" id="projTitle">添加项目</div><button class="dlg-x" onclick="closeDlg('dlg-project')">✕</button></div>
+    <div class="dlg-body">
+      <div class="fld" id="f-pname"><label>项目名称<span class="req">*</span></label><input type="text" id="projName" placeholder="如：基于大数据的智慧校园平台"><div class="err-tip">请输入项目名称</div></div>
+      <div class="row2">
+        <div class="fld"><label>开始日期<span class="req">*</span></label><input type="date" id="projStart"></div>
+        <div class="fld"><label>结束日期</label><input type="date" id="projEnd"><span style="font-size:11px;color:#a0a5b0;">不填表示进行中</span></div>
+      </div>
+      <div class="fld"><div class="switch-row"><span>是否团队项目</span><button class="sw" id="projTeam" onclick="toggleTeam()"></button></div></div>
+      <div class="fld" id="f-team" style="display:none"><label>团队成员<span class="req">*</span></label><input type="text" id="projMembers" placeholder="逗号分隔，如：张三, 李四"><div class="err-tip">团队项目需填写成员</div></div>
+      <div class="fld"><label>项目成果附件</label>
+        <div class="upload-box" id="projUpload" onclick="fakeUpload(this)">📎 点击上传成果文件（演示）</div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn danger-t left" id="projDelBtn" style="display:none" onclick="delProject()">删除项目</button>
+      <button class="btn" onclick="closeDlg('dlg-project')">取消</button>
+      <button class="btn pri" onclick="saveProject()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：添加成长记录 ================= -->
+<div class="mask" id="dlg-record">
+  <div class="dlg wide">
+    <div class="dlg-head"><div class="dlg-title" id="recTitle">添加成长记录</div><button class="dlg-x" onclick="closeDlg('dlg-record')">✕</button></div>
+    <div class="dlg-body">
+      <div class="row2">
+        <div class="fld"><label>记录类型<span class="req">*</span></label>
+          <select id="recType" onchange="renderRecForm()">
+            <option value="honor">🏅 荣誉</option><option value="competition">🏆 竞赛</option>
+            <option value="practice">🌱 实践</option><option value="paper">📄 论文</option>
+            <option value="achievement">💡 成果</option>
+          </select>
+        </div>
+        <div class="fld" id="f-rdate"><label>日期<span class="req">*</span></label><input type="date" id="recDate"></div>
+      </div>
+      <div id="recForm"></div>
+      <div class="fld"><label>证明材料</label><div class="upload-box" id="recUpload" onclick="fakeUpload(this)">📎 点击上传证明材料（演示）</div></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" onclick="closeDlg('dlg-record')">取消</button>
+      <button class="btn pri" onclick="saveRecord()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：全部成长记录 ================= -->
+<div class="mask" id="dlg-records">
+  <div class="dlg">
+    <div class="dlg-head"><div class="dlg-title">全部成长记录</div><button class="dlg-x" onclick="closeDlg('dlg-records')">✕</button></div>
+    <div class="dlg-body" id="recList"></div>
+    <div class="dlg-foot"><button class="btn" onclick="closeDlg('dlg-records')">关闭</button></div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：记录详情 ================= -->
+<div class="mask" id="dlg-detail">
+  <div class="dlg narrow">
+    <div class="dlg-head"><div class="dlg-title" id="dtTitle">记录详情</div><button class="dlg-x" onclick="closeDlg('dlg-detail')">✕</button></div>
+    <div class="dlg-body" id="dtBody"></div>
+    <div class="dlg-foot"><button class="btn" onclick="closeDlg('dlg-detail')">关闭</button></div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：计算规则 ================= -->
+<div class="mask" id="dlg-formula">
+  <div class="dlg wide">
+    <div class="dlg-head"><div class="dlg-title" id="formulaTitle">GPA 计算说明</div><button class="dlg-x" onclick="closeDlg('dlg-formula')">✕</button></div>
+    <div class="dlg-body">
+      <div class="tabs">
+        <button id="tabGpa" class="on" onclick="openFormula('gpa')">GPA 计算</button>
+        <button id="tabScore" onclick="openFormula('score')">综合评分</button>
+      </div>
+      <div id="formulaBody"></div>
+    </div>
+    <div class="dlg-foot"><button class="btn" onclick="closeDlg('dlg-formula')">关闭</button></div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：修改资料字段 ================= -->
+<div class="mask" id="dlg-field">
+  <div class="dlg narrow">
+    <div class="dlg-head"><div class="dlg-title" id="fldTitle">修改昵称</div><button class="dlg-x" onclick="closeDlg('dlg-field')">✕</button></div>
+    <div class="dlg-body" id="fldBody"></div>
+    <div class="dlg-foot">
+      <button class="btn" onclick="closeDlg('dlg-field')">取消</button>
+      <button class="btn pri" onclick="confirmField()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：裁剪头像 ================= -->
+<div class="mask" id="dlg-crop">
+  <div class="dlg narrow">
+    <div class="dlg-head"><div class="dlg-title">裁剪头像</div><button class="dlg-x" onclick="closeDlg('dlg-crop')">✕</button></div>
+    <div class="dlg-body">
+      <div class="crop-stage" id="cropStage">
+        <img id="cropImg" draggable="false">
+        <div class="ring"></div>
+      </div>
+      <div class="crop-hint">拖动图片调整位置 · 滑动滑杆缩放</div>
+      <div class="zoom-row"><span style="font-size:12px;color:#9298a3">🔍</span><input type="range" id="cropZoom" min="1" max="3" step="0.01" value="1"></div>
+      <div class="crop-result" id="cropResult" style="display:none">
+        <img id="cropOut"><div style="font-size:12px;color:#2e9e44;margin-top:8px">✓ 裁剪完成，头像已更新</div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" onclick="resetCrop()">重置</button>
+      <button class="btn" onclick="closeDlg('dlg-crop')">取消</button>
+      <button class="btn pri" onclick="confirmCrop()">确认裁剪</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：勋章详情 ================= -->
+<div class="mask" id="dlg-badge">
+  <div class="dlg narrow">
+    <div class="dlg-head"><div class="dlg-title">勋章详情</div><button class="dlg-x" onclick="closeDlg('dlg-badge')">✕</button></div>
+    <div class="dlg-body">
+      <div class="badge-hero">
+        <div class="b-ico">🏆</div>
+        <div class="b-nm">学业之星</div>
+        <div class="b-time">2026 年 6 月获得</div>
+      </div>
+      <div class="badge-desc">🏅 获得条件：单学期 GPA 达到 3.8 及以上，且无挂科记录。由学业中心根据每学期成绩自动评定颁发。</div>
+      <div class="badge-progress dim-row" style="margin-top:16px">
+        <div class="dim-top"><span>全校获得率</span><b>12.6%</b></div>
+        <div class="dim-bar"><i style="width:12.6%;background:linear-gradient(90deg,#f59e0b,#f97316)"></i></div>
+        <div class="dim-f">超过全校 87.4% 的同学 · 稀有度 ★★★☆</div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" onclick="toast('已生成分享卡片（演示）')">分享</button>
+      <button class="btn" onclick="closeDlg('dlg-badge')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：确认 ================= -->
+<div class="mask" id="dlg-confirm">
+  <div class="dlg narrow" style="max-width:340px">
+    <div class="dlg-body" style="padding-top:20px">
+      <div class="confirm-ico" id="cfIco">⚠️</div>
+      <div class="confirm-text" id="cfText">确定删除吗？</div>
+    </div>
+    <div class="dlg-foot" style="border-top:1px solid #f0f1f5">
+      <button class="btn" style="flex:1" onclick="closeDlg('dlg-confirm')">取消</button>
+      <button class="btn danger" style="flex:1" id="cfOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= 风格切换 ================= */
+function setStyle(s) {
+  document.body.dataset.style = s;
+  document.querySelectorAll('.style-tab').forEach(t => t.classList.toggle('on', t.dataset.s === s));
+  localStorage.setItem('dlg-style', s);
+}
+setStyle(localStorage.getItem('dlg-style') || 'a');
+
+/* ================= 基础 ================= */
+function openDlg(id) { document.getElementById(id).classList.add('show'); if (id === 'dlg-ai' && !aiState) runAi(); }
+function closeDlg(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.mask').forEach(m => m.addEventListener('click', e => {
+  if (e.target === m && m.id !== 'dlg-crop' && m.id !== 'dlg-project' && m.id !== 'dlg-record') closeDlg(m.id);
+}));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.mask.show').forEach(m => closeDlg(m.id)); });
+let toastTimer;
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200); }
+function fakeUpload(el) { el.classList.add('has'); el.textContent = '✓ 成果证明.pdf（2.1 MB）'; toast('文件上传成功（演示）'); }
+
+/* 确认弹窗 */
+let cfCb = null;
+function askConfirm(text, cb, ico = '⚠️') {
+  document.getElementById('cfIco').textContent = ico;
+  document.getElementById('cfText').textContent = text;
+  cfCb = cb;
+  document.getElementById('cfOk').onclick = () => { closeDlg('dlg-confirm'); cfCb && cfCb(); };
+  openDlg('dlg-confirm');
+}
+
+/* ================= 数据 ================= */
+const grades = [
+  { s: '2025-2026-1', n: '数据结构', sc: 92, gpa: 4.0, c: 4 }, { s: '2025-2026-1', n: '操作系统', sc: 85, gpa: 3.7, c: 4 },
+  { s: '2025-2026-1', n: '计算机网络', sc: 78, gpa: 3.0, c: 3 }, { s: '2025-2026-1', n: '数据库原理', sc: 88, gpa: 3.9, c: 3.5 },
+  { s: '2025-2026-1', n: '软件工程导论', sc: 95, gpa: 4.0, c: 2 }, { s: '2025-2026-1', n: '大学英语Ⅳ', sc: 71, gpa: 2.7, c: 3 },
+  { s: '2024-2025-2', n: '高等数学Ⅱ', sc: 83, gpa: 3.6, c: 5 }, { s: '2024-2025-2', n: '线性代数', sc: 90, gpa: 4.0, c: 3 },
+  { s: '2024-2025-2', n: '大学物理', sc: 76, gpa: 3.1, c: 4 }, { s: '2024-2025-2', n: 'C语言程序设计', sc: 96, gpa: 4.0, c: 4 },
+];
+const sems = [...new Set(grades.map(g => g.s))];
+let curSem = sems[0];
+const semChips = document.getElementById('semChips'), gradeGrid = document.getElementById('gradeGrid');
+function lv(sc) { return sc >= 85 ? 'good' : sc >= 75 ? 'mid' : 'low'; }
+function renderGrades() {
+  semChips.innerHTML = sems.map(s => `<button class="sem-chip ${s === curSem ? 'on' : ''}" onclick="curSem='${s}';renderGrades()">${s.replace('2025-2026','25-26').replace('2024-2025','24-25')}</button>`).join('');
+  gradeGrid.innerHTML = grades.filter(g => g.s === curSem).map(g => `
+    <div class="g-card ${lv(g.sc)}"><div class="gc-top"><span class="gc-name">${g.n}</span><span class="gc-score">${g.sc}</span></div>
+    <div class="gc-meta"><span>绩点 ${g.gpa.toFixed(1)}</span><span>学分 ${g.c}</span></div></div>`).join('');
+}
+renderGrades();
+
+/* ================= AI 学情分析 ================= */
+let aiState = null, aiTimer = null;
+const aiHtml = [
+  '<h4>📈 整体表现</h4><p>本学期共修 <span class="hl">6 门课程</span>，平均绩点 <span class="hl">3.55</span>，较上学期提升 0.15，处于专业前 30% 水平。</p>',
+  '<h4>💪 优势学科</h4><p><span class="hl">软件工程导论（95分）</span>、数据结构（92分）表现突出，编程类课程学习能力较强，建议保持并参与相关竞赛进一步发展。</p>',
+  '<h4>📌 待提升项</h4><ul><li><b>大学英语Ⅳ（71分）</b>：绩点 2.7，是当前最大短板，建议每天投入 30 分钟进行阅读与听力训练；</li><li><b>计算机网络（78分）</b>：协议记忆类知识点薄弱，推荐结合抓包实验加深理解。</li></ul>',
+  '<h4>🎯 下阶段建议</h4><p>若下学期目标绩点 3.7，只需将英语提升至 80 分、网络提升至 85 分即可达成，其他课程保持现有水平。</p>'
+];
+function runAi() {
+  aiState = 'loading';
+  document.getElementById('aiBtn').textContent = '分析中...';
+  document.getElementById('aiContent').innerHTML = `
+    <div class="ai-hero"><div class="ai-emoji">🤖</div><p>AI 正在分析您的学情数据...</p></div>
+    <div class="skeleton">${'<div class="sk-line" style="width:80%"></div><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:90%"></div><div class="sk-line" style="width:70%"></div>'}</div>`;
+  setTimeout(() => {
+    aiState = 'done';
+    document.getElementById('aiBtn').textContent = '✨ 重新分析';
+    const box = document.getElementById('aiContent');
+    box.innerHTML = '<div class="ai-report"></div>';
+    const rep = box.querySelector('.ai-report');
+    let i = 0;
+    (function type() {
+      if (i < aiHtml.length) { rep.innerHTML += aiHtml[i++]; aiTimer = setTimeout(type, 450); }
+    })();
+  }, 1400);
+}
+
+/* ================= 项目 ================= */
+let projects = [
+  { id: 1, name: '基于大数据的智慧校园平台', start: '2025-09-01', end: '', team: true, members: '张三, 李四, 王五', file: false },
+  { id: 2, name: '校园二手交易小程序', start: '2025-03-10', end: '2025-06-20', team: false, members: '', file: true },
+];
+let projEditing = null;
+function renderProjects() {
+  const list = projects.map(p => `
+    <div class="proj-item"><div class="pi-main">
+      <div class="pi-nm">${p.name}</div>
+      <div class="pi-sub">${p.start} ~ ${p.end || '进行中'} · ${p.team ? '团队：' + p.members : '个人项目'}${p.file ? ' · 📎 附件' : ''}</div>
+    </div>
+    <div class="pi-ops">
+      <button class="icon-btn" title="编辑" onclick="editProject(${p.id})">✏️</button>
+      <button class="icon-btn del" title="删除" onclick="delProjectAsk(${p.id})">🗑️</button>
+    </div></div>`).join('');
+  document.getElementById('projTitle').dataset.list = '1';
+  if (!document.querySelector('#projListHost')) {
+    const host = document.createElement('div'); host.id = 'projListHost'; host.className = 'page-sec';
+    host.innerHTML = '<div class="sec-title"><span class="bar"></span>我的项目（在「添加 / 编辑项目」中增删改后实时更新）</div><div id="projList"></div>';
+    document.querySelector('.wrap').appendChild(host);
+  }
+  document.getElementById('projList').innerHTML = list || '<div style="color:#a0a5b0;font-size:13px">暂无项目，点击上方「添加项目」创建</div>';
+}
+function openProject(id) {
+  projEditing = id ? projects.find(p => p.id === id) : null;
+  document.getElementById('projTitle').textContent = projEditing ? '编辑项目' : '添加项目';
+  document.getElementById('projName').value = projEditing?.name || '';
+  document.getElementById('projStart').value = projEditing?.start || '';
+  document.getElementById('projEnd').value = projEditing?.end || '';
+  document.getElementById('projMembers').value = projEditing?.members || '';
+  const teamBtn = document.getElementById('projTeam');
+  teamBtn.classList.toggle('on', !!projEditing?.team);
+  document.getElementById('projUpload').className = 'upload-box' + (projEditing?.file ? ' has' : '');
+  document.getElementById('projUpload').textContent = projEditing?.file ? '✓ 成果证明.pdf（2.1 MB）' : '📎 点击上传成果文件（演示）';
+  document.getElementById('projDelBtn').style.display = projEditing ? '' : 'none';
+  ['f-pname', 'f-team'].forEach(id => document.getElementById(id).classList.remove('has-err'));
+  openDlg('dlg-project');
+}
+function editProject(id) { openProject(id); }
+function toggleTeam() { document.getElementById('projTeam').classList.toggle('on'); document.getElementById('f-team').style.display = document.getElementById('projTeam').classList.contains('on') ? '' : 'none'; }
+function saveProject() {
+  const name = document.getElementById('projName'), start = document.getElementById('projStart');
+  const team = document.getElementById('projTeam').classList.contains('on');
+  let ok = true;
+  document.getElementById('f-pname').classList.toggle('has-err', !name.value.trim()); if (!name.value.trim()) ok = false;
+  if (team && !document.getElementById('projMembers').value.trim()) { document.getElementById('f-team').classList.add('has-err'); ok = false; } else document.getElementById('f-team').classList.remove('has-err');
+  if (!ok) return toast('请完善必填项');
+  const data = { name: name.value.trim(), start: start.value, end: document.getElementById('projEnd').value, team, members: document.getElementById('projMembers').value.trim(), file: document.getElementById('projUpload').classList.contains('has') };
+  if (projEditing) Object.assign(projEditing, data), toast('项目已更新');
+  else { projects.unshift({ id: Date.now(), ...data }); toast('项目添加成功'); }
+  closeDlg('dlg-project'); renderProjects();
+}
+function delProjectAsk(id) { askConfirm('删除后不可恢复，确定删除该项目吗？', () => { projects = projects.filter(p => p.id !== id); renderProjects(); toast('项目已删除'); }, '🗑️'); }
+function delProject() { closeDlg('dlg-project'); delProjectAsk(projEditing.id); }
+renderProjects();
+
+/* ================= 成长记录 ================= */
+let records = [
+  { id: 1, type: 'honor', date: '2026-06-15', title: '国家奖学金', desc: '教育部颁发 · 2025-2026学年', level: '国家级' },
+  { id: 2, type: 'competition', date: '2026-05-20', title: 'ACM-ICPC 亚洲区域赛', desc: '银奖', org: 'ACM/ICPC组委会', lv2: '国家级' },
+  { id: 3, type: 'practice', date: '2025-07-10', title: '暑期三下乡支教活动', desc: '服务时长 21 天', ptype: '三下乡' },
+  { id: 4, type: 'paper', date: '2026-03-02', title: '基于协同过滤的选课推荐研究', desc: '发表于《计算机应用》', pname: '基于协同过滤的选课推荐研究', ptype: '核心期刊', authors: '林小城、张三' },
+  { id: 5, type: 'achievement', date: '2025-11-08', title: '校园服务小程序软件著作权', desc: '登记号 2025SR0XXXXX', aname: '校园服务小程序', atype: '软件著作权' },
+];
+const typeMeta = { honor: ['荣誉', 'honor', '#e08a00'], competition: ['竞赛', 'comp', '#7c4dff'], practice: ['实践', 'prac', '#2e9e44'], paper: ['论文', 'paper', '#2b7de0'], achievement: ['成果', 'achv', '#d63384'] };
+function renderRecords() {
+  document.getElementById('recList').innerHTML = records.sort((a, b) => b.date.localeCompare(a.date)).map(r => `
+    <div class="rec-item" onclick="showDetail(${r.id})">
+      <div class="rec-dot" style="background:${typeMeta[r.type][2]}"></div>
+      <div class="rec-main">
+        <div class="rec-top"><span class="tag ${typeMeta[r.type][1]}">${typeMeta[r.type][0]}</span><span class="rec-date">${r.date}</span></div>
+        <div class="rec-title">${r.title}</div>
+        ${r.desc ? `<div class="rec-sub">${r.desc}</div>` : ''}
+      </div><span class="rec-arrow">›</span>
+    </div>`).join('');
+}
+function showDetail(id) {
+  const r = records.find(x => x.id === id); if (!r) return;
+  document.getElementById('dtTitle').textContent = r.title;
+  const rows = [];
+  if (r.type === 'honor' && r.level) rows.push(['荣誉等级', r.level]);
+  if (r.type === 'competition') { if (r.org) rows.push(['主办方', r.org]); if (r.lv2) rows.push(['竞赛等级', r.lv2]); }
+  if (r.type === 'practice' && r.ptype) rows.push(['实践类型', r.ptype]);
+  if (r.type === 'paper') { if (r.pname) rows.push(['论文题目', r.pname]); if (r.ptype) rows.push(['期刊类型', r.ptype]); if (r.authors) rows.push(['作者', r.authors]); }
+  if (r.type === 'achievement') { if (r.aname) rows.push(['成果名称', r.aname]); if (r.atype) rows.push(['成果类型', r.atype]); }
+  if (r.file) rows.push(['证明材料', '<a href="#" onclick="toast(\'查看附件（演示）\');return false" style="color:#4f6ef2">查看附件</a>']);
+  document.getElementById('dtBody').innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><span class="tag ${typeMeta[r.type][1]}">${typeMeta[r.type][0]}</span><span class="rec-date">${r.date}</span></div>
+    ${r.desc ? `<div style="background:#f7f8fc;border-radius:10px;padding:12px 14px;font-size:13px;color:#4a4f58;line-height:1.7;margin-bottom:12px">${r.desc}</div>` : ''}
+    ${rows.map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}`;
+  openDlg('dlg-detail');
+}
+renderRecords();
+
+/* 添加成长记录：动态表单 */
+function openRecord() {
+  document.getElementById('recDate').value = new Date().toISOString().slice(0, 10);
+  renderRecForm(); openDlg('dlg-record');
+}
+function fldHTML(id, label, ph, req = true) {
+  return `<div class="fld" id="f-${id}"><label>${label}${req ? '<span class="req">*</span>' : ''}</label><input type="text" id="${id}" placeholder="${ph}"><div class="err-tip">请填写${label.replace('*', '')}</div></div>`;
+}
+function selHTML(id, label, opts) {
+  return `<div class="fld"><label>${label}<span class="req">*</span></label><select id="${id}">${opts.map(o => `<option>${o}</option>`).join('')}</select></div>`;
+}
+function renderRecForm() {
+  const t = document.getElementById('recType').value;
+  document.getElementById('recTitle').textContent = '添加成长记录 — ' + typeMeta[t][0];
+  const F = document.getElementById('recForm');
+  if (t === 'honor') F.innerHTML = selHTML('rLevel', '荣誉等级', ['校级', '省级', '国家级', '国际级']) + fldHTML('rTitle', '荣誉名称', '例如：国家奖学金') + fldHTML('rDesc', '荣誉描述', '颁发单位、获奖时间等', false);
+  else if (t === 'competition') F.innerHTML = fldHTML('rTitle', '竞赛名称', '例如：ACM-ICPC 亚洲区域赛') + fldHTML('rOrg', '主办方', '例如：ACM/ICPC 组委会', false) + selHTML('rLevel', '竞赛等级', ['校级', '省级', '国家级', '国际级']) + fldHTML('rDesc', '获奖情况', '金奖/银奖/一等奖等', false);
+  else if (t === 'practice') F.innerHTML = selHTML('rPtype', '实践类型', ['社会志愿活动', '三下乡', '支教', '西部计划', '筑梦扬帆计划', '其他社会实践']) + fldHTML('rTitle', '实践名称', '例如：暑期三下乡支教活动') + fldHTML('rDesc', '实践描述', '实践内容、服务时长等', false);
+  else if (t === 'paper') F.innerHTML = fldHTML('rPname', '论文题目', '论文完整标题') + selHTML('rPtype', '期刊类型', ['普刊', '核心期刊', 'SCI', 'EI', '顶刊', '会议论文']) + fldHTML('rAuthor', '第一作者', '姓名') + fldHTML('rDesc', '备注', '发表时间、期刊名称等', false);
+  else F.innerHTML = selHTML('rAtype', '成果类型', ['发明专利', '实用新型专利', '外观设计专利', '软件著作权', '作品著作权']) + fldHTML('rAname', '成果名称', '专利/软著名称') + fldHTML('rTitle', '成果标题', '简短标题') + fldHTML('rDesc', '成果描述', '授权号、申请日等信息', false);
+}
+function saveRecord() {
+  const t = document.getElementById('recType').value, date = document.getElementById('recDate').value;
+  const v = id => document.getElementById(id)?.value?.trim() || '';
+  let title = '', need = [];
+  if (t === 'honor') { need = ['rTitle']; title = v('rTitle'); }
+  else if (t === 'competition') { need = ['rTitle']; title = v('rTitle'); }
+  else if (t === 'practice') { need = ['rTitle']; title = v('rTitle'); }
+  else if (t === 'paper') { need = ['rPname', 'rAuthor']; title = v('rPname'); }
+  else { need = ['rAname', 'rTitle']; title = v('rTitle') || v('rAname'); }
+  if (!date) return toast('请选择日期');
+  for (const id of need) {
+    const el = document.getElementById(id), wrap = el.closest('.fld');
+    wrap.classList.toggle('has-err', !el.value.trim());
+    if (!el.value.trim()) return toast('请完善必填项');
+  }
+  const r = { id: Date.now(), type: t, date, title, desc: v('rDesc'), file: document.getElementById('recUpload').classList.contains('has') };
+  if (t === 'honor') r.level = v('rLevel');
+  if (t === 'competition') { r.org = v('rOrg'); r.lv2 = v('rLevel'); }
+  if (t === 'practice') r.ptype = v('rPtype');
+  if (t === 'paper') { r.pname = v('rPname'); r.ptype = v('rPtype'); r.authors = v('rAuthor') + (v('rDesc') ? '' : ''); }
+  if (t === 'achievement') { r.aname = v('rAname'); r.atype = v('rAtype'); }
+  records.unshift(r); renderRecords();
+  closeDlg('dlg-record'); toast('成长记录已添加 ✓');
+}
+
+/* ================= 计算规则 ================= */
+const dims = [
+  { name: '学术素养', value: 86, formula: 'avg(课程绩点) × 25' },
+  { name: '创新能力', value: 72, formula: '竞赛分 + 论文分 + 专利分' },
+  { name: '实践能力', value: 80, formula: '实践次数 × 8 + 时长分' },
+  { name: '社交素养', value: 65, formula: '社区互动 + 组织活动分' },
+  { name: '综合素质', value: 78, formula: '技能认证 + 兴趣拓展分' },
+];
+function fdColor(v) { return v >= 80 ? 'linear-gradient(90deg,#22c55e,#4ade80)' : v >= 65 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#ef4444,#f87171)'; }
+function openFormula(type) {
+  document.getElementById('tabGpa').classList.toggle('on', type === 'gpa');
+  document.getElementById('tabScore').classList.toggle('on', type === 'score');
+  document.getElementById('formulaTitle').textContent = type === 'gpa' ? 'GPA 计算说明' : '综合评分计算说明';
+  const gpaAvg = (grades.reduce((s, g) => s + g.gpa, 0) / grades.length).toFixed(2);
+  document.getElementById('formulaBody').innerHTML = type === 'gpa' ? `
+    <div class="tip-bar">ℹ️ <span>当前 GPA 即已录入的全部课程绩点的平均值。<b>注意：</b>采用简单平均而非按学分加权平均。</span></div>
+    <div class="formula-box"><div class="fb-t">计算公式</div>
+      <div class="fb-f">平均GPA =（课程1绩点 + 课程2绩点 + … + 课程${grades.length}绩点）÷ 课程总数</div>
+      <div class="fb-sub">当前数据：共 <b>${grades.length}</b> 门课程，当前 GPA = <b>${gpaAvg}</b></div></div>
+    <div class="formula-box"><div class="fb-t">各课程绩点明细 <span style="font-weight:400;color:#a0a5b0">（红色为低于 3.5 的课程，是提升关键）</span></div>
+      <div style="overflow-x:auto"><table class="f-table"><thead><tr><th>课程</th><th>学期</th><th>分数</th><th>绩点</th><th>学分</th></tr></thead>
+      <tbody>${grades.map(g => `<tr><td>${g.n}</td><td>${g.s.replace('2025-2026','25-26').replace('2024-2025','24-25')}</td><td>${g.sc}</td><td class="${g.gpa < 3.5 ? 'low-gpa' : ''}">${g.gpa.toFixed(2)}</td><td>${g.c}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="tip-bar warn">⚠️ <span>提升建议：重点提升绩点低于 3.5 的课程（如大学英语Ⅳ 2.70、计算机网络 3.00），它们是拉低整体 GPA 的关键。</span></div>
+  ` : `
+    <div class="tip-bar">ℹ️ <span>综合评分由 <b>5 个能力维度</b>构成，每个维度满分 100 分，综合评分即 5 个维度得分的<b>平均值</b>。</span></div>
+    <div class="formula-box"><div class="fb-t">计算公式</div>
+      <div class="fb-f">综合评分 =（学术素养 + 创新能力 + 实践能力 + 社交素养 + 综合素质）÷ 5</div>
+      <div class="fb-sub">当前数据：综合评分 = <b>${(dims.reduce((s, d) => s + d.value, 0) / 5).toFixed(1)}</b></div></div>
+    <div class="formula-box"><div class="fb-t">各维度得分与计算规则</div>
+      ${dims.map(d => `<div class="dim-row"><div class="dim-top"><span>${d.name}</span><b>${d.value} 分</b></div>
+      <div class="dim-bar"><i style="width:${d.value}%;background:${fdColor(d.value)}"></i></div>
+      <div class="dim-f">min(100, ${d.formula})</div></div>`).join('')}</div>
+    <div class="tip-bar warn">⚠️ <span>提升建议：优先补齐得分偏低的维度（<b>社交素养 65 分</b>），多记录成长档案、参与竞赛/实践、完善技能与兴趣，即可快速提升综合评分。</span></div>
+  `;
+  openDlg('dlg-formula');
+}
+
+/* ================= 资料字段编辑 ================= */
+const accFields = {
+  nickname: { label: '昵称', type: 'text', value: '林小城', ph: '2-16 个字符' },
+  age: { label: '年龄', type: 'number', value: 20 },
+  college: { label: '学院', type: 'select', value: '计算机学院', options: ['计算机学院', '电子信息学院', '机械工程学院', '经济管理学院', '外国语学院', '数学与统计学院'] },
+};
+let editingKey = null;
+function openField(key) {
+  editingKey = key;
+  const f = accFields[key];
+  document.getElementById('fldTitle').textContent = '修改' + f.label;
+  const B = document.getElementById('fldBody');
+  if (f.type === 'text') B.innerHTML = `<div class="fld" id="f-acc"><label>${f.label}</label><input type="text" id="accVal" value="${f.value}" placeholder="${f.ph}"><div class="err-tip">内容不能为空</div></div>`;
+  else if (f.type === 'number') B.innerHTML = `<div class="fld"><label>${f.label}</label><div style="display:flex;align-items:center;gap:12px">
+    <button class="icon-btn" style="width:38px;height:38px" onclick="stepNum(-1)">−</button>
+    <b id="accNum" style="font-size:22px;min-width:44px;text-align:center">${f.value}</b>
+    <button class="icon-btn" style="width:38px;height:38px" onclick="stepNum(1)">＋</button></div></div>`;
+  else B.innerHTML = `<div class="fld"><label>${f.label}</label><select id="accSel">${f.options.map(o => `<option ${o === f.value ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+  openDlg('dlg-field');
+  if (f.type === 'text') setTimeout(() => document.getElementById('accVal').focus(), 80);
+}
+function stepNum(d) {
+  const el = document.getElementById('accNum');
+  el.textContent = Math.min(120, Math.max(1, parseInt(el.textContent) + d));
+}
+function confirmField() {
+  const f = accFields[editingKey];
+  if (f.type === 'text') {
+    const el = document.getElementById('accVal');
+    if (!el.value.trim()) { document.getElementById('f-acc').classList.add('has-err'); return; }
+    f.value = el.value.trim();
+  } else if (f.type === 'number') f.value = parseInt(document.getElementById('accNum').textContent);
+  else f.value = document.getElementById('accSel').value;
+  if (editingKey === 'college') document.getElementById('pfCollegeTxt').textContent = f.value;
+  closeDlg('dlg-field'); toast(`已更新${f.label}：${f.value}`);
+}
+renderPfKv();
+function renderPfKv() {
+  if (document.getElementById('pfKvHost')) return;
+  const host = document.createElement('div'); host.className = 'page-sec';
+  host.innerHTML = '<div class="sec-title"><span class="bar"></span>资料字段（修改后实时更新）</div>' +
+    Object.entries(accFields).map(([k, f]) => `<div class="pf-kv"><b>${f.label}</b><span><span id="kv-${k}">${f.value}</span>　<span class="edit-link" onclick="openField('${k}')">修改</span></span></div>`).join('');
+  document.querySelector('.wrap').appendChild(host);
+}
+
+/* ================= 头像裁剪 ================= */
+const cropStage = document.getElementById('cropStage'), cropImg = document.getElementById('cropImg'), cropZoom = document.getElementById('cropZoom');
+let cs = { scale: 1, x: 0, y: 0, drag: false, sx: 0, sy: 0 };
+function presetImage() {
+  const c = document.createElement('canvas'); c.width = 600; c.height = 600;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 600, 600);
+  g.addColorStop(0, '#6366f1'); g.addColorStop(.5, '#a855f7'); g.addColorStop(1, '#ec4899');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 600, 600);
+  ctx.font = '300px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🧑‍🎓', 300, 280);
+  ctx.font = '600 44px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.fillText('我的头像', 300, 500);
+  const url = c.toDataURL('image/png');
+  cropImg.src = url; document.getElementById('pfAvatar').src = url;
+}
+presetImage();
+function applyCrop() {
+  const w = cropStage.clientWidth, h = cropStage.clientHeight;
+  const base = Math.max(w, h);
+  const iw = base * cs.scale, ih = base * cs.scale;
+  cropImg.style.width = iw + 'px'; cropImg.style.height = ih + 'px';
+  cropImg.style.left = (w - iw) / 2 + cs.x + 'px';
+  cropImg.style.top = (h - ih) / 2 + cs.y + 'px';
+}
+cropStage.addEventListener('pointerdown', e => { cs.drag = true; cs.sx = e.clientX - cs.x; cs.sy = e.clientY - cs.y; cropStage.setPointerCapture(e.pointerId); });
+cropStage.addEventListener('pointermove', e => { if (!cs.drag) return; cs.x = e.clientX - cs.sx; cs.y = e.clientY - cs.sy; applyCrop(); });
+cropStage.addEventListener('pointerup', () => cs.drag = false);
+cropZoom.addEventListener('input', () => { cs.scale = parseFloat(cropZoom.value); applyCrop(); });
+function openCrop() { cs = { scale: 1, x: 0, y: 0, drag: false, sx: 0, sy: 0 }; cropZoom.value = 1; document.getElementById('cropResult').style.display = 'none'; cropStage.style.display = ''; document.querySelector('.crop-hint').style.display = ''; document.querySelector('.zoom-row').style.display = ''; openDlg('dlg-crop'); requestAnimationFrame(applyCrop); }
+function resetCrop() { cs = { scale: 1, x: 0, y: 0, drag: false, sx: 0, sy: 0 }; cropZoom.value = 1; applyCrop(); document.getElementById('cropResult').style.display = 'none'; cropStage.style.display = ''; }
+function confirmCrop() {
+  const size = 220, c = document.createElement('canvas'); c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  const img = cropImg;
+  const w = cropStage.clientWidth, h = cropStage.clientHeight;
+  const iw = Math.max(w, h) * cs.scale, ih = iw;
+  const dispX = (w - iw) / 2 + cs.x, dispY = (h - ih) / 2 + cs.y;
+  const ratio = size / w; // 舞台→输出 缩放
+  ctx.drawImage(img, dispX * ratio, dispY * ratio, iw * ratio, ih * ratio);
+  const url = c.toDataURL('image/png');
+  document.getElementById('cropOut').src = url;
+  document.getElementById('pfAvatar').src = url;
+  cropStage.style.display = 'none'; document.querySelector('.crop-hint').style.display = 'none'; document.querySelector('.zoom-row').style.display = 'none';
+  document.getElementById('cropResult').style.display = '';
+  toast('头像已更新 ✓');
+}
+window.addEventListener('resize', applyCrop);
+</script>
+</body>
+</html>

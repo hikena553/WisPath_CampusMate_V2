@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>教师移动端 UI 设计方案 · 任务清单 / 学生详情 / 表单 / 学生主页</title>
+<style>
+:root{
+  --primary:#2563eb; --primary-hover:#1d4ed8; --primary-soft:#eff4ff;
+  --bg:#f2f3f5; --surface:#ffffff; --muted:#f7f8fa; --sunken:#eceef1;
+  --border:#f0f1f3; --border-strong:#e5e7eb; --hairline:rgba(15,17,21,.06);
+  --text:#0f1115; --sub:#4b5563; --tertiary:#6b7280; --quiet:#9ca3af;
+  --success:#079455; --success-soft:#e7f6ef;
+  --warn:#b54708; --warn-soft:#fdf1e5;
+  --danger:#d92d20; --danger-soft:#fdecea;
+  --violet:#6941c6; --violet-soft:#f1ecfa;
+  --cyan:#0891b2; --cyan-soft:#e3f5fa;
+  --r-xs:10px; --r-sm:12px; --r:14px; --r-lg:18px; --r-xl:22px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+body{font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  background:#e9ebef;color:var(--text);padding:0 0 80px}
+.ic{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ===== 页面骨架 ===== */
+.page-head{background:linear-gradient(135deg,#111827,#1f2937);color:#fff;padding:36px 32px 30px}
+.page-head h1{font-size:24px;letter-spacing:.5px}
+.page-head p{margin-top:10px;color:#9ca3af;font-size:13.5px;line-height:1.7;max-width:820px}
+.page-head .tags{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+.page-head .tags span{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14)}
+
+.sec{max-width:1440px;margin:34px auto 0;padding:0 32px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.sec-head h2{font-size:19px}
+.sec-head em{font-style:normal;font-size:12px;color:var(--tertiary)}
+.sec-desc{font-size:13px;color:var(--sub);margin-bottom:18px;line-height:1.7;max-width:900px}
+.opt-row{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+.opt{display:flex;gap:18px;align-items:flex-start;flex:none}
+.opt-note{width:230px;padding-top:8px}
+.opt-note h3{font-size:14.5px;display:flex;align-items:center;gap:8px}
+.badge-re{font-size:10.5px;color:var(--primary);background:var(--primary-soft);border:1px solid #d6e3ff;padding:2px 8px;border-radius:999px;font-weight:600}
+.opt-note ul{margin-top:10px;list-style:none}
+.opt-note li{font-size:12.5px;color:var(--sub);line-height:1.7;padding-left:14px;position:relative}
+.opt-note li::before{content:"";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:var(--primary);opacity:.55}
+.opt-note .fit{margin-top:10px;font-size:12px;color:var(--tertiary);background:var(--sunken);border-radius:var(--r-xs);padding:8px 10px;line-height:1.6}
+
+/* ===== 手机框 ===== */
+.phone{width:360px;height:742px;background:var(--bg);border-radius:34px;border:8px solid #111827;
+  overflow:hidden;position:relative;box-shadow:0 18px 50px rgba(15,17,21,.22);flex:none}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg)}
+.screen.active{display:flex}
+.statusbar{height:30px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font-size:11px;color:var(--sub);background:transparent;flex:none}
+.statusbar b{font-weight:600}
+.appbar{height:54px;display:flex;align-items:center;gap:10px;padding:0 16px;flex:none;position:relative}
+.appbar .back{width:32px;height:32px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--sub);box-shadow:0 1px 2px rgba(15,17,21,.05)}
+.appbar h4{font-size:17px;font-weight:700}
+.appbar .sp{flex:1}
+.appbar .act{width:32px;height:32px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--sub);box-shadow:0 1px 2px rgba(15,17,21,.05)}
+.body{flex:1;overflow-y:auto;padding:0 14px 90px;scrollbar-width:none}
+.body::-webkit-scrollbar{display:none}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:58px;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-top:1px solid var(--hairline);display:flex;z-index:5}
+.tabbar .t{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:var(--quiet)}
+.tabbar .t.on{color:var(--primary);font-weight:600}
+.footbar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px calc(12px + 10px);display:flex;gap:10px;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-top:1px solid var(--hairline);z-index:5}
+
+/* ===== 通用组件 ===== */
+.card{background:var(--surface);border-radius:var(--r-lg);box-shadow:0 1px 2px rgba(15,17,21,.04),0 2px 10px rgba(15,17,21,.05);padding:14px;margin-bottom:12px}
+.card-t{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:7px;margin-bottom:10px}
+.card-t .more{margin-left:auto;font-size:11.5px;color:var(--quiet);font-weight:400;display:flex;align-items:center;gap:2px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:3px 8px;border-radius:999px;font-weight:500}
+.seg{display:flex;background:var(--sunken);border-radius:var(--r-sm);padding:3px;margin-bottom:12px}
+.seg span{flex:1;text-align:center;font-size:12px;color:var(--sub);padding:7px 0;border-radius:9px;font-weight:500}
+.seg span.on{background:var(--surface);color:var(--text);font-weight:700;box-shadow:0 1px 3px rgba(15,17,21,.1)}
+.avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:#fff;flex:none}
+.btn{flex:1;min-height:42px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;gap:6px}
+.btn.primary{background:var(--primary);color:#fff}
+.btn.ghost{background:var(--surface);color:var(--sub);border:1px solid var(--border-strong)}
+.btn.danger-ghost{background:var(--surface);color:var(--danger);border:1px solid #f4c7c3}
+.btn.sm{min-height:34px;font-size:12.5px;border-radius:var(--r-xs);padding:0 14px;flex:none}
+.icbtn{width:34px;height:34px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+
+/* ===== 方案A 任务：清单勾选 ===== */
+.ring-card{display:flex;align-items:center;gap:16px}
+.ring{width:78px;height:78px;flex:none;position:relative}
+.ring svg{transform:rotate(-90deg)}
+.ring .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .num b{font-size:16px;color:var(--success)}
+.ring .num i{font-style:normal;font-size:9.5px;color:var(--quiet)}
+.trow{display:flex;align-items:flex-start;gap:11px;padding:12px 12px;background:var(--surface);border-radius:var(--r);margin-bottom:9px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.trow .chk{width:21px;height:21px;border-radius:50%;border:2px solid #cfd4db;margin-top:1px;flex:none}
+.trow.done .chk{background:var(--success);border-color:var(--success);position:relative}
+.trow.done .chk::after{content:"";position:absolute;left:5.5px;top:2.5px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.trow .tt{font-size:13.5px;font-weight:600;line-height:1.45}
+.trow.done .tt{color:var(--quiet);text-decoration:line-through;font-weight:500}
+.trow .meta{margin-top:5px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tertiary);flex-wrap:wrap}
+.trow .meta .who{display:flex;align-items:center;gap:5px}
+.trow .meta .who .avatar{width:17px;height:17px;font-size:8.5px}
+.pri{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:2px 7px;border-radius:6px;font-weight:600}
+.pri.high{color:var(--danger);background:var(--danger-soft)}
+.pri.mid{color:var(--warn);background:var(--warn-soft)}
+.pri.low{color:var(--tertiary);background:var(--sunken)}
+
+/* ===== 方案B 任务：卡片看板 ===== */
+.stat-strip{display:flex;gap:9px;margin-bottom:12px}
+.stat-strip .s{flex:1;background:var(--surface);border-radius:var(--r);padding:11px 0;text-align:center;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.stat-strip .s b{font-size:20px;display:block}
+.stat-strip .s i{font-style:normal;font-size:10.5px;color:var(--tertiary)}
+.kanban-chips{display:flex;gap:7px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}
+.kanban-chips .k{font-size:11.5px;padding:6px 12px;border-radius:999px;background:var(--surface);color:var(--sub);border:1px solid var(--border-strong);white-space:nowrap;font-weight:500}
+.kanban-chips .k.on{background:var(--text);color:#fff;border-color:var(--text);font-weight:600}
+.kcard{background:var(--surface);border-radius:var(--r-lg);box-shadow:0 1px 2px rgba(15,17,21,.04),0 2px 10px rgba(15,17,21,.05);margin-bottom:11px;overflow:hidden;position:relative}
+.kcard .band{position:absolute;left:0;top:0;bottom:0;width:4px}
+.kcard .in{padding:13px 14px 12px 18px}
+.kcard .top{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.kcard .top .tt{font-size:13.5px;font-weight:700;flex:1}
+.kcard .desc{font-size:11.5px;color:var(--tertiary);line-height:1.6;margin-bottom:9px}
+.kcard .prog{height:5px;border-radius:3px;background:var(--sunken);overflow:hidden;margin-bottom:9px}
+.kcard .prog i{display:block;height:100%;border-radius:3px}
+.kcard .foot{display:flex;align-items:center;gap:8px}
+.kcard .foot .due{font-size:11px;color:var(--tertiary);display:flex;align-items:center;gap:4px}
+.kcard .foot .due.late{color:var(--danger);font-weight:600}
+.kcard .foot .ops{margin-left:auto;display:flex;gap:6px}
+
+/* ===== 方案C 任务：时间轴 ===== */
+.date-strip{display:flex;gap:7px;margin-bottom:14px}
+.date-strip .d{flex:1;text-align:center;padding:8px 0;border-radius:var(--r-sm);background:var(--surface);font-size:10.5px;color:var(--tertiary);box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.date-strip .d b{display:block;font-size:15px;color:var(--text);margin-top:2px}
+.date-strip .d.on{background:var(--primary);color:rgba(255,255,255,.75)}
+.date-strip .d.on b{color:#fff}
+.tl-group{font-size:11.5px;font-weight:700;color:var(--tertiary);margin:14px 2px 9px;display:flex;align-items:center;gap:7px}
+.tl-group .n{font-size:10px;color:#fff;background:var(--danger);border-radius:999px;padding:1px 7px}
+.tl{position:relative;padding-left:22px}
+.tl::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--border-strong);border-radius:2px}
+.tl-item{position:relative;margin-bottom:10px}
+.tl-item::before{content:"";position:absolute;left:-20.5px;top:14px;width:9px;height:9px;border-radius:50%;background:var(--surface);border:2.5px solid var(--quiet)}
+.tl-item.urgent::before{border-color:var(--danger)}
+.tl-item.now::before{border-color:var(--success);background:var(--success)}
+.tl-item .time{font-size:10.5px;color:var(--quiet);font-weight:600;margin-bottom:4px;display:flex;gap:6px;align-items:center}
+.tl-item .tcard{background:var(--surface);border-radius:var(--r);padding:11px 12px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+
+/* ===== 学生详情 方案A ===== */
+.stu-hero{background:linear-gradient(150deg,#1d4ed8,#2563eb 55%,#3b82f6);border-radius:var(--r-xl);padding:16px;color:#fff;margin-bottom:12px}
+.stu-hero .r1{display:flex;gap:12px;align-items:center}
+.stu-hero .avatar{width:52px;height:52px;font-size:17px;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.4)}
+.stu-hero h3{font-size:17px}
+.stu-hero .cls{font-size:11px;opacity:.82;margin-top:3px}
+.stu-hero .tg{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.stu-hero .tg span{font-size:10px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.16)}
+.kpi-row{display:flex;background:var(--surface);border-radius:var(--r-lg);padding:12px 0;margin-bottom:12px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.kpi-row .k{flex:1;text-align:center;position:relative}
+.kpi-row .k+.k::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:1px;background:var(--border-strong)}
+.kpi-row b{font-size:17px;display:block}
+.kpi-row i{font-style:normal;font-size:10px;color:var(--tertiary)}
+.anchor-tabs{display:flex;gap:4px;background:var(--surface);border-radius:var(--r);padding:4px;margin-bottom:12px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.anchor-tabs span{flex:1;text-align:center;font-size:11.5px;color:var(--sub);padding:7px 0;border-radius:10px;font-weight:500}
+.anchor-tabs span.on{background:var(--primary-soft);color:var(--primary);font-weight:700}
+.risk-card{border-left:4px solid var(--danger)}
+.risk-card .r1{display:flex;align-items:center;gap:8px}
+.risk-card .r1 .tt{font-size:13px;font-weight:700;color:var(--danger)}
+.risk-card .sla{margin-top:9px}
+.risk-card .sla .lb{font-size:10.5px;color:var(--tertiary);display:flex;justify-content:space-between;margin-bottom:5px}
+.risk-card .sla .bar{height:5px;background:var(--danger-soft);border-radius:3px;overflow:hidden}
+.risk-card .sla .bar i{display:block;height:100%;width:64%;background:var(--danger);border-radius:3px}
+.mini-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.mini-row:last-child{border-bottom:0}
+.mini-row .nm{flex:1;font-weight:500}
+.mini-row .sc{font-weight:700}
+.mini-row .sc.good{color:var(--success)} .mini-row .sc.bad{color:var(--danger)}
+
+/* ===== 学生详情 方案B ===== */
+.ops-row{display:flex;gap:9px;margin-bottom:12px}
+.ops-row .o{flex:1;background:var(--surface);border-radius:var(--r);padding:11px 0;text-align:center;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.ops-row .o .icbtn{margin:0 auto 6px;width:36px;height:36px;border-radius:var(--r-xs)}
+.gauges{display:flex;justify-content:space-around;padding:6px 0 2px}
+.gauge{text-align:center}
+.gauge .ring{width:66px;height:66px;margin:0 auto}
+.gauge b{font-size:13px;display:block;margin-top:6px}
+.gauge i{font-style:normal;font-size:10px;color:var(--tertiary)}
+
+/* ===== 学生详情 方案C：时间轴 ===== */
+.ev{position:relative;margin-bottom:11px}
+.ev .dotline{position:absolute;left:15px;top:22px;bottom:-14px;width:2px;background:var(--border-strong)}
+.ev:last-child .dotline{display:none}
+.ev .r{display:flex;gap:11px;align-items:flex-start}
+.ev .nd{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;position:relative;z-index:1}
+.ev .bd{flex:1;background:var(--surface);border-radius:var(--r);padding:11px 13px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.ev .bd .h{display:flex;align-items:center;gap:7px}
+.ev .bd .h .tt{font-size:13px;font-weight:600;flex:1}
+.ev .bd .h time{font-size:10.5px;color:var(--quiet)}
+.ev .bd p{font-size:11.5px;color:var(--tertiary);margin-top:4px;line-height:1.6}
+
+/* ===== 表单 方案A：票据卡 ===== */
+.form-status{display:flex;align-items:center;gap:11px;background:var(--cyan-soft);border:1px solid #c8e9f3;border-radius:var(--r-lg);padding:13px 14px;margin-bottom:12px}
+.form-status .icbtn{background:var(--cyan);color:#fff;width:38px;height:38px;border-radius:var(--r)}
+.form-status .tt{font-size:13.5px;font-weight:700;color:var(--cyan)}
+.form-status .st{font-size:11px;color:var(--tertiary);margin-top:2px}
+.fgroup{margin-bottom:14px}
+.fgroup .gt{font-size:11px;font-weight:700;color:var(--tertiary);letter-spacing:1px;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.fgroup .gt::after{content:"";flex:1;height:1px;background:var(--border-strong)}
+.frow{display:flex;padding:10px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.frow:last-child{border-bottom:0}
+.frow .k{width:88px;color:var(--tertiary);flex:none}
+.frow .v{flex:1;font-weight:500;line-height:1.5}
+.frow .v .tag{font-size:10px;padding:2px 7px;border-radius:6px;margin-right:5px}
+.att{display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--muted);border-radius:var(--r-xs);margin-bottom:7px;font-size:12px}
+.att .ic{color:var(--cyan)}
+.att .sz{margin-left:auto;font-size:10.5px;color:var(--quiet)}
+.flow{position:relative;padding-left:24px}
+.flow::before{content:"";position:absolute;left:8px;top:16px;bottom:14px;width:2px;background:var(--border-strong)}
+.fstep{position:relative;padding-bottom:14px}
+.fstep:last-child{padding-bottom:0}
+.fstep::before{content:"";position:absolute;left:-20.5px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2.5px solid #cfd4db}
+.fstep.done::before{background:var(--success);border-color:var(--success)}
+.fstep.doing::before{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-soft)}
+.fstep .h{display:flex;align-items:center;gap:8px}
+.fstep .h b{font-size:12.5px}
+.fstep .h .chip{margin-left:auto}
+.fstep p{font-size:11px;color:var(--tertiary);margin-top:3px}
+
+/* ===== 表单 方案B：摘要+折叠 ===== */
+.sum-card{background:linear-gradient(150deg,#0891b2,#0e7490);color:#fff;border-radius:var(--r-xl);padding:15px;margin-bottom:12px}
+.sum-card .lb{font-size:10.5px;opacity:.8}
+.sum-card .big{font-size:19px;font-weight:800;margin-top:4px}
+.sum-card .pts{display:flex;gap:14px;margin-top:11px}
+.sum-card .pts .p{font-size:10.5px;opacity:.9;display:flex;align-items:center;gap:5px}
+.acc{background:var(--surface);border-radius:var(--r-lg);margin-bottom:10px;box-shadow:0 1px 2px rgba(15,17,21,.04);overflow:hidden}
+.acc .h{display:flex;align-items:center;gap:9px;padding:13px 14px;font-size:13px;font-weight:600}
+.acc .h .cnt{margin-left:auto;font-size:11px;color:var(--quiet);font-weight:400}
+.acc .bd2{padding:0 14px 6px;border-top:1px solid var(--border)}
+
+/* ===== 学生主页 方案A ===== */
+.home-cover{height:86px;background:linear-gradient(120deg,#6941c6,#8b5cf6 60%,#a78bfa);position:relative}
+.home-cover::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 78% 20%,rgba(255,255,255,.25),transparent 55%)}
+.home-head{padding:0 14px;margin-top:-34px;position:relative;z-index:2}
+.home-head .avatar{width:64px;height:64px;font-size:20px;border:3px solid var(--surface);box-shadow:0 2px 10px rgba(15,17,21,.12)}
+.home-head h3{font-size:17px;margin-top:8px}
+.home-head .motto{font-size:11.5px;color:var(--tertiary);margin-top:3px}
+.badges{display:flex;gap:9px;overflow-x:auto;padding:2px 14px 4px;margin-top:12px;scrollbar-width:none}
+.badges .b{flex:none;width:62px;text-align:center;background:var(--surface);border-radius:var(--r-sm);padding:9px 0 7px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.badges .b .icbtn{margin:0 auto;width:30px;height:30px;border-radius:50%}
+.badges .b i{font-style:normal;font-size:9.5px;color:var(--tertiary);display:block;margin-top:4px}
+.dyn{display:flex;gap:11px;background:var(--surface);border-radius:var(--r-lg);padding:13px;margin-bottom:10px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.dyn .avatar{width:36px;height:36px}
+.dyn .bd{flex:1}
+.dyn .h{display:flex;align-items:center;gap:7px}
+.dyn .h b{font-size:13px}
+.dyn .h time{font-size:10.5px;color:var(--quiet);margin-left:auto}
+.dyn p{font-size:12px;color:var(--sub);margin-top:4px;line-height:1.6}
+.dyn .attach{margin-top:8px;display:flex;gap:7px}
+.dyn .attach .ph{width:64px;height:46px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+
+/* ===== 学生主页 方案B ===== */
+.info-list .frow .k{width:96px}
+
+/* ===== 方案切换器 ===== */
+.switcher{display:flex;gap:6px;margin-bottom:14px}
+.switcher button{border:1px solid var(--border-strong);background:var(--surface);color:var(--sub);font-size:12px;padding:7px 14px;border-radius:999px;cursor:pointer;font-weight:600;font-family:inherit;transition:all .15s}
+.switcher button.on{background:var(--text);color:#fff;border-color:var(--text)}
+.combo{max-width:1440px;margin:40px auto 0;padding:22px 32px;background:var(--surface);border-radius:var(--r-xl);box-shadow:0 2px 10px rgba(15,17,21,.06)}
+.combo h2{font-size:17px;margin-bottom:12px}
+.combo table{width:100%;border-collapse:collapse;font-size:12.5px}
+.combo th{text-align:left;color:var(--tertiary);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--border-strong);white-space:nowrap}
+.combo td{padding:11px 12px;border-bottom:1px solid var(--border);color:var(--sub);line-height:1.6;vertical-align:top}
+.combo td b{color:var(--text)}
+.combo .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;margin-right:6px}
+</style>
+</head>
+<body>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="m3 6 1.7 1.7L8 4.4"/><path d="m3 12 1.7 1.7L8 10.4"/><path d="m3 18 1.7 1.7L8 16.4"/><path d="M11 6h10M11 12h10M11 18h10"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.8a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.5 2.8.7a2 2 0 0 1 1.7 2z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+  <symbol id="i-award" viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="m15.5 13 1.5 8-5-3-5 3 1.5-8"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V19h4v-4.3"/><path d="M6 2h12v7a6 6 0 0 1-12 0z"/></symbol>
+  <symbol id="i-paperclip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7L9.4 17.4a2 2 0 0 1-2.8-2.8l8.5-8.4"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a.6.6 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .8-4.5 2.1C10.5 3.8 9.3 3 7.5 3A5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></symbol>
+  <symbol id="i-homepg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M6.2 5.3A14.9 14.9 0 0 1 9 12a14.9 14.9 0 0 1-2.8 6.7M17.8 5.3A14.9 14.9 0 0 0 15 12a14.9 14.9 0 0 0 2.8 6.7M12 3a14.4 14.4 0 0 0 0 18M12 3a14.4 14.4 0 0 1 0 18"/></symbol>
+</svg>
+
+<header class="page-head">
+  <h1>教师移动端 UI 设计方案</h1>
+  <p>基于现有设计契约（Untitled UI 色板 · Lucide 图标 · Ant Design Mobile 范式）延展的四个页面重构方案：
+  ① 任务清单 ② 学生详情 ③ 学生表单展示 ④ 学生主页。每个页面提供 2~3 个可选方向，点击「方案 A / B / C」切换预览。</p>
+  <div class="tags"><span>Design Tokens 同源</span><span>Lucide 图标</span><span>Ant DM 交互范式</span><span>移动工作台 · Minimal Light</span></div>
+</header>
+
+<!-- ================= ① 任务清单 ================= -->
+<section class="sec">
+  <div class="sec-head"><h2>① 任务清单</h2><em>签名色 success ·「今日任务」模块重构</em></div>
+  <p class="sec-desc">三个方向解决同一个问题：让辅导员在 3 秒内知道「现在该干什么、什么快逾期了」。A 重执行效率，B 重全局盘点，C 重时间节奏。</p>
+  <div class="switcher" data-group="tasks">
+    <button class="on" data-t="a">方案 A · 勾选清单式</button>
+    <button data-t="b">方案 B · 卡片看板式</button>
+    <button data-t="c">方案 C · 时间轴式</button>
+  </div>
+  <div class="opt-row">
+
+    <!-- A -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 A · 勾选清单式 <span class="badge-re">推荐</span></h3>
+        <ul>
+          <li>环形完成度 + 今日/逾期/本周分段，先给全局再给清单</li>
+          <li>任务即勾选行：圆形 checkbox、优先级色签、关联学生头像内联展示</li>
+          <li>完成划线置灰，正向反馈即时；单手可达，滑动可完成</li>
+        </ul>
+        <div class="fit">适合：日常高频打卡型使用（每天打开 5~10 次）。参考：滴答清单 / iOS 提醒事项。</div>
+      </div>
+      <div class="phone">
+        <div class="screen active" data-g="tasks" data-k="a">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><h4>今日任务</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-bell"/></svg></div><div class="act" style="background:var(--success);color:#fff"><svg class="ic"><use href="#i-plus"/></svg></div></div>
+          <div class="body">
+            <div class="card ring-card">
+              <div class="ring">
+                <svg width="78" height="78"><circle cx="39" cy="39" r="33" stroke="var(--sunken)" stroke-width="8" fill="none"/><circle cx="39" cy="39" r="33" stroke="var(--success)" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="149 207"/></svg>
+                <div class="num"><b>72%</b><i>6/9</i></div>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:700">今日完成度</div>
+                <div style="font-size:11px;color:var(--tertiary);margin-top:4px">10月30日 周五 · 还剩 3 项</div>
+                <div style="display:flex;gap:6px;margin-top:9px">
+                  <span class="chip" style="background:var(--danger-soft);color:var(--danger)">逾期 2</span>
+                  <span class="chip" style="background:var(--success-soft);color:var(--success)">已完成 6</span>
+                </div>
+              </div>
+            </div>
+            <div class="seg"><span class="on">今日 9</span><span>逾期 2</span><span>本周 23</span></div>
+            <div class="trow done"><div class="chk"></div><div style="flex:1"><div class="tt">提交本周考勤周报至学院</div><div class="meta"><span class="chip" style="background:var(--success-soft);color:var(--success)">09:00 已完成</span></div></div></div>
+            <div class="trow"><div class="chk"></div><div style="flex:1"><div class="tt">与张子轩谈话（学业预警）</div><div class="meta"><span class="who"><span class="avatar" style="background:#2563eb">张</span>张子轩</span><span class="pri high">高</span><span class="chip" style="background:var(--sunken);color:var(--sub)">09:30</span></div></div><svg class="ic" style="color:var(--quiet);margin-top:9px"><use href="#i-chev-r"/></svg></div>
+            <div class="trow"><div class="chk"></div><div style="flex:1"><div class="tt">收集奖学金评审材料</div><div class="meta"><span class="who"><span class="avatar" style="background:#6941c6">李</span>软件2201</span><span class="pri mid">中</span><span class="chip" style="background:var(--sunken);color:var(--sub)">12:00</span></div></div><svg class="ic" style="color:var(--quiet);margin-top:9px"><use href="#i-chev-r"/></svg></div>
+            <div class="trow"><div class="chk"></div><div style="flex:1"><div class="tt">回访陈雨桐家长（关怀中心）</div><div class="meta"><span class="who"><span class="avatar" style="background:#0891b2">陈</span>陈雨桐</span><span class="pri high">高</span><span class="chip" style="background:var(--sunken);color:var(--sub)">15:00</span></div></div><svg class="ic" style="color:var(--quiet);margin-top:9px"><use href="#i-chev-r"/></svg></div>
+            <div class="trow"><div class="chk"></div><div style="flex:1"><div class="tt">审核 3 份请假申请</div><div class="meta"><span class="chip" style="background:var(--sunken);color:var(--sub)">17:30 前</span><span class="pri low">低</span></div></div></div>
+          </div>
+          <div class="tabbar">
+            <div class="t on"><svg class="ic"><use href="#i-home"/></svg>首页</div>
+            <div class="t"><svg class="ic"><use href="#i-user"/></svg>学生</div>
+            <div class="t"><svg class="ic"><use href="#i-spark"/></svg>绵小城</div>
+            <div class="t"><svg class="ic"><use href="#i-msg"/></svg>消息</div>
+            <div class="t"><svg class="ic"><use href="#i-user"/></svg>我的</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 B · 卡片看板式</h3>
+        <ul>
+          <li>顶部三项统计条（今日/逾期/已完成）一眼盘点全局</li>
+          <li>任务以富信息卡片呈现：左色带表优先级、进度条表子任务、底部快捷操作</li>
+          <li>筛选 chips 支持按「紧急 / 今天 / 已完成」快速切换视图</li>
+        </ul>
+        <div class="fit">适合：任务复杂、需要承载描述与子任务的场景。参考：飞书任务 / Notion。</div>
+      </div>
+      <div class="phone">
+        <div class="screen" data-g="tasks" data-k="b">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><h4>任务中心</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-cal"/></svg></div></div>
+          <div class="body">
+            <div class="stat-strip">
+              <div class="s"><b style="color:var(--primary)">9</b><i>今日</i></div>
+              <div class="s"><b style="color:var(--danger)">2</b><i>逾期</i></div>
+              <div class="s"><b style="color:var(--success)">6</b><i>已完成</i></div>
+            </div>
+            <div class="kanban-chips">
+              <span class="k on">全部</span><span class="k">紧急</span><span class="k">今天截止</span><span class="k">进行中</span><span class="k">已完成</span>
+            </div>
+            <div class="kcard"><div class="band" style="background:var(--danger)"></div><div class="in">
+              <div class="top"><span class="tt">与张子轩谈话</span><span class="pri high">高</span></div>
+              <div class="desc">学业预警触发 3 天，需完成首谈并填写处置记录</div>
+              <div class="prog"><i style="width:40%;background:var(--danger)"></i></div>
+              <div class="foot"><span class="due late"><svg class="ic" style="width:13px;height:13px"><use href="#i-clock"/></svg>逾期 1 天</span>
+                <div class="ops"><button class="btn sm ghost">延期</button><button class="btn sm" style="background:var(--success);color:#fff">完成</button></div></div>
+            </div></div>
+            <div class="kcard"><div class="band" style="background:var(--warn)"></div><div class="in">
+              <div class="top"><span class="tt">奖学金评审材料收集</span><span class="pri mid">中</span></div>
+              <div class="desc">已收到 18 / 24 份，缺 6 份（3 人已提醒）</div>
+              <div class="prog"><i style="width:75%;background:var(--warn)"></i></div>
+              <div class="foot"><span class="due"><svg class="ic" style="width:13px;height:13px"><use href="#i-clock"/></svg>今天 12:00</span>
+                <div class="ops"><button class="btn sm ghost">催办</button><button class="btn sm" style="background:var(--success);color:#fff">完成</button></div></div>
+            </div></div>
+            <div class="kcard"><div class="band" style="background:var(--primary)"></div><div class="in">
+              <div class="top"><span class="tt">审核请假申请 ×3</span><span class="pri low">低</span></div>
+              <div class="desc">刘一诺（病假 2 天）· 王梓豪（事假 1 天）· 陈雨桐（病假半天）</div>
+              <div class="prog"><i style="width:0%;background:var(--primary)"></i></div>
+              <div class="foot"><span class="due"><svg class="ic" style="width:13px;height:13px"><use href="#i-clock"/></svg>今天 17:30</span>
+                <div class="ops"><button class="btn sm" style="background:var(--primary);color:#fff">去处理</button></div></div>
+            </div></div>
+          </div>
+          <div class="tabbar">
+            <div class="t on"><svg class="ic"><use href="#i-home"/></svg>首页</div>
+            <div class="t"><svg class="ic"><use href="#i-user"/></svg>学生</div>
+            <div class="t"><svg class="ic"><use href="#i-spark"/></svg>绵小城</div>
+            <div class="t"><svg class="ic"><use href="#i-msg"/></svg>消息</div>
+            <div class="t"><svg class="ic"><use href="#i-user"/></svg>我的</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 C · 时间轴式</h3>
+        <ul>
+          <li>顶部日期条快速换日，任务按「逾期 / 上午 / 下午」挂到时间轴节点</li>
+          <li>逾期红节点、当前进行绿节点，一天的节奏可视化</li>
+          <li>时间感知最强，天然衔接课表与日程</li>
+        </ul>
+        <div class="fit">适合：日程型辅导员（谈话、例会、回访都有固定时间）。参考：系统日历 / Sunsama。</div>
+      </div>
+      <div class="phone">
+        <div class="screen" data-g="tasks" data-k="c">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><h4>任务日程</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-plus"/></svg></div></div>
+          <div class="body">
+            <div class="date-strip">
+              <div class="d">一<b>27</b></div><div class="d">二<b>28</b></div><div class="d">三<b>29</b></div>
+              <div class="d on">五<b>30</b></div><div class="d">六<b>31</b></div><div class="d">日<b>1</b></div>
+            </div>
+            <div class="tl-group"><svg class="ic" style="width:14px;height:14px;color:var(--danger)"><use href="#i-alert"/></svg>逾期<span class="n">2</span></div>
+            <div class="tl">
+              <div class="tl-item urgent">
+                <div class="time">昨天 22:00 · 已逾期</div>
+                <div class="tcard"><div style="font-size:13px;font-weight:600">宿舍 7 栋卫生整改复查</div><div style="font-size:11px;color:var(--tertiary);margin-top:3px">502 寝室 · 复查结果未登记</div></div>
+              </div>
+              <div class="tl-item urgent">
+                <div class="time">今天 08:00 · 已逾期</div>
+                <div class="tcard"><div style="font-size:13px;font-weight:600">早自习考勤异常跟进</div><div style="font-size:11px;color:var(--tertiary);margin-top:3px">软件2201 · 缺勤 4 人</div></div>
+              </div>
+            </div>
+            <div class="tl-group"><svg class="ic" style="width:14px;height:14px;color:var(--success)"><use href="#i-clock"/></svg>上午</div>
+            <div class="tl">
+              <div class="tl-item now">
+                <div class="time">09:30 · 进行中</div>
+                <div class="tcard"><div style="font-size:13px;font-weight:600">与张子轩谈话（学业预警）</div><div style="font-size:11px;color:var(--tertiary);margin-top:3px">办公室 3-412 · 预计 40 分钟</div></div>
+              </div>
+              <div class="tl-item">
+                <div class="time">11:00</div>
+                <div class="tcard"><div style="font-size:13px;font-weight:600">收集奖学金评审材料</div><div style="font-size:11px;color:var(--tertiary);margin-top:3px">18/24 已提交</div></div>
+              </div>
+            </div>
+            <div class="tl-group"><svg class="ic" style="width:14px;height:14px;color:var(--tertiary)"><use href="#i-clock"/></svg>下午</div>
+            <div class="tl">
+              <div class="tl-item">
+                <div class="time">15:00</div>
+                <div class="tcard"><div style="font-size:13px;font-weight:600">回访陈雨桐家长</div><div style="font-size:11px;color:var(--tertiary);margin-top:3px">关怀中心 · 电话回访</div></div>
+              </div>
+              <div class="tl-item">
+                <div class="time">17:30</div>
+                <div class="tcard"><div style="font-size:13px;font-weight:600">审核 3 份请假申请</div><div style="font-size:11px;color:var(--tertiary);margin-top:3px">待办 · 请假审批</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="t on"><svg class="ic"><use href="#i-home"/></svg>首页</div>
+            <div class="t"><svg class="ic"><use href="#i-user"/></svg>学生</div>
+            <div class="t"><svg class="ic"><use href="#i-spark"/></svg>绵小城</div>
+            <div class="t"><svg class="ic"><use href="#i-msg"/></svg>消息</div>
+            <div class="t"><svg class="ic"><use href="#i-user"/></svg>我的</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ② 学生详情 ================= -->
+<section class="sec">
+  <div class="sec-head"><h2>② 学生详情</h2><em>教师端「学生」页下钻 · 同一设计逻辑延展</em></div>
+  <p class="sec-desc">沿用任务清单的设计逻辑：先给「全局状态」（头卡/指标），再按需下钻明细。三个方向决定「以什么为骨架组织学生信息」。</p>
+  <div class="switcher" data-group="stu">
+    <button class="on" data-t="a">方案 A · 档案头卡 + 锚点 Tab</button>
+    <button data-t="b">方案 B · 指标仪表式</button>
+    <button data-t="c">方案 C · 成长时间轴式</button>
+  </div>
+  <div class="opt-row">
+
+    <!-- A -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 A · 档案头卡 + 锚点 Tab <span class="badge-re">推荐</span></h3>
+        <ul>
+          <li>渐变头卡承载身份（头像/班级/标签），KPI 行给出三关键数</li>
+          <li>锚点 Tab（概览/课业/考勤/档案）组织多维度信息，与任务清单「分段器」同一交互范式</li>
+          <li>风险卡置顶：SLA 倒计时条与预警处置强绑定，可直接跳转任务</li>
+        </ul>
+        <div class="fit">适合：信息维度多、需长期跟进的重点学生。与方案①A 搭配最统一。</div>
+      </div>
+      <div class="phone">
+        <div class="screen active" data-g="stu" data-k="a">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><h4>学生详情</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-more"/></svg></div></div>
+          <div class="body">
+            <div class="stu-hero">
+              <div class="r1"><div class="avatar">张</div>
+                <div><h3>张子轩</h3><div class="cls">软件工程 2201 · 学号 20220301 · 宿舍 7-502</div></div></div>
+              <div class="tg"><span>学业预警 1</span><span>班委 · 学习委员</span><span>重点关注</span></div>
+            </div>
+            <div class="kpi-row">
+              <div class="k"><b style="color:var(--warn)">92%</b><i>出勤率</i></div>
+              <div class="k"><b style="color:var(--danger)">2.6</b><i>绩点</i></div>
+              <div class="k"><b style="color:var(--primary)">3</b><i>进行中任务</i></div>
+              <div class="k"><b style="color:var(--violet)">12</b><i>档案记录</i></div>
+            </div>
+            <div class="anchor-tabs"><span class="on">概览</span><span>课业</span><span>考勤</span><span>档案</span></div>
+            <div class="card risk-card">
+              <div class="r1"><svg class="ic" style="color:var(--danger)"><use href="#i-alert"/></svg><span class="tt">学业预警 · 高数Ⅰ</span><span class="chip" style="background:var(--danger-soft);color:var(--danger);margin-left:auto">处理中</span></div>
+              <p style="font-size:11.5px;color:var(--sub);margin-top:7px;line-height:1.6">期中 51 分，连续 2 次作业未交。已触发预警流程，需 3 日内完成首谈。</p>
+              <div class="sla"><div class="lb"><span>首谈剩余时限</span><span style="color:var(--danger);font-weight:700">还剩 22 小时</span></div><div class="bar"><i></i></div></div>
+              <button class="btn sm ghost" style="margin-top:10px;width:100%;justify-content:center;color:var(--danger);border-color:#f4c7c3">去完成首谈任务</button>
+            </div>
+            <div class="card">
+              <div class="card-t">近期成绩<svg class="ic" style="width:14px;height:14px;color:var(--quiet);margin-left:auto"><use href="#i-chev-r"/></svg></div>
+              <div class="mini-row"><span class="nm">高等数学Ⅰ · 期中</span><span class="sc bad">51</span></div>
+              <div class="mini-row"><span class="nm">程序设计基础 · 平时</span><span class="sc">78</span></div>
+              <div class="mini-row"><span class="nm">大学英语 · 平时</span><span class="sc good">85</span></div>
+            </div>
+            <div class="card">
+              <div class="card-t">最近动态</div>
+              <div class="mini-row"><span class="dot" style="background:var(--danger)"></span><span class="nm">触发学业预警（高数Ⅰ）</span><span style="font-size:10.5px;color:var(--quiet)">10-28</span></div>
+              <div class="mini-row"><span class="dot" style="background:var(--success)"></span><span class="nm">图书馆学习 6 次 · 12.5h</span><span style="font-size:10.5px;color:var(--quiet)">本周</span></div>
+              <div class="mini-row"><span class="dot" style="background:var(--violet)"></span><span class="nm">获校园歌手大赛优胜奖</span><span style="font-size:10.5px;color:var(--quiet)">10-12</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 B · 指标仪表式</h3>
+        <ul>
+          <li>头图 + 四个高频快捷操作（消息/电话/谈心/家长沟通）置于首屏</li>
+          <li>三个仪表环可视化核心指标（出勤/绩点/任务完成），健康度一眼可判</li>
+          <li>最近记录以轻时间轴收尾，重点突出「现在能为他做什么」</li>
+        </ul>
+        <div class="fit">适合：以「行动」为导向的日常巡检视图，弱化档案、强化操作。</div>
+      </div>
+      <div class="phone">
+        <div class="screen" data-g="stu" data-k="b">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><h4>学生详情</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-more"/></svg></div></div>
+          <div class="body">
+            <div class="stu-hero" style="display:flex;align-items:center;gap:12px">
+              <div class="avatar" style="width:48px;height:48px;font-size:16px;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.4)">张</div>
+              <div style="flex:1"><h3 style="font-size:16px">张子轩</h3><div class="cls">软件工程 2201 · 20220301</div></div>
+              <svg class="ic" style="opacity:.8"><use href="#i-more"/></svg>
+            </div>
+            <div class="ops-row">
+              <div class="o"><div class="icbtn" style="background:var(--primary-soft);color:var(--primary)"><svg class="ic"><use href="#i-msg"/></svg></div><span style="font-size:10.5px;color:var(--sub)">发消息</span></div>
+              <div class="o"><div class="icbtn" style="background:var(--cyan-soft);color:var(--cyan)"><svg class="ic"><use href="#i-phone"/></svg></div><span style="font-size:10.5px;color:var(--sub)">打电话</span></div>
+              <div class="o"><div class="icbtn" style="background:var(--warn-soft);color:var(--warn)"><svg class="ic"><use href="#i-pen"/></svg></div><span style="font-size:10.5px;color:var(--sub)">谈心记录</span></div>
+              <div class="o"><div class="icbtn" style="background:var(--violet-soft);color:var(--violet)"><svg class="ic"><use href="#i-user"/></svg></div><span style="font-size:10.5px;color:var(--sub)">家长沟通</span></div>
+            </div>
+            <div class="card">
+              <div class="card-t">核心指标</div>
+              <div class="gauges">
+                <div class="gauge"><div class="ring"><svg width="66" height="66"><circle cx="33" cy="33" r="27" stroke="var(--sunken)" stroke-width="7" fill="none"/><circle cx="33" cy="33" r="27" stroke="var(--warn)" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="156 170"/></svg><div class="num"><b style="color:var(--warn)">92%</b></div></div><b>出勤</b><i>本月</i></div>
+                <div class="gauge"><div class="ring"><svg width="66" height="66"><circle cx="33" cy="33" r="27" stroke="var(--sunken)" stroke-width="7" fill="none"/><circle cx="33" cy="33" r="27" stroke="var(--danger)" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="87 170"/></svg><div class="num"><b style="color:var(--danger)">2.6</b></div></div><b>绩点</b><i>上学期</i></div>
+                <div class="gauge"><div class="ring"><svg width="66" height="66"><circle cx="33" cy="33" r="27" stroke="var(--sunken)" stroke-width="7" fill="none"/><circle cx="33" cy="33" r="27" stroke="var(--success)" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="146 170"/></svg><div class="num"><b style="color:var(--success)">86%</b></div></div><b>任务完成</b><i>本学期</i></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-t">在校表现<svg class="ic" style="width:14px;height:14px;color:var(--quiet);margin-left:auto"><use href="#i-chev-r"/></svg></div>
+              <div class="mini-row"><span class="dot" style="background:var(--success)"></span><span class="nm">课堂考勤正常</span><span style="font-size:10.5px;color:var(--quiet)">本周</span></div>
+              <div class="mini-row"><span class="dot" style="background:var(--warn)"></span><span class="nm">晚归 1 次（23:40）</span><span style="font-size:10.5px;color:var(--quiet)">10-24</span></div>
+              <div class="mini-row"><span class="dot" style="background:var(--primary)"></span><span class="nm">图书馆学习 6 次</span><span style="font-size:10.5px;color:var(--quiet)">本周</span></div>
+            </div>
+            <div class="card">
+              <div class="card-t">近期跟进</div>
+              <div class="mini-row"><span class="avatar" style="width:26px;height:26px;font-size:9.5px;background:var(--warn)">李</span><span class="nm">李静 · 预警首谈预约</span><span style="font-size:10.5px;color:var(--quiet)">今天 09:30</span></div>
+              <div class="mini-row"><span class="avatar" style="width:26px;height:26px;font-size:9.5px;background:var(--cyan)">系</span><span class="nm">系统 · 预警自动通知</span><span style="font-size:10.5px;color:var(--quiet)">10-28</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 C · 成长时间轴式</h3>
+        <ul>
+          <li>极简头卡 + 单一时间轴承载全部事件：预警、成绩、表扬、谈心</li>
+          <li>事件按类型着色（danger/success/violet），「 这个学生的故事」按时间自然展开</li>
+          <li>支持按类型过滤，回溯一次谈话的来龙去脉最直观</li>
+        </ul>
+        <div class="fit">适合：谈话前快速回顾全貌、写评语/总结材料时溯源。</div>
+      </div>
+      <div class="phone">
+        <div class="screen" data-g="stu" data-k="c">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><h4>张子轩 · 成长记录</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-funnel" id="x1"/></svg></div></div>
+          <div class="body">
+            <div class="card" style="display:flex;align-items:center;gap:12px">
+              <div class="avatar" style="width:46px;height:46px;font-size:15px;background:var(--primary)">张</div>
+              <div style="flex:1"><div style="font-size:15px;font-weight:700">张子轩</div><div style="font-size:11px;color:var(--tertiary);margin-top:2px">软件工程 2201 · 20220301</div></div>
+              <span class="chip" style="background:var(--danger-soft);color:var(--danger)">预警中</span>
+            </div>
+            <div class="kanban-chips" style="margin-bottom:14px">
+              <span class="k on">全部</span><span class="k" style="color:var(--danger)">预警</span><span class="k" style="color:var(--violet)">荣誉</span><span class="k">谈心</span><span class="k">课业</span>
+            </div>
+            <div class="ev"><div class="dotline"></div><div class="r">
+              <div class="nd" style="background:var(--danger-soft);color:var(--danger)"><svg class="ic" style="width:15px;height:15px"><use href="#i-alert"/></svg></div>
+              <div class="bd"><div class="h"><span class="tt">触发学业预警</span><time>10-28</time></div><p>高等数学Ⅰ期中 51 分，连续 2 次作业未交。系统自动推送至辅导员，SLA 72h。</p></div></div></div>
+            <div class="ev"><div class="dotline"></div><div class="r">
+              <div class="nd" style="background:var(--primary-soft);color:var(--primary)"><svg class="ic" style="width:15px;height:15px"><use href="#i-book"/></svg></div>
+              <div class="bd"><div class="h"><span class="tt">高数Ⅰ · 期中成绩发布</span><time>10-26</time></div><p>51 分（班级后 10%）。程序设计 78 分保持平稳。</p></div></div></div>
+            <div class="ev"><div class="dotline"></div><div class="r">
+              <div class="nd" style="background:var(--success-soft);color:var(--success)"><svg class="ic" style="width:15px;height:15px"><use href="#i-check"/></svg></div>
+              <div class="bd"><div class="h"><span class="tt">图书馆学习打卡 6 次</span><time>本周</time></div><p>累计 12.5h，较上周 +40%，学习状态回升。</p></div></div></div>
+            <div class="ev"><div class="dotline"></div><div class="r">
+              <div class="nd" style="background:var(--violet-soft);color:var(--violet)"><svg class="ic" style="width:15px;height:15px"><use href="#i-award"/></svg></div>
+              <div class="bd"><div class="h"><span class="tt">获校园歌手大赛优胜奖</span><time>10-12</time></div><p>计入成长档案（可见范围：本人+辅导员）。</p></div></div></div>
+            <div class="ev"><div class="r">
+              <div class="nd" style="background:var(--cyan-soft);color:var(--cyan)"><svg class="ic" style="width:15px;height:15px"><use href="#i-pen"/></svg></div>
+              <div class="bd"><div class="h"><span class="tt">谈心记录 · 开学适应</span><time>09-15</time></div><p>自述想加入技术社团但怕耽误学习，约定先试四周。</p></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ③ 学生表单展示 ================= -->
+<section class="sec">
+  <div class="sec-head"><h2>③ 学生表单展示</h2><em>查看学生提交的表单（请假 / 申请 / 问卷）· 同一设计逻辑延展</em></div>
+  <p class="sec-desc">延续「先全局、后明细」逻辑：表单不是一屏字段堆砌，而是「状态 → 摘要 → 明细 → 流转」的阅读动线。</p>
+  <div class="switcher" data-group="form">
+    <button class="on" data-t="a">方案 A · 票据卡 + 审批流</button>
+    <button data-t="b">方案 B · 摘要 + 折叠明细</button>
+  </div>
+  <div class="opt-row">
+
+    <!-- A -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 A · 票据卡 + 审批流 <span class="badge-re">推荐</span></h3>
+        <ul>
+          <li>顶部状态横幅（色块 + 图标）先给结论：审核中 / 已通过 / 已驳回</li>
+          <li>票据卡按「基本信息 → 申请内容 → 附件」分组，label-value 行式排版高密度可读</li>
+          <li>底部审批流时间轴 + 常驻操作条（驳回 / 通过），审批闭环不跳页</li>
+        </ul>
+        <div class="fit">适合：请假、奖学金、证明开具等带审批流的表单。与设计契约的 approval 弹窗同一范式。</div>
+      </div>
+      <div class="phone">
+        <div class="screen active" data-g="form" data-k="a">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><h4>表单详情</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-paperclip"/></svg></div></div>
+          <div class="body">
+            <div class="form-status">
+              <div class="icbtn"><svg class="ic"><use href="#i-file"/></svg></div>
+              <div><div class="tt">学生请假申请单</div><div class="st">陈雨桐 · 软件2201 · 今天 08:12 提交 · 单号 QJ-20261030-007</div></div>
+            </div>
+            <div class="card">
+              <div class="fgroup">
+                <div class="gt">基本信息</div>
+                <div class="frow"><span class="k">请假类型</span><span class="v"><span class="tag" style="background:var(--warn-soft);color:var(--warn)">病假</span></span></div>
+                <div class="frow"><span class="k">请假时长</span><span class="v">10月31日 08:00 — 10月31日 14:00（半天）</span></div>
+                <div class="frow"><span class="k">去向</span><span class="v">绵阳市中心医院</span></div>
+              </div>
+              <div class="fgroup">
+                <div class="gt">申请事由</div>
+                <div class="frow"><span class="k">事由说明</span><span class="v">昨晚开始发烧 38.5°C，已预约明天上午门诊，需请假半天就医。</span></div>
+                <div class="frow"><span class="k">紧急联系人</span><span class="v">陈母 138****2210</span></div>
+              </div>
+              <div class="fgroup">
+                <div class="gt">附件（2）</div>
+                <div class="att"><svg class="ic"><use href="#i-paperclip"/></svg>挂号截图.png<span class="sz">312 KB</span></div>
+                <div class="att"><svg class="ic"><use href="#i-paperclip"/></svg>体温记录.jpg<span class="sz">188 KB</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-t">审批流程</div>
+              <div class="flow">
+                <div class="fstep done"><div class="h"><b>班长 刘一诺</b><span class="chip" style="background:var(--success-soft);color:var(--success)">已确认</span></div><p>10-30 08:20 · "情况属实，已核实就医预约"</p></div>
+                <div class="fstep doing"><div class="h"><b>辅导员 李静（我）</b><span class="chip" style="background:var(--cyan-soft);color:var(--cyan)">审批中</span></div><p>当前节点 · SLA 剩余 22h</p></div>
+                <div class="fstep"><div class="h"><b>学院教务</b><span class="chip" style="background:var(--sunken);color:var(--quiet)">待处理</span></div><p>备案存档</p></div>
+              </div>
+            </div>
+          </div>
+          <div class="footbar">
+            <button class="btn danger-ghost">驳回</button>
+            <button class="btn primary"><svg class="ic"><use href="#i-check"/></svg>通过申请</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 B · 摘要 + 折叠明细</h3>
+        <ul>
+          <li>深色摘要卡先给「结果」：结论、评分、风险点提示</li>
+          <li>明细按分组折叠（手风琴），默认展开最关键组，其余收起降噪</li>
+          <li>长表单（问卷/互评/综合测评）不再无限滚动，按需展开</li>
+        </ul>
+        <div class="fit">适合：字段很多的综合类表单（奖学金申请、综合素质测评、问卷结果）。</div>
+      </div>
+      <div class="phone">
+        <div class="screen" data-g="form" data-k="b">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><h4>奖学金申请</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-more"/></svg></div></div>
+          <div class="body">
+            <div class="sum-card">
+              <div class="lb">软件2201 · 李雨欣 · 今天 10:02 提交</div>
+              <div class="big">国家励志奖学金 · 二等</div>
+              <div class="pts">
+                <span class="p"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg>条件自查通过</span>
+                <span class="p"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg>绩点 3.7</span>
+                <span class="p" style="color:#ffd6a8"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg>缺 1 份材料</span>
+              </div>
+            </div>
+            <div class="acc">
+              <div class="h" style="color:var(--warn)"><svg class="ic" style="color:var(--warn)"><use href="#i-alert"/></svg>待补材料（1）<span class="cnt">需在 11-02 前补交</span><svg class="ic" style="color:var(--quiet)"><use href="#i-chev-d"/></svg></div>
+              <div class="bd2"><div class="att" style="background:var(--warn-soft);margin:0 0 10px"><svg class="ic" style="color:var(--warn)"><use href="#i-paperclip"/></svg>家庭经济困难认定表<span class="sz" style="color:var(--warn);font-weight:600">未提交</span></div></div>
+            </div>
+            <div class="acc">
+              <div class="h"><svg class="ic" style="color:var(--primary)"><use href="#i-user"/></svg>基本信息（8 项）<span class="cnt">已填写</span><svg class="ic" style="color:var(--quiet)"><use href="#i-chev-d"/></svg></div>
+              <div class="bd2">
+                <div class="frow"><span class="k">姓名</span><span class="v">李雨欣</span></div>
+                <div class="frow"><span class="k">学号</span><span class="v">20220315</span></div>
+                <div class="frow"><span class="k">政治面貌</span><span class="v">共青团员</span></div>
+              </div>
+            </div>
+            <div class="acc">
+              <div class="h"><svg class="ic" style="color:var(--violet)"><use href="#i-trophy"/></svg>获奖情况（3 项）<span class="cnt">已核验</span><svg class="ic" style="color:var(--quiet)"><use href="#i-chev-r"/></svg></div>
+            </div>
+            <div class="acc">
+              <div class="h"><svg class="ic" style="color:var(--cyan)"><use href="#i-file"/></svg>个人陈述<span class="cnt">612 字</span><svg class="ic" style="color:var(--quiet)"><use href="#i-chev-r"/></svg></div>
+            </div>
+            <div class="acc">
+              <div class="h"><svg class="ic" style="color:var(--success)"><use href="#i-shield"/></svg>班级评议<span class="cnt">班长已签署</span><svg class="ic" style="color:var(--quiet)"><use href="#i-chev-r"/></svg></div>
+            </div>
+          </div>
+          <div class="footbar">
+            <button class="btn ghost"><svg class="ic"><use href="#i-msg"/></svg>退回补件</button>
+            <button class="btn primary"><svg class="ic"><use href="#i-check"/></svg>签署意见并提交</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ④ 学生主页 ================= -->
+<section class="sec">
+  <div class="sec-head"><h2>④ 学生主页</h2><em>教师点击查看学生主页 · 同一设计逻辑延展</em></div>
+  <p class="sec-desc">「学生主页」是学生视角的展示面（区别于②的工作台视角）：先看这个人是谁、状态如何，再看动态与档案。</p>
+  <div class="switcher" data-group="home">
+    <button class="on" data-t="a">方案 A · 个人空间式</button>
+    <button data-t="b">方案 B · 结构档案式</button>
+  </div>
+  <div class="opt-row">
+
+    <!-- A -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 A · 个人空间式 <span class="badge-re">推荐</span></h3>
+        <ul>
+          <li>封面 + 头像 + 格言的「个人空间」头部，弱工作感、强人物感</li>
+          <li>徽章墙横滑（荣誉/技能/参与），与成长档案模块的徽章体系打通</li>
+          <li>数据带 + 动态流：教师可点赞互动，主页成为师生轻互动触点</li>
+        </ul>
+        <div class="fit">适合：学生端已有个人主页产品、教师以「拜访」视角查看。参考：微信状态 / 校园社交 App。</div>
+      </div>
+      <div class="phone">
+        <div class="screen active" data-g="home" data-k="a">
+          <div class="statusbar" style="position:absolute;top:0;left:0;right:0;color:#fff;z-index:3"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar" style="position:absolute;top:30px;left:0;right:0;z-index:3"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-more"/></svg></div></div>
+          <div class="body" style="padding:0 0 20px">
+            <div class="home-cover"></div>
+            <div class="home-head">
+              <div class="avatar" style="background:#6941c6">张</div>
+              <h3>张子轩 <svg class="ic" style="width:15px;height:15px;color:var(--violet);vertical-align:-2px"><use href="#i-award"/></svg></h3>
+              <div class="motto">"想加入技术社团，又怕耽误学习 —— 先试四周。"</div>
+            </div>
+            <div class="badges">
+              <div class="b"><div class="icbtn" style="background:var(--violet-soft);color:var(--violet)"><svg class="ic" style="width:15px;height:15px"><use href="#i-trophy"/></svg></div><i>歌手大赛<br>优胜奖</i></div>
+              <div class="b"><div class="icbtn" style="background:var(--success-soft);color:var(--success)"><svg class="ic" style="width:15px;height:15px"><use href="#i-book"/></svg></div><i>图书馆<br>达人 Lv.3</i></div>
+              <div class="b"><div class="icbtn" style="background:var(--warn-soft);color:var(--warn)"><svg class="ic" style="width:15px;height:15px"><use href="#i-flag"/></svg></div><i>班委<br>学习委员</i></div>
+              <div class="b"><div class="icbtn" style="background:var(--cyan-soft);color:var(--cyan)"><svg class="ic" style="width:15px;height:15px"><use href="#i-spark"/></svg></div><i>志愿时长<br>26h</i></div>
+              <div class="b"><div class="icbtn" style="background:var(--primary-soft);color:var(--primary)"><svg class="ic" style="width:15px;height:15px"><use href="#i-award"/></svg></div><i>签到<br>连续 32 天</i></div>
+            </div>
+            <div class="kpi-row" style="margin:12px 14px 0;border-radius:var(--r-lg)">
+              <div class="k"><b style="color:var(--success)">89%</b><i>任务完成</i></div>
+              <div class="k"><b style="color:var(--violet)">12</b><i>获赞</i></div>
+              <div class="k"><b style="color:var(--primary)">5</b><i>动态</i></div>
+              <div class="k"><b style="color:var(--danger)">1</b><i>预警</i></div>
+            </div>
+            <div style="padding:14px 14px 0">
+              <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:7px">最近动态</div>
+              <div class="dyn">
+                <div class="avatar" style="background:#6941c6">张</div>
+                <div class="bd"><div class="h"><b>获得荣誉</b><time>10-12</time></div>
+                  <p>在校园歌手大赛决赛中获得优胜奖，感谢室友们的支持 🎤</p>
+                  <div class="attach"><div class="ph" style="background:var(--violet-soft)"><svg class="ic" style="color:var(--violet)"><use href="#i-trophy"/></svg></div></div></div>
+              </div>
+              <div class="dyn">
+                <div class="avatar" style="background:#6941c6">张</div>
+                <div class="bd"><div class="h"><b>学习打卡</b><time>昨天</time></div>
+                  <p>图书馆 3.5h · 高数复习第二章，进度 68%。</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="opt">
+      <div class="opt-note">
+        <h3>方案 B · 结构档案式</h3>
+        <ul>
+          <li>标准信息头卡 + 分组导航（基本/学业/荣誉/考勤），一屏结构化档案</li>
+          <li>分组卡片内用 label-value 行式排版，与③方案 A 同一表单阅读范式</li>
+          <li>右上直达「查看完整档案 / 导出」，方便写材料时取用</li>
+        </ul>
+        <div class="fit">适合：以信息查询为主的严肃场景（核实信息、导出档案、评奖评优审核）。</div>
+      </div>
+      <div class="phone">
+        <div class="screen" data-g="home" data-k="b">
+          <div class="statusbar"><b>9:41</b><span>●●● ⚡ 82%</span></div>
+          <div class="appbar"><div class="back"><svg class="ic"><use href="#i-chev-l"/></svg></div><h4>学生主页</h4><div class="sp"></div><div class="act"><svg class="ic"><use href="#i-file"/></svg></div></div>
+          <div class="body">
+            <div class="stu-hero">
+              <div class="r1"><div class="avatar" style="width:48px;height:48px;font-size:16px;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.4)">张</div>
+                <div style="flex:1"><h3 style="font-size:16px">张子轩</h3><div class="cls">软件工程 2201 · 20220301</div></div>
+                <span class="chip" style="background:rgba(255,255,255,.18)">在册</span></div>
+            </div>
+            <div class="anchor-tabs"><span class="on">基本</span><span>学业</span><span>荣誉</span><span>考勤</span></div>
+            <div class="card info-list">
+              <div class="card-t">基本信息</div>
+              <div class="frow"><span class="k">性别 / 年龄</span><span class="v">男 · 20</span></div>
+              <div class="frow"><span class="k">政治面貌</span><span class="v">共青团员</span></div>
+              <div class="frow"><span class="k">宿舍</span><span class="v">7 栋 502（4人间）</span></div>
+              <div class="frow"><span class="k">联系电话</span><span class="v">139****6672</span></div>
+              <div class="frow"><span class="k">紧急联系</span><span class="v">张父 138****3341</span></div>
+              <div class="frow"><span class="k">班内职务</span><span class="v">学习委员</span></div>
+            </div>
+            <div class="card info-list">
+              <div class="card-t">学业概况<svg class="ic" style="width:14px;height:14px;color:var(--quiet);margin-left:auto"><use href="#i-chev-r"/></svg></div>
+              <div class="frow"><span class="k">绩点 / 排名</span><span class="v">2.6 · 班级 38/42</span></div>
+              <div class="frow"><span class="k">本学期出勤</span><span class="v">92%（缺勤 6 次）</span></div>
+              <div class="frow"><span class="k">预警记录</span><span class="v"><span class="tag" style="background:var(--danger-soft);color:var(--danger)">1 条进行中</span></span></div>
+            </div>
+            <div class="card info-list">
+              <div class="card-t">荣誉与成长<svg class="ic" style="width:14px;height:14px;color:var(--quiet);margin-left:auto"><use href="#i-chev-r"/></svg></div>
+              <div class="frow"><span class="k">荣誉</span><span class="v">校园歌手大赛优胜奖（2026）</span></div>
+              <div class="frow"><span class="k">志愿时长</span><span class="v">26h</span></div>
+              <div class="frow"><span class="k">档案记录</span><span class="v">12 条（本学期 4 条）</span></div>
+            </div>
+            <button class="btn ghost" style="width:100%;justify-content:center"><svg class="ic"><use href="#i-file"/></svg>查看完整成长档案</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 推荐组合 ================= -->
+<section class="combo">
+  <h2>推荐组合与落地说明</h2>
+  <table>
+    <tr><th>页面</th><th>推荐方案</th><th>核心交互范式</th><th>说明</th></tr>
+    <tr>
+      <td><b>任务清单</b></td>
+      <td><span class="pill" style="background:var(--success-soft);color:var(--success)">A 勾选清单式</span></td>
+      <td>环形进度 + 分段器 + 可勾选行</td>
+      <td>与设计契约中「今日任务」签名版式（完成度进度 + 今日/逾期/本周分段 + 可勾选清单）完全一致，属契约内方案的深化。B/C 可作为「任务中心」二级视图保留。</td>
+    </tr>
+    <tr>
+      <td><b>学生详情</b></td>
+      <td><span class="pill" style="background:var(--primary-soft);color:var(--primary)">A 档案头卡 + 锚点 Tab</span></td>
+      <td>渐变头卡 + KPI 行 + 锚点分段 + 风险卡置顶</td>
+      <td>沿用「先全局后明细」逻辑；风险卡 SLA 条与任务模块联动（一键生成首谈任务）。</td>
+    </tr>
+    <tr>
+      <td><b>学生表单</b></td>
+      <td><span class="pill" style="background:var(--cyan-soft);color:var(--cyan)">A 票据卡 + 审批流</span></td>
+      <td>状态横幅 + 分组票据卡 + 审批流时间轴 + 常驻操作条</td>
+      <td>复用契约中 approval「审批票据卡 + 审批流时间轴」与底部弹窗操作条范式；B 方案用于长表单。</td>
+    </tr>
+    <tr>
+      <td><b>学生主页</b></td>
+      <td><span class="pill" style="background:var(--violet-soft);color:var(--violet)">A 个人空间式</span></td>
+      <td>封面头像 + 徽章墙横滑 + 数据带 + 动态流</td>
+      <td>与成长档案（violet 签名色）徽章体系打通；B 方案可作教师端「档案视图」切换项。</td>
+    </tr>
+  </table>
+  <p style="font-size:12px;color:var(--tertiary);margin-top:14px;line-height:1.8">
+  统一设计语言：四组方案共享同一套令牌（#2563eb 主色 / 6 签名色系 / 10~22px 圆角 / 毛玻璃底栏 / Lucide 图标）、
+  同一条信息动线「状态总览 → 关键指标 → 明细内容 → 操作闭环」，以及同一组件词汇表（分段器、chips、色签、时间轴、常驻底栏），
+  因此四个页面可自由混搭（如任务用 A、表单用 B）而风格不割裂。</p>
+</section>
+
+<script>
+document.querySelectorAll('.switcher').forEach(sw=>{
+  const g=sw.dataset.group;
+  sw.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      sw.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on');
+      const k=btn.dataset.t;
+      document.querySelectorAll('.screen[data-g="'+g+'"]').forEach(s=>s.classList.toggle('active',s.dataset.k===k));
+    });
+  });
+});
+</script>
+</body>
+</html>

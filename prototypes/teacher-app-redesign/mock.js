@@ -152,6 +152,10 @@ window.DB = {
     approval: {
       meta: { title: '审批', sub: '请假、证明等事项的受理与审批', accent: 'warn', icon: 'clipboard-check' },
       fab: null,
+      aiFallback: { suggest: '同意', confidence: 95,
+        summary: '在读证明为常规事项申请，学生状态正常，无在办预警。',
+        checks: [ { k: '材料核验', v: '无需附件，系统信息一致', ok: true } ],
+        reason: '常规事项，建议同意并转教务处盖章。', opinion: '情况属实，同意开具，请到教务处盖章。' },
       todo: { count: 3, urgentName: '陈思远', urgentType: '事假 3 天', sla: '剩余 6 小时', note: '今天 17:00 前需完成审批，逾期将自动上报学工处' },
       stats: [ { num: 3, label: '待我审批', tone: 'warn' }, { num: 12, label: '本月已办', tone: 'success' }, { num: 1, label: '已驳回', tone: 'danger' } ],
       segments: ['待审批 3', '已处理 8', '我发起的 2'],
@@ -160,12 +164,28 @@ window.DB = {
           range: '10 月 13 日 — 10 月 15 日', days: '3 天', reason: '家中有事，需返回绵阳处理',
           submitted: '今天 09:24', sla: '剩余 6 小时', files: [ { name: '家长知情书.jpg', size: '860 KB', icon: 'image' } ],
           flow: [ { k: '学生提交申请', t: '今天 09:24', state: 'done' }, { k: '辅导员审批', t: '进行中', state: 'active' }, { k: '学工处备案', t: '待处理', state: 'wait' } ],
-          actions: ['驳回', '同意'] },
+          actions: ['驳回', '同意'],
+          ai: { suggest: '同意', confidence: 93,
+            summary: '事假 3 天，事由明确（家中有事），已附家长知情书；该生本月首次请假，出勤正常，无在办预警。',
+            checks: [
+              { k: '材料核验', v: '家长知情书已上传，要素齐全', ok: true },
+              { k: '时间冲突', v: '请假期间无考试与实操安排', ok: true },
+              { k: '历史记录', v: '本学期首次请假，无逾期未销假', ok: true } ],
+            reason: '事由合理、材料齐全，建议同意，销假时间 10 月 15 日。',
+            opinion: '情况属实，同意事假 3 天（10.13—10.15），返校后请及时销假。' } },
         { id: 'ap2', student: '孙倩', stuTone: 'tone-red', cls: '计科 2302', type: '病假', tag: '待审批', tagTone: 'warn', urgent: false,
           range: '10 月 14 日（1 天）', days: '1 天', reason: '感冒发热，附校医院就诊证明',
           submitted: '今天 08:12', sla: '剩余 20 小时', files: [ { name: '校医院证明.pdf', size: '1.1 MB', icon: 'file-text' } ],
           flow: [ { k: '学生提交申请', t: '今天 08:12', state: 'done' }, { k: '辅导员审批', t: '进行中', state: 'active' }, { k: '学工处备案', t: '待处理', state: 'wait' } ],
-          actions: ['驳回', '同意'] },
+          actions: ['驳回', '同意'],
+          ai: { suggest: '同意', confidence: 81,
+            summary: '病假 1 天，附校医院就诊证明；但该生近 7 天已缺勤 3 天，且本学期第 2 次病假，需关注连续缺勤风险。',
+            checks: [
+              { k: '材料核验', v: '校医院证明已上传，与主诉一致', ok: true },
+              { k: '历史记录', v: '本学期第 2 次病假（上月 1 次）', ok: false },
+              { k: '考勤关联', v: '近 7 天缺勤 3 天，已有预警在办', ok: false } ],
+            reason: '病情属实建议同意，但需同步关怀中心跟进缺勤，必要时联系家长。',
+            opinion: '同意病假 1 天；已关注近期缺勤情况，返校后约谈了解。' } },
         { id: 'ap3', student: '刘洋', stuTone: 'tone-violet', cls: '计科 2301', type: '在读证明', tag: '待审批', tagTone: 'warn', urgent: false,
           range: '—', days: '—', reason: '申请开具在读证明（用于国家助学贷款）',
           submitted: '昨天 16:40', sla: '剩余 2 天', files: [],
@@ -341,28 +361,34 @@ window.DB = {
       templates: ['缺勤情况沟通', '心理状态告知', '学业预警反馈', '在校表现通报'],
     },
 
-    /* ---------------- ⑧ 今日任务 ---------------- */
+    /* ---------------- ⑧ 今日任务（v3：时间轴式） ---------------- */
     tasks: {
-      meta: { title: '今日任务', sub: '待办、逾期与日程的统一入口', accent: 'success', icon: 'list-checks' },
+      meta: { title: '任务日程', sub: '逾期、今日与本周任务的时间轴视图', accent: 'success', icon: 'list-checks' },
       fab: { label: '新建任务', icon: 'plus' },
       progress: { total: 9, done: 5 },
-      stats: [ { num: 5, label: '今日待办', tone: 'success' }, { num: 1, label: '已逾期', tone: 'danger' }, { num: 3, label: '本周计划', tone: 'brand' } ],
-      segments: ['今天 5', '逾期 1', '本周 3'],
-      groups: [
-        { title: '今天', items: [
-          { id: 'tk1', title: '审批陈思远事假申请', done: false, priority: '高', priTone: 'danger', due: '今天 17:00', from: '审批', fromTone: 'warn' },
-          { id: 'tk2', title: '与陈思远完成一对一谈心', done: false, priority: '高', priTone: 'danger', due: '今天 16:20', from: '关怀', fromTone: 'warn' },
-          { id: 'tk3', title: '发布班会时间调整公告', done: true, priority: '中', priTone: 'brand', due: '今天 17:10', from: '公告', fromTone: 'brand' },
-          { id: 'tk4', title: '核对迎新志愿者名单', done: true, priority: '低', priTone: 'quiet', due: '今天 12:00', from: '日常', fromTone: 'quiet' },
-          { id: 'tk5', title: '提交本周工作周报', done: false, priority: '中', priTone: 'brand', due: '今天 20:00', from: '日常', fromTone: 'quiet' },
+      dateStrip: [
+        { w: '一', d: '26' }, { w: '二', d: '27' }, { w: '三', d: '28' },
+        { w: '四', d: '29' }, { w: '五', d: '30', on: true }, { w: '六', d: '31' },
+      ],
+      timeline: [
+        { title: '已逾期', tone: 'danger', items: [
+          { id: 'tk6', title: '回复孙倩助学金材料咨询', done: false, priority: '高', priTone: 'danger', t: '昨天 18:00', from: '反馈', fromTone: 'cyan' },
         ] },
-        { title: '已逾期', items: [
-          { id: 'tk6', title: '回复孙倩助学金材料咨询', done: false, priority: '高', priTone: 'danger', due: '昨天 18:00', from: '反馈', fromTone: 'cyan' },
+        { title: '今天 · 上午', tone: 'quiet', items: [
+          { id: 'tk4', title: '核对迎新志愿者名单', done: true, priority: '低', priTone: 'quiet', t: '12:00 前', from: '日常', fromTone: 'quiet' },
         ] },
-        { title: '本周计划', items: [
-          { id: 'tk7', title: '十五五规划学习心得提交', done: false, priority: '中', priTone: 'brand', due: '周五', from: '日常', fromTone: 'quiet' },
-          { id: 'tk8', title: '学风建设问卷数据回收', done: false, priority: '中', priTone: 'brand', due: '周三', from: '问卷', fromTone: 'cyan' },
-          { id: 'tk9', title: '学工例会（15:00）', done: false, priority: '低', priTone: 'quiet', due: '周五', from: '会议', fromTone: 'violet' },
+        { title: '今天 · 下午', tone: 'success', items: [
+          { id: 'tk2', title: '与陈思远完成一对一谈心', done: false, priority: '高', priTone: 'danger', t: '16:20', from: '关怀', fromTone: 'warn' },
+          { id: 'tk1', title: '审批陈思远事假申请', done: false, priority: '高', priTone: 'danger', t: '17:00', from: '审批', fromTone: 'warn' },
+          { id: 'tk3', title: '发布班会时间调整公告', done: true, priority: '中', priTone: 'brand', t: '17:10', from: '公告', fromTone: 'brand' },
+        ] },
+        { title: '今天 · 晚间', tone: 'quiet', items: [
+          { id: 'tk5', title: '提交本周工作周报', done: false, priority: '中', priTone: 'brand', t: '20:00', from: '日常', fromTone: 'quiet' },
+        ] },
+        { title: '本周计划', tone: 'brand', items: [
+          { id: 'tk8', title: '学风建设问卷数据回收', done: false, priority: '中', priTone: 'brand', t: '周三', from: '问卷', fromTone: 'cyan' },
+          { id: 'tk7', title: '十五五规划学习心得提交', done: false, priority: '中', priTone: 'brand', t: '周五', from: '日常', fromTone: 'quiet' },
+          { id: 'tk9', title: '学工例会', done: false, priority: '低', priTone: 'quiet', t: '周五 15:00', from: '会议', fromTone: 'violet' },
         ] },
       ],
     },
@@ -392,6 +418,110 @@ window.DB = {
       report: { week: '第 7 教学周', generated: '今天 08:00',
         points: [ '本周班级整体出勤率 96.2%，较上周回升 1.4%', '重点关注名单 2 人，均已建立跟进记录', '学风建设问卷回收率 76%，建议再次提醒未提交学生' ] },
     },
+  },
+
+  /* ==================================================================
+     v3：学生详情（档案头卡 + 锚点 Tab）· 重点关注学生的富数据
+     其他学生由 app.js 按 _generic 模板合成
+     ================================================================== */
+  studentDetail: {
+    _generic: {
+      kpis: [ { k: '出勤率', v: '96%', tone: '' }, { k: '绩点', v: '3.2', tone: '' }, { k: '进行任务', v: '1', tone: 'brand' }, { k: '档案', v: '6', tone: 'violet' } ],
+      grades: [
+        { k: '高等数学 · 期中', v: '82' }, { k: '数据结构 · 平时', v: '88', tone: 'good' },
+        { k: '大学英语 · 平时', v: '79' }, { k: '大学物理 · 平时', v: '84' } ],
+      attendance: [
+        { k: '课堂出勤', v: '本月无缺勤', tone: 'good' },
+        { k: '晚归记录', v: '无', tone: '' },
+        { k: '图书馆', v: '本月到馆 4 次 · 8h', tone: '' } ],
+      dynamics: [
+        { dot: 'success', k: '图书馆学习打卡 4 次', t: '本周' },
+        { dot: 'brand', k: '提交课程设计选题', t: '10-09' },
+        { dot: 'violet', k: '参加社团纳新活动', t: '09-20' } ],
+      records: [
+        { icon: 'graduation-cap', t: '2026-09-10', k: '数据结构课程设计选题通过', tone: 'brand' },
+        { icon: 'medal', t: '2026-06-30', k: '获评 2025-2026 学年优秀学生', tone: 'violet' },
+        { icon: 'heart-handshake', t: '2026-05-18', k: '社区志愿服务 8 小时', tone: 'cyan' } ],
+    },
+    u1: {
+      kpis: [ { k: '出勤率', v: '87%', tone: 'warn' }, { k: '绩点', v: '2.8', tone: 'warn' }, { k: '进行任务', v: '3', tone: 'brand' }, { k: '档案', v: '9', tone: 'violet' } ],
+      risk: { level: '高危', title: '心理测评异常', source: '系统自动识别 · SCL-90 测评',
+        desc: '焦虑因子偏高，近 7 天出勤下降 38%，夜间活跃异常。已建立跟进记录，需完成面谈与回访闭环。',
+        sla: '24 小时内完成首次面谈', pct: 68 },
+      grades: [
+        { k: '高等数学 · 期中', v: '78' }, { k: '数据结构 · 平时', v: '85', tone: 'good' },
+        { k: '大学英语 · 平时', v: '72' }, { k: '大学物理 · 平时', v: '58', tone: 'bad' } ],
+      attendance: [
+        { k: '课堂出勤', v: '近 7 天下降 38%', tone: 'bad' },
+        { k: '晚归记录', v: '10-11 晚归 1 次（23:52）', tone: 'warn' },
+        { k: '图书馆', v: '本周到馆 6 次 · 12.5h', tone: 'good' } ],
+      dynamics: [
+        { dot: 'danger', k: '触发高危预警（心理测评异常）', t: '10-13' },
+        { dot: 'success', k: '图书馆学习打卡 6 次 · 12.5h', t: '本周' },
+        { dot: 'warn', k: '高等数学随堂测验未通过', t: '10-09' },
+        { dot: 'violet', k: '院篮球赛亚军（与室友组队）', t: '10-12' } ],
+      records: [
+        { icon: 'shield-alert', t: '2026-10-13', k: '触发高危预警 · 已启动跟进', tone: 'danger' },
+        { icon: 'trophy', t: '2026-09-28', k: '省级程序设计竞赛三等奖（队长）', tone: 'warn' },
+        { icon: 'notebook-pen', t: '2026-09-15', k: '一对一谈心 · 开学适应', tone: 'warn' },
+        { icon: 'heart-handshake', t: '2026-06-01', k: '社区志愿服务 26 小时', tone: 'cyan' } ],
+    },
+    u6: {
+      kpis: [ { k: '出勤率', v: '81%', tone: 'danger' }, { k: '绩点', v: '2.9', tone: '' }, { k: '进行任务', v: '2', tone: 'brand' }, { k: '档案', v: '5', tone: 'violet' } ],
+      risk: { level: '高危', title: '连续缺勤', source: '考勤系统 · 连续 3 天未签到',
+        desc: '连续 3 天未签到，家长电话一度无人接听。家访已沟通，待确认返校情况并回访闭环。',
+        sla: '明天前确认返校情况', pct: 45 },
+    },
+  },
+
+  /* ==================================================================
+     v3：学生主页（QQ 风格）· 展示墙 / 动态 / 互动
+     ================================================================== */
+  studentPages: {
+    u1: {
+      motto: '最近有点累，但想先把这周撑过去。',
+      likes: 23, visitors: 56,
+      badges: [
+        { icon: 'trophy', tone: 'warn', label: '省赛三等奖' },
+        { icon: 'heart-handshake', tone: 'cyan', label: '志愿 26h' },
+        { icon: 'flame', tone: 'danger', label: '打卡 12 天' },
+        { icon: 'graduation-cap', tone: 'brand', label: '课设优秀' },
+      ],
+      photos: 6,
+      posts: [
+        { id: 'u1p1', time: '昨天 22:41', text: '图书馆待到闭馆，数据结构练习题总算刷完了，坚持！', imgs: 1, likeN: 12, cmtN: 3 },
+        { id: 'u1p2', time: '10-12', text: '和室友拿到院篮球赛亚军，虽然输了但打得很爽，明年再来。', imgs: 2, likeN: 31, cmtN: 8 },
+        { id: 'u1p3', time: '09-28', text: '省赛拿了个三等奖，感谢队友带飞，明年再战！', imgs: 1, likeN: 45, cmtN: 12 },
+      ],
+    },
+    u2: {
+      motto: '球场上见真章。',
+      likes: 18, visitors: 34,
+      badges: [ { icon: 'trophy', tone: 'warn', label: '院篮球赛亚军' }, { icon: 'flame', tone: 'danger', label: '打卡 8 天' } ],
+      photos: 4,
+      posts: [
+        { id: 'u2p1', time: '10-12', text: '院篮球赛亚军！最后一球差一点就进了。', imgs: 2, likeN: 28, cmtN: 6 },
+        { id: 'u2p2', time: '09-30', text: '新学期第一节实验课，环境搭建终于跑通了。', imgs: 0, likeN: 9, cmtN: 2 },
+      ],
+    },
+    u3: {
+      motto: '把每一件小事做好。',
+      likes: 41, visitors: 67,
+      badges: [ { icon: 'medal', tone: 'violet', label: '三好学生' }, { icon: 'heart-handshake', tone: 'cyan', label: '志愿 40h' }, { icon: 'trending-up', tone: 'success', label: '满勤 3 周' } ],
+      photos: 8,
+      posts: [
+        { id: 'u3p1', time: '10-09', text: '社会实践报告写完了，40 小时的社区服务收获很多。', imgs: 1, likeN: 36, cmtN: 9 },
+        { id: 'u3p2', time: '09-18', text: '连续三周满勤打卡，继续保持。', imgs: 0, likeN: 22, cmtN: 4 },
+      ],
+    },
+    u4: { motto: '码农进行时。', likes: 12, visitors: 21, badges: [ { icon: 'graduation-cap', tone: 'brand', label: '课设优秀' } ], photos: 3,
+      posts: [ { id: 'u4p1', time: '10-08', text: '校园导航系统课设答辩结束，92 分！', imgs: 1, likeN: 19, cmtN: 5 } ] },
+    u5: { motto: '竞赛 Season，冲！', likes: 27, visitors: 39, badges: [ { icon: 'trophy', tone: 'warn', label: '校赛二等奖' }, { icon: 'book-open', tone: 'brand', label: '刷题 200+' } ], photos: 5,
+      posts: [ { id: 'u5p1', time: '10-07', text: '程序设计竞赛请了假去打校赛，拿了个二等奖，值了。', imgs: 1, likeN: 24, cmtN: 6 } ] },
+    u6: { motto: '最近在调整状态。', likes: 8, visitors: 19, badges: [ { icon: 'heart-handshake', tone: 'cyan', label: '志愿 12h' } ], photos: 2,
+      posts: [ { id: 'u6p1', time: '10-05', text: '家里有点事，落了几天课，回来要抓紧补上。', imgs: 0, likeN: 6, cmtN: 2 } ] },
+    u7: { motto: '绩点保卫战。', likes: 10, visitors: 18, badges: [ { icon: 'book-open', tone: 'brand', label: '图书馆达人' } ], photos: 3,
+      posts: [ { id: 'u7p1', time: '09-26', text: '这学期目标：把绩点拉回 3.0，第一周打卡完成。', imgs: 0, likeN: 11, cmtN: 3 } ] },
   },
 
   /* ---------------- 学生档案 / 智能体（占位说明） ---------------- */
