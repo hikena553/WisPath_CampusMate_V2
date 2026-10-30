@@ -227,3 +227,12 @@ frontend/inbox2.html
 backend/pip-unpack-*/
 # 本地数据库手工备份
 backend/*.db.bak*
+
+# ---------- Local build check output (not for repo) ----------
+frontend/dist*-check/
+
+# 本地 .git 损坏后的备份目录（仅本机保留）
+.git-corrupted-backup-*/
+
+# 一次性前端验证脚本（用完即弃，与 backend/_probe*.py 同类）
+frontend/_*.cjs
