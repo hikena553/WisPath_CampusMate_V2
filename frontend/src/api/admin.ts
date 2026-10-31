@@ -393,7 +393,6 @@ export interface SystemIntegrations {
   github_token_set: boolean
   gitee_token_set: boolean
   sentry_configured: boolean
-  library_site_url: string
 }
 
 export interface SystemModuleInfo {

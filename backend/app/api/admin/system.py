@@ -114,7 +114,6 @@ def _integrations(db: Session) -> dict:
         "github_token_set": bool((settings.GITHUB_TOKEN or "").strip()),
         "gitee_token_set": bool((settings.GITEE_TOKEN or "").strip()),
         "sentry_configured": bool((settings.SENTRY_DSN or "").strip()),
-        "library_site_url": settings.LIBRARY_SITE_URL,
     }
 
 

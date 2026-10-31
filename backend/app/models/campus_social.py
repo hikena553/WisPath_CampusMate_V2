@@ -1,6 +1,6 @@
 """校园资讯互动：点赞 / 评论 / 转发 / 浏览
 
-背景：校园资讯（教务处、学院、图书馆的爬虫结果）本身是「无主」的抓取产物——
+背景：校园资讯（教务处、学院的爬虫结果）本身是「无主」的抓取产物——
 没有数据库 id，唯一稳定的身份就是原文 url。因此这里的互动表全部以 article_url
 作为逻辑外键，而不是外键到某张资讯表：
 - 爬虫会重抓、会改标题、会下线重上，若用内部 id 关联，重抓一次互动数据就全丢了；
@@ -37,7 +37,7 @@ class CampusArticleSocial(Base):
     # title/source/image_url 是创建时对资讯做的快照：资讯源可能临时抓取失败或下线，
     # 有了快照，互动列表（如「我的点赞」）仍能展示标题与封面，不必回源。
     title: Mapped[str] = mapped_column(String(200), default="")
-    source: Mapped[str] = mapped_column(String(30), default="")      # jwc_jxdt/jwc_tzgg/college_news/library ...
+    source: Mapped[str] = mapped_column(String(30), default="")      # jwc_jxdt/jwc_tzgg/college_news ...
     image_url: Mapped[str | None] = mapped_column(String(500), default=None)
     like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     favorite_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -88,7 +88,7 @@
     <ActionSheet v-model="searchVisible" title="搜索校园资讯" width="600px">
       <el-input
         v-model="searchKeyword"
-        placeholder="搜索资讯标题，如：图书馆、放假、招聘……"
+        placeholder="搜索资讯标题，如：放假、招聘、奖学金……"
         :prefix-icon="Search"
         clearable
         @keyup.enter="runSearch"
@@ -144,8 +144,8 @@
          与下方信息流共用同一份数据，切换只是换 filter，不重新请求。
          滚动说明：页头与 Tab 一起吸顶（Tab 粘在页头下沿），滚到信息流任何位置都能
          直接切分类；两者叠成一个白色顶栏，不会在信息流上方切出两条分离的悬浮条。
-         不放条数角标：7 个分类在 390px 宽下已超出首屏、需要横向滑动，
-         再加数字只会把「图书馆」推得更远，却没有滑动暗示。
+         不放条数角标：6 个分类在 390px 宽下已超出首屏、需要横向滑动，
+         再加数字只会把后面的 Tab 推得更远，却没有滑动暗示。
          分类口径：移动端不展示「高教信息」（见 MOBILE_HIDDEN_SOURCES），
          所以这里比桌面端卡片少一栏 —— 桌面端「高教信息」卡片保留不变。
          「推荐」= 原「全部」合并流；「关注」为新增 Tab，数据源待接（见 itemsOfTab）。 -->
@@ -604,8 +604,8 @@
       </div>
     </section>
 
-    <!-- ⑤ 绵城印象 + 图书馆 -->
-    <section class="campus-duo campus-duo-lib">
+    <!-- ⑤ 绵城印象 -->
+    <section class="campus-duo">
       <div class="campus-card campus-card-impression" v-tilt>
         <div class="card-head">
           <span class="card-title"><el-icon><OfficeBuilding /></el-icon> 绵城印象</span>
@@ -619,19 +619,6 @@
               <span class="impression-desc">{{ item.desc }}</span>
             </div>
             <el-icon class="impression-arrow"><ArrowRight /></el-icon>
-          </a>
-        </div>
-      </div>
-      <div class="campus-card campus-card-library" v-tilt>
-        <div class="card-head">
-          <span class="card-title"><el-icon><Reading /></el-icon> 图书馆公告</span>
-          <a v-if="libraryHome" class="card-more" :href="libraryHome" @click.prevent="openArticle(libraryHome, '图书馆')">进入官网 →</a>
-        </div>
-        <div class="lib-list">
-          <!-- 移动端统一展示 5 条（与教学动态/通知公告列表一致）；桌面端维持 4 条 -->
-          <a v-for="a in impression.library.slice(0, 4)" :key="a.title" class="lib-item" :href="a.url" @click.prevent="openArticle(a.url, a.title)">
-            <span class="lib-date">{{ formatDate(a.date) }}</span>
-            <span class="lib-title">{{ a.title }}</span>
           </a>
         </div>
       </div>
@@ -890,13 +877,9 @@ const impression = computed(() => {
     tzgg: bySource('jwc_tzgg'),
     gjxx: bySource('jwc_gjxx'),
     jxjs: bySource('jwc_jxjs'),
-    library: bySource('library'),
     collegeNews: groupCollegeNews(all),
   }
 })
-
-/** 图书馆官网入口：取自后端抓取结果（域名可用 .env 的 LIBRARY_SITE_URL 覆盖）；无数据时不展示死链 */
-const libraryHome = computed(() => impression.value.library[0]?.url || '')
 
 function groupCollegeNews(all: ImpressionItem[]): Record<string, ImpressionItem[]> {
   const map: Record<string, ImpressionItem[]> = {}
@@ -1114,7 +1097,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 // ---------------- 头部搜索 ----------------
 
-const SEARCH_HOT_KEYWORDS = ['图书馆', '放假', '招聘', '奖学金', '讲座']
+const SEARCH_HOT_KEYWORDS = ['放假', '招聘', '奖学金', '讲座']
 
 /** source 字段 → 中文名：搜索结果每条都标出来源，用户才知道点进去是什么 */
 const SOURCE_LABELS: Record<string, string> = {
@@ -1124,7 +1107,6 @@ const SOURCE_LABELS: Record<string, string> = {
   jwc_gjxx: '高教信息',
   jwc_jxjs: '教学建设',
   college_news: '学院动态',
-  library: '图书馆',
 }
 
 interface NewsHit {
@@ -1291,7 +1273,7 @@ const carouselImages = computed(() => galleryImages)
  * 'following' 是「关注」：只放用户关注的栏目 / 来源的资讯 ——
  *   关注关系与数据源尚未接入，当前 itemsOfTab 固定返回空数组、页面走空态，
  *   后续接后端时只改 itemsOfTab 一处即可（轮播仍只属于推荐页，见 heroSlidesOf）。
- * 其余 5 个与桌面端卡片一一对应：教学动态 / 通知公告 / 教学建设 / 学院动态 / 图书馆。
+ * 其余 4 个与桌面端卡片一一对应：教学动态 / 通知公告 / 教学建设 / 学院动态。
  * 「高教信息」不设 Tab：移动端信息流不展示该栏目的内容（见 itemsOfTab），
  * 与桌面端「高教信息」卡片并列的只剩「教学建设」，那条桌面布局保持不变。
  */
@@ -1302,7 +1284,6 @@ type FeedTabKey =
   | 'jwc_tzgg'
   | 'jwc_jxjs'
   | 'college_news'
-  | 'library'
   | 'favorites'
   | 'ai_resources'
 
@@ -1313,7 +1294,6 @@ const FEED_TABS: { key: FeedTabKey; label: string }[] = [
   { key: 'jwc_tzgg', label: '通知公告' },
   { key: 'jwc_jxjs', label: '教学建设' },
   { key: 'college_news', label: '学院动态' },
-  { key: 'library', label: '图书馆' },
   { key: 'favorites', label: '收藏' },
   { key: 'ai_resources', label: 'AI资源' },
 ]
@@ -1348,7 +1328,7 @@ function itemsOfTab(key: FeedTabKey): ImpressionItem[] {
   return deduplicateByTitle(all.filter(i => i.source === key)).sort(byDateDesc)
 }
 
-/** Tab 列表（只含 key/label）：条数不放在 Tab 上 —— 7 个分类 × 数字会把「图书馆」挤出首屏 */
+/** Tab 列表（只含 key/label）：条数不放在 Tab 上 —— 6 个分类 × 数字会把后面的 Tab 挤出首屏 */
 const mobileTabs = computed(() => FEED_TABS)
 
 /**
@@ -2649,7 +2629,7 @@ onMounted(() => {
 /* ===== Section ===== */
 .campus-section { margin-bottom: 24px; }
 /* 区块标题与卡片标题（.card-title）同一口径：15px/700 + 3px 蓝色竖条 + 8px 内距。
-   原先这里用 4px 圆角小竖条 + 16px/600，与页内「通知公告 / 专业分院 / 图书馆公告」
+   原先这里用 4px 圆角小竖条 + 16px/600，与页内「通知公告 / 专业分院」
    等卡片标题两种观感，故统一。 */
 .section-title {
   font-size: 15px; font-weight: 700; color: #1a1a2e;
@@ -2918,8 +2898,8 @@ onMounted(() => {
 /* 「专业分院」是 .campus-page 的直接子元素，被上面那条
    `.campus-page > * { padding-left/right: 0 }` 抹掉了左右内边距 ——
    而它内部的 .card-head 并不自带内边距，结果是标题贴着卡片左边缘，
-   与嵌在 .campus-duo-lib 里、保住了 .campus-card 的 16px 18px 的
-   「图书馆公告」标题不齐。
+   与嵌在 .campus-duo 里、保住了 .campus-card 的 16px 18px 的
+   「绵城印象」标题不齐。
     只补 .card-head 的左右内边距（而非整个 section）：.card-body 自己已有
     20px 左右内边距，若加在 section 上会叠加成 38px，桌面端学院网格会内缩。 */
 .campus-card-college { margin-bottom: 22px; }
@@ -3008,44 +2988,6 @@ onMounted(() => {
 }
 .impression-row:hover .impression-arrow {
   transform: translateX(3px);
-  color: #409eff;
-}
-
-/* ===== Library ===== */
-.campus-card-library { flex: 0.8; }
-.lib-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.lib-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px dashed #ebeef5;
-  cursor: pointer;
-  transition: background .2s ease;
-}
-.lib-item:last-child { border-bottom: none; }
-.lib-item:hover { background: #ecf5ff; }
-.lib-date {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: #7a8694;
-  width: 45px;
-  text-align: center;
-}
-.lib-title {
-  flex: 1;
-  font-size: 13px;
-  color: #42505f;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color .2s ease;
-}
-.lib-item:hover .lib-title {
   color: #409eff;
 }
 
@@ -3698,7 +3640,7 @@ onMounted(() => {
   }
 
   /* 页头与内容：移动端所有卡片版式（轮播 / 入口宫格 / 教学动态 / 专业分院 /
-     绵城印象 / 图书馆）都包在桌面端 <template v-if="!isMobile"> 里，不再渲染，
+     绵城印象）都包在桌面端 <template v-if="!isMobile"> 里，不再渲染，
      因此这里无需再为它们写移动端覆盖样式；
      若后续要恢复某个卡片到移动端，把它移出该 template 并在此补样式即可。 */
 }

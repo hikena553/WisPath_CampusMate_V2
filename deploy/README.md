@@ -1,5 +1,10 @@
 # Smart Campus 部署手册（Docker Compose）
 
+> 首次把服务搬到云服务器、并需要把本地 SQLite 数据一起迁过去时，
+> 请先看 **[上云部署与数据迁移.md](./上云部署与数据迁移.md)**（含服务器初始化、
+> 生产 `.env` 配置、`scripts/db_migrate.py` 数据搬运与核对流程）。
+> 本文档聚焦 compose 本身的启动、持久化与升级。
+
 ## 1. 前置要求
 
 - Docker Engine 20.10+ / Docker Desktop

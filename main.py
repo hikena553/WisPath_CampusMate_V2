@@ -23,6 +23,7 @@
 """
 import atexit
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -133,6 +134,35 @@ def _assign_to_job(pid: int) -> None:
 
 
 
+def _enable_ansi() -> None:
+    """让父控制台渲染 ANSI 颜色码。
+
+    本启动器用 subprocess.PIPE 接管子进程 stdout，子进程 isatty() 恒为 False，
+    uvicorn / vite 因此把日志降级成纯文本（这就是"错误日志全是白色"的原因）。
+    修法分两步：子进程强制输出颜色（--use-colors / FORCE_COLOR=1），父进程这边
+    再把 Windows 控制台的 VT 处理打开，否则父进程 print 出来的就是 `←[31m` 乱码。
+    """
+    if not _IS_WINDOWS:
+        return
+    try:
+        import colorama
+
+        colorama.just_fix_windows_console()
+        return
+    except (ImportError, OSError, AttributeError):
+        pass
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    except (OSError, AttributeError):  # pragma: no cover - 老控制台/重定向场景
+        pass
+
+
 class Service:
     """一个被托管的子进程（后端/前端）。"""
 
@@ -147,6 +177,9 @@ class Service:
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
+        # stdout 是管道，子进程（vite/uvicorn/node）会误判为"非终端"而关闭颜色
+        env["FORCE_COLOR"] = "1"
+        env["CLICOLOR_FORCE"] = "1"
         self.proc = subprocess.Popen(
             cmd,
             cwd=cwd,
@@ -193,14 +226,17 @@ backend = Service("backend", "backend.out.log")
 frontend = Service("frontend", "frontend.out.log")
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
 def _pump(name, pipe, log_path):
-    """把子进程输出双写到控制台和日志文件。"""
+    """把子进程输出双写到控制台和日志文件（控制台带色，文件去色便于 grep）。"""
     try:
         with open(log_path, "a", encoding="utf-8", errors="replace") as f:
             f.write(f"\n===== {name} 启动于 {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
             f.flush()
             for line in iter(pipe.readline, ""):
-                f.write(line)
+                f.write(_ANSI_RE.sub("", line))
                 f.flush()
                 try:
                     sys.stdout.write(line)
@@ -299,6 +335,9 @@ def _backend_cmd() -> list[str]:
     cmd = [
         sys.executable, "-m", "uvicorn", "app.main:app",
         "--host", "127.0.0.1", "--port", str(BACKEND_PORT),
+        # stdout 被重定向到管道时 uvicorn 默认按 isatty() 关闭颜色，
+        # ERROR/INFO 一律白字，500 堆栈在满屏白字里根本跳不出来
+        "--use-colors",
     ]
     if RELOAD:
         # 只监控业务代码目录：避免 .venv / logs / *.db 变更引发无谓重启
@@ -365,6 +404,7 @@ for _sig in (signal.SIGINT, signal.SIGTERM):
 
 
 def main() -> int:
+    _enable_ansi()
     print("=" * 56)
     print("  智慧校园AI服务平台 - 启动中")
     print("=" * 56)

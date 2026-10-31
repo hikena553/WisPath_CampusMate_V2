@@ -66,6 +66,40 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False)
 
 
+# 控制台按级别着色：满屏 JSON 里 ERROR/CRITICAL 是白字，500 堆栈根本跳不出来。
+# 只影响 console handler（人看），文件 handler 仍输出纯 JSON（机器解析），
+# 落盘内容不带 ANSI 转义，grep / jq 不受影响。
+_LEVEL_COLORS = {
+    logging.DEBUG: "\033[90m",     # 灰
+    logging.INFO: "\033[36m",      # 青
+    logging.WARNING: "\033[33m",   # 黄
+    logging.ERROR: "\033[31m",     # 红
+    logging.CRITICAL: "\033[1;41m",  # 白字红底
+}
+_RESET = "\033[0m"
+
+
+def _console_color_enabled() -> bool:
+    """是否给控制台加色：尊重 NO_COLOR，并支持父进程强制（启动器走管道）。"""
+    if os.getenv("NO_COLOR"):
+        return False
+    if os.getenv("FORCE_COLOR", "").lower() not in ("", "0", "false"):
+        return True
+    try:
+        return sys.stdout.isatty()
+    except (AttributeError, ValueError):  # pragma: no cover
+        return False
+
+
+class ColorJsonFormatter(JsonFormatter):
+    """按日志级别整行着色的 JSON 格式化器（仅用于控制台）。"""
+
+    def format(self, record: logging.LogRecord) -> str:
+        line = super().format(record)
+        color = _LEVEL_COLORS.get(record.levelno)
+        return f"{color}{line}{_RESET}" if color else line
+
+
 def _build_file_handler() -> logging.Handler | None:
     """构造轮转文件 handler；不可写时返回 None（不影响服务启动）。"""
     if os.getenv("LOG_TO_FILE", "1") == "0":
@@ -99,7 +133,7 @@ def setup_logging() -> None:
         level = logging.INFO
 
     console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(JsonFormatter())
+    console.setFormatter(ColorJsonFormatter() if _console_color_enabled() else JsonFormatter())
 
     root = logging.getLogger()
     root.setLevel(level)

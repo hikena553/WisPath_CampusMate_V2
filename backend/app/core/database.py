@@ -2,28 +2,55 @@ from urllib.parse import urlparse
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import settings
 
 _IS_SQLITE = settings.DATABASE_URL.startswith("sqlite")
 
+# MySQL 错误码：1049 = Unknown database（目标库不存在）
+_MYSQL_UNKNOWN_DATABASE = 1049
+
 
 def _ensure_database():
-    """确保数据库存在，支持 SQLite 和 MySQL。"""
+    """确保数据库存在，支持 SQLite 和 MySQL。
+
+    MySQL 分支不能无脑执行 CREATE DATABASE：云托管实例（RDS/CDB）和 docker
+    compose 里的应用账号通常只被授予「某个库」的权限，建库语句会直接
+    1044 Access denied，把整个应用启动带崩。所以这里先探测目标库能否直连，
+    只有明确返回 1049（Unknown database）时才真正去建库。
+    """
     if _IS_SQLITE:
         # SQLite: 确保数据库目录存在
         db_path = settings.DATABASE_URL.replace("sqlite:///", "")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    else:
-        # MySQL: 连接时不指定数据库，自动创建目标数据库（如不存在）
-        parsed = urlparse(settings.DATABASE_URL)
-        db_name = parsed.path.lstrip("/")
-        base_url = settings.DATABASE_URL.rsplit("/", 1)[0]
-        tmp_engine = create_engine(base_url)
+        return
+
+    probe = create_engine(settings.DATABASE_URL)
+    try:
+        with probe.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return  # 目标库已就绪，无需建库
+    except OperationalError as exc:
+        errno = getattr(getattr(exc, "orig", None), "args", (None,))[0]
+        if errno != _MYSQL_UNKNOWN_DATABASE:
+            # 密码错（1045）、网络不通（2003）等，直接抛出更明确的原始错误，
+            # 不要吞掉后去建库、把真实原因掩盖成权限问题
+            raise
+    finally:
+        probe.dispose()
+
+    # 走到这里说明目标库确实不存在：尝试创建（要求账号有全局 CREATE 权限）
+    parsed = urlparse(settings.DATABASE_URL)
+    db_name = parsed.path.lstrip("/")
+    base_url = settings.DATABASE_URL.rsplit("/", 1)[0]
+    tmp_engine = create_engine(base_url)
+    try:
         with tmp_engine.connect() as conn:
             conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
             conn.commit()
+    finally:
         tmp_engine.dispose()
 
 

@@ -35,6 +35,7 @@ from app.core.middleware import (
     CsrfProtectionMiddleware,
     RequestLogMiddleware,
 )
+from app.core.schema_guard import repair_missing_columns
 from app.tasks.periodic import start_periodic_tasks, stop_periodic_tasks
 
 # 结构化 JSON 日志（可观测性 p4_1）：级别由 LOG_LEVEL 环境变量控制（默认 INFO）
@@ -150,6 +151,12 @@ async def lifespan(app: FastAPI):
     init_sentry_if_configured()
     # 迁移：先保证表结构就绪（SQLite 并发写入撞车时自动重试，避免启动即崩）
     _with_retry(run_migrations, label="数据库迁移")
+    # schema 对账：alembic 版本号已是 head 但真实表少列（备份恢复/手工 stamp）时，
+    # 运行期会 `no such column` 整片 500 且迁移永远修不到，这里启动即补齐并告警
+    try:
+        repair_missing_columns()
+    except Exception as exc:  # noqa: BLE001 - 自愈失败只告警，不阻断启动
+        logger.error("schema 对账异常（不影响启动）: %s", exc)
     # 初始化种子数据（幂等）
     _with_retry(lambda: importlib.import_module("app.seed"), label="种子数据初始化")
     # 启动后台周期任务，退出时统一回收

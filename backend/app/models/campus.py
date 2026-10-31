@@ -21,11 +21,11 @@ class CampusScenery(Base):
 
 
 class CampusImpressionItem(Base):
-    """教务处/学院/图书馆爬取结果统一存储"""
+    """教务处/学院爬取结果统一存储"""
     __tablename__ = "campus_impression_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    source: Mapped[str] = mapped_column(String(20), index=True)      # jwc_entries/jwc_jxdt/jwc_tzgg/jwc_gjxx/jwc_jxjs/college_news/library
+    source: Mapped[str] = mapped_column(String(20), index=True)      # jwc_entries/jwc_jxdt/jwc_tzgg/jwc_gjxx/jwc_jxjs/college_news
     college_key: Mapped[str | None] = mapped_column(String(50), index=True, default=None)
     title: Mapped[str] = mapped_column(String(200))
     image_url: Mapped[str | None] = mapped_column(String(500), default=None)

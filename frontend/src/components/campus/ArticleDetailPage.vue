@@ -338,7 +338,6 @@ const SOURCE_LABELS: Record<string, string> = {
   jwc_gjxx: '高教信息',
   jwc_jxjs: '教学建设',
   college_news: '学院动态',
-  library: '图书馆',
 }
 
 const visible = ref(false)

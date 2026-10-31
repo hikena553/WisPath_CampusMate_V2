@@ -742,13 +742,12 @@ const HOT_TABS = [
   { key: 'jwc_tzgg', label: '通知公告' },
   { key: 'jwc_jxjs', label: '教学建设' },
   { key: 'college_news', label: '学院动态' },
-  { key: 'library', label: '图书馆' },
 ] as const
 
 const hotTab = ref<string>('all')
 
 const hotTabNavRef = ref<HTMLElement | null>(null)
-/** 只用于测量，刻意不进响应式：六个按钮的位置在渲染后量一次就够，放进 ref 数组每帧都要 diff */
+/** 只用于测量，刻意不进响应式：五个按钮的位置在渲染后量一次就够，放进 ref 数组每帧都要 diff */
 const hotTabEls: HTMLElement[] = []
 
 function setHotTabRef(el: unknown, i: number) {
