@@ -105,16 +105,30 @@ cd backend
 # 安装依赖
 pip install -r requirements.txt
 
-# 配置环境变量（编辑 .env）
-# DATABASE_URL=mysql+pymysql://root:password@localhost:3306/smart_campus
+# 配置环境变量（编辑 backend/.env，模板见 backend/.env.example）
+# 运行时账号（无 DDL 权限）：应用日常连接用它
+# DATABASE_URL=mysql+pymysql://campus_rw:password@localhost:3306/smart_campus?charset=utf8mb4
+# 迁移账号（有 DDL 权限）：仅 Alembic 迁移与启动期 schema 对账使用
+# MIGRATION_DATABASE_URL=mysql+pymysql://campus_ddl:password@localhost:3306/smart_campus?charset=utf8mb4
+# 启动时是否自动迁移：单机 true；多副本/流水线发布改成 false
+# AUTO_MIGRATE=true
 # LLM_API_KEY=your-dashscope-api-key
 
-# 初始化数据库（会自动建表）
+# 首次接入：建库 + 迁移到 head（可选 --accounts 顺带建最小权限账号）
+# 建表只由 Alembic 迁移完成，任何手工 DDL 都会让别人库里缺东西
+python scripts/db_bootstrap.py --init
+
+# 每次拉完代码后自检：库结构与仓库迁移是否一致，不一致返回 1 并列出缺什么
+python scripts/db_bootstrap.py --check
+
+# 初始化业务数据
 python -m app.seed
 
 # 启动开发服务器
 uvicorn app.main:app --reload
 ```
+
+> 数据库规范、数据字典与遗留表下线评估都在 `docs/`：`数据库规范.md`（硬约束 + 多人协作流程）、`数据库数据字典.md`（由脚本生成，勿手改）、`遗留表下线评估.md`。
 
 #### 前端
 

@@ -53,6 +53,10 @@ pip-delete-this-directory.txt
 !.env.example
 backend/.env
 
+# 数据库备份（含真实用户数据，切勿入库）
+backup/
+*.sql.gz
+
 # ---------- Node / Frontend (Vue 3 + Vite) ----------
 node_modules/
 .pnp/
@@ -169,7 +173,12 @@ frontend/e2e/
 *.db
 
 # ---------- Docs (excluded from repo) ----------
-docs/
+# 设计稿 / 评审页仍不入库，但「数据库规范 / 数据字典 / 遗留表下线评估」是团队的
+# 强制约束与 schema 投影，必须进仓库 —— 否则每个人的库会各自漂移。
+docs/*
+!docs/数据库规范.md
+!docs/数据库数据字典.md
+!docs/遗留表下线评估.md
 
 # ---------- Vendored backend deps / planning docs (not for repo) ----------
 backend/vendor_packages/
@@ -208,8 +217,11 @@ _acl_recovery/
 _cleanup_backup_*/
 
 # ---------- Local voice / settings debug scripts & uv output (added 2026-10-09) ----------
-# 排查语音音色与系统设置时产生的一次性脚本、日志与探测输出，与 _probe*.py 同类，不入库
-backend/scripts/
+# 排查语音音色与系统设置时产生的一次性脚本、日志与探测输出，与 _probe*.py 同类，不入库。
+# 例外：db_*.py 是数据库规范化工具（建账号 / 生成字典 / 遗留表审计 / 接入自检），
+# 属于团队共用资产，必须进仓库 —— 否则别人无法复现同一套库。
+backend/scripts/*
+!backend/scripts/db_*.py
 backend/uv.out
 backend/uv.err
 
