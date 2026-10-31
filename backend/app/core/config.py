@@ -2,13 +2,22 @@ from os import environ
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 
 class Settings(BaseSettings):
     # 运行环境：development / production（限流 TESTING 旁路等仅开发环境生效）
     ENV: str = "development"
+    # 应用运行时连接串：应对应只有 DML 权限的账号（campus_rw），无法改表结构
     DATABASE_URL: str = ""
+    # 结构变更连接串：仅供 Alembic 迁移与 schema 对账使用，需 DDL 权限（campus_ddl）。
+    # 留空则回落到 DATABASE_URL（单账号开发机的兼容行为）。
+    MIGRATION_DATABASE_URL: str = ""
+    # 启动时是否自动执行 alembic upgrade head。
+    #   本地/单机可部署：True（开箱即跑）
+    #   多实例/流水线发布：False，迁移由发布步骤用 campus_ddl 单独执行一次，
+    #   否则 N 个副本同时 upgrade 会互相抢 DDL 锁、并让「迁移失败」变成「整个服务起不来」。
+    AUTO_MIGRATE: bool = True
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
@@ -79,9 +88,38 @@ class Settings(BaseSettings):
             raise ValueError("LLM_BASE_URL 未配置")
         return v
 
+    @model_validator(mode="after")
+    def force_migration_url_when_testing(self) -> "Settings":
+        """测试态强制迁移连接串跟随 DATABASE_URL。
+
+        为什么需要这道闸：迁移连接串是独立字段，测试如果把 DATABASE_URL 换成
+        SQLite、却忘了同步换 MIGRATION_DATABASE_URL，.env 里的真实 MySQL DDL 账号
+        就会被 Alembic 和 schema_guard 拿去用 —— 表现为「跑一次 pytest，生产库被
+        ALTER 了一轮」。这是静默事故，没有任何报错会提示你。
+
+        所以不依赖测试代码记得改两处，而是在配置层直接按 TESTING 常量兜死。
+        """
+        if environ.get("TESTING"):
+            self.MIGRATION_DATABASE_URL = self.DATABASE_URL
+        return self
+
     @property
     def llm_api_key(self) -> str:
         return self.LLM_API_KEY or environ.get("OPENAI_API_KEY", "")
+
+    @property
+    def migration_database_url(self) -> str:
+        """迁移连接串：优先 MIGRATION_DATABASE_URL，未配置则回落运行时连接串。
+
+        回落是为了兼容「单账号开发机」——但不建议生产这么做，理由见 §5 账号矩阵：
+        应用进程一旦拿到 DDL 账号，任何注入点都能 DROP TABLE。
+        """
+        return (self.MIGRATION_DATABASE_URL or "").strip() or self.DATABASE_URL
+
+    @property
+    def uses_separate_migration_account(self) -> bool:
+        """运行时与迁移是否使用不同账号（用于启动日志提示权限边界）。"""
+        return self.migration_database_url != self.DATABASE_URL
 
     @property
     def llm_native_base(self) -> str:

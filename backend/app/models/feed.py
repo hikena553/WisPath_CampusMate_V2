@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, Integer, DateTime, JSON, UniqueConstraint, Boolean
+from sqlalchemy import String, Text, Integer, DateTime, JSON, UniqueConstraint, Boolean, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -32,7 +32,11 @@ class ExternalFeedItem(Base):
     """外部资讯条目：AI 论文 / 开源项目榜 / 智能体榜 / 权威要闻，快照式存储按 URL 去重"""
 
     __tablename__ = "external_feed_items"
-    __table_args__ = (UniqueConstraint("link", name="uq_feed_link"),)
+    __table_args__ = (
+        UniqueConstraint("link", name="uq_feed_link"),
+        # 分类标签页：WHERE source_type=? ORDER BY published_at DESC
+        Index("ix_external_feed_items_type_published", "source_type", "published_at", "id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source_type: Mapped[str] = mapped_column(String(20), index=True, comment="papers/agents/opensource/news")

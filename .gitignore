@@ -52,6 +52,10 @@ pip-delete-this-directory.txt
 !.env.example
 backend/.env
 
+# 数据库备份（含真实用户数据，切勿入库）
+backup/
+*.sql.gz
+
 # ---------- Node / Frontend (Vue 3 + Vite) ----------
 node_modules/
 .pnp/
@@ -176,8 +180,10 @@ frontend/e2e/
 *.db
 
 # ---------- Docs ----------
-# 设计稿 / 方案 / 接口说明属于项目资产，docs/ 正常入库。
-# 仅排除构建产物与编辑器缓存（docs/_build/ 已在上面「Docs build artifacts」声明）
+# 设计稿 / 方案 / 接口说明 / 数据库规范与字典都属项目资产，docs/ 整体入库。
+# 不上「docs/*」整目录忽略：那样每加一份文档都要回来补一条 ! 白名单，
+# 漏补时 git status 完全看不见，等于静默吞文件（数据库规范 / 字典就是这样被漏掉的）。
+# 仅排除编辑器与构建产物。
 docs/.obsidian/
 docs/.vuepress/dist/
 
@@ -228,8 +234,9 @@ deck/out/
 deck/.animtest/
 
 # ---------- Local voice / settings debug scripts & uv output (added 2026-10-09) ----------
-# 只忽略「排查用」的一次性脚本；backend/scripts/ 下的正式工具（如 db_migrate.py）必须入库，
-# 之前整目录忽略把数据库迁移脚本一起吞掉了
+# 只忽略「排查用」的一次性脚本；backend/scripts/ 下的正式工具必须入库。
+# 不上「backend/scripts/* + !db_*.py」白名单：新加一个 export_*.py / check_*.py 时
+# 会被静默忽略，git status 看不见 —— db_migrate.py 当初就是这样差点没提交上去。
 backend/scripts/_*.py
 backend/scripts/*probe*.py
 backend/scripts/*_shot*.py

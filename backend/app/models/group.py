@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import String, Text, DateTime, ForeignKey, Boolean, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -36,3 +36,8 @@ class GroupMessage(Base):
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        # 群消息拉取 + 「最后一条消息」聚合：WHERE group_id=? ORDER BY created_at
+        Index("ix_group_messages_group_created", "group_id", "created_at"),
+    )

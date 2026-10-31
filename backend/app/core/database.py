@@ -4,10 +4,14 @@ from pathlib import Path
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.engine import Engine
 
 from app.core.config import settings
 
 _IS_SQLITE = settings.DATABASE_URL.startswith("sqlite")
+
+# 结构变更专用连接串：优先 MIGRATION_DATABASE_URL（DDL 账号），未配置则同运行时
+_MIGRATION_URL = settings.migration_database_url
 
 # MySQL 错误码：1049 = Unknown database（目标库不存在）
 _MYSQL_UNKNOWN_DATABASE = 1049
@@ -20,14 +24,17 @@ def _ensure_database():
     compose 里的应用账号通常只被授予「某个库」的权限，建库语句会直接
     1044 Access denied，把整个应用启动带崩。所以这里先探测目标库能否直连，
     只有明确返回 1049（Unknown database）时才真正去建库。
+
+    探测与建库都走**迁移连接串**而不是运行时连接串：运行时账号（campus_rw）
+    按规范没有 CREATE 权限，用它建库必然 1044；用 DDL 账号才有意义。
     """
-    if _IS_SQLITE:
+    if _MIGRATION_URL.startswith("sqlite"):
         # SQLite: 确保数据库目录存在
-        db_path = settings.DATABASE_URL.replace("sqlite:///", "")
+        db_path = _MIGRATION_URL.replace("sqlite:///", "")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         return
 
-    probe = create_engine(settings.DATABASE_URL)
+    probe = create_engine(_MIGRATION_URL)
     try:
         with probe.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -42,13 +49,13 @@ def _ensure_database():
         probe.dispose()
 
     # 走到这里说明目标库确实不存在：尝试创建（要求账号有全局 CREATE 权限）
-    parsed = urlparse(settings.DATABASE_URL)
+    parsed = urlparse(_MIGRATION_URL)
     db_name = parsed.path.lstrip("/")
-    base_url = settings.DATABASE_URL.rsplit("/", 1)[0]
+    base_url = _MIGRATION_URL.rsplit("/", 1)[0]
     tmp_engine = create_engine(base_url)
     try:
         with tmp_engine.connect() as conn:
-            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"))
             conn.commit()
     finally:
         tmp_engine.dispose()
@@ -88,6 +95,35 @@ if _IS_SQLITE:
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+_migration_engine: Engine | None = None
+
+
+def get_migration_engine() -> Engine:
+    """返回结构变更（DDL）专用 engine，供 Alembic 之外的自愈逻辑复用。
+
+    为什么单独建池：运行时账号 campus_rw 没有 ALTER/CREATE 权限，任何
+    `ALTER TABLE ... ADD COLUMN` 用它执行都会 1142；而 schema_guard 的职责
+    恰恰是补列。两套账号各用一个连接池，权限边界才不会被打穿。
+
+    未配置 MIGRATION_DATABASE_URL 时直接复用主 engine（单账号开发机的兼容路径），
+    此时不会额外产生第二个连接池。
+    """
+    global _migration_engine
+    if _MIGRATION_URL == settings.DATABASE_URL:
+        return engine
+    if _migration_engine is None:
+        # DDL 连接是低频、串行的：池子给 2 个足够，避免 DDL 账号长期占用大量连接
+        _migration_engine = create_engine(
+            _MIGRATION_URL,
+            pool_pre_ping=True,
+            pool_size=2,
+            max_overflow=2,
+            pool_recycle=1800,
+        )
+    return _migration_engine
+
 
 
 class Base(DeclarativeBase):

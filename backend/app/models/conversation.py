@@ -1,4 +1,4 @@
-from sqlalchemy import String, Text, Boolean, DateTime, Enum as SAEnum, ForeignKey
+from sqlalchemy import String, Text, Boolean, DateTime, Enum as SAEnum, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime, timezone
 import enum
@@ -49,6 +49,11 @@ class Conversation(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        # 会话列表：WHERE user_id=? ORDER BY updated_at DESC
+        Index("ix_conversations_user_updated", "user_id", "updated_at"),
+    )
 
 
 class ConversationMessage(Base):

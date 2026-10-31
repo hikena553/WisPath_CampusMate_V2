@@ -1,5 +1,5 @@
 from datetime import date
-from sqlalchemy import String, Text, Date, Integer, Boolean, Enum as SAEnum
+from sqlalchemy import String, Text, Date, Integer, Boolean, Enum as SAEnum, Index
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
 
@@ -46,6 +46,11 @@ class GrowthRecord(Base):
     # 成果
     achievement_type: Mapped[str | None] = mapped_column(String(50))
     achievement_name: Mapped[str | None] = mapped_column(String(300))
+
+    __table_args__ = (
+        # 按学生 + 类型筛选成长记录并按日期排序：WHERE student_id=? AND type=? ORDER BY date
+        Index("ix_growth_records_student_type_date", "student_id", "type", "date"),
+    )
 
 
 class StudentProject(Base):
