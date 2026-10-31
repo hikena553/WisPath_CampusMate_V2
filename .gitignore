@@ -45,7 +45,6 @@ nosetests.xml
 # Python environment / packaging
 pip-log.txt
 pip-delete-this-directory.txt
-.pytest_cache/
 
 # Environment / secret config (keep .env.example tracked!)
 .env
@@ -95,7 +94,6 @@ backend/wechat_mp_build/
 # Backend logs
 backend/logs/
 logs/
-*.log
 
 # ---------- Editor / IDE ----------
 .idea/
@@ -126,20 +124,25 @@ site/
 .tmp/
 tmp/
 *.tmp
-.cache/
 
 # ---------- Internal agent / tooling data (not for public repo) ----------
 .workbuddy/
 .trae/
 .trae-html-share-packages/
+# AI 协作说明属于本机工作约定（含账号口令表等本机信息），保持不入库
 CLAUDE.md
+AGENTS.md
+AGENT.md
 # Brainstorm 可视化预览会话（本地 mockup 持久化目录）
 .superpowers/
 
 # ---------- Local probe / one-off scripts / ML model binaries ----------
 backend/_probe*.py
 backend/probe_*.py
-backend/models/
+# 只忽略模型二进制，不能整目录忽略：backend/models/ 若将来放 Python 包会被静默吞掉
+backend/models/*.pt
+backend/models/*.onnx
+backend/models/*.pth
 
 # ML 表情识别模块：只保留「最终结果模型」，训练过程 / 测试页面 / 数据集全部不入库
 #   保留：frontend/public/models/ 下的模型文件（最终交付物，前端运行时依赖）
@@ -152,6 +155,10 @@ backend/ml/data/
 backend/ml/runs/
 backend/ml/*.pt
 backend/ml/*.y4m
+# 训练用预训练权重（COCO YOLO 等）仅 ml 训练脚本本地使用，属训练资产，不入库。
+# 之前漏了这两条，导致 backend/yolov8n.pt、backend/weights/yolo26n.pt 被误加进版本库
+backend/*.pt
+backend/weights/
 
 # 浏览器测试页面（非业务代码，仅用于实测与调试）
 frontend/demo/
@@ -168,8 +175,11 @@ frontend/e2e/
 *.sqlite3
 *.db
 
-# ---------- Docs (excluded from repo) ----------
-docs/
+# ---------- Docs ----------
+# 设计稿 / 方案 / 接口说明属于项目资产，docs/ 正常入库。
+# 仅排除构建产物与编辑器缓存（docs/_build/ 已在上面「Docs build artifacts」声明）
+docs/.obsidian/
+docs/.vuepress/dist/
 
 # ---------- Vendored backend deps / planning docs (not for repo) ----------
 backend/vendor_packages/
@@ -180,9 +190,13 @@ campusmate-audit/
 绵小城语音通话改造方案.html
 
 # ---------- Generated runtime junk (added 2026-10-08 cleanup) ----------
-# Backend temp files written by tooling / libraries (random 8-char names, zero or "blat" content)
-backend/tmp*
-backend/[0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z]
+# pip / 工具运行时落下的临时文件。必须限定「tmp + 小写字母数字开头」：
+# 用 backend/tmp* 会连 tmp_utils.py 这类正常模块一起吞掉（下划线不在此字符类内）
+backend/tmp[0-9a-z]*
+# 同理，8 位随机名的垃圾逐个列名，禁止用 backend/[0-9a-z]{8} 通配 ——
+# 那条通配会吞掉 backend/fixtures、backend/settings 这类正常目录且 git status 完全看不见
+backend/p9r2qmnc
+backend/xhafxrox
 # jieba runtime cache (9 MB, regenerated on demand)
 backend/jieba.cache
 # pytest cache dirs that appear when the default cache dir is unwritable
@@ -199,17 +213,26 @@ frontend/probe-*.png
 frontend/real-*.png
 
 # ---------- Working snapshots / audit material (keep on disk, out of git) ----------
+# campus-cockpit/（数据大屏原型：.design + 页面 + 校验报告）已改为入库，不再忽略
 out/
 _recovery_audit/
-campus-cockpit/
 _cleanup_backup_manifest.txt
 _acl_recovery/
 # 清理时临时移出的浏览器 profile / 截图 / DOM dump 备份目录（本机快照，不入库）
 _cleanup_backup_*/
+# 拉取代码丢改动事故的恢复备份（IDE shelf 补丁 / 工作区快照，本机证据，不入库）
+_recover_backup/
+# 宣传片工程的渲染产物（mp4 / pptx 成品约 38M），脚本与文案照常入库
+deck/out/
+# 动画调试时的临时 dump / 试渲染中间件，不是产物也不是源码
+deck/.animtest/
 
 # ---------- Local voice / settings debug scripts & uv output (added 2026-10-09) ----------
-# 排查语音音色与系统设置时产生的一次性脚本、日志与探测输出，与 _probe*.py 同类，不入库
-backend/scripts/
+# 只忽略「排查用」的一次性脚本；backend/scripts/ 下的正式工具（如 db_migrate.py）必须入库，
+# 之前整目录忽略把数据库迁移脚本一起吞掉了
+backend/scripts/_*.py
+backend/scripts/*probe*.py
+backend/scripts/*_shot*.py
 backend/uv.out
 backend/uv.err
 
