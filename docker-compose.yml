@@ -13,7 +13,9 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
     command:
       - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
+      # 与本地开发库、database.py 建库语句保持一致：MySQL 8 默认 utf8mb4_0900_ai_ci
+      # （unicode_ci 排序规则更老，二者混用会导致 JOIN 时 "Illegal mix of collations"）
+      - --collation-server=utf8mb4_0900_ai_ci
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
@@ -32,6 +34,14 @@ services:
     environment:
       ENV: production
       DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-smart_campus}?charset=utf8mb4
+      # 迁移连接串：留空即回落到 DATABASE_URL（容器首次初始化时 MYSQL_USER 拿到的是该库
+      # ALL PRIVILEGES，单容器部署能跑通）。要落实「应用账号无 DDL 权限」，就在这里填
+      # 独立的 campus_ddl 连接串，并按 docs/数据库规范.md §5 建账号矩阵。
+      # 不用嵌套默认值是刻意的：compose 对 ${A:-${B}} 这类嵌套展开支持不稳定。
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
+      # 单容器 true；要水平扩容到多副本时必须改 false，迁移改成发布流水线里的一次性步骤，
+      # 否则 N 个副本并发 upgrade 会抢 DDL 锁、且任何一个失败都会让该副本起不来。
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
       SECRET_KEY: ${SECRET_KEY:?请在 .env 中设置 SECRET_KEY（至少 32 位随机串）}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1}

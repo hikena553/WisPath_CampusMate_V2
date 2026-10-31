@@ -102,12 +102,30 @@ def run_migrations() -> None:
     """启动时执行数据库迁移（alembic upgrade head），保证 schema 与代码版本一致。
 
     schema 的唯一事实源是 alembic/versions 下的迁移脚本；应用不再调用 create_all。
+
+    账号边界：迁移走 MIGRATION_DATABASE_URL（campus_ddl，有 DDL 权限），
+    运行时走 DATABASE_URL（campus_rw，只有 DML 权限）。分离后即使应用被注入也改不了
+    表结构；代价是「谁能改表」必须显式配置，不能再靠应用自己顺手做掉。
+
+    AUTO_MIGRATE=false 时整体跳过：多副本部署下 N 个进程同时 upgrade 会抢同一把
+    DDL 锁，且某个副本迁移失败就直接起不来（而不是等流水线回滚）。
     """
+    if not settings.AUTO_MIGRATE:
+        logger.info(
+            "AUTO_MIGRATE=false：跳过启动期迁移。"
+            "请由发布流水线以 DDL 账号执行 alembic upgrade head（见 docs/数据库规范.md §9）"
+        )
+        return
+
     from alembic import command
     from alembic.config import Config
 
     backend_dir = Path(__file__).resolve().parent.parent
     cfg = Config(str(backend_dir / "alembic.ini"))
+    logger.info(
+        "执行数据库迁移 head（连接账号：%s）",
+        "独立迁移账号" if settings.uses_separate_migration_account else "与运行时同账号",
+    )
     command.upgrade(cfg, "head")
     # alembic/env.py 会调用 logging.config.fileConfig(alembic.ini)：根 logger 的 handler
     # 与 level 会被 ini 里的配置整体替换（WARNING + 文本格式 + stderr），

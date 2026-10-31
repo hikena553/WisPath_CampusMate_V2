@@ -37,6 +37,10 @@ os.environ["TESTING"] = "1"
 os.environ["ENV"] = "development"
 os.environ["SECRET_KEY"] = "test-secret-key-0123456789abcdef0123456789abcdef"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB.as_posix()}"
+# 必须同步覆盖迁移连接串：只改 DATABASE_URL 的话，MIGRATION_DATABASE_URL 会从
+# .env 读到真实的 MySQL DDL 账号，于是 pytest 的迁移与 schema 对账会直接打到
+# **生产库**（并可能执行 ALTER TABLE）。两行必须成对出现。
+os.environ["MIGRATION_DATABASE_URL"] = f"sqlite:///{TEST_DB.as_posix()}"
 os.environ.setdefault("LLM_API_KEY", "test-llm-key")
 
 # ── 3. 之后才导入 app 模块 ────────────────────────────────────────────────

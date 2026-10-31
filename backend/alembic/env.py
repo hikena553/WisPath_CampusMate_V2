@@ -9,11 +9,17 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-# 数据库 URL 统一由应用配置（DATABASE_URL 环境变量 / .env）注入，
-# 避免在 alembic.ini 中硬编码连接凭据。优先于 ini 中的 sqlalchemy.url。
+# 数据库 URL 统一由应用配置注入，避免在 alembic.ini 中硬编码连接凭据。
+# 优先 MIGRATION_DATABASE_URL（DDL 账号 campus_ddl）：迁移要做 CREATE/ALTER/DROP，
+# 运行时账号 campus_rw 没有这些权限，用它会直接 1142；未配置该变量时回落到
+# DATABASE_URL，保持单账号开发机可用。
 from app.core.config import settings
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# ConfigParser 会把 % 当插值语法，URL 里的 %（如密码含 urlencode 字符）必须转义，
+# 否则 set_main_option 抛 InterpolationSyntaxError。
+config.set_main_option(
+    "sqlalchemy.url", settings.migration_database_url.replace("%", "%%")
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
