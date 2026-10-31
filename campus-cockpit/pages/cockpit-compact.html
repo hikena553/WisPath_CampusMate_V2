@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>移动驾驶舱 - 紧凑版</title>
+    <style id="theme-vars">
+/* =============================================================
+   绵小城 · 移动驾驶舱 — 品牌 Token（清爽升级版）
+   Prefix: mc   |   Single brand hue: blue
+   ============================================================= */
+
+:root,
+html.light {
+  /* --- Surfaces --- */
+  --mc-background: #f2f5fb;
+  --mc-foreground: #16203a;
+  --mc-card: #ffffff;
+  --mc-card-foreground: #16203a;
+  --mc-popover: #ffffff;
+  --mc-popover-foreground: #16203a;
+  --mc-muted: #eef1f8;
+  --mc-muted-foreground: #6b7690;
+  --mc-border: #e3e8f3;
+  --mc-input: #e3e8f3;
+  --mc-ring: #2f6fed;
+
+  /* --- Brand (single hue) --- */
+  --mc-primary: #2f6fed;
+  --mc-primary-foreground: #ffffff;
+  --mc-primary-soft: #e8f0ff;
+  --mc-primary-softer: #f3f7ff;
+  --mc-primary-strong: #1f57cc;
+  --mc-primary-track: #e0e7f6;
+
+  /* --- Text steps --- */
+  --mc-ink-2: #5a647e;
+  --mc-ink-3: #97a0b6;
+
+  /* --- Status (semantic only) --- */
+  --mc-state-success: #16a34a;
+  --mc-state-success-soft: #e7f6ec;
+  --mc-state-warning: #d97706;
+  --mc-state-warning-soft: #fdf3e3;
+  --mc-state-error: #dc2626;
+  --mc-state-info: #2f6fed;
+
+  /* --- Radius --- */
+  --mc-radius-sm: 8px;
+  --mc-radius-md: 12px;
+  --mc-radius-lg: 16px;
+  --mc-radius-pill: 999px;
+
+  /* --- Shadow (subtle, alpha <= 0.05 for static surfaces) --- */
+  --mc-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --mc-shadow-md: 0 10px 26px -14px rgba(15, 23, 42, 0.18);
+
+  /* --- Type --- */
+  --mc-font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "HarmonyOS Sans SC",
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mc-font-num: "Inter", "PingFang SC", system-ui, sans-serif;
+
+  /* --- Spacing rhythm --- */
+  --mc-gap-block: 14px;
+  --mc-pad-card: 16px;
+  --mc-safe-bottom: 72px;
+}
+
+html.dark {
+  --mc-background: #10131c;
+  --mc-foreground: #e9edf6;
+  --mc-card: #191e2b;
+  --mc-card-foreground: #e9edf6;
+  --mc-popover: #191e2b;
+  --mc-popover-foreground: #e9edf6;
+  --mc-muted: #222838;
+  --mc-muted-foreground: #9aa3ba;
+  --mc-border: #2a3244;
+  --mc-input: #2a3244;
+  --mc-ring: #5b8dff;
+  --mc-primary: #5b8dff;
+  --mc-primary-foreground: #0d1220;
+  --mc-primary-soft: #1d2740;
+  --mc-primary-softer: #181f30;
+  --mc-primary-strong: #82a8ff;
+  --mc-primary-track: #26304a;
+  --mc-ink-2: #b3bcd2;
+  --mc-ink-3: #7c86a0;
+  --mc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --mc-shadow-md: 0 12px 28px -16px rgba(0, 0, 0, 0.6);
+}
+
+html,
+body {
+  font-family: var(--mc-font-sans);
+  background: var(--mc-background);
+  color: var(--mc-foreground);
+}
+
+/* Typographic helper classes (optional, token-sourced) */
+.mc-num {
+  font-family: var(--mc-font-num);
+  font-variant-numeric: tabular-nums;
+}
+.mc-display {
+  font-size: 34px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.mc-h2 {
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.mc-body {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.mc-caption {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mc-ink-3);
+}
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--mc-background);
+    --color-foreground: var(--mc-foreground);
+    --color-card: var(--mc-card);
+    --color-card-foreground: var(--mc-card-foreground);
+    --color-popover: var(--mc-popover);
+    --color-popover-foreground: var(--mc-popover-foreground);
+    --color-primary: var(--mc-primary);
+    --color-primary-foreground: var(--mc-primary-foreground);
+    --color-muted: var(--mc-muted);
+    --color-muted-foreground: var(--mc-muted-foreground);
+    --color-border: var(--mc-border);
+    --color-input: var(--mc-input);
+    --color-ring: var(--mc-ring);
+    --radius-sm: var(--mc-radius-sm);
+    --radius-md: var(--mc-radius-md);
+    --radius-lg: var(--mc-radius-lg);
+  }
+  @layer base {
+    body { background: var(--mc-background); color: var(--mc-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-background { background-color: var(--mc-background); }
+      .text-background { color: var(--mc-background); }
+      .border-background { border-color: var(--mc-background); }
+      .ring-background { --tw-ring-color: var(--mc-background); }
+      .bg-foreground { background-color: var(--mc-foreground); }
+      .text-foreground { color: var(--mc-foreground); }
+      .border-foreground { border-color: var(--mc-foreground); }
+      .ring-foreground { --tw-ring-color: var(--mc-foreground); }
+      .bg-card { background-color: var(--mc-card); }
+      .text-card { color: var(--mc-card); }
+      .border-card { border-color: var(--mc-card); }
+      .ring-card { --tw-ring-color: var(--mc-card); }
+      .bg-card-foreground { background-color: var(--mc-card-foreground); }
+      .text-card-foreground { color: var(--mc-card-foreground); }
+      .border-card-foreground { border-color: var(--mc-card-foreground); }
+      .ring-card-foreground { --tw-ring-color: var(--mc-card-foreground); }
+      .bg-popover { background-color: var(--mc-popover); }
+      .text-popover { color: var(--mc-popover); }
+      .border-popover { border-color: var(--mc-popover); }
+      .ring-popover { --tw-ring-color: var(--mc-popover); }
+      .bg-popover-foreground { background-color: var(--mc-popover-foreground); }
+      .text-popover-foreground { color: var(--mc-popover-foreground); }
+      .border-popover-foreground { border-color: var(--mc-popover-foreground); }
+      .ring-popover-foreground { --tw-ring-color: var(--mc-popover-foreground); }
+      .bg-primary { background-color: var(--mc-primary); }
+      .text-primary { color: var(--mc-primary); }
+      .border-primary { border-color: var(--mc-primary); }
+      .ring-primary { --tw-ring-color: var(--mc-primary); }
+      .bg-primary-foreground { background-color: var(--mc-primary-foreground); }
+      .text-primary-foreground { color: var(--mc-primary-foreground); }
+      .border-primary-foreground { border-color: var(--mc-primary-foreground); }
+      .ring-primary-foreground { --tw-ring-color: var(--mc-primary-foreground); }
+      .bg-muted { background-color: var(--mc-muted); }
+      .text-muted { color: var(--mc-muted); }
+      .border-muted { border-color: var(--mc-muted); }
+      .ring-muted { --tw-ring-color: var(--mc-muted); }
+      .bg-muted-foreground { background-color: var(--mc-muted-foreground); }
+      .text-muted-foreground { color: var(--mc-muted-foreground); }
+      .border-muted-foreground { border-color: var(--mc-muted-foreground); }
+      .ring-muted-foreground { --tw-ring-color: var(--mc-muted-foreground); }
+      .bg-border { background-color: var(--mc-border); }
+      .text-border { color: var(--mc-border); }
+      .border-border { border-color: var(--mc-border); }
+      .ring-border { --tw-ring-color: var(--mc-border); }
+      .bg-input { background-color: var(--mc-input); }
+      .text-input { color: var(--mc-input); }
+      .border-input { border-color: var(--mc-input); }
+      .ring-input { --tw-ring-color: var(--mc-input); }
+      .bg-ring { background-color: var(--mc-ring); }
+      .text-ring { color: var(--mc-ring); }
+      .border-ring { border-color: var(--mc-ring); }
+      .ring-ring { --tw-ring-color: var(--mc-ring); }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+    <main class="cockpit">
+      <style id="critical-layout">
+        .cockpit {
+          width: min(100%, 460px);
+          margin-inline: auto;
+          padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          background: var(--mc-background);
+          min-height: 100vh;
+        }
+        .cockpit section { min-width: 0; }
+
+        /* Card base (white card + 1px token border, no static shadow) */
+        .card {
+          background: var(--mc-card);
+          border: 1px solid var(--mc-border);
+          border-radius: var(--mc-radius-lg);
+          padding: 13px;
+        }
+        .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+        .card-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--mc-foreground); }
+        .card-title-icon { display: inline-flex; align-items: center; gap: 6px; }
+        .card-title-icon .ic-18 { color: var(--mc-primary); }
+        .card-cap { flex: none; font-size: 11px; color: var(--mc-ink-3); white-space: nowrap; }
+
+        /* Brand header merged into first card */
+        .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; min-width: 0; }
+        .brand-badge { width: 26px; height: 26px; border-radius: 7px; object-fit: cover; flex: none; }
+        .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+        .ai-chip {
+          margin-left: auto; flex: none;
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 3px 9px; border-radius: var(--mc-radius-pill);
+          background: var(--mc-primary-soft); color: var(--mc-primary);
+          font-size: 11px; font-weight: 600; white-space: nowrap;
+        }
+        .ai-chip-dot { width: 6px; height: 6px; border-radius: var(--mc-radius-pill); background: var(--mc-primary); }
+
+        /* Growth ring + merged KPI column */
+        .growth-main { display: flex; align-items: center; gap: 13px; }
+        .ring-wrap { position: relative; width: 104px; height: 104px; flex: none; }
+        .ring { display: block; width: 100%; height: 100%; }
+        .ring-track { stroke: var(--mc-primary-track); }
+        .ring-progress { stroke: url(#mcRingGrad); animation: mc-ring-in 1.1s cubic-bezier(.22,.61,.36,1) both; }
+        .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+        .ring-value { font-size: 30px; line-height: 1; font-weight: 800; letter-spacing: -0.03em; }
+        .ring-label { font-size: 11px; color: var(--mc-ink-3); }
+        .kpi-list { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+        .kpi-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; min-width: 0; }
+        .kpi-row + .kpi-row { border-top: 1px solid var(--mc-border); }
+        .kpi-label { font-size: 12px; color: var(--mc-ink-2); white-space: nowrap; }
+        .kpi-value { flex: none; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+        .growth-desc { margin: 10px 0 0; font-size: 12px; color: var(--mc-ink-2); }
+
+        /* Five dimensions (compressed rows, single brand hue steps) */
+        .dim-list { list-style: none; margin: 0; padding: 0; }
+        .dim-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+        .dim-row + .dim-row { border-top: 1px solid var(--mc-border); }
+        .dim-name { flex: none; width: 56px; font-size: 13px; color: var(--mc-ink-2); white-space: nowrap; }
+        .dim-track { flex: 1 1 auto; min-width: 0; height: 7px; border-radius: var(--mc-radius-pill); background: var(--mc-primary-track); overflow: hidden; }
+        .dim-fill { display: block; height: 100%; border-radius: var(--mc-radius-pill); background: var(--mc-primary); transform-origin: left center; animation: mc-bar-in .8s cubic-bezier(.22,.61,.36,1) both; }
+        .dim-value { flex: none; width: 26px; text-align: right; font-size: 13px; font-weight: 600; }
+
+        /* Academic entry rows (44px, dividers, no sub-cards) */
+        .link-list { display: flex; flex-direction: column; }
+        .link-row {
+          display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px;
+          color: inherit; text-decoration: none; border-radius: var(--mc-radius-md);
+          transition: background-color .18s ease, transform .18s ease;
+        }
+        .link-row + .link-row { border-top: 1px solid var(--mc-border); }
+        .link-icon { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: var(--mc-primary); }
+        .link-title { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
+        .link-chevron { flex: none; color: var(--mc-ink-3); }
+        .link-row:hover { background: var(--mc-muted); }
+        .link-row:active { transform: scale(.99); }
+        .link-row:focus-visible { outline: 2px solid var(--mc-ring); outline-offset: 2px; }
+
+        /* Quick space grid (3 cols x 2 rows, icon + 11px label only) */
+        .space-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; column-gap: 6px; }
+        .space-item {
+          display: flex; flex-direction: column; align-items: center; gap: 5px;
+          padding: 4px 2px; border-radius: var(--mc-radius-md);
+          text-decoration: none; color: inherit;
+          transition: background-color .18s ease, transform .18s ease;
+        }
+        .space-icon { display: inline-flex; align-items: center; justify-content: center; color: var(--mc-primary); }
+        .space-label { font-size: 11px; line-height: 1.2; color: var(--mc-ink-2); white-space: nowrap; }
+        .space-item:hover { background: var(--mc-muted); }
+        .space-item:active { transform: scale(.96); }
+        .space-item:focus-visible { outline: 2px solid var(--mc-ring); outline-offset: 2px; }
+
+        /* AI compact strip */
+        .icon-btn {
+          flex: none; width: 28px; height: 28px;
+          display: inline-flex; align-items: center; justify-content: center;
+          border: 1px solid var(--mc-border); border-radius: var(--mc-radius-md);
+          background: var(--mc-card); color: var(--mc-ink-2); cursor: pointer;
+          transition: background-color .18s ease, color .18s ease, transform .18s ease;
+        }
+        .icon-btn:hover { background: var(--mc-muted); color: var(--mc-primary); }
+        .icon-btn:active { transform: scale(.92) rotate(-30deg); }
+        .icon-btn:focus-visible { outline: 2px solid var(--mc-ring); outline-offset: 2px; }
+        .insight-list { display: flex; flex-direction: column; }
+        .insight-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; min-width: 0; }
+        .insight-row + .insight-row { border-top: 1px solid var(--mc-border); }
+        .pill { flex: none; display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--mc-radius-pill); font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .pill-warning { background: var(--mc-state-warning-soft); color: var(--mc-state-warning); }
+        .pill-primary { background: var(--mc-primary-soft); color: var(--mc-primary); }
+        .insight-text { margin: 0; flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--mc-ink-2); }
+        .insight-strong { font-weight: 600; color: var(--mc-foreground); }
+
+        /* Bottom nav (static fallback for the canonical nav markup) */
+        .cockpit [data-mobile-nav] { display: block; height: 64px; margin-top: 2px; }
+        .cockpit [data-mobile-nav] > div {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          align-items: center;
+          gap: 2px;
+          width: 100%;
+          max-width: 28rem;
+          height: 100%;
+          margin-inline: auto;
+          padding-inline: 6px;
+          background: var(--mc-card);
+          border: 1px solid var(--mc-border);
+          border-radius: var(--mc-radius-lg);
+        }
+        .tab-item {
+          display: flex; flex-direction: column; align-items: center; gap: 4px;
+          padding: 4px 2px; border-radius: var(--mc-radius-md);
+          text-decoration: none; color: var(--mc-ink-3);
+          transition: color .18s ease;
+        }
+        .tab-icon { width: 22px; height: 22px; }
+        .tab-label { font-size: 10.5px; line-height: 1.2; white-space: nowrap; }
+        .tab-item:hover { color: var(--mc-ink-2); }
+        .tab-item[data-active="true"] { color: var(--mc-primary); font-weight: 600; }
+
+        /* Icon sizing */
+        .ic-15 { width: 15px; height: 15px; }
+        .ic-18 { width: 18px; height: 18px; }
+        .ic-20 { width: 20px; height: 20px; }
+        .ic-22 { width: 22px; height: 22px; }
+
+        /* Motion */
+        @keyframes mc-bar-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @keyframes mc-ring-in { from { stroke-dashoffset: 326.73; } to { stroke-dashoffset: 58.81; } }
+
+        @media (prefers-reduced-motion: reduce) {
+          .dim-fill, .ring-progress { animation: none; }
+          .link-row, .space-item, .icon-btn, .tab-item { transition: none; }
+          .link-row:active, .space-item:active, .icon-btn:active { transform: none; }
+        }
+
+        @media (min-width: 640px) {
+          .cockpit { padding-inline: 18px; }
+        }
+      </style>
+
+      <!-- 1. Growth overview (brand header + ring + KPI merged) -->
+      <section id="sec-growth" class="card" aria-label="成长概览">
+        <div class="brand-row">
+          <img src="../assets/brand-badge.png" alt="绵小城校徽" class="brand-badge">
+          <span class="brand-name">绵小城</span>
+          <span class="ai-chip" aria-label="AI 在线">
+            <span class="ai-chip-dot" aria-hidden="true"></span>
+            AI 在线
+          </span>
+        </div>
+        <div class="growth-main">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="成长指数 82 分">
+              <defs>
+                <linearGradient id="mcRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:var(--mc-primary)"></stop>
+                  <stop offset="100%" style="stop-color:var(--mc-primary-strong)"></stop>
+                </linearGradient>
+              </defs>
+              <circle class="ring-track" cx="60" cy="60" r="52" fill="none" stroke-width="10"></circle>
+              <circle class="ring-progress" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="326.73" stroke-dashoffset="58.81"></circle>
+            </svg>
+            <div class="ring-center">
+              <span class="ring-value mc-num">82</span>
+              <span class="ring-label">成长指数</span>
+            </div>
+          </div>
+          <div class="kpi-list">
+            <div class="kpi-row">
+              <span class="kpi-label">成长记录</span>
+              <span class="kpi-value mc-num">26</span>
+            </div>
+            <div class="kpi-row">
+              <span class="kpi-label">技能素养</span>
+              <span class="kpi-value mc-num">8</span>
+            </div>
+            <div class="kpi-row">
+              <span class="kpi-label">综合评分</span>
+              <span class="kpi-value mc-num">82</span>
+            </div>
+          </div>
+        </div>
+        <p class="growth-desc truncate">稳步上升 · 超过同年级 68% 同学</p>
+      </section>
+
+      <!-- 2. Five dimensions -->
+      <section id="sec-dimension" class="card" aria-label="五维成长">
+        <div class="card-head">
+          <h3 class="card-title">五维成长</h3>
+          <span class="card-cap">综合评分构成</span>
+        </div>
+        <ul class="dim-list">
+          <li class="dim-row">
+            <span class="dim-name">学业成绩</span>
+            <span class="dim-track"><span class="dim-fill" style="width:88%; opacity:1"></span></span>
+            <span class="dim-value mc-num">88</span>
+          </li>
+          <li class="dim-row">
+            <span class="dim-name">实践能力</span>
+            <span class="dim-track"><span class="dim-fill" style="width:76%; opacity:.8"></span></span>
+            <span class="dim-value mc-num">76</span>
+          </li>
+          <li class="dim-row">
+            <span class="dim-name">综合素养</span>
+            <span class="dim-track"><span class="dim-fill" style="width:80%; opacity:.9"></span></span>
+            <span class="dim-value mc-num">80</span>
+          </li>
+          <li class="dim-row">
+            <span class="dim-name">身心健康</span>
+            <span class="dim-track"><span class="dim-fill" style="width:72%; opacity:.72"></span></span>
+            <span class="dim-value mc-num">72</span>
+          </li>
+          <li class="dim-row">
+            <span class="dim-name">创新能力</span>
+            <span class="dim-track"><span class="dim-fill" style="width:69%; opacity:.66"></span></span>
+            <span class="dim-value mc-num">69</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- 3. Academic entries -->
+      <section id="sec-academic" class="card" aria-label="我的学业">
+        <div class="card-head">
+          <h3 class="card-title">我的学业</h3>
+          <span class="card-cap">一键直达</span>
+        </div>
+        <div class="link-list">
+          <a class="link-row" href="#" aria-label="课程表">
+            <span class="link-icon"><i data-lucide="calendar" class="ic-20" aria-hidden="true"></i></span>
+            <span class="link-title truncate">课程表</span>
+            <i data-lucide="chevron-right" class="ic-18 link-chevron" aria-hidden="true"></i>
+          </a>
+          <a class="link-row" href="#" aria-label="成绩分析">
+            <span class="link-icon"><i data-lucide="trending-up" class="ic-20" aria-hidden="true"></i></span>
+            <span class="link-title truncate">成绩分析</span>
+            <i data-lucide="chevron-right" class="ic-18 link-chevron" aria-hidden="true"></i>
+          </a>
+          <a class="link-row" href="#" aria-label="成长轨迹">
+            <span class="link-icon"><i data-lucide="route" class="ic-20" aria-hidden="true"></i></span>
+            <span class="link-title truncate">成长轨迹</span>
+            <i data-lucide="chevron-right" class="ic-18 link-chevron" aria-hidden="true"></i>
+          </a>
+        </div>
+      </section>
+
+      <!-- 4. Quick space -->
+      <section id="sec-space" class="card" aria-label="快捷空间">
+        <div class="card-head">
+          <h3 class="card-title">快捷空间</h3>
+          <span class="card-cap">常用服务</span>
+        </div>
+        <div class="space-grid">
+          <a class="space-item" href="#" aria-label="学习计划">
+            <span class="space-icon"><i data-lucide="target" class="ic-22" aria-hidden="true"></i></span>
+            <span class="space-label truncate whitespace-nowrap">学习计划</span>
+          </a>
+          <a class="space-item" href="#" aria-label="作品集">
+            <span class="space-icon"><i data-lucide="folder-open" class="ic-22" aria-hidden="true"></i></span>
+            <span class="space-label truncate whitespace-nowrap">作品集</span>
+          </a>
+          <a class="space-item" href="#" aria-label="成长档案">
+            <span class="space-icon"><i data-lucide="notebook" class="ic-22" aria-hidden="true"></i></span>
+            <span class="space-label truncate whitespace-nowrap">成长档案</span>
+          </a>
+          <a class="space-item" href="#" aria-label="情绪树洞">
+            <span class="space-icon"><i data-lucide="heart-handshake" class="ic-22" aria-hidden="true"></i></span>
+            <span class="space-label truncate whitespace-nowrap">情绪树洞</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- 5. AI insights (compact strip) -->
+      <section id="sec-ai" class="card" aria-label="AI 主动发现">
+        <div class="card-head">
+          <h3 class="card-title card-title-icon">
+            <i data-lucide="sparkles" class="ic-18" aria-hidden="true"></i>AI 主动发现
+          </h3>
+          <button type="button" class="icon-btn" aria-label="刷新">
+            <i data-lucide="refresh-cw" class="ic-15" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="insight-list">
+          <div class="insight-row">
+            <span class="pill pill-warning">温馨提醒</span>
+            <p class="insight-text line-clamp-1"><span class="insight-strong">高数成绩回落</span> · 高等数学(下) 期中较上学期下滑 6 分，建议本周复盘。</p>
+          </div>
+          <div class="insight-row">
+            <span class="pill pill-primary">值得关注</span>
+            <p class="insight-text line-clamp-1"><span class="insight-strong">成长档案待更新</span> · 已连续 3 周未更新，补充项目经历可提升综合评分。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tabbar (canonical global nav) -->
+      <nav class="h-[64px]" data-mobile-nav="global" aria-label="主导航"><div class="w-full max-w-md mx-auto grid grid-cols-5 h-full items-center gap-0.5 rounded-[var(--mc-radius-lg)] border border-[var(--mc-border)] bg-[var(--mc-card)] px-1.5"><a class="tab-item" href="#" data-nav-key="campus"><i data-lucide="compass" class="tab-icon" aria-hidden="true"></i><span class="tab-label truncate whitespace-nowrap">校园资讯</span></a><a class="tab-item" href="#" data-nav-key="schedule" data-active="true"><i data-lucide="gauge" class="tab-icon" aria-hidden="true"></i><span class="tab-label truncate whitespace-nowrap">驾驶舱</span></a><a class="tab-item tab-center" href="#" data-nav-key="agent"><i data-lucide="school" class="tab-icon" aria-hidden="true"></i><span class="tab-label truncate whitespace-nowrap">绵小城</span></a><a class="tab-item" href="#" data-nav-key="workbench"><i data-lucide="layout-grid" class="tab-icon" aria-hidden="true"></i><span class="tab-label truncate whitespace-nowrap">工作台</span></a><a class="tab-item" href="#" data-nav-key="profile"><i data-lucide="user" class="tab-icon" aria-hidden="true"></i><span class="tab-label truncate whitespace-nowrap">个人中心</span></a></div></nav>
+    </main>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

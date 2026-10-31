@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "repairedPages": [
+    {
+      "htmlSrc": "pages/cockpit.html",
+      "action": "replace-data-mobile-nav-global",
+      "activeKey": "schedule"
+    }
+  ],
+  "skippedPages": [],
+  "failedPages": [],
+  "repairCount": 1,
+  "previousFailedReportDetected": false,
+  "checkedAt": "2026-10-03T19:14:30.305Z"
+}

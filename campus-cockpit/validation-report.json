@@ -1,0 +1,141 @@
+{
+  "success": false,
+  "outcome": "terminal_stop",
+  "repairable": false,
+  "terminalViolations": [
+    "validationHistory has 5 full validation run(s), max allowed is 4"
+  ],
+  "terminalBlockingSummary": {
+    "terminalState": "validation-budget-exhausted",
+    "nextAction": "stop_and_report_blocking_summary",
+    "violations": [
+      "validationHistory has 5 full validation run(s), max allowed is 4"
+    ]
+  },
+  "skillProvenance": {
+    "name": "solo-design",
+    "version": "2026.08.06.19.15.08",
+    "version_source": "skill-release-manifest.json",
+    "runtime_skill_dir": null,
+    "recorded_at": null,
+    "expected_version": "2026.08.06.19.15.08",
+    "status": "matched",
+    "read_status": "ok"
+  },
+  "operatingMode": "free-explore",
+  "renderBlockingErrorCount": 0,
+  "softWarningCount": 11,
+  "renderBlockingErrors": [],
+  "errorSignatures": [],
+  "softWarnings": [
+    "[repair-ledger] validationRepairLedger[] has 3 entries; retry_or_repair_loop risk should be reviewed",
+    "[repair-ledger] validationRepairLedger[0].repairActions[0].preEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[0].repairActions[0].postEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[1].repairActions[0].preEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[1].repairActions[0].postEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[2].repairActions[0].preEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[2].repairActions[0].postEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[2].revalidationReportPath is missing",
+    "[repair-ledger] validationRepairLedger[2].revalidationReportHash is missing",
+    "[repair-ledger] validationRepairLedger[2].revalidationSuccess should be a boolean",
+    "[validation-discipline] validationHistory has 5 full validation run(s), max allowed is 4"
+  ],
+  "repairPlanHints": [],
+  "repairActionTable": [],
+  "errorCount": 0,
+  "warningCount": 11,
+  "errors": [],
+  "warnings": [
+    "[repair-ledger] validationRepairLedger[] has 3 entries; retry_or_repair_loop risk should be reviewed",
+    "[repair-ledger] validationRepairLedger[0].repairActions[0].preEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[0].repairActions[0].postEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[1].repairActions[0].preEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[1].repairActions[0].postEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[2].repairActions[0].preEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[2].repairActions[0].postEditFileHashes[] is missing (legacy optional evidence)",
+    "[repair-ledger] validationRepairLedger[2].revalidationReportPath is missing",
+    "[repair-ledger] validationRepairLedger[2].revalidationReportHash is missing",
+    "[repair-ledger] validationRepairLedger[2].revalidationSuccess should be a boolean",
+    "[validation-discipline] validationHistory has 5 full validation run(s), max allowed is 4"
+  ],
+  "validationRunDisciplineStatus": {
+    "declared": true,
+    "restoreMode": false,
+    "maxFullValidationRuns": 4,
+    "validationHistoryCount": 5,
+    "repairLedgerCount": 3,
+    "softWarningsTriggerRepair": false,
+    "terminalState": "validation-budget-exhausted",
+    "nextAction": "stop_and_report_blocking_summary",
+    "violations": [
+      "validationHistory has 5 full validation run(s), max allowed is 4"
+    ],
+    "success": false
+  },
+  "terminalState": "validation-budget-exhausted",
+  "nextCheck": {
+    "type": "stop",
+    "reason": "validation-budget-exhausted",
+    "command": null
+  },
+  "repairBatch": [],
+  "repairContextPacket": {
+    "schema_version": "1.0",
+    "purpose": "terminal stop packet; do not repair",
+    "success": false,
+    "outcome": "terminal_stop",
+    "repairable": false,
+    "terminalViolations": [
+      "validationHistory has 5 full validation run(s), max allowed is 4"
+    ],
+    "terminalBlockingSummary": {
+      "terminalState": "validation-budget-exhausted",
+      "nextAction": "stop_and_report_blocking_summary",
+      "violations": [
+        "validationHistory has 5 full validation run(s), max allowed is 4"
+      ]
+    },
+    "terminalState": "validation-budget-exhausted",
+    "skillProvenance": {
+      "name": "solo-design",
+      "version": "2026.08.06.19.15.08",
+      "version_source": "skill-release-manifest.json",
+      "runtime_skill_dir": null,
+      "recorded_at": null,
+      "expected_version": "2026.08.06.19.15.08",
+      "status": "matched",
+      "read_status": "ok"
+    },
+    "renderBlockingErrorCount": 0,
+    "softWarningCount": 11,
+    "renderBlockingErrors": [],
+    "repairActionTable": [],
+    "repairPlanHints": [],
+    "nextCheck": {
+      "type": "stop",
+      "command": null,
+      "fullValidationAllowed": false,
+      "reason": "validation-budget-exhausted",
+      "nextAction": "stop_and_report_blocking_summary"
+    },
+    "forbidden": [
+      "do not repair ledger",
+      "do not delete validation state",
+      "do not rerun validation",
+      "do not read validator source"
+    ]
+  },
+  "projectFileHashes": {
+    "campus-cockpit.design": "d3cb8d7e27c9f9dd345ab348f9e1604ef5079984b5ca9c93ace0354716a5078b",
+    "colors_and_type.css": "60e627e5c82b8bb1d9c844fe92c4fcd9432e5f2452958c13005c2c5f11c15282",
+    "runtime-orchestration-summary.json": "3e7900ea36e25b9d5066fbfdcdabdab202abb80f82803d8cb8556bac3ac7d69a",
+    "pages/cockpit-compact.html": "ef647c5f5fccb4c51c95d77ad73cc270612293b3ed25f171f51db8e45a19e200",
+    "pages/cockpit.html": "0ec8efcedce92c0a201063855891c0952fc323ff534cb55c4e828bf37587ed17",
+    "assets/brand-badge.png": "24b27f2ea6d67b7a258e8ad59c68bbfc9a2ef47a6e4395ddf514163d7a8a79ba",
+    "assets/mascot.png": "b0cbe2037afa6696fd2f1d0348a015f7eb382e3635cb8e357155a00eab323db9"
+  },
+  "designDir": "e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit",
+  "expectedPages": 2,
+  "requireInteractions": null,
+  "checkedAt": "2026-10-03T19:24:50.104Z"
+}

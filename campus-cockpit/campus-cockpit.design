@@ -1,0 +1,98 @@
+{
+  "data": [
+    {
+      "id": "page-cockpit",
+      "title": "移动驾驶舱",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1791055000000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0,
+        "deviceType": "freeSize",
+        "windowSize": {
+          "width": 497,
+          "height": 1591
+        },
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1592,
+          "viewportWidth": 497,
+          "sourceHash": "fnv1a-fa1188b3",
+          "measuredAt": 1791054911336
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/cockpit.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-cockpit-compact",
+      "title": "移动驾驶舱 · 正式版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1791056000000,
+      "canvasData": {
+        "x": 580,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1058,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-a7023ecd",
+          "measuredAt": 1791055323884
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/cockpit-compact.html",
+        "interactions": [],
+        "supersedesPageId": "page-cockpit"
+      }
+    },
+    {
+      "id": "image-001",
+      "title": "校徽徽标",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1791055000000,
+      "canvasData": {
+        "x": 0,
+        "y": 346,
+        "naturalSize": {
+          "width": 311,
+          "height": 286
+        }
+      },
+      "devMetadata": {
+        "imageSrc": "assets/brand-badge.png"
+      }
+    },
+    {
+      "id": "image-002",
+      "title": "绵小城吉祥物",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1791055000000,
+      "canvasData": {
+        "x": 180,
+        "y": 348,
+        "naturalSize": {
+          "width": 180,
+          "height": 197
+        }
+      },
+      "devMetadata": {
+        "imageSrc": "assets/mascot.png"
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": false,
+    "deviceType": "mobile",
+    "projectName": "绵小城 · 移动驾驶舱",
+    "visualEditorEnabled": true
+  }
+}
