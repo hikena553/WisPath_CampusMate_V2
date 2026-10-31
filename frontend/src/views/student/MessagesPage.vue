@@ -1,7 +1,27 @@
 <template>
   <div class="msg-page no-dock-inset">
-    <!-- 移动端吸顶栏：与其它学生页统一走 SubPageHeader -->
-    <SubPageHeader v-if="isMobile" title="消息" fallback="/student" />
+    <!-- 移动端页头：消息是底部导航的一级 Tab，故不套 SubPageHeader（子页头带返回箭头）。
+         「消息 / 好友」两枚并排标题就是本页的两个主视图，点击切换 ——
+         下划线滑条与文字随条染色复用 SlidingTabs（与校园资讯分类 Tab 同一套动画）；
+         两个主视图之外的「互动」收成右侧一枚星标图标，不再和两个大标题抢位置。 -->
+    <header v-if="isMobile" class="msg-appbar">
+      <SlidingTabs
+        class="msg-appbar-tabs"
+        :tabs="headerTabs"
+        :model-value="activeTab"
+        @select="switchMainTab"
+      />
+      <button
+        type="button"
+        class="msg-appbar-forum"
+        aria-label="互动消息"
+        :class="{ active: activeTab === 'forum' }"
+        @click="switchMainTab('forum')"
+      >
+        <el-icon :size="18"><Star /></el-icon>
+        <i v-if="forumUnread" class="msg-appbar-forum-dot">{{ forumUnread > 99 ? '99+' : forumUnread }}</i>
+      </button>
+    </header>
     <!-- 桌面端页头 -->
     <header v-else class="msg-head">
       <div class="msg-head-title">
@@ -20,7 +40,12 @@
       <aside class="msg-side">
         <div class="msg-search">
           <el-icon :size="14"><Search /></el-icon>
-          <input v-model="keyword" type="search" placeholder="搜索会话或联系人" />
+          <!-- 占位文案跟着当前视图走：好友页搜的是人，不是会话 -->
+          <input
+            v-model="keyword"
+            type="search"
+            :placeholder="activeTab === 'contacts' ? '搜索好友' : '搜索会话或联系人'"
+          />
         </div>
 
         <nav class="msg-tabs">
@@ -158,79 +183,84 @@
         </div>
       </aside>
 
-      <!-- 右侧 / 移动端覆盖：会话窗口 -->
-      <section v-if="!isMobile || chatOpen" :class="['msg-pane', { 'is-mobile-chat': isMobile }]">
-        <template v-if="activeSession">
-          <header class="msg-pane-head">
-            <button v-if="isMobile" type="button" class="msg-back" aria-label="返回" @click="closeChat">
-              <el-icon :size="18"><ArrowLeft /></el-icon>
-            </button>
-            <div class="msg-pane-title">
-              <span class="msg-pane-name">{{ activeSession.name }}</span>
-              <span v-if="activeSession.type === 'group'" class="msg-pane-meta">{{ groupMeta }}</span>
-              <span v-else class="msg-pane-meta">{{ isOnline(activeSession.rawId) ? '在线' : '离线' }}</span>
-            </div>
-            <button
-              v-if="activeSession.type === 'private'"
-              type="button"
-              class="msg-ghost-btn"
-              @click="openHomepage(activeSession.rawId)"
-            >
-              主页
-            </button>
-          </header>
-
-          <div ref="scrollEl" class="msg-chat-scroll">
-            <div v-if="chatLoading" class="msg-empty"><p>加载中…</p></div>
-            <div v-else-if="!messages.length" class="msg-empty">
-              <el-icon :size="26"><ChatDotRound /></el-icon>
-              <p>还没有聊天记录</p>
-              <span>发条消息打个招呼吧</span>
-            </div>
-            <div v-else class="msg-bubbles">
-              <div
-                v-for="m in messages"
-                :key="m.id"
-                :class="['msg-bubble-row', { mine: isMine(m) }]"
+      <!-- 右侧 / 移动端覆盖：会话窗口
+           移动端点开会话 = 打开一个覆盖式二级页，进出场直接复用全站那套 .subpage
+           （从右滑入 / 向右滑出，本体在 styles/subpage-transition.css，这里不另写动画）。
+           桌面端这个节点恒存在（!isMobile），Transition 全程不触发，桌面零变化。 -->
+      <Transition name="subpage" :duration="320" @after-leave="onChatClosed">
+        <section v-if="!isMobile || chatOpen" :class="['msg-pane', { 'is-mobile-chat': isMobile }]">
+          <template v-if="activeSession">
+            <header class="msg-pane-head">
+              <button v-if="isMobile" type="button" class="msg-back" aria-label="返回" @click="closeChat">
+                <el-icon :size="18"><ArrowLeft /></el-icon>
+              </button>
+              <div class="msg-pane-title">
+                <span class="msg-pane-name">{{ activeSession.name }}</span>
+                <span v-if="activeSession.type === 'group'" class="msg-pane-meta">{{ groupMeta }}</span>
+                <span v-else class="msg-pane-meta">{{ isOnline(activeSession.rawId) ? '在线' : '离线' }}</span>
+              </div>
+              <button
+                v-if="activeSession.type === 'private'"
+                type="button"
+                class="msg-ghost-btn"
+                @click="openHomepage(activeSession.rawId)"
               >
-                <el-avatar
-                  v-if="!isMine(m)"
-                  :size="30"
-                  :src="senderAvatar(m) || undefined"
-                  class="msg-bubble-avatar"
+                主页
+              </button>
+            </header>
+
+            <div ref="scrollEl" class="msg-chat-scroll">
+              <div v-if="chatLoading" class="msg-empty"><p>加载中…</p></div>
+              <div v-else-if="!messages.length" class="msg-empty">
+                <el-icon :size="26"><ChatDotRound /></el-icon>
+                <p>还没有聊天记录</p>
+                <span>发条消息打个招呼吧</span>
+              </div>
+              <div v-else class="msg-bubbles">
+                <div
+                  v-for="m in messages"
+                  :key="m.id"
+                  :class="['msg-bubble-row', { mine: isMine(m) }]"
                 >
-                  {{ senderName(m).slice(0, 1) }}
-                </el-avatar>
-                <div class="msg-bubble-wrap">
-                  <span v-if="activeSession.type === 'group' && !isMine(m)" class="msg-bubble-sender">
-                    {{ senderName(m) }}
-                  </span>
-                  <div class="msg-bubble">{{ m.content }}</div>
-                  <span class="msg-bubble-time">{{ formatTime(m.created_at) }}</span>
+                  <el-avatar
+                    v-if="!isMine(m)"
+                    :size="30"
+                    :src="senderAvatar(m) || undefined"
+                    class="msg-bubble-avatar"
+                  >
+                    {{ senderName(m).slice(0, 1) }}
+                  </el-avatar>
+                  <div class="msg-bubble-wrap">
+                    <span v-if="activeSession.type === 'group' && !isMine(m)" class="msg-bubble-sender">
+                      {{ senderName(m) }}
+                    </span>
+                    <div class="msg-bubble">{{ m.content }}</div>
+                    <span class="msg-bubble-time">{{ formatTime(m.created_at) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <footer class="msg-composer">
-            <textarea
-              v-model="draft"
-              rows="1"
-              placeholder="输入消息，Enter 发送"
-              @keydown.enter.exact.prevent="send"
-            />
-            <button type="button" class="msg-send" :disabled="sending || !draft.trim()" @click="send">
-              <el-icon :size="16"><Promotion /></el-icon>
-              <span>发送</span>
-            </button>
-          </footer>
-        </template>
-        <div v-else class="msg-pane-placeholder">
-          <el-icon :size="34"><ChatLineRound /></el-icon>
-          <p>选择一个会话开始聊天</p>
-          <span>也可以从通讯录发消息</span>
-        </div>
-      </section>
+            <footer class="msg-composer">
+              <textarea
+                v-model="draft"
+                rows="1"
+                placeholder="输入消息，Enter 发送"
+                @keydown.enter.exact.prevent="send"
+              />
+              <button type="button" class="msg-send" :disabled="sending || !draft.trim()" @click="send">
+                <el-icon :size="16"><Promotion /></el-icon>
+                <span>发送</span>
+              </button>
+            </footer>
+          </template>
+          <div v-else class="msg-pane-placeholder">
+            <el-icon :size="34"><ChatLineRound /></el-icon>
+            <p>选择一个会话开始聊天</p>
+            <span>也可以从通讯录发消息</span>
+          </div>
+        </section>
+      </Transition>
     </div>
   </div>
 </template>
@@ -248,7 +278,8 @@ import {
   Star,
   User,
 } from '@element-plus/icons-vue'
-import SubPageHeader from '@/components/common/SubPageHeader.vue'
+// 页头两个主视图标题：滑动下划线 + 文字随条染色，与校园资讯分类 Tab 同一套动画
+import SlidingTabs from '@/components/common/SlidingTabs.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useResponsive } from '@/composables/useResponsive'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
@@ -307,6 +338,11 @@ const mainTabs: Array<{ label: string; value: TabValue }> = [
   { label: '会话', value: 'sessions' },
   { label: '通讯录', value: 'contacts' },
   { label: '互动', value: 'forum' },
+]
+/** 移动端页头的两个主视图标题：一对一映射「会话 / 通讯录」，点标题即切页（喂给 SlidingTabs） */
+const headerTabs: Array<{ key: Extract<TabValue, 'sessions' | 'contacts'>; label: string }> = [
+  { key: 'sessions', label: '消息' },
+  { key: 'contacts', label: '好友' },
 ]
 const contactTabs: Array<{ label: string; value: ContactTabValue }> = [
   { label: '好友', value: 'friends' },
@@ -454,6 +490,19 @@ function switchContactTab(tab: ContactTabValue) {
   void loadContacts()
 }
 
+/**
+ * 移动端页头的主视图切换（消息 / 好友 / 互动）。
+ * contactTab 先落位再切 activeTab —— activeTab 的 watch 会带着新分组去拉数据；
+ * 头像与标题用同一套 activeTab 状态，所以页头高亮和下方内容是同一份真相，不会各说各话。
+ * 入参是 SlidingTabs / 星标按钮给的 string，这里收窄回本页的 TabValue。
+ */
+function switchMainTab(tab: string) {
+  if (tab !== 'sessions' && tab !== 'contacts' && tab !== 'forum') return
+  if (activeTab.value === tab) return
+  if (tab === 'contacts' && contactTab.value !== 'friends') contactTab.value = 'friends'
+  activeTab.value = tab
+}
+
 // ---------- 会话窗口 ----------
 function openSession(s: SessionItem) {
   activeSession.value = s
@@ -461,8 +510,18 @@ function openSession(s: SessionItem) {
   void loadChat(true)
 }
 
+/**
+ * 关闭会话（移动端返回键）：只收起覆盖层，让 .subpage 的离场动画把整页滑出去。
+ * activeSession / messages 留到 after-leave 再清 —— 提前清会让滑走的是一张
+ * 「选择一个会话开始聊天」的占位页，闪一下再走，观感很差。
+ */
 function closeChat() {
   chatOpen.value = false
+}
+
+/** 离场动画播完再丢弃会话上下文；若动画期间又点开了别的会话，则不清 */
+function onChatClosed() {
+  if (chatOpen.value) return
   activeSession.value = null
   messages.value = []
 }
@@ -643,6 +702,73 @@ onBeforeUnmount(() => {
 .msg-head-sub { font-size: 12px; color: #9aa0a6; }
 .msg-head-actions { display: flex; gap: 8px; }
 
+/* ================= 移动端页头 =================
+   一级 Tab 页头：两枚并排标题「消息 / 好友」就是本页的两个主视图，
+   点击切换 —— 下划线滑条与文字随条染色用的是抽出来的 SlidingTabs（与校园资讯同一套动画）。
+   标题取 20px：两枚并排时 26px 在 390px 屏上会挤，20px 既醒目又给右侧互动图标留得出位置。 */
+.msg-appbar {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  background: #fff;
+  border-bottom: 1px solid #f0f1f3;
+}
+/* 外观全部通过 CSS 变量喂给组件，组件内部的动画逻辑一行都不用改。
+   左右各 44px：右边给互动图标让位，左边对称留白，标题组因此落在页面正中。
+   两层文字必须同宽才能对齐裁剪，所以选中态只改颜色、不改字重（统一 700）。 */
+.msg-appbar-tabs {
+  flex: 1;
+  min-width: 0;
+  --st-height: 48px;
+  --st-pad: 0 44px;
+  --st-justify: center;
+  --st-gap: 28px;
+  --st-font: 20px;
+  --st-font-weight: 700;
+  --st-color: #9aa0a8;
+  --st-color-active: #1d2129;
+  --st-bg: transparent;
+  --st-shadow: none;
+  --st-tab-pad-b: 0px;
+  --st-indicator-h: 2.5px;
+  --st-indicator-bottom: 6px;
+  --st-indicator-radius: 2px;
+}
+/* 互动入口：不属于「消息 / 好友」两个主视图，收成右上角一枚星标，未读挂红点 */
+.msg-appbar-forum {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #9aa0a8;
+  cursor: pointer;
+}
+.msg-appbar-forum.active { color: #1d2129; background: #f4f5f7; }
+.msg-appbar-forum-dot {
+  position: absolute;
+  top: 3px;
+  right: 1px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9.5px;
+  font-style: normal;
+  line-height: 14px;
+  text-align: center;
+}
+
 .msg-main { flex: 1; min-height: 0; display: flex; gap: 0; }
 .msg-side { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; background: #fff; border-right: 1px solid #f0f1f3; min-height: 0; }
 
@@ -731,6 +857,9 @@ onBeforeUnmount(() => {
 @media (max-width: 767px) {
   .msg-page { background: #fff; }
   .msg-head { display: none; }
+  /* 移动端不再有「会话 / 通讯录 / 互动」三栏页签：主切换已上移到页头的两枚标题，
+     互动收成页头右上角星标。页签行留着只会和标题重复一层。 */
+  .msg-tabs { display: none; }
   .msg-main { flex-direction: column; }
   .msg-side { width: 100%; border-right: none; flex: 1; }
   .msg-list { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); overscroll-behavior-y: contain; }

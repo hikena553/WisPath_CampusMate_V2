@@ -149,41 +149,24 @@
          分类口径：移动端不展示「高教信息」（见 MOBILE_HIDDEN_SOURCES），
          所以这里比桌面端卡片少一栏 —— 桌面端「高教信息」卡片保留不变。
          「推荐」= 原「全部」合并流；「关注」为新增 Tab，数据源待接（见 itemsOfTab）。 -->
-    <nav
+    <!-- 移动端分类 Tab：横向滑动、选中项深色 + 短下划线（不改字重）。
+         动画本体（下划线滑条 + 文字随条染色）已抽到 components/common/SlidingTabs.vue，
+         本页只负责把「拖动进度 / 方向 / 逐帧状态」喂进去 —— 滑条位置与手指严格同步。
+         与下方信息流共用同一份数据，切换只是换 filter，不重新请求。 -->
+    <SlidingTabs
       v-if="isMobile"
       class="campus-tabs"
-      :class="{
-        'is-pager-dragging': pagerDragging,
-        'is-pager-resetting': pagerResetting,
-        'is-tab-instant': tabClickSwitch,
-      }"
-      role="tablist"
+      :tabs="mobileTabs"
+      :model-value="activeTab"
+      :progress="tabProgress"
+      :direction="tabDirection"
+      :dragging="pagerDragging"
+      :resetting="pagerResetting"
+      :instant-sweep="tabClickSwitch"
+      sticky-top="var(--campus-appbar-h)"
       aria-label="资讯分类"
-    >
-      <button
-        v-for="t in mobileTabs"
-        :key="t.key"
-        :ref="el => setTabRef(t.key, el)"
-        type="button"
-        role="tab"
-        class="campus-tab"
-        :aria-selected="activeTab === t.key"
-        @click="onTabClick(t.key)"
-      >
-        <span class="campus-tab-label">{{ t.label }}</span>
-        <!-- 同一段文字的深色副本：叠在文字框里，只显示滑条所占的那一段 ——
-             放在按钮内部是为了复用同一个文字框，两层字的字体 / 宽度必然一致，
-             不会像「另起一行复制」那样因字体或加粗差几个像素而重影。 -->
-        <span
-          class="campus-tab-label campus-tab-label-dark"
-          :style="tabDarkClip[t.key]"
-          aria-hidden="true"
-        >{{ t.label }}</span>
-      </button>
-      <!-- 选中下划线做成独立滑条：拖卡片时按位移比例在相邻 Tab 之间移动，
-           与卡片同步；点 Tab / 吸附完成时用同一段 200ms 过渡滑到目标位。 -->
-      <span class="campus-tab-indicator" :style="tabIndicatorStyle" aria-hidden="true" />
-    </nav>
+      @select="onTabSelect"
+    />
 
     <!-- 移动端卡片分页（三页轨道）
          一次渲染「当前分类」和它左右两侧的邻居分类，三张卡片铺在同一条横向轨道上：
@@ -683,6 +666,8 @@ import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+// 分类 Tab 的动画（滑动下划线 + 文字随条染色）已抽成通用组件
+import SlidingTabs from '@/components/common/SlidingTabs.vue'
 import { getArticleInteractions, type CampusArticleInteract } from '@/api/campus'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
@@ -725,8 +710,6 @@ function openForumInbox() {
 const vTilt = tilt
 const isMobile = ref(window.innerWidth <= 767)
 window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 767 })
-// 从桌面宽度缩回移动端时 Tab 才重新渲染：落位后再量一次滑条基准
-watch(isMobile, v => { if (v) void nextTick(measureTabs) })
 
 /** 站内阅读器：点击资讯在应用内打开（移动端全屏抽屉），不跳出应用。
     站内阅读需要登录态，游客点击时先引导登录。 */
@@ -1356,6 +1339,11 @@ function onTabClick(key: FeedTabKey) {
   startTabSlide(key)
 }
 
+/** SlidingTabs 的 select 载荷是 string（组件不认识本页的分类联合类型），这里收窄回来 */
+function onTabSelect(key: string) {
+  onTabClick(key as FeedTabKey)
+}
+
 /**
  * 点 Tab 的换页动画：
  *   ① 同一帧里把轨道瞬时摆到「出发页」（关过渡，只关轨道，Tab 滑条照常走过渡）；
@@ -1501,94 +1489,21 @@ function measurePagerWidth() {
   if (pagerRef.value) pagerWidth.value = pagerRef.value.clientWidth
 }
 
-/* ---------------- 分类 Tab 的滑条 + 随条染色 ----------------
-   下划线不画在选中 Tab 的 ::after 上（那样只能整块闪一下），
-   而是一个独立滑条，位置 / 宽度按「当前 Tab → 目标 Tab」的进度插值：
-     · 拖动卡片时进度 = |pagerX| / 页宽，滑条与卡片严格同步；
-     · 松手吸附 / 点 Tab 时交给 CSS 过渡，200ms 走完，与卡片同一段缓动。
-   位置用按钮的 offsetLeft / offsetWidth 量（Tab 行可横向滚动，滑条会跟着滚）。 */
-const tabEls = new Map<FeedTabKey, HTMLElement>()
-const tabMetrics = ref<{ left: number; width: number }[]>([])
-
-function setTabRef(key: FeedTabKey, el: unknown) {
-  if (el instanceof HTMLElement) tabEls.set(key, el)
-  else tabEls.delete(key)
-}
-
-function measureTabs() {
-  tabMetrics.value = mobileTabs.value.map(t => {
-    const el = tabEls.get(t.key)
-    return el ? { left: el.offsetLeft, width: el.offsetWidth } : { left: 0, width: 0 }
-  })
-}
-
-/**
- * 滑条几何（相对 Tab 行的 padding box）：左边界 + 宽度。
- * 滑条绘制与深色文字裁剪共用这一份，二者永远不会错位。
- */
-const tabBar = computed(() => {
-  const index = FEED_TABS.findIndex(t => t.key === activeTab.value)
-  const cur = tabMetrics.value[index]
-  if (!cur) return null
-  const width = pagerWidth.value
-  // 点 Tab 换页时 pagerX 只是为了推动轨道，滑条已经直接落到目标位、交给 CSS 过渡，
-  // 不能再按 pagerX 插值，否则跨分类点一下会先滑到隔壁 Tab 再折回
-  const progress = !tabSwitch.value && width ? Math.min(1, Math.abs(pagerX.value) / width) : 0
-  // 卡片往左拖 = 去下一个 Tab；往右拖 = 去上一个 Tab
-  const dir = pagerX.value < 0 ? 1 : pagerX.value > 0 ? -1 : 0
-  const next = dir ? tabMetrics.value[index + dir] : undefined
-  return {
-    left: next ? cur.left + (next.left - cur.left) * progress : cur.left,
-    width: next ? cur.width + (next.width - cur.width) * progress : cur.width,
-  }
+/* ---------------- 分类 Tab 的联动输入 ----------------
+   滑条 + 随条染色的实现已抽到 components/common/SlidingTabs.vue（测量也在那边自己做），
+   本页只负责喂三个量：
+     · tabProgress：拖动卡片时 = |pagerX| / 页宽，滑条与卡片严格同步；
+       点 Tab 换页（tabSwitch）时给 null —— 那一趟位移只是为了推动页面轨道，
+       滑条已直接落到目标位、交给 CSS 过渡，不能再按位移插值；
+     · tabDirection：卡片往左拖 = 去下一项；往右拖 = 去上一项；
+     · 拖动 / 归位 / 点按换页三个状态位，用来在逐帧写入时关掉过渡。 */
+const tabProgress = computed(() => {
+  if (tabSwitch.value || !pagerWidth.value) return null
+  return Math.min(1, Math.abs(pagerX.value) / pagerWidth.value)
 })
-
-const tabIndicatorStyle = computed(() => {
-  const bar = tabBar.value
-  if (!bar) return { transform: 'translate3d(0, 0, 0)', width: '0px', opacity: '0' }
-  return {
-    transform: `translate3d(${bar.left}px, 0, 0)`,
-    width: `${bar.width}px`,
-    opacity: '1',
-  }
-})
-
-/**
- * 每个 Tab 的深色文字裁多少：把滑条的左右边界换算到该 Tab 自己的文字框里。
- * 左 / 右内缩只作用于这一格，所以「条到哪儿，深色字就渲染到哪儿」，
- * 不需要额外一层整行文字去对齐，天然不会重影。
- *
- * 裁剪样式对象按 Tab 复用：拖动时通常只有「当前 / 目标」两格的 inset 在变，
- * 其余 Tab 拿到同一个对象引用，Vue 的 vnode diff 会直接跳过 style patch。
- * 每格只保留最近一次，缓存不会随拖动无限增长。
- */
-const clipCache = new Map<FeedTabKey, { value: string; style: { clipPath: string } }>()
-function clipStyle(key: FeedTabKey, clipPath: string) {
-  const hit = clipCache.get(key)
-  if (hit && hit.value === clipPath) return hit.style
-  const style = { clipPath }
-  clipCache.set(key, { value: clipPath, style })
-  return style
-}
-
-const tabDarkClip = computed(() => {
-  const bar = tabBar.value
-  const clips = {} as Record<FeedTabKey, { clipPath: string }>
-  mobileTabs.value.forEach((t, i) => {
-    const rect = tabMetrics.value[i]
-    if (!bar || !rect || !rect.width) {
-      clips[t.key] = clipStyle(t.key, 'inset(0 100% 0 0)')
-      return
-    }
-    const left = Math.min(Math.max(bar.left - rect.left, 0), rect.width)
-    const right = Math.min(
-      Math.max(rect.left + rect.width - (bar.left + bar.width), 0),
-      rect.width - left,
-    )
-    clips[t.key] = clipStyle(t.key, `inset(0 ${right}px 0 ${left}px)`)
-  })
-  return clips
-})
+const tabDirection = computed<1 | -1 | 0>(() =>
+  pagerX.value < 0 ? 1 : pagerX.value > 0 ? -1 : 0,
+)
 
 /** 轨道上要渲染的页：拖动时是 [上一页, 当前页, 下一页]，静止时只有当前页 */
 const pagerPages = computed<PagerPage[]>(() => {
@@ -1683,8 +1598,6 @@ function onPagerPointerDown(e: PointerEvent) {
   if (!target?.closest('.campus-feed')) return
   if (target.closest('button')) return
   measurePagerWidth()
-  // 滑条位置按 Tab 按钮实测宽度算：起手时重新量一次，避免字体 / 宽度变化后对不上
-  measureTabs()
   pagerDrag = {
     pointerId: e.pointerId,
     startX: e.clientX,
@@ -2304,9 +2217,6 @@ watch(
 onMounted(() => {
   // 分页宽度要等 DOM 渲染完才能量：吸附位移、边界判断都按它算
   void nextTick(measurePagerWidth)
-  // Tab 滑条同样要等按钮落位后再量；字体异步加载完成后再补量一次
-  void nextTick(measureTabs)
-  void document.fonts?.ready.then(measureTabs)
   // 收藏 / AI资源 Tab 的数据与资讯流缓存无关，单独拉取（失败静默走空态）
   void loadCustomTabData()
   // 深链：个人中心「收藏的帖子」→ /student/campus?tab=favorites
@@ -3111,7 +3021,7 @@ onMounted(() => {
      圆角归零：吸顶后页头上沿贴着屏幕，保留 13px 圆角会在两个角上露出背后滚动的内容。
      高度 56px（--campus-appbar-h）；标题与图标靠 align-items:center 垂直居中。
      底部不画分割线：下方 Tab 也是吸顶的，两者要拼成一个完整的白色顶栏，
-     分割线统一放在顶栏最下沿（见 .campus-tabs）。 */
+     分割线统一放在顶栏最下沿（见 components/common/SlidingTabs.vue 的 box-shadow）。 */
   .campus-appbar {
     position: sticky;
     top: 0;
@@ -3154,104 +3064,9 @@ onMounted(() => {
   .appbar-btn:hover { background: #f3f4f6; border-color: transparent; }
   .appbar-btn:active { transform: scale(.92); background: #eceef1; }
 
-  /* ---------- 分类 Tab：吸顶在页头下沿 ----------
-     是白卡的第二段（紧接页头，白底）；15px，选中项深色（不变字重）+ 3px 黑色下划线（与文字等宽）。
-     吸顶偏移量 = 页头高度（--campus-appbar-h），两层无缝拼成一个白色顶栏；
-     滚到信息流任何位置都能直接切分类，不用先滚回顶部。
-     层级压在页头之下（30 > 25），但高于信息流里带 z-index 的轮播指示点（6）。
-     最下沿一条极浅分割线：白色顶栏与下方滚动内容之间留一个层级边界。
-     overflow-x 仍是 auto：吸顶不影响这一行自身的横向滑动。 */
-  .campus-tabs {
-    position: sticky;
-    top: var(--campus-appbar-h);
-    z-index: 25;
-    display: flex;
-    align-items: center;
-    /* 滑条绝对定位在这条 Tab 行里（sticky 本身就是定位元素，随内容横向滚动） */
-    /* 参考稿分类之间留白很紧（「全部 / 热榜 / CS2」几乎贴着），22px 会撑得过宽，
-       导致第 6 个分类被截断显示成「专」这种半截字。收到 16px。 */
-    gap: 16px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    margin: 0;
-    padding: 8px 16px 10px;
-    background: #fff;
-    box-shadow: 0 1px 0 #f0f1f3;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    border-bottom: 0;
-    border-radius: 0;
-  }
-  .campus-tabs::-webkit-scrollbar { display: none; }
-  .campus-tab {
-    position: relative;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    padding: 0 0 8px;
-    background: none;
-    border: 0;
-    /* 参考稿 Tab 比标题小一号（标题 26、Tab 约 15），16px 会让一行放不下 6 个分类 */
-    font-size: 15px;
-    /* 按钮默认字体不继承页面：深色文字层用的是同款 span，必须显式继承，
-       两层文字的字体 / 字宽才会完全一致，裁剪边界才对得上 */
-    font-family: inherit;
-    font-weight: 400;
-    color: #86909c;
-    cursor: pointer;
-    transition: color .18s ease;
-    -webkit-tap-highlight-color: transparent;
-  }
-  /* 拖动中颜色 / 裁剪都是逐帧写入的，不能再走过渡 —— 否则会滞后于卡片与滑条 */
-  .campus-tabs.is-pager-dragging .campus-tab {
-    transition: none;
-  }
-  /* Tab 文字：两层同宽文字叠在按钮内容框里。
-     底层永远是灰色；上层是同款深色，用 clip-path 只留滑条覆盖的那一段 ——
-     「条到哪儿，深色文字就渲染到哪儿」，条走到两个 Tab 中间时，
-     左边那段字深、右边那段字灰，分界线与条严格重合。 */
-  .campus-tab-label {
-    display: block;
-    white-space: nowrap;
-    text-align: left;
-  }
-  .campus-tab-label-dark {
-    position: absolute;
-    /* 四边都贴着按钮内容框：底部让开 8px（下划线留白），与真实文字框完全重合 */
-    inset: 0 0 8px 0;
-    color: #1d2129;
-    pointer-events: none;
-    transition: clip-path 200ms cubic-bezier(.22, .61, .36, 1);
-  }
-  .campus-tabs.is-pager-dragging .campus-tab-label-dark,
-  .campus-tabs.is-pager-resetting .campus-tab-label-dark,
-  .campus-tabs.is-tab-instant .campus-tab-label-dark {
-    transition: none;
-  }
-  /* 选中下划线：独立滑条（不是 is-active::after），宽度随 Tab 文字宽度变化。
-     位置 / 宽度由 tabIndicatorStyle 逐帧写入：
-       · 拖动卡片时关过渡，跟手指 1:1 在相邻 Tab 之间挪；
-       · 松手吸附 / 点 Tab 时开过渡，200ms 与卡片同一段缓动滑到目标位；
-       · 换页归零那一帧关过渡（类名由 .campus-tabs 上的状态控制），避免倒着补动画。
-     下沿对齐 Tab 文字底部：Tab 行 padding-bottom 10px，滑条 bottom 也取 10px。 */
-  .campus-tab-indicator {
-    position: absolute;
-    left: 0;
-    bottom: 10px;
-    height: 3px;
-    border-radius: 0;
-    background: #1d2129;
-    pointer-events: none;
-    will-change: transform, width;
-    transition:
-      transform 200ms cubic-bezier(.22, .61, .36, 1),
-      width 200ms cubic-bezier(.22, .61, .36, 1);
-  }
-  .campus-tabs.is-pager-dragging .campus-tab-indicator,
-  .campus-tabs.is-pager-resetting .campus-tab-indicator {
-    transition: none;
-  }
+  /* ---------- 分类 Tab ----------
+     分类 Tab 的样式与动画已整体搬进 components/common/SlidingTabs.vue
+     （滑动下划线 + 文字随条染色 + 吸顶偏移都自带），这里不再重复定义，避免两套规则打架。 */
 
   /* ---------- 大图轮播（只在「推荐」那一页的顶部渲染）----------
      位次：页内最上方，信息流之上，属于同一张白卡的上半段；
