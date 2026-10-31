@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Float, Integer, DateTime
+from sqlalchemy import String, Float, Integer, DateTime, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -19,4 +19,9 @@ class EmotionRecord(Base):
     conversation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        # 按会话回溯情绪轨迹：WHERE conversation_id=?
+        Index("ix_emotion_records_conversation", "conversation_id"),
     )

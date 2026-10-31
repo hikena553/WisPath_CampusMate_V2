@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Enum, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -38,3 +38,10 @@ class Notification(Base):
 
     user = relationship("User", foreign_keys=[user_id], back_populates="notifications")
     sender = relationship("User", foreign_keys=[sender_id])
+
+    __table_args__ = (
+        # 列表分页 + 未读数 + 时间倒序：等值列在前、排序列在后，消除 filesort
+        Index("ix_notifications_user_read_created", "user_id", "is_read", "created_at"),
+        # 按业务对象反查（同一请假/审批的重复提醒去重、跳转详情）
+        Index("ix_notifications_type_related", "type", "related_id"),
+    )

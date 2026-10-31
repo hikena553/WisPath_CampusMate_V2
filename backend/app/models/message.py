@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Integer
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -11,6 +11,13 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        # 双人会话拉取：WHERE sender_id=? AND receiver_id=? ORDER BY created_at
+        Index("ix_messages_sender_receiver_created", "sender_id", "receiver_id", "created_at"),
+        # 未读角标：WHERE receiver_id=? AND read=0（低基数列不单独建索引）
+        Index("ix_messages_receiver_read", "receiver_id", "read"),
+    )
 
 
 class MessageSessionPin(Base):

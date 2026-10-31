@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Text, Boolean, Enum as SAEnum, DateTime, Date
+from sqlalchemy import String, Text, Boolean, Enum as SAEnum, DateTime, Date, Index
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
 
@@ -36,3 +36,8 @@ class LeaveRequest(Base):
     return_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        # 辅导员待办列表：WHERE tutor_id=? AND status=? ORDER BY created_at DESC
+        Index("ix_leave_requests_tutor_status_created", "tutor_id", "status", "created_at"),
+    )
