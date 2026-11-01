@@ -151,32 +151,24 @@
          「推荐」= 原「全部」合并流；「关注」为新增 Tab，数据源待接（见 itemsOfTab）。 -->
     <!-- 移动端分类 Tab：横向滑动、选中项深色 + 短下划线（不改字重）。
          动画本体（下划线滑条 + 文字随条染色）已抽到 components/common/SlidingTabs.vue，
-         本页只负责把「拖动进度 / 方向 / 逐帧状态」喂进去 —— 滑条位置与手指严格同步。
+         分页位移的口径在 components/common/SwipePager.vue，
+         本页只负责把组件的「拖动进度 / 方向 / 逐帧状态」转给 Tab —— 滑条位置与手指严格同步。
          与下方信息流共用同一份数据，切换只是换 filter，不重新请求。 -->
     <SlidingTabs
       v-if="isMobile"
       class="campus-tabs"
       :tabs="mobileTabs"
       :model-value="activeTab"
-      :progress="tabProgress"
-      :direction="tabDirection"
-      :dragging="pagerDragging"
-      :resetting="pagerResetting"
-      :instant-sweep="tabClickSwitch"
+      :progress="pagerState.progress"
+      :direction="pagerState.direction"
+      :dragging="pagerState.dragging"
+      :resetting="pagerState.resetting"
+      :instant-sweep="pagerState.sliding"
       sticky-top="var(--campus-appbar-h)"
       aria-label="资讯分类"
       @select="onTabSelect"
     />
 
-    <!-- 移动端卡片分页（三页轨道）
-         一次渲染「当前分类」和它左右两侧的邻居分类，三张卡片铺在同一条横向轨道上：
-         手指往左拖时整条轨道跟着走，右侧那一页从边缘同步进来，松手按位移 / 速度
-         吸附到最近一页（或回弹）。全程「跟手」，不会等到松手后才补动画。
-         邻居页只在拖动开始时挂载（pagerOpen），松手吸附完成后立即卸载，
-         页面高度回到当前分类自己的高度，不在底部留多余白区。
-         每页 = 一条分类的完整卡片：「推荐」页含顶部大图轮播，「关注」页是空态，其余是纯信息流。
-         轮播自己的拖动仍挂在 .hero-track 上，与分类翻页互不干扰（按压必须落在
-         .campus-feed 上才会启动分类拖动）。 -->
     <!-- 下拉刷新指示器：放在两段吸顶头（页头 / 分类 Tab）之后，
          靠自身高度把信息流下推、吸顶头保持不动（见 usePullRefresh 注释） -->
     <PullRefreshIndicator
@@ -185,37 +177,29 @@
       :active="pull.active"
     />
 
-    <!-- 裁切层：overflow:hidden 必须挂在「不参与位移」的这一层上。
-         挂在会 translate 的轨道上时，裁切框会跟着轨道一起移走 ——
-         轨道平移到 ±一页宽时，可视区正好落在裁切框之外，整页变成空白。
-         所以这里拆成「外层裁切 + 内层平移」两层。 -->
-    <div v-if="isMobile" class="campus-pager-viewport">
-    <div
+    <!-- 卡片分页轨道：手势、位移、吸附 / 回弹 / 点 Tab 换页全部在 components/common/SwipePager.vue，
+         本页只管「轨道上摆哪几页」和每页的内容。
+         轨道上摆哪些页由组件算（renderedPages：静止 = 当前页，拖动 = 前后邻居，点 Tab = 出发页 + 目标页），
+         本页不再判断「邻居页什么时候挂载」。 -->
+    <SwipePager
+      v-if="isMobile"
       ref="pagerRef"
       class="campus-pager"
-      :class="{
-        'is-pager-dragging': pagerDragging,
-        'is-pager-resetting': pagerResetting,
-        'is-pager-jumping': trackJumping,
-        'is-pager-open': pagerOpen,
-        'is-pager-animating': pagerAnimating,
-      }"
-      :style="{ transform: pagerTransform }"
-      @pointerdown="onPagerPointerDown"
-      @pointermove="onPagerPointerMove"
-      @pointerup="onPagerPointerUp"
-      @pointercancel="onPagerPointerCancel"
-      @click.capture="onPagerClickCapture"
-      @dragstart.prevent
+      :model-value="activeTab"
+      :pages="feedTabKeys"
+      start-selector=".campus-feed"
+      @update:model-value="onPagerChange"
     >
-      <!-- v-memo：拖动时 pagerX 每帧变化会让整个组件重渲染，三页信息流（含图标 SVG）
+      <!-- v-memo：拖动时跟手位移每帧变化会让本页重渲染，三页信息流（含图标 SVG）
            会被逐帧 diff，手机上就是卡顿来源。页面内容只跟分类数据有关，
-           依赖不变时整棵子树直接跳过 patch。 -->
+           依赖不变时整棵子树直接跳过 patch。
+           （v-for + v-memo 留在调用方而不是交给组件：组件的插槽每次渲染都会被重建，
+             只有写在本页渲染函数里，memo 缓存才真正命中。） -->
       <div
         v-for="entry in pagerPages"
         :key="entry.key"
         v-memo="[entry.key, entry.items, entry.slides]"
-        class="campus-pager-page"
+        class="sw-pager-page campus-pager-page"
       >
         <!-- 大图轮播：只在「推荐」那一页的顶部渲染。
              图源 = 全部资讯里带 image_url 的最新条目（各来源详情页抓到的正文首图），
@@ -401,8 +385,7 @@
           </template>
         </section>
       </div>
-    </div>
-    </div>
+    </SwipePager>
 
     <!-- 以下为桌面端版式（移动端整块隐藏：由上面的 Tab + 信息流替代） -->
     <template v-if="!isMobile">
@@ -668,6 +651,7 @@ import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 // 分类 Tab 的动画（滑动下划线 + 文字随条染色）已抽成通用组件
 import SlidingTabs from '@/components/common/SlidingTabs.vue'
+import SwipePager from '@/components/common/SwipePager.vue'
 import { getArticleInteractions, type CampusArticleInteract } from '@/api/campus'
 import {
   Calendar, Monitor, DataLine, Reading, TrendCharts,
@@ -1327,16 +1311,23 @@ function switchTab(key: FeedTabKey) {
 }
 
 /**
+/**
  * 点 Tab：内容横向滑过去，与手指切换同一段 200ms。
  * 相邻与跨分类共用一条两页轨道（出发页 + 目标页一次对滑），不逐页播。
+ * 动画本体在 SwipePager.slideTo()，本页只决定「切到哪一页 / 要不要收掉残留动画」。
  */
 function onTabClick(key: FeedTabKey) {
-  if (key === activeTab.value) {
-    // 已在目标分类：只收掉可能还在跑的拖动 / 吸附 / 换页动画
-    cancelPagerMotion()
+  if (!pagerRef.value) {
+    // 桌面端没有分页轨道（Tab 行本身也只在移动端渲染，这里只是兜底）
+    if (key !== activeTab.value) switchTab(key)
     return
   }
-  startTabSlide(key)
+  if (key === activeTab.value) {
+    // 已在目标分类：只收掉可能还在跑的拖动 / 吸附 / 换页动画
+    pagerRef.value.cancel()
+    return
+  }
+  pagerRef.value.slideTo(key)
 }
 
 /** SlidingTabs 的 select 载荷是 string（组件不认识本页的分类联合类型），这里收窄回来 */
@@ -1344,411 +1335,71 @@ function onTabSelect(key: string) {
   onTabClick(key as FeedTabKey)
 }
 
-/**
- * 点 Tab 的换页动画：
- *   ① 同一帧里把轨道瞬时摆到「出发页」（关过渡，只关轨道，Tab 滑条照常走过渡）；
- *   ② 强制结算这一帧后放开过渡、把 pagerX 推到 0 —— 出发页滑出、目标页滑入；
- *   ③ 200ms 后卸载出发页、轨道瞬时归零（与吸附换页同一套归位做法）。
- * activeTab 在①就落到目标位，所以 Tab 的滑条 / 染色全程是目标态。
- */
-function startTabSlide(key: FeedTabKey) {
-  const from = activeTab.value
-  const fromIndex = FEED_TABS.findIndex(t => t.key === from)
-  const toIndex = FEED_TABS.findIndex(t => t.key === key)
-  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
-
-  // 收掉拖动 / 吸附残留（不走 cancelPagerMotion 的 rAF：起手帧要自己控制）
-  window.clearTimeout(pagerTimer)
-  window.clearTimeout(tabSlideTimer)
-  cancelQueuedPagerX()
-  pagerDrag = null
-  pagerDragging.value = false
-  pagerOpen.value = false
-
-  measurePagerWidth()
-  const width = pagerWidth.value || pagerRef.value?.clientWidth || window.innerWidth || 320
-  const dir: 1 | -1 = toIndex > fromIndex ? 1 : -1
-
-  trackJumping.value = true
-  pagerAnimating.value = true // 动画期间不接新手势
-  tabClickSwitch.value = true // 点 Tab 不做「逐字扫过」染色，文字随滑条直接落位
-  tabSwitch.value = { from, to: key, dir }
-  pagerX.value = dir > 0 ? width : -width
-  switchTab(key)
-
-  requestAnimationFrame(() => {
-    // 先让「关过渡 + 起点位移」结算成上一帧样式，再放开过渡推向终点
-    void pagerRef.value?.offsetWidth
-    trackJumping.value = false
-    pagerX.value = 0
-    window.clearTimeout(tabSlideTimer)
-    tabSlideTimer = window.setTimeout(finishTabSlide, PAGER_SLIDE_MS + 30)
-  })
-}
-
-/** 点 Tab 换页收尾：卸载出发页、轨道瞬时归零（当前页是同一个 DOM 节点，画面不跳） */
-function finishTabSlide() {
-  trackJumping.value = true
-  tabSwitch.value = null
-  pagerX.value = 0
-  requestAnimationFrame(() => {
-    void pagerRef.value?.offsetWidth
-    trackJumping.value = false
-    pagerAnimating.value = false
-    // 收尾这一帧再放开染色过渡：重新量 Tab 后裁剪会差 1~2px，
-    // 提前放开会让这点差值又补一段「扫过」动画
-    tabClickSwitch.value = false
-  })
-}
-
-/** 中止轨道上的一切位移 / 定时器：把轨道瞬时归位、收起邻居，不再接后续动作 */
-function cancelPagerMotion() {
-  window.clearTimeout(pagerTimer)
-  window.clearTimeout(tabSlideTimer)
-  cancelQueuedPagerX()
-  pagerDrag = null
-  tabSwitch.value = null
-  tabClickSwitch.value = false
-  pagerAnimating.value = false
-  pagerDragging.value = false
-  trackJumping.value = true
-  pagerResetting.value = true
-  pagerOpen.value = false
-  pagerX.value = 0
-  requestAnimationFrame(() => {
-    void pagerRef.value?.offsetWidth
-    trackJumping.value = false
-    pagerResetting.value = false
-  })
+/** 分页组件回报「当前页变了」（拖动吸附完成、或点 Tab 换页出发那一刻），落到分类状态上 */
+function onPagerChange(key: string) {
+  switchTab(key as FeedTabKey)
 }
 
 /* ==================== 移动端：卡片分页（跟手切换分类） ==================== */
 
-/** 分页里的一页：某个分类的完整卡片（「推荐」页额外带顶部大图轮播，「关注」页为空态） */
+/**
+ * 分页轨道本体在 components/common/SwipePager.vue：
+ * 拖动 1:1 跟手、松手按位移 / 速度吸附或回弹、点 Tab 两页对滑、邻居页的挂载与卸载，
+ * 都在组件里；本页只留两件事：
+ *   ① 告诉轨道「有哪些页」并给每页提供内容（pageDataMap / pagerPages）；
+ *   ② 把组件的即时状态转给 SlidingTabs，让滑条与文字染色跟手指严格同步。
+ */
+const pagerRef = ref<InstanceType<typeof SwipePager> | null>(null)
+
+/** 全部分类的 key（有序）：组件据此判断左右邻居与首尾边界 */
+const feedTabKeys = FEED_TABS.map(t => t.key)
+
+/**
+ * 每个分类的页数据（items / slides）。
+ * 整表一次算好、只在资讯数据变化时重算 —— 页对象（items / slides 数组）引用因此稳定，
+ * 模板里的 v-memo 才能在拖动（每帧重渲染）期间真正命中，跳过三页 DOM 的 diff。
+ */
+const pageDataMap = computed(() => {
+  const map = {} as Record<FeedTabKey, { items: FeedItem[]; slides: HeroSlide[] }>
+  FEED_TABS.forEach((t) => {
+    map[t.key] = { items: feedItemsOf(t.key), slides: heroSlidesOf(t.key) }
+  })
+  return map
+})
+
+/** 轨道上的一页：某个分类的完整内容（「推荐」页额外带顶部大图轮播，「关注」页为空态） */
 interface PagerPage {
   key: FeedTabKey
-  label: string
   items: FeedItem[]
   slides: HeroSlide[]
 }
 
 /**
- * 卡片分页：当前分类居中，左右各挂一页邻居，三张卡片排在同一条横向轨道上。
- *   · 手指往左拖：整条轨道 1:1 跟着走，右侧邻居页从屏幕边缘同步进来 ——
- *     不是松手后才补动画，拖动过程中就已经看得到下一页；
- *   · 松手：位移超过阈值 / 快甩 → 吸附到相邻页；否则回弹归位；
- *   · 吸附完成后：切换 activeTab、把轨道瞬时归零、卸载两侧邻居 —— 当前页始终是
- *     轨道里同一个 DOM 节点（v-for :key 按分类），换页瞬间不重建页面、不会闪；
- *   · 邻居页只在拖动开始时挂载，静止时只渲染当前页，页面高度不被邻居撑高；
- *   · 首 / 尾分类没有对应方向的邻居页：该方向直接不接手势，卡片一动不动 ——
- *     不做阻尼回弹，避免在边缘拉出一条白色空档。
- * 轮播区域不接分类手势（按压必须落在 .campus-feed 上），两套拖动互不干扰。
- * 吸顶的页头 / Tab 保持不动，位移只作用于这条卡片轨道。
+ * 轨道上正在渲染的页：静止 = 当前页，拖动 / 吸附 = 加上左右邻居，点 Tab 换页 = 出发页 + 目标页。
+ * 具体摆哪几页由组件算（renderedPages），本页按 key 取数据即可 ——
+ * 邻居页只在拖动开始时挂载，静止时只渲染当前页，页面高度不被邻居撑高。
  */
-const pagerRef = ref<HTMLElement | null>(null)
-/** 一页的宽度（px）：页宽 = 分页容器宽度，吸附位移与边界判断都按它算 */
-const pagerWidth = ref(0)
-/** 是否挂载左右邻居页（拖动开始 → 吸附完成） */
-const pagerOpen = ref(false)
-/** 轨道正在跟手（关过渡） */
-const pagerDragging = ref(false)
-/** 换页后瞬时归位（关过渡）：切数据与轨道归零必须在同一帧完成 */
-const pagerResetting = ref(false)
-/** 吸附 / 回弹动画进行中：不接新手势 */
-const pagerAnimating = ref(false)
-/** 轨道相对「当前页居中」的位移（px，向左为负） */
-const pagerX = ref(0)
-/** 点 Tab 换页时轨道瞬时落到「出发页」位（关过渡）：只作用于轨道，不影响 Tab 滑条的过渡 */
-const trackJumping = ref(false)
-
-/**
- * 点 Tab 换页动画：不是拖动，但同样在轨道上「出发页滑出、目标页滑入」。
- * 有它时轨道只摆两页（顺序按 Tab 先后），滑条与染色不再跟 pagerX 走 ——
- * 点击后 activeTab 已经直接落到目标位，这两者交给各自的 200ms 过渡。
- */
-interface TabSwitch {
-  from: FeedTabKey
-  to: FeedTabKey
-  dir: 1 | -1
-}
-const tabSwitch = ref<TabSwitch | null>(null)
-/** 点 Tab 换页期间：关掉深色文字层的 clip-path 过渡（见 startTabSlide 的注释） */
-const tabClickSwitch = ref(false)
-let tabSlideTimer: number | undefined
-
-/** 进入拖动态的最小水平位移（px）：低于它算点击，不算滑动 */
-const PAGER_DRAG_THRESHOLD = 12
-/** 松手判定翻页的最小位移（px） */
-const PAGER_SWIPE_THRESHOLD = 56
-/** 速度阈值（px/ms）：快甩时即使位移不够也翻页 */
-const PAGER_FLING_VELOCITY = 0.35
-/** 吸附 / 回弹时长（ms），与样式里的 transform 过渡保持一致 */
-const PAGER_SLIDE_MS = 200
-
-function measurePagerWidth() {
-  if (pagerRef.value) pagerWidth.value = pagerRef.value.clientWidth
-}
-
-/* ---------------- 分类 Tab 的联动输入 ----------------
-   滑条 + 随条染色的实现已抽到 components/common/SlidingTabs.vue（测量也在那边自己做），
-   本页只负责喂三个量：
-     · tabProgress：拖动卡片时 = |pagerX| / 页宽，滑条与卡片严格同步；
-       点 Tab 换页（tabSwitch）时给 null —— 那一趟位移只是为了推动页面轨道，
-       滑条已直接落到目标位、交给 CSS 过渡，不能再按位移插值；
-     · tabDirection：卡片往左拖 = 去下一项；往右拖 = 去上一项；
-     · 拖动 / 归位 / 点按换页三个状态位，用来在逐帧写入时关掉过渡。 */
-const tabProgress = computed(() => {
-  if (tabSwitch.value || !pagerWidth.value) return null
-  return Math.min(1, Math.abs(pagerX.value) / pagerWidth.value)
-})
-const tabDirection = computed<1 | -1 | 0>(() =>
-  pagerX.value < 0 ? 1 : pagerX.value > 0 ? -1 : 0,
-)
-
-/** 轨道上要渲染的页：拖动时是 [上一页, 当前页, 下一页]，静止时只有当前页 */
 const pagerPages = computed<PagerPage[]>(() => {
-  const index = FEED_TABS.findIndex(t => t.key === activeTab.value)
-  const build = (i: number): PagerPage => ({
-    key: FEED_TABS[i].key,
-    label: FEED_TABS[i].label,
-    items: feedItemsOf(FEED_TABS[i].key),
-    slides: heroSlidesOf(FEED_TABS[i].key),
-  })
-  const pages: PagerPage[] = []
-  const sw = tabSwitch.value
-  // 点 Tab 换页：轨道上只摆「出发页 + 目标页」，两页一次对滑 ——
-  // 跨多个分类也只走一次 200ms，不逐页播；顺序按 Tab 先后，方向与手指切换一致
-  if (sw) {
-    const fromIndex = FEED_TABS.findIndex(t => t.key === sw.from)
-    const toIndex = FEED_TABS.findIndex(t => t.key === sw.to)
-    if (fromIndex >= 0 && toIndex >= 0) {
-      return sw.dir > 0
-        ? [build(fromIndex), build(toIndex)]
-        : [build(toIndex), build(fromIndex)]
-    }
-  }
-  if (pagerOpen.value && index > 0) pages.push(build(index - 1))
-  pages.push(build(index))
-  if (pagerOpen.value && index < FEED_TABS.length - 1) pages.push(build(index + 1))
-  return pages
+  const keys = (pagerRef.value?.renderedPages ?? [activeTab.value]) as FeedTabKey[]
+  return keys.map(key => ({ key, ...pageDataMap.value[key] }))
 })
 
-/** 当前页在渲染数组里的下标：0 = 最左，1 = 中间，2 = 最右 */
-const pagerAnchor = computed(() =>
-  Math.max(0, pagerPages.value.findIndex(p => p.key === activeTab.value)),
-)
-
 /**
- * 轨道位移 = 「把当前页挪到中点」的基准偏移 + 手指位移。
- * 收尾换页时 activeTab 变化会改变基准偏移，同时 pagerX 归零 —— 两者在同一次渲染里
- * 相互抵消，画面上当前页仍停在原处，所以看不到跳动。
+ * 组件状态 → SlidingTabs 的输入：
+ *   · progress：拖动时 = |位移| / 页宽，滑条与卡片严格同步；
+ *     点 Tab 换页时为 null —— 那一趟位移只为推动页面轨道，滑条已直接落到目标位、
+ *     交给 CSS 过渡，不能再按位移插值（否则跨分类点一下会先滑到隔壁再折回）；
+ *   · direction：往左拖 = 下一项，往右拖 = 上一项；
+ *   · dragging / resetting / sliding：逐帧写入时关掉过渡的三个状态位。
+ * 组件用 defineExpose 暴露的是 computed ref，父级模板取值时自动解包。
  */
-const pagerTransform = computed(() => {
-  const offset = -pagerAnchor.value * pagerWidth.value + pagerX.value
-  return `translate3d(${offset}px, 0, 0)`
-})
-
-interface PagerDragState {
-  pointerId: number
-  startX: number
-  startY: number
-  lastX: number
-  lastTime: number
-  /** 已越过阈值、进入拖动 */
-  active: boolean
-  /** 已判定为纵向滚动，本次手势彻底放弃 */
-  locked: boolean
-}
-let pagerDrag: PagerDragState | null = null
-/** 上一次手势是滑动（而非轻点）：随后紧跟着的 click 要吞掉，否则一滑完就点进了文章 */
-let pagerSuppressClick = false
-let pagerTimer: number | undefined
-/** 跟手位移按帧提交：同一帧内多次 pointermove 只触发一次渲染 */
-let pagerRaf = 0
-let pendingPagerX = 0
-
-function queuePagerX(x: number) {
-  pendingPagerX = x
-  if (pagerRaf) return
-  pagerRaf = requestAnimationFrame(() => {
-    pagerRaf = 0
-    pagerX.value = pendingPagerX
-  })
-}
-
-/** 吸附 / 回弹要直接写目标值：先丢掉还排队的跟手帧，避免它把动画目标覆盖回去 */
-function cancelQueuedPagerX() {
-  if (pagerRaf) {
-    cancelAnimationFrame(pagerRaf)
-    pagerRaf = 0
-  }
-  pendingPagerX = 0
-}
-
-function onPagerPointerDown(e: PointerEvent) {
-  // 每次按下先复位：避免上一次滑动没产生 click 时，把下一次正常点击吞掉
-  pagerSuppressClick = false
-  cancelQueuedPagerX()
-  if (!isMobile.value || pagerAnimating.value) return
-  // 只处理主键 / 单指；右键与双指不接管
-  if (e.pointerType === 'mouse' && e.button !== 0) return
-  if (!e.isPrimary) return
-  const target = e.target as HTMLElement | null
-  // 只从信息流上起手：轮播图片有自己的拖动；行内互动按钮优先当点击
-  if (!target?.closest('.campus-feed')) return
-  if (target.closest('button')) return
-  measurePagerWidth()
-  pagerDrag = {
-    pointerId: e.pointerId,
-    startX: e.clientX,
-    startY: e.clientY,
-    lastX: e.clientX,
-    lastTime: Date.now(),
-    active: false,
-    locked: false,
-  }
-}
-
-function onPagerPointerMove(e: PointerEvent) {
-  const d = pagerDrag
-  if (!d || d.pointerId !== e.pointerId || d.locked) return
-  const dx = e.clientX - d.startX
-  const dy = e.clientY - d.startY
-  const index = FEED_TABS.findIndex(t => t.key === activeTab.value)
-  // 这个方向有没有邻居页：往右拖要有上一页，往左拖要有下一页
-  const hasTarget = dx < 0 ? index < FEED_TABS.length - 1 : index > 0
-
-  // 未越过阈值：先定方向。纵向为主 → 交还页面滚动，本次手势放弃
-  if (!d.active) {
-    if (Math.abs(dy) > PAGER_DRAG_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
-      d.locked = true
-      return
-    }
-    if (Math.abs(dx) <= PAGER_DRAG_THRESHOLD) return
-    // 已在最左 / 最右分类：该方向没有邻居页，不接管手势 —— 卡片固定不动，
-    // 既不露白也不回弹；手指抬起后仍是普通点击
-    if (!hasTarget) return
-    d.active = true
-    // 邻居页与位移同一次渲染上屏：从第一帧起三张卡片就在轨道上
-    pagerOpen.value = true
-    pagerDragging.value = true
-    // 捕获指针：手指滑出列表区域也不丢 up 事件
-    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
-  }
-
-  d.lastX = e.clientX
-  d.lastTime = Date.now()
-  // 1:1 跟手；起步后把方向反向拉过起点（该方向没有邻居）时硬停在 0，同样不露白
-  queuePagerX(hasTarget ? dx : 0)
-}
-
-function onPagerPointerUp(e: PointerEvent) {
-  const d = pagerDrag
-  pagerDrag = null
-  if (!d || d.pointerId !== e.pointerId) return
-  // 松手后由吸附 / 回弹直接写目标值，丢掉还没落地的跟手帧
-  cancelQueuedPagerX()
-
-  // 没进入拖动（轻点）或已判定为纵向滚动：直接归位，click 照常交给行 / 按钮
-  if (!d.active || d.locked) {
-    pagerX.value = 0
-    pagerDragging.value = false
-    return
-  }
-
-  // 滑动过：吞掉随后那次 click
-  pagerSuppressClick = true
-  window.setTimeout(() => { pagerSuppressClick = false }, 350)
-
-  const dx = e.clientX - d.startX
-  const dt = Math.max(1, Date.now() - d.lastTime)
-  const velocity = (e.clientX - d.lastX) / dt
-  const wantNext = dx < 0 && (Math.abs(dx) > PAGER_SWIPE_THRESHOLD || velocity < -PAGER_FLING_VELOCITY)
-  const wantPrev = dx > 0 && (Math.abs(dx) > PAGER_SWIPE_THRESHOLD || velocity > PAGER_FLING_VELOCITY)
-
-  const index = FEED_TABS.findIndex(t => t.key === activeTab.value)
-  const targetIndex = wantNext ? index + 1 : wantPrev ? index - 1 : -1
-
-  // 已到首 / 尾分类，或位移不够：回弹
-  if (targetIndex < 0 || targetIndex >= FEED_TABS.length) {
-    springBackPager()
-    return
-  }
-
-  snapPager(wantNext ? 'next' : 'prev', FEED_TABS[targetIndex].key)
-}
-
-/**
- * 回弹：轨道滑回当前页，动画结束后收起邻居页。
- * 邻居页卸载时当前页仍在原位，所以不会有任何位移。
- */
-function springBackPager() {
-  cancelQueuedPagerX()
-  pagerAnimating.value = true
-  pagerDragging.value = false
-  pagerX.value = 0
-  window.clearTimeout(pagerTimer)
-  pagerTimer = window.setTimeout(closePager, PAGER_SLIDE_MS + 20)
-}
-
-/**
- * 吸附到相邻页：轨道滑到 ±页宽（此时邻居正好落在中位）。
- * 动画结束后在同一帧里做三件事：切分类、把轨道归零、卸载邻居 ——
- * 当前页始终是同一个 DOM 节点（:key 按分类），画面不重建、不闪。
- */
-function snapPager(direction: 'next' | 'prev', key: FeedTabKey) {
-  const width = pagerWidth.value || pagerRef.value?.clientWidth || window.innerWidth || 320
-  cancelQueuedPagerX()
-  pagerAnimating.value = true
-  pagerDragging.value = false
-  pagerX.value = direction === 'next' ? -width : width
-  window.clearTimeout(pagerTimer)
-  pagerTimer = window.setTimeout(() => {
-    pagerResetting.value = true
-    switchTab(key)
-    pagerOpen.value = false
-    pagerX.value = 0
-    requestAnimationFrame(() => {
-      // 强制结算归位后的这一帧，再恢复过渡，避免残留目标值再补一段动画
-      void pagerRef.value?.offsetWidth
-      pagerResetting.value = false
-      pagerAnimating.value = false
-    })
-  }, PAGER_SLIDE_MS + 20)
-}
-
-/** 收起邻居页：当前页仍在原位，卸载邻居不产生视觉位移 */
-function closePager() {
-  cancelQueuedPagerX()
-  pagerResetting.value = true
-  pagerOpen.value = false
-  pagerX.value = 0
-  requestAnimationFrame(() => {
-    void pagerRef.value?.offsetWidth
-    pagerResetting.value = false
-    pagerAnimating.value = false
-  })
-}
-
-function onPagerPointerCancel() {
-  // 被系统打断（来电、手势返回、双指缩放）：回弹，不翻页
-  pagerDrag = null
-  cancelQueuedPagerX()
-  if (!pagerOpen.value) {
-    pagerX.value = 0
-    pagerDragging.value = false
-    return
-  }
-  springBackPager()
-}
-
-/** 滑动结束后那一次 click 在此截停：不让它落到行（进详情）或按钮上 */
-function onPagerClickCapture(e: MouseEvent) {
-  if (!pagerSuppressClick) return
-  pagerSuppressClick = false
-  e.preventDefault()
-  e.stopPropagation()
-}
+const pagerState = computed(() => ({
+  progress: pagerRef.value?.progress ?? null,
+  direction: pagerRef.value?.direction ?? 0,
+  dragging: pagerRef.value?.dragging ?? false,
+  resetting: pagerRef.value?.resetting ?? false,
+  sliding: pagerRef.value?.sliding ?? false,
+}))
 
 /**
  * 相对时间：昨天 / 今天 / MM-DD / 更早。
@@ -2215,8 +1866,6 @@ watch(
 )
 
 onMounted(() => {
-  // 分页宽度要等 DOM 渲染完才能量：吸附位移、边界判断都按它算
-  void nextTick(measurePagerWidth)
   // 收藏 / AI资源 Tab 的数据与资讯流缓存无关，单独拉取（失败静默走空态）
   void loadCustomTabData()
   // 深链：个人中心「收藏的帖子」→ /student/campus?tab=favorites
@@ -3231,50 +2880,24 @@ onMounted(() => {
   }
 
   /* ---------- 卡片分页轨道 ----------
-     三张卡片（上一页 / 当前页 / 下一页）首尾相接排在同一条横向轨道上：
-     手指往左拖时整条轨道跟着走，当前页跟手、右侧邻居页从边缘同步进来。
-     位移由 pagerX 驱动（模板内联 transform）；这里只管过渡与手势归属：
-       · 常态：200ms 过渡，用于吸附 / 回弹；
-       · 拖动中 / 换页归位：关掉过渡，位移严格跟手 / 瞬时归位；
-       · 裁切必须由**不参与位移的外层**（.campus-pager-viewport）负责：
-         如果把 overflow: hidden 挂在会 translate 的轨道上，裁切框会跟着轨道一起
-         移走 —— 轨道平移到 ±一页宽时，可视区正好落在裁切框之外，整页变空白。
-         外层裁切后，邻居页只在真正进入内容区后才可见，也不会溢到左右 16px 边距里。 */
-  .campus-pager-viewport {
-    position: relative;
-    width: 100%;
-    flex-shrink: 0;
-    overflow: hidden;
-  }
+     轨道本身（裁切层、跟手位移、吸附过渡、首尾边界）已抽到 components/common/SwipePager.vue，
+     这里只剩「这一页长什么样」：
+       · .campus-pager 落在组件根节点上（组件根会继承本页的 scope id），只往下传设计变量；
+       · .campus-pager-page 是每页的容器，底色与下圆角按本页白卡的规格给
+         （等宽的 flex-basis 由组件统一提供，见组件的 :deep(.sw-pager-page) 规则）。 */
   .campus-pager {
-    display: flex;
-    width: 100%;
-    flex-shrink: 0;
-    transition: transform 200ms cubic-bezier(.22, .61, .36, 1);
-    touch-action: pan-y;            /* 横向手势交给 Pointer 逻辑，纵向仍归页面滚动 */
-    -webkit-user-select: none;
-    user-select: none;
+    /* 拖动 / 吸附时整条轨道垫白：边界分类回弹时露出的边缘也是白卡，
+       不会闪出一条页面底色；收起邻居页后组件撤掉这个底色。 */
+    --sw-track-bg: #fff;
   }
-  .campus-pager.is-pager-dragging,
-  .campus-pager.is-pager-resetting,
-  .campus-pager.is-pager-jumping {
-    transition: none;
-  }
-  .campus-pager.is-pager-dragging { will-change: transform; }
-  /* 吸附 / 回弹动画进行中不响应点按：避免落在还没停稳的邻居页上误开文章 */
-  .campus-pager.is-pager-animating { pointer-events: none; }
-  /* 拖动 / 吸附过程中整条轨道垫白：边界分类回弹时露出的边缘也是白卡，
-     不会闪出一条页面底色；收起邻居页后撤掉（当前页自带白底与圆角）。 */
-  .campus-pager.is-pager-open { background: #fff; }
-  /* 拖动中不保留按下态的压暗：滑动是切分类，不是「按住这一行」 */
-  .campus-pager.is-pager-dragging .feed-item:active { opacity: 1; }
+
+  /* 拖动中不保留按下态的压暗：滑动是切分类，不是「按住这一行」。
+     状态类由分页组件挂在根节点上（is-dragging），仍在本页的 scope 里，可直接选中。 */
+  .campus-pager.is-dragging .feed-item:active { opacity: 1; }
 
   /* 一张卡片 = 一个分类的完整内容：「推荐」页是轮播 + 信息流，「关注」页只有空态，其余只有信息流。
-     flex: 0 0 100% 让每页正好占满一屏宽（100% 相对轨道自身宽度，轨道宽度 = 内容区宽）。
      页容器自带白底与下圆角：邻居页比当前页矮时也能把卡片补齐，拖动时不会露底色。 */
   .campus-pager-page {
-    flex: 0 0 100%;
-    width: 100%;
     background: #fff;
     border-radius: 0 0 13px 13px;
   }

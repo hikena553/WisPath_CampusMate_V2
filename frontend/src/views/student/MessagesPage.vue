@@ -3,20 +3,27 @@
     <!-- 移动端页头：消息是底部导航的一级 Tab，故不套 SubPageHeader（子页头带返回箭头）。
          「消息 / 好友」两枚并排标题就是本页的两个主视图，点击切换 ——
          下划线滑条与文字随条染色复用 SlidingTabs（与校园资讯分类 Tab 同一套动画）；
+         下方视图是一条三页轨道（SwipePager），左右拖动的进度逐帧喂给滑条，
+         所以「滑条跟手指」和「页面跟手指」是同一次位移的两个投影，不会各走各的。
          两个主视图之外的「互动」收成右侧一枚星标图标，不再和两个大标题抢位置。 -->
     <header v-if="isMobile" class="msg-appbar">
       <SlidingTabs
         class="msg-appbar-tabs"
         :tabs="headerTabs"
         :model-value="activeTab"
-        @select="switchMainTab"
+        :progress="pagerState.progress"
+        :direction="pagerState.direction"
+        :dragging="pagerState.dragging"
+        :resetting="pagerState.resetting"
+        :instant-sweep="pagerState.sliding"
+        @select="selectMainTab"
       />
       <button
         type="button"
         class="msg-appbar-forum"
         aria-label="互动消息"
         :class="{ active: activeTab === 'forum' }"
-        @click="switchMainTab('forum')"
+        @click="selectMainTab('forum')"
       >
         <el-icon :size="18"><Star /></el-icon>
         <i v-if="forumUnread" class="msg-appbar-forum-dot">{{ forumUnread > 99 ? '99+' : forumUnread }}</i>
@@ -54,133 +61,151 @@
             :key="t.value"
             type="button"
             :class="['msg-tab', { active: activeTab === t.value }]"
-            @click="activeTab = t.value"
+            @click="switchMainTab(t.value)"
           >
             {{ t.label }}
             <i v-if="tabBadge(t.value)" class="msg-tab-badge">{{ tabBadge(t.value) }}</i>
           </button>
         </nav>
 
-        <div
-          class="msg-list"
-          @touchstart.passive="pull.onStart"
-          @touchmove="pull.onMove"
-          @touchend="pull.onEnd"
-          @touchcancel="pull.onCancel"
+        <!-- 视图分页轨道：消息 / 好友 / 互动三个视图各占一页，左右滑动或点页头标题切换。
+             跟手位移、松手吸附、点标题两页对滑、邻居页的挂载与卸载全部在
+             components/common/SwipePager.vue，与校园资讯的分类分页是同一个组件。
+             每页各自持有一份 .msg-list（自己滚、自己下拉刷新）：
+             切走再切回不会串到另一个视图的滚动位置上。
+             ignore-selector 传空：本页整行都是 <button>（会话行 / 互动行），
+             默认忽略按钮会让「从行上起手」永远拖不动，滑动后的误触由组件吞 click 兜住。 -->
+        <SwipePager
+          ref="pagerRef"
+          class="msg-pager"
+          :model-value="activeTab"
+          :pages="pagerKeys"
+          ignore-selector=""
+          @update:model-value="onPagerChange"
         >
-          <!-- 下拉刷新指示器：作为列表的第一个内容（吸顶栏在 .msg-list 之外，保持不动） -->
-          <PullRefreshIndicator
-            v-if="isMobile"
-            :indicator-style="pull.indicatorStyle"
-            :active="pull.active"
-          />
-          <!-- 会话：私聊 + 群聊合并，按最后消息时间排序 -->
-          <template v-if="activeTab === 'sessions'">
-            <div v-if="!filteredSessions.length" class="msg-empty">
-              <el-icon :size="26"><ChatDotRound /></el-icon>
-              <p>还没有会话</p>
-              <span>去通讯录找人聊两句吧</span>
-            </div>
-            <button
-              v-for="s in filteredSessions"
-              :key="s.key"
-              type="button"
-              :class="['msg-session', { active: activeSession?.key === s.key }]"
-              @click="openSession(s)"
+          <div v-for="v in pagerViews" :key="v" class="sw-pager-page msg-view">
+            <div
+              class="msg-list"
+              @touchstart.passive="pull.onStart"
+              @touchmove="pull.onMove"
+              @touchend="pull.onEnd"
+              @touchcancel="pull.onCancel"
             >
-              <div class="msg-avatar">
-                <el-avatar :size="40" :src="s.avatar || undefined">{{ s.name.slice(0, 1) }}</el-avatar>
-                <i v-if="s.type === 'private' && isOnline(s.rawId)" class="msg-online-dot" aria-hidden="true"></i>
-              </div>
-              <div class="msg-session-main">
-                <div class="msg-session-row">
-                  <span class="msg-session-name">
-                    <i v-if="s.type === 'group'" class="msg-group-mark">群</i>{{ s.name }}
-                  </span>
-                  <span class="msg-session-time">{{ formatTime(s.time) }}</span>
+              <!-- 下拉刷新指示器：作为列表的第一个内容（吸顶栏在 .msg-list 之外，保持不动） -->
+              <PullRefreshIndicator
+                v-if="isMobile"
+                :indicator-style="pull.indicatorStyle"
+                :active="pull.active"
+              />
+              <!-- 会话：私聊 + 群聊合并，按最后消息时间排序 -->
+              <template v-if="v === 'sessions'">
+                <div v-if="!filteredSessions.length" class="msg-empty">
+                  <el-icon :size="26"><ChatDotRound /></el-icon>
+                  <p>还没有会话</p>
+                  <span>去通讯录找人聊两句吧</span>
                 </div>
-                <div class="msg-session-row">
-                  <span class="msg-session-last">{{ s.lastMessage || '暂无消息' }}</span>
-                  <span v-if="s.unread" class="msg-unread">{{ s.unread > 99 ? '99+' : s.unread }}</span>
-                </div>
-              </div>
-            </button>
-          </template>
-
-          <!-- 通讯录：好友（互关）/ 我关注的 / 关注我的 -->
-          <template v-else-if="activeTab === 'contacts'">
-            <div class="msg-sub-tabs">
-              <button
-                v-for="t in contactTabs"
-                :key="t.value"
-                type="button"
-                :class="['msg-sub-tab', { active: contactTab === t.value }]"
-                @click="switchContactTab(t.value)"
-              >
-                {{ t.label }}
-              </button>
-            </div>
-            <div v-if="contactsLoading" class="msg-empty"><p>加载中…</p></div>
-            <div v-else-if="!filteredContacts.length" class="msg-empty">
-              <el-icon :size="26"><User /></el-icon>
-              <p>{{ contactEmptyText }}</p>
-              <span>{{ contactTab === 'following' ? '在交流社区关注感兴趣的同学' : '互相关注后自动成为好友' }}</span>
-            </div>
-            <div v-for="c in filteredContacts" v-else :key="c.id" class="msg-contact">
-              <button type="button" class="msg-contact-main" @click="openHomepage(c.id)">
-                <el-avatar :size="40" :src="c.avatar || undefined">{{ c.name.slice(0, 1) }}</el-avatar>
-                <div class="msg-contact-info">
-                  <span class="msg-contact-name">{{ c.name }}</span>
-                  <span class="msg-contact-meta">{{ contactMeta(c) }}</span>
-                </div>
-              </button>
-              <div class="msg-contact-actions">
-                <button type="button" class="msg-ghost-btn" @click="chatWith(c)">发消息</button>
                 <button
+                  v-for="s in filteredSessions"
+                  :key="s.key"
                   type="button"
-                  :class="['msg-follow-btn', { following: c.is_following }]"
-                  @click="toggleFollow(c)"
+                  :class="['msg-session', { active: activeSession?.key === s.key }]"
+                  @click="openSession(s)"
                 >
-                  {{ actionLabel(c) }}
+                  <div class="msg-avatar">
+                    <el-avatar :size="40" :src="s.avatar || undefined">{{ s.name.slice(0, 1) }}</el-avatar>
+                    <i v-if="s.type === 'private' && isOnline(s.rawId)" class="msg-online-dot" aria-hidden="true"></i>
+                  </div>
+                  <div class="msg-session-main">
+                    <div class="msg-session-row">
+                      <span class="msg-session-name">
+                        <i v-if="s.type === 'group'" class="msg-group-mark">群</i>{{ s.name }}
+                      </span>
+                      <span class="msg-session-time">{{ formatTime(s.time) }}</span>
+                    </div>
+                    <div class="msg-session-row">
+                      <span class="msg-session-last">{{ s.lastMessage || '暂无消息' }}</span>
+                      <span v-if="s.unread" class="msg-unread">{{ s.unread > 99 ? '99+' : s.unread }}</span>
+                    </div>
+                  </div>
                 </button>
-              </div>
-            </div>
-          </template>
+              </template>
 
-          <!-- 互动：论坛的赞 / 收藏 / 评论 / 新粉丝，与聊天彻底分开 -->
-          <template v-else>
-            <div class="msg-inbox-head">
-              <span>对我帖子的互动</span>
-              <button v-if="forumUnread" type="button" class="msg-link-btn" @click="readAllForum">全部已读</button>
-            </div>
-            <div v-if="!forumList.length" class="msg-empty">
-              <el-icon :size="26"><Star /></el-icon>
-              <p>还没有互动消息</p>
-              <span>点赞、收藏、评论都会汇总在这里</span>
-            </div>
-            <button
-              v-for="m in forumList"
-              v-else
-              :key="m.id"
-              type="button"
-              :class="['msg-forum', { unread: !m.is_read }]"
-              @click="openForum(m)"
-            >
-              <el-avatar :size="34" :src="m.actor_avatar || undefined">
-                {{ (m.actor_name || '同学').slice(0, 1) }}
-              </el-avatar>
-              <div class="msg-forum-main">
-                <div class="msg-forum-line">
-                  <b>{{ m.actor_name || '同学' }}</b>
-                  <span>{{ forumAction(m.kind) }}</span>
-                  <span v-if="m.post_title" class="msg-forum-title">《{{ m.post_title }}》</span>
+              <!-- 通讯录：好友（互关）/ 我关注的 / 关注我的 -->
+              <template v-else-if="v === 'contacts'">
+                <div class="msg-sub-tabs">
+                  <button
+                    v-for="t in contactTabs"
+                    :key="t.value"
+                    type="button"
+                    :class="['msg-sub-tab', { active: contactTab === t.value }]"
+                    @click="switchContactTab(t.value)"
+                  >
+                    {{ t.label }}
+                  </button>
                 </div>
-                <p v-if="m.kind === 'comment' && m.content" class="msg-forum-quote">{{ m.content }}</p>
-                <span class="msg-forum-time">{{ formatTime(m.created_at) }}</span>
-              </div>
-            </button>
-          </template>
-        </div>
+                <div v-if="contactsLoading" class="msg-empty"><p>加载中…</p></div>
+                <div v-else-if="!filteredContacts.length" class="msg-empty">
+                  <el-icon :size="26"><User /></el-icon>
+                  <p>{{ contactEmptyText }}</p>
+                  <span>{{ contactTab === 'following' ? '在交流社区关注感兴趣的同学' : '互相关注后自动成为好友' }}</span>
+                </div>
+                <div v-for="c in filteredContacts" v-else :key="c.id" class="msg-contact">
+                  <button type="button" class="msg-contact-main" @click="openHomepage(c.id)">
+                    <el-avatar :size="40" :src="c.avatar || undefined">{{ c.name.slice(0, 1) }}</el-avatar>
+                    <div class="msg-contact-info">
+                      <span class="msg-contact-name">{{ c.name }}</span>
+                      <span class="msg-contact-meta">{{ contactMeta(c) }}</span>
+                    </div>
+                  </button>
+                  <div class="msg-contact-actions">
+                    <button type="button" class="msg-ghost-btn" @click="chatWith(c)">发消息</button>
+                    <button
+                      type="button"
+                      :class="['msg-follow-btn', { following: c.is_following }]"
+                      @click="toggleFollow(c)"
+                    >
+                      {{ actionLabel(c) }}
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 互动：论坛的赞 / 收藏 / 评论 / 新粉丝，与聊天彻底分开 -->
+              <template v-else>
+                <div class="msg-inbox-head">
+                  <span>对我帖子的互动</span>
+                  <button v-if="forumUnread" type="button" class="msg-link-btn" @click="readAllForum">全部已读</button>
+                </div>
+                <div v-if="!forumList.length" class="msg-empty">
+                  <el-icon :size="26"><Star /></el-icon>
+                  <p>还没有互动消息</p>
+                  <span>点赞、收藏、评论都会汇总在这里</span>
+                </div>
+                <button
+                  v-for="m in forumList"
+                  v-else
+                  :key="m.id"
+                  type="button"
+                  :class="['msg-forum', { unread: !m.is_read }]"
+                  @click="openForum(m)"
+                >
+                  <el-avatar :size="34" :src="m.actor_avatar || undefined">
+                    {{ (m.actor_name || '同学').slice(0, 1) }}
+                  </el-avatar>
+                  <div class="msg-forum-main">
+                    <div class="msg-forum-line">
+                      <b>{{ m.actor_name || '同学' }}</b>
+                      <span>{{ forumAction(m.kind) }}</span>
+                      <span v-if="m.post_title" class="msg-forum-title">《{{ m.post_title }}》</span>
+                    </div>
+                    <p v-if="m.kind === 'comment' && m.content" class="msg-forum-quote">{{ m.content }}</p>
+                    <span class="msg-forum-time">{{ formatTime(m.created_at) }}</span>
+                  </div>
+                </button>
+              </template>
+            </div>
+          </div>
+        </SwipePager>
       </aside>
 
       <!-- 右侧 / 移动端覆盖：会话窗口
@@ -267,7 +292,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
   ChatDotRound,
@@ -280,9 +305,10 @@ import {
 } from '@element-plus/icons-vue'
 // 页头两个主视图标题：滑动下划线 + 文字随条染色，与校园资讯分类 Tab 同一套动画
 import SlidingTabs from '@/components/common/SlidingTabs.vue'
+// 视图左右翻页：跟手位移 / 吸附 / 点标题两页对滑，与校园资讯分类分页同一个组件
+import SwipePager from '@/components/common/SwipePager.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useResponsive } from '@/composables/useResponsive'
-import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
@@ -315,6 +341,7 @@ import {
 } from '@/api/social'
 
 const router = useRouter()
+const route = useRoute()
 const { isMobile } = useResponsive()
 const auth = useAuthStore()
 const { refresh: refreshUnread, forum: forumUnread, isOnline, syncPresence } = useUnreadSummary()
@@ -350,7 +377,27 @@ const contactTabs: Array<{ label: string; value: ContactTabValue }> = [
   { label: '关注我的', value: 'followers' },
 ]
 
-const activeTab = ref<TabValue>('sessions')
+/**
+ * 「消息 / 好友」两个主视图各自对应一条路由（见 router/index.ts）：
+ *   /student/messages          → 消息（会话列表）
+ *   /student/messages/friends  → 好友（通讯录 · 好友分组）
+ * 两条路由渲染同一个组件，只是进入时按地址落位到对应视图；页内换标题再 replace 回地址，
+ * URL 与页头高亮互为镜像 —— 刷新、分享链接、浏览器前进后退都能停在同一个视图上。
+ * 「互动」是同一页里的第三个视图（右上角星标进），没有独立地址，故不参与路由。
+ */
+const ROUTE_OF_TAB = {
+  sessions: 'student-messages',
+  contacts: 'student-message-friends',
+} as const
+
+/** 地址 → 视图。返回 null 表示这条地址与本页的两个视图无关（例如正在离开本页） */
+function tabFromRoute(name: unknown): Exclude<TabValue, 'forum'> | null {
+  if (name === ROUTE_OF_TAB.contacts) return 'contacts'
+  if (name === ROUTE_OF_TAB.sessions) return 'sessions'
+  return null
+}
+
+const activeTab = ref<TabValue>(tabFromRoute(route.name) ?? 'sessions')
 const contactTab = ref<ContactTabValue>('friends')
 const keyword = ref('')
 
@@ -364,8 +411,16 @@ const chatLoading = ref(false)
 const sending = ref(false)
 const scrollEl = ref<HTMLElement | null>(null)
 
-// 移动端进入会话属于二级页，聊天中让出底部悬浮导航
-useMobileSubPage(computed(() => isMobile.value && chatOpen.value))
+/*
+ * 会话窗口**不登记**为「页内二级页」，底部悬浮导航因此全程留在 DOM 里。
+ *
+ * 聊天页本身是 position: fixed; inset: 0; z-index: 2600 的整屏覆盖层，
+ * 层级压过悬浮导航（1000）—— 滑到位以后它自己就把导航盖住了。
+ * 反过来，一打开就 v-if 卸掉导航，会在滑入动画的头一帧（约 30ms 内）
+ * 凭空挖掉屏幕底部一块：列表还在原地，导航已经没了，看上去像布局塌了；
+ * 同时 useDockInset 撤掉页面根的 82px 让位，页面还会跟着抖一下。
+ * 交给覆盖层逐帧「盖上去」，才是子页推入该有的观感（返回时也是一层层露出来）。
+ */
 
 const contacts = ref<ContactUser[]>([])
 const contactsLoading = ref(false)
@@ -491,16 +546,102 @@ function switchContactTab(tab: ContactTabValue) {
 }
 
 /**
- * 移动端页头的主视图切换（消息 / 好友 / 互动）。
+ * 页内主视图的**唯一状态落点**（消息 / 好友 / 互动）。
+ * 三条入口最后都收在这里：轨道回报（拖动吸附 / 点标题换页）、桌面端三栏页签、地址回填。
  * contactTab 先落位再切 activeTab —— activeTab 的 watch 会带着新分组去拉数据；
- * 头像与标题用同一套 activeTab 状态，所以页头高亮和下方内容是同一份真相，不会各说各话。
- * 入参是 SlidingTabs / 星标按钮给的 string，这里收窄回本页的 TabValue。
+ * 页头高亮、搜索占位、下方轨道用的是同一份 activeTab，不会各说各话。
  */
 function switchMainTab(tab: string) {
-  if (tab !== 'sessions' && tab !== 'contacts' && tab !== 'forum') return
+  if (!isViewKey(tab)) return
   if (activeTab.value === tab) return
   if (tab === 'contacts' && contactTab.value !== 'friends') contactTab.value = 'friends'
   activeTab.value = tab
+  // 「互动」没有自己的地址：URL 停在上一枚标题对应的位置上，刷新后回到那个视图
+  if (tab !== 'forum') syncRouteForTab(tab)
+}
+
+/**
+ * 换视图 = 换地址。用 replace 而不是 push：两个标题是同一个页面的两个视图，
+ * 来回点不该在历史里堆出一串记录（返回键应当直接离开消息页）。
+ * query / hash 一并带上，页面上其它靠 query 的入口不会因为换标题被抹掉。
+ */
+function syncRouteForTab(tab: Exclude<TabValue, 'forum'>) {
+  const name = ROUTE_OF_TAB[tab]
+  if (route.name === name) return
+  void router.replace({ name, query: route.query, hash: route.hash })
+}
+
+/* ==================== 视图左右翻页（移动端 / 桌面端共用一份标记） ==================== */
+
+/**
+ * 三个主视图（消息 / 好友 / 互动）就是轨道上的三页。
+ * 拖动 1:1 跟手、松手按位移 / 速度吸附或回弹、点标题两页对滑、邻居页的挂载与卸载，
+ * 全在 components/common/SwipePager.vue（与校园资讯分类分页同一个组件）；
+ * 本页只留两件事：① 告诉轨道有哪几页、给出每页内容；② 把轨道的即时状态转给页头滑条。
+ *
+ * 「互动」排第三页：它不是页头的一枚标题，只能从「好友」往左滑、或点右上角星标进；
+ * 走到这一页时页头滑条自然隐去（两个标题都不再选中），高亮交给星标自身。
+ *
+ * 桌面端 pagerKeys 只剩当前视图一页 —— 轨道没有邻居，手势天然不接管，
+ * 同一份标记两档共用，不必为桌面另写一套列表。
+ */
+const pagerRef = ref<InstanceType<typeof SwipePager> | null>(null)
+
+/** 轨道上的页序（有序）：组件据此判断左右邻居与首尾边界 */
+const VIEW_KEYS: TabValue[] = ['sessions', 'contacts', 'forum']
+
+const pagerKeys = computed<TabValue[]>(() => (isMobile.value ? VIEW_KEYS : [activeTab.value]))
+
+/**
+ * 轨道上正在渲染的页：静止 = 当前页，拖动 / 吸附 = 加上左右邻居，点标题换页 = 出发页 + 目标页。
+ * 摆哪几页由组件算（renderedPages），本页按 key 渲染对应视图即可 ——
+ * 邻居页只在拖动开始时挂载，静止时只有当前页，页面不会被邻居撑高。
+ */
+const pagerViews = computed<TabValue[]>(() => {
+  const keys = pagerRef.value?.renderedPages ?? [activeTab.value]
+  return keys.filter((k): k is TabValue => (VIEW_KEYS as string[]).includes(k))
+})
+
+/**
+ * 组件状态 → 页头滑条（口径与校园资讯一致）：
+ *   · progress：拖动时 = |位移| / 页宽，滑条与页面严格同步；
+ *     点标题换页时为 null —— 那一趟位移只为推动页面轨道，滑条已直接落到目标位；
+ *   · direction：往左拖 = 下一页，往右拖 = 上一页；
+ *   · dragging / resetting / sliding：逐帧写入时关掉过渡的三个状态位。
+ */
+const pagerState = computed(() => ({
+  progress: pagerRef.value?.progress ?? null,
+  direction: pagerRef.value?.direction ?? 0,
+  dragging: pagerRef.value?.dragging ?? false,
+  resetting: pagerRef.value?.resetting ?? false,
+  sliding: pagerRef.value?.sliding ?? false,
+}))
+
+function isViewKey(key: string): key is TabValue {
+  return key === 'sessions' || key === 'contacts' || key === 'forum'
+}
+
+/**
+ * 点页头标题 / 右上角星标：内容横向滑过去，与手指切换同一段时长。
+ * 状态不在此刻落，交给轨道回报（onPagerChange）统一写 —— 拖动与点按因此只有一条落点。
+ * 已在目标视图时只收掉可能还在跑的拖动 / 吸附残留，避免半路卡在邻居页上。
+ */
+function selectMainTab(key: string) {
+  if (!isViewKey(key)) return
+  if (!isMobile.value || !pagerRef.value) {
+    switchMainTab(key)
+    return
+  }
+  if (key === activeTab.value) {
+    pagerRef.value.cancel()
+    return
+  }
+  pagerRef.value.slideTo(key)
+}
+
+/** 轨道回报「当前页变了」（拖动吸附完成、或点标题换页出发那一刻） */
+function onPagerChange(key: string) {
+  switchMainTab(key)
 }
 
 // ---------- 会话窗口 ----------
@@ -676,9 +817,30 @@ watch(activeTab, (tab) => {
   if (tab === 'forum') void loadForum()
 })
 
+/**
+ * 地址 → 页内状态：浏览器前进 / 后退、从别处直接跳到 /student/messages/friends 时以地址为准。
+ * 页内换视图是先改 activeTab 再 replace，这里算出来的视图与当前一致，天然空转，
+ * 所以不需要「忽略下一次路由变化」那种标记位。
+ */
+watch(
+  () => route.name,
+  (name) => {
+    const tab = tabFromRoute(name)
+    // tab 为 null = 正在离开本页（跳到校园资讯等），交给路由去换页面，不改页内状态
+    if (!tab || tab === activeTab.value) return
+    if (tab === 'contacts' && contactTab.value !== 'friends') contactTab.value = 'friends'
+    activeTab.value = tab
+  },
+)
+
 onMounted(async () => {
   await loadSessions()
   void loadForum()
+  // 直接落到 /student/messages/friends 时 activeTab 的 watch 不会被触发（首帧不跑），这里补一次
+  if (activeTab.value === 'contacts') void loadContacts()
+  // 移动端预载「好友」：它是轨道的邻居页，手指一拖邻居就立刻上屏 ——
+  // 等到切过去那一刻再拉数据，滑到一半的邻居会是一张「还没有好友」的空态。
+  else if (isMobile.value) void loadContacts()
   // 会话未读与聊天轮询：移动端回到页面时不重复拉，靠 visibility 判断
   pollTimer = setInterval(() => {
     if (document.visibilityState !== 'visible') return
@@ -780,6 +942,17 @@ onBeforeUnmount(() => {
 .msg-tab.active { background: #111827; color: #fff; font-weight: 500; }
 .msg-tab-badge { position: absolute; top: 1px; right: 4px; min-width: 15px; padding: 1px 4px; border-radius: 8px; background: #111827; color: #fff; font-size: 10px; font-style: normal; line-height: 1.4; }
 .msg-tab.active .msg-tab-badge { background: #fff; color: #111827; }
+
+/* ================= 视图分页轨道 =================
+   消息 / 好友 / 互动三个视图各占一页，左右滑动或点页头标题切换。
+   高度链必须逐层给死，否则「页内自己滚」会退化成「整条轨道被最高的那页撑高」：
+     .msg-side（列，高度由 .msg-main 定死）
+       → 轨道（flex: 1 1 0，吃掉剩余高度，与内容高度无关）
+         → 轨道内容器 100% → 页 100% → 页内 .msg-list 自己 overflow-y: auto
+   只有最后一层在滚，所以每个视图各自持有滚动位置，切走再切回不会串位。 */
+.msg-pager { flex: 1 1 0; min-height: 0; --sw-track-bg: #fff; }
+.msg-pager :deep(.sw-pager) { height: 100%; }
+.msg-view { display: flex; flex-direction: column; height: 100%; min-height: 0; background: #fff; }
 
 /* ================= 列表 ================= */
 .msg-list { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 12px; scrollbar-width: thin; }

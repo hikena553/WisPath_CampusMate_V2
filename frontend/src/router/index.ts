@@ -70,6 +70,11 @@ const router = createRouter({
         { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
         // 消息：原「工作台」页签位，统筹会话（私聊 / 群聊）、通讯录（关注·粉丝·互关好友）与论坛互动消息
         { path: 'messages', name: 'student-messages', component: () => import('@/views/student/MessagesPage.vue'), meta: { keepAlive: false } },
+        // 消息页的两个主视图各有地址：/student/messages = 会话，/student/messages/friends = 好友。
+        // 两条路由指向同一个组件（动态 import 同一个模块，组件身份不变，切视图不会重建页面），
+        // 只是进入时按路由落位到对应视图 —— 刷新 / 分享 / 浏览器前进后退都能停在同一个视图上。
+        // 「互动」是页内第三个视图（右上角星标进），没有独立地址，故不单独建路由。
+        { path: 'messages/friends', name: 'student-message-friends', component: () => import('@/views/student/MessagesPage.vue'), meta: { keepAlive: false } },
         // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
         { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },

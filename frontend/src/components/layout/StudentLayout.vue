@@ -179,6 +179,8 @@ const TAB_BAR_ROUTES = new Set([
   '/student/campus',
   '/student/schedule',
   '/student/messages',
+  // 消息页「好友」视图是它自己的地址（同一页面、另一个视图），仍属一级页面
+  '/student/messages/friends',
   '/student/profile',
   // 工作台（办事服务）虽已不占页签，但仍是模块落地页（入群等流程会直达此处），
   // 页面本身没有返回键，保留导航避免「进得来出不去」；它的办事子页仍按二级处理。
