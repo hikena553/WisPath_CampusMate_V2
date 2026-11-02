@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getUser, setUser, removeToken, isLoggingOut, isForcedLogout } from '@/utils/token'
 import { isGuestMode } from '@/utils/guest'
 import { getCurrentIdentity } from '@/api/auth'
+import { useAuthStore } from '@/stores/auth'
+import type { UserInfo } from '@/types'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -79,6 +81,9 @@ const router = createRouter({
         // 不在底部导航白名单里 → 移动端导航自动隐藏，返回链由页头箭头承担；
         // 点结果时 replace 回 /student/messages?chat=<key>，由消息页把会话打开。
         { path: 'messages/search', name: 'student-message-search', component: () => import('@/views/student/MessagesSearchPage.vue'), meta: { keepAlive: false } },
+        // 添加朋友子页：消息页「＋」面板与通讯录空态进入。
+        // 搜索找人 / 建群 / 可能认识的人 / 我的名片都在这一页，不再借道消息搜索页。
+        { path: 'messages/add', name: 'student-message-add', component: () => import('@/views/student/AddFriendPage.vue'), meta: { keepAlive: false } },
         // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
         { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },
@@ -145,6 +150,20 @@ const router = createRouter({
 })
 
 /**
+ * 把用户写进 pinia 的 auth store。
+ *
+ * 不能只写 localStorage：store 的 `user` 是在**创建那一刻**读缓存的，
+ * 而 store 往往比缓存早一步建好（登录页先挂载 → store 初始化为 null → 登录/探活才写缓存）。
+ * 不同步的话 `auth.user` 一直是 null，页面里读 `auth.userName`、`auth.user?.role`
+ * 全是空 —— 表现就是问候草稿缺名字、教师刷新后被当成学生。
+ */
+function syncAuthUser(user: Record<string, unknown>) {
+  const auth = useAuthStore()
+  if (auth.user?.id === user.id) return
+  auth.updateUser(user as unknown as UserInfo)
+}
+
+/**
  * 确保拿到完整的当前用户信息。
  * - 本地缓存命中（含 id）直接返回，避免每次导航都请求；
  * - 缓存缺失（localStorage 被清理/篡改）时调 /api/auth/me 拉取并回填；
@@ -156,11 +175,15 @@ async function ensureUser(): Promise<Record<string, unknown> | null> {
   //（表现为「要刷新才退出」或「刷新后又登进去」）
   if (isLoggingOut() || isForcedLogout()) return null
   const cached = getUser()
-  if (cached && cached.id) return cached
+  if (cached && cached.id) {
+    syncAuthUser(cached)
+    return cached
+  }
   try {
     const identity = await getCurrentIdentity()
     const user = identity as unknown as Record<string, unknown>
     setUser(user)
+    syncAuthUser(user)
     return user
   } catch {
     return null

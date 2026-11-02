@@ -47,7 +47,12 @@ class ForumMessage(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     actor_id: Mapped[int] = mapped_column(Integer, index=True)
     kind: Mapped[ForumMessageKind] = mapped_column(
-        SAEnum(ForumMessageKind), default=ForumMessageKind.LIKE, index=True
+        # 库里存的是小写值（like / favorite / comment / follow）：种子数据、
+        # 建表迁移的注释、前端按 kind 过滤都按这个口径。SQLAlchemy 默认按**枚举名**
+        # 读写，会在读到 'follow' 时抛 LookupError，故显式指定取值函数。
+        SAEnum(ForumMessageKind, values_callable=lambda e: [m.value for m in e]),
+        default=ForumMessageKind.LIKE,
+        index=True,
     )
     post_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 标题快照：帖子被删除后消息仍可读，不至于只剩一条空记录

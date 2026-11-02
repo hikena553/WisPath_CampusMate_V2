@@ -94,7 +94,7 @@ onMounted(async () => {
   }
 })
 
-/** 入群后按角色进入对应端：教师直达群聊，学生进入消息中心 */
+/** 入群后按角色进入对应端：教师直达群聊，学生落到消息页并直接打开这个群 */
 function goToGroup() {
   const res = result.value
   if (!res) return
@@ -102,7 +102,9 @@ function goToGroup() {
     router.replace({ path: '/teacher/messages', query: { groupId: String(res.group_id), groupName: res.group_name } })
     return
   }
-  router.replace('/student/workbench')
+  // 别往 /student/workbench 跳：那边是消息中心的旧实现，进群聊后退回会回到工作台首页，
+  // 从邀请链接点进来的人根本没去过工作台，退回去一脸问号。消息页的会话键是 g-<id>。
+  router.replace({ name: 'student-messages', query: { chat: `g-${res.group_id}` } })
 }
 </script>
 

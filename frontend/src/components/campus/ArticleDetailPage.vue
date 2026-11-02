@@ -1,6 +1,8 @@
 <template>
   <Teleport to="body">
-    <!-- 覆盖式全屏子页：动画复用全局 .subpage（styles/animations.css，全站唯一实现）。
+    <!-- 全屏子页：动画复用全局 .subpage（styles/animations.css，全站唯一实现）。
+         子页从右滑入的同时，下层页面退 -30%（父页挂 .subpage-underlay，见 CampusPage）；
+         本组件自己 Teleport 到 body，所以不受父页 transform 的影响。
          结构照抄 ArticleReader：Teleport + Transition(name="subpage") + 根元素 fixed inset:0。
          取舍：不用 el-dialog / el-drawer —— 它们自带居中、遮罩、body 滚动锁与 z-index 体系，
          而这页要的是「手机上整页盖上来、桌面端 760px 居中」的确定性版式，自己写样式可控得多。 -->

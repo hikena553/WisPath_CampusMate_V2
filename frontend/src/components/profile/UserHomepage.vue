@@ -212,8 +212,8 @@
 
               <!-- 删除好友：放在设置列表末尾的独立白色行，随内容滚动，不再吸底 -->
               <div class="uh-set-group uh-set-del-group">
-                <button type="button" class="uh-cell uh-del" :disabled="removing" @click="removeFriend">
-                  删除好友
+                <button type="button" class="uh-cell uh-del" :disabled="removing" @click="removeOrUnfollow">
+                  {{ data.mutual.has_conversation ? '删除好友' : '取消关注' }}
                 </button>
               </div>
             </div>
@@ -234,6 +234,7 @@ import { actionPrompt, actionConfirm } from '@/composables/useActionSheet'
 import BadgeWall from '@/components/profile/BadgeWall.vue'
 import BadgeMedal from '@/components/profile/BadgeMedal.vue'
 import { deleteSession } from '@/api/messages'
+import { unfollowUser } from '@/api/social'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useUserHomepage } from '@/composables/useUserHomepage'
@@ -283,7 +284,17 @@ const roleLine = computed(() => {
 })
 
 const friendCount = computed(() => data.value?.stats.find((s) => s.key === 'contacts')?.value ?? 0)
-const isFriend = computed(() => !!data.value?.mutual.has_conversation)
+/**
+ * 「是不是我的人」：我关注的，或者聊过天的。
+ *
+ * 原来只看 has_conversation（聊过天），从好友列表点进来但还没说过话的人会被当成陌生人 ——
+ * 右上角没有「…」，进不了备注 / 免打扰 / 删除，发消息还会塞一句自我介绍。
+ * 本站口径是「好友 = 我关注的」，主页跟通讯录保持一致。
+ */
+const isFriend = computed(() => {
+  const m = data.value?.mutual
+  return !!m && (m.is_following || m.has_conversation)
+})
 const isSelf = computed(() => !!data.value && data.value.id === auth.user?.id)
 
 /** 好友设置项（备注 / 特别关心 / 免打扰 / 黑名单）：本地保存，仅自己可见 */
@@ -369,18 +380,58 @@ const greeting = computed(() => `你好，我是${auth.userName || ''}，想和�
 
 /**
  * 打开与该用户的会话：
- * 教师端落到 /teacher/messages，学生端落到工作台的「消息中心」，
- * 用 query 带上 chat / chatName / draft，由消息页负责打开会话并预填草稿。
+ *   · 教师端 → /teacher/messages，query 用裸 id（教师端会话键就是用户 id）
+ *   · 学生端 → /student/messages，query 必须是 **s-<id>**（学生会话键带前缀）
+ *
+ * 学生端别再往 /student/workbench 跳：工作台里那套是消息中心的旧实现，
+ * 会话页的返回是「收回到工作台首页」，从好友列表点进来再返回就莫名其妙到了工作台。
+ * 底部导航的「消息」早就是 /student/messages 了，这里跟它对齐。
  */
 function goChat(draft?: string) {
   const d = data.value
   if (!d) return
   if (d.role === 'admin' || auth.user?.role === 'admin') return
-  const query: Record<string, string> = { chat: String(d.id), chatName: d.name }
+  const isTeacher = auth.user?.role === 'teacher'
+  const query: Record<string, string> = isTeacher
+    ? { chat: String(d.id), chatName: d.name }
+    : { chat: `s-${d.id}`, chatName: d.name }
   if (draft) query.draft = draft
-  const path = auth.user?.role === 'teacher' ? '/teacher/messages' : '/student/workbench'
+  const path = isTeacher ? '/teacher/messages' : '/student/messages'
   close()
   router.push({ path, query })
+}
+
+/**
+ * 设置页末尾那个红色动作，按「有没有聊过」分两种：
+ *   · 聊过 → 从消息列表移除（会话隐藏，关注关系保留，对方无感）；
+ *   · 只关注没聊过 → 取消关注。不然这颗按钮点了什么都不发生，
+ *     而这类人正是「好友 = 我关注的」名单里的大多数。
+ */
+function removeOrUnfollow() {
+  return data.value?.mutual.has_conversation ? removeFriend() : unfollowTarget()
+}
+
+/** 取消关注：二次确认后删掉关注关系并收起主页（名单里这个人会消失） */
+async function unfollowTarget() {
+  const d = data.value
+  if (!d) return
+  const ok = await actionConfirm(
+    `不再关注「${d.name}」？TA 会从好友列表里消失。`,
+    '取消关注',
+    { danger: true, confirmButtonText: '取消关注' },
+  )
+  if (!ok) return
+  removing.value = true
+  try {
+    await unfollowUser(d.id)
+    showSettings.value = false
+    ElMessage.success(`已取消关注 ${d.name}`)
+    close()
+  } catch {
+    ElMessage.error('取消关注失败，请稍后再试')
+  } finally {
+    removing.value = false
+  }
 }
 
 /** 删除好友：二次确认后从我的会话列表移除该联系人（服务端记隐藏水位，对方不受影响） */

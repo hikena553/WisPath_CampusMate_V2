@@ -1,6 +1,7 @@
 <template>
   <div
-    class="campus-page"
+    class="campus-page subpage-underlay"
+    :class="{ 'is-subpushed': campusPushed }"
     @touchstart.passive="pull.onStart"
     @touchmove="pull.onMove"
     @touchend="pull.onEnd"
@@ -599,7 +600,7 @@
          「Component inside <Transition> renders non-element root node that cannot be animated」，
          且整个页面的切换动画会失效。
          阅读器自己会 Teleport 抽屉到 body，放在这里不会影响布局。 -->
-    <ArticleReader ref="readerRef" />
+    <ArticleReader ref="readerRef" @visible-change="readerOpen = $event" />
 
     <!-- 移动端全屏搜索子页（移动端页头放大镜的落点；桌面端仍走上面的 el-dialog）：
          搜索历史 / 搜索发现 / 热榜三段 + 结果视图，资讯池由父页备好传入。
@@ -646,7 +647,7 @@ import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
 import CampusSearchPage, { type SearchPoolItem } from '@/components/campus/CampusSearchPage.vue'
 import ForumInboxSheet from '@/components/community/ForumInboxSheet.vue'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
-import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { useMobileSubPage, useSubpagePush } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 // 分类 Tab 的动画（滑动下划线 + 文字随条染色）已抽成通用组件
@@ -1759,8 +1760,35 @@ function onHeroSlideDragStart(e: DragEvent) {
  */
 const detailTarget = ref<{ url: string; title: string; source: string; from: 'row' | 'comment' | 'repost' } | null>(null)
 
-// 校园资讯的搜索页 / 文章详情 / 论坛信箱属于二级页，打开时让出移动端底部悬浮导航
-useMobileSubPage(computed(() => isMobile.value && (searchTarget.value || !!detailTarget.value || forumInboxOpen.value)))
+/**
+ * 底部悬浮导航的去留，按子页类型分两套 —— 这是本页最容易改错的一处。
+ *
+ * ① 全屏子页（搜索 / 详情 / 阅读器）：**不登记隐藏**，让胶囊留在 DOM 里，
+ *    由下面的 useSubpagePush 推着一起走（-30%），与消息页会话层同一套。
+ *    它们都是 SubPageShell 的 fixed 整屏覆盖层（z-index 2600 > 胶囊 1000），
+ *    滑到位后自己就把胶囊盖住了；反过来一打开就 v-if 卸掉，会在子页推开的
+ *    同一帧凭空挖掉屏幕底部一块（内容还在原地、导航已经没了），比「被盖住」割裂得多。
+ * ② 互动消息（el-drawer 全屏抽屉）：仍登记隐藏。它是从底部/侧边弹出的独立抽屉层，
+ *    不是本页的「下一层」，让胶囊跟着页面位移没有意义。
+ */
+useMobileSubPage(computed(() => isMobile.value && forumInboxOpen.value))
+
+/** 站内阅读器的开关（由 ArticleReader 的 visible-change 通报）：
+ *  它是 Teleport 到 body 的覆盖层，本页拿不到它的 visible，只能靠事件同步。 */
+const readerOpen = ref(false)
+
+/**
+ * 子页打开时下层页面让位（-30%），与子页滑入同一条 0.3s 曲线 —— 即个人中心
+ * 「编辑资料」那套（见 animations.css 的 .subpage-underlay）。
+ * 只算真正的全屏子页：搜索页 / 详情 / 阅读器。论坛信箱是半屏面板，不推页面。
+ * 移动端限定：桌面端这几个子页同样是整屏覆盖层，但没有底部导航要躲，
+ * 下层位移只会让桌面观感变廉价（与 page-card 的断点划分同一个道理）。
+ */
+const campusPushed = computed(
+  () => isMobile.value && (searchTarget.value || !!detailTarget.value || readerOpen.value),
+)
+// 布局层的底部胶囊跟着一起走（它不在本页里，只能靠全局登记）
+useSubpagePush(campusPushed)
 
 /**
  * 互动计数表：url → 计数 + 当前用户是否点赞。

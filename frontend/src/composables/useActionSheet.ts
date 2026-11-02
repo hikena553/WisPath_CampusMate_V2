@@ -1,5 +1,5 @@
 import { createApp, defineComponent, h, reactive, nextTick } from 'vue'
-import { ElMessageBox, ElInput } from 'element-plus'
+import { ElMessageBox, ElInput, ElIcon, ElDialog } from 'element-plus'
 import ActionSheet from '@/components/common/ActionSheet.vue'
 
 /**
@@ -162,7 +162,13 @@ function ensureHost() {
   const style = document.createElement('style')
   style.textContent = HOST_CSS
   document.head.appendChild(style)
-  createApp(Host).mount(host)
+  // 这是**独立的 Vue app**（指令式挂载），拿不到 main.ts 里 app.use(ElementPlus) 的全局注册：
+  // 不注册的话 ActionSheet 模板里的 `<el-icon>` 会渲染成未知元素 —— 标题行右上角的关闭按钮
+  // 只剩一个灰圆，里面的 × 是 0 宽的（之前一直如此，只是没人注意）。
+  const app = createApp(Host)
+  app.component('ElIcon', ElIcon)   // 面板头部关闭按钮
+  app.component('ElDialog', ElDialog) // 窗口从移动端拉到桌面端时会切到 el-dialog 分支
+  app.mount(host)
   mounted = true
 }
 

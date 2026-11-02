@@ -52,6 +52,9 @@ from app.api.ml_training import router as ml_training_router
 from app.api.badge import router as badge_router
 from app.api.cron_task import router as cron_task_router
 from app.api.study_room import router as study_room_router
+# 社交关系（关注 / 取关 / 通讯录 / 推荐 / 论坛互动消息）——
+# 上一次改登记表时被顺手删掉，导致 /api/social/* 整片 404、关注按钮点了没反应
+from app.api.social import router as social_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -106,6 +109,7 @@ ROUTERS = [
     badge_router,
     cron_task_router,
     study_room_router,
+    social_router,
 ]
 
 

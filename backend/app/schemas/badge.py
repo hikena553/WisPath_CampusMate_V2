@@ -59,8 +59,12 @@ class MutualOut(BaseModel):
     common_groups: int = 0
     is_my_tutor: bool = False
     is_my_student: bool = False
-    # 是否已建立单聊关系（决定主页显示「加为好友」还是「删除好友」）
+    # 是否已建立单聊关系（聊过天）
     has_conversation: bool = False
+    # 关注关系：「好友 = 我关注的」是本站口径，主页右上角的联系人菜单据此显示，
+    # 只看 has_conversation 的话，从好友列表点进来但还没聊过的人会被当成陌生人
+    is_following: bool = False
+    is_follower: bool = False
 
 
 class UserHomepageOut(BaseModel):
