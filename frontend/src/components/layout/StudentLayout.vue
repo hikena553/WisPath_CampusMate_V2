@@ -81,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
@@ -97,6 +97,8 @@ import { ChatDotRound, Memo, Message, User, SwitchButton, Odometer } from '@elem
 import { useResponsive } from '@/composables/useResponsive'
 import { useDockInset } from '@/composables/useDockInset'
 import { hasOpenSubPage } from '@/composables/useMobileSubPage'
+import { hasSearchFieldFlight, hasSearchPageExit } from '@/utils/searchFieldFlight'
+import { pageTransition, setPageTransition } from '@/utils/routeTransition'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import UserHomepage from '@/components/profile/UserHomepage.vue'
 import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
@@ -123,26 +125,51 @@ const { isMobile } = useResponsive()
 //    所以滑动的只有离场页自己。
 // 3) 其余同级页面切换（底部导航/顶栏之间，如校园资讯↔驾驶舱）：卡片式切换（新页浮起放大到位，旧页缩小退后）
 const quickPagePaths = ['/student/plan', '/student/portfolio', '/student/growth', '/student/emotion']
-const pageTransition = ref('')
 watch(
   () => route.path,
   (to, from) => {
+    // 消息搜索子页：从列表点搜索条进来时，搜索框要「飞」到顶栏（见 utils/searchFieldFlight.ts）。
+    // 这一趟不能用页面淡入 —— 整页 opacity 0→1 会把飞行中的框一起压成半透明，
+    // 观感是「框在闪」而不是「框在移动」。让页面瞬间就位，进场交给框和内容区自己做。
+    // 用 route-instant 而不是空名字：空名字连 leave 类都不加，离场页仍留在流里，
+    // 新页会被挤到下面，框量到的目标位置是错的（会从屏幕外飞进来）。
+    if (to === '/student/messages/search' && hasSearchFieldFlight()) {
+      setPageTransition('route-instant')
+      return
+    }
+    // 兜底：搜索页自己会在 goBack 里提前指名 route-search-exit（见 utils/routeTransition.ts）。
+    // 这里再判一次，是为了覆盖「浏览器后退」等不经由页面按钮的退出 ——
+    // 那种情况下 name 仍可能晚一步，播不出动画，但至少不会退化成瞬切。
+    // 消息搜索子页的退场（返回 / 取消）：刻意不复用进场的语言。进场是纵向的
+    // （搜索框飞上来、顶栏从下往上滑入），退场走「整页缩到 96% 并淡出」，
+    // 否则只是把进场倒放一遍，两趟动作分不出来。只动离场页一页，
+    // 新页不淡入也不位移（同时动两页就是「传送带」，这条在 subpage 一节里踩过）。
+    // 点搜索结果跳会话不算退出，不标记，仍走常规过渡。
+    if (from === '/student/messages/search' && hasSearchPageExit()) {
+      setPageTransition('route-search-exit')
+      holdTabBarFor(240)
+      return
+    }
     const toQuick = quickPagePaths.includes(to)
     const fromQuick = quickPagePaths.includes(from)
     if (toQuick || fromQuick) {
-      pageTransition.value = fromQuick && !toQuick ? 'route-subpage-back' : 'route-subpage'
+      setPageTransition(fromQuick && !toQuick ? 'route-subpage-back' : 'route-subpage')
     } else {
-      pageTransition.value = 'page-card'
+      setPageTransition('page-card')
     }
   },
   { flush: 'pre' }
 )
 
-/** 只有覆盖式滑动需要显式时长兜底移除（离场页脱流，见 animations.css）；
+/** 只有覆盖式过渡需要显式时长兜底移除（离场页脱流，见 animations.css）；
     卡片切换交给 Vue 自动检测，与 CSS 时长精确对齐 */
-const transitionDuration = computed(() =>
-  pageTransition.value === 'route-subpage' || pageTransition.value === 'route-subpage-back' ? 320 : undefined
-)
+const transitionDuration = computed(() => {
+  // 各过渡时长不一致，别合并成一个数：搜索页退场淡出 240ms（与 animations.css 同步），
+  // 子页横滑是一屏宽（320ms），混用会让其中一方被提前摘掉或拖住。
+  if (pageTransition.value === 'route-search-exit') return 240
+  if (pageTransition.value === 'route-subpage' || pageTransition.value === 'route-subpage-back') return 320
+  return undefined
+})
 
 // 移动端底部导航
 // 「工作台」页签位已改为「消息」：会话 / 通讯录 / 论坛互动集中在这里，
@@ -187,7 +214,25 @@ const TAB_BAR_ROUTES = new Set([
   '/student/workbench',
 ])
 
-const showTabBar = computed(() => isMobile.value && TAB_BAR_ROUTES.has(route.path) && !hasOpenSubPage.value)
+/**
+ * 搜索页退场期间的「导航让位」：底部导航属于底下那页（消息列表），
+ * 它 z-index 1000，会浮在正在下滑的搜索页上面 —— 看起来像导航提前跳出来压着页面。
+ * 先按住 360ms（与下滑动画同长），等搜索页滑走再挂载，导航跟着列表一起露出来。
+ */
+const holdTabBar = ref(false)
+let holdTabBarTimer: number | undefined
+function holdTabBarFor(ms: number) {
+  if (holdTabBarTimer) window.clearTimeout(holdTabBarTimer)
+  holdTabBar.value = true
+  holdTabBarTimer = window.setTimeout(() => {
+    holdTabBar.value = false
+    holdTabBarTimer = undefined
+  }, ms)
+}
+
+const showTabBar = computed(() =>
+  isMobile.value && TAB_BAR_ROUTES.has(route.path) && !hasOpenSubPage.value && !holdTabBar.value
+)
 
 // 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
 useDockInset(showTabBar)
@@ -262,6 +307,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopUnreadWatch()
   if (warmTimer) window.clearTimeout(warmTimer)
+  if (holdTabBarTimer) window.clearTimeout(holdTabBarTimer)
 })
 
 function goTo(path: string) { router.push(path) }

@@ -75,6 +75,10 @@ const router = createRouter({
         // 只是进入时按路由落位到对应视图 —— 刷新 / 分享 / 浏览器前进后退都能停在同一个视图上。
         // 「互动」是页内第三个视图（右上角星标进），没有独立地址，故不单独建路由。
         { path: 'messages/friends', name: 'student-message-friends', component: () => import('@/views/student/MessagesPage.vue'), meta: { keepAlive: false } },
+        // 消息搜索子页：移动端点搜索框进入（/student/messages/search），整页做「输入 → 分区结果 → 点进会话」。
+        // 不在底部导航白名单里 → 移动端导航自动隐藏，返回链由页头箭头承担；
+        // 点结果时 replace 回 /student/messages?chat=<key>，由消息页把会话打开。
+        { path: 'messages/search', name: 'student-message-search', component: () => import('@/views/student/MessagesSearchPage.vue'), meta: { keepAlive: false } },
         // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
         { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },

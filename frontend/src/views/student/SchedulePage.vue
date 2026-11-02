@@ -52,7 +52,7 @@
              顶栏只保留主标题，高度恒为 48px（避免布局跳动）。 -->
         <div v-if="isMobile" class="subpage-bar" :class="{ 'is-scrolled': subpageScrolled }">
           <div class="sp-side sp-left">
-            <button class="sp-back" type="button" aria-label="返回主页" @click="backToHome">
+            <button class="sp-back" type="button" :aria-label="cameFromNotice ? '返回消息通知' : '返回主页'" @click="backToHome">
               <el-icon :size="19"><ArrowLeft /></el-icon>
             </button>
           </div>
@@ -1328,6 +1328,7 @@ import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { getGrowthRecords, createGrowthRecord, getGrowthProfile, getProjects, createProject, updateProject, deleteProject } from '@/api/growth'
 import type { GrowthProfile, StudentProject, GrowthTagItem } from '@/api/growth'
+import { NOTICE_ORIGIN, SYSTEM_NOTICE_ROUTE } from '@/utils/systemNotice'
 import { getStreak, createQuickTask, getPlans, createTask } from '@/api/plan'
 import type { Streak } from '@/api/plan'
 import type { GrowthRecord } from '@/types'
@@ -1657,7 +1658,22 @@ function openSubPage(tab: string) {
   if (isMobile.value && activeTab.value === 'home') resetPageScroll()
   activeTab.value = tab
 }
+
+/**
+ * 从「消息通知」卡片点进来（地址带 `from=msg-notice`）。
+ * 本页是「一个页面装着一排子页」的形态，返回键默认只把 activeTab 拨回驾驶舱主页、
+ * 地址一动不动 —— 从通知进来看明细的人会被丢进一个他没去过的页面。
+ * 这种情况下返回应当整页退回来处，落到那条通知上。
+ */
+const cameFromNotice = computed(() => route.query.from === NOTICE_ORIGIN)
+
 function backToHome() {
+  if (cameFromNotice.value) {
+    // 站内进来才有上一条；直接贴地址打开时退回消息页，别把人甩出应用
+    if (history.state?.back) router.back()
+    else void router.replace(SYSTEM_NOTICE_ROUTE)
+    return
+  }
   if (activeTab.value === 'home') return
   if (isMobile.value) resetPageScroll()
   activeTab.value = 'home'

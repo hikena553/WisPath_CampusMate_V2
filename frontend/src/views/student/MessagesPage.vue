@@ -1,12 +1,12 @@
 <template>
-  <div class="msg-page no-dock-inset">
+  <div class="msg-page no-dock-inset" @scroll.capture.passive="onScrollCapture">
     <!-- 移动端页头：消息是底部导航的一级 Tab，故不套 SubPageHeader（子页头带返回箭头）。
          「消息 / 好友」两枚并排标题就是本页的两个主视图，点击切换 ——
          下划线滑条与文字随条染色复用 SlidingTabs（与校园资讯分类 Tab 同一套动画）；
          下方视图是一条三页轨道（SwipePager），左右拖动的进度逐帧喂给滑条，
          所以「滑条跟手指」和「页面跟手指」是同一次位移的两个投影，不会各走各的。
          两个主视图之外的「互动」收成右侧一枚星标图标，不再和两个大标题抢位置。 -->
-    <header v-if="isMobile" class="msg-appbar">
+    <header v-if="isMobile" ref="appbarRef" class="msg-appbar" :class="{ 'is-hidden': appbarHidden }">
       <SlidingTabs
         class="msg-appbar-tabs"
         :tabs="headerTabs"
@@ -45,13 +45,28 @@
     <div class="msg-main">
       <!-- 左侧：搜索 + 三栏页签 + 列表 -->
       <aside class="msg-side">
-        <div class="msg-search">
+        <!-- 移动端：这一块是**入口**，点了进整页的搜索子页（/student/messages/search）。
+             手机上就地输入撑不住 —— 键盘一弹只剩半屏，结果还得和会话列表抢同一块地方；
+             整页做好「输入 → 分区结果 → 点进会话」，键盘收起也不丢上下文。
+             桌面端侧栏宽、键盘是全尺寸的，仍保持就地过滤，不多一跳。 -->
+        <button
+          v-if="isMobile"
+          ref="searchEntryRef"
+          type="button"
+          class="msg-search msg-search-entry"
+          @click="openSearchPage"
+        >
           <el-icon :size="14"><Search /></el-icon>
-          <!-- 占位文案跟着当前视图走：好友页搜的是人，不是会话 -->
+          <span>搜索</span>
+        </button>
+        <div v-else class="msg-search">
+          <el-icon :size="14"><Search /></el-icon>
+          <!-- 占位文案固定为「搜索」：三个视图的搜索入口是同一个框，
+               跟着 activeTab 换字会让文案长短不一，居中时整组左右跳 -->
           <input
             v-model="keyword"
             type="search"
-            :placeholder="activeTab === 'contacts' ? '搜索好友' : '搜索会话或联系人'"
+            placeholder="搜索"
           />
         </div>
 
@@ -112,7 +127,11 @@
                   @click="openSession(s)"
                 >
                   <div class="msg-avatar">
-                    <el-avatar :size="40" :src="s.avatar || undefined">{{ s.name.slice(0, 1) }}</el-avatar>
+                    <!-- 系统通知会话没有真人头像，用一枚铃铛占同样的位置和尺寸 -->
+                    <span v-if="s.type === 'notice'" class="msg-notice-avatar" aria-hidden="true">
+                      <el-icon :size="19"><Bell /></el-icon>
+                    </span>
+                    <el-avatar v-else :size="40" :src="s.avatar || undefined">{{ s.name.slice(0, 1) }}</el-avatar>
                     <i v-if="s.type === 'private' && isOnline(s.rawId)" class="msg-online-dot" aria-hidden="true"></i>
                   </div>
                   <div class="msg-session-main">
@@ -222,6 +241,7 @@
               <div class="msg-pane-title">
                 <span class="msg-pane-name">{{ activeSession.name }}</span>
                 <span v-if="activeSession.type === 'group'" class="msg-pane-meta">{{ groupMeta }}</span>
+                <span v-else-if="activeSession.type === 'notice'" class="msg-pane-meta">系统通知 · 仅可查看</span>
                 <span v-else class="msg-pane-meta">{{ isOnline(activeSession.rawId) ? '在线' : '离线' }}</span>
               </div>
               <button
@@ -236,6 +256,14 @@
 
             <div ref="scrollEl" class="msg-chat-scroll">
               <div v-if="chatLoading" class="msg-empty"><p>加载中…</p></div>
+              <!-- 系统通知：按「微信服务通知」的卡片排，不用气泡。
+                   一条通知里有六七项键值对，压进气泡会变成一块没层次的文字墙 -->
+              <div v-else-if="activeSession.type === 'notice'" class="msg-notice-list">
+                <div v-for="c in noticeCards" :key="c.id" class="msg-notice-item">
+                  <div class="msg-time-sep">{{ formatNoticeTime(c.created_at) }}</div>
+                  <SystemNoticeCard :card="c" @open="openNoticeTarget" />
+                </div>
+              </div>
               <div v-else-if="!messages.length" class="msg-empty">
                 <el-icon :size="26"><ChatDotRound /></el-icon>
                 <p>还没有聊天记录</p>
@@ -266,7 +294,9 @@
               </div>
             </div>
 
-            <footer class="msg-composer">
+            <!-- 系统通知是单向的：没有输入框，换成一条说明，避免用户打完字才发现发不出去 -->
+            <div v-if="activeSession.type === 'notice'" class="msg-notice-tip">系统通知不支持回复</div>
+            <footer v-else class="msg-composer">
               <textarea
                 v-model="draft"
                 rows="1"
@@ -291,10 +321,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
+  Bell,
   ChatDotRound,
   ChatLineRound,
   Promotion,
@@ -313,6 +344,16 @@ import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { openUserHomepage } from '@/composables/useUserHomepage'
+import { captureSearchFieldFlight } from '@/utils/searchFieldFlight'
+import SystemNoticeCard from '@/components/chat/SystemNoticeCard.vue'
+import {
+  NOTICE_ORIGIN,
+  SYSTEM_NOTICE,
+  formatNoticeTime,
+  minutesAgo,
+  systemNoticeCards,
+  type SystemNoticeCard as NoticeCard,
+} from '@/utils/systemNotice'
 import {
   getConversations,
   getMessages,
@@ -352,7 +393,8 @@ type ChatMessage = MessageOut | GroupMessageOut
 
 interface SessionItem {
   key: string
-  type: 'private' | 'group'
+  /** notice = 系统通知会话（「消息通知」），它没有对方用户，只读不回复 */
+  type: 'private' | 'group' | 'notice'
   rawId: number
   name: string
   avatar: string | null
@@ -400,6 +442,8 @@ function tabFromRoute(name: unknown): Exclude<TabValue, 'forum'> | null {
 const activeTab = ref<TabValue>(tabFromRoute(route.name) ?? 'sessions')
 const contactTab = ref<ContactTabValue>('friends')
 const keyword = ref('')
+/** 移动端那条搜索条本身：进子页时量它的位置当「起飞点」 */
+const searchEntryRef = ref<HTMLButtonElement | null>(null)
 
 const conversations = ref<ConversationOut[]>([])
 const groups = ref<GroupOut[]>([])
@@ -427,6 +471,48 @@ const contactsLoading = ref(false)
 const forumList = ref<ForumMessageOut[]>([])
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+// ---------- 「消息通知」系统会话 ----------
+/* 会话列表顶部的一条系统通知会话：长得和私聊 / 群聊一样，只是头顶是铃铛。
+   展示数据放在 utils/systemNotice.ts（消息搜索页共用同一份），这里只是把它包成本页的
+   SessionItem。unread 是本地状态（点开即清零），所以用 reactive 而不是直接引用常量。 */
+const noticeSession = reactive<SessionItem>({
+  key: SYSTEM_NOTICE.key,
+  type: 'notice',
+  rawId: 0,
+  name: SYSTEM_NOTICE.name,
+  avatar: null,
+  lastMessage: SYSTEM_NOTICE.summary,
+  time: minutesAgo(26),
+  unread: SYSTEM_NOTICE.unread,
+})
+
+/** 打开「消息通知」后展示的三条系统通知（卡片式，只读） */
+const noticeCards = ref<NoticeCard[]>([])
+
+/** 卡片入口跳转中：两条导航（改写 + 跳走）之间有个空档，连点会多压一条历史 */
+const noticeJumping = ref(false)
+
+/**
+ * 通知卡片底部入口：跳到站内对应的业务页。
+ * 通知本身是「告知」，真正要办的事都在业务页里，所以这里直接把人送过去，
+ * 而不是弹一句「请自行前往」再让用户自己找。
+ *
+ * 跳之前先把**当前这条历史记录**改写成「消息通知打开着」的地址：
+ * 会话是页内覆盖层，本身不占一条历史 —— 不改的话，从业务页按返回落回来的是
+ * 会话列表（甚至别的视图），用户还得凭记忆重新点进「消息通知」。
+ * 改写后返回落到 `?chat=n-notice`，onMounted 里的 openChatFromQuery 会把会话摆回原样。
+ */
+async function openNoticeTarget(card: NoticeCard) {
+  if (!card.to || noticeJumping.value) return
+  noticeJumping.value = true
+  try {
+    await router.replace({ name: 'student-messages', query: { ...route.query, chat: SYSTEM_NOTICE.key } })
+    await router.push({ path: card.to.path, query: { ...card.to.query, from: NOTICE_ORIGIN } })
+  } finally {
+    noticeJumping.value = false
+  }
+}
 
 // ---------- 会话合并 ----------
 const sessions = computed<SessionItem[]>(() => {
@@ -456,9 +542,10 @@ const sessions = computed<SessionItem[]>(() => {
       unread: g.unread_count || 0,
     })
   }
-  return list.sort((a, b) => (b.time ? Date.parse(b.time) : 0) - (a.time ? Date.parse(a.time) : 0))
+  list.sort((a, b) => (b.time ? Date.parse(b.time) : 0) - (a.time ? Date.parse(a.time) : 0))
+  // 「消息通知」钉在最前，不参与按时间排序：系统会话不该被几十条私聊挤到看不见的位置
+  return [noticeSession, ...list]
 })
-
 const filteredSessions = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return sessions.value
@@ -549,7 +636,7 @@ function switchContactTab(tab: ContactTabValue) {
  * 页内主视图的**唯一状态落点**（消息 / 好友 / 互动）。
  * 三条入口最后都收在这里：轨道回报（拖动吸附 / 点标题换页）、桌面端三栏页签、地址回填。
  * contactTab 先落位再切 activeTab —— activeTab 的 watch 会带着新分组去拉数据；
- * 页头高亮、搜索占位、下方轨道用的是同一份 activeTab，不会各说各话。
+ * 页头高亮、搜索范围、下方轨道用的是同一份 activeTab，不会各说各话。
  */
 function switchMainTab(tab: string) {
   if (!isViewKey(tab)) return
@@ -569,6 +656,43 @@ function syncRouteForTab(tab: Exclude<TabValue, 'forum'>) {
   const name = ROUTE_OF_TAB[tab]
   if (route.name === name) return
   void router.replace({ name, query: route.query, hash: route.hash })
+}
+
+/* ==================== 搜索子页 ==================== */
+
+/** 移动端搜索框的点击：进整页搜索（push，返回键才回得到列表）。
+ *  跳转前先把这条搜索条的屏幕位置交给下一页，那边会从同一处把框「飞」到顶栏 —
+ *  否则整页是淡入的，搜索框凭空出现在最上方，动作前后接不上。 */
+function openSearchPage() {
+  captureSearchFieldFlight(searchEntryRef.value)
+  void router.push({ name: 'student-message-search' })
+}
+
+/**
+ * 地址 → 会话：搜索子页点结果后 replace 到 /student/messages?chat=<key>，
+ * 由这里把那条会话打开，随后把 chat 参数抹掉 —— 留着的话刷新 / 返回会重复弹一次。
+ *
+ * 好友不一定已经聊过（会话列表里没有它），所以找不到会话时回落到通讯录：
+ * 用 id 现造一条空会话，点搜索结果一样能直接开聊。
+ * 抹参数放在打开之前：即便目标已经不存在（被删好友 / 退群），地址也先回到干净状态。
+ */
+async function openChatFromQuery() {
+  if (typeof route.query.chat !== 'string' || !route.query.chat) return
+  const key = route.query.chat
+  const { chat: _chat, ...restQuery } = route.query
+  void router.replace({ name: 'student-messages', query: restQuery })
+
+  const target = sessions.value.find((s) => s.key === key)
+  if (target) {
+    openSession(target)
+    return
+  }
+  const m = /^s-(\d+)$/.exec(key)
+  if (!m) return
+  // 桌面端首屏不一定拉过通讯录（只有移动端预载），这里按需补一次再找人
+  if (!contacts.value.length) await loadContacts()
+  const user = contacts.value.find((c) => c.id === Number(m[1]))
+  if (user) chatWith({ id: user.id, name: user.name, avatar: user.avatar })
 }
 
 /* ==================== 视图左右翻页（移动端 / 桌面端共用一份标记） ==================== */
@@ -665,6 +789,7 @@ function onChatClosed() {
   if (chatOpen.value) return
   activeSession.value = null
   messages.value = []
+  noticeCards.value = []
 }
 
 function chatWith(user: { id: number; name: string; avatar: string | null }) {
@@ -683,6 +808,17 @@ function chatWith(user: { id: number; name: string; avatar: string | null }) {
 async function loadChat(scrollToBottom: boolean) {
   const session = activeSession.value
   if (!session) return
+  // 系统通知：内容在本地（utils/systemNotice.ts），不发请求、也不走已读上报；
+  // 打开即视为读过，把列表上那枚红点清掉
+  if (session.type === 'notice') {
+    noticeCards.value = systemNoticeCards()
+    messages.value = []
+    noticeSession.unread = 0
+    chatLoading.value = false
+    if (scrollToBottom) await scrollBottom()
+    return
+  }
+  noticeCards.value = []
   chatLoading.value = true
   try {
     if (session.type === 'group') {
@@ -812,6 +948,75 @@ function formatTime(t: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+/* ==================== 移动端页头：随滚动平滑上滑收起 ====================
+   一级 Tab 页的标题栏占 48px，会话多的时候一直钉在顶上不划算：往下翻时让它滑走、
+   往回翻时滑回来（微信 / 小红书都是这个手感）。桌面端页头是另一套 .msg-head，不参与。 */
+
+const appbarRef = ref<HTMLElement | null>(null)
+/** 页头是否收起。收起 = margin-top 变负，整条滑出页面顶边（由 .main-area 的 overflow 裁掉） */
+const appbarHidden = ref(false)
+
+/** 位移用实测高度而不是写死 48px：字体缩放或边框算进/不算进盒高都会让「收干净」差一点，
+    差一点就会在顶边留一条白线 */
+function measureAppbar() {
+  const el = appbarRef.value
+  if (el) el.style.setProperty('--ab-h', `${el.offsetHeight}px`)
+}
+
+const HIDE_AFTER = 48 // 滚过这么远才允许收起：页面刚进来轻微回弹时不该让标题栏闪一下
+const DELTA = 14 // 单向累计位移阈值（px）：手指抖一两像素不切状态，避免来回抽动
+
+/** 每条列表各自的上一帧位置：三条视图是三个独立滚动容器，混着记会算出假位移 */
+const lastTop = new WeakMap<EventTarget, number>()
+/** 单向累计位移，方向一翻就清零 */
+let scrolledBy = 0
+
+function onScrollCapture(e: Event) {
+  if (!isMobile.value) return
+  const el = e.target as HTMLElement | null
+  // 只认视图列表；移动端聊天浮层里的 .msg-chat-scroll 不参与
+  if (!el || !el.classList?.contains('msg-list')) return
+
+  const y = el.scrollTop
+  // 第一次收到这条列表的滚动时按「原来在 0」算：不必白扔一帧，
+  // 否则用户从顶部一次性甩出去的那一下会被吞掉（列表短的时候往往只有这一个事件）
+  const prev = lastTop.get(el) ?? 0
+  lastTop.set(el, y)
+
+  const dy = y - prev
+  // 换方向就清零：否则「先下滑 300px、再上滑 20px」会被上面的余量吃成仍然向下
+  if ((dy > 0) !== (scrolledBy > 0)) scrolledBy = 0
+  scrolledBy += dy
+
+  // 到顶一律展开 —— 这是「我在最上面」的强信号，也顺手修掉下拉刷新时的错位
+  if (y <= 4) {
+    scrolledBy = 0
+    appbarHidden.value = false
+    return
+  }
+  if (scrolledBy > DELTA && y > HIDE_AFTER) {
+    scrolledBy = 0
+    appbarHidden.value = true
+  } else if (scrolledBy < -DELTA) {
+    scrolledBy = 0
+    appbarHidden.value = false
+  }
+}
+
+/** 换视图（含拖动切页 / 空格键 / 地址回填）时把页头放回来：
+ *  收起状态是「上一个视图的滚动位置」的产物，带到下一个视图没有意义 */
+watch(activeTab, () => {
+  scrolledBy = 0
+  appbarHidden.value = false
+})
+
+// 断点来回切：桌面端没有这条页头，回到移动端时不该带着上一次的收起状态
+watch(isMobile, (mobile) => {
+  if (!mobile) return
+  appbarHidden.value = false
+  void nextTick(measureAppbar)
+})
+
 watch(activeTab, (tab) => {
   if (tab === 'contacts') void loadContacts()
   if (tab === 'forum') void loadForum()
@@ -834,13 +1039,18 @@ watch(
 )
 
 onMounted(async () => {
+  // 页头收起要按实测高度位移：字体缩放 / 边框算不算进盒高，都会让「收干净」差一两个像素
+  void nextTick(measureAppbar)
+  window.addEventListener('resize', measureAppbar)
   await loadSessions()
+  // 好友列表按需预载，这里改成 await 是为了下面 openChatFromQuery 的兜底能查到人：
+  // ① 直接落到 /student/messages/friends 时 activeTab 的 watch 首帧不跑，需要补一次；
+  // ② 移动端「好友」是轨道的邻居页，手指一拖就要立刻上屏，等到切过去再拉会闪一张空态；
+  // ③ 从搜索子页点一个「还没聊过」的好友回来时，会话列表里没有它，只能靠通讯录按 id 现造会话。
+  if (activeTab.value === 'contacts' || isMobile.value) await loadContacts()
+  // 地址里带 chat（搜索子页刚点了某条结果）：直接把那条会话打开
+  await openChatFromQuery()
   void loadForum()
-  // 直接落到 /student/messages/friends 时 activeTab 的 watch 不会被触发（首帧不跑），这里补一次
-  if (activeTab.value === 'contacts') void loadContacts()
-  // 移动端预载「好友」：它是轨道的邻居页，手指一拖邻居就立刻上屏 ——
-  // 等到切过去那一刻再拉数据，滑到一半的邻居会是一张「还没有好友」的空态。
-  else if (isMobile.value) void loadContacts()
   // 会话未读与聊天轮询：移动端回到页面时不重复拉，靠 visibility 判断
   pollTimer = setInterval(() => {
     if (document.visibilityState !== 'visible') return
@@ -852,6 +1062,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = null
+  window.removeEventListener('resize', measureAppbar)
 })
 </script>
 
@@ -876,6 +1087,16 @@ onBeforeUnmount(() => {
   height: 48px;
   background: #fff;
   border-bottom: 1px solid #f0f1f3;
+  /* 收起用 margin-top 而不是 transform：整条页头要真的「让出位置」，
+     下面的搜索条和列表一起跟着上移。只做 transform 会在顶上留一条底色的空带。
+     页头顶边一旦越过 .msg-page 的顶沿就被 .main-area 的 overflow:hidden 裁掉，
+     不会画到全局导航栏上面去。 */
+  transition: margin-top 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* --ab-h 由 measureAppbar() 按实测高度写进来（含下边框） */
+.msg-appbar.is-hidden { margin-top: calc(-1 * var(--ab-h, 49px)); }
+@media (prefers-reduced-motion: reduce) {
+  .msg-appbar { transition: none; }
 }
 /* 外观全部通过 CSS 变量喂给组件，组件内部的动画逻辑一行都不用改。
    左右各 44px：右边给互动图标让位，左边对称留白，标题组因此落在页面正中。
@@ -965,6 +1186,18 @@ onBeforeUnmount(() => {
 .msg-session.active { background: #f2f3f5; }
 .msg-avatar { position: relative; flex-shrink: 0; }
 .msg-online-dot { position: absolute; right: 1px; bottom: 1px; width: 8px; height: 8px; border-radius: 50%; background: #16a34a; border: 1.5px solid #fff; }
+/* 系统通知会话的头像：铃铛，尺寸与 el-avatar 一致（40 / 气泡里 30），
+   底色跟着列表的中性灰走，不用主题蓝 —— 这一页整体是黑白灰，突然一块彩色反而像广告位 */
+.msg-notice-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #111827;
+  color: #fff;
+}
 .msg-session-main { flex: 1; min-width: 0; }
 .msg-session-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .msg-session-name { font-size: 14px; color: #1f2329; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1018,7 +1251,24 @@ onBeforeUnmount(() => {
 .msg-bubble { padding: 8px 12px; border-radius: 10px; background: #fff; font-size: 13.5px; line-height: 1.55; color: #1f2329; white-space: pre-wrap; word-break: break-word; }
 .msg-bubble-row.mine .msg-bubble { background: #111827; color: #fff; }
 .msg-bubble-time { margin-top: 3px; font-size: 10.5px; color: #9aa0a6; }
+
+/* ================= 系统通知（卡片流） =================
+   时间居中浮在卡片上方、卡片整宽铺开，是微信服务通知的固定版式：
+   时间属于「这一刻收到了什么」，不属于卡片本身，所以它不画进卡片里。 */
+.msg-notice-list { display: flex; flex-direction: column; gap: 20px; }
+.msg-notice-item { display: flex; flex-direction: column; gap: 9px; }
+.msg-time-sep { text-align: center; font-size: 11.5px; color: #9aa0a6; }
 .msg-composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #f0f1f3; background: #fff; }
+/* 通知会话底部：替掉输入框的位置，高度接近输入区，避免切换会话时整页跳一下 */
+.msg-notice-tip {
+  flex-shrink: 0;
+  padding: 18px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #f0f1f3;
+  background: #fafbfc;
+  color: #9aa0a6;
+  font-size: 12px;
+  text-align: center;
+}
 .msg-composer textarea { flex: 1; resize: none; border: none; outline: none; background: #f5f6f8; border-radius: 10px; padding: 9px 12px; font-size: 13.5px; line-height: 1.5; max-height: 110px; color: #1f2329; }
 .msg-send { display: inline-flex; align-items: center; gap: 4px; border: none; background: #111827; color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 10px; cursor: pointer; }
 .msg-send:disabled { background: #d1d5db; cursor: default; }
@@ -1033,6 +1283,14 @@ onBeforeUnmount(() => {
   /* 移动端不再有「会话 / 通讯录 / 互动」三栏页签：主切换已上移到页头的两枚标题，
      互动收成页头右上角星标。页签行留着只会和标题重复一层。 */
   .msg-tabs { display: none; }
+  /* 搜索入口：整块是一枚按钮（点了进搜索子页），图标 + 文案作为一组居中，
+     与页头「消息 / 好友」同一根中轴。列表页在移动端不再有可输入的搜索框。 */
+  .msg-search { justify-content: center; }
+  .msg-search-entry { border: 0; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    /* 28px（原输入框的自然高度）当按钮偏矮，拇指点不准；抬到 34px 仍比会话行矮，不抢视觉 */
+    min-height: 34px; }
+  .msg-search-entry > span { font-size: 13px; line-height: 1; }
+  .msg-search-entry:active { background: #eceef1; }
   .msg-main { flex-direction: column; }
   .msg-side { width: 100%; border-right: none; flex: 1; }
   .msg-list { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); overscroll-behavior-y: contain; }

@@ -345,4 +345,67 @@
 
 @media (prefers-reduced-motion: reduce) {
   .page-card-leave-active, .page-card-enter-active { transition: none !important; }
+  /* 退场只留淡出：缩放属于「装饰性位移」，减弱动效时不该有 */
+  .route-search-exit-leave-active { transition: opacity 0.18s linear !important; }
+  .route-search-exit-leave-to { transform: none !important; }
+}
+
+/* Route Transition - route-instant：整页不做过渡，进场交给页面内部自己演
+   目前只有「消息 → 消息搜索子页」这一趟用：那一趟的主角是搜索框本身（从列表那条
+   搜索条平移到顶栏，见 utils/searchFieldFlight.ts），整页再淡入会把它压成半透明。
+   enter 侧必须显式写 transition:none，Vue 才会把这一趟判成 0 时长、立刻结束；
+   leave 侧仍然脱流（absolute），否则离场页留在 flex 列里，新页被挤到下面，
+   框量到的目标位置是错的 —— 表现为「从屏幕外飞进来」。 */
+.route-instant-enter-active,
+.route-instant-enter-from,
+.route-instant-enter-to {
+  transition: none !important;
+  animation: none !important;
+}
+.route-instant-leave-active {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+/* Route Transition - route-search-exit：消息搜索子页「退场淡出 + 轻微缩小」
+   进场那一趟全是纵向位移（搜索框飞上来、顶栏从下往上滑入）。退场如果也走纵向平移，
+   哪怕方向相反，观感也只是「把进场倒放一遍」，两趟动作分不出来。
+   所以这里换成完全不同的语汇：整页原地缩到 96% 并淡出，下面的消息列表从白底后面浮出来 ——
+   「页面往后退了一层」，与「一条栏从下面滑上来」不共用任何方向。
+   只动离场页：新页不淡入也不位移，两页同时动就是「传送带」，在 subpage 一节里踩过。
+   离场页必须脱流（absolute）：否则它和新页在 .main-area 的 flex 列里各分一半高度。
+   background 兜住离场页自身的白底 —— 它会跟着 opacity 一起淡，所以看到的是「白纱褪去」，
+   而不是一块死白的矩形在缩小。 */
+.route-search-exit-leave-active {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  background: #fff;
+  /* 从页面中心收：四周一起内缩，顶部会先露出下面那页的页头，
+     如果是 center top 就变成「从下往上抽走」，又回到纵向位移了。 */
+  transform-origin: center center;
+  /* 240ms：淡出比位移更需要克制，长了会显得页面「挂在那儿慢慢变淡」；
+     短于 200ms 又看不出缩小。
+     淡出 180ms、缩放 240ms，两者错开收尾：页面内容早一点退干净，只留那层
+     还在轻微内缩的白底收完最后一段 —— 否则中途会有一段时间两层文字互相叠着，
+     看起来像重影。 */
+  transition:
+    opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.24s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  will-change: opacity, transform;
+}
+.route-search-exit-leave-from { opacity: 1; transform: scale(1); }
+.route-search-exit-leave-to { opacity: 0; transform: scale(0.96); }
+/* enter 侧显式关掉：Vue 才会判成 0 时长，立刻把新页放到最上层露出
+   （和 route-instant 同理，不写的话会继承默认行为，出现「新页淡入 + 旧页消失」两套动作） */
+.route-search-exit-enter-active,
+.route-search-exit-enter-from,
+.route-search-exit-enter-to {
+  transition: none !important;
+  animation: none !important;
 }
