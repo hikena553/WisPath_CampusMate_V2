@@ -351,6 +351,54 @@ export function refreshAdminFeeds(sourceType: FeedSourceType | 'all' = 'all') {
   )
 }
 
+// ==================== 资讯账号管理（管理端） ====================
+
+export interface MediaAccount {
+  id: number
+  user_id: number
+  username: string
+  name: string
+  avatar: string | null
+  signature: string | null
+  is_enabled: boolean
+  content_scope: FeedSourceType[] | null
+  relay_interval_minutes: number
+  post_count: number
+  last_posted_at: string | null
+  created_at: string | null
+}
+
+export interface MediaAccountPayload {
+  name?: string
+  avatar?: string | null
+  signature?: string | null
+  content_scope?: FeedSourceType[] | null
+  relay_interval_minutes?: number | null
+  is_enabled?: boolean
+}
+
+export function getAdminMediaAccounts() {
+  return request.get<MediaAccount[]>('/admin/media/accounts')
+}
+
+export function createAdminMediaAccount(body: MediaAccountPayload) {
+  return request.post<MediaAccount>('/admin/media/accounts', body)
+}
+
+export function updateAdminMediaAccount(id: number, body: MediaAccountPayload) {
+  return request.patch<MediaAccount>(`/admin/media/accounts/${id}`, body)
+}
+
+export function deleteAdminMediaAccount(id: number) {
+  return request.delete<{ message: string }>(`/admin/media/accounts/${id}`)
+}
+
+export function publishMediaDigest(id: number, force = false) {
+  return request.post<{ posted: boolean; message: string; post_id: number | null; title: string | null }>(
+    `/admin/media/accounts/${id}/publish?force=${force}`,
+  )
+}
+
 // ==================== 系统监控与运维 ====================
 
 export interface SystemServiceInfo {

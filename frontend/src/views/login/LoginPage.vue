@@ -49,6 +49,7 @@
 
         <div class="field">
           <input
+            ref="passwordRef"
             v-model="form.password"
             :type="showPassword ? 'text' : 'password'"
             autocomplete="current-password"
@@ -157,6 +158,7 @@ import {
   remainingHours,
   type PendingPasswordReset,
 } from '@/utils/passwordReset'
+import { getLastAccount } from '@/utils/lastAccount'
 
 const router = useRouter()
 const route = useRoute()
@@ -177,12 +179,16 @@ const showPassword = ref(false)
 const loginLoading = ref(false)
 const quickLoading = ref<'' | QuickChannel>('')
 const usernameRef = ref<HTMLInputElement>()
+const passwordRef = ref<HTMLInputElement>()
 const formError = ref('')
 const errorField = ref<'username' | 'password' | ''>('')
 const pendingReset = ref<PendingPasswordReset | null>(loadPendingPasswordReset())
 const legalType = ref<'' | 'agreement' | 'privacy'>('')
 const loginReason = ref('')
 const reasonDismissed = ref(false)
+
+/** 上次登录账号：退出登录不清除，回到登录页把学号/工号填回输入框，用户只需再输密码 */
+const lastUsername = getLastAccount()?.username || ''
 
 let bannerTimer: number | undefined
 let toastTimer: number | undefined
@@ -305,7 +311,13 @@ function handleGuest() {
 }
 
 onMounted(() => {
-  nextTick(() => usernameRef.value?.focus())
+  if (lastUsername) {
+    // 账号已回填：光标直接落在密码框，输完密码回车即可
+    form.username = lastUsername
+    nextTick(() => passwordRef.value?.focus())
+  } else {
+    nextTick(() => usernameRef.value?.focus())
+  }
   // 申请提交后停留在登录页时，定时刷新剩余等待时间提示
   bannerTimer = window.setInterval(() => {
     pendingReset.value = loadPendingPasswordReset()

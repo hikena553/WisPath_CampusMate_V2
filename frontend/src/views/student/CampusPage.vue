@@ -609,7 +609,8 @@
     <CampusSearchPage
       v-if="searchTarget"
       :items="searchPool"
-      @closed="searchTarget = false"
+      @close-start="onSearchLeaving"
+      @closed="onSearchClosed"
       @open="openHitFromSearch"
     />
 
@@ -622,7 +623,7 @@
       :article-url="detailTarget.url"
       :title="detailTarget.title"
       :source="detailTarget.source"
-      @close="closeDetail"
+      @close="onDetailLeaving"
       @closed="onDetailClosed"
       @updated="onDetailUpdated"
       @read="onDetailRead"
@@ -1121,6 +1122,7 @@ const searchPool = computed<SearchPoolItem[]>(() =>
 
 function openSearch() {
   if (isMobile.value) {
+    searchLeaving.value = false
     searchTarget.value = true
     return
   }
@@ -1784,8 +1786,30 @@ const readerOpen = ref(false)
  * 移动端限定：桌面端这几个子页同样是整屏覆盖层，但没有底部导航要躲，
  * 下层位移只会让桌面观感变廉价（与 page-card 的断点划分同一个道理）。
  */
+/**
+ * 子页「退场中」：从开始滑出（close() 那一刻）到卸载完成（after-leave）。
+ *
+ * campusPushed 认的是**语义可见性** = 已挂载 && 不在退场中，而不是挂载态。
+ * 挂载态要等 after-leave 才翻假：子页 300ms 已经滑出屏幕了，下层还钉在 -117
+ * 一动不动，等子页卸载完才开始 300ms 归位 —— 中间那段静止就是「返回卡一下」。
+ * 换成退场开始即归位后，两者的 0.3s 同拍走完，返回是一气呵成的。
+ */
+const searchLeaving = ref(false)
+const detailLeaving = ref(false)
+
+/**
+ * 详情 → 阅读器的接力标记。
+ * 「阅读全文」是同一层的推进（详情收起、阅读器展开），下层不该跟着回位再推回去；
+ * 所以这条路径下退场不算「语义关闭」，一直保持让位，由阅读器接管。
+ */
+let detailHandoffToReader = false
+
 const campusPushed = computed(
-  () => isMobile.value && (searchTarget.value || !!detailTarget.value || readerOpen.value),
+  () =>
+    isMobile.value &&
+    ((searchTarget.value && !searchLeaving.value) ||
+      (!!detailTarget.value && !detailLeaving.value) ||
+      readerOpen.value),
 )
 // 布局层的底部胶囊跟着一起走（它不在本页里，只能靠全局登记）
 useSubpagePush(campusPushed)
@@ -1843,6 +1867,7 @@ function openDetail(url: string, title?: string, from: 'row' | 'comment' | 'repo
   if (!url) return
   // 来源栏目从信息流项里取：详情页要用它显示顶栏副标题与来源标签
   const source = mobileFeed.value.find(f => f.url === url)?.source || ''
+  detailLeaving.value = false
   detailTarget.value = { url, title: title || '', source, from }
   if (from === 'row') return
   const action = from
@@ -1862,21 +1887,49 @@ function closeDetail() {
   detailRef.value?.close()
 }
 
+/**
+ * 子页开始退场（详情页 close() 里发的 close 事件）：
+ * 立刻把下层从让位态放回来，与子页滑出同一条 0.3s —— 等 after-leave 就晚了 300ms。
+ * 「阅读全文」那种层内接力不在此列，见 detailHandoffToReader。
+ */
+function onDetailLeaving() {
+  if (detailHandoffToReader) return
+  detailLeaving.value = true
+}
+
 /** 子页退场播完：真正卸载，并把详情里改过的互动数同步回信息流 */
 function onDetailClosed() {
   detailTarget.value = null
+  detailLeaving.value = false
   interactionMap.value = { ...interactionMap.value }
+}
+
+/** 搜索子页同理：开始退场就让下层归位，播完再卸载 */
+function onSearchLeaving() {
+  searchLeaving.value = true
+}
+
+function onSearchClosed() {
+  searchTarget.value = false
+  searchLeaving.value = false
 }
 
 /**
  * 详情子页点「阅读全文」：正文不在详情页渲染，交给站内阅读器（ArticleReader）。
  * 先关详情再开阅读器：两者都是整页覆盖层，同时挂载会互相抢 body 滚动锁与 z-index；
  * 先收起讨论页、露出阅读器，视觉上是「讨论 → 阅读」的一次正常推进，不会叠层。
+ *
+ * 下层这次保持让位（不回位再推回去）：两条都是「第一层」的子页，
+ * 中间回位会闪一下；由阅读器接管 is-subpushed 直到它关闭。
  */
 function onDetailRead(url: string) {
   const title = detailTarget.value?.title || ''
+  detailHandoffToReader = true
   closeDetail()
-  nextTick(() => openArticle(url, title))
+  nextTick(() => {
+    openArticle(url, title)
+    detailHandoffToReader = false
+  })
 }
 
 /**

@@ -12,6 +12,8 @@ PROACTIVE_INTERVAL_SECONDS = 1800
 CRON_TASK_SCAN_INTERVAL_SECONDS = 60
 # 资源探针：10 分钟记一次内存/线程数
 RESOURCE_PROBE_INTERVAL_SECONDS = 600
+# 资讯账号发帖：与外部资讯抓取同节奏（30 分钟），转发新条目 + 到点补发每日汇总
+MEDIA_PUBLISH_INTERVAL_SECONDS = 1800
 
 
 def _process_stats() -> tuple[float, int] | None:
@@ -64,6 +66,18 @@ async def _periodic_feed_refresh() -> None:
         await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
 
 
+async def _periodic_media_publish() -> None:
+    """资讯账号自动发帖：转发新入库资讯 + 到点补发每日重点汇总（内部幂等）。"""
+    from app.services.media_account_service import run_media_publish_cycle
+
+    while True:
+        try:
+            await run_media_publish_cycle()
+        except Exception:
+            logger.exception("后台资讯账号发帖异常")
+        await asyncio.sleep(MEDIA_PUBLISH_INTERVAL_SECONDS)
+
+
 async def _periodic_proactive_push() -> None:
     """定期执行 AI 主动触达全量评估：命中规则即落库站内通知，实现服务端自动推送。"""
     from app.services.proactive_engine import evaluate_all
@@ -103,6 +117,8 @@ def start_periodic_tasks() -> list[asyncio.Task]:
     return [
         asyncio.create_task(_periodic_impression_refresh()),
         asyncio.create_task(_periodic_feed_refresh()),
+        # 资讯账号：转发新资讯 + 每日 8 点后补发汇总帖（与抓取同节奏）
+        asyncio.create_task(_periodic_media_publish()),
         # 学习预警 pipeline：每小时检查，内部按「每日一次」标记真正执行
         asyncio.create_task(_periodic_learning_alert()),
         # AI 主动触达：每 30 分钟扫描全体学生，命中规则落到站内通知

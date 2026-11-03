@@ -12,6 +12,7 @@ export interface CommunityPost {
   created_at: string | null
   author_name: string | null
   author_avatar: string | null
+  author_is_following: boolean
   liked: boolean
 }
 
@@ -25,7 +26,7 @@ export interface CommunityComment {
   author_avatar: string | null
 }
 
-export const COMMUNITY_CATEGORIES = ['技术', '提问', '分享', '求助']
+export const COMMUNITY_CATEGORIES = ['技术', '提问', '分享', '求助', '资讯']
 
 export function getPosts(params?: { category?: string; q?: string; page?: number; page_size?: number; sort?: string }) {
   return request.get<CommunityPost[]>('/community/posts', { params })

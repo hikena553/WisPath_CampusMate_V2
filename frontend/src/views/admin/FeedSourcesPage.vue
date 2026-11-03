@@ -157,7 +157,74 @@
         </div>
         <el-empty v-else-if="!itemsLoading" description="暂无资讯条目，点击上方「触发抓取」获取" />
       </el-tab-pane>
+
+      <!-- ============ 资讯账号画板：分类源节点 + 虚线连线 + 可拖拽账号卡片 ============ -->
+      <el-tab-pane label="账号管理" name="accounts">
+        <div class="filter-bar">
+          <el-select v-model="accountEnabledFilter" placeholder="按状态筛选" clearable style="width: 150px" @change="loadAccounts">
+            <el-option label="启用" value="on" />
+            <el-option label="停用" value="off" />
+          </el-select>
+          <el-button :loading="accountsLoading" @click="loadAccounts">查询</el-button>
+          <el-button @click="boardRef?.resetLayout()">重置布局</el-button>
+          <div class="filter-spacer"></div>
+          <el-button type="primary" :icon="Plus" @click="showAccountDialog()">新增资讯账号</el-button>
+        </div>
+
+        <MediaAccountBoard
+          ref="boardRef"
+          :accounts="accounts"
+          :publishing-id="publishingId"
+          @publish="publishNow"
+          @edit="showAccountDialog"
+          @toggle="toggleAccount"
+          @remove="removeAccount"
+        />
+        <el-empty v-if="!accountsLoading && accounts.length === 0" description="暂无资讯账号，新增后自动在交流社区发布资讯帖" />
+      </el-tab-pane>
     </el-tabs>
+
+    <!-- 新增 / 编辑资讯账号 -->
+    <el-dialog v-model="accountDialogVisible" :title="editingAccountId ? '编辑资讯账号' : '新增资讯账号'" width="560px">
+      <el-form ref="accountFormRef" :model="accountForm" :rules="accountRules" label-width="90px">
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="accountForm.name" maxlength="20" show-word-limit placeholder="展示在帖子作者位的名称，如：绵小城资讯站" />
+        </el-form-item>
+        <el-form-item label="头像" prop="avatar">
+          <div class="avatar-row">
+            <el-avatar :size="40" :src="accountForm.avatar || undefined">
+              {{ (accountForm.name || '资').slice(0, 1) }}
+            </el-avatar>
+            <el-input v-model="accountForm.avatar" placeholder="可选，图片 URL；留空按名称首字显示" style="flex: 1" />
+          </div>
+        </el-form-item>
+        <el-form-item label="签名" prop="signature">
+          <el-input v-model="accountForm.signature" maxlength="30" show-word-limit placeholder="可选，展示在个人主页" />
+        </el-form-item>
+        <el-form-item label="内容方向" prop="content_scope">
+          <el-select
+            v-model="accountForm.content_scope" multiple collapse-tags collapse-tags-tooltip
+            placeholder="不选 = 转发全部分类" style="width: 100%"
+          >
+            <el-option v-for="t in FEED_TYPES" :key="t.key" :label="t.label" :value="t.key" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="发帖频率" prop="relay_interval_minutes">
+          <el-select v-model="accountForm.relay_interval_minutes" style="width: 100%">
+            <el-option v-for="o in RELAY_FREQ_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+          <span class="form-hint">控制逐条转发的最小间隔；「每日汇总」帖固定每天一条，不受此频率限制</span>
+        </el-form-item>
+        <el-form-item label="启用" prop="is_enabled">
+          <el-switch v-model="accountForm.is_enabled" />
+          <span class="form-hint">停用后不参与自动发帖；账号禁止登录，仅由系统发帖</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="accountDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="accountSaving" @click="handleAccountSave">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 新增 / 编辑资讯源 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑资讯源' : '新增资讯源'" width="620px">
@@ -196,12 +263,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Search, RefreshCw, Plus } from 'lucide-vue-next'
+import MediaAccountBoard from '@/components/admin/MediaAccountBoard.vue'
 import {
   getAdminFeedSources, createAdminFeedSource, updateAdminFeedSource, deleteAdminFeedSource,
   getAdminFeedItems, updateAdminFeedItem, deleteAdminFeedItem, refreshAdminFeeds,
-  type AdminFeedSource, type AdminFeedItem, type FeedSourceType,
+  getAdminMediaAccounts, createAdminMediaAccount, updateAdminMediaAccount,
+  deleteAdminMediaAccount, publishMediaDigest,
+  type AdminFeedSource, type AdminFeedItem, type FeedSourceType, type MediaAccount,
 } from '@/api/admin'
 
 const FEED_TYPES: { key: FeedSourceType; label: string }[] = [
@@ -221,6 +291,17 @@ const KIND_OPTIONS = [
   { value: 'github', label: 'GitHub API' },
   { value: 'gitee', label: 'Gitee API' },
   { value: 'lmarena', label: '权威榜 API' },
+]
+
+// 发帖频率（逐条转发的最小间隔，分钟）；0=不逐条转发，仅发每日汇总（展示文案在画板卡片上）
+const RELAY_FREQ_OPTIONS = [
+  { value: 30, label: '跟随抓取 · 约 30 分钟' },
+  { value: 60, label: '每 1 小时' },
+  { value: 180, label: '每 3 小时' },
+  { value: 360, label: '每 6 小时' },
+  { value: 720, label: '每 12 小时' },
+  { value: 1440, label: '每天 1 次' },
+  { value: 0, label: '不逐条转发 · 仅每日汇总' },
 ]
 
 const activeTab = ref('sources')
@@ -421,6 +502,146 @@ async function removeItem(row: AdminFeedItem) {
   }
 }
 
+// ---------- 资讯账号 ----------
+const accounts = ref<MediaAccount[]>([])
+const accountsLoading = ref(false)
+const accountEnabledFilter = ref<'on' | 'off' | ''>('')
+const publishingId = ref<number | null>(null)
+const boardRef = ref<InstanceType<typeof MediaAccountBoard>>()
+
+async function loadAccounts() {
+  accountsLoading.value = true
+  try {
+    let list = await getAdminMediaAccounts()
+    if (accountEnabledFilter.value === 'on') list = list.filter((a) => a.is_enabled)
+    if (accountEnabledFilter.value === 'off') list = list.filter((a) => !a.is_enabled)
+    accounts.value = list
+  } catch {
+    ElMessage.error('加载资讯账号失败')
+  } finally {
+    accountsLoading.value = false
+  }
+}
+
+// ---------- 新增 / 编辑账号 ----------
+const accountDialogVisible = ref(false)
+const editingAccountId = ref<number | null>(null)
+const accountSaving = ref(false)
+const accountFormRef = ref<FormInstance>()
+const accountForm = ref({
+  name: '',
+  avatar: '',
+  signature: '',
+  content_scope: [] as FeedSourceType[],
+  relay_interval_minutes: 30,
+  is_enabled: true,
+})
+const accountRules: FormRules = {
+  name: [{ required: true, message: '请填写账号名称', trigger: 'blur' }],
+}
+
+function showAccountDialog(row?: MediaAccount) {
+  editingAccountId.value = row ? row.id : null
+  accountForm.value = row
+    ? {
+        name: row.name,
+        avatar: row.avatar || '',
+        signature: row.signature || '',
+        content_scope: row.content_scope || [],
+        relay_interval_minutes: row.relay_interval_minutes ?? 30,
+        is_enabled: row.is_enabled,
+      }
+    : { name: '', avatar: '', signature: '', content_scope: [], relay_interval_minutes: 30, is_enabled: true }
+  accountDialogVisible.value = true
+}
+
+async function handleAccountSave() {
+  const valid = await accountFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  accountSaving.value = true
+  const body = {
+    name: accountForm.value.name.trim(),
+    avatar: accountForm.value.avatar.trim() || null,
+    signature: accountForm.value.signature.trim() || null,
+    content_scope: accountForm.value.content_scope.length ? accountForm.value.content_scope : null,
+    relay_interval_minutes: accountForm.value.relay_interval_minutes,
+    is_enabled: accountForm.value.is_enabled,
+  }
+  try {
+    if (editingAccountId.value) {
+      await updateAdminMediaAccount(editingAccountId.value, body)
+      ElMessage.success('已更新')
+    } else {
+      await createAdminMediaAccount(body)
+      ElMessage.success('已新增资讯账号')
+    }
+    accountDialogVisible.value = false
+    await loadAccounts()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '保存失败')
+  } finally {
+    accountSaving.value = false
+  }
+}
+
+async function toggleAccount(row: MediaAccount) {
+  try {
+    await updateAdminMediaAccount(row.id, { is_enabled: !row.is_enabled })
+    ElMessage.success(row.is_enabled ? '已停用' : '已启用')
+    await loadAccounts()
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
+async function publishNow(row: MediaAccount) {
+  publishingId.value = row.id
+  try {
+    const res = await publishMediaDigest(row.id)
+    if (res.posted) {
+      ElMessage.success(`已发布「${res.title}」`)
+      await loadAccounts()
+    } else {
+      // 今日已发过：询问是否覆盖重发
+      try {
+        await ElMessageBox.confirm(`${res.message}，是否覆盖重发？`, '覆盖确认', { type: 'warning' })
+      } catch {
+        return
+      }
+      const forced = await publishMediaDigest(row.id, true)
+      if (forced.posted) {
+        ElMessage.success(`已覆盖发布「${forced.title}」`)
+        await loadAccounts()
+      } else {
+        ElMessage.info(forced.message)
+      }
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '发布失败，请稍后再试')
+  } finally {
+    publishingId.value = null
+  }
+}
+
+async function removeAccount(row: MediaAccount) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除资讯账号「${row.name}」？该账号已发布的帖子与互动数据将一并删除，不可恢复。`,
+      '删除确认',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteAdminMediaAccount(row.id)
+    ElMessage.success('已删除')
+    await loadAccounts()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '删除失败')
+  }
+}
+
 // 概览统计：由全量资讯源条目数聚合分类计数，并取最新一条作为「最近抓取」参考
 async function loadOverview() {
   try {
@@ -445,7 +666,7 @@ async function loadOverview() {
 }
 
 async function reloadAll() {
-  await Promise.all([loadSources(), loadItems(), loadOverview()])
+  await Promise.all([loadSources(), loadItems(), loadOverview(), loadAccounts()])
 }
 
 // ---------- 工具 ----------
@@ -560,5 +781,19 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+.filter-spacer {
+  flex: 1;
+}
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.form-hint {
+  margin-left: 10px;
+  font-size: 12px;
+  color: #94a3b8;
 }
 </style>

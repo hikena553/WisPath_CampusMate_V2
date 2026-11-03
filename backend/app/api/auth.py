@@ -176,6 +176,9 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     user = db.query(User).filter(User.username == req.username).first()
     if user:
+        # 资讯账号是系统运营身份，只用于自动发帖，不开放任何登录通道
+        if user.role == UserRole.MEDIA:
+            raise HTTPException(status_code=403, detail="该账号为系统资讯账号，不支持登录")
         _attach_quick(user, result)
     _set_auth_cookie(response, result["access_token"])
     return result
@@ -198,6 +201,8 @@ def quick_login(req: QuickLoginRequest, request: Request, response: Response, db
         user = None
     if not user or payload.get("ph") != user.password_hash[:8]:
         raise HTTPException(status_code=401, detail="一键登录信息已失效，请使用账号密码登录")
+    if user.role == UserRole.MEDIA:
+        raise HTTPException(status_code=403, detail="该账号为系统资讯账号，不支持登录")
     if not _quick_channels(user):
         raise HTTPException(status_code=401, detail="暂无信息，请使用账号密码登录")
     # 认证通过后再校验通道：账号存在但对应手机号/QQ 未绑定时，才提示「无账号」

@@ -10,6 +10,7 @@ import {
   clearForcedLogout,
 } from '@/utils/token'
 import { isGuestMode, setGuestMode } from '@/utils/guest'
+import { saveLastAccount } from '@/utils/lastAccount'
 import { logoutApi } from '@/api/auth'
 import { useAgentStore, useTeacherAgentStore } from './agent'
 
@@ -38,6 +39,8 @@ export const useAuthStore = defineStore('auth', () => {
     setGuestMode(false)
     setToken(t)
     setUser(u as unknown as Record<string, unknown>)
+    // 记下本机上次登录的学号/工号：退出后登录页据此把账号填回输入框
+    saveLastAccount(u.username)
     // 重新登录成功：解除「已主动退出」的强制标记
     clearForcedLogout()
     resetUserState()

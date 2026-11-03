@@ -9,6 +9,8 @@ class UserRole(str, enum.Enum):
     STUDENT = "student"
     TEACHER = "teacher"
     ADMIN = "admin"
+    # 资讯账号（运营用机器人身份）：在交流社区自动发爬取资讯/每日汇总，禁止登录
+    MEDIA = "media"
 
 
 class User(Base):

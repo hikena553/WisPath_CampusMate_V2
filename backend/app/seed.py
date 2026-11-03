@@ -255,6 +255,24 @@ for t in teachers:
         t.department = "绵阳城市学院"
 db.commit()
 
+# ─── 资讯账号演示数据（幂等：管理端「资讯管理 → 账号管理」可再增删） ───
+from app.models.media import MediaAccount  # noqa: E402
+
+if not db.query(User).filter(User.role == UserRole.MEDIA).first():
+    media_user = User(
+        username="media_0001",
+        password_hash=hash_password("media-no-login-9527"),
+        name="绵小城资讯站",
+        role=UserRole.MEDIA,
+        signature="每天汇总校园内外重点资讯",
+        password_changed=True,
+    )
+    db.add(media_user)
+    db.flush()
+    db.add(MediaAccount(user_id=media_user.id, is_enabled=True, content_scope=None))
+    db.commit()
+    seeded = True
+
 
 # ═══════════════════════════════════════════════════════════
 # 3. 课表（按班级维度，不再逐学生复制）

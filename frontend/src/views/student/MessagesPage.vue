@@ -321,7 +321,6 @@
               <div class="msg-pane-title">
                 <span class="msg-pane-name">{{ activeSession.name }}</span>
                 <span v-if="activeSession.type === 'group'" class="msg-pane-meta">{{ groupMeta }}</span>
-                <span v-else-if="activeSession.type === 'private'" class="msg-pane-meta">{{ isOnline(activeSession.rawId) ? '在线' : '离线' }}</span>
               </div>
               <!-- 页头已经有对方名字了，再摆一个「主页」文字按钮是重复说明；
                    收成一枚三条横线的图标（汉堡菜单式），与左侧返回键同尺寸、成对。
@@ -1744,8 +1743,8 @@ onBeforeUnmount(() => {
 }
 .msg-ghost-btn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #e5e7eb; background: #fff; color: #4b5563; font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
 .msg-ghost-btn:hover { border-color: #d1d5db; color: #111827; }
-/* 只剩图标的那种（会话页头「主页」）：方形胶囊改成圆形，并且与左侧返回键同一套外观 ——
-   页头两端各一枚 30px 灰底圆，中间放名字，视觉上才是成对的 */
+/* 只剩图标的那种（会话页头「主页」）：保留 30px 圆形命中区，但底色透明 ——
+   页头本来就浅，再压一块灰底会显得比对方名字还重；悬停时只给一层淡淡的可点提示 */
 .msg-ghost-icon {
   width: 30px;
   height: 30px;
@@ -1754,10 +1753,10 @@ onBeforeUnmount(() => {
   justify-content: center;
   border: 0;
   border-radius: 50%;
-  background: #f4f5f7;
+  background: transparent;
   color: #4b5563;
 }
-.msg-ghost-icon:hover { background: #eceef1; color: #1f2329; }
+.msg-ghost-icon:hover { background: rgba(15, 23, 42, 0.06); color: #1f2329; }
 /* 三条横线：填 currentColor，跟着按钮的文字色走 */
 .msg-menu-lines { display: block; fill: currentColor; }
 
@@ -1803,9 +1802,21 @@ onBeforeUnmount(() => {
 
 /* ================= 会话窗口 ================= */
 .msg-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
-.msg-pane-head { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid #f0f1f3; }
-.msg-pane-title { flex: 1; display: flex; flex-direction: column; gap: 1px; }
-.msg-pane-name { font-size: 15px; font-weight: 600; color: #1f2329; }
+/* 三栏等宽骨架：左「返回」、右「主页」各占一条 30px 定宽轨，名字落在中间那轨。
+   这样手机端（两个按钮都在）、桌面私聊（只有右侧按钮）、桌面群聊（一个都没有）
+   三种情况下名字都严格居中，不会因为某一侧缺按钮、被 gap 顶偏十几像素。 */
+.msg-pane-head {
+  display: grid;
+  grid-template-columns: 30px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #f0f1f3;
+}
+.msg-pane-head > .msg-back { grid-column: 1; }
+.msg-pane-head > .msg-ghost-icon { grid-column: 3; }
+.msg-pane-title { grid-column: 2; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
+.msg-pane-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; color: #1f2329; }
 .msg-pane-meta { font-size: 11px; color: #9aa0a6; }
 .msg-back { border: none; background: #f4f5f7; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #4b5563; cursor: pointer; }
 .msg-chat-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; background: #f7f8fa; }
