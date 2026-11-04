@@ -3,10 +3,15 @@
     <div class="pwd-card">
       <div class="pwd-brand">
         <span class="pwd-tag">WisPath CampusMate</span>
-        <h1 class="pwd-title">修改初始密码</h1>
+        <h1 class="pwd-title">{{ isInitial ? '修改初始密码' : '修改密码' }}</h1>
         <p class="pwd-tip">
-          检测到当前账号仍在使用初始密码。为保障账号安全，
-          <b>建议尽快修改</b>（不影响其他功能使用）。
+          <template v-if="isInitial">
+            检测到当前账号仍在使用初始密码。为保障账号安全，
+            <b>建议尽快修改</b>（不影响其他功能使用）。
+          </template>
+          <template v-else>
+            定期修改密码可以更好地保护账号安全，新密码需与原密码不同。
+          </template>
         </p>
       </div>
 
@@ -23,8 +28,28 @@
             type="password"
             show-password
             placeholder="再次输入新密码"
-            @keyup.enter="submit"
           />
+        </el-form-item>
+        <el-form-item label="验证码" required>
+          <div class="captcha-row">
+            <el-input
+              v-model="form.captcha_code"
+              maxlength="4"
+              placeholder="输入图中字符"
+              @keyup.enter="submit"
+            />
+            <button
+              type="button"
+              class="captcha-img-btn"
+              :class="{ loading: captchaLoading }"
+              aria-label="刷新验证码"
+              :disabled="captchaLoading"
+              @click="loadCaptcha"
+            >
+              <img v-if="captcha?.image" :src="captcha.image" alt="验证码" />
+              <span v-else>{{ captchaLoading ? '加载中' : '点击获取' }}</span>
+            </button>
+          </div>
         </el-form-item>
       </el-form>
 
@@ -41,10 +66,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { changePassword } from '@/api/user'
+import { getCaptcha } from '@/api/auth'
+import type { CaptchaChallenge } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { confirmLogout } from '@/utils/logout'
 
@@ -52,13 +79,33 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const submitting = ref(false)
-const form = reactive({ old_password: '', new_password: '', confirm_password: '' })
+const form = reactive({ old_password: '', new_password: '', confirm_password: '', captcha_code: '' })
+const captcha = ref<CaptchaChallenge | null>(null)
+const captchaLoading = ref(false)
+/** 仅在账号仍未修改过初始密码时展示对应提示 */
+const isInitial = computed(() => auth.user?.password_changed === false)
+
+onMounted(() => { loadCaptcha() })
+
+async function loadCaptcha() {
+  captchaLoading.value = true
+  try {
+    captcha.value = await getCaptcha()
+    form.captcha_code = ''
+  } catch {
+    captcha.value = null
+  } finally {
+    captchaLoading.value = false
+  }
+}
 
 const roleHome: Record<string, string> = { teacher: '/teacher', admin: '/admin', student: '/student' }
 
 /** 与后端 /api/auth/change-password 的校验规则保持一致，避免提交后才报错 */
 function validate(): string | null {
-  if (!form.old_password || !form.new_password || !form.confirm_password) return '请填写所有字段'
+  if (!form.old_password || !form.new_password || !form.confirm_password || !form.captcha_code) {
+    return '请填写所有字段'
+  }
   if (form.new_password !== form.confirm_password) return '两次输入的新密码不一致'
   if (form.new_password.length < 8) return '新密码至少 8 位'
   if (!/[A-Za-z]/.test(form.new_password) || !/\d/.test(form.new_password)) return '新密码必须同时包含字母和数字'
@@ -72,15 +119,21 @@ async function submit() {
     ElMessage.warning(invalid)
     return
   }
+  if (!captcha.value) {
+    ElMessage.warning('验证码未加载，请点击图片重试')
+    return
+  }
   submitting.value = true
   try {
-    await changePassword(form.old_password, form.new_password)
+    await changePassword(form.old_password, form.new_password, captcha.value.captcha_id, form.captcha_code)
     // 同步缓存里的 password_changed，避免路由守卫再次把人送回本页
     if (auth.user) auth.updateUser({ ...auth.user, password_changed: true })
     ElMessage.success('密码修改成功')
     router.replace(roleHome[auth.user?.role || 'student'] || '/student')
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '修改失败，请重试')
+    const detail = e?.response?.data?.detail || '修改失败，请重试'
+    ElMessage.error(detail)
+    if (detail.includes('验证码')) loadCaptcha()
   } finally {
     submitting.value = false
   }
@@ -162,6 +215,33 @@ function onLogout() {
 .pwd-card :deep(.el-input__inner::placeholder) {
   color: rgba(255, 255, 255, 0.42);
 }
+
+.captcha-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.captcha-row .el-input { flex: 1; }
+.captcha-img-btn {
+  flex-shrink: 0;
+  width: 108px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+}
+.captcha-img-btn:hover:not(:disabled) { opacity: 0.85; }
+.captcha-img-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+.captcha-img-btn img { width: 100%; height: 100%; object-fit: fill; display: block; }
+.captcha-img-btn span { font-size: 13px; color: rgba(255, 255, 255, 0.7); }
 
 .pwd-submit {
   width: 100%;
