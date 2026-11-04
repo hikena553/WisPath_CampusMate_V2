@@ -188,7 +188,7 @@ function openItem(item: ForumMessageOut) {
   }
   if (!item.post_id) return
   open.value = false
-  router.push({ name: 'student-community', query: { post: String(item.post_id) } })
+  router.push({ path: '/student/campus', query: { tab: 'community', post: String(item.post_id) } })
 }
 
 async function onOpen() {

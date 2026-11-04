@@ -17,11 +17,21 @@
    需要热重载：`RELOAD=1 python main.py`，且只监控 app/ 目录。
 
 用法：
-    python main.py                # 正常启动
+    python main.py                # 正常启动（前端 HTTP）
+    HTTPS=1 python main.py        # 前端 HTTPS：手机访问时麦克风/语音录制才可用
     RELOAD=1 python main.py       # 带后端热重载
     MAX_RESTARTS=0 python main.py # 崩溃不自动重启，便于看第一次的错误现场
+
+HTTPS=1 首次启动会在 frontend/certs/ 生成本地 CA 与服务端证书（已 gitignore），
+并额外开一个只提供证书下载的 HTTP 端口（默认 5174）。手机先装证书：
+Android 打开 http://<局域网IP>:5174/dev-ca.crt；iOS 打开
+http://<局域网IP>:5174/dev-ca.mobileconfig 并在
+“设置→通用→关于本机→证书信任设置”开启完全信任，之后访问
+https://<局域网IP>:5173 才能调用麦克风。
 """
 import atexit
+import base64
+import ipaddress
 import os
 import re
 import signal
@@ -32,6 +42,8 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
+from datetime import datetime, timedelta, timezone
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
@@ -43,6 +55,11 @@ FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "5173"))
 RELOAD = os.getenv("RELOAD", "0") == "1"
 MAX_RESTARTS = int(os.getenv("MAX_RESTARTS", "5"))
 HEALTH_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/health"
+# HTTPS=1：前端以 HTTPS 启动，手机通过局域网访问时才能调用麦克风（语音消息）。
+HTTPS = os.getenv("HTTPS", "0") == "1"
+FRONTEND_CERT_DIR = os.path.join(FRONTEND_DIR, "certs")
+CA_HTTP_PORT = int(os.getenv("CA_HTTP_PORT", "5174"))
+_ca_http_server = None
 
 _IS_WINDOWS = sys.platform == "win32"
 _win_flags = subprocess.CREATE_NEW_PROCESS_GROUP if _IS_WINDOWS else 0
@@ -163,6 +180,258 @@ def _enable_ansi() -> None:
         pass
 
 
+def _local_ipv4_addresses() -> list[str]:
+    """本机所有非回环 IPv4（手机通过哪个地址访问，证书里就要覆盖哪个 IP）。"""
+    ips: set[str] = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127."):
+                ips.add(ip)
+    except OSError:
+        pass
+    try:
+        for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
+            if ip and not ip.startswith("127."):
+                ips.add(ip)
+    except OSError:
+        pass
+    return sorted(ips)
+
+
+def _ensure_dev_certs() -> bool:
+    """生成一次本地 CA + 服务端证书（HTTPS=1 时用）。
+
+    手机浏览器只在 HTTPS/localhost 下开放 getUserMedia；局域网 IP 用 HTTP 会被
+    浏览器直接禁用麦克风。Android 装 dev-ca.crt、iOS 装 dev-ca.mobileconfig 后，
+    https://<局域网IP>:5173 就是受信任的安全上下文，按住说话才能工作。
+    """
+    ca_key_path = os.path.join(FRONTEND_CERT_DIR, "dev-ca.key")
+    ca_crt_path = os.path.join(FRONTEND_CERT_DIR, "dev-ca.crt")
+    srv_key_path = os.path.join(FRONTEND_CERT_DIR, "dev-server.key")
+    srv_crt_path = os.path.join(FRONTEND_CERT_DIR, "dev-server.crt")
+    mobileconfig_path = os.path.join(FRONTEND_CERT_DIR, "dev-ca.mobileconfig")
+    required_ips = set(_local_ipv4_addresses()) | {"127.0.0.1"}
+
+    def cert_still_valid() -> bool:
+        if not all(os.path.isfile(p) for p in (srv_key_path, srv_crt_path, ca_crt_path, mobileconfig_path)):
+            return False
+        try:
+            from cryptography import x509
+
+            cert = x509.load_pem_x509_certificate(open(srv_crt_path, "rb").read())
+            san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            ips = {str(v) for v in san.get_values_for_type(x509.IPAddress)}
+            dns = set(san.get_values_for_type(x509.DNSName))
+            try:
+                expires = cert.not_valid_after_utc
+            except AttributeError:  # cryptography < 42
+                expires = cert.not_valid_after.replace(tzinfo=timezone.utc)
+            return expires > datetime.now(timezone.utc) + timedelta(days=7) and "localhost" in dns and required_ips <= ips
+        except Exception:
+            return False
+
+    if cert_still_valid():
+        return True
+
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+    except ImportError:
+        print("[WARN] 当前 Python 环境未安装 cryptography，无法生成 HTTPS 开发证书")
+        return False
+
+    try:
+        os.makedirs(FRONTEND_CERT_DIR, exist_ok=True)
+        now = datetime.now(timezone.utc)
+
+        def read_bytes(path: str) -> bytes:
+            with open(path, "rb") as f:
+                return f.read()
+
+        # 复用已有 CA：局域网 IP 变化时只重签服务端证书，避免手机反复安装根证书
+        ca_key = None
+        ca_cert = None
+        if os.path.isfile(ca_key_path) and os.path.isfile(ca_crt_path):
+            try:
+                ca_key = serialization.load_pem_private_key(read_bytes(ca_key_path), password=None)
+                ca_cert = x509.load_pem_x509_certificate(read_bytes(ca_crt_path))
+                try:
+                    ca_expires = ca_cert.not_valid_after_utc
+                except AttributeError:  # cryptography < 42
+                    ca_expires = ca_cert.not_valid_after.replace(tzinfo=timezone.utc)
+                if ca_expires < now + timedelta(days=30) or ca_key.public_key().public_numbers() != ca_cert.public_key().public_numbers():
+                    ca_key = ca_cert = None
+            except Exception:
+                ca_key = ca_cert = None
+
+        if ca_key is not None and ca_cert is not None:
+            ca_name = ca_cert.subject
+        else:
+            ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            ca_name = x509.Name([
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "WisPath CampusMate"),
+                x509.NameAttribute(NameOID.COMMON_NAME, "WisPath CampusMate Dev CA"),
+            ])
+            ca_cert = (
+                x509.CertificateBuilder()
+                .subject_name(ca_name)
+                .issuer_name(ca_name)
+                .public_key(ca_key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(now - timedelta(days=1))
+                .not_valid_after(now + timedelta(days=3650))
+                .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+                .add_extension(
+                    x509.KeyUsage(
+                        digital_signature=False,
+                        content_commitment=False,
+                        key_encipherment=False,
+                        data_encipherment=False,
+                        key_agreement=False,
+                        key_cert_sign=True,
+                        crl_sign=True,
+                        encipher_only=False,
+                        decipher_only=False,
+                    ),
+                    critical=True,
+                )
+                .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
+                .sign(ca_key, hashes.SHA256())
+            )
+            with open(ca_key_path, "wb") as f:
+                f.write(ca_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+            with open(ca_crt_path, "wb") as f:
+                f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
+
+        srv_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        san = x509.SubjectAlternativeName(
+            [x509.DNSName("localhost")]
+            + [x509.IPAddress(ipaddress.ip_address(ip)) for ip in sorted(required_ips)]
+        )
+        srv_cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")]))
+            .issuer_name(ca_name)
+            .public_key(srv_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - timedelta(days=1))
+            .not_valid_after(now + timedelta(days=825))
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=False,
+                    key_encipherment=True,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=False,
+                    crl_sign=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(san, critical=False)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+            .sign(ca_key, hashes.SHA256())
+        )
+
+        pem = serialization.Encoding.PEM
+        no_enc = serialization.NoEncryption()
+        with open(srv_key_path, "wb") as f:
+            f.write(srv_key.private_bytes(pem, serialization.PrivateFormat.PKCS8, no_enc))
+        with open(srv_crt_path, "wb") as f:
+            f.write(srv_cert.public_bytes(pem))
+
+        # iOS 只能通过描述文件安装根证书；PayloadContent 必须是 DER 的 base64
+        ca_der = base64.b64encode(ca_cert.public_bytes(serialization.Encoding.DER)).decode()
+        profile_uuid = str(uuid.uuid4()).upper()
+        payload_uuid = str(uuid.uuid4()).upper()
+        with open(mobileconfig_path, "w", encoding="utf-8") as f:
+            f.write(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+                '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+                '<plist version="1.0">\n<dict>\n'
+                "  <key>PayloadContent</key>\n  <array>\n    <dict>\n"
+                "      <key>PayloadCertificateFileName</key><string>dev-ca.crt</string>\n"
+                f"      <key>PayloadContent</key><data>{ca_der}</data>\n"
+                "      <key>PayloadDescription</key><string>WisPath CampusMate 本地开发 HTTPS 根证书（仅用于开发调试）</string>\n"
+                "      <key>PayloadDisplayName</key><string>WisPath CampusMate Dev CA</string>\n"
+                "      <key>PayloadIdentifier</key><string>com.wispath.campusmate.devca</string>\n"
+                "      <key>PayloadType</key><string>com.apple.security.root</string>\n"
+                f"      <key>PayloadUUID</key><string>{payload_uuid}</string>\n"
+                "      <key>PayloadVersion</key><integer>1</integer>\n"
+                "    </dict>\n  </array>\n"
+                "  <key>PayloadDisplayName</key><string>WisPath CampusMate Dev CA</string>\n"
+                "  <key>PayloadIdentifier</key><string>com.wispath.campusmate.devca.profile</string>\n"
+                "  <key>PayloadRemovalDisallowed</key><false/>\n"
+                "  <key>PayloadType</key><string>Configuration</string>\n"
+                f"  <key>PayloadUUID</key><string>{profile_uuid}</string>\n"
+                "  <key>PayloadVersion</key><integer>1</integer>\n"
+                "</dict>\n</plist>\n"
+            )
+        return True
+    except Exception as exc:  # noqa: BLE001 - 证书生成失败时退回 HTTP，不能挡住启动
+        print(f"[WARN] 生成 HTTPS 开发证书失败: {exc}")
+        return False
+
+
+def _start_ca_http_server() -> None:
+    """HTTPS 模式下提供一个纯 HTTP 的证书下载口。
+
+    手机首次访问时 HTTPS 证书还没被信任，直接从 HTTPS 页面下载描述文件会被浏览器
+    拦截；单独开一个只暴露两个公开证书文件的 HTTP 端口，安装流程最省事。
+    """
+    global _ca_http_server
+    if not HTTPS or _ca_http_server is not None:
+        return
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    files = {
+        "/dev-ca.crt": ("dev-ca.crt", "application/x-x509-ca-cert"),
+        "/dev-ca.mobileconfig": ("dev-ca.mobileconfig", "application/x-apple-aspen-config"),
+    }
+
+    class _Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 - BaseHTTPRequestHandler 约定
+            item = files.get(self.path.split("?", 1)[0])
+            full = os.path.join(FRONTEND_CERT_DIR, item[0]) if item else ""
+            if not item or not os.path.isfile(full):
+                self.send_error(404)
+                return
+            with open(full, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", item[1])
+            self.send_header("Content-Disposition", f'attachment; filename="{item[0]}"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *_args):
+            pass
+
+    try:
+        server = ThreadingHTTPServer(("0.0.0.0", CA_HTTP_PORT), _Handler)
+        server.daemon_threads = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        _ca_http_server = server
+    except OSError as exc:
+        print(f"[WARN] 证书下载端口 {CA_HTTP_PORT} 启动失败: {exc}")
+
+
+def _stop_ca_http_server() -> None:
+    global _ca_http_server
+    if _ca_http_server is not None:
+        _ca_http_server.shutdown()
+        _ca_http_server.server_close()
+        _ca_http_server = None
+
+
 class Service:
     """一个被托管的子进程（后端/前端）。"""
 
@@ -172,11 +441,13 @@ class Service:
         self.proc: subprocess.Popen | None = None
         self.restarts = 0
 
-    def spawn(self, cmd, cwd, shell=False):
+    def spawn(self, cmd, cwd, shell=False, extra_env=None):
         os.makedirs(LOG_DIR, exist_ok=True)
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
+        if extra_env:
+            env.update(extra_env)
         # stdout 是管道，子进程（vite/uvicorn/node）会误判为"非终端"而关闭颜色
         env["FORCE_COLOR"] = "1"
         env["CLICOLOR_FORCE"] = "1"
@@ -350,11 +621,13 @@ def _start_backend():
 
 
 def _start_frontend():
-    frontend.spawn(["npm", "run", "dev"], FRONTEND_DIR, shell=_IS_WINDOWS)
+    extra_env = {"VITE_HTTPS": "1"} if HTTPS else None
+    frontend.spawn(["npm", "run", "dev"], FRONTEND_DIR, shell=_IS_WINDOWS, extra_env=extra_env)
 
 
 def _stop_all():
     _stopping.set()
+    _stop_ca_http_server()
     for svc in (frontend, backend):
         svc.kill_tree()
 
@@ -404,12 +677,28 @@ for _sig in (signal.SIGINT, signal.SIGTERM):
 
 
 def main() -> int:
+    global HTTPS
     _enable_ansi()
+    if HTTPS and not _ensure_dev_certs():
+        HTTPS = False
+    scheme = "https" if HTTPS else "http"
     print("=" * 56)
     print("  智慧校园AI服务平台 - 启动中")
     print("=" * 56)
     print(f"  后端: http://localhost:{BACKEND_PORT}  (热重载: {'开' if RELOAD else '关'})")
-    print(f"  前端: http://localhost:{FRONTEND_PORT}")
+    print(f"  前端: {scheme}://localhost:{FRONTEND_PORT}")
+    if HTTPS:
+        _start_ca_http_server()
+        ips = _local_ipv4_addresses()
+        host = ips[0] if ips else "<局域网IP>"
+        print(f"  手机访问: {scheme}://{host}:{FRONTEND_PORT}/")
+        print("    1) 先装开发证书（用手机浏览器直接打开下面的 HTTP 地址）:")
+        print(f"       Android: http://{host}:{CA_HTTP_PORT}/dev-ca.crt")
+        print(f"       iOS:     http://{host}:{CA_HTTP_PORT}/dev-ca.mobileconfig")
+        print("       iOS 装完还需到 设置→通用→关于本机→证书信任设置 开启完全信任")
+        print("    2) 证书装好后访问上面的 HTTPS 地址，按住说话即可")
+    else:
+        print("  手机端录音需要 HTTPS：用 HTTPS=1 python main.py 启动")
     print(f"  日志: {LOG_DIR}")
     print("  按 Ctrl+C 停止所有服务")
     print("=" * 56)

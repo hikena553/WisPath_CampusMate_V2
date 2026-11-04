@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timezone
 from urllib.parse import unquote
@@ -19,6 +18,7 @@ from app.models.announcement import UrgencyLevel
 from app.schemas.message import MessageSend, MessageOut, ConversationOut
 from app.services.session_hidden import hidden_watermarks, is_hidden, hide_session
 from app.services.ws_manager import manager
+from app.utils.message_attach import ATTACHMENT_TYPES, parse_attachment, preview_of
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 
@@ -115,7 +115,7 @@ def get_conversations(user: User = Depends(get_current_user), db: Session = Depe
             user_id=other.id,
             user_name=other.name,
             user_avatar=other.avatar,
-            last_message=last_msg.content[:80] if last_msg else "",
+            last_message=preview_of(last_msg.content) if last_msg else "",
             last_message_time=last_msg.created_at if last_msg else None,
             unread_count=unread,
             online=manager.is_online(other.id),
@@ -295,26 +295,7 @@ def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(
 
 
 # ==================== 跨会话文件汇总（QQ「文件」页） ====================
-
-_ATTACHMENT_TYPES = ("file", "image", "voice")
-
-
-def _parse_attachment(content: str | None) -> dict | None:
-    """解析消息内容中的结构化附件（文件 / 图片 / 语音），非附件返回 None。"""
-    if not content or not content.startswith("{"):
-        return None
-    try:
-        data = json.loads(content)
-    except (ValueError, TypeError):
-        return None
-    if not isinstance(data, dict) or data.get("type") not in _ATTACHMENT_TYPES or not data.get("url"):
-        return None
-    return {
-        "type": data["type"],
-        "text": data.get("text") or "",
-        "url": data["url"],
-        "duration": data.get("duration") or 0,
-    }
+# 附件消息的解析口径放在 app/utils/message_attach.py（会话摘要等处共用同一份）。
 
 
 @router.get("/files")
@@ -349,7 +330,7 @@ def list_shared_files(
         {u.id: u.name for u in db.query(User).filter(User.id.in_(peer_ids)).all()} if peer_ids else {}
     )
     for m in single_rows:
-        meta = _parse_attachment(m.content)
+        meta = parse_attachment(m.content)
         if not meta:
             continue
         peer_id = m.receiver_id if m.sender_id == user.id else m.sender_id
@@ -387,7 +368,7 @@ def list_shared_files(
             {u.id: u.name for u in db.query(User).filter(User.id.in_(sender_ids)).all()} if sender_ids else {}
         )
         for m in group_rows:
-            meta = _parse_attachment(m.content)
+            meta = parse_attachment(m.content)
             if not meta:
                 continue
             session_key = f"g-{m.group_id}"
@@ -412,7 +393,7 @@ def list_shared_files(
     kw = (keyword or "").strip().lower()
     if kw:
         items = [i for i in items if kw in (i["name"] or "").lower()]
-    if file_type in _ATTACHMENT_TYPES:
+    if file_type in ATTACHMENT_TYPES:
         items = [i for i in items if i["file_type"] == file_type]
     items.sort(key=lambda i: i["created_at"], reverse=True)
     return {"items": items[:limit], "total": len(items)}

@@ -388,7 +388,7 @@ function openForumHit(m: ForumHit) {
     void openUserHomepage(m.actorId)
     return
   }
-  void router.push({ name: 'student-community', query: { post: String(m.postId) } })
+  void router.push({ path: '/student/campus', query: { tab: 'community', post: String(m.postId) } })
 }
 
 /* ==================== 最近搜索 ==================== */

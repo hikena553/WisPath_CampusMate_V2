@@ -292,6 +292,20 @@
   /* 返回：滑出的子页压在上面，露出的一级页在下面归位 */
   .route-subpage-back-leave-active { z-index: 1501 !important; pointer-events: none !important; }
   .route-subpage-back-enter-active { z-index: 1499 !important; }
+
+  /* 学业中心的功能子页（/student/schedule?tab=plan 等）没有独立路由组件，
+     根节点 .schedule-page 是留在流内的 height:100% 页面；而上面这套横滑的几何前提
+     是「子页自身 fixed 整屏」（消息搜索 / 添加朋友都满足）。若让它照旧留在流内，
+     进场页与离场页会在 .main-area（flex column）里各分一半高度 → 两页一起塌陷抽搐。
+     只把这一页脱流即可：推入时它从右滑入、个人中心留在流内占满；返回时它向右滑出、
+     个人中心归位，另一页始终有完整高度。其它 fixed 子页不命中，行为不变。 */
+  .schedule-page.route-subpage-enter-active,
+  .schedule-page.route-subpage-leave-active,
+  .schedule-page.route-subpage-back-enter-active,
+  .schedule-page.route-subpage-back-leave-active {
+    position: absolute !important;
+    inset: 0 !important;
+  }
 }
 
 /* 推入 / 返回各两页在动：进场页 + 让位的离场页，返回时反过来。 */

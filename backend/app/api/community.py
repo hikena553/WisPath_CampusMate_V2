@@ -5,6 +5,7 @@
 - 数字赋能：热帖推荐（按学生画像/学习方向关键词匹配）、社区内容作为 RAG 知识来源
 """
 from datetime import date
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -23,6 +24,17 @@ from app.schemas.community import (
 router = APIRouter(prefix="/api/community", tags=["交流社区"])
 
 CATEGORIES = ["技术", "提问", "分享", "求助", "资讯"]
+
+# 一条帖子最多带 9 张图（前端九宫格上限，超出的截断而不是报错）
+MAX_POST_IMAGES = 9
+
+
+def _images_to_db(images: list[str] | None) -> str | None:
+    """URL 数组 → 入库 JSON 字符串；空数组存 None，避免库里出现 '[]' 与 NULL 两种空值。"""
+    if not images:
+        return None
+    cleaned = [str(u).strip() for u in images if str(u).strip()][:MAX_POST_IMAGES]
+    return json.dumps(cleaned, ensure_ascii=False) if cleaned else None
 
 
 def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: bool = True) -> CommunityPostOut:
@@ -50,6 +62,7 @@ def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: b
         author_avatar=author.avatar if author else None,
         author_is_following=author_is_following,
         liked=liked,
+        images=p.images,
     )
 
 
@@ -94,6 +107,7 @@ def create_post(req: CommunityPostCreate, db: Session = Depends(get_db), current
         category=req.category,
         title=req.title.strip(),
         content=req.content.strip(),
+        images=_images_to_db(req.images),
     )
     db.add(post)
     db.commit()
@@ -142,6 +156,9 @@ def update_post(
     data = req.model_dump(exclude_unset=True)
     if req.category is not None and req.category not in CATEGORIES:
         raise HTTPException(400, "分类不合法")
+    # images 是数组，不能走下面那个「字符串就 strip」的通用分支
+    if "images" in data and data["images"] is not None:
+        post.images = _images_to_db(data.pop("images"))
     for k, v in data.items():
         if v is not None:
             setattr(post, k, v.strip() if isinstance(v, str) else v)

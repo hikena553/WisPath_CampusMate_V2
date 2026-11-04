@@ -26,6 +26,10 @@ ALLOWED_MIME_PREFIXES = (
     "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
     "text/plain", "application/zip", "application/x-rar", "application/x-zip-compressed",
 )
+# Safari 的 MediaRecorder 只出 mp4 容器（audio/mp4），libmagic 对 ISO BMFF 常判成
+# video/mp4；只对 m4a 这个扩展名放行这两个 MIME，别的一律按原规则拒绝。
+AUDIO_CONTAINER_EXTS = (".m4a",)
+AUDIO_CONTAINER_MIMES = ("audio/mp4", "video/mp4")
 
 # 压缩包安全限制（防解压炸弹与路径穿越）
 ZIP_MAX_MEMBERS = 200
@@ -86,7 +90,10 @@ async def upload_file(
     except ImportError:
         raise HTTPException(503, "文件校验服务不可用，请稍后重试")
     mime_type = magic.from_buffer(content[:2048], mime=True)
-    if not mime_type.startswith(ALLOWED_MIME_PREFIXES):
+    mime_ok = mime_type.startswith(ALLOWED_MIME_PREFIXES) or (
+        ext in AUDIO_CONTAINER_EXTS and mime_type in AUDIO_CONTAINER_MIMES
+    )
+    if not mime_ok:
         raise HTTPException(400, f"文件内容类型不匹配: {mime_type}")
     if ext in (".zip", ".rar") or mime_type in ("application/zip", "application/x-zip-compressed", "application/x-rar"):
         _validate_archive(content)

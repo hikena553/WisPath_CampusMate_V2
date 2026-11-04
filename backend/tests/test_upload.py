@@ -128,3 +128,30 @@ def test_upload_valid_zip_accepted(api, login_token, set_magic_mime):
     assert resp.status_code == 200
     save_name = resp.json()["url"].rsplit("/", 1)[-1]
     (UPLOAD_DIR / save_name).unlink(missing_ok=True)
+
+
+def test_upload_m4a_accepts_mp4_container_mime(api, login_token, set_magic_mime):
+    """Safari 录的语音是 mp4 容器，libmagic 常判成 video/mp4 —— .m4a 放行这两个 MIME。
+
+    不豁免的话，iOS 上「按住说话」一律 400，语音消息等于没做。
+    """
+    set_magic_mime("video/mp4")
+    auth = login_token()
+    payload = b"\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00M4A isom"
+    resp = api.post("/api/upload",
+                    files={"file": ("voice.m4a", payload, "audio/mp4")},
+                    headers=auth["headers"])
+    assert resp.status_code == 200
+    save_name = resp.json()["url"].rsplit("/", 1)[-1]
+    (UPLOAD_DIR / save_name).unlink(missing_ok=True)
+
+
+def test_upload_mp4_container_mime_still_rejected_for_other_ext(api, login_token, set_magic_mime):
+    """豁免只认 .m4a：同样嗅探成 video/mp4 的 .png 依旧被拒。"""
+    set_magic_mime("video/mp4")
+    auth = login_token()
+    resp = api.post("/api/upload",
+                    files={"file": ("fake.png", b"not-really-a-png", "image/png")},
+                    headers=auth["headers"])
+    assert resp.status_code == 400
+    assert "文件内容类型不匹配" in resp.json()["detail"]

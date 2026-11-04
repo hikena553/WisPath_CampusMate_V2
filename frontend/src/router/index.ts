@@ -87,7 +87,16 @@ const router = createRouter({
         // v4：学习计划收编为学业中心第 5 个 tab，旧路由重定向
         { path: 'plan', name: 'student-plan', redirect: { path: '/student/schedule', query: { tab: 'plan' } } },
         { path: 'portfolio', name: 'student-portfolio', component: () => import('@/views/student/PortfolioView.vue'), meta: { keepAlive: false } },
-        { path: 'community', name: 'student-community', component: () => import('@/views/student/CommunityView.vue'), meta: { keepAlive: false } },
+        // 交流社区已并入校园资讯的「交流社区」分类页签，独立页下线；
+        // 旧地址仍可用：带 post 的老链接原样带过去，落地即展开那条帖子
+        {
+          path: 'community',
+          name: 'student-community',
+          redirect: (to) => ({
+            path: '/student/campus',
+            query: { tab: 'community', ...(to.query.post ? { post: String(to.query.post) } : {}) },
+          }),
+        },
         // v4：情绪树洞淡出，心情卡在学业中心主页承接（打点 + 台账 + AI 提醒），旧路由重定向
         { path: 'emotion', name: 'student-emotion', redirect: { path: '/student/schedule', query: { tab: 'home' } } },
         // 我的关怀：教师端「人文关怀」的学生侧闭环（激励 / 关怀记录 / 家访记录）

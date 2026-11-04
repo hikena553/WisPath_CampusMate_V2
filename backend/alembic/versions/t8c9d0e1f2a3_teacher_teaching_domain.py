@@ -24,6 +24,9 @@
 ----
 所有 ``ADD COLUMN`` / ``CREATE TABLE`` 都先查 inspector，重复执行不报错——
 本项目的部署环境存在「手工 stamp head」的历史，迁移必须能安全重跑。
+回填按方言分流：MySQL 走 ``UPDATE ... JOIN``，SQLite 走相关子查询；
+``users.role`` 由 SAEnum 存枚举名（大写 ``TEACHER``），统一用 ``UPPER()``
+比较，避免 MySQL 不区分大小写、SQLite 区分大小写导致的回填差异。
 
 Revision ID: t8c9d0e1f2a3
 Revises: p7b8c9d0e1f2
@@ -61,22 +64,38 @@ def upgrade() -> None:
 
         # 回填：姓名 → 教师账号。只认「姓名唯一命中且 role=teacher」的记录，
         # 同名歧义一律留空并计入待人工核对，宁可空着也不猜。
-        bind.execute(
-            sa.text(
-                """
+        # MySQL 支持 UPDATE ... JOIN，SQLite 不支持，两条分支语义保持一致：
+        # 只认「姓名唯一命中且角色为教师」的账号，同名歧义一律留空。
+        # users.role 存的是 SAEnum 枚举名（'TEACHER'），MySQL 默认 collation
+        # 不区分大小写能匹配小写字面量，SQLite 会全部漏回填，故统一 UPPER()。
+        if bind.dialect.name == "mysql":
+            backfill_sql = """
                 UPDATE courses c
                 JOIN (
                     SELECT name, MIN(id) AS teacher_id
                     FROM users
-                    WHERE role = 'teacher' AND name IS NOT NULL AND name <> ''
+                    WHERE UPPER(role) = 'TEACHER' AND name IS NOT NULL AND name <> ''
                     GROUP BY name
                     HAVING COUNT(*) = 1
                 ) t ON t.name = c.teacher
                 SET c.teacher_id = t.teacher_id
                 WHERE c.teacher_id IS NULL AND c.teacher IS NOT NULL AND c.teacher <> ''
-                """
-            )
-        )
+            """
+        else:
+            backfill_sql = """
+                UPDATE courses
+                SET teacher_id = (
+                    SELECT MIN(u.id)
+                    FROM users u
+                    WHERE UPPER(u.role) = 'TEACHER'
+                      AND u.name IS NOT NULL AND u.name <> ''
+                      AND u.name = courses.teacher
+                    GROUP BY u.name
+                    HAVING COUNT(*) = 1
+                )
+                WHERE teacher_id IS NULL AND teacher IS NOT NULL AND teacher <> ''
+            """
+        bind.execute(sa.text(backfill_sql))
 
     # ── 2. attendances ────────────────────────────────────────────────
     if not _has_table(inspector, "attendances"):

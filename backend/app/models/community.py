@@ -15,6 +15,7 @@ class CommunityPost(Base):
     category: Mapped[str] = mapped_column(String(20), default="分享", index=True)  # 技术/提问/分享/求助
     title: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
+    images: Mapped[str | None] = mapped_column(Text, default=None, comment="配图 URL JSON 数组，最多 9 张")
     view_count: Mapped[int] = mapped_column(Integer, default=0)
     like_count: Mapped[int] = mapped_column(Integer, default=0)
     comment_count: Mapped[int] = mapped_column(Integer, default=0)

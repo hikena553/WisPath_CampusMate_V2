@@ -1,9 +1,14 @@
 import { defineConfig, type Plugin, type ViteDevServer, type PreviewServer } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
-import { createReadStream, existsSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+
+const CERT_DIR = fileURLToPath(new URL('./certs', import.meta.url))
+const HTTPS_ENABLED = process.env.VITE_HTTPS === '1'
+const HTTPS_KEY = join(CERT_DIR, 'dev-server.key')
+const HTTPS_CERT = join(CERT_DIR, 'dev-server.crt')
 
 const ORT_MIME: Record<string, string> = {
   '.mjs': 'text/javascript',
@@ -43,8 +48,47 @@ function ortStaticPlugin(): Plugin {
   }
 }
 
+/**
+ * 开发证书下载（仅 HTTPS 模式）。
+ *
+ * 手机浏览器只有 HTTPS/localhost 才允许调用麦克风；局域网 IP + HTTP 会被浏览器
+ * 直接禁用 navigator.mediaDevices。HTTPS 模式下手机需要先安装本地 CA，这里把
+ * CA 证书与 iOS 描述文件直接以附件形式提供，避免用户去电脑上找文件。
+ */
+function devCertDownloadPlugin(): Plugin {
+  const files: Record<string, { file: string; type: string }> = {
+    '/__dev-ca.crt': { file: 'dev-ca.crt', type: 'application/x-x509-ca-cert' },
+    '/__dev-ca.mobileconfig': { file: 'dev-ca.mobileconfig', type: 'application/x-apple-aspen-config' },
+  }
+  return {
+    name: 'dev-cert-download',
+    configureServer(server: ViteDevServer) {
+      if (!HTTPS_ENABLED) return
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url || '').split('?')[0]
+        const item = files[path]
+        if (!item) return next()
+        const full = join(CERT_DIR, item.file)
+        if (!existsSync(full)) return next()
+        res.setHeader('Content-Type', item.type)
+        res.setHeader('Content-Disposition', `attachment; filename="${item.file}"`)
+        createReadStream(full).pipe(res)
+      })
+    },
+  }
+}
+
+const httpsOptions =
+  HTTPS_ENABLED && existsSync(HTTPS_KEY) && existsSync(HTTPS_CERT)
+    ? { key: readFileSync(HTTPS_KEY), cert: readFileSync(HTTPS_CERT) }
+    : undefined
+
+if (HTTPS_ENABLED && !httpsOptions) {
+  console.warn('[vite] VITE_HTTPS=1 但未找到 frontend/certs/dev-server.*，本次仍以 HTTP 启动')
+}
+
 export default defineConfig({
-  plugins: [vue(), ortStaticPlugin()],
+  plugins: [vue(), ortStaticPlugin(), devCertDownloadPlugin()],
   optimizeDeps: {
     include: ['d3-cloud', 'd3-dispatch']
   },
@@ -57,6 +101,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
+    https: httpsOptions,
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true, ws: true },
       '/uploads': { target: 'http://127.0.0.1:8000', changeOrigin: true }

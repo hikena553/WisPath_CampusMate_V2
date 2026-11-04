@@ -52,7 +52,7 @@
              顶栏只保留主标题，高度恒为 48px（避免布局跳动）。 -->
         <div v-if="isMobile" class="subpage-bar" :class="{ 'is-scrolled': subpageScrolled }">
           <div class="sp-side sp-left">
-            <button class="sp-back" type="button" :aria-label="cameFromNotice ? '返回消息通知' : '返回主页'" @click="backToHome">
+            <button class="sp-back" type="button" :aria-label="backLabel" @click="backToHome">
               <el-icon :size="19"><ArrowLeft /></el-icon>
             </button>
           </div>
@@ -1377,6 +1377,13 @@ const subPageTitle = computed(() => {
   return map[activeTab.value] || '学业中心'
 })
 
+/**
+ * 这趟子页是「从别的页面点进来」的（地址上带着 ?tab=xxx），
+ * 而不是在驾驶舱主页点卡片下钻的（页内下钻不改地址）。
+ * 返回键据此分流：前者整页退回来处，后者只回驾驶舱主页 —— 见 backToHome。
+ */
+const enteredSubPageByRoute = ref((tabKeys as readonly string[]).includes(validInitTab))
+
 // 学业中心的各功能子页属于二级页，打开时让出移动端底部悬浮导航
 useMobileSubPage(computed(() => isMobile.value && activeTab.value !== 'home'))
 
@@ -1656,7 +1663,12 @@ const planRef = ref<InstanceType<typeof PlanView> | null>(null)
 
 function openSubPage(tab: string) {
   if (activeTab.value === tab) return
-  if (isMobile.value && activeTab.value === 'home') resetPageScroll()
+  if (isMobile.value && activeTab.value === 'home') {
+    resetPageScroll()
+    // 驾驶舱里点卡片下钻：这一步不产生新的历史记录，
+    // 所以「从别的页面进来」的标记在这里失效 —— 返回应当回驾驶舱主页。
+    enteredSubPageByRoute.value = false
+  }
   activeTab.value = tab
 }
 
@@ -1668,6 +1680,24 @@ function openSubPage(tab: string) {
  */
 const cameFromNotice = computed(() => route.query.from === NOTICE_ORIGIN)
 
+/**
+ * 站内上一条地址（vue-router 会写进 history.state.back）。
+ * 首屏进入 / 直接贴地址打开 / 跨站进来时拿不到，此时不允许退到应用外面。
+ */
+function inAppBackPath(): string | null {
+  const back = (history.state as { back?: unknown } | null)?.back
+  return typeof back === 'string' && back.startsWith('/') && !back.startsWith('//') ? back : null
+}
+
+/** 返回键语义（无障碍标签与行为必须一致，免得读屏念的和做的不一样） */
+const backLabel = computed(() =>
+  cameFromNotice.value
+    ? '返回消息通知'
+    : enteredSubPageByRoute.value && !!inAppBackPath()
+      ? '返回上一页'
+      : '返回主页',
+)
+
 function backToHome() {
   if (cameFromNotice.value) {
     // 站内进来才有上一条；直接贴地址打开时退回消息页，别把人甩出应用
@@ -1676,8 +1706,29 @@ function backToHome() {
     return
   }
   if (activeTab.value === 'home') return
+
+  // 动态判定：这一趟子页到底是「别的页面点进来」还是「本页驾驶舱点卡片下钻」。
+  // 前者（个人中心「成长档案 / 学习计划」、工作台、消息等处 push 过来）返回应当
+  // 整页退回来处；只有后者才该回到驾驶舱主页 —— 否则用户会被丢进一个他没去过的页面。
+  //   1) 进页时地址上就带 ?tab=xxx —— 页内下钻不改地址，可据此区分入口；
+  //   2) 站内确实还有上一条（首屏 / 分享链接直达时没有 back，只能回主页）；
+  //   3) 上一条不是学业中心自己（含别的 tab），退过去等于原地打转，仍按回主页处理。
+  const back = inAppBackPath()
+  if (enteredSubPageByRoute.value && back && back.split('?')[0] !== route.path) {
+    enteredSubPageByRoute.value = false
+    router.back()
+    return
+  }
+
   if (isMobile.value) resetPageScroll()
   activeTab.value = 'home'
+  // 地址上的 ?tab= 只在「从别的页面点进来」时写入，回驾驶舱主页后一并抹掉：
+  // 否则页面显示的是主页、地址还写着 tab=plan，刷新就又被丢回那个子页。
+  if (typeof route.query.tab === 'string') {
+    const query = { ...route.query }
+    delete query.tab
+    void router.replace({ path: route.path, query })
+  }
   // 回首页时同步一次速览数据（待办/心情/打卡可能在子页里刚变过）
   if (isMobile.value) void dashboardRef.value?.refresh()
 }

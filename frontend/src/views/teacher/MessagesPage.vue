@@ -2836,7 +2836,15 @@ let talkStartY = 0
 async function onTalkStart(e: PointerEvent) {
   if (isRecording.value) return
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-    ElMessage.warning('当前环境不支持语音录制')
+    if (!window.isSecureContext) {
+      ElMessage.warning(
+        location.protocol === 'https:'
+          ? 'HTTPS 证书未受信任，请先安装开发证书后刷新页面'
+          : '语音录制需要 HTTPS：请改用 https:// 地址访问'
+      )
+    } else {
+      ElMessage.warning('当前浏览器不支持语音录制')
+    }
     return
   }
   talkPressed = true

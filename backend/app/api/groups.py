@@ -16,6 +16,7 @@ from app.schemas.group import (
 )
 from app.services.session_hidden import hidden_watermarks, is_hidden
 from app.services.ws_manager import manager
+from app.utils.message_attach import preview_of
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
@@ -102,7 +103,7 @@ def get_groups(user: User = Depends(get_current_user), db: Session = Depends(get
             is_dismissed=g.is_dismissed,
             member_count=member_count,
             online_count=online_count,
-            last_message=last_msg.content[:80] if last_msg else "",
+            last_message=preview_of(last_msg.content) if last_msg else "",
             last_message_time=last_msg.created_at if last_msg else None,
             unread_count=unread,
             is_muted=muted,
@@ -147,7 +148,7 @@ def get_group(group_id: int, user: User = Depends(get_current_user), db: Session
         is_dismissed=group.is_dismissed,
         member_count=member_count,
         online_count=online_count,
-        last_message=last_msg.content[:80] if last_msg else "",
+        last_message=preview_of(last_msg.content) if last_msg else "",
         last_message_time=last_msg.created_at if last_msg else None,
         unread_count=unread,
         is_muted=muted,

@@ -31,6 +31,10 @@ export function setPageTransition(name: string): void {
    （同一层 children），但交互上是「子页」。层级表写在下面，谁是谁的子页一眼可见，
    加新页面时只改一处。
 
+   唯一的例外是学业中心：/student/plan、/student/growth 等旧路由都 redirect 到
+   /student/schedule?tab=xxx，路径本身是一级页签，只有 query.tab 能说明「这趟是
+   下钻到功能子页」。resolvePageTransition 的第三个参数就是为此存在（见下方注释）。
+
    几何前提（见 animations.css 路由段）：
    - 移动端：进入/离场的子页自身是 fixed 整屏覆盖层（z-index 1500），离开的一级页
      留在流内也不会被分摊高度 —— 消息搜索 / 添加朋友两页为此在 ≤767px 里声明了
@@ -73,11 +77,48 @@ export function navDepthOf(path: string): number {
 }
 
 /**
+ * 学业中心「子页」的 tab 键（与 SchedulePage.vue 的 tabKeys 保持一致）。
+ * /student/plan、/student/growth、/student/grade … 这些旧路由都是 redirect 到
+ * /student/schedule?tab=xxx，从个人中心 / 驾驶舱点进去时语义是**下钻到子页**，
+ * 但目标路径 /student/schedule 本身又是一级页（底部页签）——只看 path 分不出层级，
+ * 于是过去一律判成平级 page-card（移动端纯淡入），与「编辑资料 / 我的作品集」等
+ * 下层让位式子页动画不一致。这里用 query.tab 补上层级信息。
+ */
+const SCHEDULE_SUB_TABS: ReadonlySet<string> = new Set([
+  'schedule', 'grades', 'growth', 'service', 'plan', 'study', 'ai',
+])
+
+/** 是否「学业中心的某个功能子页」（home / 无 tab 都是一级驾驶舱主页） */
+export function isScheduleSubTab(path: string, tab?: string): boolean {
+  return path === '/student/schedule' && !!tab && SCHEDULE_SUB_TABS.has(tab)
+}
+
+export interface PageTransitionContext {
+  /** 目标地址的 ?tab=（redirect 之后的地址上就有） */
+  toTab?: string
+  /** 来源地址的 ?tab=（router.back() 时靠它认出「正在从子页返回」） */
+  fromTab?: string
+}
+
+/**
  * 决定这次路由切换播哪一种过渡。
  * 注意 `from` 可能是 `/student/messages?chat=...` 这类带 query 的地址 —— 调用方传
- * `route.path`（不含 query），这里不做解析，保持纯函数。
+ * `route.path`（不含 query），层级相关的 query 走 ctx，保持本函数无路由库依赖。
  */
-export function resolvePageTransition(to: string, from: string): PageTransitionName {
+export function resolvePageTransition(
+  to: string,
+  from: string,
+  ctx: PageTransitionContext = {},
+): PageTransitionName {
+  // 同一路由内换 tab（plan → grades）组件不重建，Transition 本就不会触发；
+  // 明确判为平级，避免误报下钻。
+  if (to === from) return 'page-card'
+
+  const toIsSubTab = isScheduleSubTab(to, ctx.toTab)
+  const fromIsSubTab = isScheduleSubTab(from, ctx.fromTab)
+  if (toIsSubTab && !fromIsSubTab) return 'route-subpage'
+  if (fromIsSubTab && !toIsSubTab) return 'route-subpage-back'
+
   const toDepth = navDepthOf(to)
   const fromDepth = navDepthOf(from)
   if (toDepth > fromDepth) return 'route-subpage'

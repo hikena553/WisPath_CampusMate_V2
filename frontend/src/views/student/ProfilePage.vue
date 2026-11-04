@@ -162,6 +162,17 @@
               >
                 收藏的帖子
               </button>
+              <!-- 卡片只铺 4 张：再多就把个人主页挤成第二个资讯列表，
+                   全量收进「我的收藏」子页。入口跟着 Tab 走，只在收藏页签下出现。 -->
+              <button
+                v-if="cardTab === 'favorites' && articleFavs.length"
+                type="button"
+                class="pf-cards-all"
+                @click="openPage('favorites')"
+              >
+                全部 {{ articleFavs.length }} 条
+                <el-icon :size="11"><ArrowRight /></el-icon>
+              </button>
             </div>
 
             <!-- 左右滑动切换：项目经历在前，向左滑（dx<0）到收藏，向右滑回项目经历 -->
@@ -175,17 +186,18 @@
             >
               <template v-if="cardTab === 'favorites'">
                 <div v-if="favLoading" class="pf-cards-loading">加载中…</div>
-                <div v-else-if="!favorites.length" class="pf-cards-empty">还没有收藏任何帖子</div>
+                <div v-else-if="!articleFavs.length" class="pf-cards-empty">还没有收藏任何帖子</div>
                 <div v-else class="pf-media-grid">
                   <div
-                    v-for="fav in favorites.slice(0, 4)"
+                    v-for="fav in articleFavs.slice(0, 4)"
                     :key="fav.id"
                     class="pf-media-card"
-                    @click="router.push('/student/campus?tab=favorites')"
+                    @click="openArticleDetail(fav)"
                   >
                     <div class="pf-media-cover" :class="`tone-${fav.id % 5}`">
-                      <span class="pf-media-cover-text">{{ fav.category || '帖子' }}</span>
-                      <span v-if="fav.category" class="pf-media-tag">{{ fav.category }}</span>
+                      <img v-if="fav.image_url" :src="fav.image_url" alt="" loading="lazy" />
+                      <span v-else class="pf-media-cover-text">{{ fav.title || '校园资讯' }}</span>
+                      <span v-if="fav.source" class="pf-media-tag">{{ favSourceLabel(fav.source) }}</span>
                     </div>
                     <div class="pf-media-title">{{ fav.title }}</div>
                     <div class="pf-media-meta">
@@ -194,6 +206,7 @@
                     </div>
                   </div>
                 </div>
+                <!-- 卡片只铺 4 张，全量在页签右侧的「全部」里 -->
               </template>
 
               <template v-else>
@@ -382,6 +395,35 @@
             :level="badgeWall.level"
           />
           <div v-else class="badge-placeholder">勋章数据加载中…</div>
+        </div>
+
+        <!-- 我的收藏：校园资讯详情「收藏」写入的全部帖子。
+             收藏这个动作发生在资讯页，回来找的时候人已经在个人中心了，
+             所以列表就落在这里，点开走校园资讯同款站内详情（不跳外部浏览器）。 -->
+        <div v-if="currentPage === 'favorites'" class="sub-page-content">
+          <p v-if="favLoading" class="pf-fav-empty">加载中…</p>
+          <p v-else-if="!articleFavs.length" class="pf-fav-empty">还没有收藏的帖子</p>
+          <div v-else class="pf-fav-list">
+            <button
+              v-for="fav in articleFavs"
+              :key="fav.id"
+              type="button"
+              class="pf-fav-row"
+              @click="openArticleDetail(fav)"
+            >
+              <span class="pf-fav-thumb">
+                <img v-if="fav.image_url" :src="fav.image_url" alt="" loading="lazy" />
+                <el-icon v-else :size="18"><Star /></el-icon>
+              </span>
+              <span class="pf-fav-main">
+                <span class="pf-fav-title">{{ fav.title }}</span>
+                <span class="pf-fav-meta">
+                  {{ favSourceLabel(fav.source) }} · {{ fav.created_at ? fav.created_at.slice(0, 10) : '已收藏' }}
+                </span>
+              </span>
+              <el-icon class="pf-fav-arrow" :size="14"><ArrowRight /></el-icon>
+            </button>
+          </div>
         </div>
 
         <!-- 修改密码（同教师端）：单卡片表单 + 密码强度提示 -->
@@ -673,6 +715,20 @@
 
     <!-- 导出简历向导：问答 → 匹配度 → 模板（真实预览）→ 生成 DOCX/PDF -->
     <ResumeExportWizard v-model="resumeWizardVisible" @generated="loadResumes" />
+
+    <!-- 站内阅读器 / 资讯详情：收藏卡片和收藏列表都走校园资讯同款详情页，不跳外部浏览器 -->
+    <ArticleReader ref="articleReader" />
+    <ArticleDetailPage
+      v-if="articleTarget"
+      ref="articleDetailRef"
+      :article-url="articleTarget.url"
+      :title="articleTarget.title"
+      :source="articleTarget.source"
+      @close="closeArticleDetail"
+      @closed="articleTarget = null"
+      @read="onArticleDetailRead"
+      @updated="onArticleUpdated"
+    />
   </div>
 </template>
 
@@ -687,7 +743,7 @@ import { updateProfile, getTeachers, changePassword } from '@/api/user'
 import { createFeedback, getFeedbacks } from '@/api/feedback'
 import { uploadFile } from '@/api/upload'
 import { getGrowthProfile, getProjects, type GrowthProfile, type StudentProject } from '@/api/growth'
-import { getFavorites, type Favorite } from '@/api/resources'
+import { getArticleFavorites, type CampusArticleFavoriteItem } from '@/api/campus'
 import { getGoals } from '@/api/plan'
 import { getMyBadgeWall, type BadgeItem, type BadgeWall as BadgeWallData } from '@/api/badge'
 import { syncQuickAccount } from '@/utils/quickLogin'
@@ -695,10 +751,13 @@ import { confirmLogout } from '@/utils/logout'
 import BadgeWall from '@/components/profile/BadgeWall.vue'
 import BadgeMedal from '@/components/profile/BadgeMedal.vue'
 import BadgeDetail from '@/components/profile/BadgeDetail.vue'
+// 收藏列表点开走校园资讯同款站内详情（与教师端个人中心同一套）
+import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
+import ArticleReader from '@/components/campus/ArticleReader.vue'
 import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useResponsive } from '@/composables/useResponsive'
-import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { useSubpagePush } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 // v6.1 弹窗减负：单字段编辑/裁剪等轻交互走底部动作面板（简历向导与简历删除确认保持原样）
@@ -723,8 +782,14 @@ const { siteName, siteLogo, agentName } = useSiteConfig()
 const currentPage = ref<string | null>(null)
 const slideDirection = ref('slide-left')
 
-// 个人中心的设置等页内子页打开时，让出移动端底部悬浮导航（一级页面才该有页签）
-useMobileSubPage(computed(() => isMobile.value && !!currentPage.value))
+/**
+ * 子页打开时底部胶囊的去留 —— 按校园资讯（CampusPage）那套来，不登记隐藏：
+ * 全屏子页是「下一层」，胶囊留在 DOM 里被下方 useSubpagePush 推着一起左退 -30%，
+ * 滑到位后由子页自己盖住（移动端 .sub-page 的 z-index 已抬到胶囊之上）。
+ * 一打开就 v-if 卸掉会在子页推开的同一帧凭空挖掉屏幕底部一块 —— 内容还在原地、
+ * 导航已经没了，比「被盖住」割裂得多（校园资讯的注释里记过这个坑）。
+ */
+useSubpagePush(computed(() => isMobile.value && !!currentPage.value))
 
 // 表单状态
 const saving = ref(false)
@@ -772,7 +837,12 @@ const growthProfile = ref<GrowthProfile | null>(null)
 const goalCount = ref(0)
 
 // 收藏的帖子 & 项目经历（个人中心卡片展示）
-const favorites = ref<Favorite[]>([])
+/**
+ * 收藏的数据源是**资讯收藏明细**（资讯详情「收藏」写入的表），不是资源收藏：
+ * 后者是 AI 资源 / 知识库那套「收藏会参与推荐权重」的收藏，列表在资源页自己有一份。
+ * 校园资讯的收藏入口挪到个人中心以后，这里显示的必须是「我在资讯页点过星的那几篇」。
+ */
+const articleFavs = ref<CampusArticleFavoriteItem[]>([])
 const projects = ref<StudentProject[]>([])
 const favLoading = ref(false)
 const projLoading = ref(false)
@@ -821,9 +891,49 @@ function onPointerEnd(e: PointerEvent) {
 async function loadFavorites() {
   favLoading.value = true
   try {
-    favorites.value = await getFavorites()
-  } catch { favorites.value = [] }
+    articleFavs.value = await getArticleFavorites()
+  } catch { articleFavs.value = [] }
   finally { favLoading.value = false }
+}
+
+/** 来源 key → 中文栏目名：与校园资讯页 / 资讯详情的口径一致（三处显示的是同一件事，文案不能各写各的） */
+const FAV_SOURCE_LABELS: Record<string, string> = {
+  jwc_entries: '系统入口',
+  jwc_jxdt: '教学动态',
+  jwc_tzgg: '通知公告',
+  jwc_gjxx: '高教信息',
+  jwc_jxjs: '教学建设',
+  college_news: '学院动态',
+}
+function favSourceLabel(source: string) {
+  return FAV_SOURCE_LABELS[source] || source || '校园资讯'
+}
+
+// ---------- 收藏 → 站内资讯详情 ----------
+const articleTarget = ref<{ url: string; title: string; source: string } | null>(null)
+const articleDetailRef = ref<InstanceType<typeof ArticleDetailPage> | null>(null)
+const articleReader = ref<InstanceType<typeof ArticleReader> | null>(null)
+
+function openArticleDetail(fav: CampusArticleFavoriteItem) {
+  if (!fav.url) return
+  articleTarget.value = { url: fav.url, title: fav.title || '', source: fav.source || '' }
+}
+
+function closeArticleDetail() {
+  articleDetailRef.value?.close()
+}
+
+/** 详情页「阅读全文」：先收起详情再交给站内阅读器，避免两层整页覆盖抢滚动锁 */
+function onArticleDetailRead(url: string) {
+  const title = articleTarget.value?.title || ''
+  closeArticleDetail()
+  nextTick(() => articleReader.value?.open(url, title))
+}
+
+/** 在详情里取消收藏 → 列表立刻少一条；否则回到收藏页还挂着已经取消的那张卡 */
+function onArticleUpdated(payload: { url: string; favorited: boolean }) {
+  if (payload.favorited) return
+  articleFavs.value = articleFavs.value.filter(f => f.url !== payload.url)
 }
 
 const imageComplete = computed(() => {
@@ -1003,6 +1113,7 @@ const pageTitle = computed(() => {
     settings: '设置',
     profile: '账号与安全',
     badges: '我的勋章',
+    favorites: '我的收藏',
     password: '修改密码',
     feedback: '意见反馈',
     help: '使用帮助',
@@ -1034,6 +1145,8 @@ function openPage(page: string) {
     }
     loadResumes()          // 进资料页即刷新「我的简历」列表
   }
+  // 收藏在资讯页随时会增减：每次进收藏页重新拉一次，别把进站时的旧快照当现况
+  if (page === 'favorites') loadFavorites()
   slideDirection.value = 'slide-left'
   currentPage.value = page
 }
@@ -1370,10 +1483,12 @@ onMounted(async () => {
   loadResumes()
   refreshBadges()
   applyTheme('light')
-  // 支持外部跳转直达子页（如工作台"意见反馈"入口）
+  // 支持外部跳转直达子页（如工作台"意见反馈"入口、校园资讯旧收藏链接 → 我的收藏）
   const page = route.query.page as string | undefined
-  if (page && ['settings', 'profile', 'badges', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
+  if (page && ['settings', 'profile', 'badges', 'favorites', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
     openPage(page)
+    // 落到子页后把参数摘掉：否则从子页退回主页，刷新一次又会被弹回收藏页
+    void router.replace({ path: route.path })
   }
 })
 </script>
@@ -2138,6 +2253,79 @@ onMounted(async () => {
   text-align: center;
 }
 
+/* 收藏超过 4 条时的出口：贴在页签行右端，跟「项目经历 / 收藏的帖子」同一水平线。
+   不放卡片下方 —— 那里正好压在底部悬浮胶囊上，点不到（且页面不一定滚得动）。 */
+.pf-cards-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  padding: 0 0 7px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--tui-text-quiet, #9aa0a6);
+  cursor: pointer;
+}
+.pf-cards-all:active { opacity: 0.6; }
+
+/* ===== 我的收藏（子页）：一行一条，左缩略图 + 标题 + 来源/日期 ===== */
+.pf-fav-empty {
+  padding: 48px 0;
+  font-size: 13px;
+  color: var(--tui-text-quiet, #9aa0a6);
+  text-align: center;
+}
+/* 一条一条铺在灰底上会散，收进一张白卡里读起来才是一份清单（与设置页同一套卡片语言） */
+.pf-fav-list {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 12px;
+  border-radius: 14px;
+  background: #fff;
+}
+.pf-fav-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 2px;
+  border: none;
+  border-bottom: 1px solid var(--tui-line, #f0f1f3);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-fav-row:last-child { border-bottom: none; }
+.pf-fav-row:active { background: rgba(0, 0, 0, 0.03); }
+/* 缩略图固定 56：有图显示图，没图就放一枚淡星，别留一块空白的灰方块 */
+.pf-fav-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f4f5f7;
+  color: #b9bcc2;
+  display: grid;
+  place-items: center;
+}
+.pf-fav-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pf-fav-title {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tui-text, #16181d);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pf-fav-meta { font-size: 11.5px; color: var(--tui-text-quiet, #9aa0a6); }
+.pf-fav-arrow { flex-shrink: 0; color: #c8ccd2; }
+
 /* 两列网格，数据向下铺开（不再横向滑动） */
 .pf-media-grid {
   display: grid;
@@ -2721,8 +2909,17 @@ onMounted(async () => {
 .pf-profile-foot .pf-save-btn { width: 100%; }
 
 @media (max-width: 767px) {
+  /* 子页必须盖住底部胶囊：胶囊是布局层的 .dock-wrap（z-index 1000），本页子页原先是
+     z-index 10 —— 于是胶囊画在滑入的新页之上（白底表单里透出一枚正在下沉的胶囊）。
+     抬到 1000 以上，滑到位后由子页自己盖住它，与校园资讯的 SubPageShell（z 2600）同一思路。
+     桌面端不需要（无胶囊），保持 10。 */
+  .sub-page { z-index: 1500; }
   /* 下拉刷新：避免浏览器原生下拉刷新抢手势 */
   .profile-page { overscroll-behavior-y: contain; }
+  /* 底部留白给悬浮胶囊：.profile-page 是 absolute + height:100% 的滚动容器，
+     外层 .profile-wrapper 上那份 82px 的 dock-inset 留白它拿不到 ——
+     于是最后一行卡片（收藏的第二排）会永远压在胶囊底下，滚也滚不上来。 */
+  .profile-page { padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px)); }
   .pf-resume-group { display: block; }
   /* 上传条：虚线框整条可点 */
   .pf-resume-upload {

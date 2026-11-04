@@ -1,6 +1,9 @@
 <template>
   <Teleport to="body">
-    <Transition name="uh-page">
+    <!-- 进出场复用全站那套「子页覆盖」动画（styles/animations.css 的 .subpage）：
+         与布局层最外层的进入 / 退出动画同一份实现，不再维护本组件的私有滑入曲线。
+         :duration 320 = CSS 0.3s + 20ms 余量，兜底移除离场节点。 -->
+    <Transition name="subpage" :duration="320">
       <div v-if="visible" class="uh-page">
         <div class="uh-main">
           <!-- ===== 封面：QQ 资料卡的封面范式（不加卡片，身份直接压在渐变上） ===== -->
@@ -940,12 +943,9 @@ async function removeFriend() {
 .uh-del:active { background: #fdf0f0; }
 .uh-del:disabled { opacity: 0.6; }
 
-/* ===== 动效 ===== */
-.uh-page-enter-active,
-.uh-page-leave-active { transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1); }
-.uh-page-enter-from,
-.uh-page-leave-to { transform: translateX(100%); }
-
+/* ===== 动效 =====
+   主页本体的进出场交给全局 .subpage（styles/animations.css），这里只保留内层子页
+   （设置页 / 勋章墙）自己的滑入规则。 */
 .uh-sub-enter-active,
 .uh-sub-leave-active { transition: transform 0.28s cubic-bezier(0.33, 1, 0.68, 1); }
 .uh-sub-enter-from,

@@ -359,24 +359,64 @@
               </div>
               <div v-else class="msg-bubbles">
                 <div
-                  v-for="m in messages"
-                  :key="m.id"
-                  :class="['msg-bubble-row', { mine: isMine(m) }]"
+                  v-for="row in chatRows"
+                  :key="row.msg.id"
+                  :class="['msg-bubble-row', { mine: isMine(row.msg) }]"
                 >
                   <el-avatar
-                    v-if="!isMine(m)"
+                    v-if="!isMine(row.msg)"
                     :size="30"
-                    :src="senderAvatar(m) || undefined"
+                    :src="senderAvatar(row.msg) || undefined"
                     class="msg-bubble-avatar"
                   >
-                    {{ senderName(m).slice(0, 1) }}
+                    {{ senderName(row.msg).slice(0, 1) }}
                   </el-avatar>
                   <div class="msg-bubble-wrap">
-                    <span v-if="activeSession.type === 'group' && !isMine(m)" class="msg-bubble-sender">
-                      {{ senderName(m) }}
+                    <span v-if="activeSession.type === 'group' && !isMine(row.msg)" class="msg-bubble-sender">
+                      {{ senderName(row.msg) }}
                     </span>
-                    <div class="msg-bubble">{{ m.content }}</div>
-                    <span class="msg-bubble-time">{{ formatTime(m.created_at) }}</span>
+                    <!-- 气泡内容分三类：图片 / 语音 / 文本。
+                         附件消息的 content 是 JSON（见 utils/messageAttach.ts），
+                         这里必须解析后再渲染，不能把 JSON 直接怼到气泡里。 -->
+                    <div :class="['msg-bubble', { 'is-media': !!row.attach }]">
+                      <button
+                        v-if="row.attach?.type === 'image'"
+                        type="button"
+                        class="msg-image"
+                        :aria-label="`查看图片 ${row.attach.text || ''}`"
+                        @click="openImagePreview(row.attach.url)"
+                      >
+                        <img :src="row.attach.url" :alt="row.attach.text || '图片'" loading="lazy" />
+                      </button>
+                      <button
+                        v-else-if="row.attach?.type === 'voice'"
+                        type="button"
+                        class="msg-voice"
+                        :class="{ playing: playingVoiceUrl === row.attach.url }"
+                        :style="{ width: voiceBubbleWidth(row.attach.duration) }"
+                        :aria-label="`播放语音 ${formatVoiceDuration(row.attach.duration)}`"
+                        @click="toggleVoicePlay(row.attach.url)"
+                      >
+                        <el-icon :size="15" class="msg-voice-icon">
+                          <VideoPause v-if="playingVoiceUrl === row.attach.url" />
+                          <VideoPlay v-else />
+                        </el-icon>
+                        <span class="msg-voice-bars" aria-hidden="true"><i /><i /><i /></span>
+                        <span class="msg-voice-dur">{{ formatVoiceDuration(row.attach.duration) }}</span>
+                      </button>
+                      <!-- 文件：显示文件名，点击直接下载 -->
+                      <button
+                        v-else-if="row.attach"
+                        type="button"
+                        class="msg-file"
+                        @click="downloadAttachment(row.attach.url, row.attach.text)"
+                      >
+                        <el-icon :size="18"><Document /></el-icon>
+                        <span class="msg-file-name">{{ row.attach.text || '文件' }}</span>
+                      </button>
+                      <template v-else>{{ row.msg.content }}</template>
+                    </div>
+                    <span class="msg-bubble-time">{{ formatTime(row.msg.created_at) }}</span>
                   </div>
                 </div>
               </div>
@@ -384,17 +424,182 @@
 
             <!-- 系统通知是单向的：没有输入框，换成一条说明，避免用户打完字才发现发不出去 -->
             <div v-if="activeSession.type === 'notice'" class="msg-notice-tip">系统通知不支持回复</div>
+            <!-- 输入区：移动端按参考图改成「白框 + 蓝色发送键」一行，下面再压一条图标栏；
+                 桌面端仍是一行「输入框 + 黑色发送」，图标栏不出现（display:none）。
+                 两段结构共用同一套 DOM，靠媒体查询切换，不做两份输入框。 -->
             <footer v-else class="msg-composer">
-              <textarea
-                v-model="draft"
-                rows="1"
-                placeholder="输入消息，Enter 发送"
-                @keydown.enter.exact.prevent="send"
+              <div class="msg-composer-bar">
+                <!-- 语音模式：输入框换成「按住说话」。收音由 MediaRecorder 负责，
+                     松手即上传，上滑超过 60px 取消（与微信 / QQ 同一套手势）。 -->
+                <button
+                  v-if="voiceMode"
+                  type="button"
+                  class="msg-hold-talk"
+                  :class="{ recording: isRecording, cancel: recordCancelled }"
+                  @pointerdown.prevent="onTalkStart"
+                  @pointermove="onTalkMove"
+                  @pointerup="onTalkEnd"
+                  @pointercancel="onTalkCancel"
+                  @contextmenu.prevent
+                >
+                  {{ isRecording ? (recordCancelled ? '松开取消' : '松开发送') : '按住 说话' }}
+                </button>
+                <template v-else>
+                  <!-- 桌面端没有下方图标栏，单独给一枚图片入口；语音要「按住说话」，
+                       鼠标端不做（移动端走图标栏）。 -->
+                  <button
+                    v-if="!isMobile"
+                    type="button"
+                    class="msg-composer-img"
+                    aria-label="发送图片"
+                    title="发送图片"
+                    @click="pickImage"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="3" y="4.6" width="18" height="14.8" rx="4.2" />
+                      <circle cx="8.4" cy="9.7" r="1.45" />
+                      <path d="M4.2 17.2l3.9-3.6a2 2 0 0 1 2.7-.05l2.9 2.6 2.1-2a2 2 0 0 1 2.7 0l1.2 1.1" />
+                    </svg>
+                  </button>
+                  <textarea
+                    ref="composerEl"
+                    v-model="draft"
+                    rows="1"
+                    :placeholder="isMobile ? '发消息…' : '输入消息，Enter 发送'"
+                    @input="autosizeComposer"
+                    @keydown.enter.exact.prevent="send"
+                  />
+                </template>
+                <button
+                  type="button"
+                  class="msg-send"
+                  :disabled="sending || uploading || !draft.trim()"
+                  @click="send"
+                >
+                  <el-icon :size="16"><Promotion /></el-icon>
+                  <span>发送</span>
+                </button>
+              </div>
+
+              <!-- 表情面板：点笑脸在图标栏上方展开，选中即追加到草稿末尾。
+                   不开原生 input 键盘，避免「表情面板」和系统键盘叠成两层。 -->
+              <Transition name="msg-emoji">
+                <div v-if="emojiOpen" class="msg-emoji-sheet">
+                  <button
+                    v-for="e in EMOJIS"
+                    :key="e"
+                    type="button"
+                    class="msg-emoji-cell"
+                    @click="insertEmoji(e)"
+                  >
+                    {{ e }}
+                  </button>
+                </div>
+              </Transition>
+
+              <!-- 图标栏：六个入口等距排开，统一线性描边（stroke 1.7 / 圆头），
+                   与参考图一样的「不描底色」处理 —— 聊天输入区里出现色块会抢气泡的注意力。 -->
+              <div class="msg-composer-tools">
+                <button
+                  type="button"
+                  class="msg-tool"
+                  :class="{ 'is-on': voiceMode }"
+                  :aria-label="voiceMode ? '切换到键盘' : '语音消息'"
+                  :title="voiceMode ? '切换到键盘' : '语音消息'"
+                  @click="toggleVoiceMode"
+                >
+                  <svg v-if="voiceMode" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="5.6" width="18" height="12.8" rx="3.2" />
+                    <path d="M7 9.4h10M7 12.4h10M7 15.4h5.5" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="9" y="2.4" width="6" height="10.8" rx="3" />
+                    <path d="M5.4 11.3a6.6 6.6 0 0 0 13.2 0" />
+                    <path d="M12 17.9v3.6" />
+                  </svg>
+                </button>
+                <button type="button" class="msg-tool" aria-label="图片" title="图片" @click="pickImage">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="4.6" width="18" height="14.8" rx="4.2" />
+                    <circle cx="8.4" cy="9.7" r="1.45" />
+                    <path d="M4.2 17.2l3.9-3.6a2 2 0 0 1 2.7-.05l2.9 2.6 2.1-2a2 2 0 0 1 2.7 0l1.2 1.1" />
+                  </svg>
+                </button>
+                <button type="button" class="msg-tool" aria-label="相机" title="相机" @click="pickCamera">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3.5 10.2A3.7 3.7 0 0 1 7.2 6.5h1.1l.9-1.7a1 1 0 0 1 .9-.5h3.8a1 1 0 0 1 .9.5l.9 1.7h1.1a3.7 3.7 0 0 1 3.7 3.7v6.6a3.7 3.7 0 0 1-3.7 3.7H7.2a3.7 3.7 0 0 1-3.7-3.7z" />
+                    <circle cx="12" cy="13.1" r="3.3" />
+                  </svg>
+                </button>
+                <!-- 发送文件：打开系统文件选择器，选完即上传并发一条文件消息 -->
+                <button type="button" class="msg-tool" aria-label="文件" title="文件" @click="pickFile">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14.1 2.9H7.6A3.4 3.4 0 0 0 4.2 6.3v11.4a3.4 3.4 0 0 0 3.4 3.4h8.8a3.4 3.4 0 0 0 3.4-3.4V9.5z" />
+                    <path d="M14.1 2.9v6.6h5.7" />
+                    <path d="M8.4 13.2h7.2M8.4 16.6h4.6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="msg-tool"
+                  :class="{ 'is-on': emojiOpen }"
+                  aria-label="表情"
+                  title="表情"
+                  @click="toggleEmoji"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9.1" />
+                    <path d="M8.4 14.1c.85 1.55 2.1 2.35 3.6 2.35s2.75-.8 3.6-2.35" />
+                    <circle class="solid" cx="8.9" cy="9.7" r="1" />
+                    <circle class="solid" cx="15.1" cy="9.7" r="1" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- 图片 / 拍照的隐藏选择器：
+                   图片走相册（多选）；拍照那个只在浏览器不支持应用内相机时兜底，
+                   带 capture=environment，移动端仍会直接起系统相机。 -->
+              <input
+                ref="imageInputRef"
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                @change="onImagePicked"
               />
-              <button type="button" class="msg-send" :disabled="sending || !draft.trim()" @click="send">
-                <el-icon :size="16"><Promotion /></el-icon>
-                <span>发送</span>
-              </button>
+              <input
+                ref="cameraInputRef"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                @change="onImagePicked"
+              />
+              <!-- 文件：只列后端放行的文档 / 压缩包类型；图片、语音有各自的入口，不在这里重复 -->
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                hidden
+                @change="onFilePicked"
+              />
+
+              <!-- 录音浮层：松开发送 / 上滑取消（与手势判定同一份状态） -->
+              <Transition name="fade">
+                <div v-if="isRecording" class="msg-record-mask" :class="{ cancel: recordCancelled }">
+                  <div class="msg-record-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="9" y="2.4" width="6" height="10.8" rx="3" />
+                      <path d="M5.4 11.3a6.6 6.6 0 0 0 13.2 0" />
+                      <path d="M12 17.9v3.6" />
+                    </svg>
+                  </div>
+                  <b class="msg-record-time">{{ formatVoiceDuration(recordSeconds) }}</b>
+                  <span class="msg-record-hint">
+                    {{ recordCancelled ? '松开手指，取消发送' : '手指上滑，取消发送' }}
+                  </span>
+                </div>
+              </Transition>
             </footer>
           </template>
           <div v-else class="msg-pane-placeholder">
@@ -409,6 +614,42 @@
     <!-- 发起群聊：选人表单已抽成 components/chat/CreateGroupPopup.vue，
          「添加朋友」页共用同一份；建完直接进群，落点才是能说话的地方 -->
     <CreateGroupPopup v-model="createGroupOpen" @created="onGroupCreated" />
+
+    <!-- 图片大图预览：点气泡里的缩略图拉起，点任意处收起。
+         层级压过聊天覆盖层（2600）与自己起的 Element 浮层（2000+），但低于全局用户主页（3100）。 -->
+    <Transition name="fade">
+      <div v-if="previewUrl" class="msg-image-preview" @click="closeImagePreview">
+        <img :src="previewUrl" alt="图片预览" />
+      </div>
+    </Transition>
+
+    <!-- 应用内相机：点「相机」图标即拉起实时取景，圆钮拍照后直接上传发送。
+         移动端优先起后置摄像头（facingMode: environment），桌面端用默认摄像头。
+         不支持 getUserMedia（非 HTTPS / 无摄像头）时退回系统文件选择器。 -->
+    <Transition name="fade">
+      <div v-if="cameraOpen" class="msg-camera">
+        <video
+          ref="cameraVideoEl"
+          class="msg-camera-video"
+          autoplay
+          playsinline
+          muted
+        />
+        <button type="button" class="msg-camera-close" aria-label="关闭相机" @click="closeCamera">
+          <el-icon :size="20"><Close /></el-icon>
+        </button>
+        <div class="msg-camera-bar">
+          <button
+            type="button"
+            class="msg-camera-shutter"
+            :disabled="cameraBusy"
+            aria-label="拍照"
+            @click="capturePhoto"
+          />
+          <span v-if="cameraBusy" class="msg-camera-hint">正在发送…</span>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -421,12 +662,16 @@ import {
   ChatDotRound,
   ChatLineRound,
   Check,
+  Close,
+  Document,
   Plus,
   Promotion,
   Refresh,
   Search,
   Star,
   User,
+  VideoPause,
+  VideoPlay,
 } from '@element-plus/icons-vue'
 // 「＋」菜单里的操作会失败（网络 / 后端校验），给一句即时反馈
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -447,6 +692,15 @@ import { openUserHomepage } from '@/composables/useUserHomepage'
 import { INDEX_KEYS, indexOrder, initialOf } from '@/utils/pinyinInitial'
 // 陌生人发消息时用主页接口补名字，避免开出一个没有标题的空会话
 import { getUserHomepage } from '@/api/badge'
+// 附件消息（图片 / 语音）：content 里是 JSON，渲染前必须先解析
+import {
+  attachmentPreview,
+  formatVoiceDuration,
+  parseAttachment,
+  recordFileExt,
+  voiceBubbleWidth,
+} from '@/utils/messageAttach'
+import { uploadFile } from '@/api/upload'
 import SystemNoticeCard from '@/components/chat/SystemNoticeCard.vue'
 import {
   SYSTEM_NOTICE,
@@ -543,10 +797,56 @@ const groups = ref<GroupOut[]>([])
 const activeSession = ref<SessionItem | null>(null)
 const messages = ref<ChatMessage[]>([])
 const draft = ref('')
+/** 表情面板开关：只由图标栏的笑脸驱动（移动端才有这条图标栏） */
+const emojiOpen = ref(false)
+/** 输入框跟着内容长高，上限与 CSS 的 max-height 一致（120px） */
+const composerEl = ref<HTMLTextAreaElement | null>(null)
 const chatOpen = ref(false)
 const chatLoading = ref(false)
 const sending = ref(false)
 const scrollEl = ref<HTMLElement | null>(null)
+
+/* ===== 附件消息（图片 / 语音）=====
+   消息体只有 content 一个字段，附件是一条 JSON 文本（见 utils/messageAttach.ts）。
+   渲染前统一解析一次放进 chatRows，避免模板里每条气泡都 JSON.parse 四遍。 */
+const chatRows = computed(() =>
+  messages.value.map((msg) => ({ msg, attach: parseAttachment(msg.content) })),
+)
+/** 图片 / 拍照用的隐藏选择器 */
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const cameraInputRef = ref<HTMLInputElement | null>(null)
+/** 文件选择器：只从图标栏的「文件」入口打开 */
+const fileInputRef = ref<HTMLInputElement | null>(null)
+/** 上传中：发送键置灰，避免连点把同一张图传两遍 */
+const uploading = ref(false)
+/** 大图预览地址（空串 = 未打开） */
+const previewUrl = ref('')
+
+/* ===== 应用内相机（拍照发送） ===== */
+const cameraOpen = ref(false)
+/** 拍照中（取帧 + 上传 + 发送）：期间快门置灰，避免连点发出多张 */
+const cameraBusy = ref(false)
+const cameraStream = ref<MediaStream | null>(null)
+const cameraVideoEl = ref<HTMLVideoElement | null>(null)
+
+/* ===== 语音模式与录音 ===== */
+const voiceMode = ref(false)
+const isRecording = ref(false)
+const recordCancelled = ref(false)
+const recordSeconds = ref(0)
+/** 最长录音 60 秒：超过自动结束并发出去，避免一条语音拖成几十兆 */
+const RECORD_MAX_SECONDS = 60
+let mediaRecorder: MediaRecorder | null = null
+let mediaStream: MediaStream | null = null
+let audioChunks: Blob[] = []
+let recordTimer: number | null = null
+/** 麦克风授权是异步的：按下期间松手（talkPressed=false）就别再开始录 */
+let talkPressed = false
+let talkStartY = 0
+
+/* ===== 语音播放（同一时刻只播一条）===== */
+const playingVoiceUrl = ref('')
+let voiceAudioEl: HTMLAudioElement | null = null
 
 /*
  * 会话窗口**不登记**为「页内二级页」，底部悬浮导航因此全程留在 DOM 里。
@@ -597,7 +897,7 @@ const sessions = computed<SessionItem[]>(() => {
       rawId: c.user_id,
       name: c.user_name,
       avatar: c.user_avatar,
-      lastMessage: c.last_message,
+      lastMessage: attachmentPreview(c.last_message),
       time: c.last_message_time,
       unread: c.unread_count || 0,
     })
@@ -610,7 +910,7 @@ const sessions = computed<SessionItem[]>(() => {
       rawId: g.id,
       name: g.name,
       avatar: g.avatar,
-      lastMessage: g.last_message,
+      lastMessage: attachmentPreview(g.last_message),
       time: g.last_message_time,
       unread: g.unread_count || 0,
     })
@@ -887,8 +1187,12 @@ function onPagerChange(key: string) {
 
 // ---------- 会话窗口 ----------
 function openSession(s: SessionItem) {
+  stopVoicePlay()
   activeSession.value = s
   chatOpen.value = true
+  emojiOpen.value = false
+  // 语音模式不跨会话保留：进新会话默认回到键盘，否则会以为「输入框没了」
+  voiceMode.value = false
   void loadChat(true)
 }
 
@@ -904,9 +1208,14 @@ function closeChat() {
 /** 离场动画播完再丢弃会话上下文；若动画期间又点开了别的会话，则不清 */
 function onChatClosed() {
   if (chatOpen.value) return
+  stopVoicePlay()
+  closeCamera()
+  previewUrl.value = ''
   activeSession.value = null
   messages.value = []
   noticeCards.value = []
+  emojiOpen.value = false
+  voiceMode.value = false
 }
 
 /** 现造一条单聊会话：列表里还没有这个人（没聊过、刚关注）时用，键与列表口径一致（s-<id>） */
@@ -965,22 +1274,401 @@ async function scrollBottom() {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-async function send() {
+// ---------- 输入区 ----------
+/** 图标栏里常用的那批表情：一屏摆完、不用翻页，够表达语气即可 */
+const EMOJIS = [
+  '😀', '😄', '😁', '😊', '🥰', '😍', '😘', '😜',
+  '🤗', '🤔', '😅', '😂', '🥲', '😴', '😎', '🤩',
+  '👍', '👏', '🙌', '🙏', '💪', '🎉', '🔥', '☀️',
+  '🌙', '❤️', '🌟', '✨', '🍀', '🎓', '🌱', '👌',
+]
+
+function autosizeComposer() {
+  const el = composerEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  // 移动端把下限钉在 52px，和发送键的高度对齐；桌面端由内容自然撑开
+  const floor = isMobile.value ? 52 : 0
+  el.style.height = `${Math.min(Math.max(el.scrollHeight, floor), 120)}px`
+}
+
+function toggleEmoji() {
+  emojiOpen.value = !emojiOpen.value
+}
+
+function insertEmoji(emoji: string) {
+  draft.value += emoji
+  void nextTick(autosizeComposer)
+  composerEl.value?.focus()
+}
+
+/**
+ * 统一发送入口：文本 / 图片 / 语音都走这里，群聊与单聊的分流只写一处。
+ * 返回是否成功 —— 失败时调用方自己决定要不要清草稿（文本失败要保留，附件失败重传）。
+ */
+async function sendContent(content: string): Promise<boolean> {
   const session = activeSession.value
-  const text = draft.value.trim()
-  if (!session || !text || sending.value) return
+  if (!session || session.type === 'notice' || sending.value) return false
   sending.value = true
   try {
-    if (session.type === 'group') await sendGroupMessage(session.rawId, text)
-    else await sendMessage(session.rawId, text)
-    draft.value = ''
+    if (session.type === 'group') await sendGroupMessage(session.rawId, content)
+    else await sendMessage(session.rawId, content)
     await loadChat(true)
-    await loadSessions()
+    void loadSessions()
+    return true
   } catch {
-    /* 失败保留草稿，用户可重试 */
+    ElMessage.error('发送失败，请重试')
+    return false
   } finally {
     sending.value = false
   }
+}
+
+async function send() {
+  const text = draft.value.trim()
+  if (!activeSession.value || !text) return
+  const ok = await sendContent(text)
+  if (!ok) return
+  draft.value = ''
+  emojiOpen.value = false
+  // 发完把输入框缩回一行：留在 120px 的高度上，下一句会先看见一大块空白
+  void nextTick(autosizeComposer)
+}
+
+/* ==================== 图片消息 ==================== */
+function pickImage() {
+  if (sending.value || uploading.value) return
+  emojiOpen.value = false
+  imageInputRef.value?.click()
+}
+
+/* ==================== 应用内相机 ==================== */
+function pickCamera() {
+  if (sending.value || uploading.value) return
+  emojiOpen.value = false
+  void openCamera()
+}
+
+/**
+ * 打开实时取景：移动端优先后置摄像头，桌面端用默认摄像头。
+ * 不支持 getUserMedia 时退回隐藏的 capture 选择器 ——
+ * 移动端仍会直接起系统相机，桌面端则退化为选文件，功能不断。
+ */
+async function openCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraInputRef.value?.click()
+    return
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    })
+    cameraStream.value = stream
+    cameraOpen.value = true
+    await nextTick()
+    const video = cameraVideoEl.value
+    if (video) {
+      video.srcObject = stream
+      await video.play().catch(() => {})
+    }
+  } catch {
+    closeCamera()
+    ElMessage.warning('无法打开相机，已改用系统选图')
+    cameraInputRef.value?.click()
+  }
+}
+
+/** 关闭取景：停掉摄像头（不 stop 的话指示灯会一直亮着），并清空 srcObject */
+function closeCamera() {
+  cameraOpen.value = false
+  cameraStream.value?.getTracks().forEach((t) => t.stop())
+  cameraStream.value = null
+  const video = cameraVideoEl.value
+  if (video) video.srcObject = null
+}
+
+/** 快门：把当前帧画到 canvas → JPEG → 上传 → 发一条图片消息，成功后再收起取景 */
+async function capturePhoto() {
+  const video = cameraVideoEl.value
+  if (!video || cameraBusy.value) return
+  const w = video.videoWidth
+  const h = video.videoHeight
+  if (!w || !h) {
+    ElMessage.warning('相机还没准备好，请稍候')
+    return
+  }
+  cameraBusy.value = true
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('canvas unavailable')
+    ctx.drawImage(video, 0, 0, w, h)
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+    if (!blob) throw new Error('encode failed')
+    const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' })
+    const { url } = await uploadFile(file)
+    const ok = await sendContent(JSON.stringify({ type: 'image', text: file.name, url }))
+    // 发送失败时保留取景：用户可以再拍一张，不用重新授权
+    if (ok) closeCamera()
+  } catch {
+    ElMessage.error('拍照发送失败，请重试')
+  } finally {
+    cameraBusy.value = false
+  }
+}
+
+/** Esc 关闭取景（桌面端习惯）：与「＋」面板同一套键盘收尾 */
+function onCameraEscape(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeCamera()
+}
+
+watch(cameraOpen, (open) => {
+  if (open) document.addEventListener('keydown', onCameraEscape)
+  else document.removeEventListener('keydown', onCameraEscape)
+})
+
+/** 相册 / 拍照选完：逐张校验 → 上传 → 每条图片单独发一条消息（多张就是多条，与微信一致） */
+async function onImagePicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  // 立刻清空，否则同一张图第二次选不会触发 change
+  input.value = ''
+  if (!files.length) return
+  uploading.value = true
+  try {
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        ElMessage.warning(`${file.name} 不是图片`)
+        continue
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        ElMessage.warning('图片不能超过 20MB')
+        continue
+      }
+      try {
+        const { url } = await uploadFile(file)
+        const ok = await sendContent(JSON.stringify({ type: 'image', text: file.name, url }))
+        if (!ok) break
+      } catch {
+        ElMessage.error(`上传 ${file.name} 失败`)
+        break
+      }
+    }
+  } finally {
+    uploading.value = false
+  }
+}
+
+function openImagePreview(url: string) {
+  previewUrl.value = url
+}
+
+function closeImagePreview() {
+  previewUrl.value = ''
+}
+
+/* ==================== 文件消息 ==================== */
+function pickFile() {
+  if (sending.value || uploading.value) return
+  emojiOpen.value = false
+  fileInputRef.value?.click()
+}
+
+/** 选完文件：校验大小 → 上传 → 发一条 type=file 附件消息 */
+async function onFilePicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  // 立刻清空，否则同一个文件第二次选不会触发 change
+  input.value = ''
+  if (!file) return
+  // 与后端 /api/upload 的上限一致（50MB）
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.warning('文件不能超过 50MB')
+    return
+  }
+  uploading.value = true
+  try {
+    const { url } = await uploadFile(file)
+    await sendContent(JSON.stringify({ type: 'file', text: file.name, url }))
+  } catch {
+    ElMessage.error(`上传 ${file.name} 失败`)
+  } finally {
+    uploading.value = false
+  }
+}
+
+/** 文件气泡点击下载（图片 / 语音以外都走这里） */
+function downloadAttachment(url: string, name: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name || 'file'
+  a.click()
+}
+
+/* ==================== 语音消息（按住说话） ==================== */
+function toggleVoiceMode() {
+  voiceMode.value = !voiceMode.value
+  emojiOpen.value = false
+  if (!voiceMode.value) void nextTick(autosizeComposer)
+}
+
+async function onTalkStart(e: PointerEvent) {
+  if (isRecording.value) return
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    if (!window.isSecureContext) {
+      ElMessage.warning(
+        location.protocol === 'https:'
+          ? 'HTTPS 证书未受信任，请先安装开发证书后刷新页面'
+          : '语音录制需要 HTTPS：请改用 https:// 地址访问'
+      )
+    } else {
+      ElMessage.warning('当前浏览器不支持语音录制')
+    }
+    return
+  }
+  talkPressed = true
+  talkStartY = e.clientY
+  recordCancelled.value = false
+  recordSeconds.value = 0
+  try {
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  } catch {
+    /* 指针捕获失败不影响录音 */
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // 授权弹窗期间用户已经松手：直接释放麦克风，别录一段没人认领的音频
+    if (!talkPressed) {
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+    mediaStream = stream
+    audioChunks = []
+    // Chrome / Android 出 webm，Safari 只出 mp4：按支持情况挑，挑不到就交给浏览器默认
+    const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4']
+    const mime = preferred.find((m) => MediaRecorder.isTypeSupported(m))
+    mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+    mediaRecorder.ondataavailable = (ev: BlobEvent) => {
+      if (ev.data.size > 0) audioChunks.push(ev.data)
+    }
+    mediaRecorder.start()
+    isRecording.value = true
+    const startedAt = Date.now()
+    recordTimer = window.setInterval(() => {
+      recordSeconds.value = Math.floor((Date.now() - startedAt) / 1000)
+      if (recordSeconds.value >= RECORD_MAX_SECONDS) void onTalkEnd() // 到顶自动发
+    }, 200)
+  } catch {
+    talkPressed = false
+    isRecording.value = false
+    ElMessage.error('无法访问麦克风，请检查权限')
+  }
+}
+
+function onTalkMove(e: PointerEvent) {
+  if (!isRecording.value) return
+  // 手指上滑超过 60px 视为取消发送（与微信 / QQ 一致）
+  recordCancelled.value = talkStartY - e.clientY > 60
+}
+
+function onTalkCancel() {
+  if (isRecording.value) {
+    recordCancelled.value = true
+    void onTalkEnd()
+  } else {
+    talkPressed = false
+  }
+}
+
+async function onTalkEnd() {
+  talkPressed = false
+  if (!isRecording.value || !mediaRecorder) return
+  const cancelled = recordCancelled.value
+  const tooShort = recordSeconds.value < 1
+  const duration = Math.max(1, Math.round(recordSeconds.value))
+  const recorder = mediaRecorder
+  const stream = mediaStream
+  isRecording.value = false
+  if (recordTimer) {
+    clearInterval(recordTimer)
+    recordTimer = null
+  }
+  mediaRecorder = null
+  mediaStream = null
+  await new Promise<void>((resolve) => {
+    recorder.addEventListener('stop', () => resolve(), { once: true })
+    try {
+      recorder.stop()
+    } catch {
+      resolve()
+    }
+  })
+  stream?.getTracks().forEach((t) => t.stop())
+  const chunks = audioChunks
+  audioChunks = []
+  if (cancelled) return
+  if (tooShort) {
+    ElMessage.warning('说话时间太短')
+    return
+  }
+  const type = recorder.mimeType || chunks[0]?.type || 'audio/webm'
+  const blob = new Blob(chunks, { type })
+  if (!blob.size) {
+    ElMessage.error('录音失败，请重试')
+    return
+  }
+  uploading.value = true
+  try {
+    const file = new File([blob], `voice-${Date.now()}.${recordFileExt(type)}`, { type })
+    const { url } = await uploadFile(file)
+    await sendContent(JSON.stringify({ type: 'voice', text: '', url, duration }))
+  } catch {
+    ElMessage.error('语音发送失败')
+  } finally {
+    uploading.value = false
+  }
+}
+
+/** 语音播放：同一时刻只播一条，再点同一条即暂停 */
+function toggleVoicePlay(url: string) {
+  if (!url) return
+  if (playingVoiceUrl.value === url && voiceAudioEl) {
+    stopVoicePlay()
+    return
+  }
+  stopVoicePlay()
+  const audio = new Audio(url)
+  voiceAudioEl = audio
+  audio.onended = () => {
+    if (playingVoiceUrl.value === url) playingVoiceUrl.value = ''
+    voiceAudioEl = null
+  }
+  audio.onerror = () => {
+    playingVoiceUrl.value = ''
+    voiceAudioEl = null
+    ElMessage.error('语音播放失败')
+  }
+  audio
+    .play()
+    .then(() => {
+      playingVoiceUrl.value = url
+    })
+    .catch(() => {
+      playingVoiceUrl.value = ''
+      voiceAudioEl = null
+      ElMessage.error('语音播放失败')
+    })
+}
+
+function stopVoicePlay() {
+  if (voiceAudioEl) {
+    voiceAudioEl.pause()
+    voiceAudioEl = null
+  }
+  playingVoiceUrl.value = ''
 }
 
 function isMine(m: ChatMessage) {
@@ -1123,7 +1811,7 @@ function openForum(m: ForumMessageOut) {
     return
   }
   if (!m.post_id) return
-  router.push({ name: 'student-community', query: { post: String(m.post_id) } })
+  router.push({ path: '/student/campus', query: { tab: 'community', post: String(m.post_id) } })
 }
 
 async function readAllForum() {
@@ -1428,6 +2116,18 @@ onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = null
   window.removeEventListener('resize', measureAppbar)
+  document.removeEventListener('keydown', onCameraEscape)
+  // 页面被卸载时麦克风可能还开着、语音可能还在播：一并收干净
+  if (recordTimer) {
+    clearInterval(recordTimer)
+    recordTimer = null
+  }
+  mediaStream?.getTracks().forEach((t) => t.stop())
+  mediaStream = null
+  mediaRecorder = null
+  isRecording.value = false
+  stopVoicePlay()
+  closeCamera()
 })
 </script>
 
@@ -1830,13 +2530,130 @@ onBeforeUnmount(() => {
 .msg-bubble-row.mine .msg-bubble { background: #111827; color: #fff; }
 .msg-bubble-time { margin-top: 3px; font-size: 10.5px; color: #9aa0a6; }
 
+/* ================= 附件气泡（图片 / 语音 / 文件） =================
+   附件气泡自己去画外框：图片要贴边不留白，语音要有播放键与时长，
+   再套一层 .msg-bubble 的 padding + 深色底就成了「白图外面镶一圈黑边」。 */
+.msg-bubble.is-media { padding: 0; background: none; }
+.msg-image {
+  display: block; padding: 0; margin: 0; border: none; background: none;
+  border-radius: 10px; overflow: hidden; line-height: 0; cursor: zoom-in;
+}
+.msg-image img { display: block; max-width: 200px; max-height: 260px; width: auto; height: auto; border-radius: 10px; }
+.msg-voice {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border: none; border-radius: 10px;
+  background: #fff; color: #1f2329; font: inherit; cursor: pointer;
+}
+.msg-bubble-row.mine .msg-voice { background: #111827; color: #fff; }
+.msg-voice-icon { flex: none; }
+.msg-voice-bars { display: flex; align-items: center; gap: 3px; flex: 1; }
+.msg-voice-bars i { width: 3px; height: 8px; border-radius: 2px; background: currentColor; opacity: .55; }
+.msg-voice-bars i:nth-child(2) { height: 15px; }
+.msg-voice-bars i:nth-child(3) { height: 10px; }
+.msg-voice.playing .msg-voice-bars i { animation: msg-voice-pulse .8s ease-in-out infinite; }
+.msg-voice.playing .msg-voice-bars i:nth-child(2) { animation-delay: .15s; }
+.msg-voice.playing .msg-voice-bars i:nth-child(3) { animation-delay: .3s; }
+@keyframes msg-voice-pulse {
+  0%, 100% { transform: scaleY(.55); }
+  50% { transform: scaleY(1.6); }
+}
+.msg-voice-dur { flex: none; font-size: 11.5px; opacity: .75; font-variant-numeric: tabular-nums; }
+.msg-file {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 220px;
+  padding: 9px 12px; border: none; border-radius: 10px;
+  background: #fff; color: #1f2329; font: inherit; cursor: pointer; text-align: left;
+}
+.msg-bubble-row.mine .msg-file { background: #111827; color: #fff; }
+.msg-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+
+/* ================= 按住说话 + 录音浮层 ================= */
+.msg-hold-talk {
+  flex: 1; height: 38px; border: none; border-radius: 10px;
+  background: #f5f6f8; color: #4b5563;
+  font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  /* 长按录音时浏览器默认的选字 / 长按菜单 / 页面滚动都会抢手势 */
+  user-select: none; -webkit-user-select: none;
+  touch-action: none; -webkit-touch-callout: none;
+  transition: background .18s, color .18s;
+}
+.msg-hold-talk.recording { background: #e8edff; color: #1a4fd6; }
+.msg-hold-talk.cancel { background: #fdecea; color: #c53a30; }
+.msg-record-mask {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 172px; padding: 22px 18px; border-radius: 18px;
+  background: rgba(17, 24, 39, .84); color: #fff;
+  /* 压在聊天覆盖层（2600）之上，但低于全局用户主页（3100） */
+  z-index: 2800;
+  display: flex; flex-direction: column; align-items: center; gap: 9px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+  /* 不用 backdrop-filter：模糊会把背后那几张蓝色气泡晕成一块灰底，
+     看起来像浮层又多了一层卡片，反而更脏 */
+}
+.msg-record-mask.cancel { background: rgba(190, 26, 26, .88); }
+.msg-record-icon svg {
+  width: 30px; height: 30px; fill: none;
+  stroke: currentColor; stroke-width: 1.7; stroke-linecap: round;
+}
+.msg-record-time { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.msg-record-hint { font-size: 12px; opacity: .88; text-align: center; }
+
+/* ================= 图片大图预览 ================= */
+.msg-image-preview {
+  position: fixed; inset: 0; z-index: 2700;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .86); cursor: zoom-out;
+}
+.msg-image-preview img { max-width: 92vw; max-height: 88vh; border-radius: 10px; box-shadow: 0 18px 60px rgba(0, 0, 0, .5); }
+
+/* ================= 应用内相机 =================
+   整屏黑底 + 实时取景：层级压过聊天覆盖层（2600）与大图预览（2700），
+   低于全局用户主页（3100）。 */
+.msg-camera { position: fixed; inset: 0; z-index: 2750; background: #000; overflow: hidden; }
+.msg-camera-video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.msg-camera-close {
+  position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 14px;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%;
+  background: rgba(17, 24, 39, .48); color: #fff; cursor: pointer;
+}
+.msg-camera-close:active { background: rgba(17, 24, 39, .7); }
+/* 底部只放一枚快门：没有缩放 / 闪光等本系统用不到的控件 */
+.msg-camera-bar {
+  position: absolute; left: 0; right: 0;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  pointer-events: none;
+}
+.msg-camera-shutter {
+  width: 72px; height: 72px; padding: 7px; box-sizing: border-box;
+  border: 3px solid rgba(255, 255, 255, .6); border-radius: 50%;
+  background: transparent; cursor: pointer; pointer-events: auto;
+  transition: transform .12s ease, opacity .12s ease;
+}
+.msg-camera-shutter::after {
+  content: ''; display: block; width: 100%; height: 100%;
+  border-radius: 50%; background: #fff;
+}
+.msg-camera-shutter:active:not(:disabled) { transform: scale(.94); }
+.msg-camera-shutter:disabled { opacity: .55; cursor: default; }
+.msg-camera-hint { margin: 0; font-size: 12px; color: rgba(255, 255, 255, .82); }
+
+/* 浮层淡入淡出（录音提示 / 大图预览）：本页自带，别依赖全局 */
+.fade-enter-active, .fade-leave-active { transition: opacity .18s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
 /* ================= 系统通知（卡片流） =================
    时间居中浮在卡片上方、卡片整宽铺开，是微信服务通知的固定版式：
    时间属于「这一刻收到了什么」，不属于卡片本身，所以它不画进卡片里。 */
 .msg-notice-list { display: flex; flex-direction: column; gap: 20px; }
 .msg-notice-item { display: flex; flex-direction: column; gap: 9px; }
 .msg-time-sep { text-align: center; font-size: 11.5px; color: #9aa0a6; }
-.msg-composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #f0f1f3; background: #fff; }
+.msg-composer { display: flex; align-items: flex-end; gap: 8px; flex-shrink: 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #f0f1f3; background: #fff; }
+/* 输入行与图标栏分两层：桌面端只显示输入行（图标栏 display:none），
+   移动端整块重排成「白框 + 蓝键」并露出图标栏，见下方 @media。 */
+.msg-composer-bar { display: flex; align-items: flex-end; gap: 8px; flex: 1; min-width: 0; }
+.msg-composer-tools, .msg-emoji-sheet { display: none; }
 /* 通知会话底部：替掉输入框的位置，高度接近输入区，避免切换会话时整页跳一下 */
 .msg-notice-tip {
   flex-shrink: 0;
@@ -1848,6 +2665,20 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 .msg-composer textarea { flex: 1; resize: none; border: none; outline: none; background: #f5f6f8; border-radius: 10px; padding: 9px 12px; font-size: 13.5px; line-height: 1.5; max-height: 110px; color: #1f2329; }
+/* 语音模式下输入框整块换成「按住 说话」：底色、圆角、字号都跟输入框对齐，
+   切换时只有文字变了，块面尺寸不动（桌面端进不了这个模式，规则只作兜底） */
+.msg-hold-talk { flex: 1; border: none; border-radius: 10px; background: #f5f6f8; padding: 9px 12px; font-size: 13.5px; color: #1f2329; }
+.msg-composer-img {
+  flex: none; width: 34px; height: 34px; margin-bottom: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 9px; background: #f5f6f8; color: #6b7280;
+  cursor: pointer; transition: background .16s, color .16s;
+}
+.msg-composer-img:hover { background: #eceef1; color: #1f2329; }
+.msg-composer-img svg {
+  width: 19px; height: 19px; fill: none;
+  stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
 .msg-send { display: inline-flex; align-items: center; gap: 4px; border: none; background: #111827; color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 10px; cursor: pointer; }
 .msg-send:disabled { background: #d1d5db; cursor: default; }
 .msg-pane-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #9aa0a6; font-size: 13px; }
@@ -1888,7 +2719,108 @@ onBeforeUnmount(() => {
   .msg-pane.is-mobile-chat { position: fixed; inset: 0; z-index: 2600; background: #fff; }
   .msg-pane.is-mobile-chat .msg-pane-head { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
   .msg-pane.is-mobile-chat .msg-chat-scroll { padding-bottom: 18px; }
+
+  /* ===== 输入区：与页头同底色（纯白），输入框改用浅灰填充拉开层次 =====
+     整块底色改成 #fff 与页头一致；白底上的白框会看不见，
+     所以输入框 / 「按住说话」改为浅灰，仍能一眼看出「写到哪了」。 */
+  .msg-composer {
+    display: block;
+    padding: 10px 14px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-top: none;
+    background: #fff;
+  }
+  .msg-composer-bar { align-items: stretch; gap: 10px; }
+  .msg-composer textarea {
+    min-height: 52px;
+    max-height: 120px;
+    padding: 15px 14px;
+    border-radius: 14px;
+    background: #f5f6f8;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .msg-composer textarea::placeholder { color: #b9bcc2; }
+  /* 语音模式那块「按住 说话」与输入框同高同圆角，切换时块面不跳 */
+  .msg-hold-talk {
+    min-height: 52px;
+    border-radius: 14px;
+    background: #f5f6f8;
+    font-size: 15px;
+  }
+  .msg-hold-talk.recording { background: #e9f0f9; }
+  .msg-hold-talk.cancel { background: #fdecec; color: #b42318; }
+  /* 发送键只有一行高：输入框长成三行时，一枚被拉高的蓝色长条比小键更碍眼，
+     所以它固定 52px 并贴底对齐，与第一行输入并排 */
+  .msg-send {
+    align-self: flex-end;
+    width: 76px;
+    height: 52px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 14px;
+    background: #7cb6ea;
+    font-size: 15.5px;
+  }
+  /* 参考图的发送键只有两个字：图标挤进去会让这枚键在 88px 里显得局促 */
+  .msg-send .el-icon { display: none; }
+  /* 空草稿时按钮仍保留可读的浅蓝，压到很淡会让人以为这枚键是灰掉的说明文字 */
+  .msg-send:disabled { background: #b7d5f2; color: #fff; }
+  .msg-send:active:not(:disabled) { background: #6aa9e2; }
+
+  .msg-composer-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0 2px;
+  }
+  .msg-tool {
+    width: 46px;
+    height: 34px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: none;
+    background: transparent;
+    color: #14161a;
+  }
+  .msg-tool svg {
+    display: block;
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .msg-tool svg .solid { fill: currentColor; stroke: none; }
+  .msg-tool:active { opacity: .45; }
+  .msg-tool.is-on { color: #2f86d6; }
+  /* 首尾各外扩 6px：图标本身有留白，直接贴边会显得比参考图更靠里 */
+  .msg-composer-tools .msg-tool:first-child { margin-left: -6px; }
+  .msg-composer-tools .msg-tool:last-child { margin-right: -6px; }
+
+  .msg-emoji-sheet {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+    padding: 10px 0 2px;
+  }
+  .msg-emoji-cell {
+    padding: 5px 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    font-size: 22px;
+    line-height: 1.3;
+  }
+  .msg-emoji-cell:active { background: rgba(0, 0, 0, .07); }
 }
+
+.msg-emoji-enter-active,
+.msg-emoji-leave-active { transition: opacity .16s ease, transform .16s ease; }
+.msg-emoji-enter-from,
+.msg-emoji-leave-to { opacity: 0; transform: translateY(6px); }
 @media (min-width: 768px) {
   .msg-side { max-width: 340px; }
 }

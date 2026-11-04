@@ -146,7 +146,14 @@ const { isMobile } = useResponsive()
 // 而 animations.css 只定义了 .route-subpage-back-leave-active，于是「没有动画、
 // 干等 320ms 再消失」。守卫在路由提交之前跑，name 一定是这一趟的。
 const stopTransitionGuard = router.beforeEach((to, from) => {
-  setPageTransition(resolvePageTransition(to.path, from.path))
+  // 学业中心的功能子页没有独立路径（/student/plan 等旧路由都 redirect 到
+  // /student/schedule?tab=xxx），只有带上 ?tab= 才能把它和「平级切到学业中心主页」
+  // 区分开：前者是下钻子页（右滑 + 下层让位），后者仍是页签级淡入。
+  const tabOf = (r: typeof to) => (typeof r.query.tab === 'string' ? r.query.tab : undefined)
+  setPageTransition(resolvePageTransition(to.path, from.path, {
+    toTab: tabOf(to),
+    fromTab: tabOf(from),
+  }))
 })
 onUnmounted(stopTransitionGuard)
 

@@ -14,6 +14,8 @@ export interface CommunityPost {
   author_avatar: string | null
   author_is_following: boolean
   liked: boolean
+  /** 配图 URL 数组（最多 9 张），后端出参恒为数组 */
+  images: string[]
 }
 
 export interface CommunityComment {
@@ -41,7 +43,7 @@ export function getMyPosts() {
   return request.get<CommunityPost[]>('/community/posts/mine')
 }
 
-export function createPost(data: { category: string; title: string; content: string }) {
+export function createPost(data: { category: string; title: string; content: string; images?: string[] }) {
   return request.post<CommunityPost>('/community/posts', data)
 }
 
