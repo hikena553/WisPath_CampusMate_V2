@@ -281,3 +281,11 @@ dist-check2/
 
 # 本地语音识别模型（200MB+ 运行时产物，不入库）
 backend/models/
+
+# ---------- GitHub Actions 排查临时产物（2026-11-05）----------
+# 查 CI 红叉时用 API 拉的 run/jobs 缓存与日志包，以及就地解 wheel 的临时目录
+# （.tmpci/pkgs 里是 pytest 依赖解包，500+ 文件 / 15MB，全是可重新下载的东西）
+backend/.tmpci/
+backend/.cijobs.json
+backend/.ciq.json
+backend/.runid.txt
