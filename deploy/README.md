@@ -96,19 +96,34 @@ docker compose down
 docker compose down -v   # 危险：连同数据卷一起删除
 ```
 
-## 7. HTTPS 建议
+## 7. HTTPS
 
-nginx 仅监听 80。生产环境推荐二选一：
+仓库已内置 Let's Encrypt 自动化脚本 `deploy/enable_https.sh`：
 
-1. 前置一层负载均衡/网关（如云厂商 LB、Caddy、宝塔）终结 TLS，转发到本机 nginx 80 端口；
-2. 自行扩展 `deploy/nginx.conf` 增加 443 server 块，并用 docker compose 挂载证书：
-   ```yaml
-   frontend:
-     volumes:
-       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-       - ./deploy/certs:/etc/nginx/certs:ro   # 证书挂载点（已预留）
-   ```
-   证书续期建议使用 certbot/caddy 自动续期，或云厂商托管证书。
+```bash
+chmod +x deploy/enable_https.sh
+./deploy/enable_https.sh <域名> <邮箱>
+```
+
+webroot 模式申请（前端不停机）→ 证书同步为固定文件名 → 自动切换
+`NGINX_CONF` 到 `deploy/nginx.ssl.conf` → 重建 frontend。续期：
+
+```bash
+./deploy/enable_https.sh --renew      # 建议加 cron，每天执行一次
+```
+
+相关文件与挂载：
+
+- `deploy/nginx.conf`：HTTP 版（默认）
+- `deploy/nginx.ssl.conf`：HTTPS 版（80 跳转 + 443 服务）
+- `deploy/certs/`：证书目录，挂载为容器内 `/etc/nginx/certs:ro`
+- 命名卷 `certbot_webroot`：ACME 校验目录，挂载为 `/var/www/certbot`
+
+> **前置条件**：必须有解析到本机公网 IP 的域名，且放通 80/443。
+> Let's Encrypt 不对 IP 签证书；只有 IP 时只能自签，而自签证书下浏览器
+> 会拒绝麦克风权限，语音通话不可用。
+
+若不想自建证书，也可前置云厂商 LB / Caddy / 宝塔终结 TLS，转发到本机 80。
 
 ## 8. 注意事项
 

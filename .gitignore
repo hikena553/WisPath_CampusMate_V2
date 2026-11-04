@@ -76,6 +76,10 @@ frontend/.tmpbuild/
 # HTTPS=1 本地开发证书（含 CA 私钥，绝对不能入库）
 frontend/certs/
 
+# 生产 TLS 证书与 Let's Encrypt 账户密钥（含私钥，绝对不能入库）
+deploy/certs/*
+!deploy/certs/.gitkeep
+
 # Vite / TS / test caches
 .vite/
 *.tsbuildinfo
