@@ -141,7 +141,7 @@ const groups: FeatureGroup[] = [
   {
     title: '学生成长与关怀',
     items: [
-      { path: '/teacher/portfolio', label: '学生档案', desc: '学生成长记录、徽章与育人档案管理', icon: Collection, color: '#6941c6', tint: '#f4f3ff' },
+      { path: '/teacher/portfolio', label: '成长档案', desc: '学生成长记录、徽章与育人档案管理', icon: Collection, color: '#6941c6', tint: '#f4f3ff' },
       { path: '/teacher/care-center', label: '关怀与家校', desc: '谈心、家访、激励与家长沟通台账，同一处留痕', icon: Sunny, color: '#f79009', tint: '#fffaeb' },
     ],
   },

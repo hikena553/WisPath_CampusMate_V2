@@ -121,6 +121,16 @@
           <el-badge v-if="announceUnread" :value="announceUnread" class="contact-badge" />
           <el-icon class="contact-arrow"><ArrowRight /></el-icon>
         </div>
+        <div class="contact-item" @click="router.push('/student/emotion')">
+          <div class="contact-icon" style="background: rgba(245,108,108,0.1); color: #f56c6c;">
+            <el-icon :size="20"><ChatLineRound /></el-icon>
+          </div>
+          <div class="contact-info">
+            <div class="contact-name">情绪树洞</div>
+            <div class="contact-desc">记录情绪，也可以向辅导员求助</div>
+          </div>
+          <el-icon class="contact-arrow"><ArrowRight /></el-icon>
+        </div>
         <div class="contact-item" @click="goFeedback">
           <div class="contact-icon" style="background: rgba(179,127,235,0.1); color: #b37feb;">
             <el-icon :size="20"><Promotion /></el-icon>
@@ -999,7 +1009,7 @@ import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   Calendar, Document, Promotion, ChatDotRound,
   ArrowRight, ArrowLeft, Search,
-  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading, Microphone, Postcard, Message
+  InfoFilled, Location, Close, Bell, Collection, Tickets, FolderOpened, Loading, Microphone, Postcard, Message, ChatLineRound
 } from '@element-plus/icons-vue'
 
 const router = useRouter()

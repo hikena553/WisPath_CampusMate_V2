@@ -1122,17 +1122,29 @@
           </div>
           </div>
 
-          <!-- v5：全部申请记录（请假/证明/项目合并，原「我的申请」并入这里）——仅移动端 -->
+          <!-- v5：申请 / 工单记录（请假/证明/项目与工单分视图，原「我的申请」「我的工单」并入这里）——仅移动端 -->
           <div v-if="isMobile" class="sv-records">
             <div class="ai-sec-head">
-              <h3 class="ai-sec-title">全部申请记录</h3>
-              <span class="ai-sec-count">{{ svRecords.length }} 条</span>
+              <h3 class="ai-sec-title">我的记录</h3>
+              <span class="ai-sec-count">{{ svVisibleRecords.length }} 条</span>
             </div>
-            <div v-for="r in svRecords" :key="r.kind + '-' + r.id" class="svr-row">
+            <div class="sv-rec-switch" role="tablist" aria-label="记录类型">
+              <button
+                v-for="v in SV_VIEWS"
+                :key="v.key"
+                type="button"
+                class="sv-rec-switch-item"
+                :class="{ active: svView === v.key }"
+                @click="switchSvView(v.key)"
+              >{{ v.label }}</button>
+            </div>
+            <div v-for="r in svVisibleRecords" :key="r.kind + '-' + r.id" class="svr-row">
               <div class="svr-main"><h5>{{ r.title }}</h5><small>{{ r.date }}</small></div>
               <span class="svr-st" :class="svStatusClass(r.status)">{{ svStatusLabel(r.status) }}</span>
             </div>
-            <p v-if="!svRecords.length && !svRecordsLoading" class="ai-empty">还没有申请记录</p>
+            <p v-if="!svVisibleRecords.length && !svRecordsLoading" class="ai-empty">
+              {{ svView === 'ticket' ? '还没有工单记录' : svView === 'leave' ? '还没有申请记录' : '还没有申请记录' }}
+            </p>
           </div>
         </div>
 
@@ -1602,12 +1614,25 @@ function exportReport() {
   ElMessage.success('已导出今日报告')
 }
 
-// ===== 请假服务 v5：美团订单流 + 全部申请记录（「我的申请」已合并进来） =====
+// ===== 请假服务 v5：美团订单流 + 申请/工单记录（「我的申请」「我的工单」分视图） =====
 interface SvRecord { kind: 'leave' | 'ticket'; id: number; title: string; date: string; status: string }
 const svRecordsLoading = ref(false)
 const svRecords = ref<SvRecord[]>([])
 const svShowForms = ref(false)
 const svCurrent = computed(() => svRecords.value.find(r => ['pending', 'processing'].includes(r.status)) || null)
+
+/** 记录视图：all=全部，leave=我的申请（请假/证明/项目），ticket=我的工单 */
+const SV_VIEWS = [
+  { key: 'all', label: '全部' },
+  { key: 'leave', label: '我的申请' },
+  { key: 'ticket', label: '我的工单' },
+] as const
+type SvView = (typeof SV_VIEWS)[number]['key']
+const initSvView = route.query.view === 'ticket' ? 'ticket' : route.query.view === 'leave' ? 'leave' : 'all'
+const svView = ref<SvView>(initSvView)
+const svVisibleRecords = computed(() =>
+  svView.value === 'all' ? svRecords.value : svRecords.value.filter(r => r.kind === (svView.value === 'ticket' ? 'ticket' : 'leave'))
+)
 
 function svStatusLabel(st: string): string {
   const m: Record<string, string> = { pending: '审批中', processing: '处理中', approved: '已通过', rejected: '已退回', completed: '已办结', cancelled: '已取消', returned: '已销假' }
@@ -1670,6 +1695,30 @@ function openSubPage(tab: string) {
     enteredSubPageByRoute.value = false
   }
   activeTab.value = tab
+  // 子页状态同步进地址：刷新 / 分享 / 前进后退都能停在同一个子页
+  if (isMobile.value) {
+    const query: Record<string, string> = {}
+    for (const [k, v] of Object.entries(route.query)) {
+      if (typeof v === 'string') query[k] = v
+    }
+    query.tab = tab
+    if (tab !== 'service') delete query.view
+    void router.replace({ path: route.path, query })
+  }
+}
+
+/** 申请 / 工单视图切换：同步 ?view= 到地址，两个工作台入口各自落到独立视图 */
+function switchSvView(v: SvView) {
+  if (svView.value === v) return
+  svView.value = v
+  const query: Record<string, string> = {}
+  for (const [k, val] of Object.entries(route.query)) {
+    if (typeof val === 'string') query[k] = val
+  }
+  query.tab = 'service'
+  if (v === 'all') delete query.view
+  else query.view = v
+  void router.replace({ path: route.path, query })
 }
 
 /**
@@ -1722,11 +1771,13 @@ function backToHome() {
 
   if (isMobile.value) resetPageScroll()
   activeTab.value = 'home'
-  // 地址上的 ?tab= 只在「从别的页面点进来」时写入，回驾驶舱主页后一并抹掉：
+  // 地址上的 ?tab= / ?view= 只在「从别的页面点进来」时写入，回驾驶舱主页后一并抹掉：
   // 否则页面显示的是主页、地址还写着 tab=plan，刷新就又被丢回那个子页。
-  if (typeof route.query.tab === 'string') {
-    const query = { ...route.query }
-    delete query.tab
+  if (isMobile.value) {
+    const query: Record<string, string> = {}
+    for (const [k, v] of Object.entries(route.query)) {
+      if (typeof v === 'string' && k !== 'tab' && k !== 'view') query[k] = v
+    }
     void router.replace({ path: route.path, query })
   }
   // 回首页时同步一次速览数据（待办/心情/打卡可能在子页里刚变过）
@@ -3915,6 +3966,18 @@ watch(() => route.query.tab, (val) => {
     box-shadow: 0 1px 3px rgba(20, 23, 26, .10);
   }
   .sv-seg-item:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 1px; }
+  .sv-rec-switch { display: flex; gap: 8px; margin: 10px 0 2px; }
+  .sv-rec-switch-item {
+    height: 30px; padding: 0 14px; border: 1px solid var(--sp-line-2, #e6e8eb); border-radius: 15px;
+    background: var(--sp-surface, #fff); font-size: 12.5px; color: var(--sp-ink-2);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: background .18s ease, color .18s ease, border-color .18s ease;
+  }
+  .sv-rec-switch-item.active {
+    background: var(--sp-accent-soft); border-color: var(--sp-accent-soft); color: var(--sp-accent-ink);
+    font-weight: 600;
+  }
+  .sv-rec-switch-item:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 1px; }
   .sv-card {
     background: var(--sp-surface, #ffffff); border-radius: var(--sp-radius-lg, 16px);
     box-shadow: var(--sp-shadow-card, 0 1px 2px rgba(20,23,26,.04)); padding: 14px;

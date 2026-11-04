@@ -400,9 +400,17 @@
         @open-records="openRoster"
       />
 
-      <!-- ===== 班级数据分析：本页的二级入口 =====
-           学生名单入口保留在 KPI 与工作量卡，底部不再重复铺一张名单摘要卡。 -->
+      <!-- ===== 二级入口：学生名单 / 班级数据分析 =====
+           名单既可从 KPI 卡进入，也在这里给一条显式入口，避免首屏只看到首页看板。 -->
       <section class="wb-entries">
+        <button class="tui-card wb-entry wb-entry-slim" type="button" @click="openRoster">
+          <span class="wb-entry-icon"><el-icon :size="18"><UserFilled /></el-icon></span>
+          <span class="wb-entry-main">
+            <span class="wb-entry-title">学生名单</span>
+            <span class="wb-entry-hint">按危机等级分诊 · 搜索 / 排序 / 进入档案</span>
+          </span>
+          <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+        </button>
         <button class="tui-card wb-entry wb-entry-slim" type="button" @click="showAnalyticsPage = true">
           <span class="wb-entry-icon"><el-icon :size="18"><DataAnalysis /></el-icon></span>
           <span class="wb-entry-main">
@@ -922,7 +930,7 @@ import {
   Search, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
   Download, Upload, DataAnalysis, MoreFilled,
   MagicStick, WarningFilled, ChatLineRound, Star, Picture,
-  Check,
+  UserFilled, Check,
 } from '@element-plus/icons-vue'
 import {
   getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats, importStudents,
