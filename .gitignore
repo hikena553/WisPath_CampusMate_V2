@@ -266,6 +266,8 @@ frontend/dist*-check/
 
 # 本地 .git 损坏后的备份目录（仅本机保留）
 .git-corrupted-backup-*/
+# .git 对象库损坏时的抢修备份目录（仅本机保留）
+_git_repair_backup_*/
 
 # 一次性前端验证脚本（用完即弃，与 backend/_probe*.py 同类）
 frontend/_*.cjs
