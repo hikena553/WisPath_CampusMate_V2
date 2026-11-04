@@ -275,6 +275,8 @@ frontend/_*.cjs
 dist-verify/
 _dist_check/
 dist-check2/
+# 同上：frontend/.verify* 是本机 vite build --outDir 的校验输出目录
+frontend/.verify*/
 
 # 本地语音识别模型（200MB+ 运行时产物，不入库）
 backend/models/

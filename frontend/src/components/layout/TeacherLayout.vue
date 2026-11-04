@@ -236,11 +236,9 @@ interface NavItem {
 
 /**
  * 未在侧边栏单列的子路由 → 其归属的侧边栏入口。
- * 例如成长档案 / 问卷互评 是「学生档案」的下钻能力，进入后高亮「学生档案」，
- * 保证页面归属清晰，而不是所有子页都亮「首页」。
+ * 成长档案已经在「我的成长」分组单列，不再挂到「工作台」下，避免顶栏页签标题被改写成「工作台」。
  */
 const SUB_ROUTE_PARENT: Record<string, string> = {
-  '/teacher/portfolio': '/teacher/students',
   '/teacher/survey': '/teacher/students',
   '/teacher/ai': '/teacher',
   '/teacher/features': '/teacher',
@@ -301,7 +299,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
  */
 const mobileNavItems = computed(() => [
   { key: 'home', label: '首页', icon: HomeFilled, route: '/teacher' },
-  { key: 'students', label: '学生档案', icon: Notebook, route: '/teacher/students' },
+  { key: 'students', label: '工作台', icon: Notebook, route: '/teacher/students' },
   { key: 'agent', label: siteName.value, iconImg: siteLogo.value, center: true, route: '/teacher/agent' },
   { key: 'messages', label: '消息', icon: Message, route: '/teacher/messages', badge: true },
   { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },

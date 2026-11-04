@@ -29,6 +29,22 @@ const EMPTY: SiteConfig = {
   site_mascot: '',
   site_announcement: '',
   agent_name: '',
+  site_domain: '',
+  icp_number: '',
+  police_number: '',
+}
+
+/**
+ * 解析站点对外地址，优先级：管理端配置的域名 → 构建注入的 VITE_SITE_URL → 当前访问域。
+ * 域名未带协议时按 https 处理（备案通过的站点必须可被手机直接通过 HTTPS 访问）。
+ */
+export function resolveSiteBase(configuredDomain?: string): string {
+  const configured = (configuredDomain || '').trim().replace(/\/+$/, '')
+  if (configured) {
+    return /^https?:\/\//i.test(configured) ? configured : `https://${configured}`
+  }
+  const envUrl = ((import.meta.env.VITE_SITE_URL as string | undefined) || '').trim().replace(/\/+$/, '')
+  return envUrl || window.location.origin
 }
 
 const config = ref<SiteConfig>({ ...EMPTY })
@@ -136,6 +152,14 @@ export function useSiteConfig() {
     siteAnnouncement: computed(() => (config.value.site_announcement || '').trim()),
     /** AI 助手自我称谓 */
     agentName: computed(() => (config.value.agent_name || '').trim() || DEFAULT_SITE_NAME),
+    /** 管理端配置的对外域名（未配置为空串） */
+    siteDomain: computed(() => (config.value.site_domain || '').trim()),
+    /** 对外站点地址：配置域名 → VITE_SITE_URL → 当前访问域 */
+    siteBaseUrl: computed(() => resolveSiteBase(config.value.site_domain)),
+    /** ICP 备案号（未配置为空串） */
+    icpNumber: computed(() => (config.value.icp_number || '').trim()),
+    /** 公安备案号（未配置为空串） */
+    policeNumber: computed(() => (config.value.police_number || '').trim()),
     loadSiteConfig,
     refreshSiteConfig,
   }

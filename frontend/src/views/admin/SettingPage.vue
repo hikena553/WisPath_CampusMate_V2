@@ -114,6 +114,76 @@
           </div>
         </section>
 
+        <!-- ============ 备案与域名 ============ -->
+        <section id="sec-deploy" class="setting-section">
+          <div class="section-header">
+            <div class="section-header-icon cyan"><el-icon><Globe /></el-icon></div>
+            <div class="section-header-info">
+              <div class="section-title">
+                备案与域名
+                <el-tag :type="deployReady ? 'success' : 'warning'" size="small" effect="light" round>
+                  {{ deployReady ? '已就绪' : '待完善' }}
+                </el-tag>
+              </div>
+              <div class="section-desc">配置对外域名与备案信息：官网、二维码与下载链接自动使用正式域名，官网页脚按要求展示备案号</div>
+            </div>
+          </div>
+
+          <!-- 部署检查：当前访问环境与配置是否匹配 -->
+          <div class="deploy-checks">
+            <div v-for="c in deployChecks" :key="c.key" class="deploy-check" :class="{ ok: c.ok }">
+              <el-icon><component :is="c.ok ? CircleCheck : Info" /></el-icon>
+              <div class="deploy-check-body">
+                <div class="deploy-check-label">{{ c.label }}</div>
+                <div class="deploy-check-value">{{ c.value }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-list">
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">站点域名</div>
+                <div class="setting-desc">对外访问地址，建议填写完整协议，如 https://mian.example.edu.cn；手机扫码后将打开该域名下的下载页</div>
+              </div>
+              <el-input v-model="settingsMap['site_domain']" placeholder="https://mian.example.edu.cn" style="width: 320px" />
+            </div>
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">ICP 备案号</div>
+                <div class="setting-desc">备案通过后由工信部下发，展示在官网页脚并链接至备案查询系统</div>
+              </div>
+              <el-input v-model="settingsMap['icp_number']" placeholder="蜀ICP备xxxxxxxx号-1" style="width: 320px" />
+            </div>
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-name">公安备案号</div>
+                <div class="setting-desc">选填。公安联网备案通过后下发，同样展示在官网页脚</div>
+              </div>
+              <el-input v-model="settingsMap['police_number']" placeholder="川公网安备 5107xxxxxxxxxxxx号" style="width: 320px" />
+            </div>
+          </div>
+
+          <div class="ai-actions">
+            <el-button type="primary" :loading="savingDeploy" @click="handleSaveDeploy">
+              <el-icon><Check /></el-icon> 保存并应用
+            </el-button>
+            <el-button @click="openPublicSite">
+              <el-icon><Monitor /></el-icon> 打开官网校验
+            </el-button>
+          </div>
+
+          <div class="deploy-guide">
+            <div class="deploy-guide-title">部署清单</div>
+            <ul>
+              <li>域名解析：将域名 A 记录指向服务器公网 IP，并放行 80 / 443 端口。</li>
+              <li>Web 服务：使用 <span class="mono-text">deploy/nginx.conf</span> 托管前端构建产物，<span class="mono-text">/api/</span> 反向代理到后端。</li>
+              <li>HTTPS：配置证书后用 https 协议填写域名，手机扫码才能正常打开下载页。</li>
+              <li>安装包：将 Android 安装包放到 <span class="mono-text">frontend/public/download/</span>，下载页会自动检测是否可用。</li>
+            </ul>
+          </div>
+        </section>
+
         <!-- ============ AI 助手 ============ -->
         <section id="sec-ai" class="setting-section ai-section">
           <div class="section-header">
@@ -703,7 +773,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import {
   Settings, MessageSquare, TriangleAlert, Check, RefreshCw, Plug, Image,
   Sparkles, Upload, Mic, Monitor, Headphones, Play, CircleCheck,
-  Clock, Info, Smartphone,
+  Clock, Info, Smartphone, Globe,
 } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import {
@@ -712,7 +782,7 @@ import {
   getWechatMpInfo, verifyWechatMp, deployWechatMp, type WechatMpInfo, type WechatMpStep,
 } from '@/api/setting'
 import { getCrisisConfig } from '@/api/crisis'
-import { refreshSiteConfig } from '@/composables/useSiteConfig'
+import { refreshSiteConfig, resolveSiteBase } from '@/composables/useSiteConfig'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -729,6 +799,7 @@ const activeSection = ref('basic')
 const pageRef = ref<HTMLElement | null>(null)
 const groups = [
   { key: 'basic', icon: Settings, label: '基础设置', desc: '站点名称与公告' },
+  { key: 'deploy', icon: Globe, label: '备案与域名', desc: '域名、备案与部署' },
   { key: 'ai', icon: MessageSquare, label: 'AI 助手', desc: '大模型与智能体' },
   { key: 'alert', icon: TriangleAlert, label: '危机预警', desc: '敏感词与通知' },
   { key: 'brand', icon: Image, label: '品牌设计', desc: 'Logo 与吉祥物' },
@@ -1409,6 +1480,93 @@ async function clearSiteAnnouncement() {
   }
 }
 
+// ===== 备案与域名（部署） =====
+const savingDeploy = ref(false)
+
+const deployBaseUrl = computed(() => resolveSiteBase(settingsMap['site_domain'] || ''))
+const deployHost = computed(() => {
+  try {
+    return new URL(deployBaseUrl.value).host
+  } catch {
+    return ''
+  }
+})
+const hasDeployDomain = computed(() => !!(settingsMap['site_domain'] || '').trim())
+const deployReady = computed(() => hasDeployDomain.value && !!(settingsMap['icp_number'] || '').trim())
+
+/** 部署检查：对比当前访问环境与已填写配置，帮助定位「域名没生效 / 备案没展示」 */
+const deployChecks = computed(() => {
+  const currentHost = window.location.host
+  const https = window.location.protocol === 'https:'
+  const records = [settingsMap['icp_number'], settingsMap['police_number']]
+    .map((v) => (v || '').trim())
+    .filter(Boolean)
+  return [
+    { key: 'access', label: '当前访问地址', value: window.location.origin, ok: true },
+    {
+      key: 'domain',
+      label: '对外域名',
+      value: hasDeployDomain.value ? deployBaseUrl.value : '未配置，回退当前访问地址',
+      ok: hasDeployDomain.value,
+    },
+    {
+      key: 'https',
+      label: 'HTTPS 访问',
+      value: https ? '已启用 HTTPS' : '未启用，备案后请配置证书',
+      ok: https,
+    },
+    {
+      key: 'match',
+      label: '域名一致性',
+      value: !hasDeployDomain.value
+        ? '未配置域名'
+        : deployHost.value === currentHost
+          ? '与当前访问域一致'
+          : `当前实际访问 ${currentHost}`,
+      ok: hasDeployDomain.value && deployHost.value === currentHost,
+    },
+    {
+      key: 'record',
+      label: '备案信息',
+      value: records.length ? records.join(' · ') : '未填写备案号',
+      ok: records.length > 0,
+    },
+  ]
+})
+
+function openPublicSite() {
+  window.open(deployBaseUrl.value, '_blank', 'noopener')
+}
+
+async function handleSaveDeploy() {
+  let domain = (settingsMap['site_domain'] || '').trim().replace(/\/+$/, '')
+  if (domain && !/^https?:\/\//i.test(domain)) domain = `https://${domain}`
+  if (domain) {
+    try {
+      const url = new URL(domain)
+      if (!/^https?:$/.test(url.protocol)) throw new Error('invalid')
+    } catch {
+      ElMessage.warning('域名格式不正确，请填写如 https://mian.example.edu.cn')
+      return
+    }
+  }
+  savingDeploy.value = true
+  try {
+    const icp = (settingsMap['icp_number'] || '').trim()
+    const police = (settingsMap['police_number'] || '').trim()
+    await batchUpdateSettings({ site_domain: domain, icp_number: icp, police_number: police })
+    settingsMap['site_domain'] = domain
+    settingsMap['icp_number'] = icp
+    settingsMap['police_number'] = police
+    await refreshSiteConfig()
+    ElMessage.success(domain ? '已保存，官网与二维码将使用正式域名' : '已清除域名配置，回退当前访问地址')
+  } catch {
+    ElMessage.error('保存失败')
+  } finally {
+    savingDeploy.value = false
+  }
+}
+
 async function handleSaveAI() {
   if (!validateAISettings()) return
   savingAI.value = true
@@ -1777,6 +1935,66 @@ html.dark .announce-tip { color: #8b93a7; }
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
+}
+
+/* ===== 备案与域名 ===== */
+.deploy-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.deploy-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid #f3e2b8;
+  border-radius: 10px;
+  background: #fdf9ef;
+  color: #b7791f;
+  font-size: 12px;
+}
+.deploy-check.ok {
+  border-color: #cbe8bd;
+  background: #f4fbf1;
+  color: #3f8f28;
+}
+.deploy-check-body {
+  min-width: 0;
+}
+.deploy-check-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.deploy-check-value {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #5b6472;
+  word-break: break-all;
+}
+.deploy-guide {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px dashed #dfe4ec;
+  border-radius: 10px;
+  background: #fafbfd;
+}
+.deploy-guide-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2b3445;
+}
+.deploy-guide ul {
+  margin: 0;
+  padding-left: 17px;
+}
+.deploy-guide li {
+  font-size: 11.5px;
+  line-height: 1.9;
+  color: #5b6472;
 }
 
 /* ===== 品牌设计 ===== */
@@ -2341,6 +2559,12 @@ html.dark .nav-icon,
 html.dark .pipe-chip { background: #262a38; color: #a0a8b8; }
 html.dark .section-header,
 html.dark .ai-actions { border-color: #2a2e3d; }
+html.dark .deploy-check { background: rgba(230, 162, 60, 0.1); border-color: rgba(230, 162, 60, 0.35); color: #e6a23c; }
+html.dark .deploy-check.ok { background: rgba(103, 194, 58, 0.1); border-color: rgba(103, 194, 58, 0.35); color: #85ce61; }
+html.dark .deploy-check-value,
+html.dark .deploy-guide li { color: #a0a8b8; }
+html.dark .deploy-guide { background: #191c26; border-color: #33384a; }
+html.dark .deploy-guide-title { color: #e8eaf0; }
 html.dark .ai-section {
   border-color: rgba(64, 158, 255, 0.25);
   background: linear-gradient(135deg, rgba(64, 158, 255, 0.06), rgba(103, 194, 58, 0.04));

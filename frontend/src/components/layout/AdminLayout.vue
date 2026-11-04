@@ -41,7 +41,10 @@
             </div>
           </div>
           <template #dropdown>
-            <el-dropdown-item @click="logout">
+            <el-dropdown-item @click="pwdDialog = true">
+              <el-icon style="margin-right:6px"><KeyRound /></el-icon>修改密码
+            </el-dropdown-item>
+            <el-dropdown-item divided @click="logout">
               <el-icon style="margin-right:6px"><LogOut /></el-icon>退出登录
             </el-dropdown-item>
           </template>
@@ -104,6 +107,9 @@
         </div>
       </main>
     </div>
+
+    <!-- 修改密码：就地弹窗，不离开当前页面 -->
+    <ChangePasswordDialog v-model="pwdDialog" />
   </div>
 </template>
 
@@ -114,11 +120,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { confirmLogout } from '@/utils/logout'
 import AdminMessageBell from '@/views/admin/components/AdminMessageBell.vue'
+import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import {
   House, Library, TriangleAlert,
   User, Users, Building2,
   CalendarDays, MessageSquare, Settings,
-  LogOut, PanelLeftClose, PanelLeftOpen, X, Boxes, Rss, Activity
+  LogOut, PanelLeftClose, PanelLeftOpen, X, Rss, Activity, KeyRound
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -144,7 +151,6 @@ const ADMIN_PAGE_LOADERS: Array<() => Promise<unknown>> = [
   () => import('@/views/admin/HomePage.vue'),
   () => import('@/views/admin/KnowledgePage.vue'),
   () => import('@/views/admin/FeedSourcesPage.vue'),
-  () => import('@/views/admin/ReferenceLibraryPage.vue'),
   () => import('@/views/admin/CrisisMonitorPage.vue'),
   () => import('@/views/admin/TeachersPage.vue'),
   () => import('@/views/admin/StudentsPage.vue'),
@@ -170,6 +176,9 @@ onMounted(() => {
     setTimeout(prefetchAdminPages, 50)
   }
 })
+
+// ===== 修改密码弹窗（就地在管理端打开，不跳转） =====
+const pwdDialog = ref(false)
 
 // ===== 侧边栏：桌面折叠 + 移动端抽屉 =====
 const sidebarCollapsed = ref(false)
@@ -219,7 +228,6 @@ const navGroups: NavGroup[] = [
       { path: '/admin', label: '首页', icon: House },
       { path: '/admin/knowledge', label: '知识库', icon: Library },
       { path: '/admin/feeds', label: '资讯管理', icon: Rss },
-      { path: '/admin/references', label: '开源参考复用', icon: Boxes },
       { path: '/admin/crisis', label: '危机预警', icon: TriangleAlert },
     ],
   },

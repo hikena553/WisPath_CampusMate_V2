@@ -10,12 +10,16 @@ from sqlalchemy.orm import Session
 from app.models.setting import SystemSetting
 
 # 公开展示类设置键（免登录可读）：站点名称 / Logo / 吉祥物 / 系统公告 / 助手称谓
+# 另含对外域名与备案号：官网页脚、二维码与下载链接需要在未登录状态下读取
 PUBLIC_SETTING_KEYS: tuple[str, ...] = (
     "site_name",
     "site_logo",
     "site_mascot",
     "site_announcement",
     "agent_name",
+    "site_domain",
+    "icp_number",
+    "police_number",
 )
 
 
