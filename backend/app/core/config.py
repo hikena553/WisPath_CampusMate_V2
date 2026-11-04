@@ -37,6 +37,32 @@ class Settings(BaseSettings):
     LLM_TTS_VOICE: str = "longanhuan_v3.6"
     # 语音播报风格提示词（可在系统设置中覆盖，作用于语音通话中大模型的回复风格）
     LLM_TTS_PROMPT: str = ""
+    # ===== 手机号短信验证码登录（阿里云 / 腾讯云）=====
+    # SMS_PROVIDER：aliyun / tencent；留空表示未接入短信服务商
+    SMS_PROVIDER: str = ""
+    SMS_CODE_TTL_SECONDS: int = 300
+    SMS_CODE_COOLDOWN_SECONDS: int = 60
+    # 阿里云短信（dysmsapi.aliyuncs.com）
+    ALIYUN_SMS_ACCESS_KEY_ID: str = ""
+    ALIYUN_SMS_ACCESS_KEY_SECRET: str = ""
+    ALIYUN_SMS_SIGN_NAME: str = ""
+    ALIYUN_SMS_TEMPLATE_CODE: str = ""
+    # 腾讯云短信（sms.tencentcloudapi.com）
+    TENCENT_SMS_SECRET_ID: str = ""
+    TENCENT_SMS_SECRET_KEY: str = ""
+    TENCENT_SMS_APP_ID: str = ""
+    TENCENT_SMS_SIGN_NAME: str = ""
+    TENCENT_SMS_TEMPLATE_ID: str = ""
+    TENCENT_SMS_REGION: str = "ap-guangzhou"
+
+    # ===== QQ 互联 OAuth 登录 =====
+    QQ_APP_ID: str = ""
+    QQ_APP_KEY: str = ""
+    # QQ 互联后台登记的「回调地址」，必须与这里完全一致
+    QQ_REDIRECT_URI: str = ""
+    # 前端站点根地址：QQ 回跳、短信登录成功后的落地页都基于它
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+
     # 外部资讯源令牌（可选，不配置则按匿名限流抓取）
     GITHUB_TOKEN: str = ""
     GITEE_TOKEN: str = ""

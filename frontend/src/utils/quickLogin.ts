@@ -66,7 +66,7 @@ export function saveQuickAccountFromLogin(res: LoginResponse) {
 
 /** 资料页绑定/解绑手机号或 QQ 后刷新凭证，保证登录页的一键登录与最新绑定一致 */
 export async function syncQuickAccount(user: UserInfo): Promise<void> {
-  if (!user.phone && !user.qq) {
+  if (!user.phone && !user.qq && !user.qq_bound) {
     clearQuickAccount()
     return
   }
