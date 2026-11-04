@@ -1,4 +1,7 @@
 # 构建上下文排除（backend/）
+# 关键：.venv 必须排除。本地虚拟环境约 300MB，且是 Windows 版解释器与
+# site-packages（*.pyd/.dll），进镜像既白占体积又会在 linux 下完全无效。
+.venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -18,3 +21,11 @@ logs/
 Dockerfile
 .dockerignore
 README*
+
+# 本地验证脚本与截图产物（backend 根目录历史遗留）
+_shot*.py
+_shot*.png
+.tmp*
+.tmpci/
+_cleanup_*
+*.bak*
