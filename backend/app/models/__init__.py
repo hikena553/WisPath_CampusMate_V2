@@ -33,7 +33,7 @@ from app.models.emotion import EmotionRecord
 from app.models.material import MaterialArchive
 from app.models.sms import SmsLog
 from app.models.feed import FeedSource, ExternalFeedItem
-from app.models.media import MediaAccount, MediaPost
+from app.models.media import MediaAccount, MediaPost, MediaSourceLink, MediaStationConfig
 from app.models.teacher_task import TeacherTask, TaskSourceType, TaskStatus
 from app.models.care_record import CareRecord, CareRecordType
 from app.models.teacher_portfolio import (
@@ -73,7 +73,5 @@ from app.models.guardian import (
 )
 from app.models.help_request import HelpRequest, HelpRequestStatus
 from app.models.learning_event import LearningEvent
-from app.models.workflow import WorkflowDef, WorkflowInstance, WorkflowStatus
-from app.models.reference import OpenSourceReference
 from app.models.badge import UserBadge
 from app.models.password_reset import PasswordResetRequest, PasswordResetStatus

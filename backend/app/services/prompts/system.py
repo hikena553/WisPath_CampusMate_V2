@@ -134,17 +134,12 @@ def build_teacher_system_prompt(
 13. 家校沟通 → query_guardian_logs
 14. 学情底座 → query_learning_events
 15. AI 学情诊断 → query_student_insight
-16. 审批流程 → query_my_workflows
-17. 求助受理 → query_help_requests / reply_help_request
-18. 开源复用 → search_reference_library / generate_page_scaffold
-19. 课表与任课教师 → query_my_courses（不传教师名=我的课；传教师名=查该教师的课表）
-20. 出勤概况 → query_class_attendance；点名前名单 → query_attendance_roster
-21. 作业提交 → query_homework_status
-22. 成绩概况 → query_class_grade
-23. 日程计划 → query_teacher_schedules / create_teacher_schedule
-24. 班级公告 → publish_class_announcement（发布后自动推送站内通知）
-25. 预警处置 → resolve_crisis_alert（标记已介入/重新打开）
-26. 发消息 → send_message_to_student（一对一，写入会话并实时推送）""",
+16. 求助受理 → query_help_requests / reply_help_request
+17. 课表与任课教师 → query_my_courses（不传教师名=我的课；传教师名=查该教师的课表）
+18. 日程计划 → query_teacher_schedules / create_teacher_schedule
+19. 班级公告 → publish_class_announcement（发布后自动推送站内通知）
+20. 预警处置 → resolve_crisis_alert（标记已介入/重新打开）
+21. 发消息 → send_message_to_student（一对一，写入会话并实时推送）""",
     )
 
     constraints = section(
@@ -161,11 +156,10 @@ def build_teacher_system_prompt(
             '教师说"我的互评结果" → 用 query_my_survey_results（只给聚合，样本不足时说明原因）',
             '教师说"这个月要关怀谁" → 用 query_care_calendar；"某某的家长沟通记录" → 用 query_guardian_logs',
             '教师说"诊断一下某某/某某最近怎么样" → 用 query_student_insight（只依据返回的证据清单，不额外推断）',
-            '教师说"某某的学情数据" → 用 query_learning_events；"我的审批流程" → 用 query_my_workflows',
+            '教师说"某某的学情数据" → 用 query_learning_events',
             '教师说"我的课表/我这周有课吗/周三有什么课" → 用 query_my_courses；'
             '"查一下某位老师的课表/某老师周三有课吗" → query_my_courses 传 teacher_name'
-            "（可跨教师查询，用于排课协调）；教师说\"这门课谁总不来/到课率多少\" → query_class_attendance；"
-            '"点名/今天这门课谁该到" → query_attendance_roster 先出名单再确认',
+            "（可跨教师查询，用于排课协调）；课堂执行类问题（点名/作业/成绩录入）直接说明前端未提供入口",
             '教师说"我的计划/这个月有什么安排" → 用 query_teacher_schedules；'
             '"帮我安排/加到日程/下周三提醒我" → 用 create_teacher_schedule（不要降级成跟进任务）',
             '教师说"写一条班级公告/发通知给全班" → 用 publish_class_announcement；'
@@ -174,13 +168,8 @@ def build_teacher_system_prompt(
             "处置前先确认目标预警ID与处置说明",
             '教师说"给某某发消息/通知一下某某/跟他说……" → 用 send_message_to_student；'
             "发送前把要发的内容复述给教师确认",
-            '教师说"作业交了多少/谁没交作业" → 用 query_homework_status；'
-            '"这门课考得怎么样/多少人不及格/平均分" → query_class_grade',
-            "教学类工具只能查教师本人担任任课教师的课程（query_my_courses 按教师姓名看课表除外），"
+            "教学类工具只能查教师本人担任任课教师的课程（query_my_courses 按教师姓名看课表），"
             "课程不在其名下时如实说明",
-            "教师/管理员想复用成熟开源方案或搭新页面 → 用 search_reference_library 检索可合法复用的开源项目"
-            "（含许可证与署名要求），或直接用 generate_page_scaffold 生成页面骨架；"
-            "严禁搬运闭源项目代码，只复用许可证允许的范围",
             "只能操作教师名下的学生，学生不在名下时如实说明",
             '不知道的回答"我需要确认后回答你"',
             ANTI_FABRICATION,

@@ -246,8 +246,8 @@ async def test_p1_module_tools_flow(make_user, db, _tool_counters_clean):
 
 @pytest.mark.asyncio
 async def test_p2_platform_tools(make_user, db, _tool_counters_clean, monkeypatch):
-    """P2 工具：学情事件 / AI 学情诊断（降级）/ 审批流程。"""
-    from app.services import learning_event_service, workflow_engine
+    """P2 工具：学情事件 / AI 学情诊断（降级）。"""
+    from app.services import learning_event_service
 
     teacher = make_user(role=UserRole.TEACHER)
     student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id, name="底座学生")
@@ -269,19 +269,6 @@ async def test_p2_platform_tools(make_user, db, _tool_counters_clean, monkeypatc
     assert insight["message"]
     assert insight["degraded"] is True
     assert insight["evidence"]
-
-    # 审批流程：无实例时友好提示
-    workflow_engine.create_def(
-        db,
-        code="tool_wf",
-        name="工具流程",
-        nodes=[{"key": "a", "name": "节点A"}],
-        created_by=teacher.id,
-    )
-    workflow_engine.start(db, def_code="tool_wf", initiator_id=teacher.id, biz_id=1)
-    flows = await execute_tool("query_my_workflows", {}, teacher)
-    assert flows["instances"]
-    assert flows["instances"][0]["current_node"] == "节点A"
 
 
 @pytest.mark.asyncio

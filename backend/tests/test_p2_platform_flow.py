@@ -14,7 +14,6 @@ from app.models.crisis import AIDialogSummary, CrisisLevel
 from app.models.learning_event import LearningEvent
 from app.models.teacher_task import TeacherTask
 from app.models.user import UserRole
-from app.models.workflow import WorkflowInstance
 from app.services import alert_pipeline_service, learning_event_service, student_insight_service
 
 
@@ -61,20 +60,7 @@ def test_learning_event_emit_and_query(client, api, make_user, db):
     assert rows[0].verb == "leave.apply"
     assert rows[0].object_type == "leave"
 
-    # 教师可查名下学生聚合
-    agg = api.get(
-        "/api/learning-events/aggregate", params={"actor_id": student.id}, headers=t_headers
-    )
-    assert agg.status_code == 200, agg.text
-    assert agg.json()["total"] >= 1
-    assert any(v["verb"] == "leave.apply" for v in agg.json()["by_verb"])
-
-    # 越权：其他教师不可查
-    other = make_user(role=UserRole.TEACHER)
-    denied = api.get(
-        "/api/learning-events/aggregate", params={"actor_id": student.id}, headers=_login(client, other)
-    )
-    assert denied.status_code == 403
+    # 学情事件不再暴露 HTTP 接口（前端无对应页面），仅供内部 AI 诊断与预警使用
 
 
 def test_learning_event_emit_never_breaks_main_flow(make_user, db):
@@ -230,126 +216,3 @@ def test_student_insight_to_task(client, api, make_user, db):
     assert task["source_type"] == "care_plan"
     assert task["student_id"] == student.id
     assert task["student_name"] == student.name
-
-
-# ── 模块 14：审批流程引擎 ──────────────────────────────────────
-
-
-def test_workflow_engine_full_flow(client, api, make_user, db):
-    admin = make_user(role=UserRole.ADMIN)
-    teacher = make_user(role=UserRole.TEACHER)
-    a_headers = _login(client, admin)
-    t_headers = _login(client, teacher)
-
-    # 新增一种审批类型：无需改代码，仅登记节点 JSON
-    defn = api.post(
-        "/api/workflows/defs",
-        json={
-            "code": "material_approve",
-            "name": "材料归档审批",
-            "biz_type": "material",
-            "nodes": [
-                {"key": "tutor", "name": "辅导员初审", "approver_role": "teacher"},
-                {"key": "admin", "name": "管理员终审", "approver_role": "admin"},
-            ],
-        },
-        headers=a_headers,
-    )
-    assert defn.status_code == 200, defn.text
-    assert len(defn.json()["nodes"]) == 2
-
-    # 重复编码被拒
-    dup = api.post(
-        "/api/workflows/defs",
-        json={"code": "material_approve", "name": "重复", "nodes": [{"key": "a", "name": "A"}]},
-        headers=a_headers,
-    )
-    assert dup.status_code == 400
-
-    started = api.post(
-        "/api/workflows/instances",
-        json={"def_code": "material_approve", "biz_type": "material", "biz_id": 123},
-        headers=t_headers,
-    )
-    assert started.status_code == 200, started.text
-    body = started.json()
-    instance_id = body["id"]
-    assert body["status"] == "running"
-    assert body["current_node"]["key"] == "tutor"
-
-    first = api.post(
-        f"/api/workflows/instances/{instance_id}/approve",
-        json={"comment": "初审通过"},
-        headers=t_headers,
-    )
-    assert first.json()["status"] == "running"
-    assert first.json()["current_node"]["key"] == "admin"
-
-    second = api.post(
-        f"/api/workflows/instances/{instance_id}/approve",
-        json={"comment": "终审通过"},
-        headers=a_headers,
-    )
-    assert second.json()["status"] == "approved"
-
-    # 已结束流程不可再操作
-    again = api.post(
-        f"/api/workflows/instances/{instance_id}/approve", json={}, headers=a_headers
-    )
-    assert again.status_code == 400
-
-    # 历史可追溯：发起 + 两次审批
-    history = api.get("/api/workflows/instances", params={"mine": False}, headers=a_headers).json()
-    target = next(i for i in history if i["id"] == instance_id)
-    assert [h["action"] for h in target["history"]] == ["start", "approve", "approve"]
-
-
-def test_workflow_reject_and_cancel(client, api, make_user, db):
-    admin = make_user(role=UserRole.ADMIN)
-    teacher = make_user(role=UserRole.TEACHER)
-    a_headers = _login(client, admin)
-    t_headers = _login(client, teacher)
-
-    api.post(
-        "/api/workflows/defs",
-        json={
-            "code": "leave_approve_wf",
-            "name": "请假审批流程",
-            "biz_type": "leave",
-            "nodes": [{"key": "tutor", "name": "辅导员审批"}],
-        },
-        headers=a_headers,
-    )
-
-    # 驳回
-    r1 = api.post(
-        "/api/workflows/instances",
-        json={"def_code": "leave_approve_wf", "biz_id": 1},
-        headers=t_headers,
-    ).json()["id"]
-    rejected = api.post(
-        f"/api/workflows/instances/{r1}/reject", json={"comment": "材料不全"}, headers=t_headers
-    )
-    assert rejected.json()["status"] == "rejected"
-    assert db.get(WorkflowInstance, r1).status.value == "rejected"
-
-    # 撤销（发起人本人）
-    r2 = api.post(
-        "/api/workflows/instances",
-        json={"def_code": "leave_approve_wf", "biz_id": 2},
-        headers=t_headers,
-    ).json()["id"]
-    cancelled = api.post(f"/api/workflows/instances/{r2}/cancel", json={}, headers=t_headers)
-    assert cancelled.json()["status"] == "cancelled"
-
-    # 非发起人且非管理员不可撤销
-    r3 = api.post(
-        "/api/workflows/instances",
-        json={"def_code": "leave_approve_wf", "biz_id": 3},
-        headers=t_headers,
-    ).json()["id"]
-    other = make_user(role=UserRole.TEACHER)
-    denied = api.post(
-        f"/api/workflows/instances/{r3}/cancel", json={}, headers=_login(client, other)
-    )
-    assert denied.status_code == 400

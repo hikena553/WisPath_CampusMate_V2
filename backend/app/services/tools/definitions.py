@@ -662,20 +662,6 @@ TEACHER_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "query_my_workflows",
-            "description": "查看审批流程实例及当前待办节点。教师说'我的审批流程'、'流程到哪一步了'时调用",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "status": {"type": "string", "enum": ["running", "approved", "rejected", "cancelled"], "description": "按状态筛选"},
-                    "all": {"type": "boolean", "description": "true 表示查看全部（不限于我发起的）"}
-                }
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "query_help_requests",
             "description": "查询名下学生提交的求助（含匿名）。教师说'有哪些学生求助'、'待受理求助'、'学生求助情况'时调用",
             "parameters": {
@@ -702,36 +688,6 @@ TEACHER_TOOL_DEFINITIONS = [
             }
         }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_reference_library",
-            "description": "在开源参考库中检索可合法复用的成熟开源项目/模板（含许可证、收藏量、可复用范围、署名要求）。当教师/管理员说'想复用某某项目''找个类似的成熟方案''有没有现成的组件库/模板''搭个XX页面参考哪个项目'时调用。只返回许可证允许改造复用的开源项目，不涉及闭源代码搬运",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "要查找的能力或需求关键词，如'表格 虚拟滚动'、'中后台 筛选栏'、'图表 折线'"},
-                    "limit": {"type": "integer", "description": "返回条数，默认5"}
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "generate_page_scaffold",
-            "description": "按需求生成符合本项目规范的 Vue 页面骨架代码（本地模板生成，会自动附带所参考开源项目的出处署名）。当教师/管理员说'帮我生成一个XX页面''搭个XX页面的骨架''照这个需求起个页面'时调用",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "requirement": {"type": "string", "description": "页面需求描述，说明页面用途与需要的结构，如'学生成绩分析页面，包含筛选栏、统计卡片和折线图'"},
-                    "page_name": {"type": "string", "description": "可选，页面组件名（PascalCase），不传则按需求自动推断"}
-                },
-                "required": ["requirement"]
-            }
-        }
-    },
     # ============ 教学域工具（PH3）：让绵小城能直接处理课表/考勤/作业/成绩 ============
     {
         "type": "function",
@@ -744,69 +700,6 @@ TEACHER_TOOL_DEFINITIONS = [
                     "teacher_name": {"type": "string", "description": "可选，任课教师姓名（支持模糊）。不传则查我自己的课"},
                     "weekday": {"type": "integer", "description": "可选，星期几：1=周一…7=周日"},
                     "semester": {"type": "string", "description": "可选，学期如 2025-2026-2，不传则用当前学期"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_class_attendance",
-            "description": "查询我所教某门课的出勤概况：点名次数、到课率、旷课人次、缺勤最多的学生。教师说'这门课出勤怎么样''谁总是不来上课''到课率多少'时调用",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "course_name": {"type": "string", "description": "课程名称（支持模糊），与 course_id 二选一"},
-                    "course_id": {"type": "integer", "description": "课程ID"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_attendance_roster",
-            "description": "查询某门课某一天的应到学生名单，并标出当天已批假的学生。用于点名前预览，或教师说'今天这门课谁该到''帮我看看有没有人请假'时调用",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "course_name": {"type": "string", "description": "课程名称（支持模糊）"},
-                    "course_id": {"type": "integer", "description": "课程ID"},
-                    "attend_date": {"type": "string", "description": "日期 YYYY-MM-DD，不传则今天"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_homework_status",
-            "description": "查询作业的提交与批改情况：应交多少人、已交多少、未交名单。教师说'这次作业交了多少''谁没交作业''作业批改完了吗'时调用",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "course_name": {"type": "string", "description": "可选，课程名称（支持模糊）"},
-                    "course_id": {"type": "integer", "description": "可选，课程ID"},
-                    "homework_title": {"type": "string", "description": "可选，作业标题关键词；不传则取最近一次作业"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_class_grade",
-            "description": "查询我所教某门课的成绩概况：均分、最高最低分、及格率、分数段分布、不及格名单。教师说'这门课考得怎么样''有多少人不及格''平均分多少'时调用",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "course_name": {"type": "string", "description": "课程名称（支持模糊），与 course_id 二选一"},
-                    "course_id": {"type": "integer", "description": "课程ID"},
-                    "pass_line": {"type": "number", "description": "可选，及格线，默认60"}
                 },
                 "required": []
             }
