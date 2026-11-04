@@ -15,6 +15,7 @@ from app.api.admin.xique import router as _xique_router
 from app.api.admin.dashboard import router as _dashboard_router
 from app.api.admin.feeds import router as _feeds_router
 from app.api.admin.media_accounts import router as _media_accounts_router
+from app.api.admin.media_station import router as _media_station_router
 from app.api.admin.system import router as _system_router
 from app.api.admin.tasks import router as _tasks_router
 from app.api.admin.password_reset import router as _password_reset_router
@@ -29,6 +30,7 @@ router.include_router(_xique_router)
 router.include_router(_dashboard_router)
 router.include_router(_feeds_router)
 router.include_router(_media_accounts_router)
+router.include_router(_media_station_router)
 router.include_router(_system_router)
 router.include_router(_tasks_router)
 router.include_router(_password_reset_router)

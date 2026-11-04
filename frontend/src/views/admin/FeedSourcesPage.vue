@@ -27,7 +27,7 @@
       <div class="stat-card">
         <div class="stat-label">最近抓取</div>
         <div class="stat-value small">{{ latestIngest }}</div>
-        <div class="stat-desc">后台每 30 分钟自动抓取</div>
+        <div class="stat-desc">后台按资讯站设置的节奏自动抓取</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">覆盖分类</div>
@@ -158,37 +158,123 @@
         <el-empty v-else-if="!itemsLoading" description="暂无资讯条目，点击上方「触发抓取」获取" />
       </el-tab-pane>
 
-      <!-- ============ 资讯账号画板：分类源节点 + 虚线连线 + 可拖拽账号卡片 ============ -->
+      <!-- ============ 资讯账号画布：资讯站 → 账号 → 资讯源连接 三级图谱 ============ -->
       <el-tab-pane label="账号管理" name="accounts">
         <div class="filter-bar">
-          <el-select v-model="accountEnabledFilter" placeholder="按状态筛选" clearable style="width: 150px" @change="loadAccounts">
-            <el-option label="启用" value="on" />
-            <el-option label="停用" value="off" />
-          </el-select>
-          <el-button :loading="accountsLoading" @click="loadAccounts">查询</el-button>
-          <el-button @click="boardRef?.resetLayout()">重置布局</el-button>
+          <span class="board-note">绵小城 AI 资讯站 → 资讯账号 → 资讯源连接：画布上可缩放、新增/删除、断开/重连，断开不影响内容保留</span>
           <div class="filter-spacer"></div>
+          <el-button :loading="graphLoading" :icon="RefreshCw" @click="loadGraph">刷新图谱</el-button>
           <el-button type="primary" :icon="Plus" @click="showAccountDialog()">新增资讯账号</el-button>
         </div>
 
         <MediaAccountBoard
+          v-if="graph"
           ref="boardRef"
-          :accounts="accounts"
+          :station="graph.station"
+          :accounts="graph.accounts"
+          :sources="graph.sources"
           :publishing-id="publishingId"
+          @open-station="openStationDialog"
+          @add-account="showAccountDialog()"
+          @edit-account="showAccountDialog"
+          @toggle-account="toggleAccount"
+          @remove-account="removeAccount"
           @publish="publishNow"
-          @edit="showAccountDialog"
-          @toggle="toggleAccount"
-          @remove="removeAccount"
+          @toggle-station-link="toggleStationLink"
+          @open-link-picker="openLinkPicker"
+          @remove-link="removeLink"
+          @edit-source="editSourceById"
+          @remove-source="removeSourceById"
+          @refresh="handleRefreshFeeds"
         />
-        <el-empty v-if="!accountsLoading && accounts.length === 0" description="暂无资讯账号，新增后自动在交流社区发布资讯帖" />
+        <div v-else v-loading="graphLoading" class="board-placeholder"></div>
+        <el-empty
+          v-if="graph && !graphLoading && graph.accounts.length === 0"
+          description="暂无资讯账号：点击画布根节点「＋」或右上角「新增资讯账号」开始搭建"
+        />
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 资讯站（画布根节点）设置：抓取节奏 / 发帖模式 -->
+    <el-dialog v-model="stationDialogVisible" title="绵小城 AI 资讯站 · 站点设置" width="560px">
+      <el-form :model="stationForm" label-width="96px">
+        <el-form-item label="站点名称" required>
+          <el-input v-model="stationForm.name" maxlength="60" show-word-limit placeholder="绵小城 AI 资讯站" />
+        </el-form-item>
+        <el-form-item label="站点说明">
+          <el-input v-model="stationForm.description" maxlength="200" placeholder="可选，展示在画布根节点上" />
+        </el-form-item>
+        <el-form-item label="抓取时间">
+          <el-select v-model="stationForm.ingest_interval_minutes" style="width: 180px">
+            <el-option v-for="o in INGEST_INTERVAL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+          <span class="form-hint">后台按此节奏轮询已启用的资讯源</span>
+        </el-form-item>
+        <el-form-item label="每日汇总">
+          <el-select v-model="stationForm.digest_hour" style="width: 180px">
+            <el-option v-for="h in 24" :key="h" :label="`${String(h - 1).padStart(2, '0')}:00`" :value="h - 1" />
+          </el-select>
+          <span class="form-hint">到达该时刻后为每个已接入账号补发当天汇总帖</span>
+        </el-form-item>
+        <el-form-item label="发帖模式">
+          <el-select v-model="stationForm.publish_mode" style="width: 180px">
+            <el-option v-for="o in PUBLISH_MODE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+          <span class="form-hint">逐条+汇总 / 仅每日汇总 / 仅管理员手动发布</span>
+        </el-form-item>
+        <el-form-item label="站点总开关">
+          <el-switch v-model="stationForm.is_enabled" />
+          <span class="form-hint">关闭后停止抓取与自动发帖，并隐藏社区中的资讯账号内容</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="stationDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="stationSaving" @click="handleStationSave">保存设置</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 连接已有资讯源（画布账号节点「＋」） -->
+    <el-dialog v-model="linkDialogVisible" title="连接资讯源" width="520px">
+      <el-form :model="linkForm" label-width="90px">
+        <el-form-item label="资讯账号">
+          <span class="form-static">{{ linkTarget?.name || '' }}</span>
+        </el-form-item>
+        <el-form-item label="资讯源" required>
+          <el-select
+            v-model="linkForm.feed_source_id"
+            filterable
+            placeholder="选择要连接的资讯源"
+            style="width: 100%"
+            @change="onLinkSourceChange"
+          >
+            <el-option
+              v-for="s in linkableSources"
+              :key="s.id"
+              :label="`${s.name} · ${typeLabel(s.source_type)}`"
+              :value="s.id"
+            >
+              <span class="link-opt">{{ s.name }}</span>
+              <span class="link-opt-type">{{ typeLabel(s.source_type) }}</span>
+            </el-option>
+          </el-select>
+          <span v-if="linkableSources.length === 0" class="form-hint">没有可连接的资讯源，请先「新建资讯源」</span>
+        </el-form-item>
+        <el-form-item label="连接名">
+          <el-input v-model="linkForm.name" maxlength="60" placeholder="给这条连接起个名字，默认取源名称" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="openCreateSourceForAccount(linkTarget)">新建资讯源</el-button>
+        <el-button @click="linkDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="linkSaving" :disabled="!linkForm.feed_source_id" @click="handleLinkSave">连接</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 新增 / 编辑资讯账号 -->
     <el-dialog v-model="accountDialogVisible" :title="editingAccountId ? '编辑资讯账号' : '新增资讯账号'" width="560px">
       <el-form ref="accountFormRef" :model="accountForm" :rules="accountRules" label-width="90px">
         <el-form-item label="名称" prop="name">
-          <el-input v-model="accountForm.name" maxlength="20" show-word-limit placeholder="展示在帖子作者位的名称，如：绵小城资讯站" />
+          <el-input v-model="accountForm.name" maxlength="20" show-word-limit placeholder="展示在帖子作者位的名称，如：绵小城时政小助手" />
         </el-form-item>
         <el-form-item label="头像" prop="avatar">
           <div class="avatar-row">
@@ -233,12 +319,14 @@
           <el-input v-model="form.name" placeholder="如：某某科技官方" />
         </el-form-item>
         <el-form-item label="类型" required>
-          <el-select v-model="form.kind" style="width: 160px">
-            <el-option v-for="k in KIND_OPTIONS" :key="k.value" :label="k.label" :value="k.value" />
-          </el-select>
-          <el-select v-model="form.source_type" style="width: 180px; margin-left: 10px">
-            <el-option v-for="t in FEED_TYPES" :key="t.key" :label="t.label" :value="t.key" />
-          </el-select>
+          <div class="form-inline">
+            <el-select v-model="form.kind">
+              <el-option v-for="k in KIND_OPTIONS" :key="k.value" :label="k.label" :value="k.value" />
+            </el-select>
+            <el-select v-model="form.source_type">
+              <el-option v-for="t in FEED_TYPES" :key="t.key" :label="t.label" :value="t.key" />
+            </el-select>
+          </div>
         </el-form-item>
         <el-form-item label="地址" required>
           <el-input v-model="form.url" placeholder="https:// RSS 订阅或网页地址" />
@@ -252,6 +340,27 @@
         <el-form-item label="每条上限">
           <el-input-number v-model="form.per_page" :min="1" :max="50" controls-position="right" />
         </el-form-item>
+        <el-form-item label="启用状态">
+          <el-switch v-model="form.enabled" />
+          <span class="form-hint">启用后参与后台抓取</span>
+        </el-form-item>
+        <template v-if="!editingId">
+          <el-divider content-position="left">账号连接（可选）</el-divider>
+          <el-form-item label="归属账号">
+            <el-select v-model="form.account_id" clearable placeholder="选择要连接的资讯账号" style="width: 100%">
+              <el-option
+                v-for="a in accounts"
+                :key="a.id"
+                :label="`${a.name} · @${a.username}`"
+                :value="a.id"
+              />
+            </el-select>
+            <span class="form-hint">选择后保存时自动建立「账号 → 资讯源」连接线，学生端/教师端仅展示已接入账号的内容</span>
+          </el-form-item>
+          <el-form-item v-if="form.account_id" label="连接名">
+            <el-input v-model="form.link_name" maxlength="60" placeholder="默认取资讯源名称，可自定义画布连线名称" />
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -269,9 +378,11 @@ import MediaAccountBoard from '@/components/admin/MediaAccountBoard.vue'
 import {
   getAdminFeedSources, createAdminFeedSource, updateAdminFeedSource, deleteAdminFeedSource,
   getAdminFeedItems, updateAdminFeedItem, deleteAdminFeedItem, refreshAdminFeeds,
-  getAdminMediaAccounts, createAdminMediaAccount, updateAdminMediaAccount,
+  getMediaGraph, updateMediaStation, setMediaAccountStationLink, createMediaSourceLink,
+  deleteMediaSourceLink, createAdminMediaAccount, updateAdminMediaAccount,
   deleteAdminMediaAccount, publishMediaDigest,
   type AdminFeedSource, type AdminFeedItem, type FeedSourceType, type MediaAccount,
+  type MediaAccountGraph, type MediaGraph, type MediaStationConfig, type MediaSourceLink,
 } from '@/api/admin'
 
 const FEED_TYPES: { key: FeedSourceType; label: string }[] = [
@@ -305,6 +416,23 @@ const RELAY_FREQ_OPTIONS = [
 ]
 
 const activeTab = ref('sources')
+
+// 资讯站抓取节奏 / 发帖模式选项
+const INGEST_INTERVAL_OPTIONS = [
+  { value: 5, label: '每 5 分钟' },
+  { value: 15, label: '每 15 分钟' },
+  { value: 30, label: '每 30 分钟' },
+  { value: 60, label: '每 1 小时' },
+  { value: 180, label: '每 3 小时' },
+  { value: 360, label: '每 6 小时' },
+  { value: 720, label: '每 12 小时' },
+  { value: 1440, label: '每天 1 次' },
+]
+const PUBLISH_MODE_OPTIONS = [
+  { value: 'auto', label: '逐条转发 + 每日汇总' },
+  { value: 'digest', label: '仅每日汇总' },
+  { value: 'manual', label: '仅管理员手动发布' },
+]
 
 // ---------- 资讯源 ----------
 const sources = ref<AdminFeedSource[]>([])
@@ -350,15 +478,30 @@ const form = ref({
   query: '',
   filter_kw_text: '',
   per_page: 10,
+  enabled: true,
+  account_id: null as number | null,
+  link_name: '',
 })
 
 function resetForm() {
-  form.value = { name: '', kind: 'rss', source_type: 'ai_news', url: '', query: '', filter_kw_text: '', per_page: 10 }
+  form.value = {
+    name: '', kind: 'rss', source_type: 'ai_news', url: '', query: '', filter_kw_text: '',
+    per_page: 10, enabled: true, account_id: null, link_name: '',
+  }
 }
 
 function showAddDialog() {
   editingId.value = null
   resetForm()
+  dialogVisible.value = true
+}
+
+/** 从画布账号节点「新建资讯源」进入：预先绑定归属账号，保存时自动建立连接线 */
+function openCreateSourceForAccount(row?: MediaAccountGraph | null) {
+  editingId.value = null
+  resetForm()
+  if (row) form.value.account_id = row.id
+  linkDialogVisible.value = false
   dialogVisible.value = true
 }
 
@@ -372,6 +515,9 @@ function showEditDialog(row: AdminFeedSource) {
     query: row.query || '',
     filter_kw_text: (row.filter_kw || []).join(','),
     per_page: row.per_page,
+    enabled: row.enabled,
+    account_id: null,
+    link_name: '',
   }
   dialogVisible.value = true
 }
@@ -394,10 +540,11 @@ async function handleSave() {
         query: form.value.query.trim() || null,
         filter_kw,
         per_page: form.value.per_page,
+        enabled: form.value.enabled,
       })
       ElMessage.success('已更新')
     } else {
-      await createAdminFeedSource({
+      const created = await createAdminFeedSource({
         name: form.value.name.trim(),
         kind: form.value.kind as AdminFeedSource['kind'],
         source_type: form.value.source_type,
@@ -405,11 +552,23 @@ async function handleSave() {
         query: form.value.query.trim() || null,
         filter_kw,
         per_page: form.value.per_page,
+        enabled: form.value.enabled,
       })
-      ElMessage.success('已新增，触发抓取后生效')
+      // 归属账号：新增资讯源时顺手建立「账号 → 资讯源」连接线，连接名可自定义
+      if (form.value.account_id) {
+        await createMediaSourceLink(form.value.account_id, {
+          feed_source_id: created.id,
+          name: form.value.link_name.trim() || form.value.name.trim(),
+        })
+      }
+      ElMessage.success(
+        form.value.account_id
+          ? `已新增并连接到资讯账号「${accounts.value.find((a) => a.id === form.value.account_id)?.name || ''}」`
+          : '已新增，可在画布「＋ 连接」绑定资讯账号',
+      )
     }
     dialogVisible.value = false
-    await loadSources()
+    await reloadAll()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || '保存失败')
   } finally {
@@ -502,24 +661,154 @@ async function removeItem(row: AdminFeedItem) {
   }
 }
 
-// ---------- 资讯账号 ----------
-const accounts = ref<MediaAccount[]>([])
-const accountsLoading = ref(false)
-const accountEnabledFilter = ref<'on' | 'off' | ''>('')
+// ---------- 资讯账号图谱（资讯站 → 账号 → 资讯源连接） ----------
+const graph = ref<MediaGraph | null>(null)
+const graphLoading = ref(false)
+const accounts = computed<MediaAccountGraph[]>(() => graph.value?.accounts ?? [])
 const publishingId = ref<number | null>(null)
 const boardRef = ref<InstanceType<typeof MediaAccountBoard>>()
 
-async function loadAccounts() {
-  accountsLoading.value = true
+async function loadGraph() {
+  graphLoading.value = true
   try {
-    let list = await getAdminMediaAccounts()
-    if (accountEnabledFilter.value === 'on') list = list.filter((a) => a.is_enabled)
-    if (accountEnabledFilter.value === 'off') list = list.filter((a) => !a.is_enabled)
-    accounts.value = list
+    graph.value = await getMediaGraph()
   } catch {
-    ElMessage.error('加载资讯账号失败')
+    ElMessage.error('加载资讯图谱失败')
   } finally {
-    accountsLoading.value = false
+    graphLoading.value = false
+  }
+}
+
+// ---------- 资讯站（根节点）设置 ----------
+const stationDialogVisible = ref(false)
+const stationSaving = ref(false)
+const stationForm = ref({
+  name: '绵小城 AI 资讯站',
+  description: '',
+  is_enabled: true,
+  ingest_interval_minutes: 30,
+  digest_hour: 8,
+  publish_mode: 'auto' as MediaStationConfig['publish_mode'],
+})
+
+function openStationDialog() {
+  const s = graph.value?.station
+  stationForm.value = {
+    name: s?.name || '绵小城 AI 资讯站',
+    description: s?.description || '',
+    is_enabled: s?.is_enabled ?? true,
+    ingest_interval_minutes: s?.ingest_interval_minutes ?? 30,
+    digest_hour: s?.digest_hour ?? 8,
+    publish_mode: s?.publish_mode || 'auto',
+  }
+  stationDialogVisible.value = true
+}
+
+async function handleStationSave() {
+  if (!stationForm.value.name.trim()) {
+    ElMessage.warning('站点名称不能为空')
+    return
+  }
+  stationSaving.value = true
+  try {
+    await updateMediaStation({
+      name: stationForm.value.name.trim(),
+      description: stationForm.value.description.trim() || null,
+      is_enabled: stationForm.value.is_enabled,
+      ingest_interval_minutes: stationForm.value.ingest_interval_minutes,
+      digest_hour: stationForm.value.digest_hour,
+      publish_mode: stationForm.value.publish_mode,
+    })
+    ElMessage.success('站点设置已保存')
+    stationDialogVisible.value = false
+    await loadGraph()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '保存失败')
+  } finally {
+    stationSaving.value = false
+  }
+}
+
+// ---------- 画布连接线：接入 / 断开 资讯站 ----------
+async function toggleStationLink(row: MediaAccountGraph, connected: boolean) {
+  if (!connected) {
+    try {
+      await ElMessageBox.confirm(
+        `断开「${row.name}」与资讯站的连接？账号内容与历史帖子都会保留，学生端/教师端将不再展示该账号，随时可在画布上重新接入。`,
+        '断开连接',
+        { type: 'warning', confirmButtonText: '断开', cancelButtonText: '取消' },
+      )
+    } catch {
+      return
+    }
+  }
+  try {
+    await setMediaAccountStationLink(row.id, connected)
+    ElMessage.success(connected ? '已接入资讯站' : '已断开连接（内容保留）')
+    await loadGraph()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '操作失败')
+  }
+}
+
+// ---------- 连接已有资讯源 ----------
+const linkDialogVisible = ref(false)
+const linkSaving = ref(false)
+const linkTarget = ref<MediaAccountGraph | null>(null)
+const linkForm = ref<{ feed_source_id: number | null; name: string }>({ feed_source_id: null, name: '' })
+
+const linkableSources = computed(() => {
+  const all = graph.value?.sources ?? []
+  const linkedIds = new Set((linkTarget.value?.links || []).map((l) => l.feed_source_id))
+  return all.filter((s) => !linkedIds.has(s.id))
+})
+
+function openLinkPicker(row: MediaAccountGraph) {
+  linkTarget.value = row
+  linkForm.value = { feed_source_id: null, name: '' }
+  linkDialogVisible.value = true
+}
+
+function onLinkSourceChange(id: number) {
+  const src = graph.value?.sources.find((s) => s.id === id)
+  if (src && !linkForm.value.name.trim()) linkForm.value.name = src.name
+}
+
+async function handleLinkSave() {
+  const target = linkTarget.value
+  if (!target || !linkForm.value.feed_source_id) return
+  linkSaving.value = true
+  try {
+    await createMediaSourceLink(target.id, {
+      feed_source_id: linkForm.value.feed_source_id,
+      name: linkForm.value.name.trim() || null,
+    })
+    ElMessage.success('已连接资讯源')
+    linkDialogVisible.value = false
+    await loadGraph()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '连接失败')
+  } finally {
+    linkSaving.value = false
+  }
+}
+
+async function removeLink(link: MediaSourceLink) {
+  try {
+    await ElMessageBox.confirm(
+      `断开「${link.name}」这条连接线？资讯源「${link.source_name}」及已抓取内容都会保留，可随时重新连接。`,
+      '断开连接线',
+      { type: 'warning', confirmButtonText: '断开', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteMediaSourceLink(link.id)
+    ElMessage.success('已断开连接线（内容保留）')
+    await loadGraph()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '操作失败')
   }
 }
 
@@ -540,7 +829,7 @@ const accountRules: FormRules = {
   name: [{ required: true, message: '请填写账号名称', trigger: 'blur' }],
 }
 
-function showAccountDialog(row?: MediaAccount) {
+function showAccountDialog(row?: MediaAccount | MediaAccountGraph) {
   editingAccountId.value = row ? row.id : null
   accountForm.value = row
     ? {
@@ -573,10 +862,10 @@ async function handleAccountSave() {
       ElMessage.success('已更新')
     } else {
       await createAdminMediaAccount(body)
-      ElMessage.success('已新增资讯账号')
+      ElMessage.success('已新增资讯账号，请用画布「＋ 连接」挂载资讯源')
     }
     accountDialogVisible.value = false
-    await loadAccounts()
+    await loadGraph()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || '保存失败')
   } finally {
@@ -588,7 +877,7 @@ async function toggleAccount(row: MediaAccount) {
   try {
     await updateAdminMediaAccount(row.id, { is_enabled: !row.is_enabled })
     ElMessage.success(row.is_enabled ? '已停用' : '已启用')
-    await loadAccounts()
+    await loadGraph()
   } catch {
     ElMessage.error('操作失败')
   }
@@ -600,7 +889,7 @@ async function publishNow(row: MediaAccount) {
     const res = await publishMediaDigest(row.id)
     if (res.posted) {
       ElMessage.success(`已发布「${res.title}」`)
-      await loadAccounts()
+      await loadGraph()
     } else {
       // 今日已发过：询问是否覆盖重发
       try {
@@ -611,7 +900,7 @@ async function publishNow(row: MediaAccount) {
       const forced = await publishMediaDigest(row.id, true)
       if (forced.posted) {
         ElMessage.success(`已覆盖发布「${forced.title}」`)
-        await loadAccounts()
+        await loadGraph()
       } else {
         ElMessage.info(forced.message)
       }
@@ -626,7 +915,7 @@ async function publishNow(row: MediaAccount) {
 async function removeAccount(row: MediaAccount) {
   try {
     await ElMessageBox.confirm(
-      `确认删除资讯账号「${row.name}」？该账号已发布的帖子与互动数据将一并删除，不可恢复。`,
+      `确认删除资讯账号「${row.name}」？该账号的连接线、已发布的帖子与互动数据将一并删除，不可恢复。`,
       '删除确认',
       { type: 'warning' },
     )
@@ -636,7 +925,38 @@ async function removeAccount(row: MediaAccount) {
   try {
     await deleteAdminMediaAccount(row.id)
     ElMessage.success('已删除')
-    await loadAccounts()
+    await loadGraph()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '删除失败')
+  }
+}
+
+// ---------- 画布资讯源节点：编辑 / 删除 ----------
+async function editSourceById(sourceId: number) {
+  let src = sources.value.find((s) => s.id === sourceId)
+  if (!src) {
+    sourceTypeFilter.value = ''
+    await loadSources()
+    src = sources.value.find((s) => s.id === sourceId)
+  }
+  if (src) showEditDialog(src)
+  else ElMessage.warning('资讯源不存在或已被删除')
+}
+
+async function removeSourceById(sourceId: number, sourceName: string) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除资讯源「${sourceName}」？该源已抓取的条目会一并清除，且所有账号上的连接线失效，不可恢复。`,
+      '删除资讯源',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteAdminFeedSource(sourceId)
+    ElMessage.success('已删除资讯源')
+    await reloadAll()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || '删除失败')
   }
@@ -666,7 +986,7 @@ async function loadOverview() {
 }
 
 async function reloadAll() {
-  await Promise.all([loadSources(), loadItems(), loadOverview(), loadAccounts()])
+  await Promise.all([loadSources(), loadItems(), loadOverview(), loadGraph()])
 }
 
 // ---------- 工具 ----------
@@ -791,8 +1111,44 @@ onMounted(() => {
   gap: 10px;
   width: 100%;
 }
+/* 同一行并排的下拉：等宽平分并留出间距，避免小屏换行后上下贴在一起 */
+.form-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.form-inline :deep(.el-select) {
+  flex: 1;
+  min-width: 0;
+}
 .form-hint {
   margin-left: 10px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.board-note {
+  font-size: 12.5px;
+  color: #8a94a6;
+  line-height: 1.7;
+}
+.board-placeholder {
+  height: clamp(520px, 62vh, 760px);
+  border: 1px dashed #e3e8f7;
+  border-radius: 12px;
+  background: #fbfcff;
+}
+.form-static {
+  font-size: 13px;
+  color: #334155;
+}
+.link-opt {
+  color: #334155;
+}
+.link-opt-type {
+  float: right;
+  margin-left: 12px;
   font-size: 12px;
   color: #94a3b8;
 }

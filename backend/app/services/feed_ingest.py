@@ -697,17 +697,39 @@ def _trim(db: Session) -> None:
 
 def ingest_all(only: str | None = None) -> dict:
     """入口：从 feed_sources 读取启用的源，动态抓取并入库。返回统计。
-    only 为 source_type 时仅抓该分类。"""
+    only 为 source_type 时仅抓该分类。
+
+    画布连接即抓取范围：只抓取「已接入资讯站且启用」的账号所连接的资讯源；
+    若系统尚无任何启用账号，则回落到抓取全部启用源，避免校园资讯空窗。
+    """
     db = SessionLocal()
     stats = {"inserted": 0, "sources": {}, "errors": []}
     try:
         sync_builtin_sources(db)
+        from app.models.media import MediaAccount
+        from app.services.media_account_service import (
+            ensure_station_graph, get_station_config, linked_source_ids,
+        )
+
+        ensure_station_graph(db)
+        station = get_station_config(db)
+        if not station.is_enabled:
+            logger.warning("资讯站已停用，跳过本轮抓取")
+            return stats
         query = db.query(FeedSource).filter(FeedSource.enabled == True).order_by(FeedSource.sort_order, FeedSource.id)
         if only:
             query = query.filter(FeedSource.source_type == only)
         sources = query.all()
+        has_active_account = db.query(MediaAccount.id).filter(
+            MediaAccount.is_enabled.is_(True),
+            MediaAccount.station_connected.is_(True),
+        ).first() is not None
+        if has_active_account:
+            # 只保留画布上真实连到账号的资讯源
+            linked = linked_source_ids(db)
+            sources = [s for s in sources if s.id in linked]
         if not sources:
-            logger.warning("没有启用的资讯源")
+            logger.warning("画布上没有已连接的启用的资讯源，跳过抓取")
         for src in sources:
             try:
                 items = _fetch_one(db, src)

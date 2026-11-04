@@ -32,6 +32,7 @@ class MediaAccountOut(BaseModel):
     avatar: str | None = None
     signature: str | None = None
     is_enabled: bool = True
+    station_connected: bool = True
     content_scope: list[str] | None = None
     relay_interval_minutes: int = 30
     post_count: int = 0
@@ -47,3 +48,31 @@ class MediaPublishResult(BaseModel):
     message: str
     post_id: int | None = None
     title: str | None = None
+
+
+class MediaStationUpdate(BaseModel):
+    """资讯站（画布根节点）配置更新。"""
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    is_enabled: bool | None = None
+    ingest_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
+    digest_hour: int | None = Field(default=None, ge=0, le=23)
+    publish_mode: str | None = Field(default=None, pattern="^(auto|digest|manual)$")
+    description: str | None = Field(default=None, max_length=200)
+
+
+class MediaStationLinkToggle(BaseModel):
+    """资讯站 ↔ 资讯账号 连接线开合。"""
+    connected: bool
+
+
+class MediaSourceLinkCreate(BaseModel):
+    """资讯账号 → 资讯源 连接线创建。"""
+    feed_source_id: int
+    name: str | None = Field(default=None, max_length=60)
+
+
+class MediaSourceLinkUpdate(BaseModel):
+    """连接线重命名 / 开合。"""
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    enabled: bool | None = None
+

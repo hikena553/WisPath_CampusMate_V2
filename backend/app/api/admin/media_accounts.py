@@ -76,5 +76,7 @@ async def publish_media_digest(
     account, account_user = pair
     if not account.is_enabled:
         raise HTTPException(status_code=400, detail="账号已停用，请先启用再发布")
+    if not account.station_connected:
+        raise HTTPException(status_code=400, detail="账号未接入资讯站，请先在画布上重新连接")
     result = await media_account_service.publish_digest(db, account, account_user, force=force)
     return MediaPublishResult(**result)
