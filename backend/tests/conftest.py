@@ -54,6 +54,11 @@ from app.models.notification import Notification  # noqa: E402
 from app.models.feedback import Feedback  # noqa: E402
 from app.models.conversation import Conversation, ConversationMessage  # noqa: E402
 from app.models.crisis import AIDialogSummary  # noqa: E402
+from app.models.message import (  # noqa: E402
+    Message,
+    MessageSessionHidden,
+    MessageSessionPin,
+)
 from app.models.cron_task import AgentCronTask  # noqa: E402
 from app.models.profile import StudentProfileSnapshot  # noqa: E402
 from app.models.leave import LeaveRequest  # noqa: E402
@@ -148,6 +153,13 @@ def make_user(db):
                 )
             ).delete(synchronize_session=False)
             db.query(Conversation).filter(Conversation.user_id == u.id).delete()
+            # 私信表：双向都要清。sqlite 删除后主键会复用，残留的 (sender, receiver)
+            # 会命中后续用例新建的同 id 用户，导致「精确计数」断言误判（历史坑）。
+            db.query(Message).filter(
+                (Message.sender_id == u.id) | (Message.receiver_id == u.id)
+            ).delete(synchronize_session=False)
+            db.query(MessageSessionPin).filter(MessageSessionPin.user_id == u.id).delete()
+            db.query(MessageSessionHidden).filter(MessageSessionHidden.user_id == u.id).delete()
             db.query(AIDialogSummary).filter(AIDialogSummary.student_id == u.id).delete()
             db.query(StudentProfileSnapshot).filter(
                 StudentProfileSnapshot.student_id == u.id
