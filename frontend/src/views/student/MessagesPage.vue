@@ -1898,7 +1898,7 @@ function goFindPeople() {
   void router.push({ name: 'student-message-add' })
 }
 
-/** 我的文件：跳到跨会话文件汇总页（聊天里发过的文件 / 图片 / 语音）。
+/** 我的文件：跳到跨会话文档汇总页（聊天里发过的文件；图片和语音留在聊天里看）。
  *  原先是挂在旧「工作台」里的子页，工作台下线后独立成 /student/files。 */
 function openMyFiles() {
   plusOpen.value = false

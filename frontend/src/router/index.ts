@@ -80,10 +80,11 @@ const router = createRouter({
               ? { path: '/student/files', query: {} }
               : { path: '/student/messages' },
         },
-        // 我的文件：聊天里发过的文件 / 图片 / 语音汇总（原工作台的 files 子页）
+        // 我的文件：聊天里发过的文档汇总（原工作台的 files 子页）；图片与语音不进这一页
         { path: 'files', name: 'student-files', component: () => import('@/views/student/MyFilesPage.vue'), meta: { keepAlive: false } },
-        // 失物招领：原工作台宫格里的业务，工作台下线后独立成页（入口在学业中心 · 请假服务）
-        { path: 'lost-found', name: 'student-lost-found', component: () => import('@/views/student/LostFoundPage.vue'), meta: { keepAlive: false } },
+        // 失物招领已并入交流社区（社区分区行里的「失物 / 招领」两个胶囊），独立页下线；
+        // 旧地址仍可用：落地即切到社区页签并选中「失物」
+        { path: 'lost-found', name: 'student-lost-found', redirect: { path: '/student/campus', query: { tab: 'community', chip: 'lost' } } },
         // 消息：原「工作台」页签位，统筹会话（私聊 / 群聊）、通讯录（关注·粉丝·互关好友）与论坛互动消息
         { path: 'messages', name: 'student-messages', component: () => import('@/views/student/MessagesPage.vue'), meta: { keepAlive: false } },
         // 消息页的两个主视图各有地址：/student/messages = 会话，/student/messages/friends = 好友。
@@ -148,6 +149,10 @@ const router = createRouter({
         { path: 'more', redirect: '/teacher' },
         { path: 'announcement', name: 'teacher-announcement', component: () => import('@/views/teacher/AnnouncementPage.vue'), meta: { keepAlive: false } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
+        // 消息页的两个子页（与学生端同构）：我的文件（聊天文档汇总，复用学生端同一组件）
+        // 与通知（审批/预警/公告，从消息页第四个视图抽出，入口是页头铃铛）。
+        { path: 'files', name: 'teacher-files', component: () => import('@/views/student/MyFilesPage.vue'), meta: { keepAlive: false } },
+        { path: 'notifications', name: 'teacher-notifications', component: () => import('@/views/teacher/NotificationsPage.vue'), meta: { keepAlive: false } },
         { path: 'profile', name: 'teacher-profile', component: () => import('@/views/teacher/ProfilePage.vue'), meta: { keepAlive: false } },
         // ===== 教师端三合一新增：个人工作台（我的成长）+ 我的课表 =====
         { path: 'growth', name: 'teacher-growth', component: () => import('@/views/teacher/MyGrowthPage.vue'), meta: { keepAlive: false } },

@@ -3,6 +3,40 @@ import { getToken } from '@/utils/token'
 
 export type VoiceState = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error'
 
+/** 超时类失败：文案本身就是可执行提示，不再被 describeMediaError 二次包装 */
+class VoiceTimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VoiceTimeoutError'
+  }
+}
+
+/** 给浏览器 API 加超时：这类调用在异常内核里可能既不 resolve 也不 reject */
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let done = false
+    const timer = setTimeout(() => {
+      if (done) return
+      done = true
+      reject(new VoiceTimeoutError(message))
+    }, ms)
+    p.then(
+      (v) => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        reject(e)
+      },
+    )
+  })
+}
+
 export interface UseVoiceCallOptions {
   conversationId?: number | null
   onStateChange?: (state: VoiceState) => void
@@ -75,6 +109,11 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   const PREROLL_SAMPLES = 4800  // 300ms @16kHz
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
+  // 手机侧最容易踩的两处「既不成功也不报错」：WebSocket 握手悬在 CONNECTING、
+  // getUserMedia 永不 settle（微信 X5 / 部分安卓内核在权限弹窗被忽略时如此）。
+  // 没有超时兜底时前端会永远停在「正在接通…」，用户只看到一直转圈。
+  const CONNECT_TIMEOUT_MS = 8000
+  const CAPTURE_TIMEOUT_MS = 8000
   // 音频上传节流：合并小块音频再发送，避免高频消息挤占 WebSocket，
   // 延迟回答文字/语音的回传（豆包等实时方案的共同做法：音频通道限流保活）
   const AUDIO_FLUSH_INTERVAL_MS = 60    // 至多每 60ms 发一包
@@ -173,11 +212,38 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
   function connectWs(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const finish = (err?: Error) => {
+        if (settled) return
+        settled = true
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+        if (err) reject(err)
+        else resolve()
+      }
+
       ws = new WebSocket(getWsUrl())
+
+      // 握手兜底：弱网、代理没放行 Upgrade、手机切换 Wi-Fi/蜂窝时，socket 可能长期停在
+      // CONNECTING（既不 open 也不 error），startCall 就一直 await 在这里 —— 浮层永远
+      // 显示「正在接通…」。超时后主动关掉并给出可执行提示。
+      timer = setTimeout(() => {
+        if (ws && ws.readyState !== WebSocket.OPEN) {
+          try {
+            ws.close()
+          } catch {
+            // 已关闭的套接字忽略
+          }
+          finish(new VoiceTimeoutError('语音通道连接超时，请检查网络后重试'))
+        }
+      }, CONNECT_TIMEOUT_MS)
 
       ws.onopen = () => {
         reconnectAttempts = 0
-        resolve()
+        finish()
       }
 
       ws.onmessage = (event) => {
@@ -190,13 +256,23 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       }
 
       ws.onclose = (event) => {
+        const isReject = event.code === 4001 || event.code === 4004 || event.code === 4002
+        const reason =
+          event.reason || (event.code === 4002 ? '连接过于频繁，请稍后再试' : '认证失败')
+
         // 4001 认证失败 / 4004 会话不存在 / 4002 限流：都属于「重连也没用」的
         // 确定性拒绝，必须直接停在 error 态并展示原因。此前 4002 会进入指数退避
         // 重连，而重连本身又消耗限流额度，移动端反复点电话就会一直「连接失败」。
-        if (event.code === 4001 || event.code === 4004 || event.code === 4002) {
-          error.value = event.reason || (event.code === 4002 ? '连接过于频繁，请稍后再试' : '认证失败')
+        if (isReject) {
+          error.value = reason
           setState('error')
           options.onError?.(error.value)
+        }
+
+        // 还在握手阶段就断开：让 connectWs 立刻收敛，否则 startCall 的 await 悬空，
+        // 浮层会同时「已 error 又一直转圈」（并泄漏一条 pending promise）
+        if (!settled) {
+          finish(isReject ? new Error(reason) : new VoiceTimeoutError('语音通道已断开，请重试'))
           return
         }
 
@@ -221,7 +297,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       }
 
       ws.onerror = () => {
-        reject(new Error('WebSocket 连接失败'))
+        finish(new Error('WebSocket 连接失败'))
       }
     })
   }
@@ -390,17 +466,32 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     const unsupported = checkSupport()
     if (unsupported) throw new Error(unsupported)
 
+    // 麦克风采集同样可能挂死：微信 X5 / 部分安卓内核在系统权限弹窗被忽略（或被
+    // 前台其它弹层压住）时，getUserMedia 既不 resolve 也不 reject，startCall 就永远
+    // 停在 connecting。此时服务端可能已经开始生成问候（浮层跳到「思考中…」），
+    // 用户看到的就是「一直转圈但没有任何提示」。
+    const streamPromise = navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    })
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      })
+      mediaStream = await withTimeout(
+        streamPromise,
+        CAPTURE_TIMEOUT_MS,
+        '麦克风 8 秒无响应：请检查系统或浏览器的麦克风权限弹窗（可能被其他窗口挡住），允许后重试',
+      )
     } catch (e) {
-      throw new Error(describeMediaError(e))
+      // 超时后浏览器仍可能迟一步把流给回来：立刻关掉，别让麦克风一直亮着
+      void streamPromise
+        .then((late) => {
+          if (!mediaStream) late.getTracks().forEach((t) => t.stop())
+        })
+        .catch(() => {})
+      throw e instanceof VoiceTimeoutError ? e : new Error(describeMediaError(e))
     }
 
     audioCtx = createAudioContext(16000)

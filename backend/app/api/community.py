@@ -165,6 +165,36 @@ def list_my_posts(
     return [_post_out(db, p, current_user) for p in posts]
 
 
+@router.get("/users/{user_id}/posts", response_model=list[CommunityPostOut])
+def list_user_posts(
+    user_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    before_id: int | None = Query(None, description="游标：只取 id 小于它的帖子（下一页）"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """某个用户发布的帖子：个人主页「TA 的动态」用。
+
+    与 /posts/mine 的差别只在作者是谁 —— 这里是「我看别人的主页」，
+    所以被查看的用户必须存在（否则主页会静默地少一块，看不出是空还是错）。
+
+    游标分页（before_id）而不是 page：主页是长页面，翻页期间有人发新帖会让
+    按 offset 分页出现重复/漏项；按 id 倒序取「比我手上最后一条更早的」不会重。
+    """
+    if not db.query(User.id).filter(User.id == user_id).first():
+        raise HTTPException(404, "用户不存在")
+    query = db.query(CommunityPost).filter(CommunityPost.student_id == user_id)
+    if before_id:
+        query = query.filter(CommunityPost.id < before_id)
+    posts = (
+        query.order_by(CommunityPost.created_at.desc(), CommunityPost.id.desc())
+        .limit(limit)
+        .all()
+    )
+    # with_content=False：主页卡片只显示摘要，正文留给帖子详情按需取
+    return [_post_out(db, p, current_user, with_content=False) for p in posts]
+
+
 @router.get("/posts/{post_id}", response_model=CommunityPostOut)
 def get_post(post_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post = db.query(CommunityPost).filter(CommunityPost.id == post_id).first()

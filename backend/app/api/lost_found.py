@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
@@ -17,7 +18,12 @@ from app.schemas.lost_found import (
 router = APIRouter(prefix="/api/lost-found", tags=["失物招领"])
 
 
-def _item_out(db: Session, item: LostFoundItem, with_comments: bool = False) -> LostFoundItemOut:
+def _item_out(
+    db: Session,
+    item: LostFoundItem,
+    with_comments: bool = False,
+    comment_count: int | None = None,
+) -> LostFoundItemOut:
     user = db.query(User).filter(User.id == item.user_id).first()
     comments = None
     if with_comments:
@@ -33,6 +39,17 @@ def _item_out(db: Session, item: LostFoundItem, with_comments: bool = False) -> 
                 content=c.content,
                 created_at=c.created_at,
             ))
+    # 列表接口会一次性聚合好留言数传进来；单条接口（详情 / 发布返回）没传就现查一次
+    if comment_count is None:
+        if comments is not None:
+            comment_count = len(comments)
+        else:
+            comment_count = (
+                db.query(func.count(LostFoundComment.id))
+                .filter(LostFoundComment.item_id == item.id)
+                .scalar()
+                or 0
+            )
     return LostFoundItemOut(
         id=item.id,
         user_id=item.user_id,
@@ -50,6 +67,7 @@ def _item_out(db: Session, item: LostFoundItem, with_comments: bool = False) -> 
         claimed_by=item.claimed_by,
         claimed_at=item.claimed_at,
         created_at=item.created_at,
+        comment_count=comment_count,
         comments=comments,
     )
 
@@ -58,6 +76,7 @@ def _item_out(db: Session, item: LostFoundItem, with_comments: bool = False) -> 
 def list_items(
     type: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    sort: str = Query(default="new", description="new（最新）/ hot（留言多的在前）"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -67,7 +86,20 @@ def list_items(
     if status:
         query = query.filter(LostFoundItem.status == status)
     items = query.order_by(LostFoundItem.created_at.desc()).all()
-    return [_item_out(db, it) for it in items]
+
+    # 留言数一次性聚合：既用于列表行右侧的计数，也是「最热」的排序依据。
+    # 详情页另有 with_comments 的完整留言，这里的计数口径与它一致（都是该条的全部留言）。
+    counts = dict(
+        db.query(LostFoundComment.item_id, func.count(LostFoundComment.id))
+        .group_by(LostFoundComment.item_id)
+        .all()
+    )
+    if sort == "hot":
+        # 留言多的在前；留言数相同的仍按时间倒序（Python 是稳定排序，
+        # 上面已按创建时间排好，这里只按计数降序再排一次即可）
+        items.sort(key=lambda it: counts.get(it.id, 0), reverse=True)
+
+    return [_item_out(db, it, comment_count=counts.get(it.id, 0)) for it in items]
 
 
 @router.get("/search")

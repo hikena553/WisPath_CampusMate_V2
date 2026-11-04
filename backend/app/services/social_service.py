@@ -6,10 +6,12 @@
   push_forum_message 一处，保证自赞/自评不打扰自己。
 """
 from datetime import datetime, timezone
+import json
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.community import CommunityPost
 from app.models.social import Follow, ForumMessage, ForumMessageKind
 from app.models.user import User
 
@@ -177,6 +179,39 @@ def actors_map(db: Session, messages: list[ForumMessage]) -> dict[int, User]:
         return {}
     ids = {m.actor_id for m in messages}
     return {u.id: u for u in db.query(User).filter(User.id.in_(ids)).all()}
+
+
+def post_covers_map(db: Session, messages: list[ForumMessage]) -> dict[int, str]:
+    """帖子的首图（互动消息行右侧缩略图）。
+
+    一次查完这一页涉及的所有帖子，避免逐条查（N+1）。
+    images 落库是 JSON 数组（最多 9 张），取第一张；脏数据 / 旧格式整串是 URL 时也能兜住。
+    """
+    post_ids = {m.post_id for m in messages if m.post_id}
+    if not post_ids:
+        return {}
+    rows = (
+        db.query(CommunityPost.id, CommunityPost.images)
+        .filter(CommunityPost.id.in_(post_ids))
+        .all()
+    )
+    covers: dict[int, str] = {}
+    for pid, images in rows:
+        url = ""
+        if images:
+            raw = images.strip()
+            if raw.startswith("["):
+                try:
+                    arr = json.loads(raw)
+                except ValueError:
+                    arr = []
+                if isinstance(arr, list) and arr:
+                    url = str(arr[0] or "")
+            elif raw.startswith(("http://", "https://", "/")):
+                url = raw
+        if url:
+            covers[pid] = url
+    return covers
 
 
 def contact_list(

@@ -225,7 +225,15 @@ import { actionConfirm } from '@/composables/useActionSheet'
 import { useAuthStore } from '@/stores/auth'
 import { parseServerTime } from '@/utils/datetime'
 
-const props = defineProps<{ postId: number }>()
+const props = withDefaults(defineProps<{
+  postId: number
+  /**
+   * 层级：默认 2600（挂在页面里）。
+   * 从个人主页浮层（UserHomepage，z-index 3100）上打开时要抬到 3200，
+   * 否则详情页会被主页整个盖住，点了像没反应。
+   */
+  zIndex?: number
+}>(), { zIndex: 2600 })
 const emit = defineEmits<{
   /** 开始退场（.subpage 300ms 右滑）：父页据此立刻让下层归位 */
   (e: 'close'): void
@@ -260,7 +268,7 @@ const scrolled = ref(false)
    与资讯详情同一套：软键盘只缩 visualViewport，fixed 底栏会被直接盖住，
    用布局高度与可视高度之差算出键盘高度写进 --kb-offset。 */
 const kbOffset = ref(0)
-const rootStyle = computed(() => ({ '--kb-offset': kbOffset.value + 'px' }))
+const rootStyle = computed(() => ({ '--kb-offset': kbOffset.value + 'px', zIndex: String(props.zIndex) }))
 let vv: VisualViewport | null = null
 function syncKeyboard() {
   if (!window.visualViewport) { kbOffset.value = 0; return }

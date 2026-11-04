@@ -70,10 +70,58 @@
                 <span v-for="p in mutualPills" :key="p">{{ p }}</span>
               </div>
 
+              <!-- 动态：TA 发过的帖子。放在勋章之前 ——「看过 TA 说过什么」比「拿了几枚勋章」
+                   更接近用户点开主页的目的；行版式与下方「资料」白组同构，不另起卡片流。 -->
+              <h3 class="uh-group-label">{{ isSelf ? '我的动态' : 'TA 的动态' }}</h3>
+
+              <div v-if="postsLoading" class="uh-posts-state">正在加载动态…</div>
+
+              <button
+                v-else-if="postsError"
+                type="button"
+                class="uh-posts-state is-error"
+                @click="loadUserPosts"
+              >{{ postsError }}，点击重试</button>
+
+              <template v-else-if="userPosts.length">
+                <div class="uh-group">
+                  <button
+                    v-for="p in userPosts"
+                    :key="p.id"
+                    type="button"
+                    class="uh-cell uh-post"
+                    @click="activePostId = p.id"
+                  >
+                    <span class="uh-post-main">
+                      <span class="uh-post-title">{{ p.title }}</span>
+                      <span class="uh-post-meta">
+                        <i class="uh-post-cat">{{ p.category }}</i>
+                        <span>{{ postTime(p.created_at) }}</span>
+                        <span v-if="p.like_count">· {{ p.like_count }} 赞</span>
+                        <span v-if="p.comment_count">· {{ p.comment_count }} 评论</span>
+                      </span>
+                    </span>
+                    <img v-if="p.images?.length" :src="p.images[0]" class="uh-post-thumb" alt="" loading="lazy" />
+                    <el-icon class="uh-chev" :size="13"><ArrowRight /></el-icon>
+                  </button>
+                </div>
+                <button
+                  v-if="postsMore"
+                  type="button"
+                  class="uh-post-more"
+                  :disabled="postsLoadingMore"
+                  @click="loadMorePosts"
+                >{{ postsLoadingMore ? '加载中…' : '查看更多动态' }}</button>
+              </template>
+
+              <div v-else class="uh-posts-state is-empty">
+                {{ isSelf ? '你还没有发过帖子' : 'TA 还没有发过帖子' }}
+              </div>
+
               <!-- 我的勋章：整排勋章直接铺在灰底上（没有卡片外框），
                    一排排开、超宽横向滑动，点任意一枚进「勋章墙」看详情 -->
               <div class="uh-strip-head">
-                <h3 class="uh-strip-title">我的勋章</h3>
+                <h3 class="uh-strip-title">{{ isSelf ? '我的勋章' : 'TA 的勋章' }}</h3>
                 <button type="button" class="uh-strip-more" @click="showWall = true">
                   已点亮 {{ data.earned_count }}/{{ data.total_count }}
                   <el-icon :size="11"><ArrowRight /></el-icon>
@@ -222,6 +270,19 @@
             </div>
           </div>
         </Transition>
+
+        <!-- ===== 三级：帖子详情 =====
+             主页里点一条动态就在这一层打开，不跳出去 —— 返回时主页还停在原来的滚动位置。
+             z-index 抬到 3200：详情页默认 2600 会被本主页（3100）整个盖住。 -->
+        <PostDetailPage
+          v-if="activePostId"
+          :post-id="activePostId"
+          :z-index="3200"
+          @close="postDetailLeaving = true"
+          @closed="onPostDetailClosed"
+          @updated="onPostUpdated"
+          @deleted="onPostDeleted"
+        />
       </div>
     </Transition>
   </Teleport>
@@ -236,11 +297,14 @@ import { actionPrompt, actionConfirm } from '@/composables/useActionSheet'
 
 import BadgeWall from '@/components/profile/BadgeWall.vue'
 import BadgeMedal from '@/components/profile/BadgeMedal.vue'
+import PostDetailPage from '@/components/community/PostDetailPage.vue'
 import { deleteSession } from '@/api/messages'
 import { unfollowUser } from '@/api/social'
+import { getUserPosts, type CommunityPost } from '@/api/community'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useUserHomepage } from '@/composables/useUserHomepage'
+import { parseServerTime } from '@/utils/datetime'
 import {
   ArrowLeft, ArrowRight, MoreFilled, User,
 } from '@element-plus/icons-vue'
@@ -342,6 +406,98 @@ async function editRemark() {
   pref.value.remark = (value || '').trim()
   ElMessage.success(pref.value.remark ? '备注已保存' : '备注已清除')
 }
+
+/* ================= TA 的动态 =================
+   主页是「了解这个人」的地方：TA 说过什么，比勋章和字段更能说明问题。
+   数据走 /community/users/{id}/posts（游标分页），卡片只显示摘要，
+   点开在主页之上叠一层帖子详情（z-index 3200），不跳出主页上下文。 */
+
+/**
+ * 一次拉多少条：主页不是帖子流 —— 6 条够看清「TA 在发什么」，
+ * 再多会把下方的勋章、资料整块推到屏幕外；其余靠「查看更多动态」。
+ */
+const POST_PAGE = 6
+
+const userPosts = ref<CommunityPost[]>([])
+const postsLoading = ref(false)
+const postsError = ref('')
+const postsMore = ref(false)
+const postsLoadingMore = ref(false)
+/** 正在查看的帖子 id：非 0 即挂载详情页（详情页「挂载即打开」） */
+const activePostId = ref(0)
+/** 详情退场中：等 after-leave 再卸载，否则退场动画没机会播 */
+const postDetailLeaving = ref(false)
+
+async function loadUserPosts() {
+  const id = data.value?.id
+  if (!id) return
+  postsLoading.value = true
+  postsError.value = ''
+  try {
+    const list = await getUserPosts(id, { limit: POST_PAGE })
+    userPosts.value = list
+    postsMore.value = list.length >= POST_PAGE
+  } catch (e: any) {
+    postsError.value = e?.response?.data?.detail || '动态加载失败'
+    userPosts.value = []
+    postsMore.value = false
+  } finally {
+    postsLoading.value = false
+  }
+}
+
+/** 游标翻页：只取比手上最后一条更早的，翻页期间有人发新帖也不会重复 */
+async function loadMorePosts() {
+  const id = data.value?.id
+  const last = userPosts.value[userPosts.value.length - 1]
+  if (!id || !last || postsLoadingMore.value) return
+  postsLoadingMore.value = true
+  try {
+    const list = await getUserPosts(id, { limit: POST_PAGE, before_id: last.id })
+    userPosts.value = [...userPosts.value, ...list]
+    postsMore.value = list.length >= POST_PAGE
+  } catch {
+    ElMessage.error('加载失败，请稍后重试')
+  } finally {
+    postsLoadingMore.value = false
+  }
+}
+
+/** 列表里只放「月-日 时:分」：主页不是时间线，完整年份在这里是噪音 */
+function postTime(iso: string | null): string {
+  const ms = parseServerTime(iso)
+  if (Number.isNaN(ms)) return ''
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** 详情里点赞 / 评论后同步列表上的计数，避免「刚点完赞回到主页数字没变」 */
+function onPostUpdated(post: CommunityPost) {
+  const hit = userPosts.value.find((p) => p.id === post.id)
+  if (hit) Object.assign(hit, { like_count: post.like_count, comment_count: post.comment_count, liked: post.liked })
+}
+
+/** 详情里删掉了帖子：直接从主页列表里摘掉，不整块重拉 */
+function onPostDeleted(id: number) {
+  userPosts.value = userPosts.value.filter((p) => p.id !== id)
+}
+
+function onPostDetailClosed() {
+  activePostId.value = 0
+  postDetailLeaving.value = false
+}
+
+// 换人：清空上一个人的动态，再按新 id 拉一次
+watch(() => data.value?.id, (id) => {
+  userPosts.value = []
+  postsError.value = ''
+  postsMore.value = false
+  activePostId.value = 0
+  postDetailLeaving.value = false
+  if (id) void loadUserPosts()
+}, { immediate: true })
+
 
 const earnedBadges = computed(() => (data.value?.badges || []).filter((b) => b.earned))
 const lockedBadges = computed(() => (data.value?.badges || []).filter((b) => !b.earned))
@@ -747,6 +903,95 @@ async function removeFriend() {
 .uh-group {
   background: var(--tui-surface, #fff);
 }
+
+/* ===== 动态（TA 的帖子） =====
+   与「资料」白组同构：一行一条，靠行内细线分隔。
+   标题两行截断、元信息压到一行，保证一屏能看到 4~5 条。 */
+.uh-posts-state {
+  display: block;
+  width: 100%;
+  padding: 18px 16px;
+  border: none;
+  background: var(--tui-surface, #fff);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #98a2b3;
+  text-align: center;
+  cursor: default;
+}
+.uh-posts-state.is-error { color: #d92d20; cursor: pointer; }
+.uh-posts-state.is-empty { color: #aeb6c2; }
+
+.uh-post {
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+.uh-post-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.uh-post-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.42;
+  color: var(--tui-text, #344054);
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.uh-post-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11px;
+  color: #98a2b3;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.uh-post-cat {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: #f2f4f7;
+  color: #667085;
+  font-style: normal;
+  font-size: 10px;
+  line-height: 15px;
+}
+.uh-post-thumb {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #f2f4f7;
+}
+.uh-post .uh-chev { margin-top: 2px; }
+
+/* 「查看更多」：白底整行，与上面的行组连成一片（不额外做圆角按钮） */
+.uh-post-more {
+  display: block;
+  width: 100%;
+  padding: 13px 0;
+  border: none;
+  border-top: 1px solid #f2f4f7;
+  background: var(--tui-surface, #fff);
+  font-family: inherit;
+  font-size: 12.5px;
+  color: #667085;
+  cursor: pointer;
+}
+.uh-post-more:disabled { opacity: 0.6; }
+.uh-post-more:active { background: #f7f8fa; }
 
 /* 近期亮点：与学生端个人主页成果卡一致的双列卡片 */
 .uh-hl-grid {

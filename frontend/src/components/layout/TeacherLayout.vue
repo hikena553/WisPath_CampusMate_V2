@@ -316,7 +316,8 @@ const activeNavKey = computed(() => {
   if (p.startsWith('/teacher/students')) return 'students'
   if (p.startsWith('/teacher/agent')) return 'agent'
   if (p.startsWith('/teacher/profile')) return 'profile'
-  if (p.startsWith('/teacher/messages')) return 'messages'
+  // 消息页的两个子页（我的文件 / 通知）归属「消息」页签，返回时页签不跳回首页
+  if (p.startsWith('/teacher/messages') || p.startsWith('/teacher/files') || p.startsWith('/teacher/notifications')) return 'messages'
   // 原「更多」内的模块入口已迁至首页宫格，进入这些子页面时高亮「首页」
   return 'home'
 })

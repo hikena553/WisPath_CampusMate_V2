@@ -278,12 +278,14 @@
              点整行进「资讯详情子页」（正文 + 评论 / 点赞 / 转发），不再直接跳站内阅读器 ——
              只读阅读器留下了「读完了想说两句却说不了」的断点；详情子页把社区那一层补齐，
              正文抓取仍复用后端同一套解析，只是多了一层互动。 -->
-        <!-- 交流社区：帖子流有自己的分区筛选 / 排序 / 分页，整块交给 CommunityFeed；
-             点一条在本页打开 PostDetailPage（社区独立页已下线，交互全部收在这里） -->
+        <!-- 交流社区：帖子流与失物 / 招领共用一条分区行（失物、招领是行末的两个胶囊），
+             数据与行版式都在 CommunityFeed 内部统一；点一条帖子在本页打开 PostDetailPage
+             （社区独立页已下线，交互全部收在这里） -->
         <CommunityFeed
           v-if="entry.key === 'community'"
           :ref="el => { if (el) communityFeedRef = el as any }"
           @open="openPostDetail"
+          @compose="openPostSheet"
         />
 
         <!-- 关注：我关注的人发的帖子（头像条 + 大卡片流），数据与分页都在 FollowingFeed 内部。
@@ -396,12 +398,12 @@
     </section>
 
     <!-- ③ 交流社区（桌面端没有分类页签，保留一张卡片作为入口：
-         社区独立页已下线，桌面用户也得有地方进帖子流 / 发帖） -->
+         社区独立页已下线，桌面用户也得有地方进帖子流 / 发帖 / 失物招领） -->
     <section class="campus-section">
       <div class="section-title">
         交流社区
-        <button type="button" class="section-action" @click="openPostSheet">
-          <el-icon :size="13"><Plus /></el-icon>发帖
+        <button type="button" class="section-action" @click="onDesktopCommunityAction">
+          <el-icon :size="13"><Plus /></el-icon>{{ desktopCommunityActionLabel }}
         </button>
       </div>
       <div class="campus-card">
@@ -409,6 +411,7 @@
           :ref="el => { if (el) desktopCommunityFeedRef = el as any }"
           compact
           @open="openPostDetail"
+          @compose="openPostSheet"
         />
       </div>
     </section>
@@ -564,15 +567,18 @@
     <!-- 互动消息面板（论坛侧，与聊天隔离）：页头信封点开的也是这个 -->
     <ForumInboxSheet v-model="forumInboxOpen" />
 
-    <!-- 发帖悬浮按钮：移动端所有分类 Tab 常驻。
-         社区已经是本页的一个分类页签，但「想发一条」这件事跟正在看哪个分类无关，
-         所以入口留在这一层，不随分类切换消失。游客点击先走登录引导，不发请求。 -->
+    <!-- 发帖悬浮按钮：只在「交流社区」页签出现。
+         之前是所有分类常驻，但资讯分类（推荐 / 教学动态 / 通知公告…）并不产出帖子，
+         在那里挂一颗「发帖」跟当前内容无关，反倒压住信息流的右下角。
+         现在跟着页签走：进交流社区才出现，切走即消失。
+         同一个「+」在社区的两个视图里含义不同：帖子视图发帖子，失物招领视图发登记，
+         由 CommunityFeed.openCreate() 判断，这里不做分支。游客点击先走登录引导，不发请求。 -->
     <button
-      v-if="isMobile && role === 'student'"
+      v-if="isMobile && role === 'student' && activeTab === 'community'"
       type="button"
       class="community-fab"
-      aria-label="发帖"
-      @click="openPostSheet"
+      aria-label="发布"
+      @click="onCommunityFab"
     >
       <el-icon :size="24"><Plus /></el-icon>
     </button>
@@ -1358,10 +1364,27 @@ interface FeedItem {
   post_id?: number
 }
 
-/* ---------- 交流社区：帖子流 / 详情由 CommunityFeed、PostDetailPage 承担 ----------
-   本页只留三件事：点开详情、发布后刷新列表、深链（?post=）落地。 */
+/* ---------- 交流社区：帖子流 + 失物 / 招领两个分区，都由 CommunityFeed 承担 ----------
+   本页只留三件事：点开帖子详情、发布后刷新列表、深链（?post= / ?chip=）落地。
+   「发布」不用关心当前选中哪个分区：统一交给 feed.openCreate() 分流
+   （帖子分区进全屏编辑器，失物 / 招领分区开登记弹窗）。 */
 const communityFeedRef = ref<InstanceType<typeof CommunityFeed> | null>(null)
 const desktopCommunityFeedRef = ref<InstanceType<typeof CommunityFeed> | null>(null)
+/** 桌面端分区标题右侧那颗按钮的文案跟着分区走：帖子分区叫「发帖」，失物 / 招领叫「发布」 */
+const desktopCommunityActionLabel = computed(() => {
+  // 组件对外暴露的 mode 在运行时已被 proxy 解包成字符串，类型上仍是 Ref，这里取运行时值
+  const mode = (desktopCommunityFeedRef.value as { mode?: string } | null)?.mode
+  return mode === 'lost' || mode === 'found' ? '发布' : '发帖'
+})
+function onDesktopCommunityAction() {
+  if (desktopCommunityFeedRef.value) desktopCommunityFeedRef.value.openCreate()
+  else openPostSheet()
+}
+/** 移动端悬浮「+」：同样按当前分区分流（帖子 → 编辑器，失物 / 招领 → 登记弹窗） */
+function onCommunityFab() {
+  if (communityFeedRef.value) communityFeedRef.value.openCreate()
+  else openPostSheet()
+}
 /** 关注流：「关注」页签那一页（头像条 + 动态卡片），发帖 / 点赞 / 关注变化后刷新 */
 const followingFeedRef = ref<InstanceType<typeof FollowingFeed> | null>(null)
 const communityDetailId = ref(0)
@@ -1993,6 +2016,9 @@ onMounted(() => {
   if (typeof tabParam === 'string' && FEED_TABS.some(t => t.key === tabParam)) {
     activeTab.value = tabParam as FeedTabKey
   }
+  // 深链：失物招领现在是交流社区里的一个视图（原 /student/lost-found 重定向到这里），
+  // 落地即切到社区页签并选中「失物招领」
+  openDeepLinkedCommunityView()
   // 深链：工作台 / 消息里的帖子入口都会带 ?post=<id>，落地即开详情
   openDeepLinkedPost()
   // 本页组件在每次导航时都会被重建（StudentLayout 未用 keep-alive），
@@ -2021,6 +2047,24 @@ function openDeepLinkedPost() {
 }
 
 watch(() => route.query.post, (v) => { if (v) openDeepLinkedPost() })
+
+/**
+ * 地址里的 ?chip=lost / ?chip=found：切到社区页签并选中对应的分区胶囊。
+ * 原独立页 /student/lost-found 已改为重定向到这里（老地址带 view=lostfound，一并兼容），
+ * 老书签 / 老链接仍然落到同一份内容上。
+ * 社区页在分页轨道里只有当前页才渲染，所以等一帧再让列表切分区。
+ */
+function openDeepLinkedCommunityView() {
+  const legacy = route.query.view === 'lostfound' ? 'lost' : ''
+  const chip = typeof route.query.chip === 'string' ? route.query.chip : legacy
+  if (chip !== 'lost' && chip !== 'found') return
+  if (isGuestMode()) {
+    void promptLogin('查看失物招领')
+    return
+  }
+  if (activeTab.value !== 'community') activeTab.value = 'community'
+  void nextTick(() => communityFeedRef.value?.setMode(chip))
+}
 </script>
 
 <style scoped>
@@ -2270,7 +2314,9 @@ watch(() => route.query.post, (v) => { if (v) openDeepLinkedPost() })
 .appbar-login:active { transform: scale(.95); }
 
 /* ===== 发帖悬浮按钮 =====
-   移动端全部分类常驻。与底部 dock 胶囊的间距规则：到胶囊顶边的垂直间隙 =
+   只在「交流社区」页签渲染（v-if 跟着 activeTab 走），切到别的分类就整颗消失。
+   挂载时给一段轻微缩放淡入，避免切页签时按钮「凭空出现」显得突兀。
+   与底部 dock 胶囊的间距规则：到胶囊顶边的垂直间隙 =
    到屏幕右缘的水平间隙。水平对齐「个人中心」页签中轴：胶囊宽 W=min(100vw,440px)
    左右各内缩 14px、内部再 8px 内边距，5 个页签等分，中轴距右缘 0.1W+17.6px；
    FAB 宽 52 需右收 26px → 右缘 = 0.1W−8.4px。
@@ -2292,6 +2338,14 @@ watch(() => route.query.post, (v) => { if (v) openDeepLinkedPost() })
   box-shadow: 0 6px 18px rgba(29, 33, 41, .35);
   cursor: pointer;
   transition: transform .15s ease;
+  animation: communityFabIn .18s ease-out;
+}
+@keyframes communityFabIn {
+  from { opacity: 0; transform: scale(.86); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .community-fab { animation: none; }
 }
 .community-fab:active { transform: scale(.94); }
 

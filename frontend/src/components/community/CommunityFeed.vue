@@ -1,7 +1,10 @@
 <template>
   <div class="cfeed">
-    <!-- 分类筛选 + 排序：两者都直接落到接口参数上，切一次拉一次，不做本地过滤
-         （本地过滤只能作用于已加载的这一页，会出现「切到提问却只看到 3 条」） -->
+    <!-- 分区筛选 + 排序：两者都直接落到接口参数上，切一次拉一次，不做本地过滤
+         （本地过滤只能作用于已加载的这一页，会出现「切到提问却只看到 3 条」）。
+         「失物 / 招领」也在这排胶囊里：它们不是帖子的分区，而是社区里另一份数据
+         （/lost-found/items），但同属「社区里别人发的东西」，放在同一条筛选行里
+         比单独再开一排切换更顺手 —— 列表行也统一按帖子的版式渲染。 -->
     <div class="cfeed-bar">
       <div class="cfeed-chips">
         <button
@@ -10,6 +13,9 @@
           @click="setCategory(c.value)"
         >{{ c.label }}</button>
       </div>
+      <!-- 排序对两种数据源都生效：帖子走接口的 sort 参数，失物招领走
+           /lost-found/items?sort=（最新按发布时间、最热按留言数）。
+           两个视图都常驻，切换分区时控件不消失。 -->
       <div class="cfeed-sort">
         <button type="button" :class="{ 'is-active': sort === 'new' }" @click="setSort('new')">最新</button>
         <button type="button" :class="{ 'is-active': sort === 'hot' }" @click="setSort('hot')">最热</button>
@@ -18,87 +24,165 @@
 
     <div class="cfeed-list">
       <div
-        v-for="p in posts" :key="p.id"
+        v-for="row in rows" :key="row.key"
         class="cfeed-item"
         role="link" tabindex="0"
-        @click="emit('open', p)"
-        @keydown.enter.prevent="emit('open', p)"
+        @click="openRow(row)"
+        @keydown.enter.prevent="openRow(row)"
       >
         <div class="cfeed-body">
-          <h3 class="cfeed-title">{{ p.title }}</h3>
+          <h3 class="cfeed-title">{{ row.title }}</h3>
           <div class="cfeed-meta">
-            <span class="cfeed-time">{{ timeLabel(p.created_at) }}</span>
-            <span class="cfeed-dot">·</span>
-            <span class="cfeed-source">{{ p.author_name || '同学' }} · {{ p.category }}</span>
-            <div class="cfeed-acts">
-              <span class="cfeed-act" :aria-label="`评论 ${p.comment_count} 条`">
-                <el-icon><ChatDotRound /></el-icon><span>{{ p.comment_count }}</span>
+            <span class="cfeed-time">{{ row.time }}</span>
+            <template v-for="(seg, i) in row.segments" :key="i">
+              <span class="cfeed-dot">·</span>
+              <span class="cfeed-source">{{ seg }}</span>
+            </template>
+            <div v-if="row.commentCount !== null" class="cfeed-acts">
+              <span class="cfeed-act" :aria-label="`评论 ${row.commentCount} 条`">
+                <el-icon><ChatDotRound /></el-icon><span>{{ row.commentCount }}</span>
               </span>
-              <span class="cfeed-act" :aria-label="`浏览 ${p.view_count} 次`">
-                <el-icon><View /></el-icon><span>{{ p.view_count }}</span>
+              <span v-if="row.viewCount !== null" class="cfeed-act" :aria-label="`浏览 ${row.viewCount} 次`">
+                <el-icon><View /></el-icon><span>{{ row.viewCount }}</span>
               </span>
             </div>
           </div>
         </div>
-        <div v-if="p.images?.length" class="cfeed-thumb">
-          <img :src="p.images[0]" alt="" loading="lazy" />
+        <div v-if="row.thumb" class="cfeed-thumb">
+          <img :src="row.thumb" alt="" loading="lazy" />
         </div>
       </div>
 
-      <p v-if="loading && !posts.length" class="cfeed-empty">加载中…</p>
-      <p v-else-if="!posts.length" class="cfeed-empty">{{ emptyText }}</p>
+      <p v-if="loading && !rows.length" class="cfeed-empty">加载中…</p>
+      <p v-else-if="!rows.length" class="cfeed-empty">{{ emptyText }}</p>
     </div>
 
     <!-- 底部状态：滚动到底自动翻页，不再让用户点按钮 -->
     <div ref="sentinelRef" class="cfeed-sentinel" aria-hidden="true" />
-    <p v-if="loading && posts.length" class="cfeed-tip">加载中…</p>
+    <p v-if="loading && rows.length" class="cfeed-tip">加载中…</p>
     <p v-else-if="showEndTip" class="cfeed-tip is-end">没有更多了</p>
+
+    <!-- 失物 / 招领的发布与详情弹窗：挂在列表这一层，两个视图共用一套 -->
+    <LostFoundDialogs ref="dialogsRef" @changed="refresh" />
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * 交流社区帖子流（校园资讯「交流社区」页签 / 桌面端社区卡片共用）。
+ * 交流社区内容流（校园资讯「交流社区」页签 / 桌面端社区卡片共用）。
  *
- * 为什么单独成组件：帖子有自己的筛选（分区）、排序（最新 / 最热）与分页，
- * 和资讯流的「按栏目过滤」不是一套东西；塞进 FeedItem 只会让两边的特例越堆越多。
+ * 一份筛选行，两种数据源：
+ *   - 全部 / 技术 / 提问 / 分享 / 求助 / 资讯 → 帖子（/community/posts，有分区 / 排序 / 分页）；
+ *   - 失物 / 招领 → 失物招领（/lost-found/items，按 type 过滤，一次拉全；同样支持最新 / 最热）。
+ * 两条链路的数据结构不同，但展示层统一成同一种行（标题 + 元信息 + 缩略图），
+ * 所以先把两边都映射成 FeedRow，模板只认这一种形状 —— 以后加第三种内容也只需再写一个映射。
  *
- * 用法：<CommunityFeed ref="feedRef" @open="openPost" />
- *   - 父页发布成功后调 feedRef.refresh() 重新拉第一页；
- *   - 点某条 → 父页打开 PostDetailPage。
+ * 用法：<CommunityFeed ref="feedRef" @open="openPost" @compose="openCompose" />
+ *   - feedRef.refresh()     重新拉当前视图
+ *   - feedRef.openCreate()  当前是帖子就发帖子（交给父页），是失物 / 招领就开登记弹窗
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, View } from '@element-plus/icons-vue'
 import { getPosts, COMMUNITY_CATEGORIES, type CommunityPost } from '@/api/community'
+import { getLostFoundItems } from '@/api/lostFound'
+import LostFoundDialogs from '@/components/community/LostFoundDialogs.vue'
 import { isGuestMode } from '@/utils/guest'
+import { promptLogin } from '@/utils/loginGate'
 import { parseServerTime } from '@/utils/datetime'
+import type { LostFoundItem } from '@/types'
 
 const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
-const emit = defineEmits<{ (e: 'open', post: CommunityPost): void }>()
+const emit = defineEmits<{
+  (e: 'open', post: CommunityPost): void
+  /** 帖子视图的「发布」交给父页（全屏编辑器），失物 / 招领则由本组件自己开弹窗 */
+  (e: 'compose'): void
+}>()
 
 const PAGE_SIZE = 10
+/** 分区行末尾的两个特殊项：不是帖子分区，切过去就换成失物招领的数据 */
+const LOST_CHIPS = [
+  { label: '失物', value: 'lost' },
+  { label: '招领', value: 'found' },
+]
 
 const posts = ref<CommunityPost[]>([])
+const lostItems = ref<LostFoundItem[]>([])
 const loading = ref(false)
+/** 'all' | 帖子分区名 | 'lost' | 'found' */
 const category = ref('all')
 const sort = ref<'new' | 'hot'>('new')
 const page = ref(1)
 const reachedEnd = ref(false)
 const sentinelRef = ref<HTMLElement | null>(null)
+const dialogsRef = ref<InstanceType<typeof LostFoundDialogs> | null>(null)
 let observer: IntersectionObserver | null = null
 
-const chips = [{ label: '全部', value: 'all' }, ...COMMUNITY_CATEGORIES.map(c => ({ label: c, value: c }))]
+const chips = [
+  { label: '全部', value: 'all' },
+  ...COMMUNITY_CATEGORIES.map(c => ({ label: c, value: c })),
+  ...LOST_CHIPS,
+]
 
-const hasMore = computed(() => !reachedEnd.value && posts.value.length > 0)
+const isLostMode = computed(() => category.value === 'lost' || category.value === 'found')
+const lostType = computed<'lost' | 'found'>(() => (category.value === 'found' ? 'found' : 'lost'))
 
-/** 只有一页也要提示「没有更多了」会很吵，攒够一页再说 */
+/** 统一的行模型：帖子与失物招领都映射成这个形状，模板只写一套 */
+interface FeedRow {
+  key: string
+  title: string
+  time: string
+  /** 时间之后用「·」连起来的几段：帖子是 作者 / 分区，失物招领是 失物|招领 / 地点 / 状态 */
+  segments: string[]
+  /** null = 这条内容没有这个计数（失物招领没有浏览量，但留言数是有的） */
+  commentCount: number | null
+  viewCount: number | null
+  thumb: string | null
+  post?: CommunityPost
+  lostId?: number
+}
+
+const STATUS_TEXT: Record<string, string> = { claimed: '已认领', closed: '已结束' }
+
+const rows = computed<FeedRow[]>(() => {
+  if (isLostMode.value) {
+    return lostItems.value.map(it => ({
+      key: `lf-${it.id}`,
+      title: it.title,
+      time: timeLabel(it.created_at),
+      segments: [
+        it.type === 'lost' ? '失物' : '招领',
+        it.location || '地点不详',
+        ...(STATUS_TEXT[it.status] ? [STATUS_TEXT[it.status]] : []),
+      ],
+      commentCount: it.comment_count ?? 0,
+      viewCount: null,
+      thumb: it.image_url || null,
+      lostId: it.id,
+    }))
+  }
+  return posts.value.map(p => ({
+    key: `post-${p.id}`,
+    title: p.title,
+    time: timeLabel(p.created_at),
+    segments: [p.author_name || '同学', p.category],
+    commentCount: p.comment_count,
+    viewCount: p.view_count,
+    thumb: p.images?.[0] || null,
+    post: p,
+  }))
+})
+
+const hasMore = computed(() => !isLostMode.value && !reachedEnd.value && posts.value.length > 0)
+
+/** 只有一页也要提示「没有更多了」会很吵，攒够一页再说；失物招领一次拉全，也不提示 */
 const showEndTip = computed(
-  () => !props.compact && !hasMore.value && posts.value.length >= PAGE_SIZE,
+  () => !props.compact && !isLostMode.value && !hasMore.value && posts.value.length >= PAGE_SIZE,
 )
 
 const emptyText = computed(() => {
-  if (isGuestMode()) return '登录后查看社区帖子'
+  if (isGuestMode()) return '登录后查看社区内容'
+  if (isLostMode.value) return lostType.value === 'lost' ? '还没有寻物启事' : '还没有失物招领'
   if (category.value !== 'all') return `「${category.value}」下还没有帖子`
   return '还没有帖子，点右下角「+」发布第一条'
 })
@@ -145,7 +229,22 @@ async function fetchPage(target: number, append: boolean) {
   }
 }
 
+/** 失物招领：接口一次返回该类型的全部登记，没有分页；sort 决定最新 / 留言最多的在前 */
+async function loadLost() {
+  if (isGuestMode()) { lostItems.value = []; return }
+  loading.value = true
+  try {
+    lostItems.value = await getLostFoundItems({ type: lostType.value, sort: sort.value })
+  } catch {
+    lostItems.value = []
+    ElMessage.error('失物招领加载失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
+}
+
 function refresh() {
+  if (isLostMode.value) return loadLost()
   reachedEnd.value = false
   return fetchPage(1, false)
 }
@@ -173,13 +272,56 @@ function ensureFill() {
 function setCategory(c: string) {
   if (category.value === c) return
   category.value = c
-  void refresh()
+  posts.value = []
+  lostItems.value = []
+  if (isLostMode.value) {
+    reachedEnd.value = true
+    void loadLost()
+    return
+  }
+  reachedEnd.value = false
+  void fetchPage(1, false)
 }
 
 function setSort(s: 'new' | 'hot') {
   if (sort.value === s) return
   sort.value = s
   void refresh()
+}
+
+function openRow(row: FeedRow) {
+  if (row.post) {
+    emit('open', row.post)
+    return
+  }
+  if (row.lostId) dialogsRef.value?.openDetail(row.lostId)
+}
+
+/**
+ * 「发布」统一入口（父页的悬浮「+」/ 桌面分区标题按钮都走这里）：
+ * 帖子视图把活交回父页的全屏编辑器；失物 / 招领视图直接开登记弹窗，
+ * 类型预置成当前分区（在「招领」里点发布，默认就是发一条招领）。
+ */
+function openCreate() {
+  if (!isLostMode.value) {
+    emit('compose')
+    return
+  }
+  if (isGuestMode()) {
+    void promptLogin(lostType.value === 'lost' ? '发布寻物启事' : '发布失物招领')
+    return
+  }
+  dialogsRef.value?.openCreate(lostType.value)
+}
+
+/** 外部指定分区（深链用：老地址 /student/lost-found 落地即选中「失物」） */
+function setMode(c: string) {
+  if (!chips.some(x => x.value === c)) return
+  if (category.value === c) {
+    void refresh()
+    return
+  }
+  setCategory(c)
 }
 
 /* ---------- 触底自动加载 ---------- */
@@ -206,7 +348,7 @@ onBeforeUnmount(() => {
   observer = null
 })
 
-defineExpose({ refresh })
+defineExpose({ refresh, openCreate, setMode, mode: category })
 </script>
 
 <style scoped>
@@ -257,11 +399,12 @@ defineExpose({ refresh })
 .cfeed-meta {
   display: flex; align-items: center; gap: 6px;
   margin-top: 6px; font-size: 12px; color: #98a2b3;
+  min-width: 0;
 }
 .cfeed-time, .cfeed-source { flex-shrink: 0; }
 .cfeed-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cfeed-dot { color: #d0d5dd; }
-.cfeed-acts { display: flex; gap: 12px; margin-left: auto; }
+.cfeed-dot { color: #d0d5dd; flex-shrink: 0; }
+.cfeed-acts { display: flex; gap: 12px; margin-left: auto; padding-left: 6px; }
 .cfeed-act { display: inline-flex; align-items: center; gap: 3px; }
 
 .cfeed-thumb {

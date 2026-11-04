@@ -44,6 +44,14 @@ export function getMyPosts() {
 }
 
 /**
+ * 某个用户发布的帖子（个人主页「TA 的动态」）。
+ * 游标分页：翻下一页时传手上最后一条的 id，比 page 分页更抗「翻页期间有人发新帖」。
+ */
+export function getUserPosts(userId: number, params?: { limit?: number; before_id?: number }) {
+  return request.get<CommunityPost[]>(`/community/users/${userId}/posts`, { params })
+}
+
+/**
  * 关注流：我关注的人发的帖子（校园资讯「关注」页签）。
  * 与 getPosts 的区别只有作者集合：只收我关注的人，不收自己，也不做推荐加权。
  */

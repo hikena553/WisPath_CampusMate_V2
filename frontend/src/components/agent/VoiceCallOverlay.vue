@@ -313,6 +313,9 @@ async function beginCall(conversationId?: number | null) {
   if (conversationId !== undefined) activeConvId.value = conversationId ?? null
   // 先启动表情识别：尽早弹出摄像头授权、尽早跑首帧（问候要结合表情，故必须先于/并行于连接）
   primingEmotion.value = true
+  // 兜底摘掉「正在感知你的状态…」：摄像头/模型迟迟不就绪时（手机上权限弹窗被忽略很常见）
+  // 这句话会把状态文案一直钉住，看起来就是卡在转圈。
+  const emotionGuard = setTimeout(() => { primingEmotion.value = false }, 4000)
   const emotionTask = startEmotionAuto()
   try {
     await startCall()
@@ -324,6 +327,7 @@ async function beginCall(conversationId?: number | null) {
     ElMessage.error(msg)
   }
   const emotionOk = await emotionTask
+  clearTimeout(emotionGuard)
   primingEmotion.value = false
   if (!emotionOk) {
     // 摄像头被拒 / 模型不可用：立即告知后端，直接中性问候，不必空等表情

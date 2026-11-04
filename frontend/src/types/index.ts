@@ -253,5 +253,7 @@ export interface LostFoundItem {
   image_url: string | null
   status: 'open' | 'claimed' | 'closed'
   created_at: string
+  /** 留言数（列表接口直接返回；「最热」排序与行右侧计数都用它） */
+  comment_count?: number
   comments?: LostFoundComment[] | null
 }
