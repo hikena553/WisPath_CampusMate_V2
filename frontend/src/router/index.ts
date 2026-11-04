@@ -24,7 +24,10 @@ const guestAllowedPaths = ['/student/campus']
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/login' },
+    // 对外官网：网页端访问根路径时先展示项目官网（免登录）
+    { path: '/', name: 'Landing', component: () => import('@/views/portal/LandingPage.vue'), meta: { title: '绵小城 · 智慧校园' } },
+    // 移动端下载页：官网二维码与下载链接的落地页（免登录）
+    { path: '/download', name: 'Download', component: () => import('@/views/portal/DownloadPage.vue'), meta: { title: '下载移动端' } },
     { path: '/login', name: 'Login', component: () => import('@/views/login/LoginPage.vue') },
     // 首次打开的产品介绍页（参考抖音 / 微信引导页），无需登录
     { path: '/welcome', name: 'Welcome', component: () => import('@/views/login/WelcomePage.vue'), meta: { title: '认识绵小城' } },
@@ -253,6 +256,11 @@ router.beforeEach(async (to) => {
 
   // 学生注册页：未登录可访问
   if (to.path === '/register') {
+    return true
+  }
+
+  // 官网首页与下载页：完全公开，无论是否登录、是否为游客都直接展示，不做角色重定向
+  if (to.path === '/' || to.path === '/download') {
     return true
   }
 
