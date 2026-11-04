@@ -54,16 +54,31 @@ async def _periodic_impression_refresh() -> None:
         await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
 
 
+def _station_runtime() -> dict:
+    """读取资讯站节奏配置（失败时返回空 dict，调用方自行回落默认值）。"""
+    try:
+        from app.services.media_account_service import station_runtime_settings
+
+        return station_runtime_settings()
+    except Exception:  # pragma: no cover - 配置读取失败不应中断周期任务
+        logger.exception("读取资讯站节奏配置失败")
+        return {}
+
+
 async def _periodic_feed_refresh() -> None:
-    """定期抓取外部资讯（论文/开源榜/智能体榜/权威要闻）入库。"""
+    """按资讯站配置的抓取间隔定期抓取外部资讯（论文/开源榜/智能体榜/权威要闻）入库。"""
     from app.services.feed_ingest import ingest_all
 
     while True:
+        interval = REFRESH_INTERVAL_SECONDS
         try:
-            await asyncio.to_thread(ingest_all)
+            runtime = _station_runtime()
+            if runtime.get("is_enabled", True):
+                await asyncio.to_thread(ingest_all)
+            interval = max(300, int(runtime.get("ingest_interval_minutes") or 30) * 60)
         except Exception:
             logger.exception("后台定期外部资讯抓取异常")
-        await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
+        await asyncio.sleep(interval)
 
 
 async def _periodic_media_publish() -> None:
@@ -71,11 +86,16 @@ async def _periodic_media_publish() -> None:
     from app.services.media_account_service import run_media_publish_cycle
 
     while True:
+        interval = MEDIA_PUBLISH_INTERVAL_SECONDS
         try:
             await run_media_publish_cycle()
+            interval = max(
+                300,
+                int(_station_runtime().get("ingest_interval_minutes") or 30) * 60,
+            )
         except Exception:
             logger.exception("后台资讯账号发帖异常")
-        await asyncio.sleep(MEDIA_PUBLISH_INTERVAL_SECONDS)
+        await asyncio.sleep(interval)
 
 
 async def _periodic_proactive_push() -> None:

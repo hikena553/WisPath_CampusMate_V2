@@ -8,6 +8,7 @@ from datetime import date
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -15,6 +16,8 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.social import Follow
 from app.models.community import CommunityPost, CommunityComment, CommunityLike
+from app.models.media import MediaAccount, MediaPost, MediaSourceLink, MediaStationConfig
+from app.models.feed import ExternalFeedItem, FeedSource
 from app.models.plan import GrowthGoal
 from app.schemas.community import (
     CommunityPostCreate, CommunityPostUpdate, CommunityPostOut,
@@ -35,6 +38,68 @@ def _images_to_db(images: list[str] | None) -> str | None:
         return None
     cleaned = [str(u).strip() for u in images if str(u).strip()][:MAX_POST_IMAGES]
     return json.dumps(cleaned, ensure_ascii=False) if cleaned else None
+
+
+def _hidden_media_author_ids(db: Session) -> list[int]:
+    """未接入资讯站（或资讯站总开关关闭）的资讯账号的用户 id。
+
+    这些账号的历史帖子不再出现在学生端 / 教师端交流社区；重新接入后自动恢复展示。
+    """
+    station = db.query(MediaStationConfig).filter(MediaStationConfig.id == 1).first()
+    if station is not None and not station.is_enabled:
+        return [uid for (uid,) in db.query(MediaAccount.user_id).all()]
+    return [
+        uid
+        for (uid,) in db.query(MediaAccount.user_id)
+        .filter(MediaAccount.station_connected.is_(False))
+        .all()
+    ]
+
+
+def _filter_media_connections(query, db: Session):
+    """按画布连接线过滤资讯账号的历史帖子。
+
+    - 账号与资讯站断开：整个账号的帖子都不再展示（见 _hidden_media_author_ids）；
+    - 账号与某资讯源断开：该源转发过的历史帖不再展示，但内容不删除，重新连接即恢复；
+    - 账号尚未配置任何连接线：沿用旧行为，不做额外过滤。
+    """
+    rows = (
+        db.query(
+            MediaAccount.id,
+            MediaAccount.user_id,
+            MediaAccount.station_connected,
+            MediaSourceLink.enabled,
+            FeedSource.enabled,
+            FeedSource.feed_key,
+        )
+        .join(MediaSourceLink, MediaSourceLink.account_id == MediaAccount.id)
+        .join(FeedSource, FeedSource.id == MediaSourceLink.feed_source_id)
+        .all()
+    )
+    allowed: dict[int, set[str]] = {}
+    for _acc_id, user_id, station_ok, link_ok, src_ok, feed_key in rows:
+        if not station_ok:
+            continue
+        keys = allowed.setdefault(user_id, set())
+        if link_ok and src_ok and feed_key:
+            keys.add(feed_key)
+
+    for user_id, keys in allowed.items():
+        if keys:
+            # 只隐藏「来源资讯源已断开」的逐条转发帖
+            sub = (
+                select(MediaPost.post_id)
+                .join(ExternalFeedItem, ExternalFeedItem.id == MediaPost.feed_item_id)
+                .where(
+                    MediaPost.account_user_id == user_id,
+                    ExternalFeedItem.feed_key.notin_(list(keys)),
+                )
+            )
+        else:
+            # 连接线全部断开：该账号的转发/汇总帖都不再展示
+            sub = select(MediaPost.post_id).where(MediaPost.account_user_id == user_id)
+        query = query.filter(CommunityPost.id.notin_(sub))
+    return query
 
 
 def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: bool = True) -> CommunityPostOut:
@@ -79,6 +144,10 @@ def list_posts(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(CommunityPost)
+    hidden = _hidden_media_author_ids(db)
+    if hidden:
+        query = query.filter(CommunityPost.student_id.notin_(hidden))
+    query = _filter_media_connections(query, db)
     if category and category != "全部":
         query = query.filter(CommunityPost.category == category)
     if q:
@@ -278,7 +347,12 @@ def hot_posts(
     for g in goals:
         keywords += [g.title, g.goal_type]
 
-    posts = db.query(CommunityPost).order_by(
+    hot_query = db.query(CommunityPost)
+    hidden = _hidden_media_author_ids(db)
+    if hidden:
+        hot_query = hot_query.filter(CommunityPost.student_id.notin_(hidden))
+    hot_query = _filter_media_connections(hot_query, db)
+    posts = hot_query.order_by(
         CommunityPost.like_count.desc(), CommunityPost.view_count.desc()
     ).limit(60).all()
 
