@@ -82,6 +82,8 @@ export interface SharedFile {
   file_type: 'file' | 'image' | 'voice'
   name: string
   url: string
+  /** 磁盘字节数；聊天文件过期被清理后为 0（界面据此不显示大小） */
+  size: number
   duration: number
   /** 来源会话 key：s-<userId> / g-<groupId> */
   session_key: string

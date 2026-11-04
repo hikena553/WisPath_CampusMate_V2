@@ -14,6 +14,20 @@
         @select="onAppbarSelect"
       />
       <div class="msg-appbar-acts">
+        <!-- 通知：从原「通知」视图抽成独立子页（审批 / 预警 / 公告，按时间倒序），
+             页头只留一枚铃铛 + 未读角标，与「消息 / 通讯录」两个主视图并列 -->
+        <button
+          type="button"
+          class="msg-appbar-icon msg-bell"
+          :class="{ 'has-unread': unreadNotifCount > 0 }"
+          aria-label="通知"
+          @click="goNotifications"
+        >
+          <el-icon :size="21"><Bell /></el-icon>
+          <i v-if="unreadNotifCount > 0" class="msg-bell-badge">
+            {{ unreadNotifCount > 99 ? '99+' : unreadNotifCount }}
+          </i>
+        </button>
         <button
           type="button"
           class="msg-appbar-icon msg-appbar-plus"
@@ -39,6 +53,11 @@
             <el-icon :size="18"><User /></el-icon>
             <span>发起会话</span>
           </button>
+          <!-- 我的文件：与学生端同构的独立子页（/teacher/files），只收聊天文档 -->
+          <button type="button" class="msg-plus-item" role="menuitem" @click="goMyFiles">
+            <el-icon :size="18"><FolderOpened /></el-icon>
+            <span>我的文件</span>
+          </button>
           <div class="msg-plus-sep" />
           <button
             type="button"
@@ -56,19 +75,25 @@
 
     <!-- 移动端：左栏只承载当前视图内容（视图切换由页头滑动页签完成） -->
     <div class="msg-sidebar" v-show="isMobile ? !activeId : true">
-      <!-- 桌面端搜索：与学生端消息中心同款胶囊输入框，就地过滤当前视图 -->
+      <!-- 桌面端搜索：与学生端消息中心同款胶囊输入框，就地过滤当前视图；
+           右侧铃铛是通知入口（移动端那枚在页头，桌面端没有页头栏，收进这里） -->
       <div v-if="!isMobile" class="msg-search">
         <el-icon :size="14"><Search /></el-icon>
         <input
           v-model="headerKeyword"
           type="search"
           :placeholder="headerSearchPlaceholder"
-          :disabled="mobileView === 'notifications'"
           @input="onHeaderSearch"
         />
+        <button type="button" class="msg-search-bell" aria-label="通知" @click="goNotifications">
+          <el-icon :size="16"><Bell /></el-icon>
+          <i v-if="unreadNotifCount > 0" class="msg-search-badge">
+            {{ unreadNotifCount > 99 ? '99+' : unreadNotifCount }}
+          </i>
+        </button>
       </div>
 
-      <!-- 桌面端视图切换：消息 / 通讯录 / 文件 / 通知，与学生端同款黑色胶囊页签 -->
+      <!-- 桌面端视图切换：消息 / 通讯录（与学生端同一套黑色胶囊页签） -->
       <nav v-if="!isMobile" class="msg-tabs">
         <button
           v-for="v in viewTabs"
@@ -148,7 +173,7 @@
                 @touchend="onSwipeEnd($event)">
                 <div class="conv-avatar-wrapper">
                   <el-badge :value="item.unread_count" :hidden="!item.unread_count" :max="99" class="conv-badge-avatar">
-                    <el-avatar :size="44" :src="item.avatar || undefined">{{ item.name[0] }}</el-avatar>
+                    <el-avatar :size="40" :src="item.avatar || undefined">{{ item.name[0] }}</el-avatar>
                   </el-badge>
                   <span class="group-badge">群</span>
                 </div>
@@ -204,7 +229,7 @@
                 <div class="conv-avatar-wrapper">
                   <el-badge :value="item.unread_count" :hidden="!item.unread_count" :max="99" class="conv-badge-avatar">
                     <el-avatar
-                      :size="44"
+                      :size="40"
                       :src="item.user_avatar || undefined"
                       class="conv-avatar-clickable"
                       title="查看个人主页"
@@ -423,105 +448,6 @@
           </template>
         </template>
 
-        <!-- ============ 视图三：文件（跨会话汇总，QQ「文件」页） ============ -->
-        <template v-else-if="mobileView === 'files'">
-          <!-- 顶部：搜索 + 类别筛选；搜索框与类别、类别与列表之间都留出间距 -->
-          <div class="file-topbar">
-            <!-- 移动端内嵌文件搜索；桌面端用钉钉式头部搜索 -->
-            <el-input v-if="isMobile" v-model="fileKeyword" placeholder="搜索文件名" size="small" clearable @input="onFileSearch">
-              <template #prefix><DtIcon name="search" :size="15" /></template>
-            </el-input>
-
-            <div class="file-filter">
-              <button
-                v-for="f in FILE_TYPE_FILTERS"
-                :key="f.key"
-                type="button"
-                class="file-filter-item"
-                :class="{ active: fileTypeFilter === f.key }"
-                @click="setFileTypeFilter(f.key)"
-              >{{ f.label }}</button>
-            </div>
-          </div>
-
-          <div v-if="filesLoading" class="addr-loading">
-            <AgentLoading text="正在读取聊天文件" />
-          </div>
-          <div v-else-if="!sharedFiles.length" class="empty-state">
-            <DtIcon name="empty" :size="40" style="color: var(--dt-text-quiet);" />
-            <span>{{ fileKeyword.trim() ? '未找到匹配的文件' : '暂无聊天文件' }}</span>
-          </div>
-          <div v-else class="file-list">
-            <div v-for="f in sharedFiles" :key="f.id" class="file-item" @click="openSharedFile(f)">
-              <div class="file-thumb" :class="'t-' + f.file_type">
-                <img v-if="f.file_type === 'image'" :src="f.url" alt="" loading="lazy" />
-                <el-icon v-else :size="18"><component :is="fileTypeIcon(f.file_type)" /></el-icon>
-              </div>
-              <div class="file-body">
-                <div class="file-name">
-                  <template v-if="f.file_type === 'voice'">语音消息 · {{ f.duration || 1 }}″</template>
-                  <template v-else>{{ f.name || '未命名文件' }}</template>
-                </div>
-                <div class="file-meta">
-                  <span class="file-source" :title="f.session_name" @click.stop="openFileSession(f)">
-                    <span v-if="f.is_group" class="file-src-tag">群</span>{{ f.session_name || '会话' }}
-                  </span>
-                  <span>{{ f.sender_name }}</span>
-                  <span>{{ formatTime(f.created_at) }}</span>
-                </div>
-              </div>
-              <el-icon class="file-action" :size="16">
-                <View v-if="f.file_type === 'image'" />
-                <Download v-else />
-              </el-icon>
-            </div>
-          </div>
-        </template>
-
-        <!-- ============ 视图四：通知（不设分类筛选，按时间倒序直出） ============ -->
-        <template v-else>
-          <!-- 桌面端：通知无吸顶栏，提供「全部标记已读」入口 -->
-          <div v-if="!isMobile && notifications.length" class="notif-actions">
-            <button
-              type="button"
-              class="notif-action-btn"
-              :disabled="!unreadNotifCount"
-              @click="handleReadAllNotifications"
-            >
-              全部标记已读
-            </button>
-          </div>
-          <div v-if="notifLoading && !notifications.length" class="addr-loading">
-            <AgentLoading text="正在读取通知" />
-          </div>
-          <div v-else-if="!notifications.length" class="empty-state">
-            <DtIcon name="bell" :size="40" style="color: var(--dt-text-quiet);" />
-            <span>暂无通知</span>
-          </div>
-          <button
-            v-for="n in notifications"
-            :key="n.id"
-            type="button"
-            class="notif-row"
-            :class="{ unread: !n.is_read }"
-            @click="openNotification(n)"
-          >
-            <span
-              class="notif-icon"
-              :style="{ background: notifMeta(n.type).tint, color: notifMeta(n.type).color }"
-            >
-              <el-icon :size="17"><component :is="notifMeta(n.type).icon" /></el-icon>
-            </span>
-            <span class="notif-main">
-              <span class="notif-top">
-                <span class="notif-title">{{ n.title }}</span>
-                <span class="notif-time">{{ formatTime(n.created_at) }}</span>
-              </span>
-              <span class="notif-content">{{ n.content }}</span>
-            </span>
-            <span v-if="!n.is_read" class="notif-dot" />
-          </button>
-        </template>
       </div>
     </div>
 
@@ -782,7 +708,7 @@
           </div>
 
           <input type="file" multiple hidden ref="fileInputRef" @change="onFileSelect"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt" />
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.csv,.md,.json,.xml,.mp4,.mov,.avi,.mkv" />
           <input type="file" multiple hidden ref="imageInputRef" @change="onFileSelect"
             accept=".jpg,.jpeg,.png,.gif,.bmp" />
 
@@ -857,9 +783,9 @@
       </template>
 
       <div v-else class="no-selection">
-        <DtIcon name="empty" :size="72" style="color: var(--dt-text-quiet); margin: 0 auto;" />
-        <h2>智慧校园消息中心</h2>
-        <p>选择一个会话开始聊天</p>
+        <DtIcon name="empty" :size="64" style="color: var(--dt-text-quiet); margin: 0 auto;" />
+        <h2>选择一个会话开始聊天</h2>
+        <p>也可以从通讯录发消息</p>
         <div class="quick-actions">
           <el-button type="primary" @click="openButler">
             <DtIcon name="robot" :size="16" /> 小绵管家
@@ -1370,7 +1296,7 @@
       <div class="gsp-body">
         <input type="file" multiple hidden ref="groupFileInputRef"
           @change="onGroupFileSelect"
-          accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt" />
+          accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.csv,.md,.json,.xml,.mp4,.mov,.avi,.mkv" />
         <div v-if="groupFiles.length === 0" class="gsp-empty-box">
           <DtIcon name="empty" :size="40" style="color: var(--dt-text-quiet);" />
           <span>暂无群文件</span>
@@ -1436,7 +1362,7 @@ import SlidingTabs from '@/components/common/SlidingTabs.vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { useAuthStore } from '@/stores/auth'
-import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin, deleteSession, getSharedFiles, type SharedFile } from '@/api/messages'
+import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin, deleteSession } from '@/api/messages'
 import {
   getGroups, getGroup, getGroupMembers, createGroup as apiCreateGroup,
   addGroupMembers, sendGroupMessage, getGroupMessages, searchUsers,
@@ -1444,10 +1370,10 @@ import {
   setGroupMuted, getGroupInvite, resetGroupInvite, markGroupRead,
   type GroupOut, type GroupMemberOut, type UserSearchResult
 } from '@/api/groups'
-import { uploadFile } from '@/api/upload'
+import { MAX_CHAT_FILE_SIZE, uploadChatFile, uploadFile } from '@/api/upload'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 import {
-  getNotifications, markNotificationsRead, markAllNotificationsRead,
+  getNotifications,
   type Notification as NotificationItem,
 } from '@/api/notification'
 import { getColleges, getMajors, getClassGroups, getOrgScope, type OrgScope } from '@/api/organization'
@@ -1470,11 +1396,11 @@ import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
 import QRCode from 'qrcode'
 import {
-  User, ChatDotRound, ChatLineRound,
-  Bell, Loading, InfoFilled, Stamp, Collection, Notebook,
-  OfficeBuilding,
-  UploadFilled, Document, Picture, Setting, WarningFilled, Download,
-  Microphone, EditPen, VideoPlay, VideoPause, View, Plus, Search, Check
+  User, ChatLineRound,
+  Bell, Loading, InfoFilled, Collection, Notebook,
+  OfficeBuilding, FolderOpened,
+  UploadFilled, Document, WarningFilled, Download,
+  Microphone, EditPen, VideoPlay, VideoPause, Plus, Search, Check
 } from '@element-plus/icons-vue'
 
 const auth = useAuthStore()
@@ -1486,21 +1412,19 @@ const { siteMascot, agentName } = useSiteConfig()
 // 小绵管家入口的动态摘要（取最新一条资讯标题）
 const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
-// ===== 消息中心视图（消息 / 通讯录 / 文件 / 通知）=====
-// 消息为默认主视图；其余在移动端收进侧边抽屉，桌面端置于左栏分段切换
-type MsgView = 'messages' | 'contacts' | 'files' | 'notifications'
+// ===== 消息中心视图（消息 / 通讯录）=====
+// 与学生端同构：两个主视图 + 各自的入口。「文件」「通知」不再是视图 ——
+// 前者进「＋」面板的独立子页（/teacher/files），后者进页头铃铛子页（/teacher/notifications）。
+type MsgView = 'messages' | 'contacts'
 const mobileView = ref<MsgView>('messages')
-/** 移动端「＋」面板：新建会话 / 群聊与一键已读 */
+/** 移动端「＋」面板：新建会话 / 群聊、我的文件与一键已读 */
 const plusOpen = ref(false)
 /** 移动端页头页签（SlidingTabs 只消费 key / label，角标由页面内容自行呈现） */
 const headerTabs = computed(() => viewTabs.value.map((v) => ({ key: v.key, label: v.label })))
 
 const viewTabs = computed(() => [
-  // dtIcon：钉钉风格导航图标（见 components/common/DtIcon.vue）
-  { key: 'messages' as MsgView, label: '消息', icon: ChatLineRound, dtIcon: 'message', count: totalUnread.value },
-  { key: 'contacts' as MsgView, label: '通讯录', icon: User, dtIcon: 'contacts', count: 0 },
-  { key: 'files' as MsgView, label: '文件', icon: Document, dtIcon: 'file', count: 0 },
-  { key: 'notifications' as MsgView, label: '通知', icon: Bell, dtIcon: 'bell', count: unreadNotifCount.value },
+  { key: 'messages' as MsgView, label: '消息', count: totalUnread.value },
+  { key: 'contacts' as MsgView, label: '通讯录', count: 0 },
 ])
 
 /** SlidingTabs 只回传字符串 key，收窄后再交给 switchView */
@@ -1512,8 +1436,18 @@ function switchView(v: MsgView) {
   mobileView.value = v
   plusOpen.value = false
   if (v === 'contacts') ensureContacts()
-  if (v === 'files') loadSharedFiles()
-  if (v === 'notifications') loadNotifications()
+}
+
+/** 我的文件（聊天文档汇总）：与学生端同一个页面组件，路由按角色区分 */
+function goMyFiles() {
+  plusOpen.value = false
+  void router.push({ name: 'teacher-files' })
+}
+
+/** 通知（审批 / 预警 / 公告）：从原第四个视图抽成的独立子页 */
+function goNotifications() {
+  plusOpen.value = false
+  void router.push({ name: 'teacher-notifications' })
 }
 
 const conversations = ref<any[]>([])
@@ -1598,29 +1532,20 @@ function addToTask() {
 // 侧边栏 — 筛选已有会话
 const search = ref('')
 
-/** 桌面端钉钉式头部搜索：按当前视图路由到对应关键字（消息 / 通讯录 / 文件），通知视图不展示搜索 */
+/** 桌面端钉钉式头部搜索：按当前视图路由到对应关键字（消息 / 通讯录） */
 const headerKeyword = computed({
-  get: () => {
-    if (mobileView.value === 'contacts') return contactKeyword.value
-    if (mobileView.value === 'files') return fileKeyword.value
-    return search.value
-  },
+  get: () => (mobileView.value === 'contacts' ? contactKeyword.value : search.value),
   set: (v: string) => {
     if (mobileView.value === 'contacts') contactKeyword.value = v
-    else if (mobileView.value === 'files') fileKeyword.value = v
     else search.value = v
   },
 })
-const headerSearchPlaceholder = computed(() => {
-  if (mobileView.value === 'contacts') return '搜索姓名 / 学号 / 工号'
-  if (mobileView.value === 'files') return '搜索文件名'
-  if (mobileView.value === 'notifications') return '通知无需搜索'
-  return '搜索已有会话'
-})
+const headerSearchPlaceholder = computed(() =>
+  mobileView.value === 'contacts' ? '搜索姓名 / 学号 / 工号' : '搜索已有会话'
+)
 function onHeaderSearch() {
   if (mobileView.value === 'messages') filterConversations()
-  else if (mobileView.value === 'contacts') onContactSearch()
-  else if (mobileView.value === 'files') onFileSearch()
+  else onContactSearch()
 }
 
 // 置顶会话（服务端持久化：跨端 / 跨设备同步，替代原 localStorage 方案）
@@ -2561,65 +2486,6 @@ function roleTagClass(role: string) {
   return role === 'student' ? 'tui-tag-brand' : 'tui-tag-warn'
 }
 
-/* ==================== 文件（跨会话汇总，QQ「文件」页） ==================== */
-// 汇总历史各聊天里发送/接收过的文件、图片、语音：单聊 + 群聊一次取齐（服务端聚合）
-const sharedFiles = ref<SharedFile[]>([])
-const filesLoading = ref(false)
-const fileKeyword = ref('')
-const fileTypeFilter = ref<'' | 'file' | 'image' | 'voice'>('')
-let fileSearchTimer: ReturnType<typeof setTimeout> | null = null
-
-const FILE_TYPE_FILTERS = [
-  { key: '' as const, label: '全部' },
-  { key: 'image' as const, label: '图片' },
-  { key: 'file' as const, label: '文档' },
-  { key: 'voice' as const, label: '语音' },
-]
-
-async function loadSharedFiles() {
-  if (filesLoading.value) return
-  filesLoading.value = true
-  try {
-    const params: { keyword?: string; file_type?: string } = {}
-    const kw = fileKeyword.value.trim()
-    if (kw) params.keyword = kw
-    if (fileTypeFilter.value) params.file_type = fileTypeFilter.value
-    const res = await getSharedFiles(params)
-    sharedFiles.value = res.items || []
-  } catch {
-    sharedFiles.value = []
-  } finally {
-    filesLoading.value = false
-  }
-}
-
-function onFileSearch() {
-  if (fileSearchTimer) clearTimeout(fileSearchTimer)
-  fileSearchTimer = setTimeout(() => { void loadSharedFiles() }, 300)
-}
-
-function setFileTypeFilter(key: '' | 'file' | 'image' | 'voice') {
-  fileTypeFilter.value = key
-  loadSharedFiles()
-}
-
-function fileTypeIcon(t: SharedFile['file_type']) {
-  if (t === 'image') return Picture
-  if (t === 'voice') return Microphone
-  return Document
-}
-
-/** 打开文件：图片走大图预览，其余直接下载 */
-function openSharedFile(f: SharedFile) {
-  if (f.file_type === 'image') previewImage(f.url)
-  else downloadFile(f.url, f.name || '文件')
-}
-
-/** 点击来源会话 → 跳到对应聊天 */
-function openFileSession(f: SharedFile) {
-  openChat(Number(f.session_key.slice(2)), f.session_name, f.is_group ? 'group' : 'single')
-}
-
 /* ==================== 通知 ==================== */
 // 通知不设分类筛选：按时间倒序直出，点击直达对应子页面
 const notifications = ref<NotificationItem[]>([])
@@ -2633,54 +2499,6 @@ async function loadNotifications() {
     notifications.value = await getNotifications({ page_size: 50 })
   } catch { /* 通知拉取失败不影响会话与通讯录 */ }
   finally { notifLoading.value = false }
-}
-
-async function handleReadAllNotifications() {
-  if (!unreadNotifCount.value) return
-  try {
-    await markAllNotificationsRead()
-    await loadNotifications()
-  } catch { ElMessage.error('操作失败') }
-}
-
-async function openNotification(n: NotificationItem) {
-  if (!n.is_read) {
-    try { await markNotificationsRead([n.id]); n.is_read = true } catch { /* 标记失败不阻断跳转 */ }
-  }
-  // 历史通知可能只写了 /teacher/students 而没带学生参数：用 related_id 补上，
-  // 保证点进去直接聚焦到该学生，而不是落在一张全量列表上。
-  let link = n.link || ''
-  if (link.startsWith('/teacher/students') && n.related_id && !link.includes('student=')) {
-    link += `${link.includes('?') ? '&' : '?'}student=${n.related_id}`
-  }
-  if (link) {
-    router.push(link)
-  } else {
-    // 部分通知（历史数据 / 无跳转目标）没有 link，此前点击完全无反应，
-    // 这里给出明确反馈，避免用户以为页面坏了。
-    ElMessage.info(n.content || '该通知暂无关联页面')
-  }
-}
-
-/** 通知类型 → 图标与语义色，色值取自设计令牌同源色板（teacher-ui.css） */
-function notifMeta(type: string): { icon: any; color: string; tint: string } {
-  switch (type) {
-    case 'approval':
-    case 'leave':
-      return { icon: Stamp, color: '#b54708', tint: '#fffaeb' }
-    case 'crisis':
-      return { icon: WarningFilled, color: '#d92d20', tint: '#fef3f2' }
-    case 'announcement':
-      return { icon: Bell, color: '#2563eb', tint: 'var(--dt-primary-soft)' }
-    case 'feedback':
-      return { icon: ChatLineRound, color: '#079455', tint: '#ecfdf3' }
-    case 'message':
-      return { icon: ChatDotRound, color: '#0891b2', tint: '#ecfeff' }
-    case 'system':
-      return { icon: Setting, color: '#2563eb', tint: 'var(--dt-primary-soft)' }
-    default:
-      return { icon: InfoFilled, color: '#6b7280', tint: '#f2f3f5' }
-  }
 }
 
 // 打开聊天
@@ -2950,16 +2768,19 @@ function downloadFile(url: string, name: string) {
 function previewImage(url: string) { previewUrl.value = url }
 
 async function uploadAndSend(file: File) {
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)
   uploadProgress.value = 10
   try {
-    const result = await uploadFile(file)
+    // 图片走普通上传（50MB 内）；其余文件走聊天文件通道（最大 5GB，服务器保留 7 天）
+    const result = isImage
+      ? await uploadFile(file)
+      : await uploadChatFile(file, (p) => { uploadProgress.value = Math.max(10, p) })
     uploadProgress.value = 100
-    const ext = file.name.split('.').pop()?.toLowerCase() || ''
-    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)
     const content = makeFileContent(isImage ? 'image' : 'file', file.name, result.url)
     await sendTextMsg(content)
-  } catch {
-    ElMessage.error(`上传 ${file.name} 失败`)
+  } catch (e: any) {
+    ElMessage.error(e?.message || `上传 ${file.name} 失败`)
   } finally {
     uploadProgress.value = 0
   }
@@ -2967,8 +2788,14 @@ async function uploadAndSend(file: File) {
 
 async function uploadFiles(files: FileList | File[]) {
   for (const f of files) {
-    if (f.size > 50 * 1024 * 1024) {
+    const ext = f.name.split('.').pop()?.toLowerCase() || ''
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)
+    if (isImage && f.size > 50 * 1024 * 1024) {
       ElMessage.warning(`${f.name} 超过 50MB 限制`)
+      continue
+    }
+    if (f.size > MAX_CHAT_FILE_SIZE) {
+      ElMessage.warning(`${f.name} 超过 5GB 限制`)
       continue
     }
     await uploadAndSend(f)
@@ -3020,18 +2847,14 @@ function clearUnreadFromMenu() {
 }
 
 /* ==================== 移动端下拉刷新 ==================== */
-// 会话 / 通讯录 / 通知三视图共用侧栏滚动容器：下拉时按当前视图重新拉取，
+// 两个主视图共用侧栏滚动容器：下拉时按当前视图重新拉取，
 // 兜底 WebSocket 断线或漏推导致的"消息不更新"
 async function refreshSidebar() {
   if (mobileView.value === 'messages') {
     await Promise.all([loadConversations(), loadGroups(), refreshButlerPreview()])
-  } else if (mobileView.value === 'contacts') {
+  } else {
     contactsLoaded = false
     await Promise.all([ensureContacts(), loadMyStudents()])
-  } else if (mobileView.value === 'files') {
-    await loadSharedFiles()
-  } else {
-    await loadNotifications()
   }
 }
 
@@ -3063,6 +2886,8 @@ onMounted(async () => {
   loadPins()
   connectWs()
   void refreshButlerPreview()
+  // 通知不再是页内视图，但页头铃铛的未读角标要靠它：进页面就拉一次
+  void loadNotifications()
   await Promise.all([loadConversations(), loadGroups(), loadMyStudents()])
   if (route.query.groupId) {
     openChat(Number(route.query.groupId), (route.query.groupName as string) || '', 'group')
@@ -3096,7 +2921,6 @@ watch(
 onUnmounted(() => {
   document.removeEventListener('click', onGlobalClick)
   disconnectWs()
-  if (fileSearchTimer) { clearTimeout(fileSearchTimer); fileSearchTimer = null }
   // 释放录音资源：避免离开消息页后麦克风仍在占用
   if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
   try { mediaRecorder?.stop() } catch { /* 忽略停止异常 */ }
@@ -3135,7 +2959,7 @@ function onGlobalClick(e: MouseEvent) {
 }
 
 /* ===== 侧边栏 ===== */
-.msg-sidebar { width: 288px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--dt-divider); background: var(--dt-surface); }
+.msg-sidebar { width: 252px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--dt-divider); background: var(--dt-surface); }
 /* 桌面端头部（钉钉式）：一行「整宽搜索框 + 右侧 + 新建」 */
 .sidebar-header {
   display: flex; align-items: center; gap: 8px;
@@ -3170,9 +2994,9 @@ function onGlobalClick(e: MouseEvent) {
    这里只需保证滚动容器（.sidebar-scroll / .msg-list）自身可滚并阻断原生下拉刷新 */
 
 /* 钉钉式会话行：52px 行高、圆形头像、发丝分割线、按压态 */
-.conv-item { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; cursor: pointer; transition: background .15s var(--dt-ease); border-left: 3px solid transparent; }
+.conv-item { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 14px; cursor: pointer; transition: background .15s var(--dt-ease); }
 .conv-item:hover { background: var(--dt-hover); }
-.conv-item.active { background: var(--dt-primary-soft); border-left-color: var(--dt-primary); }
+.conv-item.active { background: #f2f3f5; }
 .conv-avatar-wrapper { position: relative; flex-shrink: 0; line-height: 0; }
 /* 圆形头像（钉钉式） */
 .conv-avatar-wrapper :deep(.el-avatar) { border-radius: 50%; }
@@ -3189,10 +3013,10 @@ function onGlobalClick(e: MouseEvent) {
 .conv-avatar { flex-shrink: 0; }
 .conv-info { flex: 1; min-width: 0; }
 .conv-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.conv-name { font-size: 14px; font-weight: 600; color: var(--dt-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-name { font-size: 14px; font-weight: 500; color: var(--dt-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv-time { font-size: 11px; color: var(--dt-text-quiet); font-family: var(--mono); flex-shrink: 0; margin-left: auto; }
 .conv-bottom { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
-.conv-preview { font-size: 12.5px; color: var(--dt-text-tertiary); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-preview { font-size: 12px; color: var(--dt-text-tertiary); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-badge { --el-badge-bg-color: var(--dt-danger); flex-shrink: 0; }
 .conv-member-count { font-size: 11px; color: var(--dt-text-quiet); flex-shrink: 0; }
 /* 群聊在线人数：紧随最后一条消息前 */
@@ -3207,7 +3031,7 @@ function onGlobalClick(e: MouseEvent) {
 .butler-entry .conv-name { font-weight: 600; }
 .butler-entry .dt-tag { flex-shrink: 0; }
 .butler-entry-avatar {
-  width: 44px; height: 44px; border-radius: 50%; overflow: hidden;
+  width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   background: var(--dt-primary-soft); color: var(--dt-primary-strong);
 }
@@ -3763,14 +3587,15 @@ function onGlobalClick(e: MouseEvent) {
   display: flex; align-items: stretch; height: 48px;
   background: #fff; border-bottom: 1px solid #f0f1f3;
 }
-/* 四枚页签：字号比学生端两枚页签略小，保证 390px 屏仍能居中排开 */
+/* 两枚页签（消息 / 通讯录）：与学生端同一套参数 —— 20px / 700 / 28px 间距，
+   左右各 82px 给「铃铛 + ＋」两枚图标让位，标题组因此仍落在页面正中 */
 .msg-appbar-tabs {
   flex: 1; min-width: 0;
   --st-height: 48px;
-  --st-pad: 0 44px;
+  --st-pad: 0 82px;
   --st-justify: center;
-  --st-gap: 18px;
-  --st-font: 17px;
+  --st-gap: 28px;
+  --st-font: 20px;
   --st-font-weight: 700;
   --st-color: #9aa0a8;
   --st-color-active: #1d2129;
@@ -3792,6 +3617,16 @@ function onGlobalClick(e: MouseEvent) {
   color: #1d2129; cursor: pointer; transition: background 0.16s ease;
 }
 .msg-appbar-icon:active { background: #f2f3f5; }
+/* 通知铃铛：未读角标贴在右上角，与学生端会话行的未读样式同源（黑底白字） */
+.msg-bell { position: relative; }
+.msg-bell-badge {
+  position: absolute; top: 2px; right: 2px;
+  min-width: 15px; height: 15px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: #111827; color: #fff;
+  font-size: 10px; font-style: normal; line-height: 1;
+  box-shadow: 0 0 0 2px #fff;
+}
 .msg-appbar-plus.is-open { background: #f2f3f5; }
 .msg-appbar-plus .el-icon { transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
 .msg-appbar-plus.is-open .el-icon { transform: rotate(45deg); }
@@ -3831,6 +3666,22 @@ function onGlobalClick(e: MouseEvent) {
 .msg-search input {
   flex: 1; min-width: 0; border: none; outline: none; background: transparent;
   font-size: 13px; color: #1f2329;
+}
+/* 桌面端通知入口：贴在搜索框右端，不额外占一行 */
+.msg-search-bell {
+  position: relative; flex-shrink: 0; width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 7px; background: transparent;
+  color: #6b7280; cursor: pointer;
+}
+.msg-search-bell:hover { background: #ececf0; color: #1f2329; }
+.msg-search-badge {
+  position: absolute; top: -3px; right: -4px;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; background: #111827; color: #fff;
+  font-size: 9.5px; font-style: normal; line-height: 1;
+  box-shadow: 0 0 0 1.5px #f5f6f8;
 }
 .msg-tabs { display: flex; gap: 4px; padding: 0 14px 8px; }
 .msg-tab {

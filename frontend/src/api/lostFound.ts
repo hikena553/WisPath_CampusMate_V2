@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { LostFoundItem, LostFoundComment } from '@/types'
 
-export function getLostFoundItems(params?: { type?: string; status?: string }) {
+export function getLostFoundItems(params?: { type?: string; status?: string; sort?: 'new' | 'hot' }) {
   return request.get<LostFoundItem[]>('/lost-found/items', { params })
 }
 

@@ -46,6 +46,8 @@ class ForumMessageOut(BaseModel):
     actor_id: int
     post_id: int | None = None
     post_title: str | None = None
+    # 帖子首图（没有配图时为 None，前端据此决定是否占缩略图位）
+    post_cover: str | None = None
     content: str | None = None
     is_read: bool = False
     created_at: datetime

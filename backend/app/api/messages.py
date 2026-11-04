@@ -19,8 +19,30 @@ from app.schemas.message import MessageSend, MessageOut, ConversationOut
 from app.services.session_hidden import hidden_watermarks, is_hidden, hide_session
 from app.services.ws_manager import manager
 from app.utils.message_attach import ATTACHMENT_TYPES, parse_attachment, preview_of
+from app.api.files import CATEGORY_DIRS, resolve_safe
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
+
+
+def _attachment_size(url: str) -> int:
+    """附件在磁盘上的字节数：`/api/files/{category}/{filename}` → stat。
+
+    聊天文件服务器只保留 7 天，过期条目文件已不在盘上，这里统一返回 0，
+    由前端决定不显示大小（而不是显示 0 B）。
+    """
+    prefix = "/api/files/"
+    if not url.startswith(prefix):
+        return 0
+    category, _, name = url[len(prefix):].partition("/")
+    if not name or category not in CATEGORY_DIRS:
+        return 0
+    path = resolve_safe(name, CATEGORY_DIRS[category])
+    if not path:
+        return 0
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
 
 
 def _ws_cookie_token(ws: WebSocket) -> str | None:
@@ -310,6 +332,9 @@ def list_shared_files(
 
     对应 QQ「文件」入口：一处查看历史各聊天里发送过的文件（含自己发出的）。
     已删除的会话按其隐藏水位一并过滤，避免"列表里看不到会话、文件页却还在"。
+
+    「我的文件」页只消费文档：前端固定传 `file_type=file`，图片与语音留在各自
+    聊天里查看（`size` 为磁盘字节数，文件过期清理后为 0）。
     """
     watermarks = hidden_watermarks(db, user.id)
     items: list[dict] = []
@@ -344,6 +369,7 @@ def list_shared_files(
             "file_type": meta["type"],
             "name": meta["text"],
             "url": meta["url"],
+            "size": _attachment_size(meta["url"]),
             "duration": meta["duration"],
             "session_key": session_key,
             "session_name": peer_names.get(peer_id, ""),
@@ -381,6 +407,7 @@ def list_shared_files(
                 "file_type": meta["type"],
                 "name": meta["text"],
                 "url": meta["url"],
+                "size": _attachment_size(meta["url"]),
                 "duration": meta["duration"],
                 "session_key": session_key,
                 "session_name": group_names.get(m.group_id, ""),

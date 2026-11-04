@@ -34,7 +34,7 @@
       </header>
 
       <div class="fi-body">
-        <div v-if="loading" class="fi-hint">加载中…</div>
+        <div v-if="loading && !list.length" class="fi-hint">加载中…</div>
         <div v-else-if="!list.length" class="fi-empty">
           <el-icon :size="28"><Message /></el-icon>
           <p>还没有互动消息</p>
@@ -42,25 +42,43 @@
         </div>
         <div v-else class="fi-list">
           <button
-            v-for="item in list"
+            v-for="item in sortedList"
             :key="item.id"
             type="button"
             :class="['fi-item', { unread: !item.is_read }]"
             @click="openItem(item)"
           >
-            <el-avatar :size="34" :src="item.actor_avatar || undefined" class="fi-avatar">
-              {{ (item.actor_name || '同学').slice(0, 1) }}
-            </el-avatar>
+            <div class="fi-avatar-wrap">
+              <el-avatar
+                :size="40"
+                :src="item.actor_avatar || undefined"
+                class="fi-avatar"
+                :style="avatarStyle(item.actor_name)"
+              >
+                {{ initialOf(item.actor_name) }}
+              </el-avatar>
+              <!-- 动作徽标：一眼分清是赞、收藏、评论还是新粉丝 -->
+              <span :class="['fi-kind', `k-${item.kind}`]" :aria-label="actionText(item.kind)">
+                <el-icon :size="11"><component :is="KIND_ICON[item.kind]" /></el-icon>
+              </span>
+            </div>
+
             <div class="fi-main">
-              <div class="fi-line">
+              <p class="fi-line">
                 <b class="fi-actor">{{ item.actor_name || '同学' }}</b>
                 <span class="fi-action">{{ actionText(item.kind) }}</span>
-                <span v-if="item.post_title" class="fi-post">《{{ item.post_title }}》</span>
-              </div>
+              </p>
+              <p v-if="item.post_title" class="fi-post">{{ item.post_title }}</p>
               <p v-if="item.kind === 'comment' && item.content" class="fi-quote">{{ item.content }}</p>
-              <span class="fi-time">{{ formatTime(item.created_at) }}</span>
+              <span class="fi-time">
+                <i v-if="!item.is_read" class="fi-dot" aria-label="未读" />
+                {{ formatTime(item.created_at) }}
+              </span>
             </div>
-            <i v-if="!item.is_read" class="fi-unread-dot" aria-hidden="true"></i>
+
+            <div v-if="item.post_cover" class="fi-thumb">
+              <img :src="item.post_cover" alt="" loading="lazy" />
+            </div>
           </button>
         </div>
       </div>
@@ -71,10 +89,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message, Close } from '@element-plus/icons-vue'
+import {
+  Message,
+  Close,
+  Pointer,
+  Star,
+  ChatDotRound,
+  UserFilled,
+} from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { openUserHomepage } from '@/composables/useUserHomepage'
+import { parseServerTime } from '@/utils/datetime'
 import {
   getForumMessages,
   markForumRead,
@@ -103,6 +129,14 @@ const tabs: Array<{ label: string; value: TabValue }> = [
   { label: '关注', value: 'follow' },
 ]
 
+/** 每种互动的角标图标：赞=手型、收藏=星、评论=气泡、关注=人 */
+const KIND_ICON = {
+  like: Pointer,
+  favorite: Star,
+  comment: ChatDotRound,
+  follow: UserFilled,
+} as const
+
 const activeTab = ref<TabValue>('all')
 const list = ref<ForumMessageOut[]>([])
 const loading = ref(false)
@@ -119,6 +153,14 @@ const unreadCounts = computed(() => {
   return map
 })
 
+/** 未读置顶、其余按时间倒序：进箱后马上全部标已读，这里保留本次打开时的顺序供回溯 */
+const sortedList = computed(() =>
+  [...list.value].sort((a, b) => {
+    if (a.is_read !== b.is_read) return a.is_read ? 1 : -1
+    return (parseServerTime(b.created_at) || 0) - (parseServerTime(a.created_at) || 0)
+  }),
+)
+
 function countOf(tab: TabValue) {
   return unreadCounts.value[tab] || 0
 }
@@ -130,17 +172,53 @@ function actionText(kind: ForumKind) {
   )
 }
 
+/** 无头像时的首字底色：按名字取固定色，同一个人每次打开都是同一个颜色 */
+const AVATAR_COLORS: Array<[string, string]> = [
+  ['#e8f0fe', '#1a63c9'],
+  ['#e7f4ea', '#217a3c'],
+  ['#fdeaea', '#b03a3a'],
+  ['#fdf1e3', '#a2661a'],
+  ['#efeaf9', '#6a4bb0'],
+  ['#e4f4f6', '#1f7180'],
+]
+
+function avatarStyle(name: string) {
+  const s = (name || '同学').trim()
+  let h = 0
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) % 997
+  const [bg, fg] = AVATAR_COLORS[h % AVATAR_COLORS.length]
+  return { background: bg, color: fg }
+}
+
+function initialOf(name: string) {
+  const s = (name || '同学').trim()
+  if (!s) return '同'
+  const first = s[0]
+  return /[a-zA-Z]/.test(first) ? first.toUpperCase() : first
+}
+
+/**
+ * 相对时间：刚刚 / x 分钟前 / x 小时前 / 昨天 HH:mm / M-D / YYYY-M-D。
+ * 后端时间是不带时区的 UTC，必须先按 UTC 解析，否则凌晨的互动会被算成「昨天」。
+ */
 function formatTime(t: string) {
-  if (!t) return ''
-  const d = new Date(t)
-  if (Number.isNaN(d.getTime())) return ''
-  const now = Date.now()
-  const diff = Math.max(0, now - d.getTime())
+  const ms = parseServerTime(t)
+  if (Number.isNaN(ms)) return ''
+  const d = new Date(ms)
+  const now = new Date()
+  const diff = now.getTime() - ms
   if (diff < 60_000) return '刚刚'
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3600_000)} 小时前`
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getMonth() + 1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  if (sameDay) return `${Math.max(1, Math.floor(diff / 3_600_000))} 小时前`
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  if (d >= yesterday) return `昨天 ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}-${pad(d.getDate())}`
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${pad(d.getDate())}`
 }
 
 async function load(keepTab = false) {
@@ -173,7 +251,8 @@ async function markAllRead() {
   } finally {
     allUnread.value = []
     unreadTotal.value = 0
-    list.value = list.value.map((m) => ({ ...m, is_read: true }))
+    // 刻意不改 list 里的 is_read：导航红点与页签角标清零，但本次打开的列表
+    // 仍保留未读底色，方便刚进来时回看哪些是新的（重开面板会重新拉成已读态）
     forum.value = 0
     void refreshUnread()
   }
@@ -214,31 +293,82 @@ watch(forum, (v) => {
 
 <style scoped>
 .fi-root { display: flex; flex-direction: column; height: 100%; background: #fff; color: #1f2329; }
-.fi-head { padding: 18px 18px 10px; border-bottom: 1px solid #f0f1f3; }
+.fi-head { padding: 16px 16px 10px; border-bottom: 1px solid #f0f1f3; }
 .fi-title-row { display: flex; align-items: center; gap: 10px; }
-.fi-title { font-size: 16px; font-weight: 600; flex: 1; }
+.fi-title { font-size: 17px; font-weight: 600; flex: 1; letter-spacing: .2px; }
 .fi-read-all { border: none; background: none; color: #6b7280; font-size: 12px; cursor: pointer; }
 .fi-read-all:hover { color: #111827; text-decoration: underline; }
 .fi-close { border: none; background: #f4f5f7; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: #6b7280; }
-.fi-tabs { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
+.fi-tabs { display: flex; gap: 8px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
 .fi-tabs::-webkit-scrollbar { display: none; }
 .fi-tab { position: relative; border: 1px solid transparent; background: #f5f6f8; color: #4b5563; font-size: 12px; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .fi-tab.active { background: #111827; color: #fff; }
 .fi-tab-dot { position: absolute; top: -5px; right: -4px; background: #111827; color: #fff; font-size: 10px; line-height: 1; padding: 2px 4px; border-radius: 6px; font-style: normal; }
 .fi-tab.active .fi-tab-dot { background: #fff; color: #111827; }
-.fi-body { flex: 1; overflow-y: auto; padding: 6px 0 20px; }
+.fi-body { flex: 1; overflow-y: auto; padding: 2px 0 20px; }
 .fi-hint, .fi-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #9aa0a6; font-size: 13px; padding: 56px 24px; text-align: center; }
 .fi-empty p { margin: 4px 0 0; color: #4b5563; font-size: 14px; }
 .fi-empty span { font-size: 12px; }
-.fi-item { position: relative; width: 100%; display: flex; gap: 10px; align-items: flex-start; padding: 12px 18px; background: none; border: none; border-bottom: 1px solid #f5f6f8; text-align: left; cursor: pointer; }
+
+/* ===== 行 ===== */
+.fi-item {
+  position: relative;
+  width: 100%; display: flex; gap: 12px; align-items: flex-start;
+  padding: 13px 16px;
+  background: none; border: none; border-bottom: 1px solid #f3f4f6;
+  text-align: left; cursor: pointer;
+  transition: background .12s ease;
+}
+.fi-item:last-child { border-bottom: 0; }
 .fi-item:hover { background: #fafbfc; }
 .fi-item.unread { background: #f7f8fa; }
-.fi-avatar { flex-shrink: 0; background: #e9ebee; color: #6b7280; font-size: 13px; }
+.fi-item.unread:hover { background: #f4f5f7; }
+
+/* 头像 + 动作角标 */
+.fi-avatar-wrap { position: relative; flex: none; width: 40px; height: 40px; }
+.fi-avatar { display: block; font-size: 15px; font-weight: 600; background: #eef0f3; color: #6b7280; }
+.fi-kind {
+  position: absolute; right: -4px; bottom: -4px;
+  width: 17px; height: 17px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid #fff;
+}
+.k-like { background: #ffece8; color: #d4380d; }
+.k-favorite { background: #fff7e6; color: #d46b08; }
+.k-comment { background: #e6f4ff; color: #0958d9; }
+.k-follow { background: #f0f9eb; color: #3f8f2e; }
+
 .fi-main { flex: 1; min-width: 0; }
-.fi-line { font-size: 13px; line-height: 1.5; color: #4b5563; }
-.fi-actor { color: #111827; font-weight: 600; margin-right: 4px; }
-.fi-post { color: #111827; margin-left: 4px; }
-.fi-quote { margin: 4px 0 0; font-size: 12px; color: #6b7280; background: #f4f5f7; border-radius: 6px; padding: 6px 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.fi-time { display: inline-block; margin-top: 4px; font-size: 11px; color: #9aa0a6; }
-.fi-unread-dot { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 7px; height: 7px; border-radius: 50%; background: #111827; }
+.fi-line { margin: 0; font-size: 13px; line-height: 1.5; color: #6b7280; }
+.fi-actor { color: #111827; font-weight: 600; margin-right: 5px; }
+.fi-action { color: #6b7280; }
+/* 帖子标题独占一行，单行省略：三个 tab 里都能一眼看到「说的是哪篇」 */
+.fi-post {
+  margin: 3px 0 0;
+  font-size: 13px; line-height: 1.45; color: #1f2329;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fi-quote {
+  margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: #6b7280;
+  background: #f4f5f7; border-radius: 6px; padding: 6px 8px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.fi-time { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 11px; color: #9aa0a6; }
+.fi-dot { width: 5px; height: 5px; border-radius: 50%; background: #1d2129; }
+
+.fi-thumb { flex: none; width: 56px; height: 56px; border-radius: 8px; overflow: hidden; background: #f4f5f7; }
+.fi-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+</style>
+
+<!-- 不能写在 scoped 里：抽屉被 teleport 到 body 下，是页面级浮层。
+     全局 admin-components.css 在 ≤768px 给所有 .el-drawer 加了
+     max-width: calc(100% - 24px)（桌面端留一条缝是为了露出背后的页面，看得出来是浮层），
+     但这个抽屉在移动端是整页级交互：自带标题栏和页签，留缝只会把资讯页的半截文字
+     露在左边，右侧又贴边，左右不对称。这里只对本类放行，其余抽屉维持原样。 -->
+<style>
+@media (max-width: 768px) {
+  .el-drawer.forum-inbox-drawer {
+    max-width: 100% !important;
+  }
+}
 </style>

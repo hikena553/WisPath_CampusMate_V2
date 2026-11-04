@@ -5,17 +5,20 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Query
 from fastapi.responses import JSONResponse
 
 from app.core.deps import get_current_user
 from app.models.user import User
+from app.services.file_retention import CHAT_FILE_DIR
 from app.utils.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/api", tags=["upload"])
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+# 聊天里发送的文件：单文件上限 5GB，落盘 chat_files，由周期任务保留 7 天后删除
+CHAT_FILE_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5GB
 MAX_UPLOADS_PER_MINUTE = 20
 ALLOWED_TYPES = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".zip", ".rar",
                  # 语音消息（聊天「按住说话」录制的音频）
@@ -30,6 +33,19 @@ ALLOWED_MIME_PREFIXES = (
 # video/mp4；只对 m4a 这个扩展名放行这两个 MIME，别的一律按原规则拒绝。
 AUDIO_CONTAINER_EXTS = (".m4a",)
 AUDIO_CONTAINER_MIMES = ("audio/mp4", "video/mp4")
+
+# 聊天文件额外放行视频与常见压缩格式（5GB 的文件多为视频/资料包）
+CHAT_ALLOWED_TYPES = ALLOWED_TYPES | {
+    ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".m4v",
+    ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz",
+    ".csv", ".md", ".json", ".xml",
+}
+CHAT_ALLOWED_MIME_PREFIXES = ALLOWED_MIME_PREFIXES + (
+    "video/",
+    "application/x-7z-compressed", "application/x-tar", "application/gzip",
+    "application/x-gzip", "application/x-bzip2", "application/x-xz",
+    "application/x-compressed-tar", "application/json", "application/xml",
+)
 
 # 压缩包安全限制（防解压炸弹与路径穿越）
 ZIP_MAX_MEMBERS = 200
@@ -105,3 +121,62 @@ async def upload_file(
     with open(save_path, "wb") as f:
         f.write(content)
     return JSONResponse({"url": f"/api/files/root/{save_name}", "filename": filename})
+
+
+def _check_chat_file_mime(head: bytes) -> None:
+    """聊天文件内容嗅探：只读文件头，避免把 5GB 内容读进内存。"""
+    try:
+        import magic
+    except ImportError:
+        raise HTTPException(503, "文件校验服务不可用，请稍后重试")
+    mime_type = magic.from_buffer(head, mime=True)
+    if not mime_type.startswith(CHAT_ALLOWED_MIME_PREFIXES):
+        raise HTTPException(400, f"文件内容类型不匹配: {mime_type}")
+
+
+@router.post("/upload/chat-file")
+async def upload_chat_file(
+    request: Request,
+    filename: str = Query(..., max_length=255),
+    user: User = Depends(get_current_user),
+):
+    """聊天文件上传（裸 body 流式落盘）：单文件 ≤ 5GB，保存到 chat_files，7 天后自动清理。
+
+    与 `/api/upload` 的 multipart 不同，这里直接消费请求流，5GB 文件不会在内存 /
+    临时目录里多留一份副本；文件名通过 query 传入，认证走 Authorization 头。
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    check_rate_limit(f"upload:user:{user.id}", MAX_UPLOADS_PER_MINUTE, 60, "上传过于频繁，请稍后再试")
+    check_rate_limit(f"upload:ip:{client_ip}", MAX_UPLOADS_PER_MINUTE * 3, 60, "当前网络上传过于频繁，请稍后再试")
+
+    ext = Path(filename).suffix.lower()
+    if not ext or ext not in CHAT_ALLOWED_TYPES:
+        raise HTTPException(400, f"不支持的文件类型: {ext}")
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > CHAT_FILE_MAX_SIZE:
+        raise HTTPException(413, f"文件过大，单个文件最大 {CHAT_FILE_MAX_SIZE // 1024 // 1024 // 1024}GB")
+
+    safe_name = re.sub(r'[^\w.-]', '_', Path(filename).stem)[:64]
+    save_name = f"{safe_name}_{uuid.uuid4().hex[:8]}{ext}"
+    save_path = CHAT_FILE_DIR / save_name
+    CHAT_FILE_DIR.mkdir(parents=True, exist_ok=True)
+
+    size = 0
+    sniffed = False
+    try:
+        with open(save_path, "wb") as f:
+            async for chunk in request.stream():
+                if not sniffed:
+                    sniffed = True
+                    _check_chat_file_mime(chunk[:2048])
+                size += len(chunk)
+                if size > CHAT_FILE_MAX_SIZE:
+                    raise HTTPException(413, f"文件过大，单个文件最大 {CHAT_FILE_MAX_SIZE // 1024 // 1024 // 1024}GB")
+                f.write(chunk)
+        if size == 0:
+            raise HTTPException(400, "文件为空")
+    except Exception:
+        save_path.unlink(missing_ok=True)
+        raise
+
+    return JSONResponse({"url": f"/api/files/chat/{save_name}", "filename": filename})

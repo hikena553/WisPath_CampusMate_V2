@@ -698,7 +698,10 @@ def main() -> int:
         print("       iOS 装完还需到 设置→通用→关于本机→证书信任设置 开启完全信任")
         print("    2) 证书装好后访问上面的 HTTPS 地址，按住说话即可")
     else:
-        print("  手机端录音需要 HTTPS：用 HTTPS=1 python main.py 启动")
+        _ips = _local_ipv4_addresses()
+        _host = _ips[0] if _ips else "<局域网IP>"
+        print(f"  手机访问: http://{_host}:{FRONTEND_PORT}/  （只能浏览；浏览器在 HTTP 下禁用麦克风）")
+        print("       手机要用语音通话/录音：改为 HTTPS=1 python main.py 启动")
     print(f"  日志: {LOG_DIR}")
     print("  按 Ctrl+C 停止所有服务")
     print("=" * 56)

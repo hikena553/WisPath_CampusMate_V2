@@ -6,7 +6,7 @@
          下方视图是一条三页轨道（SwipePager），左右拖动的进度逐帧喂给滑条，
          所以「滑条跟手指」和「页面跟手指」是同一次位移的两个投影，不会各走各的。
          两个主视图之外的「互动」不占标题位、也不进 ＋ 面板：只能从「好友」往左滑到达；
-         ＋ 面板里只留「发起群聊 / 加好友 / 群 / 全部标为已读」这几件新建与清理动作。 -->
+         ＋ 面板里只留「发起群聊 / 加好友 / 群 / 我的文件 / 全部标为已读」这几件新建与清理动作。 -->
     <header
       v-if="isMobile"
       ref="appbarRef"
@@ -60,6 +60,10 @@
           <button type="button" class="msg-plus-item" role="menuitem" @click="goFindPeople">
             <el-icon :size="18"><User /></el-icon>
             <span>加好友 / 群</span>
+          </button>
+          <button type="button" class="msg-plus-item" role="menuitem" @click="openMyFiles">
+            <el-icon :size="18"><FolderOpened /></el-icon>
+            <span>我的文件</span>
           </button>
           <div class="msg-plus-sep" />
           <button
@@ -575,11 +579,11 @@
                 hidden
                 @change="onImagePicked"
               />
-              <!-- 文件：只列后端放行的文档 / 压缩包类型；图片、语音有各自的入口，不在这里重复 -->
+              <!-- 文件：只列后端放行的文档 / 压缩包 / 视频类型；图片、语音有各自的入口，不在这里重复 -->
               <input
                 ref="fileInputRef"
                 type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md,.json,.xml,.zip,.rar,.7z,.tar,.gz,.mp4,.mov,.avi,.mkv"
                 hidden
                 @change="onFilePicked"
               />
@@ -664,6 +668,7 @@ import {
   Check,
   Close,
   Document,
+  FolderOpened,
   Plus,
   Promotion,
   Refresh,
@@ -700,7 +705,7 @@ import {
   recordFileExt,
   voiceBubbleWidth,
 } from '@/utils/messageAttach'
-import { uploadFile } from '@/api/upload'
+import { MAX_CHAT_FILE_SIZE, uploadChatFile, uploadFile } from '@/api/upload'
 import SystemNoticeCard from '@/components/chat/SystemNoticeCard.vue'
 import {
   SYSTEM_NOTICE,
@@ -1484,17 +1489,17 @@ async function onFilePicked(e: Event) {
   // 立刻清空，否则同一个文件第二次选不会触发 change
   input.value = ''
   if (!file) return
-  // 与后端 /api/upload 的上限一致（50MB）
-  if (file.size > 50 * 1024 * 1024) {
-    ElMessage.warning('文件不能超过 50MB')
+  // 与后端 /api/upload/chat-file 的上限一致（5GB，服务器只保留 7 天）
+  if (file.size > MAX_CHAT_FILE_SIZE) {
+    ElMessage.warning('文件不能超过 5GB')
     return
   }
   uploading.value = true
   try {
-    const { url } = await uploadFile(file)
+    const { url } = await uploadChatFile(file)
     await sendContent(JSON.stringify({ type: 'file', text: file.name, url }))
-  } catch {
-    ElMessage.error(`上传 ${file.name} 失败`)
+  } catch (e: any) {
+    ElMessage.error(e?.message || `上传 ${file.name} 失败`)
   } finally {
     uploading.value = false
   }
@@ -1891,6 +1896,13 @@ async function onGroupCreated(group: { id: number; name: string }) {
 function goFindPeople() {
   plusOpen.value = false
   void router.push({ name: 'student-message-add' })
+}
+
+/** 我的文件：跳到跨会话文档汇总页（聊天里发过的文件；图片和语音留在聊天里看）。
+ *  原先是挂在旧「工作台」里的子页，工作台下线后独立成 /student/files。 */
+function openMyFiles() {
+  plusOpen.value = false
+  void router.push({ path: '/student/files' })
 }
 
 /** 全部标为已读：单聊 / 群聊走后端 read-all，互动走 markForumRead，系统通知是本地状态 */

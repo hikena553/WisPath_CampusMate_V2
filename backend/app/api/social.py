@@ -100,6 +100,7 @@ def list_forum_messages(
         db, current_user.id, kind=parsed, unread_only=unread_only, limit=limit, offset=offset
     )
     actors = social_service.actors_map(db, rows)
+    covers = social_service.post_covers_map(db, rows)
     result = []
     for row in rows:
         out = ForumMessageOut.model_validate(row)
@@ -107,6 +108,8 @@ def list_forum_messages(
         actor = actors.get(row.actor_id)
         out.actor_name = actor.name if actor else "已注销用户"
         out.actor_avatar = actor.avatar if actor else None
+        # 帖子可能已被删除：此时封面为空，标题仍用消息里的快照
+        out.post_cover = covers.get(row.post_id) if row.post_id else None
         result.append(out)
     return result
 

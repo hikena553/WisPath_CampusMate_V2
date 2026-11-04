@@ -422,10 +422,15 @@ async function handlePhoneCall() {
   voiceCallRef.value?.primeAudio()
   // 预热表情模型（不弹摄像头）：让接通后更快取到首帧表情，用于定制问候语
   voiceCallRef.value?.prewarmEmotion()
-  let cid = props.conversationId
+  let cid = props.conversationId ?? null
   if (!cid) {
-    const conv = await convStore.createConversation('normal')
-    cid = conv?.id ?? null
+    // 建会话可能因弱网/接口挂住。此前是直接 await，一旦不返回，浮层根本不会出现，
+    // 用户点了电话「没反应」。这里给 5 秒上限：超时就先按「无会话」拨通（后端允许
+    // conversation_id 缺省，通话记录不绑定会话；可以正常通话）。
+    cid = await Promise.race([
+      convStore.createConversation('normal').then(c => c?.id ?? null).catch(() => null),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 5000)),
+    ])
   }
   voiceConvId.value = cid
   showVoiceCall.value = true

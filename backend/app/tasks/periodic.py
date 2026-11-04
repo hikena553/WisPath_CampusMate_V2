@@ -14,6 +14,8 @@ CRON_TASK_SCAN_INTERVAL_SECONDS = 60
 RESOURCE_PROBE_INTERVAL_SECONDS = 600
 # 资讯账号发帖：与外部资讯抓取同节奏（30 分钟），转发新条目 + 到点补发每日汇总
 MEDIA_PUBLISH_INTERVAL_SECONDS = 1800
+# 聊天文件到期清理：每小时扫一次，删除超过 7 天的聊天文件
+CHAT_FILE_CLEANUP_INTERVAL_SECONDS = 3600
 
 
 def _process_stats() -> tuple[float, int] | None:
@@ -110,6 +112,18 @@ async def _periodic_proactive_push() -> None:
         await asyncio.sleep(PROACTIVE_INTERVAL_SECONDS)
 
 
+async def _periodic_chat_file_cleanup() -> None:
+    """聊天文件到期清理：只保留 7 天，避免大文件长期占用服务器磁盘。"""
+    from app.services.file_retention import purge_expired_chat_files
+
+    while True:
+        try:
+            await asyncio.to_thread(purge_expired_chat_files)
+        except Exception:
+            logger.exception("[聊天文件] 到期清理异常")
+        await asyncio.sleep(CHAT_FILE_CLEANUP_INTERVAL_SECONDS)
+
+
 async def _periodic_cron_task_runner() -> None:
     """Agent 定时任务调度：每分钟扫描一次到期任务并执行。
 
@@ -145,6 +159,8 @@ def start_periodic_tasks() -> list[asyncio.Task]:
         asyncio.create_task(_periodic_proactive_push()),
         # Agent 定时任务：每分钟扫描到期任务，AI 到点自动执行
         asyncio.create_task(_periodic_cron_task_runner()),
+        # 聊天文件：每小时清理超过 7 天的文件（启动时先立即扫一遍）
+        asyncio.create_task(_periodic_chat_file_cleanup()),
         # 资源探针：每 10 分钟记录 RSS / 线程数，用于判断进程是否被内存拖死
         asyncio.create_task(_periodic_resource_probe()),
     ]

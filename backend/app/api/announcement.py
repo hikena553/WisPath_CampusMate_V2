@@ -99,7 +99,8 @@ async def create_announcement(
                 title=f"[{urgency_label}公告] {title}",
                 content=content[:200],
                 notification_type=NotificationType.ANNOUNCEMENT,
-                link="/student/workbench",
+                # 原指旧「工作台」公告子页（已下线）：学生端公告由首页横幅 / 校园资讯承接
+                link="/student",
                 related_id=item.id,
                 sender_id=user.id,
                 # 紧急程度 → 提醒级别：学生端据此分级提醒（紧急强提醒 / 重要横幅 / 普通红点）
@@ -203,7 +204,7 @@ def remind_unread_announcements(
                 title=f"【提醒】{a.title}",
                 content=(a.content or "")[:200],
                 notification_type=NotificationType.ANNOUNCEMENT,
-                link="/student/workbench",
+                link="/student",
                 related_id=a.id,
                 sender_id=user.id,
                 level=a.urgency,

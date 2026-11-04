@@ -73,7 +73,22 @@ const router = createRouter({
         { path: 'grade-analysis', name: 'student-grade-analysis', redirect: { path: '/student/schedule', query: { tab: 'grades' } } },
         // v5：请假服务并入学业中心「请假服务」子页（我的申请记录一并合并），旧路由重定向
         { path: 'service', name: 'student-service', redirect: { path: '/student/schedule', query: { tab: 'service' } } },
-        { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
+        // v5：「工作台」页签已被「消息」取代，整页下线（旧 WorkbenchPage 不再渲染）。
+        // 旧地址仍可能出现在书签 / 历史通知里：唯一还有业务含义的是消息页旧版
+        // 「我的文件」直达（?page=files），转去独立的文件汇总页，其余一律回消息页。
+        {
+          path: 'workbench',
+          redirect: (to) =>
+            to.query.page === 'files'
+              // 显式清空 query：否则 page=files 会被带到新地址上（页面不读它，但地址会脏）
+              ? { path: '/student/files', query: {} }
+              : { path: '/student/messages' },
+        },
+        // 我的文件：聊天里发过的文档汇总（原工作台的 files 子页）；图片与语音不进这一页
+        { path: 'files', name: 'student-files', component: () => import('@/views/student/MyFilesPage.vue'), meta: { keepAlive: false } },
+        // 失物招领已并入交流社区（社区分区行里的「失物 / 招领」两个胶囊），独立页下线；
+        // 旧地址仍可用：落地即切到社区页签并选中「失物」
+        { path: 'lost-found', name: 'student-lost-found', redirect: { path: '/student/campus', query: { tab: 'community', chip: 'lost' } } },
         // 消息：原「工作台」页签位，统筹会话（私聊 / 群聊）、通讯录（关注·粉丝·互关好友）与论坛互动消息
         { path: 'messages', name: 'student-messages', component: () => import('@/views/student/MessagesPage.vue'), meta: { keepAlive: false } },
         // 消息页的两个主视图各有地址：/student/messages = 会话，/student/messages/friends = 好友。
@@ -138,6 +153,10 @@ const router = createRouter({
         { path: 'more', redirect: '/teacher' },
         { path: 'announcement', name: 'teacher-announcement', component: () => import('@/views/teacher/AnnouncementPage.vue'), meta: { keepAlive: false } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
+        // 消息页的两个子页（与学生端同构）：我的文件（聊天文档汇总，复用学生端同一组件）
+        // 与通知（审批/预警/公告，从消息页第四个视图抽出，入口是页头铃铛）。
+        { path: 'files', name: 'teacher-files', component: () => import('@/views/student/MyFilesPage.vue'), meta: { keepAlive: false } },
+        { path: 'notifications', name: 'teacher-notifications', component: () => import('@/views/teacher/NotificationsPage.vue'), meta: { keepAlive: false } },
         { path: 'profile', name: 'teacher-profile', component: () => import('@/views/teacher/ProfilePage.vue'), meta: { keepAlive: false } },
         // ===== 教师端三合一新增：个人工作台（我的成长）+ 我的课表 =====
         { path: 'growth', name: 'teacher-growth', component: () => import('@/views/teacher/MyGrowthPage.vue'), meta: { keepAlive: false } },

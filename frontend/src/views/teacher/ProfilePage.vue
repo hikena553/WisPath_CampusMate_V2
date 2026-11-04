@@ -133,7 +133,7 @@
 
           <!-- 收藏的帖子：参考学生端个人中心的两列封面卡；无内容时直接留白，不铺空状态和边框 -->
           <template v-if="articleFavs.length">
-            <h3 class="pf-section-title">收藏的帖子</h3>
+            <h3 class="pf-section-title">收藏</h3>
             <section class="pf-fav-area">
               <div class="pf-fav-grid">
                 <button
@@ -2306,17 +2306,19 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-/* 快捷入口：单行横向滑动，一屏固定 5 个，其余功能靠左右滑查看 */
+/* 快捷入口：按文案宽度等距排布，两侧留白与项间空隙同宽；入口多于一屏时左右滑查看 */
 .pf-quick {
   margin-top: 14px;
-  padding: 12px 16px 6px;
+  /* 左右内边距与轨道 gap 取同一值，配合 space-evenly 让首尾留白 = 项间空隙 */
+  padding: 12px 12px 6px;
   border-top: 1px solid var(--tui-border);
 }
-/* 滚动交给内部轨道：外层带 16px 页边距，若让外层滚动，第 6 个入口会在右侧内边距里露出局部 */
+/* 滚动交给内部轨道：外层页边距交给 space-evenly 统一分配，避免两侧比项间更空 */
 .pf-quick-track {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  justify-content: space-evenly;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
@@ -2325,8 +2327,8 @@ onMounted(() => {
 }
 .pf-quick-track::-webkit-scrollbar { display: none; }
 .pf-quick-item {
-  /* 5 个等分铺满轨道可视区，gap 共 4 个 12px */
-  flex: 0 0 calc((100% - 48px) / 5);
+  /* 宽度由图标/文案撑开，不再等分格子，否则格子富余会全部堆到两侧 */
+  flex: 0 0 auto;
   min-width: 0;
   scroll-snap-align: start;
   display: flex;

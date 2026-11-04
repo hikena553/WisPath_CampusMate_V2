@@ -1,0 +1,58 @@
+schema_version: 1
+request_id: f179f634-9a4f-4ab6-a7e9-b4fc3f8a3755
+created_at: 2026-11-04T16:48:59
+updated_at: 2026-11-04T16:49:56
+
+entry_type: full_pipeline
+stage_chain: [1, 2, 3]
+
+output_docx_path: "E:/studyScore/创意集市/WisPath_CampusMate_V2/output/f179f634-9a4f-4ab6-a7e9-b4fc3f8a3755/stage3/WisPath CampusMate 解说稿.docx"
+output_docx_user_specified: false
+
+current_stage: completed
+
+stages:
+  stage_0:
+    status: completed
+    completed_at: 2026-11-04T16:48:59
+    decision: full_pipeline
+
+  stage_1:
+    status: completed
+    started_at: 2026-11-04T16:48:59
+    completed_at: 2026-11-04T16:49:56
+    output_path: "stage1/final_draft.md"
+    genre: general
+    expert_used: general-writer
+    route_tag: general_writing
+
+  stage_2:
+    status: completed
+    started_at: 2026-11-04T16:49:56
+    completed_at: 2026-11-04T16:49:56
+    route: html
+    html_sub: template
+    output_path: "stage2/formatted-解说稿.html"
+    output_format: html
+    skills_invoked: [design-token, doc-typeset, html-review]
+    design_tokens_path: "skills/design-token/tokens/compiled/business-report.json"
+    fallback: false
+    fallback_reason: null
+
+  stage_3:
+    status: completed
+    started_at: 2026-11-04T16:49:56
+    completed_at: 2026-11-04T16:49:56
+    executor: doc-converter
+    input_format: html
+    output_path: "E:/studyScore/创意集市/WisPath_CampusMate_V2/output/f179f634-9a4f-4ab6-a7e9-b4fc3f8a3755/stage3/WisPath CampusMate 解说稿.docx"
+    skill_used: ["html-to-doc"]
+    present_files_opened: true
+    fallback: false
+    fallback_reason: null
+
+consistency_check:
+  output_files_exist: pass
+  stage_chain_complete: pass
+  last_checked_at: 2026-11-04T16:49:56
+  errors: []

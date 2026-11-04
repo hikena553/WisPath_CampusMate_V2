@@ -4444,6 +4444,9 @@ watch(() => route.query.tab, (val) => {
   font-family: inherit; font-size: 14.5px; font-weight: 600;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* 失物招领入口已挪到交流社区（校园资讯「交流社区」页签内的一个视图），
+   服务子页底部不再挂入口，对应 .sv-entry* 样式一并删除。 */
 .sv-cta:active { transform: scale(0.99); }
 .svr-row {
   display: flex; align-items: center; gap: 10px;

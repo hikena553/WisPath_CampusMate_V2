@@ -3,6 +3,40 @@ import { getToken } from '@/utils/token'
 
 export type VoiceState = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error'
 
+/** 超时类失败：文案本身就是可执行提示，不再被 describeMediaError 二次包装 */
+class VoiceTimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VoiceTimeoutError'
+  }
+}
+
+/** 给浏览器 API 加超时：这类调用在异常内核里可能既不 resolve 也不 reject */
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let done = false
+    const timer = setTimeout(() => {
+      if (done) return
+      done = true
+      reject(new VoiceTimeoutError(message))
+    }, ms)
+    p.then(
+      (v) => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        reject(e)
+      },
+    )
+  })
+}
+
 export interface UseVoiceCallOptions {
   conversationId?: number | null
   onStateChange?: (state: VoiceState) => void
@@ -29,6 +63,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   let mediaStream: MediaStream | null = null
   let workletNode: AudioWorkletNode | null = null
   let scriptProcessor: ScriptProcessorNode | null = null
+  // ScriptProcessor 需要一个「下沉节点」才会被驱动，但不能直连 destination，
+  // 否则麦克风原声会外放（手机外放形成回声/啸叫，还会自激触发打断）
+  let silentSink: GainNode | null = null
   let sourceNode: MediaStreamAudioSourceNode | null = null
   let playbackAudioCtx: AudioContext | null = null
   let pingInterval: ReturnType<typeof setInterval> | null = null
@@ -72,6 +109,11 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   const PREROLL_SAMPLES = 4800  // 300ms @16kHz
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
+  // 手机侧最容易踩的两处「既不成功也不报错」：WebSocket 握手悬在 CONNECTING、
+  // getUserMedia 永不 settle（微信 X5 / 部分安卓内核在权限弹窗被忽略时如此）。
+  // 没有超时兜底时前端会永远停在「正在接通…」，用户只看到一直转圈。
+  const CONNECT_TIMEOUT_MS = 8000
+  const CAPTURE_TIMEOUT_MS = 8000
   // 音频上传节流：合并小块音频再发送，避免高频消息挤占 WebSocket，
   // 延迟回答文字/语音的回传（豆包等实时方案的共同做法：音频通道限流保活）
   const AUDIO_FLUSH_INTERVAL_MS = 60    // 至多每 60ms 发一包
@@ -82,6 +124,77 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   function setState(s: VoiceState) {
     state.value = s
     options.onStateChange?.(s)
+  }
+
+  /**
+   * 语音通话环境自检（移动端失败的第一大来源）。
+   *
+   * 手机浏览器只在「安全上下文」（HTTPS 或 localhost）下开放
+   * navigator.mediaDevices，用 http://<局域网IP>:5173 访问时它是 undefined，
+   * getUserMedia 会直接抛 TypeError。以前这个 TypeError 被 catch 成
+   * 「麦克风权限被拒」，用户只看到一句莫名其妙的权限错误，无法判断是
+   * 协议问题还是真的拒了权限。这里提前判定并给可执行的提示。
+   */
+  function checkSupport(): string | null {
+    if (typeof window === 'undefined') return '当前环境不支持语音通话'
+
+    if (!window.isSecureContext && !navigator.mediaDevices) {
+      const host = window.location.hostname
+      const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+      if (!isLocalHost) {
+        return `语音通话需要 HTTPS：请用「HTTPS=1 python main.py」启动，手机访问 https://${host}:5173/`
+      }
+      return '当前页面不是安全上下文，浏览器已禁用麦克风，请改用 HTTPS 访问'
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return '当前浏览器不支持麦克风采集，请用系统浏览器打开（微信内请点「在浏览器打开」）'
+    }
+    return null
+  }
+
+  /** getUserMedia 的失败原因按类型翻译：移动端上这些错误码含义完全不同 */
+  function describeMediaError(e: unknown): string {
+    const name = (e as { name?: string })?.name || ''
+    switch (name) {
+      case 'NotAllowedError':
+      case 'PermissionDeniedError':
+      case 'SecurityError':
+        return '麦克风权限被拒绝，请在浏览器设置中允许后重试'
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        return '未检测到可用的麦克风'
+      case 'NotReadableError':
+      case 'TrackStartError':
+        return '麦克风被其他应用占用，请关闭后重试'
+      case 'OverconstrainedError':
+      case 'ConstraintNotSatisfiedError':
+        return '麦克风不支持所需的音频参数'
+      case 'AbortError':
+        return '麦克风启动被中断，请重试'
+      default:
+        return e instanceof Error ? `麦克风启动失败：${e.message}` : '麦克风启动失败'
+    }
+  }
+
+  /**
+   * 创建 AudioContext。
+   * iOS Safari 对 sampleRate 参数比桌面 Chrome 严格：请求 16000 可能抛
+   * NotSupportedError（硬件多为 48000/44100），一旦抛出整个 startCall 直接失败。
+   * 因此降级用默认采样率，后续重采样已经按实际 rate 处理，不影响识别。
+   */
+  function createAudioContext(preferRate?: number): AudioContext {
+    const Ctor: typeof AudioContext | undefined =
+      window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctor) throw new Error('当前浏览器不支持音频处理')
+    if (preferRate) {
+      try {
+        return new Ctor({ sampleRate: preferRate })
+      } catch {
+        // 采样率不被支持：回落到设备默认值
+      }
+    }
+    return new Ctor()
   }
 
   function getWsUrl(): string {
@@ -99,11 +212,38 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
   function connectWs(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const finish = (err?: Error) => {
+        if (settled) return
+        settled = true
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+        if (err) reject(err)
+        else resolve()
+      }
+
       ws = new WebSocket(getWsUrl())
+
+      // 握手兜底：弱网、代理没放行 Upgrade、手机切换 Wi-Fi/蜂窝时，socket 可能长期停在
+      // CONNECTING（既不 open 也不 error），startCall 就一直 await 在这里 —— 浮层永远
+      // 显示「正在接通…」。超时后主动关掉并给出可执行提示。
+      timer = setTimeout(() => {
+        if (ws && ws.readyState !== WebSocket.OPEN) {
+          try {
+            ws.close()
+          } catch {
+            // 已关闭的套接字忽略
+          }
+          finish(new VoiceTimeoutError('语音通道连接超时，请检查网络后重试'))
+        }
+      }, CONNECT_TIMEOUT_MS)
 
       ws.onopen = () => {
         reconnectAttempts = 0
-        resolve()
+        finish()
       }
 
       ws.onmessage = (event) => {
@@ -116,9 +256,23 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       }
 
       ws.onclose = (event) => {
-        if (event.code === 4001 || event.code === 4004) {
-          error.value = event.reason || '认证失败'
+        const isReject = event.code === 4001 || event.code === 4004 || event.code === 4002
+        const reason =
+          event.reason || (event.code === 4002 ? '连接过于频繁，请稍后再试' : '认证失败')
+
+        // 4001 认证失败 / 4004 会话不存在 / 4002 限流：都属于「重连也没用」的
+        // 确定性拒绝，必须直接停在 error 态并展示原因。此前 4002 会进入指数退避
+        // 重连，而重连本身又消耗限流额度，移动端反复点电话就会一直「连接失败」。
+        if (isReject) {
+          error.value = reason
           setState('error')
+          options.onError?.(error.value)
+        }
+
+        // 还在握手阶段就断开：让 connectWs 立刻收敛，否则 startCall 的 await 悬空，
+        // 浮层会同时「已 error 又一直转圈」（并泄漏一条 pending promise）
+        if (!settled) {
+          finish(isReject ? new Error(reason) : new VoiceTimeoutError('语音通道已断开，请重试'))
           return
         }
 
@@ -143,7 +297,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       }
 
       ws.onerror = () => {
-        reject(new Error('WebSocket 连接失败'))
+        finish(new Error('WebSocket 连接失败'))
       }
     })
   }
@@ -226,7 +380,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
   async function playAudioChunkInner(buffer: ArrayBuffer, gen: number) {
     if (!playbackAudioCtx) {
-      playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
+      playbackAudioCtx = createAudioContext(16000)
       nextPlayTime = playbackAudioCtx.currentTime
     }
 
@@ -309,20 +463,48 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   }
 
   async function startCapture() {
+    const unsupported = checkSupport()
+    if (unsupported) throw new Error(unsupported)
+
+    // 麦克风采集同样可能挂死：微信 X5 / 部分安卓内核在系统权限弹窗被忽略（或被
+    // 前台其它弹层压住）时，getUserMedia 既不 resolve 也不 reject，startCall 就永远
+    // 停在 connecting。此时服务端可能已经开始生成问候（浮层跳到「思考中…」），
+    // 用户看到的就是「一直转圈但没有任何提示」。
+    const streamPromise = navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    })
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      })
-    } catch {
-      throw new Error('麦克风权限被拒')
+      mediaStream = await withTimeout(
+        streamPromise,
+        CAPTURE_TIMEOUT_MS,
+        '麦克风 8 秒无响应：请检查系统或浏览器的麦克风权限弹窗（可能被其他窗口挡住），允许后重试',
+      )
+    } catch (e) {
+      // 超时后浏览器仍可能迟一步把流给回来：立刻关掉，别让麦克风一直亮着
+      void streamPromise
+        .then((late) => {
+          if (!mediaStream) late.getTracks().forEach((t) => t.stop())
+        })
+        .catch(() => {})
+      throw e instanceof VoiceTimeoutError ? e : new Error(describeMediaError(e))
     }
 
-    audioCtx = new AudioContext({ sampleRate: 16000 })
+    audioCtx = createAudioContext(16000)
+    // iOS 上新建的 AudioContext 默认是 suspended，不 resume 的话 worklet /
+    // ScriptProcessor 不会产出任何帧（表现为「接通了但 AI 听不到」）。
+    // 这里兜底恢复一次，失败也不阻断（后续每帧仍会尝试）。
+    if ((audioCtx.state as string) === 'suspended') {
+      try {
+        await audioCtx.resume()
+      } catch {
+        // 忽略：无手势时可能失败，采集仍会尝试
+      }
+    }
     // 记录实际采样率：请求值可能被浏览器忽略（Windows 上多为 48000），
     // 后续按实际值重采样，否则音频变速变调 → ASR 乱码
     captureSampleRate = audioCtx.sampleRate || 16000
@@ -386,7 +568,11 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       // 降级到 ScriptProcessor
       scriptProcessor = audioCtx.createScriptProcessor(4096, 1, 1)
       sourceNode.connect(scriptProcessor)
-      scriptProcessor.connect(audioCtx.destination)
+      // 经 0 增益节点接 destination：既能被音频线程驱动，又不会把麦克风声音外放
+      silentSink = audioCtx.createGain()
+      silentSink.gain.value = 0
+      scriptProcessor.connect(silentSink)
+      silentSink.connect(audioCtx.destination)
 
       scriptProcessor.onaudioprocess = (event) => {
         const samples = event.inputBuffer.getChannelData(0)
@@ -589,7 +775,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
    */
   async function unlockAudio(): Promise<void> {
     if (!playbackAudioCtx) {
-      playbackAudioCtx = new AudioContext({ sampleRate: 16000 })
+      playbackAudioCtx = createAudioContext(16000)
       nextPlayTime = playbackAudioCtx.currentTime
     }
     if (playbackAudioCtx.state === 'suspended') {
@@ -603,6 +789,14 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
   async function startCall() {
     if (state.value !== 'idle' && state.value !== 'error') return
+
+    // 环境不支持时直接给出可执行的原因（HTTPS / 浏览器），不必等 getUserMedia 抛错
+    const unsupported = checkSupport()
+    if (unsupported) {
+      setState('error')
+      error.value = unsupported
+      throw new Error(unsupported)
+    }
 
     setState('connecting')
     error.value = ''
@@ -672,7 +866,13 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
     if (scriptProcessor) {
       scriptProcessor.disconnect()
+      scriptProcessor.onaudioprocess = null
       scriptProcessor = null
+    }
+
+    if (silentSink) {
+      silentSink.disconnect()
+      silentSink = null
     }
 
     if (sourceNode) {
@@ -714,8 +914,40 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     bargedIn = false
   }
 
+  /**
+   * 移动端切到后台后系统常会掐掉 WebSocket（iOS 尤其明显），回到前台浏览器
+   * 不会自动恢复。这里在回前台时立刻重连，省掉指数退避的 2~8 秒空窗。
+   */
+  function ensureConnectionOnVisible() {
+    if (typeof document === 'undefined' || document.visibilityState !== 'visible') return
+    if (state.value === 'idle' || state.value === 'error') return
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
+
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout)
+      reconnectTimeout = null
+    }
+    reconnectAttempts = 0
+    try {
+      ws?.close()
+    } catch {
+      // 已关闭的套接字忽略
+    }
+    ws = null
+    connectWs().catch(() => {
+      // 失败交给 onclose / startCall 的错误路径
+    })
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', ensureConnectionOnVisible)
+  }
+
   onUnmounted(() => {
     cleanup()
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', ensureConnectionOnVisible)
+    }
   })
 
   // 触发接通问候：智能体先开口（豆包式）。可选携带首次表情，用于定制开场语

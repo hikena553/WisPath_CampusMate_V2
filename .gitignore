@@ -68,10 +68,17 @@ frontend/dist-ssr/
 frontend/.vite/
 frontend/*.local
 # 构建时把 TMPDIR/TEMP/TMP 重定向到项目内，规避 esbuild 清理系统 Temp 报 Access is denied
+# 注意：项目根目录的 .tmpbuild/ 也要忽略（此前只写了 frontend/.tmpbuild/，
+# 导致根目录那份构建临时目录里的数千个文件全部以「未跟踪」形式暴露在 git status 里）
+.tmpbuild/
 frontend/.tmpbuild/
 
 # HTTPS=1 本地开发证书（含 CA 私钥，绝对不能入库）
 frontend/certs/
+
+# 生产 TLS 证书与 Let's Encrypt 账户密钥（含私钥，绝对不能入库）
+deploy/certs/*
+!deploy/certs/.gitkeep
 
 # Vite / TS / test caches
 .vite/
@@ -282,3 +289,11 @@ frontend/.verify*/
 
 # 本地语音识别模型（200MB+ 运行时产物，不入库）
 backend/models/
+
+# ---------- GitHub Actions 排查临时产物（2026-11-05）----------
+# 查 CI 红叉时用 API 拉的 run/jobs 缓存与日志包，以及就地解 wheel 的临时目录
+# （.tmpci/pkgs 里是 pytest 依赖解包，500+ 文件 / 15MB，全是可重新下载的东西）
+backend/.tmpci/
+backend/.cijobs.json
+backend/.ciq.json
+backend/.runid.txt

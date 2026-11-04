@@ -160,7 +160,7 @@
                 :aria-selected="cardTab === 'favorites'"
                 @click="cardTab = 'favorites'"
               >
-                收藏的帖子
+                收藏
               </button>
               <!-- 卡片只铺 4 张：再多就把个人主页挤成第二个资讯列表，
                    全量收进「我的收藏」子页。入口跟着 Tab 走，只在收藏页签下出现。 -->
@@ -186,7 +186,7 @@
             >
               <template v-if="cardTab === 'favorites'">
                 <div v-if="favLoading" class="pf-cards-loading">加载中…</div>
-                <div v-else-if="!articleFavs.length" class="pf-cards-empty">还没有收藏任何帖子</div>
+                <div v-else-if="!articleFavs.length" class="pf-cards-empty">还没有收藏</div>
                 <div v-else class="pf-media-grid">
                   <div
                     v-for="fav in articleFavs.slice(0, 4)"
@@ -405,7 +405,7 @@
              所以列表就落在这里，点开走校园资讯同款站内详情（不跳外部浏览器）。 -->
         <div v-if="currentPage === 'favorites'" class="sub-page-content">
           <p v-if="favLoading" class="pf-fav-empty">加载中…</p>
-          <p v-else-if="!articleFavs.length" class="pf-fav-empty">还没有收藏的帖子</p>
+          <p v-else-if="!articleFavs.length" class="pf-fav-empty">还没有收藏</p>
           <div v-else class="pf-fav-list">
             <button
               v-for="fav in articleFavs"
@@ -2068,18 +2068,21 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-/* 快捷入口：单行横向滑动，一屏固定 5 个，其余功能靠左右滑查看 */
+/* 快捷入口：按文案宽度等距排布，两侧留白与项间空隙同宽 */
 .pf-quick {
   margin-top: 14px;
-  padding: 14px 16px 10px;
+  /* 左右内边距与轨道 gap 取同一值，配合 space-evenly 让首尾留白 = 项间空隙 */
+  padding: 14px 10px 10px;
   border-top: 1px solid var(--tui-border);
 }
-/* 滚动交给内部轨道：外层带 16px 页边距，若让外层滚动，第 6 个入口会在右侧内边距里露出局部 */
+/* 滚动交给内部轨道：外层页边距交给 space-evenly 统一分配，避免两侧比项间更空 */
 .pf-quick-track {
   display: flex;
   align-items: flex-start;
-  /* 首尾各贴齐页面 16px 页边距，5 个格子等分整行宽度，不留两侧空白 */
-  gap: 8px;
+  /* 每个入口宽度就是文案宽度，剩余空间在所有间隙（含首尾）里均分：
+     padding = gap 时，两侧留白与相邻入口之间的空隙严格相等 */
+  gap: 10px;
+  justify-content: space-evenly;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
@@ -2088,8 +2091,8 @@ onMounted(async () => {
 }
 .pf-quick-track::-webkit-scrollbar { display: none; }
 .pf-quick-item {
-  /* 5 个等分铺满轨道可视区；多留 1px，避免亚像素舍入把第 5 个挤出可视区 */
-  flex: 0 0 calc((100% - 33px) / 5);
+  /* 宽度由图标/文案撑开，不再等分格子，否则格子富余会全部堆到两侧 */
+  flex: 0 0 auto;
   min-width: 0;
   scroll-snap-align: start;
   display: flex;
@@ -2284,7 +2287,7 @@ onMounted(async () => {
   text-align: center;
 }
 
-/* 收藏超过 4 条时的出口：贴在页签行右端，跟「项目经历 / 收藏的帖子」同一水平线。
+/* 收藏超过 4 条时的出口：贴在页签行右端，跟「项目经历 / 收藏」同一水平线。
    不放卡片下方 —— 那里正好压在底部悬浮胶囊上，点不到（且页面不一定滚得动）。 */
 .pf-cards-all {
   display: inline-flex;

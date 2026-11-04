@@ -46,6 +46,8 @@ export interface ForumMessageOut {
   actor_avatar: string | null
   post_id: number | null
   post_title: string | null
+  /** 帖子首图（无配图 / 帖子已删为 null） */
+  post_cover: string | null
   content: string | null
   is_read: boolean
   created_at: string

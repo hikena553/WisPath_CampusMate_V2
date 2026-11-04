@@ -198,7 +198,8 @@ def review_item(
     from app.services.notification_service import send_notification
     send_notification(
         db, applicant_id, title=title, content=content,
-        notification_type=ntype, link="/student/workbench",
+        # 材料归档结果 → 学生端「材料档案」页（原指旧工作台，已下线）
+        notification_type=ntype, link="/student/materials",
         related_id=item_id, sender_id=user.id, sms_template=f"{title}短信",
     )
     return {"message": f"已{req.action}"}

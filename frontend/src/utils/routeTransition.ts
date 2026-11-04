@@ -54,7 +54,6 @@ export const ROUTE_NAV_DEPTH: Readonly<Record<string, number>> = {
   // 消息页「好友」视图是同一个组件的另一个视图（同一地址族），切过去不算下钻
   '/student/messages/friends': 0,
   '/student/profile': 0,
-  '/student/workbench': 0,
 
   // ---- 二级：校园资讯 ----
   // 搜索子页（CampusSearchPage）/ 详情（ArticleDetailPage）/ 阅读器（ArticleReader）
@@ -64,9 +63,14 @@ export const ROUTE_NAV_DEPTH: Readonly<Record<string, number>> = {
   // ---- 二级：消息 ----
   '/student/messages/search': 1, // 消息搜索子页（页头放大镜进入）
   '/student/messages/add': 1, // 添加朋友 / 建群（「＋」面板与通讯录空态进入）
+  '/teacher/files': 1, // 教师端我的文件（消息页「＋」面板进入）
+  '/teacher/notifications': 1, // 教师端通知（消息页页头铃铛进入）
 
   // ---- 二级：快捷空间 ----
   '/student/portfolio': 1, // 我的作品集
+  '/student/files': 1, // 我的文件（聊天文件汇总，原工作台 files 子页）
+  // 失物招领已并入交流社区（/student/campus?tab=community&view=lostfound），
+  // 旧地址是 redirect，不再产生独立页面，层级表里随之移除。
 }
 
 export type PageTransitionName = 'route-subpage' | 'route-subpage-back' | 'page-card'
