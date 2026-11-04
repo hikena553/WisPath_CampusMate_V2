@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="gwK3ahe3rNCNdvSpdZRIly">
+<head data-page-node-id="AmcFXy8jp2kuTaggbkRyZf">
+<meta charset="UTF-8" data-page-node-id="K0oqvW1iUeKpCk5WR3Fykk">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="hIlLsIGEMt546GN5xBBvja">
+<title>教师端移动端 · 首页内容并入「工作台」（三套版式 / 沿用现有首页 UI）</title>
+<style>
+:root{
+  --ink:#e9ecf1; --sub:#98a2b3; --quiet:#6b7686; --line:rgba(255,255,255,.08);
+  --card:rgba(255,255,255,.035);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+body{
+  font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  background:#0b0d10;color:var(--ink);padding:0 0 100px;
+  background-image:radial-gradient(900px 520px at 10% -6%,rgba(37,99,235,.16),transparent 62%),
+                   radial-gradient(720px 420px at 92% -2%,rgba(91,91,214,.1),transparent 58%);
+}
+.i{flex:none;display:block}
+
+/* ================= 页面外壳 ================= */
+.wrap{max-width:1660px;margin:0 auto;padding:0 40px}
+.hero{padding:50px 0 8px}
+.kicker{display:inline-flex;align-items:center;gap:9px;font-size:11px;letter-spacing:.15em;color:#8fb0ff;
+  background:rgba(37,99,235,.14);border:1px solid rgba(37,99,235,.26);padding:5px 12px;border-radius:999px}
+.hero h1{font-size:30px;letter-spacing:.3px;margin-top:18px;font-weight:700}
+.hero h1 em{font-style:normal;color:#7d90ff}
+.hero .lead{margin-top:13px;font-size:13.5px;line-height:1.9;color:var(--sub);max-width:1000px}
+.hero .lead b{color:#dfe7f2;font-weight:600}
+.req{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
+.req span{font-size:12px;color:#b9c2d0;background:var(--card);border:1px solid var(--line);
+  border-radius:9px;padding:7px 11px;display:flex;gap:7px;align-items:center}
+.req b{color:#f4f6fa;font-weight:600}
+
+.block{margin-top:52px}
+.block-head{display:flex;align-items:flex-end;gap:14px;border-bottom:1px solid var(--line);padding-bottom:13px}
+.block-head .tag{font-size:11px;letter-spacing:.1em;color:#7f8b9c}
+.block-head h2{font-size:20px;font-weight:650;letter-spacing:.2px}
+.block-head h2 span{color:#5f6b7d;font-weight:500}
+.note{margin-top:12px;font-size:12.5px;line-height:1.85;color:var(--sub);max-width:1020px}
+.note code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#a9b6ff;
+  background:rgba(120,140,255,.1);padding:1px 5px;border-radius:4px}
+.note b{color:#dfe7f2}
+
+/* ================= 信息架构 ================= */
+.ia{display:grid;grid-template-columns:1fr 64px 1fr;align-items:center;gap:6px;margin-top:26px}
+.ia-col{background:rgba(255,255,255,.028);border:1px solid var(--line);border-radius:16px;padding:18px 20px 20px}
+.ia-col h3{font-size:11.5px;letter-spacing:.12em;color:#7f8b9c;font-weight:500}
+.ia-col h3 b{color:#e9ecf1;font-weight:600;letter-spacing:0;font-size:13px;margin-left:7px}
+.ia-flow{display:flex;gap:10px;margin-top:14px;align-items:stretch;flex-wrap:wrap}
+.ia-box{flex:1;min-width:190px;border:1px dashed rgba(255,255,255,.14);border-radius:10px;padding:11px 12px}
+.ia-box .t{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+.ia-box .t i{width:16px;height:16px;border-radius:4px;background:rgba(37,99,235,.2);color:#8fa8ff;
+  font-size:9.5px;font-style:normal;display:grid;place-items:center;font-weight:700}
+.ia-box ul{margin-top:9px;display:flex;flex-direction:column;gap:6px}
+.ia-box li{font-size:11.5px;color:#9aa5b5;display:flex;gap:6px;line-height:1.5;list-style:none}
+.ia-box li::before{content:'';width:3px;height:3px;border-radius:50%;background:#4d5a6e;margin-top:6px;flex:none}
+.ia-arrow{display:flex;align-items:center;justify-content:center;color:#4b596d}
+.ia-col.is-new{border-color:rgba(37,99,235,.32);background:linear-gradient(180deg,rgba(37,99,235,.08),rgba(37,99,235,.02))}
+.moved{font-size:10.5px;color:#7d90ff;background:rgba(37,99,235,.14);border-radius:5px;padding:2px 6px;margin-left:6px}
+.ia-foot{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.ia-foot div{font-size:11.5px;color:#9aa5b5;background:rgba(255,255,255,.03);border:1px solid var(--line);
+  border-radius:9px;padding:8px 11px;line-height:1.6;flex:1;min-width:250px}
+.ia-foot b{color:#e9ecf1}
+
+/* ================= 命名 ================= */
+.names{display:flex;gap:16px;margin-top:24px;flex-wrap:wrap}
+.name-card{flex:1;min-width:240px;border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+  background:rgba(255,255,255,.028)}
+.name-card.rec{border-color:rgba(94,234,212,.3);background:rgba(94,234,212,.05)}
+.name-card .nm{font-size:17px;font-weight:700;letter-spacing:.2px}
+.name-card .nm small{font-size:10px;color:#6f7c8d;font-weight:400;margin-left:8px;letter-spacing:.05em}
+.name-card p{font-size:11.8px;color:#95a1b3;line-height:1.75;margin-top:9px}
+.name-card .kv{margin-top:11px;font-size:11px;color:#7f8b9c;line-height:1.7}
+.name-card .kv b{color:#dfe7f2}
+
+/* ================= 手机框 ================= */
+.phones{display:flex;gap:30px;margin-top:28px;flex-wrap:wrap;align-items:flex-start}
+.device{width:392px;flex:none}
+.device-head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.device-head .nm{font-size:13.5px;font-weight:600}
+.device-head .badge{font-size:9.5px;letter-spacing:.08em;padding:2px 7px;border-radius:5px;
+  background:rgba(255,255,255,.07);color:#b6c0cf}
+.device-head .badge.rec{background:linear-gradient(135deg,#8ff0c0,#5eead4);color:#0b0d10;font-weight:700}
+.device-desc{margin-top:14px;font-size:11.8px;line-height:1.8;color:#93a0b2}
+.device-desc b{color:#e6ebf3;font-weight:600}
+.device-desc .hint{display:block;margin-top:8px;color:#7f8b9c;font-size:11.3px}
+
+.phone{width:392px;height:788px;border:9px solid #171b22;border-radius:46px;overflow:hidden;
+  background:#000;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06);position:relative}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;font-size:13px}
+.sbar{height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+  font-size:11px;font-weight:600;color:#1c1c1e;letter-spacing:.2px}
+.sbar .sig{display:flex;align-items:flex-end;gap:2px;height:10px}
+.sbar .sig i{width:3px;background:currentColor;border-radius:1px;display:block}
+.sbar .sig i:nth-child(1){height:4px}.sbar .sig i:nth-child(2){height:6px}
+.sbar .sig i:nth-child(3){height:8px}.sbar .sig i:nth-child(4){height:10px;opacity:.28}
+.sbar .bat{width:17px;height:9px;border:1.2px solid currentColor;border-radius:2.5px;position:relative;opacity:.85}
+.sbar .bat::after{content:'';position:absolute;inset:1.6px;right:5px;background:currentColor;border-radius:1px}
+.sbar .rt{display:flex;align-items:center;gap:5px}
+
+/* ================= 共用分页引擎（对齐校园资讯） ================= */
+.pg-tabs{position:relative;display:flex;flex:none;z-index:6}
+.pg-ind{position:absolute;left:0;pointer-events:none;will-change:transform,width;z-index:1;
+  transition:transform 200ms cubic-bezier(.22,.61,.36,1),width 200ms cubic-bezier(.22,.61,.36,1)}
+.is-drag .pg-ind{transition:none}
+.pg-tab{position:relative;z-index:2;background:none;border:0;font:inherit;cursor:pointer;white-space:nowrap}
+.pg-viewport{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:pan-y}
+.pg-track{display:flex;height:100%;will-change:transform;transition:transform 200ms cubic-bezier(.22,.61,.36,1)}
+.pg-track.no-anim{transition:none}
+.pg-page{flex:0 0 100%;width:100%;height:100%;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  scrollbar-width:none;overscroll-behavior:contain}
+.pg-page::-webkit-scrollbar{display:none}
+
+/* =========================================================
+   教师端现有 UI 语言（tui-* / 首页现有组件）
+   ========================================================= */
+.tt{background:#f2f3f5;color:#0f1115;font-family:inherit;font-size:13px}
+.tt .sbar{color:#1c1c1e}
+.tt-head{flex:none;display:flex;align-items:center;gap:10px;padding:4px 14px 9px;background:#f5f6f8}
+.tt-head .mark{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(140deg,#2563eb,#7c3aed);color:#fff;font-size:12px;font-weight:700}
+.tt-head h1{font-size:17px;font-weight:700;letter-spacing:-.2px}
+.tt-head .sub{margin-top:3px;font-size:11px;color:#667085;display:flex;align-items:center;gap:5px}
+.tt-head .sub .live{width:5px;height:5px;border-radius:50%;background:#d92d20;box-shadow:0 0 0 3px rgba(217,45,32,.12)}
+.tt-head .sub .sep{color:#cbd0d8}
+.tt-ibtn{width:29px;height:29px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;
+  color:#475467;display:grid;place-items:center;cursor:pointer;flex:none}
+.tt-hero{flex:none;margin:0 14px;padding:13px 15px;border-radius:14px;
+  border:1px solid rgba(37,99,235,.12);background:linear-gradient(135deg,#ffffff 0%,#f3f8ff 100%);
+  box-shadow:0 1px 2px rgba(15,17,21,.03);display:flex;align-items:center;gap:12px}
+.tt-hero .main{flex:1;min-width:0}
+.tt-hero h2{font-size:18px;font-weight:700;letter-spacing:-.2px;color:#101828;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.tt-hero .meta{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:12px;color:#667085;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt-hero .dot{width:6px;height:6px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.14);flex:none}
+.tt-hero .sep{color:#cbd0d8}
+.tt-hero .idn{color:#344054;font-weight:500}
+.tt-hero .pet{width:44px;height:44px;flex:none;border-radius:50%;
+  background:radial-gradient(circle at 32% 30%,#8fb8ff,#2563eb 62%,#1d4ed8);color:#fff;
+  display:grid;place-items:center;font-size:15px;font-weight:700;box-shadow:0 4px 10px rgba(37,99,235,.22)}
+.tt-tabs{gap:2px;padding:0 10px;background:#f5f6f8;margin-top:6px}
+.tt-tab{height:38px;padding:0 10px;font-size:13.5px;color:#667085;font-weight:500}
+.tt-tab.is-on{color:#2563eb;font-weight:600}
+.tt-ind{height:3px;bottom:0;background:#2563eb;border-radius:2px 2px 0 0}
+.tt-page{padding:12px 14px 22px;background:#f2f3f5;display:flex;flex-direction:column;gap:10px}
+.tt-note{display:flex;align-items:center;gap:8px;font-size:12px;color:#344054;background:#fff;
+  border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;line-height:1.45}
+.tt-note i{width:6px;height:6px;border-radius:50%;background:#2563eb;flex:none;box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+.tt-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tt-kpi{background:#fff;border:1px solid #f0f1f3;border-radius:14px;padding:11px 12px;
+  display:flex;align-items:center;gap:10px}
+.tt-kpi .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;color:#fff;flex:none}
+.tt-kpi .v{font-size:19px;line-height:1.1;font-weight:600;letter-spacing:-.2px;font-variant-numeric:tabular-nums}
+.tt-kpi .v em{font-style:normal;font-size:11px;font-weight:400;color:#9ca3af;margin-left:2px}
+.tt-kpi .lb{font-size:11.5px;color:#9ca3af;margin-top:2px}
+.tt-kpi .ht{font-size:10.5px;color:#b0b6c0;margin-top:1px}
+.tt-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden}
+.tt-card-hd{display:flex;align-items:center;gap:8px;padding:13px 14px 0}
+.tt-card-hd .ic{width:22px;height:22px;border-radius:6px;background:#f7f8fa;color:#475467;
+  display:grid;place-items:center;flex:none}
+.tt-card-hd .t{font-size:14px;font-weight:600;color:#2b3245}
+.tt-card-hd .sub{font-size:11.5px;color:#9ca3af;margin-left:2px}
+.tt-card-hd .more{margin-left:auto;font-size:11.5px;color:#9ca3af;display:flex;align-items:center;gap:3px;
+  background:none;border:0;cursor:pointer;font-family:inherit}
+.tt-focus{margin:11px 14px 14px;display:flex;align-items:center;gap:12px;padding:12px;
+  border-radius:10px;border:1px solid #f0f1f3;background:#f7f8fa}
+.tt-focus .num{flex:none;display:flex;flex-direction:column;align-items:center;min-width:46px;
+  padding-right:12px;border-right:1px solid #f0f1f3}
+.tt-focus .num b{font-size:26px;font-weight:700;line-height:1.05;color:#1f2329;font-variant-numeric:tabular-nums}
+.tt-focus .num i{font-size:10.5px;color:#9ca3af;font-style:normal;margin-top:2px}
+.tt-focus .body{flex:1;min-width:0}
+.tt-focus .lb{font-size:11px;font-weight:600;letter-spacing:.3px;color:#9ca3af}
+.tt-focus .tx{font-size:13.5px;font-weight:600;line-height:1.45;color:#2b3245;margin-top:3px}
+.tt-go{flex:none;padding:7px 13px;border:0;border-radius:8px;background:#1f2329;color:#fff;
+  font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.tt-frow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid #f5f6f7}
+.tt-frow .bd{flex:1;min-width:0}
+.tt-frow .t{font-size:13.5px;font-weight:500;color:#2b3245;line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tt-frow .s{font-size:11.5px;color:#9ca3af;margin-top:3px}
+.tt-pill{flex:none;font-size:12px;color:#2563eb;background:#eff4ff;border:0;border-radius:8px;
+  padding:6px 10px;cursor:pointer;white-space:nowrap;font-family:inherit}
+.tt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px 0;padding:10px 6px 14px}
+.tt-cell{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:7px;
+  padding:8px 0 6px;cursor:pointer;position:relative}
+.tt-cell .sq{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff}
+.tt-cell .nm{font-size:12px;color:#4b5563}
+.tt-count{position:absolute;top:3px;right:50%;margin-right:-28px;min-width:16px;height:16px;padding:0 4px;
+  background:#d92d20;color:#fff;font-size:9.5px;border-radius:8px;display:grid;place-items:center;font-weight:600;
+  box-shadow:0 0 0 2px #fff}
+.tt-row{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid #f5f6f7}
+.tt-row:first-of-type{border-top:0}
+.tt-row .bd{flex:1;min-width:0}
+.tt-row .t{font-size:13.5px;color:#2b3245;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tt-row .s{font-size:11.5px;color:#9ca3af;margin-top:3px}
+.tt-row .v{font-size:13px;font-variant-numeric:tabular-nums;color:#4b5563;flex:none}
+.tt-row .v em{font-style:normal;color:#9ca3af;font-size:11px;margin-left:3px}
+.tt-prog{margin:9px 14px 13px;height:6px;border-radius:3px;background:#eceef1;overflow:hidden}
+.tt-prog i{display:block;height:100%;border-radius:3px;background:var(--p,#2563eb)}
+.tt-search{display:flex;gap:8px;align-items:center}
+.tt-input{flex:1;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid #e5e7eb;
+  border-radius:10px;padding:0 12px;height:38px;color:#9ca3af;font-size:12.5px}
+.tt-chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.tt-chips::-webkit-scrollbar{display:none}
+.tt-chip{flex:none;height:30px;padding:0 12px;border-radius:8px;background:#fff;border:1px solid #e5e7eb;
+  font-size:12px;color:#4b5563;display:flex;align-items:center;gap:5px;cursor:pointer;font-family:inherit}
+.tt-chip b{font-weight:600;color:#9ca3af;font-variant-numeric:tabular-nums}
+.tt-chip.is-on{background:#eff4ff;border-color:#c9dbff;color:#2563eb}
+.tt-chip.is-on b{color:#2563eb}
+.tt-chip.is-risk{background:#fef3f2;border-color:#fbd9d6;color:#d92d20}
+.tt-chip.is-risk b{color:#d92d20}
+.tt-stu{position:relative;display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #f0f1f3;
+  border-radius:12px;padding:10px 11px;overflow:hidden;cursor:pointer}
+.tt-stu::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,#e5e7eb)}
+.tt-av{width:38px;height:38px;border-radius:50%;background:#eceef1;color:#4b5563;display:grid;place-items:center;
+  font-size:14px;font-weight:600;flex:none;margin-left:3px}
+.tt-stu.sev .tt-av{box-shadow:0 0 0 2px #d92d20}
+.tt-stu.mod .tt-av{box-shadow:0 0 0 2px #b54708}
+.tt-stu .n{font-size:14px;font-weight:600;color:#2b3245;display:flex;align-items:center;gap:6px}
+.tt-tag{font-size:10px;font-weight:600;padding:2px 5px;border-radius:4px;line-height:1.4}
+.tt-tag.sev{background:#fef3f2;color:#d92d20}
+.tt-tag.mod{background:#fffaeb;color:#b54708}
+.tt-tag.mild{background:#fffbe6;color:#a15c07}
+.tt-stu .s{font-size:11.5px;color:#9ca3af;margin-top:3px}
+.tt-mets{display:flex;align-items:center;gap:8px;flex:none}
+.tt-met{text-align:right;min-width:30px}
+.tt-met b{display:block;font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:#2b3245}
+.tt-met i{display:block;font-size:9.5px;color:#9ca3af;font-style:normal;margin-top:1px}
+.tt-met.is-0 b{color:#c4c8ce}
+.tt-met.low b{color:#d92d20}
+.tt-foot{text-align:center;font-size:11.5px;color:#9ca3af;padding:4px 0 2px}
+.tt-week{display:flex;gap:5px;padding:12px 14px 13px}
+.tt-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 0;border-radius:8px}
+.tt-day .w{font-size:10.5px;color:#9ca3af}
+.tt-day .d{font-size:12.5px;color:#4b5563;font-variant-numeric:tabular-nums}
+.tt-day .dot{width:4px;height:4px;border-radius:50%;background:#c4c8ce}
+.tt-day.is-on{background:#eff4ff}
+.tt-day.is-on .w,.tt-day.is-on .d{color:#2563eb}
+.tt-day.is-on .d{font-weight:600}
+.tt-day.is-on .dot{background:#2563eb}
+.tt-task{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-top:1px solid #f5f6f7}
+.tt-task:first-of-type{border-top:0}
+.tt-box{width:16px;height:16px;border-radius:5px;border:1.4px solid #c4c8ce;flex:none;margin-top:2px;
+  display:grid;place-items:center;color:#fff}
+.tt-box.on{background:#2563eb;border-color:#2563eb}
+.tt-task .t{font-size:13px;color:#2b3245;line-height:1.45}
+.tt-task.done .t{color:#9ca3af;text-decoration:line-through}
+.tt-task .s{font-size:11px;color:#9ca3af;margin-top:3px}
+.tt-minis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tt-mini{background:#fff;border:1px solid #f0f1f3;border-radius:12px;padding:10px 12px}
+.tt-mini b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.tt-mini span{display:block;font-size:11px;color:#9ca3af;margin-top:2px}
+.tt-figs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tt-fig{background:#fff;border:1px solid #f0f1f3;border-radius:12px;padding:11px 12px}
+.tt-fig b{font-size:20px;font-weight:600;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.tt-fig span{display:block;font-size:10.5px;color:#9ca3af;margin-top:3px}
+.tt-bars{display:flex;align-items:flex-end;gap:10px;height:112px;padding:14px 14px 8px}
+.tt-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;height:100%}
+.tt-bar i{width:100%;border-radius:4px 4px 0 0;background:#c9dbff}
+.tt-bar.hi i{background:#2563eb}
+.tt-bar b{font-size:10.5px;color:#4b5563;font-variant-numeric:tabular-nums;font-weight:600}
+.tt-bar span{font-size:9.5px;color:#9ca3af}
+.tt-trend{display:flex;align-items:flex-end;gap:7px;height:90px;padding:14px 14px 12px}
+.tt-trend i{flex:1;background:#e8f0ff;border-radius:2px 2px 0 0}
+.tt-trend i.hi{background:#d92d20;opacity:.85}
+.tt-ai{display:flex;gap:10px;background:#f6f4ff;border:1px solid #e4ddff;border-radius:12px;padding:12px 13px}
+.tt-ai .ic{width:24px;height:24px;border-radius:8px;background:#5b5bd6;color:#fff;display:grid;place-items:center;flex:none}
+.tt-ai p{font-size:12px;line-height:1.7;color:#3f3a63}
+.tt-ai p b{color:#2f2b52}
+.tt-sub{flex:none;display:flex;align-items:center;gap:8px;padding:6px 12px 9px;background:#f5f6f8}
+.tt-back{width:30px;height:30px;border-radius:9px;border:0;background:#fff;color:#344054;
+  display:grid;place-items:center;cursor:pointer;flex:none}
+.tt-sub h1{font-size:16px;font-weight:700;color:#101828}
+.tt-sub .n{font-size:11.5px;color:#9ca3af;margin-left:2px}
+
+/* =========================================================
+   校园资讯（首页新位：直接复用学生端 CampusPage）
+   ========================================================= */
+.cn{background:#fff;color:#1d2129;font-family:inherit;font-size:13px}
+.cn .sbar{color:#1d2129}
+.cn-appbar{flex:none;display:flex;align-items:center;gap:4px;padding:2px 12px 8px;background:#fff}
+.cn-appbar h1{font-size:23px;font-weight:700;letter-spacing:-.4px;flex:1}
+.cn-btn{width:31px;height:31px;border:0;background:none;color:#1d2129;display:grid;place-items:center;
+  border-radius:50%;cursor:pointer;position:relative}
+.cn-pub{height:28px;border:0;border-radius:100px;background:#1d2129;color:#fff;font-size:11.5px;
+  font-weight:500;padding:0 11px;display:flex;align-items:center;gap:4px;cursor:pointer;margin-right:4px}
+.cn-dot{position:absolute;top:2px;right:1px;min-width:13px;height:13px;padding:0 3px;background:#f53f3f;color:#fff;
+  font-size:8.5px;border-radius:7px;display:grid;place-items:center;font-weight:600}
+.cn-tabs{gap:0;padding:0 12px;background:#fff;border-bottom:1px solid #f2f3f5}
+.cn-tab{height:37px;padding:0 11px;font-size:14px;color:#86909c}
+.cn-tab.is-on{color:#1d2129;font-weight:700}
+.cn-ind{height:3px;bottom:0;background:#1d2129}
+.cn-page{background:#fff;padding-bottom:20px}
+.cn-lead{margin:12px 12px 4px;border-radius:10px;padding:11px 12px;background:#f7f8fa;border:1px solid #eef0f2}
+.cn-lead .hd{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#4e5969;font-weight:600}
+.cn-lead .hd .live{width:5px;height:5px;border-radius:50%;background:#00b42a}
+.cn-lead .nums{display:flex;gap:14px;margin-top:8px}
+.cn-lead .nums div{font-size:10.5px;color:#86909c}
+.cn-lead .nums b{display:block;font-size:15px;color:#1d2129;font-variant-numeric:tabular-nums;margin-bottom:1px}
+.cn-lead .go{margin-top:9px;font-size:11.5px;color:#165dff;display:flex;align-items:center;gap:3px}
+.cn-hero{margin:12px 12px 6px;border-radius:10px;overflow:hidden;position:relative;height:150px;
+  background:linear-gradient(135deg,#2b3a67,#5b6fa8 45%,#c9a26b)}
+.cn-hero .cap{position:absolute;left:0;right:0;bottom:0;padding:22px 12px 15px;color:#fff;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.62))}
+.cn-hero .cap .tg{font-size:9.5px;background:rgba(255,255,255,.22);border-radius:3px;padding:2px 5px}
+.cn-hero .cap h3{font-size:14px;line-height:1.35;margin-top:6px;font-weight:600;padding-right:26px}
+.cn-hero .dots{position:absolute;bottom:6px;right:12px;display:flex;gap:4px}
+.cn-hero .dots i{width:12px;height:2.5px;border-radius:2px;background:rgba(255,255,255,.4)}
+.cn-hero .dots i.on{background:#fff}
+.cn-feed{padding:0 12px}
+.cn-item{display:flex;gap:11px;padding:13px 0;border-bottom:1px solid #f2f3f5;cursor:pointer}
+.cn-item .body{flex:1;min-width:0}
+.cn-item h3{font-size:15px;line-height:1.42;font-weight:600;letter-spacing:-.1px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cn-item .meta{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:11px;color:#86909c;flex-wrap:wrap}
+.cn-pin{font-size:9.5px;background:#fff1f0;color:#f53f3f;border-radius:3px;padding:1.5px 4px;font-weight:600}
+.cn-read{color:#00b42a;font-variant-numeric:tabular-nums}
+.cn-acts{margin-left:auto;display:flex;gap:9px;align-items:center;color:#86909c;font-variant-numeric:tabular-nums}
+.cn-acts span{display:flex;align-items:center;gap:3px;font-size:10.5px}
+.cn-thumb{width:92px;height:66px;border-radius:6px;flex:none;overflow:hidden;position:relative}
+.cn-thumb.g1{background:linear-gradient(140deg,#dbe6ff,#9db6e8)}
+.cn-thumb.g2{background:linear-gradient(140deg,#ffe6cc,#e8b98d)}
+.cn-thumb.g3{background:linear-gradient(140deg,#d8f3e6,#8fc9b1)}
+.cn-thumb.g4{background:linear-gradient(140deg,#ece0ff,#b6a3e0)}
+.cn-tip{font-size:10.5px;color:#86909c;text-align:center;padding:14px 12px 0;line-height:1.6}
+.cn-empty{text-align:center;color:#a9aeb8;font-size:12px;padding:50px 0}
+
+/* =========================================================
+   对比表 / 动效 / 权限
+   ========================================================= */
+.table{margin-top:24px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:rgba(255,255,255,.022)}
+.table table{width:100%;border-collapse:collapse;font-size:12.3px}
+.table th,.table td{padding:12px 15px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
+.table thead th{background:rgba(255,255,255,.04);font-size:11.5px;letter-spacing:.05em;color:#c3ccda;font-weight:600}
+.table tbody tr:last-child td{border-bottom:0}
+.table td:first-child{color:#8b96a7;width:150px;font-size:11.5px}
+.table td b{color:#eef2f8}
+.tick{color:#5eead4}.cross{color:#f97066}
+.cmp-note{margin-top:14px;font-size:12px;color:#93a0b2;line-height:1.8}
+.cmp-note b{color:#dfe7f2}
+
+.motion{display:grid;grid-template-columns:1.15fr 1fr;gap:26px;margin-top:26px}
+.motion-card{background:rgba(255,255,255,.028);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.motion-card h4{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.motion-card h4 i{width:18px;height:18px;border-radius:5px;background:rgba(37,99,235,.2);color:#8fa8ff;
+  display:grid;place-items:center;font-size:9.5px;font-style:normal;font-weight:700}
+.motion-card p{font-size:12px;line-height:1.85;color:#9aa5b5;margin-top:9px}
+.motion-card p b{color:#e3e9f4}
+.timeline{display:flex;gap:0;margin-top:18px}
+.tl-step{flex:1;position:relative;padding-top:20px}
+.tl-step::before{content:'';position:absolute;top:5px;left:0;right:0;height:1px;background:rgba(255,255,255,.1)}
+.tl-step:first-child::before{left:6px}
+.tl-step::after{content:'';position:absolute;top:2px;left:0;width:7px;height:7px;border-radius:50%;
+  background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.16)}
+.tl-step:first-child::after{left:3px}
+.tl-step .ms{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#7d90ff}
+.tl-step .tx{font-size:10.8px;color:#9aa5b5;margin-top:4px;line-height:1.5;padding-right:10px}
+.code{margin-top:14px;background:#0d1117;border:1px solid rgba(255,255,255,.07);border-radius:10px;
+  padding:13px 15px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.75;color:#c7d2e0;
+  overflow-x:auto;white-space:pre}
+.code .c{color:#6a7b8f}.code .k{color:#ff9ecd}.code .s{color:#9ae6b4}
+
+.devices-2{display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start;margin-top:26px}
+.side{flex:1;min-width:380px}
+.role-switch{display:inline-flex;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;padding:3px}
+.role-switch button{border:0;background:none;color:#98a2b3;font-size:12px;padding:7px 16px;border-radius:7px;cursor:pointer;
+  font-family:inherit;transition:.18s}
+.role-switch button.is-on{background:#e9ecf1;color:#0b0d10;font-weight:600}
+.side h4{font-size:13px;font-weight:600;margin-top:20px}
+.side ul{margin-top:10px;display:flex;flex-direction:column;gap:9px}
+.side li{list-style:none;font-size:12px;color:#9aa5b5;line-height:1.7;display:flex;gap:9px}
+.side li i{width:17px;height:17px;border-radius:5px;background:rgba(255,255,255,.07);color:#c3ccda;
+  display:grid;place-items:center;font-size:9.5px;font-style:normal;flex:none;margin-top:2px;font-weight:600}
+.side li b{color:#e3e9f4}
+
+.matrix{margin-top:10px;width:100%;border-collapse:collapse;font-size:12.3px;border:1px solid var(--line);
+  border-radius:12px;overflow:hidden}
+.matrix th,.matrix td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:left}
+.matrix thead th{background:rgba(255,255,255,.04);font-size:11.5px;color:#c3ccda}
+.matrix td:nth-child(2),.matrix td:nth-child(3),.matrix th:nth-child(2),.matrix th:nth-child(3){width:170px;text-align:center}
+.matrix tbody tr:last-child td{border-bottom:0}
+.matrix td:first-child{color:#b9c2d0}
+.matrix .muted{color:#5f6b7d;font-size:11px}
+
+.impl{margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.impl-card{background:rgba(255,255,255,.028);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.impl-card h4{font-size:12.5px;font-weight:600;display:flex;gap:8px;align-items:center;color:#e3e9f4}
+.impl-card h4 span{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#7d90ff}
+.impl-card ol,.impl-card ul{margin-top:11px;padding-left:2px;display:flex;flex-direction:column;gap:8px}
+.impl-card li{list-style:none;font-size:11.8px;line-height:1.75;color:#9aa5b5;display:flex;gap:8px}
+.impl-card li b{color:#e3e9f4;font-weight:600}
+.impl-card li code{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#a9b6ff;
+  background:rgba(120,140,255,.1);padding:1px 4px;border-radius:3px}
+.impl-card li i{font-style:normal;color:#5f6b7d;flex:none}
+.risk{border-color:rgba(249,112,102,.22);background:rgba(249,112,102,.05)}
+.risk h4{color:#ffb3a8}
+
+.foot{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:11.5px;color:#6b7686;line-height:1.9}
+@media (max-width:1024px){
+  .wrap{padding:0 20px}
+  .ia{grid-template-columns:1fr;gap:14px}
+  .ia-arrow{transform:rotate(90deg);height:30px}
+  .motion,.impl{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body data-page-node-id="muIPqoLB7JitTv1AfZSiAn">
+<div class="wrap" data-page-node-id="WfHcrTpuccdAWvX91eAzt4">
+
+  <header class="hero" data-page-node-id="wumcGM66DbQcarEKPENy5K">
+    <span class="kicker" data-page-node-id="Dt7lGERjgwaMPCgd8xwxPF">TEACHER · MOBILE · REDESIGN V5（沿用现有首页 UI）</span>
+    <h1 data-page-node-id="LdlcHdLBUDA73SqGMzVC4J">首页内容并入<em data-page-node-id="RyGAgZSUEx0CyE8hltpWPU">「工作台」</em>，资讯直接复用学生端</h1>
+    <p class="lead" data-page-node-id="Ar5todgJILhckEkBnZxf8D">
+      三条改动：<b data-page-node-id="KayTYLS6aFfXWFSkpaRcDL">①</b> 原首页整块搬进原「学生」页，那一级改名（不再叫「学生」）；<b data-page-node-id="lEawe9F4qmZIFgFdesxKb8">②</b> 原学生名单降为它的二级子页/分段；<b data-page-node-id="XX6tivQObuAjrMUMDYVaHU">③</b> 腾出来的首页位<b data-page-node-id="qfABjOARoJhLDezhz6ElFI">直接挂学生端校园资讯组件，UI 与内容零改动</b>，只按角色开关权限。
+      视觉上<b data-page-node-id="GAUdVVErgYc7S2wk3pIQM4">不换风格、不抄别的软件</b> —— 全部沿用现有首页那套（<code data-page-node-id="OYe1diUFCJW8rf1neQGz8y">teacher-ui.css</code> 的 <code data-page-node-id="KkB19zYFGgAYXluVNwhx0a">tui-*</code>、问候横幅、KPI 卡、今日重点卡、常用功能宫格）和现有学生名单的行样式，只做结构重组。下面三台手机是三套<b data-page-node-id="aa14FcQj4aA8Kfih4gHfMV">版式</b>，任挑一套。
+    </p>
+    <div class="req" data-page-node-id="Dc64MCHcDQVe7gjGTzkGZm">
+      <span data-page-node-id="aVhdanDDsNL38mtVIDF8Ty"><b data-page-node-id="UzcCGIKTNSjm3kx0M3sU7h">①</b> 首页 → 工作台第一屏</span>
+      <span data-page-node-id="s0pEXaKVCkBIeHdFGNbHNL"><b data-page-node-id="kPGxAXhUGHNi40Q5blyon4">②</b> 名单 → 二级子页</span>
+      <span data-page-node-id="TWx0mdUGieteIhOAipEnaR"><b data-page-node-id="jbAybErFrMU9bXgbgiGQJF">③</b> 动效对齐校园资讯</span>
+      <span data-page-node-id="CZfc4cJ36kOZ3CvaOCqfnC"><b data-page-node-id="UCV9pqWapooLTiWXiPqoNw">④</b> 首页位 = 学生端资讯（不改 UI）</span>
+    </div>
+  </header>
+
+  <!-- ======================= 信息架构 ======================= -->
+  <section class="block" data-page-node-id="627UbeNAIP5RDGWrU73puu">
+    <div class="block-head" data-page-node-id="A9mrHSozd9xHkwhRYT11AP">
+      <span class="tag" data-page-node-id="zL2gF307ajgDKgdvWG7BkM">01 / IA</span>
+      <h2 data-page-node-id="6TDA04UpfAkRKVAlIEmV75">结构怎么并 <span data-page-node-id="ghkWso0tIKfrB7S6fWPeSF">— 一个「工作台」装下首页 + 学生</span></h2>
+    </div>
+    <div class="ia" data-page-node-id="TlAc95xkwKPDHuYNFMKbeV">
+      <div class="ia-col" data-page-node-id="fAG8MFvMkNSyKq3FwwVqw6">
+        <h3 data-page-node-id="9JBvXdpgazn9dklBDKwMzG">现状 <b data-page-node-id="LVtqOHwlCS3ZgxUj3D2QLa">两个 Tab 各塞一半</b></h3>
+        <div class="ia-flow" data-page-node-id="J6YnNfrPXDLCiVDdhG6euB">
+          <div class="ia-box" data-page-node-id="P2GDBw87gmsmVHW6oqwHsy">
+            <div class="t" data-page-node-id="b24rTXIcFcGu6WXhGtDj3x"><i data-page-node-id="uAmhEGBTbkc9ncjppHxo25">1</i>首页</div>
+            <ul data-page-node-id="J7W6a0s0fcxwNR3NSJuLlO">
+              <li data-page-node-id="FIcynoDITbbAWGPsZNL575">问候横幅（HomeTopBanner）</li>
+              <li data-page-node-id="jmtLWGB146SgTBL1APVtiP">KPI 卡 ×4</li>
+              <li data-page-node-id="cMHlgBit4kN102LEO078PL">今日重点（TodayFocusCard）</li>
+              <li data-page-node-id="81iEq0r2KmmvPFyddhmKdA">常用功能宫格 + 我的节奏</li>
+            </ul>
+          </div>
+          <div class="ia-box" data-page-node-id="7jilQj6JZefK9FSH8AZfBo">
+            <div class="t" data-page-node-id="q77cGnNo7RVG12AstSLYGw"><i data-page-node-id="k2LOKs8mEsmxHCtiTMjUro">2</i>学生</div>
+            <ul data-page-node-id="FDRWQLy8uKcK6MIN7yFDUz">
+              <li data-page-node-id="8Ua5U8FkF0XQf5A3y70sOB">页头 + 概况便当格 <span style="color:#ff8b7e" data-page-node-id="uVmAZm8HvcBOWpYHd69zrK">（与首页 KPI 重复）</span></li>
+              <li data-page-node-id="FTZ2h7DCsO1EaCBHX1Rejv">搜索 + 危机 chips + 名单行</li>
+              <li data-page-node-id="mHA6EHFUGvh0hYvNaHlcnv">班级数据分析（整页跳转）</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="ia-arrow" data-page-node-id="V2BJDt81ilsLLaKbqhFUZn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" data-page-node-id="uoP7FbNYzB83XAqGOxsY5b"><path d="M4 12h15" data-page-node-id="OnEXODzFDGQMscyy94YDZQ"/><path d="m14 7 5 5-5 5" data-page-node-id="n9b0Pyf0bOSKupC5RERHEk"/></svg>
+      </div>
+      <div class="ia-col is-new" data-page-node-id="hujQMgRz4ZP2DRaVqNHAu5">
+        <h3 data-page-node-id="qQEwbFtUxXxHATVoPfKQve">合并后 <b data-page-node-id="1ZxiaEDTnR3zLOPfSZL7Sv">一个「工作台」</b></h3>
+        <div class="ia-flow" data-page-node-id="XZFKopUIV31w6VEjHhEmDR">
+          <div class="ia-box" style="border-style:solid;border-color:rgba(94,234,212,.3)" data-page-node-id="v6dSw6D6gkqvZrPvdTCppu">
+            <div class="t" data-page-node-id="L5JNuPmh1xbbHrNfxgtLOq"><i style="background:rgba(94,234,212,.18);color:#5eead4" data-page-node-id="JG8sgH9PTmogBsCl3bM4DG">1</i>首页/资讯<span class="moved" data-page-node-id="JbAmN3hQfTorm4iF0kiIBc">换内容</span></div>
+            <ul data-page-node-id="DNyrO9aSfTMcRPZkHZXgGH">
+              <li data-page-node-id="JJn0ihgC8bjj2kVKQBjLKu">直接渲染学生端 <code data-page-node-id="Bnw0aFv1J3E4jM8CgBXWD1">CampusPage</code></li>
+              <li data-page-node-id="IZlaHPTCNJz2OCHPJpCLci">UI 与内容不改动</li>
+              <li data-page-node-id="WhtuHDqTGfiAtp48npoWSY">只加角色权限开关</li>
+            </ul>
+          </div>
+          <div class="ia-box" style="border-style:solid;border-color:rgba(37,99,235,.34)" data-page-node-id="Xf4UPh9ZNBBxsphHq7sL4L">
+            <div class="t" data-page-node-id="dhVvjhZRfYcNtrekFaHyO1"><i data-page-node-id="ieZuhVmOWndCEswM8OHDak">2</i>工作台<span class="moved" data-page-node-id="iFex6R2Ch4VbjLxgxFgfzP">原首页 + 原学生</span></div>
+            <ul data-page-node-id="XJzKZDNZYVeXoQMgVmY16J">
+              <li data-page-node-id="MXl9oNXzb37nY7LxqAsaKQ">问候横幅 + KPI + 今日重点</li>
+              <li data-page-node-id="GoayS55OSKJfeAthSJznLy">常用功能 + 我的节奏</li>
+              <li data-page-node-id="NjLzcUO6ndr7fJSwsnOVyU">学生名单（降级为子页/分段）</li>
+            </ul>
+          </div>
+        </div>
+        <div class="ia-foot" data-page-node-id="dMCKRHixILDqkNxHrDV9qe">
+          <div data-page-node-id="pu0AVWIsnZan4u1mk1JILc"><b data-page-node-id="jNOTxZXPLC4ABllZKIOKbK">去重：</b>原学生页便当格与首页 KPI 合并为一组指标，只留一份；<b data-page-node-id="mAxNeYKEdtnVTG6NqUXTft">保留：</b>名单行、搜索、chips、学生详情下钻全部不动。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 命名 ======================= -->
+  <section class="block" data-page-node-id="KxAbB8y4DGdrjLcrVW1rvR">
+    <div class="block-head" data-page-node-id="rQw38smWEBoQ1BWT6jp834">
+      <span class="tag" data-page-node-id="8VTUSKykkCc3M39mRTawnl">02 / NAME</span>
+      <h2 data-page-node-id="ii5O5wC2X56Xknp5yyaEP6">这一级叫什么 <span data-page-node-id="r8Kt8724uWDbGPf0mYUjpv">— 「学生」已经装不下合并后的内容</span></h2>
+    </div>
+    <div class="names" data-page-node-id="1saQ3jlewHCt5CXBPUcGst">
+      <div class="name-card rec" data-page-node-id="oC9NalmPuUkQTKOv8mjaTu">
+        <div class="nm" data-page-node-id="zLljMOm7Ecpb7zFu7JBdDb">工作台<small data-page-node-id="L2SIKPDjCjv6L4WizsAbbl">推荐</small></div>
+        <p data-page-node-id="dsC5qgTCunG5P3QbNhwQdm">装的是「我今天要办什么 + 我带的人怎么样」，本质是辅导员的个人工作台；和桌面端侧边栏已有的「教师工作台」措辞同一口径。</p>
+        <div class="kv" data-page-node-id="edTpIafRaoC0E7HNqE6ibr"><b data-page-node-id="vfVOdkVsXFwGqBTgGaEw34">底部 Tab：</b>资讯 · 工作台 · 绵小城 · 消息 · 个人中心<br data-page-node-id="epqA9sc7bbJEOhdj4nDHFW"><b data-page-node-id="JXAFHf4AtBzkXRDAVNaWbz">页面标题：</b>工作台（副标：我的节奏 · 学生名单 · 班级分析）</div>
+      </div>
+      <div class="name-card" data-page-node-id="pLUGYO6zgshx7Eo2IqhQCi">
+        <div class="nm" data-page-node-id="LPTTLcqy95BV0VkLxhGZKe">我的班级<small data-page-node-id="uX03nsEQ66VSGXfbp4OoyU">备选</small></div>
+        <p data-page-node-id="aduhk6aTLhicziDb4I0kIe">更贴近「带班」语义，老师一眼知道进去看的是学生；但首页那部分个人待办（我的节奏/工作量）放在「班级」下会有点勉强。</p>
+        <div class="kv" data-page-node-id="iADkZyUcC8LvkRDrYBxDIz"><b data-page-node-id="gXQp4reBQ5mScfuKQmmScg">底部 Tab：</b>资讯 · 我的班级 · 绵小城 · 消息 · 个人中心<br data-page-node-id="uZo2JQGCOZljoNKGdjEzgE"><b data-page-node-id="I8q4tMwZmJE5OHYuQqN7Qe">页面标题：</b>我的班级（副标：42 人在册 · 3 条高危）</div>
+      </div>
+      <div class="name-card" data-page-node-id="JKDmjJe6ROOr6gHZnRzR4l">
+        <div class="nm" data-page-node-id="9YodCZN7hwRN5PqHoFqqQu">育人<small data-page-node-id="dSmEUVxLTpXblWPzOTA4hj">备选</small></div>
+        <p data-page-node-id="FssAFFDAlMSRWUX0xtSM42">与桌面端「班级育人」分组对齐，语义最准；缺点是词偏内部、学生端没有对应说法，老师在手机上不一定秒懂。</p>
+        <div class="kv" data-page-node-id="qiF3JRwgciompQvgfA6Xq1"><b data-page-node-id="PbnO4pSBrp5HEMFQRfIDmS">底部 Tab：</b>资讯 · 育人 · 绵小城 · 消息 · 个人中心<br data-page-node-id="2HLORfFu6gIxDbGlptfvW4"><b data-page-node-id="UJIAuaAXrTWsJvvS44SXLn">页面标题：</b>育人（副标：待办 · 名单 · 分析）</div>
+      </div>
+    </div>
+    <p class="note" data-page-node-id="2F4l0o9mGGoNjwonWiC0F6">
+      无论选哪个：<b data-page-node-id="ptzAsm2FLywf6noKPFVYvg">路由建议保留 <code data-page-node-id="gAyemDtXfFAmSc9Y2AFnzH">/teacher/students</code></b>（避免破坏已有书签与 <code data-page-node-id="zQrBionjR1U63VFBDvsO2i">activeNavKey</code> 逻辑），只改显示文案；
+      桌面端侧边栏「学生档案」同步改同一个名字，或保留「学生档案」作为下钻项名。
+    </p>
+  </section>
+
+  <!-- ======================= 三套版式 ======================= -->
+  <section class="block" id="styles" data-page-node-id="pygwwrNKvNBPvrNtKGBspw">
+    <div class="block-head" data-page-node-id="7XA34tk4IefaNKxAHxYgCo">
+      <span class="tag" data-page-node-id="oLui9t6wihD03gf3RMVTSC">03 / LAYOUT</span>
+      <h2 data-page-node-id="6KvNCI2c5WTw4qwBuYcQwP">三套版式，挑一套 <span data-page-node-id="yr8sDRxobx7lWNGqkjx1SD">— 同一套 UI 语言，三种组织方式</span></h2>
+    </div>
+    <p class="note" data-page-node-id="0AyNOvNoEax1YTBiBnjIZC">
+      三台手机用的都是<b data-page-node-id="icOYw6UIz5ilNvKhg6QDVr">现有首页那套件</b>：问候横幅（白→浅蓝渐变 + 品牌点 + 吉祥物）、KPI 卡（左图标右数值）、今日重点卡（灰底 + 26px 大数字 + 黑底主按钮）、常用功能宫格（40px 色块 + 角标）、名单行（风险色条 + 头像描边 + 三列指标）。差别只在<b data-page-node-id="FYjvuzhI0xVD5ujguDP1Lv">怎么组织</b>。
+      每台手机都能点 Tab / 按住左右拖 —— 切换动画就是校园资讯那套。
+    </p>
+
+    <div class="phones" data-page-node-id="5JdL3ywtAFQXQy6z7yVQnW">
+      <div class="device" data-page-node-id="hheu3INVIA1FRAEWHWRLS5">
+        <div class="device-head" data-page-node-id="pXRJUh1MvXe4DFiEiLZvTl">
+          <span class="nm" data-page-node-id="sXFbeGegsZ8k0lkDNdwCks">A · 四段分页</span>
+          <span class="badge rec" data-page-node-id="If0SUrsdp2bIYjOtU0ww3S">推荐</span>
+        </div>
+        <div class="phone" data-page-node-id="uTsSGhGteA4SdFLAcUf7dD"><div class="screen tt" id="phA" data-page-node-id="sR0bXxnsSLijatLHFP1VZv"></div></div>
+        <div class="device-desc" data-page-node-id="2ulJMTs37YzjCSWXTGduJv">
+          <b data-page-node-id="u2C2QkbBTfsgTGmqwIq4e6">问候横幅常驻顶部，下面四段：概览 / 名单 / 节奏 / 分析。</b>概览 = 原首页原样（KPI + 今日重点 + 常用功能 + 我的节奏），名单 = 原学生页列表原样。
+          <span class="hint" data-page-node-id="i7Fn1QfsXMiN807ZUkhkeY">优点：四个入口平级、边界清楚；和首页位的校园资讯用同一个分页组件，交互完全同感。风险：概览段偏长，首屏只能装到 KPI + 今日重点。</span>
+        </div>
+      </div>
+
+      <div class="device" data-page-node-id="cRkjWMttbWVI1LoJGMS6w3">
+        <div class="device-head" data-page-node-id="pAB7qy7f5L708LOWhYiH0s">
+          <span class="nm" data-page-node-id="1OmKVYhtkfJBY7LOp63p4l">B · 首屏主导 + 二级子页</span>
+          <span class="badge" data-page-node-id="Gmybo0WoJEIzQgoAFHWTAd">最贴近原话</span>
+        </div>
+        <div class="phone" data-page-node-id="fb3nPjlXKAKkOVK0lO8nGY"><div class="screen tt" id="phB" data-page-node-id="CcJutHpAn2VCWWd1PNyNlU"></div></div>
+        <div class="device-desc" data-page-node-id="YYwfsm2bKsyP5NUs86Vp7m">
+          <b data-page-node-id="fso8mt2oOtAjB6g4tOHyL2">默认就是现在的首页（一整条纵向流），学生名单收成底部一张摘要卡：3 条高危 +「看全部 42 人 ›」。</b>点进去才是二级子页（整页推入，带返回键），班级分析同理。
+          <span class="hint" data-page-node-id="cOGcMx8CCLnqD15iEUs8Xs">优点：首页观感几乎不变，改动最小最安全；学生内容真的「降为二级子页」。风险：名单要两步才到，高频入口被埋深一层。</span>
+        </div>
+      </div>
+
+      <div class="device" data-page-node-id="REMicguJP0pbGMbc6upxdx">
+        <div class="device-head" data-page-node-id="yXflbPWqd97IuN2DSsGjlu">
+          <span class="nm" data-page-node-id="UZ772T1Gz6U6DKp2v8Ic2D">C · 双段（我的 / 班级）</span>
+          <span class="badge" data-page-node-id="GS0VLytkTVR3KHkfMKYMZo">折中</span>
+        </div>
+        <div class="phone" data-page-node-id="rV2qhONcenLEsPZH1firzT"><div class="screen tt" id="phC" data-page-node-id="gBGdycmABH72xkM7QSoGiF"></div></div>
+        <div class="device-desc" data-page-node-id="Zonm2EuJ5HyolfksDmBqH3">
+          <b data-page-node-id="yZtA60uqszKVvVZES82NYr">只分两段：我的（KPI + 今日重点 + 节奏 + 常用功能）/ 班级（名单 + 分析）。</b>语义最清楚——先管自己今天的事，再看班上的人。
+          <span class="hint" data-page-node-id="dJ4RGcOCSChBKHq7N7XezP">优点：左右滑一次就在「我」和「班」之间切换，名单一步可达。风险：「我的」段偏长，常用功能沉底。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 对比表 ======================= -->
+  <section class="block" data-page-node-id="oLdgWmELIBcBcTKqASLKk2">
+    <div class="block-head" data-page-node-id="5MwZWFZXMk2QsDfD1Ik5fy">
+      <span class="tag" data-page-node-id="OsaUKmbV1UT0WQpgpRHIv7">04 / COMPARE</span>
+      <h2 data-page-node-id="KHzZLPiXlb7Oua1V7tbozV">选型对比 <span data-page-node-id="W5QIK3waHn7Vy7fpdD0b0Z">— 按「改动量 / 名单可达性 / 首页观感」打分</span></h2>
+    </div>
+    <div class="table" data-page-node-id="V35Z0GBUjbIrHmZAGJzO5u">
+      <table data-page-node-id="DoYc7d3f1hG6dEz7G1GtVB">
+        <thead data-page-node-id="BqkaUSUBmPp2dZXAGHlTBl">
+          <tr data-page-node-id="mvMd1Vf2qFXf57FmivRGEC"><th data-page-node-id="80GCoGTYeFy2JVKHAo15jY">维度</th><th data-page-node-id="ZuAIjVPqkQ1SqyCBNbeD1E">A 四段分页</th><th data-page-node-id="AhkjbAkSSLRNNFHdp0l09C">B 首屏 + 二级子页</th><th data-page-node-id="HT4XxZaMgsMrFJ6FbS8Rgc">C 双段（我的 / 班级）</th></tr>
+        </thead>
+        <tbody data-page-node-id="d9nmTFuSIuf8bXDEQKBqzu">
+          <tr data-page-node-id="VxZvsq7PlwwdsOELaE6eMx">
+            <td data-page-node-id="ZR1B8UkNtHUYbkwSMObdJ8">改动量</td>
+            <td data-page-node-id="BZugleAkWtQMnFVkmz0BNc">中：新增分段壳 + 复用 4 个现有块</td>
+            <td data-page-node-id="ERUqFMYHZmJ5Olb9bVflda"><b data-page-node-id="XaLuj7oWgglPBaOzGmjD89">最小</b>：首页不改，只加一张摘要卡 + 两个下钻子页</td>
+            <td data-page-node-id="wSXiWhD9e89za3uo6dFgp1">中：新增分段壳 + 重新分组</td>
+          </tr>
+          <tr data-page-node-id="Y1CcuQYDrEI7kBQgwS4kIG">
+            <td data-page-node-id="jGmmyhlKF8wZDu7zEOvCyH">名单可达性</td>
+            <td data-page-node-id="pQV90r5VR39aISyzNi8Rd0"><b data-page-node-id="NdoYJWXGa3Ey4M0zDP9nhT">一步</b>（Tab 直达 / 左右滑）</td>
+            <td data-page-node-id="QhO47kLZzL1cPUFPE6B8zI">两步（摘要卡 → 子页）</td>
+            <td data-page-node-id="BZ87rOYD62Z8edlNyppafi"><b data-page-node-id="mzwbUrxzpBReQDA7uU4C9h">一步</b>（滑到「班级」）</td>
+          </tr>
+          <tr data-page-node-id="BSnyAgbygbEXIgoo70zKF4">
+            <td data-page-node-id="TSmNqVjY5BMnleAUIIhmpv">首页观感保留</td>
+            <td data-page-node-id="C363HZ13X2ZLZ1VkUOteQa">中：问候横幅与 KPI 仍在首屏</td>
+            <td data-page-node-id="NvWVjrO4pcPxDwxVQxyQ9N"><b data-page-node-id="EwYvoAJ8fFNEyt7CjJzGev">最高</b>：整条首页结构原样保留</td>
+            <td data-page-node-id="7wTaeq3cBQLmGlpW4MSpHt">中：首页内容被拆到「我的」段</td>
+          </tr>
+          <tr data-page-node-id="zg8y14jc40BxpohHM9XXQW">
+            <td data-page-node-id="bKqGbFmC3iFarv0dRg0mfi">日活入口深度</td>
+            <td data-page-node-id="SjjWijCtoCL9OKulKYPkHA">每类内容都在一级</td>
+            <td data-page-node-id="MLBmzshkhGCsgqdHK5xP8B">名单 / 分析下沉一层</td>
+            <td data-page-node-id="3E6mD2Xc7ihhiQ1R4eNPF6">名单 / 分析仍在一级</td>
+          </tr>
+          <tr data-page-node-id="7CGkPZlhgVNFsVS1U3UcYL">
+            <td data-page-node-id="rU3yO6VSLtyAEITBShK4tt">与资讯页一致性</td>
+            <td colspan="3" data-page-node-id="FPlYlAPWBqZZKvsKuDyERC">三套都用同一个分页组件（跟手 + 200ms 吸附），与学生端校园资讯完全同感</td>
+          </tr>
+          <tr data-page-node-id="2oWOj4ZNmC0NFyYQJrqnLU">
+            <td data-page-node-id="nYoRvbGIBYPNVeAWQOOPCv">主要风险</td>
+            <td data-page-node-id="oCReexf7Y6JGyTuN8PLvoU">四段标签在 390px 下要控制字数（4×2 字可行，再加计数会挤）</td>
+            <td data-page-node-id="92rJNOSHO3ZcaHo3T0eci8">老师每天先进首页再进名单，路径变长</td>
+            <td data-page-node-id="v6qKrOKbTTZoD2I3dokW8S">「我的」段过长，常用功能沉底</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cmp-note" data-page-node-id="7hBAw2pnTHfNw4TP8GyGgY">
+      <b data-page-node-id="n0hgbNfeuPlPFbbL0a0Tld">我的建议：A。</b>它把「首页」和「学生」真正合成一个页面，又不埋深任何高频入口，且和首页位的校园资讯用同一套分段交互，老师学一次就够。
+      <b data-page-node-id="mhuZQDdevTUs0W3BFLKIwb">如果你更在意「首页别变样」→ 选 B；</b>如果觉得「我 / 班级」这对分法更顺手 → 选 C。
+    </p>
+  </section>
+
+  <!-- ======================= 动效 ======================= -->
+  <section class="block" data-page-node-id="ZhJKazHCKKDxRTJIq7P9ja">
+    <div class="block-head" data-page-node-id="JP0gM7D7ck2mROCeCiRBpb">
+      <span class="tag" data-page-node-id="nHAU5t18zVujiKKbfCIwRE">05 / MOTION</span>
+      <h2 data-page-node-id="vCHIZE0wq7WejFis7eWalM">子页切换动效 <span data-page-node-id="DOPPIKIRegJk5uXdIV0Ov4">— 照搬校园资讯，不新造一套</span></h2>
+    </div>
+    <div class="motion" data-page-node-id="YPBFKMNjxMTnC30lsMqis7">
+      <div class="motion-card" data-page-node-id="Rk11IvF0LD64NXINXcJG8O">
+        <h4 data-page-node-id="T5c4pjUti4Bfcv1oY2ikEu"><i data-page-node-id="Yq82HizYPsUBW5kaBkSeKH">1</i>三段轨道 + 跟手</h4>
+        <p data-page-node-id="WDesnRxyJSE8M7COmUM4CL">
+          内容铺在同一条横向轨道上，<b data-page-node-id="KghdRwwl4n6zQoGuGQ2FLm">位移只发生在轨道上</b>，外层视口负责 <code data-page-node-id="qFVjjesetBF4Ya8z45O8Jp">overflow:hidden</code>（裁切层不能跟着动，否则平移到 ±一屏时整页空白 —— 这是校园资讯里踩过的坑）。按下先不定轴，位移超 12px 才判定横向；横向手势归 JS，纵向仍交给页面滚动（<code data-page-node-id="cLajOWhbPcMZEy232LDOBt">touch-action: pan-y</code>），边界按 0.35 阻尼回弹。
+        </p>
+        <div class="timeline" data-page-node-id="xQNMBiQaf4fFNCfQxzQYMf">
+          <div class="tl-step" data-page-node-id="n57JqnaDgQKlHzkSvi0RaV"><div class="ms" data-page-node-id="Y5cbRCWhl1h2BH16Y5T1Si">0 ms</div><div class="tx" data-page-node-id="ZTHJE4JIAAtWRw0SI907rk">按下，记起点，关过渡</div></div>
+          <div class="tl-step" data-page-node-id="ogZSMTsL4PuDNR7rL5kffJ"><div class="ms" data-page-node-id="VBx1xEYotusTYAmHFG6B46">12 px</div><div class="tx" data-page-node-id="diBCgX4idRKxj1ebbVlC51">判轴：横向接管 / 纵向放行</div></div>
+          <div class="tl-step" data-page-node-id="WlZrLBRFl7uMIKsfq5bmcH"><div class="ms" data-page-node-id="5Z19Fv8VGrbpJALgDaozgx">56 px</div><div class="tx" data-page-node-id="AAWgLzbV2tqxFlKxnCyq4e">松手阈值（或 0.35 px/ms 甩动）</div></div>
+          <div class="tl-step" data-page-node-id="Eo0dEqWQLEwLg4xzXMM3xt"><div class="ms" data-page-node-id="VtTiqem4Miqn3pDoV15f4G">200 ms</div><div class="tx" data-page-node-id="8pPfSIdO3x1bJqXLrKNkw0">吸附到目标页，指示条同步落位</div></div>
+        </div>
+      </div>
+      <div class="motion-card" data-page-node-id="bDSbSWSCxy8EsRUTCnXtto">
+        <h4 data-page-node-id="DfQhp0gb7YPcVQYTfmoz80"><i data-page-node-id="ARHvBiGxUhT4x5j7DMk0fk">2</i>点 Tab / 点入口：整页推入</h4>
+        <p data-page-node-id="CggRrDDYtQmSLlIaB25BtF">
+          不做「渐隐淡入」，而是把轨道瞬时挪到「目标页 ± 一屏」（关过渡），下一帧再归零 —— 视觉上就是<b data-page-node-id="XAwECnbxEh3WziDxUnXKY5">目标页从侧边推入</b>。这跟校园资讯 <code data-page-node-id="EZpuo2scbjYurlxxLNq7Lq">CampusPage.vue</code> 的 <code data-page-node-id="uMnEbT5Mpk6i2pTmMz6aep">slideToTab</code> 完全一致；版式 B 的二级子页点「看全部 42 人 ›」走同一条路径，只是没有 Tab 条。
+        </p>
+        <div class="code" data-page-node-id="bTjiTimqwHo7gasZ2iLXwE"><span class="c" data-page-node-id="hTg8tFZhQpjFJg0RUjnDVx">// 点 Tab / 点入口：瞬时错位 → 下一帧归零</span>
+track.style.transition = <span class="s" data-page-node-id="4l8x5BcANHyZ5jpD0VCBVe">'none'</span>
+track.style.transform =
+  <span class="s" data-page-node-id="BEqYts0lg5DjmfBKUj2DjX">`translate3d(${</span>-(target*W) + dir*W<span class="s" data-page-node-id="yxQawUaMpwAZidcELizmjv">}px,0,0)`</span>
+<span class="k" data-page-node-id="QBcOb7pyUVSf9nDbhTNVdZ">void</span> track.offsetWidth          <span class="c" data-page-node-id="SJPdbfnssd1EcWJJfoVNTV">// 强制结算</span>
+track.style.transition = <span class="s" data-page-node-id="KvSSalVnQFiYwDT2NMeSzs">''</span>       <span class="c" data-page-node-id="IVtOr2CSZlH1azKhcgkdtv">// 回到 200ms</span>
+track.style.transform =
+  <span class="s" data-page-node-id="mTCkD6fxpoBBJxcu3lwQCB">`translate3d(${</span>-target*W<span class="s" data-page-node-id="5Yc9RTLBuEJf1pkdUeg3n0">}px,0,0)`</span></div>
+      </div>
+    </div>
+    <div class="motion" style="margin-top:18px;grid-template-columns:1fr" data-page-node-id="5Ll7aEToqDftjnN5REAw3v">
+      <div class="motion-card" data-page-node-id="cz7YLiXGBgoJTLlzf7XP0S">
+        <h4 data-page-node-id="CSuKuwGUwQfTmnRcc6GMQX"><i data-page-node-id="kXGvz3koZfMXZKpWbUB7hX">3</i>指示条与缓动曲线</h4>
+        <p data-page-node-id="HRkAs3j9lKFSjWtHJSidya">
+          下划线用 <code data-page-node-id="sqaR8650Q1SNDO6rSvukmz">transform + width</code> 驱动，<code data-page-node-id="CyyEHcbjl6zfoYrs9GU4F5">200ms cubic-bezier(.22,.61,.36,1)</code> —— 与轨道<b data-page-node-id="2564nWdoEbK0kLpmM3fubN">同一段曲线、同一时长</b>，所以「页在动、条也在动」看起来是一件事。拖动时按页位移比例在相邻 Tab 之间插值（<code data-page-node-id="jEKqZYBK8rP01w79FGuGOe">progress = idx - dx / W</code>）并关掉过渡保持 1:1 跟手；松手吸附完成后再开过渡。这条曲线也是 <code data-page-node-id="vqCLgCJARU2QjUXXqW5qhg">teacher-ui.css</code> 里的 <code data-page-node-id="iUKzmwDhbpaGCaLC8rGZEW">--tui-ease</code>，两端本来就共用。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 首页 = 校园资讯 ======================= -->
+  <section class="block" id="news" data-page-node-id="zXeYFIeWMUGmwbI7F1duAA">
+    <div class="block-head" data-page-node-id="eBHdvqFYv4eG4pYkSs8V7h">
+      <span class="tag" data-page-node-id="ZZsujxQmDXDVnzqE3dbB2u">06 / HOME = NEWS</span>
+      <h2 data-page-node-id="T5Q99WTr4ykJKjB1nwpafF">首页直接挂学生端校园资讯 <span data-page-node-id="RpDZabgWZzD7DHCQ6K6PSh">— UI 与内容零改动，只加角色开关</span></h2>
+    </div>
+    <p class="note" data-page-node-id="BKGLSSkbp1juzm8HlXtsmA">
+      <b data-page-node-id="j92x95EKAJUnUwVWTSTUDE">不改一个像素：</b>白底页头、23px 大标题、分类 Tab（选中黑体 + 3px 黑下划线）、大图轮播、信息流（标题两行 + 元信息 + 右侧缩略图 + 评论/浏览）、详情子页、搜索浮层、下拉刷新 —— 全部沿用 <code data-page-node-id="EUOiPslNDLA60tgTE8h42C">views/student/CampusPage.vue</code>。
+      教师端只多三处：<b data-page-node-id="HFVABnKqpbpxxDzXcSBRFZ">页头「发布」按钮、行尾「已读 38/42」回执、「我的发布」频道</b>；学生端的关注/收藏/评论照旧。<b data-page-node-id="SJfyGsR3xiQXypFRfC9RhB">切下面的按钮对比两边。</b>
+    </p>
+
+    <div class="devices-2" data-page-node-id="Ts7skiYDXuO4PtYQg0mRgu">
+      <div class="device" data-page-node-id="CTvOwfpP8In27hsiMrmFoM">
+        <div class="device-head" data-page-node-id="FVVs4IJxCEW7By35E1VOIZ">
+          <span class="nm" data-page-node-id="2mIbaFIHL0RRtdn97jwfYy">首页 · 校园资讯</span>
+          <span class="badge" id="roleBadge" data-page-node-id="zsVekqzNsssbCh9CfvOKAo">教师视角</span>
+        </div>
+        <div class="phone" data-page-node-id="U8wey2LiL4Xp9j3CrIUAzk"><div class="screen cn" id="phNews" data-page-node-id="4L8mLSENn1Cl8D9PV6U9Sp"></div></div>
+      </div>
+
+      <div class="side" data-page-node-id="To0psaBfg4NafSTVgNFLxg">
+        <div class="role-switch" data-page-node-id="9lx19vRO2LexChSGJSGcId">
+          <button class="is-on" data-role="teacher" data-page-node-id="lf3TT4Z9TZEOwpl8DIbBXk">教师视角</button>
+          <button data-role="student" data-page-node-id="XAJxD1vzudz3KD3NcUY9yi">学生视角</button>
+        </div>
+
+        <h4 data-page-node-id="41oCv4CfEumCeEtmCoFE54">教师端多出来的三处（其余完全一致）</h4>
+        <ul data-page-node-id="IzM3HSf28aa9no0ySFiQEl">
+          <li data-page-node-id="KHQWU47qlDPtBmhsaMsLfg"><i data-page-node-id="NEOYZvE3dTsdmZREhCpXvu">1</i><span data-page-node-id="AdZLqRGqHTTda1DArnIhay"><b data-page-node-id="Ek3Ckb2iQJTEW7MIlNJRmG">页头「发布」按钮：</b>点进现有 <code data-page-node-id="vFmjMNCtR3OyILTQwEiBmJ">/teacher/announcement</code> 发布班级公告，复用现有链路，不新建页面。</span></li>
+          <li data-page-node-id="cBX2z0ejRQ0TbFyg1Mrxxg"><i data-page-node-id="BwL0t3oDId8rlFJakeeAAa">2</i><span data-page-node-id="WiKD68ZDizAaXxPsaBMnBn"><b data-page-node-id="1PGijmxaiKCAKPQw720R3D">行尾「已读 38/42」：</b>教师看到的是自己发布内容的触达回执；学生看到的是评论数与浏览量。</span></li>
+          <li data-page-node-id="fAutDL9BfB1qxjrvZJbGiG"><i data-page-node-id="u2Bh68nJlBnzvh4b9ACfXI">3</i><span data-page-node-id="6Dae1qDFg3wDoJ2fsxQrj6"><b data-page-node-id="PZrD0HmYlOD9kh72YqapF6">「我的发布」频道：</b>只教师可见，列出自己发过的通知与回执；学生该位是「收藏」。</span></li>
+        </ul>
+
+        <h4 data-page-node-id="MziUSx7wlSDGpf7u0ojHCq">权限矩阵</h4>
+        <table class="matrix" data-page-node-id="FZa9wb4minsenAkEE8FQCe">
+          <thead data-page-node-id="4N13Vfn7zpfMVFI6LFAMvU"><tr data-page-node-id="9E2tlj6LohGYaf4v1NEVWW"><th data-page-node-id="DX1ChXJuNoRgaTZreFvEa3">能力</th><th data-page-node-id="LwjklJ6rdyrj2qzfPUQ9Sa">学生</th><th data-page-node-id="CNpoGqSeyWjUHmjljyvCs8">教师</th></tr></thead>
+          <tbody data-page-node-id="aR9pJGVGalGTiNmCT70hQN">
+            <tr data-page-node-id="vFOZ5QybzzzukZ7vzkR80u"><td data-page-node-id="vP2qfxD4rWR4w5QBDKu0rD">浏览信息流 / 详情 / 评论 / 点赞</td><td class="tick" data-page-node-id="nFXEEOGDZmC44nyLWVNdiF">✓</td><td class="tick" data-page-node-id="AJaVStwJtVaGR1Cevwxiwc">✓</td></tr>
+            <tr data-page-node-id="VG6CFcPTtR6jyFyPuOrj6m"><td data-page-node-id="KTJg0AEEY9tFUQLBJLzVQf">收藏 / 关注院系</td><td class="tick" data-page-node-id="gvbKtOZ9lTyvrcOacCOZCL">✓</td><td class="tick" data-page-node-id="lNnny80yI0PH666lnTjUBP">✓</td></tr>
+            <tr data-page-node-id="AQxHj1YNidoxzU6SjRQ0rx"><td data-page-node-id="8F4OdOE4Ec1djgQI7MFUM3">发布通知公告</td><td class="cross" data-page-node-id="XghNqI4KPUnKywt4MsqG3j">✗</td><td class="tick" data-page-node-id="fns1GaToQjbgFQzYTZk3gN">✓ <span class="muted" data-page-node-id="ZGBLdeY5cxHotFsAwF5RYZ">复用班级公告</span></td></tr>
+            <tr data-page-node-id="mDDFpMulEmCwzPRKqR3Cfp"><td data-page-node-id="zm6MP0348gcEP9NRARkR9W">置顶 / 撤回</td><td class="muted" data-page-node-id="NEI6jtZ2ghMFoZxd5z9Qb0">仅自己的帖子</td><td class="tick" data-page-node-id="9r66S0WKDQZCY6SQB2rztg">✓</td></tr>
+            <tr data-page-node-id="sTodjLB3XAgXPKvb0JJaU5"><td data-page-node-id="e6zyCNqV1u0WbLz2MFtu5B">阅读回执（按班级）</td><td class="cross" data-page-node-id="aDClIP36yIwdCmkLftbye3">✗</td><td class="tick" data-page-node-id="fYRNxChbsx9te2vHgxcjL4">✓</td></tr>
+            <tr data-page-node-id="lnvFqpAzFeAy8CzgVH1S1B"><td data-page-node-id="j041TvrBdOVAZ6y2KgxJFm">「我的发布」频道</td><td class="cross" data-page-node-id="sJyBXLmGHTC3fnfkbFAGjX">✗</td><td class="tick" data-page-node-id="BuWAywLSGqMM8rRnph6tHE">✓</td></tr>
+            <tr data-page-node-id="aVPy5Hz45kkaVMTVyykcPh"><td data-page-node-id="bW6FTnsJ3sHANRvlhJLW8D">游客态（未登录浏览）</td><td class="tick" data-page-node-id="wE6ouj2YYTTADuFnzQDnII">✓</td><td class="cross" data-page-node-id="GTbI1BuZAhcICq4YeQMfzm">✗ 必须登录</td></tr>
+          </tbody>
+        </table>
+        <p class="note" style="font-size:11.5px;margin-top:12px" data-page-node-id="At7V94eB6kNJjhCBuumZHQ">
+          落地方式：<code data-page-node-id="srW4BBASibgmqWbWsMfsAo">CampusPage</code> 加 <code data-page-node-id="vBmmFWZWQyIxtptYOsZx7V">role</code> prop（或读 <code data-page-node-id="dwUVVCvCL5ODNebdGka9GW">authStore.role</code>），把「页头动作 / 分类列表 / 行尾信息」抽成三份 computed；<b data-page-node-id="oZTKKekAPQ3IX7M39vzuFf">接口与数据流不动</b>，后端已按角色鉴权，前端只负责不渲染无权限入口 + 后端再校验一次。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 落地 ======================= -->
+  <section class="block" data-page-node-id="8Ug7RO5scPiGAJk2Uc3mkM">
+    <div class="block-head" data-page-node-id="ItRjKgWiOMpNEWH6rTEH64">
+      <span class="tag" data-page-node-id="mGrTB1eZEb9QOLGA0DdHOk">07 / BUILD</span>
+      <h2 data-page-node-id="FbN9wdmdOf9DY0zjk34aLL">选定后的落地路径 <span data-page-node-id="cpjU70g6E8PjxHLR9XYD0K">— 全是复用，几乎没有新视觉</span></h2>
+    </div>
+    <div class="impl" data-page-node-id="v6sOZMtVPqZrxWAKhH3UoH">
+      <div class="impl-card" data-page-node-id="G5vsefm8LeoKocjy4WeIrb">
+        <h4 data-page-node-id="tWPbadxcNv9ag0TsjNCHR3"><span data-page-node-id="g9NHwVwCsmvtmVk2dewE0i">STEP 1</span>合并页（工作台）</h4>
+        <ol data-page-node-id="QMKomAV2HHIeRzreYmQXC6">
+          <li data-page-node-id="Bgb6ovFTloPgQ5Fnkg2CSU"><i data-page-node-id="SBFzRwECatqLd7cUpRIeBI">·</i><span data-page-node-id="QBWNJHa9f3H1OAcA2z6PG2"><code data-page-node-id="3Aj9In5GZDDLNFGeCFLnDf">StudentsPage.vue</code> 的移动端分支改成新壳：页头（沿用现有 <code data-page-node-id="RbFjcDMRJaUROhVwkDGaeB">.app-head</code>，只换名称）+ 分段 + 分页容器。</span></li>
+          <li data-page-node-id="Ch1TOFX3I8oGBd6M6AfGLL"><i data-page-node-id="9r2jeljmQxC6iY5bW18M5t">·</i><span data-page-node-id="PxAjowukoCtuJjRxRRQyhW">分段内直接<b data-page-node-id="4vHToIOLdwRzCeNoTcdejo">搬现有组件</b>：<code data-page-node-id="wjRT6wCGKpEUBDHfAO74A2">HomeTopBanner</code> / <code data-page-node-id="aAuEpYFcDo7M3rFY5UdbXT">HomeKpiCards</code> / <code data-page-node-id="sziZLQIq5rdVVQVLBKi11W">TodayFocusCard</code> / <code data-page-node-id="X1QhHKErPYvhoSsxO9QDoZ">WeekPlanCard</code> / <code data-page-node-id="CjG0LEegqXHmHQ0XjZTePi">WorkloadCard</code>，不重写业务与样式。</span></li>
+          <li data-page-node-id="syzQtPPkzqmBD0VBtCAzPA"><i data-page-node-id="6flS6xIHUd8AUpkRoqhuS0">·</i><span data-page-node-id="sAMsKeBad6pEw967aZYdE9">名单段沿用现有 <code data-page-node-id="fDnidCVzhHqffhMvm9pzht">.ms-row</code> 列表（搜索 + chips + 排序），抽成 <code data-page-node-id="Z81FiyfcwDj5bEuEGzjAzH">StudentRosterPanel.vue</code> 供三套版式共用。</span></li>
+          <li data-page-node-id="AqG1VewKnvB7xbzcEt7B7e"><i data-page-node-id="POnzC1RnCJ3xTkQRTGGsTY">·</i><span data-page-node-id="TrLGCgw8AxAOGx1KjaofdH">分页逻辑：把 <code data-page-node-id="HkZLZk46f88YFhHQV2SEMv">CampusPage.vue</code> 1380–1420 的 <code data-page-node-id="xh9QqjxoXOQK5WISsaGzoT">slideToTab</code> / pager 抽成 <code data-page-node-id="sav9liFpXo38V7imcHFJPe">usePager</code> composable，资讯页与工作台共用一份。</span></li>
+        </ol>
+      </div>
+      <div class="impl-card" data-page-node-id="RMorCqcSmrnGbs2H0kncsA">
+        <h4 data-page-node-id="C58lsZNj021MAQYaZzhSGb"><span data-page-node-id="sS9YDn3H2ClnPAyVxJ2Fj8">STEP 2</span>首页位与改名</h4>
+        <ol data-page-node-id="6ESj1RW2rXTcQvA3xG720a">
+          <li data-page-node-id="RbZ6OdH9Qb8NhPvIkl59zI"><i data-page-node-id="nvKSJFPnwGna2XFey7LDNZ">·</i><span data-page-node-id="eqmDwHQJhwNw2G1uzZUzyh"><code data-page-node-id="0HlAlC8L0lcQDpIZlvNutv">/teacher</code> 直接渲染 <code data-page-node-id="pzVcmujCmZzEj1SfXZLgtn">CampusPage</code>（教师态）；底部 Tab「首页」文案改「资讯」，位置不变。</span></li>
+          <li data-page-node-id="MkeFyYvOow0QvcdTtMM4k9"><i data-page-node-id="6uTDk199UjFXsY19npaCO8">·</i><span data-page-node-id="iP65nZvsYLmrjgrPpeCVHP"><code data-page-node-id="pzB8QPM7s4lzfXsQ2QiGHC">/teacher/students</code> 渲染合并页，<code data-page-node-id="pAihEutVITYtFcgBbWTtko">TeacherLayout</code> 的 <code data-page-node-id="VF6qcVf09svyF0uwfpnmdi">mobileNavItems</code> / <code data-page-node-id="sBqVYWvUrbdRZpRY8JVknp">navGroups</code> 文案改新名字；<code data-page-node-id="EqnudbHx0NDESaZquXn573">TAB_BAR_ROUTES</code>、<code data-page-node-id="pyezxbopnEeiVUj6pUXnDN">activeNavKey</code> 同步。</span></li>
+          <li data-page-node-id="zFAOCDEqF2GvNlmTKvTGgg"><i data-page-node-id="XiQeRzQFLUWNEGZE2ENopf">·</i><span data-page-node-id="iC8i9HpTkK8GjfYxZveSoe">学生详情 / 班级分析仍走 <code data-page-node-id="zHok9f6O4tpJCUuWlp5jcs">useMobileSubPage</code>，打开时隐藏底部导航；<code data-page-node-id="vfE09zGM9Bidt3cC1JFQur">cachedNames</code> 与 <code data-page-node-id="0wHSUFoXmwML3NGXuseyzw">keep-alive</code> 名称对齐。</span></li>
+          <li data-page-node-id="rtdrOc53NiyuFVx4UlL88N"><i data-page-node-id="E8vTrh74rSSgqVe4jJf77d">·</i><span data-page-node-id="nNfAPUB3rT0gee5suVqYCF">原首页 <code data-page-node-id="aQ9vptpkYzBxSieBgdscxO">HomePage.vue</code> 移动端分支：内容已迁走，只保留指向资讯，避免两套首页并存。</span></li>
+        </ol>
+      </div>
+      <div class="impl-card risk" style="grid-column:1/-1" data-page-node-id="OLXEeNUlNp9oc13p2hkgTD">
+        <h4 data-page-node-id="SrWvieuyXeJzh5pnOS1FPS"><span data-page-node-id="8ZaecD75yHETv9PTpuINdK">RISK</span>必须先解决的四个坑</h4>
+        <ul style="display:grid;grid-template-columns:1fr 1fr;gap:8px 22px" data-page-node-id="2dGB5LSwLLVTBZPP6lEO5C">
+          <li data-page-node-id="QzLsBdGxPUBdrdfE6EBk4W"><i data-page-node-id="61AgASUkLPMy6sIexyXSKN">1</i><span data-page-node-id="auss3OZXwJCAtI4yvKHMfI"><b data-page-node-id="VTaCA5nFAZAW2HYvhF9hjQ">手势打架：</b>分页横向 Pointer 逻辑与 <code data-page-node-id="T0WEfXACBxhVH65c2SFHDx">usePullRefresh</code>、列表纵向滚动同屏。判轴阈值 ≥12px，且分页只挂在内容区、不挂吸顶头。</span></li>
+          <li data-page-node-id="FvzxOoQ9fmZA3vUDWdSBH8"><i data-page-node-id="fofBc0CIjSo5QHatzfmfG8">2</i><span data-page-node-id="T0jzv6GWxgne43zImyZ1gI"><b data-page-node-id="6ObzPD06zCvzy1cJHC5VeI">滚动位置：</b>每段各自独立滚动，切回来要恢复原位；从长列表切回概览不能停在半空。</span></li>
+          <li data-page-node-id="bw1ArszCBreAdSUHont7Gy"><i data-page-node-id="CQWHrnQg5vIoSQrJiCbXwa">3</i><span data-page-node-id="3rvtlSNtgUStUCzcFPSUGp"><b data-page-node-id="FVFzYFjxgwEZ7GLonDLqtr">数据重复请求：</b>概览与名单都用学生数据，合并后共用一次 <code data-page-node-id="lsRZ4Vlfyk0e5i7PRGLFuR">getStudents</code>，别让两个 panel 各拉一遍。</span></li>
+          <li data-page-node-id="dRvNiFaJA5QqCGbE2JUkZh"><i data-page-node-id="FpWvPDtoA2bBoXHFLjcwQJ">4</i><span data-page-node-id="7gNlwwaFYhFBtAhr3BPwLN"><b data-page-node-id="f2l1y0YUXHv3ejPwqZKNye">权限不只靠隐藏：</b>资讯页的发布 / 撤回按钮前端隐藏之外，后端必须校验 <code data-page-node-id="IdeDDBuH3BVqTA7rTyBo1X">role=teacher</code>。</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="cmp-note" style="margin-top:18px" data-page-node-id="RneQ5DlzmpGZ792NGVpkg4">
+      <b data-page-node-id="AJu0G7WwPHXbkrLo2GLbBq">下一步：</b>回一句「用 A / B / C」+「叫工作台 / 我的班级 / 育人」，我就按这套 IA 改 <code data-page-node-id="6hkv74FCylCNK72AUHfMnQ">StudentsPage.vue</code> + <code data-page-node-id="3NdE5mJ11ump6EcRuOk6Yg">HomePage.vue</code>（首页位直接挂 <code data-page-node-id="kY9yVaAE7ytNV69vmHIUjO">CampusPage</code>），跑 <code data-page-node-id="WREjM1njwB2WZzFhisyL6Q">vue-tsc</code> 与 390×844 截图验收。
+    </p>
+  </section>
+
+  <div class="foot" data-page-node-id="aJckY0GYJtiUKUtwAICe2A">
+    原型：<code data-page-node-id="289wqhzOSeG246GmhUqucX">prototypes/teacher-merged-redesign/index.html</code> · 单文件无依赖 · 392×788 真机尺寸 ·
+    视觉沿用 <code data-page-node-id="GBABTIfOFWpVHfiKtFGyrg">src/styles/teacher-ui.css</code>（<code data-page-node-id="XhFwK0DsdKY9yLkk5Qf74z">--tui-*</code>）与首页现有组件；动效参数对齐
+    <code data-page-node-id="DzH9U9fjeZUsXXb0zw8o1H">src/views/student/CampusPage.vue</code>（<code data-page-node-id="jczlYAGtN8dfrhm6tDHcmQ">PAGER_SLIDE_MS=200</code> / <code data-page-node-id="V1E9bQCacTsIhVKI3qKBy7">cubic-bezier(.22,.61,.36,1)</code>）
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   图标（线性，24 网格）
+   ========================================================= */
+const IC = {
+  users:'<path d="M15.6 19.5v-1.6a3.6 3.6 0 0 0-3.6-3.6H6.6A3.6 3.6 0 0 0 3 17.9v1.6"/><circle cx="9.3" cy="7.8" r="3.4"/><path d="M21 19.5v-1.6a3.6 3.6 0 0 0-2.7-3.5"/><path d="M15.4 4.6a3.4 3.4 0 0 1 0 6.4"/>',
+  alert:'<path d="M12 4.2 3.4 19.2h17.2L12 4.2Z"/><path d="M12 9.6v4"/><circle cx="12" cy="16.4" r=".85" fill="currentColor" stroke="none"/>',
+  doc:'<path d="M14 3.5H7.5A2 2 0 0 0 5.5 5.5v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8"/><path d="M14 3.5 18.5 8H14V3.5Z"/><path d="M9 12.5h6M9 16h4"/>',
+  clock:'<circle cx="12" cy="12" r="8.4"/><path d="M12 7.6V12l3 1.8"/>',
+  chart:'<path d="M4 19.5h16"/><path d="M7 16.5v-4M12 16.5v-9M17 16.5v-6"/>',
+  grid:'<rect x="3.8" y="3.8" width="7" height="7" rx="1.6"/><rect x="13.2" y="3.8" width="7" height="7" rx="1.6"/><rect x="3.8" y="13.2" width="7" height="7" rx="1.6"/><rect x="13.2" y="13.2" width="7" height="7" rx="1.6"/>',
+  cal:'<rect x="3.8" y="5.2" width="16.4" height="15" rx="2.4"/><path d="M8 3.4v3.4M16 3.4v3.4M3.8 10h16.4"/>',
+  bell:'<path d="M18 15.6V10a6 6 0 1 0-12 0v5.6L4.4 18h15.2L18 15.6Z"/><path d="M10 18a2.2 2.2 0 0 0 4 0"/>',
+  chat:'<path d="M20 12.4c0 3.9-3.6 7-8 7-1 0-2-.2-2.9-.5L4.2 20.4l1.3-3.3A6.6 6.6 0 0 1 4 12.4c0-3.9 3.6-7 8-7s8 3.1 8 7Z"/>',
+  search:'<circle cx="11" cy="11" r="6.6"/><path d="m16 16 4.2 4.2"/>',
+  plus:'<path d="M12 5.5v13M5.5 12h13"/>',
+  check:'<path d="m5.5 12.5 4.2 4.2 8.8-9.4"/>',
+  arrow:'<path d="M5 12h13"/><path d="m13 7 5 5-5 5"/>',
+  left:'<path d="M19 12H6"/><path d="m11 7-5 5 5 5"/>',
+  sort:'<path d="M7 4v16"/><path d="m4 17 3 3 3-3"/><path d="M17 20V4"/><path d="m14 7 3-3 3 3"/>',
+  heart:'<path d="M12 19.6S3.8 14.8 3.8 9.4A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 8.2 2.2c0 5.4-8.2 10.2-8.2 10.2Z"/>',
+  more:'<circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
+  spark:'<path d="M12 4.2 13.7 9l4.8 1.7-4.8 1.7L12 17.2 10.3 12.4 5.5 10.7 10.3 9 12 4.2Z"/>',
+  msg:'<path d="M4 5.5h16v10H9.4L4 19.4V5.5Z"/>',
+  send:'<path d="M20.4 3.6 10.6 13.4"/><path d="M20.4 3.6 14 20.4l-3.4-7-7-3.4L20.4 3.6Z"/>',
+  eye:'<path d="M2.6 12S6 6.4 12 6.4 21.4 12 21.4 12 18 17.6 12 17.6 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="2.6"/>'
+};
+function ic(n, s, w){
+  s = s || 16;
+  return '<svg class="i" viewBox="0 0 24 24" width="'+s+'" height="'+s+'" fill="none" stroke="currentColor" '+
+    'stroke-width="'+(w||1.7)+'" stroke-linecap="round" stroke-linejoin="round">'+IC[n]+'</svg>';
+}
+const sbar = () => '<div class="sbar"><span>9:41</span><span class="rt">'+
+  '<span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"></span></span></div>';
+
+/* =========================================================
+   共用数据（沿用首页 / 学生页现有字段口径）
+   ========================================================= */
+const D = {
+  name: '工作台',
+  greet: '上午好，陈立言',
+  identity: '辅导员 · 计算机 2301',
+  callout: '今天 4 件事要你决定 · 3 条高危需回访',
+  focus: {num:4, lb:'待决定', tx:'王雨桐连续 6 天未打卡，今天先找他', go:'去处理'},
+  kpi: [
+    {v:'42', u:'人', k:'名下学生', h:'计科2301 · 软件2302', c:'#2563eb', ic:'users'},
+    {v:'3', u:'条', k:'高危预警', h:'2 条待回访', c:'#d92d20', ic:'alert'},
+    {v:'5', u:'条', k:'待批请假', h:'最长 3 天', c:'#b54708', ic:'doc'},
+    {v:'4', u:'件', k:'今日到期', h:'逾期 1 件', c:'#079455', ic:'clock'}
+  ],
+  todos: [
+    {t:'王雨桐 连续 6 天未打卡', s:'失联 6 天 · 上次谈心 10-24', act:'立即谈心'},
+    {t:'张一鸣 病假 3 天待批', s:'材料齐全 · 已等 5 小时', act:'去审批'},
+    {t:'何书宁 本月家访未联系', s:'关怀空档 21 天', act:'记一次'}
+  ],
+  feats: [
+    {t:'审批', n:5, c:'#2563eb', ic:'doc'},
+    {t:'预警', n:3, c:'#d92d20', ic:'alert'},
+    {t:'名单', n:0, c:'#079455', ic:'users'},
+    {t:'成长', n:0, c:'#5b5bd6', ic:'chart'},
+    {t:'公告', n:2, c:'#b54708', ic:'bell'},
+    {t:'课表', n:0, c:'#0891b2', ic:'cal'},
+    {t:'关怀', n:0, c:'#d4568c', ic:'heart'},
+    {t:'更多', n:0, c:'#667085', ic:'grid'}
+  ],
+  students: [
+    {n:'王雨桐', c:'计科 2301', s:'失联 6 天', risk:'severe', rt:'高危', g:2, l:1, sc:62},
+    {n:'张一鸣', c:'计科 2301', s:'请假中 · 3 天', risk:'moderate', rt:'中风险', g:5, l:2, sc:78},
+    {n:'何书宁', c:'软件 2302', s:'3 天前互动', risk:'mild', rt:'关注', g:3, l:0, sc:85},
+    {n:'李明宇', c:'计科 2301', s:'昨天互动', risk:'calm', rt:'平稳', g:7, l:1, sc:91},
+    {n:'赵安琪', c:'软件 2302', s:'昨天互动', risk:'calm', rt:'平稳', g:4, l:0, sc:88}
+  ],
+  plan: [
+    {t:'提交 3 份学情周报', s:'已办结 · 10:20', done:true},
+    {t:'完成 2 次谈心记录', s:'已办结 · 昨天', done:true},
+    {t:'王雨桐 面谈', s:'今天 16:00 · 谈心室', done:false},
+    {t:'张一鸣 病假审批', s:'今天 18:00 前', done:false},
+    {t:'周五班会提纲', s:'周四前', done:false}
+  ],
+  work: [{v:8, k:'本周课时'}, {v:12, k:'育人事务'}, {v:3, k:'关怀记录'}, {v:4, k:'待办未结'}],
+  sched: [
+    {tm:'09:00', t:'高等数学 · 3-201', s:'45 人 · 已点名'},
+    {tm:'14:00', t:'主题班会 · 6-102', s:'期中复盘'},
+    {tm:'16:30', t:'王雨桐 面谈', s:'谈心室 · 已预约'}
+  ],
+  dist: [{k:'<60', v:3}, {k:'60-69', v:8}, {k:'70-79', v:15}, {k:'80-89', v:12}, {k:'90+', v:4}],
+  trend: [2,5,3,6,4,3],
+  ai: '计科 2301 预警连续两周回落，但王雨桐已 6 天无打卡、成绩降到 62，建议今天内完成一次面谈。'
+};
+
+/* ---------- 共用块（全部沿用现有首页组件语言） ---------- */
+function hero(){
+  return '<div class="tt-hero"><div class="main"><h2>'+D.greet+'</h2>'+
+    '<div class="meta"><span class="dot"></span>绵小城 · 教师端<span class="sep">·</span>'+
+    '<span class="idn">'+D.identity+'</span></div></div><div class="pet">绵</div></div>';
+}
+function head(){
+  return '<div class="tt-head"><span class="mark">绵</span>'+
+    '<div style="flex:1;min-width:0"><h1>'+D.name+'</h1>'+
+    '<div class="sub"><span class="live"></span>3 条高危待回访<span class="sep">·</span>42 人在册</div></div>'+
+    '<button class="tt-ibtn">'+ic('search',16)+'</button>'+
+    '<button class="tt-ibtn">'+ic('more',16)+'</button></div>';
+}
+function kpis(){
+  return '<div class="tt-kpis">'+D.kpi.map(k=>
+    '<div class="tt-kpi"><span class="ic" style="background:'+k.c+'">'+ic(k.ic,20)+'</span>'+
+    '<div><div class="v">'+k.v+'<em>'+k.u+'</em></div><div class="lb">'+k.k+'</div>'+
+    '<div class="ht">'+k.h+'</div></div></div>').join('')+'</div>';
+}
+function focusCard(){
+  return '<div class="tt-card">'+
+    '<div class="tt-card-hd"><span class="ic">'+ic('alert',13)+'</span>'+
+      '<span class="t">今日重点</span><span class="sub">7 件</span>'+
+      '<button class="more">全部'+ic('arrow',11)+'</button></div>'+
+    '<div class="tt-focus"><div class="num"><b>'+D.focus.num+'</b><i>'+D.focus.lb+'</i></div>'+
+      '<div class="body"><div class="lb">优先级最高</div><div class="tx">'+D.focus.tx+'</div></div>'+
+      '<button class="tt-go">'+D.focus.go+'</button></div>'+
+    D.todos.map(t=>'<div class="tt-frow"><div class="bd"><div class="t">'+t.t+'</div>'+
+      '<div class="s">'+t.s+'</div></div><button class="tt-pill">'+t.act+'</button></div>').join('')+
+  '</div>';
+}
+function featCard(){
+  return '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('grid',13)+'</span>'+
+    '<span class="t">常用功能</span><button class="more">全部'+ic('arrow',11)+'</button></div>'+
+    '<div class="tt-grid">'+D.feats.map(f=>
+      '<button class="tt-cell"><span class="sq" style="background:'+f.c+'">'+ic(f.ic,20)+'</span>'+
+      '<span class="nm">'+f.t+'</span>'+(f.n?'<em class="tt-count">'+f.n+'</em>':'')+'</button>').join('')+
+    '</div></div>';
+}
+function rhythmCard(){
+  return '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('clock',13)+'</span>'+
+    '<span class="t">我的节奏</span><span class="sub">11月第 1 周</span>'+
+    '<button class="more">去安排'+ic('arrow',11)+'</button></div>'+
+    '<div class="tt-row" style="margin-top:11px"><div class="bd"><div class="t">本周计划</div>'+
+      '<div class="s">2 项已办结 · 3 项待办</div></div><div class="v">2<em>/5</em></div></div>'+
+    '<div class="tt-prog"><i style="width:40%"></i></div>'+
+    '<div class="tt-row" style="border-top:0;padding-top:0"><div class="bd"><div class="t">本月工作量</div>'+
+      '<div class="s">育人 12 · 教学 8 · 关怀 3</div></div><div class="v">26<em>件</em></div></div>'+
+    '<div class="tt-prog" style="--p:#079455"><i style="width:68%"></i></div></div>';
+}
+function roster(withSearch){
+  const chips = [['全部',42,''],['高危',3,'is-risk'],['中风险',5,''],['关注',6,''],['平稳',28,'']].map((c,i)=>
+    '<button class="tt-chip '+(c[2]||'')+(i===0?' is-on':'')+'">'+c[0]+'<b>'+c[1]+'</b></button>').join('');
+  const rows = D.students.map(s=>{
+    const cls = s.risk==='severe'?'sev':s.risk==='moderate'?'mod':'';
+    const bar = s.risk==='severe'?'#d92d20':s.risk==='moderate'?'#b54708':s.risk==='mild'?'#eaaa08':'#e5e7eb';
+    const tag = s.risk==='severe'?'<span class="tt-tag sev">高危</span>':
+                s.risk==='moderate'?'<span class="tt-tag mod">中风险</span>':
+                s.risk==='mild'?'<span class="tt-tag mild">关注</span>':'';
+    return '<div class="tt-stu '+cls+'" style="--c:'+bar+'">'+
+      '<span class="tt-av">'+s.n[0]+'</span>'+
+      '<div style="flex:1;min-width:0"><div class="n">'+s.n+tag+'</div><div class="s">'+s.c+' · '+s.s+'</div></div>'+
+      '<div class="tt-mets">'+
+        '<div class="tt-met'+(s.g?'':' is-0')+'"><b>'+s.g+'</b><i>成果</i></div>'+
+        '<div class="tt-met'+(s.l?'':' is-0')+'"><b>'+s.l+'</b><i>请假</i></div>'+
+        '<div class="tt-met'+(s.sc<70?' low':'')+'"><b>'+s.sc+'</b><i>评分</i></div>'+
+      '</div></div>';
+  }).join('');
+  return (withSearch ? '<div class="tt-search"><div class="tt-input">'+ic('search',15)+'搜索姓名 / 学号 / 学院</div>'+
+      '<button class="tt-ibtn" style="height:38px;width:38px">'+ic('sort',16)+'</button></div>'+
+      '<div class="tt-chips">'+chips+'</div>' : '')+
+    '<div style="display:flex;flex-direction:column;gap:8px">'+rows+'</div>'+
+    '<div class="tt-foot">共 42 人 · 已显示 '+D.students.length+'</div>';
+}
+function rhythmDetail(){
+  const days = ['一','二','三','四','五','六','日'];
+  const week = days.map((d,i)=>'<div class="tt-day'+(i===0?' is-on':'')+'"><span class="w">'+d+'</span>'+
+    '<span class="d">'+(2+i)+'</span><span class="dot" style="'+(i<3?'background:#2563eb':'')+'"></span></div>').join('');
+  const plan = D.plan.map(p=>'<div class="tt-task'+(p.done?' done':'')+'">'+
+    '<span class="tt-box'+(p.done?' on':'')+'">'+(p.done?ic('check',10,2.4):'')+'</span>'+
+    '<div><div class="t">'+p.t+'</div><div class="s">'+p.s+'</div></div></div>').join('');
+  const sch = D.sched.map(s=>'<div class="tt-task"><div style="min-width:44px;font-size:12px;'+
+    'color:#2563eb;font-weight:600;font-variant-numeric:tabular-nums;padding-top:1px">'+s.tm+'</div>'+
+    '<div><div class="t">'+s.t+'</div><div class="s">'+s.s+'</div></div></div>').join('');
+  return '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('cal',13)+'</span>'+
+      '<span class="t">本周节奏</span><span class="sub">11月第 1 周</span></div>'+
+      '<div class="tt-week">'+week+'</div></div>'+
+    '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('check',13)+'</span>'+
+      '<span class="t">本周计划</span><span class="sub">2/5 已办结</span></div>'+
+      '<div style="margin-top:9px">'+plan+'</div></div>'+
+    '<div class="tt-minis">'+D.work.map(w=>'<div class="tt-mini"><b>'+w.v+'</b><span>'+w.k+'</span></div>').join('')+'</div>'+
+    '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('clock',13)+'</span>'+
+      '<span class="t">今日日程</span></div><div style="margin-top:9px">'+sch+'</div></div>';
+}
+function analysis(){
+  const figs = [['3.42','平均绩点'],['78.6','平均成绩'],['42','覆盖学生']].map(f=>
+    '<div class="tt-fig"><b>'+f[0]+'</b><span>'+f[1]+'</span></div>').join('');
+  const max = Math.max.apply(null, D.dist.map(d=>d.v));
+  const bars = D.dist.map(d=>'<div class="tt-bar'+(d.v===max?' hi':'')+'"><b>'+d.v+'</b>'+
+    '<i style="height:'+Math.round(d.v/max*58)+'px"></i><span>'+d.k+'</span></div>').join('');
+  const tmax = Math.max.apply(null, D.trend);
+  const trend = D.trend.map(v=>'<i class="'+(v===tmax?'hi':'')+'" style="height:'+Math.round(v/tmax*52)+'px"></i>').join('');
+  return '<div class="tt-figs">'+figs+'</div>'+
+    '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('chart',13)+'</span>'+
+      '<span class="t">成绩分布</span><span class="sub">计科 2301</span></div>'+
+      '<div class="tt-bars">'+bars+'</div></div>'+
+    '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('alert',13)+'</span>'+
+      '<span class="t">预警趋势</span><span class="sub">近 6 周</span></div>'+
+      '<div class="tt-trend">'+trend+'</div></div>'+
+    '<div class="tt-ai"><span class="ic">'+ic('spark',13)+'</span><p><b>AI 结论：</b>'+D.ai+'</p></div>';
+}
+function tabsHTML(list){
+  return '<div class="pg-tabs tt-tabs">'+list.map((t,i)=>
+    '<button class="pg-tab tt-tab'+(i===0?' is-on':'')+'">'+t+'</button>').join('')+
+    '<span class="pg-ind tt-ind"></span></div>';
+}
+function page(inner){
+  return '<section class="pg-page tt-page">'+inner+'</section>';
+}
+
+/* =========================================================
+   版式 A：四段分页（概览 / 名单 / 节奏 / 分析）
+   ========================================================= */
+function A(){
+  return sbar()+head()+hero()+tabsHTML(['概览','名单','节奏','分析'])+
+    '<div class="pg-viewport"><div class="pg-track">'+
+      page('<div class="tt-note"><i></i>'+D.callout+'</div>'+kpis()+focusCard()+featCard()+rhythmCard())+
+      page(roster(true))+
+      page(rhythmDetail())+
+      page(analysis())+
+    '</div></div>';
+}
+
+/* =========================================================
+   版式 B：首屏主导 + 二级子页（名单 / 分析走整页推入）
+   ========================================================= */
+function BRosterCard(){
+  const top = D.students.slice(0,3).map(s=>{
+    const cls = s.risk==='severe'?'sev':s.risk==='moderate'?'mod':'';
+    const bar = s.risk==='severe'?'#d92d20':s.risk==='moderate'?'#b54708':'#e5e7eb';
+    return '<div class="tt-stu '+cls+'" style="--c:'+bar+'"><span class="tt-av">'+s.n[0]+'</span>'+
+      '<div style="flex:1;min-width:0"><div class="n">'+s.n+
+      (s.risk==='severe'?'<span class="tt-tag sev">高危</span>':s.risk==='moderate'?'<span class="tt-tag mod">中风险</span>':'')+
+      '</div><div class="s">'+s.c+' · '+s.s+'</div></div>'+
+      '<div class="tt-mets"><div class="tt-met"><b>'+s.g+'</b><i>成果</i></div>'+
+      '<div class="tt-met"><b>'+s.l+'</b><i>请假</i></div>'+
+      '<div class="tt-met'+(s.sc<70?' low':'')+'"><b>'+s.sc+'</b><i>评分</i></div></div></div>';
+  }).join('');
+  return '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('users',13)+'</span>'+
+    '<span class="t">学生名单</span><span class="sub">3 条高危 · 42 人在册</span>'+
+    '<button class="more" data-goto="1">看全部 42 人'+ic('arrow',11)+'</button></div>'+
+    '<div style="display:flex;flex-direction:column;gap:8px;padding:11px 14px 14px">'+top+'</div></div>';
+}
+function BAnalysisCard(){
+  return '<div class="tt-card"><div class="tt-card-hd"><span class="ic">'+ic('chart',13)+'</span>'+
+    '<span class="t">班级数据</span><span class="sub">平均绩点 3.42</span>'+
+    '<button class="more" data-goto="2">看分析'+ic('arrow',11)+'</button></div>'+
+    '<div class="tt-row"><div class="bd"><div class="t">平均成绩 78.6</div>'+
+      '<div class="s">覆盖 42 人 · 比上周 +1.2</div></div>'+
+      '<div class="v">3.42<em>绩点</em></div></div></div>';
+}
+function BSubHead(title, count){
+  return '<div class="tt-sub"><button class="tt-back" data-goto="0">'+ic('left',18)+'</button>'+
+    '<h1>'+title+'</h1><span class="n">'+count+'</span></div>';
+}
+function B(){
+  return sbar()+head()+hero()+
+    '<div class="pg-viewport"><div class="pg-track">'+
+      page('<div class="tt-note"><i></i>'+D.callout+'</div>'+kpis()+focusCard()+featCard()+BRosterCard()+rhythmCard()+BAnalysisCard())+
+      '<section class="pg-page tt-page" style="padding-top:0;gap:8px">'+
+        BSubHead('学生名单', '42 人在册')+roster(true)+'</section>'+
+      '<section class="pg-page tt-page" style="padding-top:0">'+
+        BSubHead('班级分析', '计科 2301')+analysis()+'</section>'+
+    '</div></div>';
+}
+
+/* =========================================================
+   版式 C：双段（我的 / 班级）
+   ========================================================= */
+function C(){
+  return sbar()+head()+hero()+tabsHTML(['我的','班级'])+
+    '<div class="pg-viewport"><div class="pg-track">'+
+      page('<div class="tt-note"><i></i>'+D.callout+'</div>'+kpis()+focusCard()+rhythmCard()+featCard())+
+      page(roster(true)+'<div style="margin-top:12px">'+analysis()+'</div>')+
+    '</div></div>';
+}
+
+/* =========================================================
+   首页 = 学生端校园资讯（UI 与内容零改动，仅角色开关）
+   ========================================================= */
+const NEWS = {
+  teacher: [
+    {pin:true, t:'关于开展 2026 年秋季学期期中教学检查的通知', src:'教务处', tm:'2 小时前', read:'已读 38/42', g:1},
+    {t:'「一站式」学生社区服务中心试运行公告', src:'学工部', tm:'昨天 16:20', read:'已读 35/42', g:2},
+    {t:'我校在第十九届「挑战杯」省赛获 6 项特等奖', src:'宣传部', tm:'昨天 09:10', read:'阅读 1.2k', g:3},
+    {t:'教师发展中心：AI 辅助教学工作坊（第 4 期）报名', src:'教发中心', tm:'2 天前', read:'阅读 486', g:4},
+    {t:'关于 11 月学生心理健康普测的安排', src:'心理中心', tm:'3 天前', read:'已读 41/42', g:1}
+  ],
+  student: [
+    {t:'关于开展 2026 年秋季学期期中教学检查的通知', src:'教务处', tm:'2 小时前', cm:12, vw:486, g:1},
+    {t:'我校在第十九届「挑战杯」省赛获 6 项特等奖', src:'宣传部', tm:'昨天 09:10', cm:38, vw:1240, g:3},
+    {t:'校园马拉松报名开启：11 月 18 日截止', src:'体育部', tm:'昨天 08:00', cm:26, vw:902, g:2},
+    {t:'图书馆 11 月闭馆维护安排（附替代自习区）', src:'图书馆', tm:'2 天前', cm:9, vw:664, g:4}
+  ]
+};
+function newsTabs(role){
+  const list = role === 'teacher'
+    ? ['推荐','通知','教学','学工','我的发布']
+    : ['推荐','关注','院系','就业','收藏'];
+  return '<div class="pg-tabs cn-tabs">'+list.map((t,i)=>
+    '<button class="pg-tab cn-tab'+(i===0?' is-on':'')+'">'+t+'</button>').join('')+
+    '<span class="pg-ind cn-ind"></span></div>';
+}
+function newsLead(role){
+  if(role === 'teacher'){
+    return '<div class="cn-lead"><div class="hd"><span class="live"></span>本周我发布 2 条 · 平均已读 87%</div>'+
+      '<div class="nums"><div><b>2</b>条通知</div><div><b>5</b>人未读</div><div><b>87%</b>触达</div></div>'+
+      '<div class="go">查看阅读回执 '+ic('arrow',12)+'</div></div>';
+  }
+  return '<div class="cn-hero"><div class="dots"><i class="on"></i><i></i><i></i></div>'+
+    '<div class="cap"><span class="tg">校园 · 秋</span><h3>银杏落了满地，图书馆前的这条路今年最好看</h3></div></div>'+
+    '<div class="cn-lead" style="background:#fff;border:0;border-bottom:1px solid #f2f3f5;border-radius:0;margin:0 12px;padding:10px 0">'+
+      '<div class="hd" style="color:#1d2129"><span class="live"></span>你关注了 2 个院系 · 3 条新动态</div></div>';
+}
+function newsFeed(role){
+  const items = NEWS[role];
+  return items.map(n=>{
+    const meta = role === 'teacher'
+      ? (n.pin?'<span class="cn-pin">置顶</span>':'')+'<span>'+n.src+'</span><span>·</span><span>'+n.tm+'</span>'+
+        '<span class="cn-read" style="margin-left:auto">'+n.read+'</span>'
+      : '<span>'+n.src+'</span><span>·</span><span>'+n.tm+'</span>'+
+        '<span class="cn-acts"><span>'+ic('chat',12)+n.cm+'</span><span>'+ic('eye',12)+n.vw+'</span></span>';
+    return '<div class="cn-item"><div class="body"><h3>'+n.t+'</h3><div class="meta">'+meta+'</div></div>'+
+      '<div class="cn-thumb g'+n.g+'"></div></div>';
+  }).join('');
+}
+function News(role){
+  const head = role === 'teacher'
+    ? '<div class="cn-appbar"><h1>校园资讯</h1>'+
+      '<button class="cn-pub">'+ic('send',12)+'发布</button>'+
+      '<button class="cn-btn">'+ic('search',19,1.8)+'</button>'+
+      '<button class="cn-btn">'+ic('msg',19,1.8)+'<em class="cn-dot">3</em></button></div>'
+    : '<div class="cn-appbar"><h1>校园资讯</h1>'+
+      '<button class="cn-btn">'+ic('search',19,1.8)+'</button>'+
+      '<button class="cn-btn">'+ic('msg',19,1.8)+'<em class="cn-dot">1</em></button></div>';
+  const pages = role === 'teacher'
+    ? [newsLead('teacher')+'<div class="cn-feed">'+newsFeed('teacher')+'</div>'+
+       '<div class="cn-tip">教师视角 · 仅多「发布 / 置顶 / 回执」，其余与学生端完全一致</div>',
+       '<div class="cn-empty">「通知」频道：按发布单位聚合</div>',
+       '<div class="cn-empty">「教学」频道：教务处 · 教发中心</div>',
+       '<div class="cn-empty">「学工」频道：学工部 · 心理中心</div>',
+       '<div class="cn-empty">「我的发布」：2 条通知 · 回执可查</div>']
+    : [newsLead('student')+'<div class="cn-feed">'+newsFeed('student')+'</div>'+
+       '<div class="cn-tip">学生视角 · 只读 + 评论 / 收藏</div>',
+       '<div class="cn-empty">「关注」：2 个院系的新动态</div>',
+       '<div class="cn-empty">「院系」：计算机学院 · 软件学院</div>',
+       '<div class="cn-empty">「就业」：秋招宣讲 12 场</div>',
+       '<div class="cn-empty">「收藏」：还没有收藏的帖子</div>'];
+  return sbar()+head+newsTabs(role)+
+    '<div class="pg-viewport"><div class="pg-track">'+
+      pages.map(p=>'<section class="pg-page cn-page">'+p+'</section>').join('')+'</div></div>';
+}
+
+/* =========================================================
+   分页引擎（对齐 CampusPage：跟手 + 200ms 吸附 + 整页推入）
+   ① 点 Tab ② 点 data-goto 入口（版式 B 的二级子页）③ 横向拖动
+   ========================================================= */
+function initPager(root){
+  const vp = root.querySelector('.pg-viewport');
+  const track = root.querySelector('.pg-track');
+  const ind = root.querySelector('.pg-ind');
+  const tabs = Array.prototype.slice.call(root.querySelectorAll('.pg-tab'));
+  const pages = Array.prototype.slice.call(root.querySelectorAll('.pg-page'));
+  const N = Math.max(tabs.length, pages.length);
+  if(!vp || !track || !N) return;
+
+  let idx = 0, W = vp.clientWidth, startX = 0, startY = 0, dx = 0, axis = null;
+  let dragging = false, moved = false, t0 = 0;
+
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const measure = () => { W = vp.clientWidth || 392; };
+  const setX = px => { track.style.transform = 'translate3d(' + px + 'px,0,0)'; };
+  function setInd(p){
+    if(!ind || !tabs.length) return;
+    p = clamp(p, 0, N - 1);
+    const i = Math.min(N - 1, Math.floor(p));
+    const j = Math.min(N - 1, i + 1);
+    const f = p - i;
+    const a = tabs[i], b = tabs[j];
+    const l = a.offsetLeft + (b.offsetLeft - a.offsetLeft) * f;
+    const w = a.offsetWidth + (b.offsetWidth - a.offsetWidth) * f;
+    ind.style.width = w + 'px';
+    ind.style.transform = 'translate3d(' + l + 'px,0,0)';
+  }
+  const setActive = i => tabs.forEach((t,k) => t.classList.toggle('is-on', k === i));
+
+  function go(target, jump){
+    target = clamp(target, 0, N - 1);
+    measure();
+    if(target === idx){ setX(-idx * W); setInd(idx); return; }
+    const dir = target > idx ? 1 : -1;
+    if(jump){
+      track.classList.add('no-anim');
+      setX(-(target * W) + dir * W);
+      void track.offsetWidth;
+      track.classList.remove('no-anim');
+      setX(-target * W);
+    } else {
+      setX(-target * W);
+    }
+    idx = target;
+    setActive(idx);
+    setInd(idx);
+  }
+
+  requestAnimationFrame(() => {
+    measure(); setX(-idx * W); setInd(idx);
+    tabs.forEach((t,i) => t.addEventListener('click', e => { e.preventDefault(); go(i, true); }));
+    Array.prototype.slice.call(root.querySelectorAll('[data-goto]')).forEach(el => {
+      el.addEventListener('click', e => { e.preventDefault(); go(parseInt(el.dataset.goto, 10) || 0, true); });
+    });
+  });
+
+  vp.addEventListener('pointerdown', e => {
+    if(e.button !== undefined && e.button !== 0) return;
+    measure();
+    dragging = true; moved = false; axis = null; dx = 0;
+    startX = e.clientX; startY = e.clientY; t0 = performance.now();
+    track.classList.add('no-anim');
+  });
+  vp.addEventListener('pointermove', e => {
+    if(!dragging) return;
+    dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if(!axis && (Math.abs(dx) > 12 || Math.abs(dy) > 12)){
+      axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if(axis === 'x'){
+        root.classList.add('is-drag');
+        try { vp.setPointerCapture(e.pointerId); } catch(err){}
+      }
+    }
+    if(axis !== 'x') return;
+    moved = true;
+    let d = dx;
+    if((idx === 0 && d > 0) || (idx === N - 1 && d < 0)) d *= 0.35;
+    setX(-idx * W + d);
+    setInd(idx - d / W);
+  });
+  function end(){
+    if(!dragging) return;
+    dragging = false;
+    const dt = Math.max(1, performance.now() - t0);
+    const v = dx / dt;
+    track.classList.remove('no-anim');
+    root.classList.remove('is-drag');
+    if(axis === 'x'){
+      let target = idx;
+      if(dx < -56 || (v < -0.35 && dx < -14)) target = idx + 1;
+      else if(dx > 56 || (v > 0.35 && dx > 14)) target = idx - 1;
+      target = clamp(target, 0, N - 1);
+      setX(-target * W);
+      idx = target;
+      setActive(idx);
+      setInd(idx);
+    }
+    axis = null;
+  }
+  vp.addEventListener('pointerup', end);
+  vp.addEventListener('pointercancel', end);
+  vp.addEventListener('click', e => {
+    if(moved){ e.stopPropagation(); e.preventDefault(); moved = false; }
+  }, true);
+  window.addEventListener('resize', () => {
+    if(!document.body.contains(vp)) return;
+    measure(); setX(-idx * W); setInd(idx);
+  });
+}
+
+/* =========================================================
+   挂载
+   ========================================================= */
+document.getElementById('phA').innerHTML = A();
+document.getElementById('phB').innerHTML = B();
+document.getElementById('phC').innerHTML = C();
+const newsEl = document.getElementById('phNews');
+const badge = document.getElementById('roleBadge');
+let newsRole = 'teacher';
+newsEl.innerHTML = News(newsRole);
+document.querySelectorAll('.screen').forEach(initPager);
+
+document.querySelectorAll('.role-switch button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if(btn.dataset.role === newsRole) return;
+    newsRole = btn.dataset.role;
+    document.querySelectorAll('.role-switch button').forEach(b => b.classList.toggle('is-on', b === btn));
+    badge.textContent = newsRole === 'teacher' ? '教师视角' : '学生视角';
+    newsEl.innerHTML = News(newsRole);
+    initPager(newsEl);
+  });
+});
+</script>
+</body>
+</html>

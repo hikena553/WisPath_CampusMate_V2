@@ -732,4 +732,163 @@ TEACHER_TOOL_DEFINITIONS = [
             }
         }
     },
+    # ============ 教学域工具（PH3）：让绵小城能直接处理课表/考勤/作业/成绩 ============
+    {
+        "type": "function",
+        "function": {
+            "name": "query_my_courses",
+            "description": "查询课表与任课教师。不传 teacher_name 时查「我教的课」；传 teacher_name 时查该任课教师的课表（可跨教师查询，用于排课协调/找同事）。教师说'我这周有什么课''我的课表''查一下张老师的课表''周三谁有课'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "teacher_name": {"type": "string", "description": "可选，任课教师姓名（支持模糊）。不传则查我自己的课"},
+                    "weekday": {"type": "integer", "description": "可选，星期几：1=周一…7=周日"},
+                    "semester": {"type": "string", "description": "可选，学期如 2025-2026-2，不传则用当前学期"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_class_attendance",
+            "description": "查询我所教某门课的出勤概况：点名次数、到课率、旷课人次、缺勤最多的学生。教师说'这门课出勤怎么样''谁总是不来上课''到课率多少'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "course_name": {"type": "string", "description": "课程名称（支持模糊），与 course_id 二选一"},
+                    "course_id": {"type": "integer", "description": "课程ID"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_attendance_roster",
+            "description": "查询某门课某一天的应到学生名单，并标出当天已批假的学生。用于点名前预览，或教师说'今天这门课谁该到''帮我看看有没有人请假'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "course_name": {"type": "string", "description": "课程名称（支持模糊）"},
+                    "course_id": {"type": "integer", "description": "课程ID"},
+                    "attend_date": {"type": "string", "description": "日期 YYYY-MM-DD，不传则今天"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_homework_status",
+            "description": "查询作业的提交与批改情况：应交多少人、已交多少、未交名单。教师说'这次作业交了多少''谁没交作业''作业批改完了吗'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "course_name": {"type": "string", "description": "可选，课程名称（支持模糊）"},
+                    "course_id": {"type": "integer", "description": "可选，课程ID"},
+                    "homework_title": {"type": "string", "description": "可选，作业标题关键词；不传则取最近一次作业"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_class_grade",
+            "description": "查询我所教某门课的成绩概况：均分、最高最低分、及格率、分数段分布、不及格名单。教师说'这门课考得怎么样''有多少人不及格''平均分多少'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "course_name": {"type": "string", "description": "课程名称（支持模糊），与 course_id 二选一"},
+                    "course_id": {"type": "integer", "description": "课程ID"},
+                    "pass_line": {"type": "number", "description": "可选，及格线，默认60"}
+                },
+                "required": []
+            }
+        }
+    },
+    # ============ 日程 / 班级公告：补齐「我的计划」与公告发布的智能体闭环 ============
+    {
+        "type": "function",
+        "function": {
+            "name": "query_teacher_schedules",
+            "description": "查询教师自己的日程安排/计划（按月份）。教师说'我的计划''这周/这个月有什么安排''查看日程'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "year": {"type": "integer", "description": "年份，如 2026，不传则当前年"},
+                    "month": {"type": "integer", "description": "月份 1-12，不传则当前月"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_teacher_schedule",
+            "description": "新增一条教师日程/计划。教师说'帮我把XX加到日程''下周三提醒我做什么''安排一个计划'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "日程内容"},
+                    "date": {"type": "string", "description": "日期 YYYY-MM-DD，不传则今天"},
+                    "urgency": {"type": "string", "enum": ["normal", "important", "urgent"], "description": "紧急程度，默认normal"}
+                },
+                "required": ["content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_class_announcement",
+            "description": "给名下学生发布一条班级公告，并即时推送站内通知。教师说'写一条班级公告''发个通知给全班''通知学生XX'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "公告标题"},
+                    "content": {"type": "string", "description": "公告正文"},
+                    "urgency": {"type": "string", "enum": ["normal", "important", "urgent"], "description": "紧急程度，默认normal"}
+                },
+                "required": ["title", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "resolve_crisis_alert",
+            "description": "处置名下的心理危机预警：标记已介入（关闭）或重新打开。教师说'这条预警处理好了''关闭这个预警''标记已跟进'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alert_id": {"type": "integer", "description": "预警ID"},
+                    "resolved": {"type": "boolean", "description": "true 标记已处置 / false 重新打开，默认 true"},
+                    "note": {"type": "string", "description": "处置说明（可选，写入干预记录）"}
+                },
+                "required": ["alert_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_message_to_student",
+            "description": "给名下学生发送一条一对一消息（写入会话并实时推送）。教师说'给某某发消息''通知一下某某''跟他说……'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名（支持模糊）"},
+                    "content": {"type": "string", "description": "消息内容"}
+                },
+                "required": ["student_name", "content"]
+            }
+        }
+    },
 ]

@@ -14,13 +14,13 @@
               <img :src="siteMascot" :alt="siteName" />
             </span>
             <div class="app-head-text">
-              <h1 class="app-head-title">学生</h1>
+              <h1 class="app-head-title">工作台</h1>
               <p class="app-head-sub">
                 <span class="app-head-live" :class="headAlert ? 'is-alert' : 'is-calm'">
                   <i class="app-head-live-dot" aria-hidden="true"></i>{{ headStatusText }}
                 </span>
                 <span class="app-head-divider" aria-hidden="true"></span>
-                <span class="app-head-scope">名单 · 档案 · 数据分析</span>
+                <span class="app-head-scope">我的事务 · 名单 · 数据分析</span>
               </p>
             </div>
           </div>
@@ -38,142 +38,184 @@
         </div>
       </header>
 
-      <!-- 概况便当格（Bento Grid）：模块化磁贴，每格只做一件事 -->
-      <section class="bento">
-        <div class="bento-tile bento-tile-lg">
-          <span class="bento-label">在册学生</span>
-          <span class="bento-value">{{ stats.total_students }}</span>
-          <span class="bento-hint">成长档案 · 班级数据分析</span>
+      <!--
+        概况条 + 名单，合并为「本页主功能区」。
+        原来的布局问题：4 个便当格占掉半屏，只有 3 个数字，点开分析后
+        才是真正的学生名单 —— 一屏之内看不到任何学生，而「学生」就是这个页面的全部意义。
+        现在改成：一条紧凑指标条（只占一行高度），下面是名单。
+        指标本身也从「纯数字」升级为「带权重提示」：高危/待批假是需要注意的，
+        所以它们带语义色；「在册」「有成果」是中性信息，不抢视线。
+      -->
+      <section class="roster-panel">
+        <div class="metric-strip">
+          <div class="ms-item">
+            <span class="ms-num">{{ stats.total_students }}</span>
+            <span class="ms-label">在册学生</span>
+          </div>
+          <div class="ms-item" :class="{ 'is-alert': stats.severe_alert_count > 0 }">
+            <span class="ms-num">{{ stats.severe_alert_count }}</span>
+            <span class="ms-label">高危学生</span>
+          </div>
+          <div class="ms-item" :class="{ 'is-warn': stats.pending_leave_count > 0 }">
+            <span class="ms-num">{{ stats.pending_leave_count }}</span>
+            <span class="ms-label">待批请假</span>
+          </div>
+          <div class="ms-item">
+            <span class="ms-num">{{ growthCount }}</span>
+            <span class="ms-label">有成长成果</span>
+          </div>
+          <div class="ms-spacer"></div>
+          <button class="ms-action" type="button" @click="showAnalyticsPage = true">
+            <el-icon :size="15"><DataAnalysis /></el-icon>
+            班级数据分析
+          </button>
         </div>
-        <div class="bento-tile">
-          <span class="bento-label">高危学生</span>
-          <span class="bento-value bento-value-warn">{{ stats.severe_alert_count }}</span>
+
+        <!-- 筛选条：搜索独占一行（学生页最常用的动作），筛选器收拢在右侧 -->
+        <div class="roster-toolbar">
+          <el-input
+            v-model="search"
+            class="roster-search"
+            placeholder="搜索姓名 / 学号 / 学院"
+            clearable
+            @input="debouncedLoadStudents"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+          <div class="roster-filters">
+            <el-select v-model="filterCrisis" placeholder="危机等级" clearable class="rf-select">
+              <el-option label="全部" value="" />
+              <el-option label="高危" value="severe" />
+              <el-option label="中度" value="moderate" />
+              <el-option label="轻度" value="mild" />
+              <el-option label="无预警" value="none" />
+            </el-select>
+            <el-select v-model="filterGrowth" placeholder="成长成果" clearable class="rf-select">
+              <el-option label="全部" value="" />
+              <el-option label="有成果" value="has" />
+              <el-option label="无成果" value="none" />
+            </el-select>
+            <el-select v-model="filterScore" placeholder="综合评分" clearable class="rf-select">
+              <el-option label="全部" value="" />
+              <el-option label="突出 (≥80)" value="excellent" />
+              <el-option label="良好 (≥65)" value="good" />
+              <el-option label="一般 (≥50)" value="average" />
+              <el-option label="偏低 (<50)" value="poor" />
+            </el-select>
+            <el-select v-model="filterSkill" placeholder="技能画像" clearable class="rf-select">
+              <el-option label="全部" value="" />
+              <el-option label="有技能" value="has" />
+              <el-option label="无技能" value="none" />
+            </el-select>
+            <button v-if="hasActiveFilter" class="rf-clear" type="button" @click="clearFilters">
+              <el-icon :size="12"><Close /></el-icon>
+              清除
+            </button>
+          </div>
         </div>
-        <div class="bento-tile">
-          <span class="bento-label">有成长成果</span>
-          <span class="bento-value bento-value-ok">{{ growthCount }}</span>
+
+        <div v-if="!filteredStudents.length && loaded" class="empty-wrapper">
+          <el-empty :image-size="96">
+            <template #image>
+              <img :src="siteMascot" :alt="siteName" class="empty-mascot" />
+            </template>
+            <p class="empty-text">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</p>
+          </el-empty>
         </div>
-        <button class="bento-tile bento-tile-action" type="button" @click="showAnalyticsPage = true">
-          <span class="bento-action-icon"><el-icon :size="18"><DataAnalysis /></el-icon></span>
-          <span class="bento-action-main">
-            <span class="bento-label">班级数据分析</span>
-            <span class="bento-hint">成绩分布 · 心理危机 · 预警趋势</span>
+
+        <div v-else class="student-grid">
+          <div
+            v-for="s in pagedStudents"
+            :key="s.id"
+            :class="['student-card', s.crisis_level ? `level-${s.crisis_level}` : '']"
+          >
+            <div class="card-head">
+              <el-avatar :size="40" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
+              <div class="card-info">
+                <strong class="card-name">{{ s.name }}</strong>
+                <span class="card-college">{{ s.college || '未分配' }}</span>
+              </div>
+              <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="crisis-tag">
+                {{ crisisLabel(s.crisis_level) }}
+              </el-tag>
+            </div>
+
+            <!--
+              卡片主体改成一行「关键事实」，不再是三个等宽大数字。
+              教师看名单时真正想知道的是：这人有没有事（预警）、有没有产出（成果）、
+              有没有请假（请假），而不是三个并排的 0。
+            -->
+            <div class="card-facts">
+              <span class="cf-item" :class="{ 'is-quiet': !s.growth_count }">
+                <b>{{ s.growth_count }}</b> 成果
+              </span>
+              <span class="cf-sep" aria-hidden="true"></span>
+              <span class="cf-item" :class="{ 'is-quiet': !s.leave_count }">
+                <b>{{ s.leave_count }}</b> 请假
+              </span>
+              <span class="cf-sep" aria-hidden="true"></span>
+              <span class="cf-item" :class="s.score !== undefined ? scoreClass(s.score) : 'is-quiet'">
+                <b>{{ s.score ?? '—' }}</b> 综合分
+              </span>
+            </div>
+
+            <div v-if="s.latest_crisis_summary" class="card-crisis-note">
+              {{ s.latest_crisis_summary }}
+            </div>
+
+            <div v-if="s.skills_json?.skills?.length" class="card-skills">
+              <el-tag v-for="sk in s.skills_json.skills.slice(0, 3)" :key="sk.name" size="small" round effect="plain">{{ sk.name }}</el-tag>
+            </div>
+
+            <div class="card-actions">
+              <el-button size="small" type="primary" @click="openDetail(s)">
+                <el-icon><View /></el-icon> 详情
+              </el-button>
+              <el-button size="small" type="success" plain @click="openContact(s)">
+                <el-icon><ChatDotRound /></el-icon> 联系
+              </el-button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="filteredStudents.length > 0" class="pagination-wrapper">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[12, 24, 36, 48]"
+            :total="filteredStudents.length"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+      </section>
+
+      <!--
+        班级数据分析折叠区。
+        不放首屏的理由：这是「看趋势、做汇报」才用的，日常最高频的动作是查某个学生。
+        但也不能藏进二级页 —— 折叠标题里直接告诉它有什么，需要时一行就能展开。
+      -->
+      <section class="analytics-section is-collapsed">
+        <button class="analytics-toggle" type="button" @click="analyticsOpen = !analyticsOpen">
+          <span class="at-main">
+            <span class="at-title">班级数据分析</span>
+            <span class="at-sub">综合评估 / 成绩分布 / 心理危机 / 生源地等维度</span>
           </span>
-          <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+          <el-icon :size="14" class="at-arrow" :class="{ 'is-open': analyticsOpen }">
+            <ArrowRight />
+          </el-icon>
         </button>
-      </section>
-
-      <!-- 班级数据分析：与学生相关的数据维度，归属本页 -->
-      <section class="analytics-section">
-        <div class="analytics-section-head">
-          <span class="analytics-section-title">班级数据分析</span>
-          <span class="analytics-section-sub">班级综合评估 / 成绩分布 / 心理危机 / 学生成长等维度</span>
+        <div v-if="analyticsOpen" class="analytics-body">
+          <ClassAnalyticsPanel
+            :class-stats="classStats"
+            :eval-data="evalData"
+            :analysis-result="analysisResult"
+            :analysis-loading="analysisLoading"
+            @analyze="handleClassAnalysis"
+          />
         </div>
-        <ClassAnalyticsPanel
-          :class-stats="classStats"
-          :eval-data="evalData"
-          :analysis-result="analysisResult"
-          :analysis-loading="analysisLoading"
-          @analyze="handleClassAnalysis"
-        />
       </section>
-
-      <div class="filter-bar">
-        <el-input v-model="search" class="list-search filter-search" placeholder="搜索姓名 / 学号 / 学院" clearable @input="debouncedLoadStudents">
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
-        <el-select v-model="filterCrisis" placeholder="危机等级" clearable style="width:130px">
-          <el-option label="全部" value="" />
-          <el-option label="高危" value="severe" />
-          <el-option label="中度" value="moderate" />
-          <el-option label="轻度" value="mild" />
-          <el-option label="无预警" value="none" />
-        </el-select>
-        <el-select v-model="filterGrowth" placeholder="成长成果" clearable style="width:130px">
-          <el-option label="全部" value="" />
-          <el-option label="有成果" value="has" />
-          <el-option label="无成果" value="none" />
-        </el-select>
-        <el-select v-model="filterScore" placeholder="综合评分" clearable style="width:130px">
-          <el-option label="全部" value="" />
-          <el-option label="优秀 (≥90)" value="excellent" />
-          <el-option label="良好 (≥75)" value="good" />
-          <el-option label="及格 (≥60)" value="average" />
-          <el-option label="不及格 (<60)" value="poor" />
-        </el-select>
-        <el-select v-model="filterSkill" placeholder="技能画像" clearable style="width:130px">
-          <el-option label="全部" value="" />
-          <el-option label="有技能" value="has" />
-          <el-option label="无技能" value="none" />
-        </el-select>
-        <el-button v-if="hasActiveFilter" type="info" text @click="clearFilters">
-          <el-icon><Close /></el-icon> 清除筛选
-        </el-button>
-      </div>
-
-      <div v-if="!filteredStudents.length && loaded" class="empty-wrapper">
-        <el-empty :image-size="96">
-          <template #image>
-            <img :src="siteMascot" :alt="siteName" class="empty-mascot" />
-          </template>
-          <p class="empty-text">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</p>
-        </el-empty>
-      </div>
-
-      <div v-else class="student-grid">
-        <div v-for="s in pagedStudents" :key="s.id" :class="['student-card', s.crisis_level ? `level-${s.crisis_level}` : '']">
-          <div class="card-head">
-            <el-avatar :size="40" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
-            <div class="card-info">
-              <strong class="card-name">{{ s.name }}</strong>
-              <span class="card-college">{{ s.college || '未分配' }}</span>
-            </div>
-            <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="crisis-tag">
-              {{ crisisLabel(s.crisis_level) }}
-            </el-tag>
-          </div>
-
-          <div class="card-stats">
-            <div class="stat-item">
-              <span class="stat-num">{{ s.growth_count }}</span>
-              <span class="stat-text">成果</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-num">{{ s.leave_count }}</span>
-              <span class="stat-text">请假</span>
-            </div>
-            <div class="stat-item" v-if="s.score !== undefined">
-              <span :class="['stat-num', scoreClass(s.score)]">{{ s.score }}</span>
-              <span class="stat-text">综合分</span>
-            </div>
-          </div>
-
-          <div v-if="s.skills_json?.skills?.length" class="card-skills">
-            <el-tag v-for="sk in s.skills_json.skills.slice(0, 3)" :key="sk.name" size="small" round effect="plain">{{ sk.name }}</el-tag>
-          </div>
-
-          <div class="card-actions">
-            <el-button size="small" type="primary" @click="openDetail(s)">
-              <el-icon><View /></el-icon> 详情
-            </el-button>
-            <el-button size="small" type="success" plain @click="openContact(s)">
-              <el-icon><ChatDotRound /></el-icon> 联系
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="filteredStudents.length > 0" class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[12, 24, 36, 48]"
-          :total="filteredStudents.length"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-        />
-      </div>
 
       <!-- 桌面端详情弹窗 -->
       <el-dialog v-model="detailVisible" :title="detail ? `${detail.name} - 学生详情` : '学生详情'" width="800px" :close-on-click-modal="false" destroy-on-close class="student-detail-dialog">
@@ -318,7 +360,7 @@
                 </el-tab-pane>
                 <el-tab-pane label="工作记录" name="work">
                   <div class="tab-content">
-                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/care-center')">
+                    <button type="button" class="loop-bar" @click="gotoFeature('/teacher/care-center', { view: 'profile' })">
                       <span class="loop-bar-text">关怀中心 · 关怀日历 / 家访台账 / 正向激励</span>
                       <el-icon :size="14"><ArrowRight /></el-icon>
                     </button>
@@ -346,146 +388,169 @@
 
     <!-- ============ 移动端（全新设计） ============ -->
     <template v-else>
-      <!-- 移动端页头：与桌面端同一套（品牌形象 + 页面标题 + 实时状态 + 更多操作） -->
-      <header class="app-head">
-        <div class="app-head-bar">
-          <div class="app-head-lead">
-            <span class="app-head-mark" aria-hidden="true">
-              <img :src="siteMascot" :alt="siteName" />
-            </span>
-            <div class="app-head-text">
-              <h1 class="app-head-title">学生</h1>
-              <p class="app-head-sub">
-                <span class="app-head-live" :class="headAlert ? 'is-alert' : 'is-calm'">
-                  <i class="app-head-live-dot" aria-hidden="true"></i>{{ headStatusText }}
-                </span>
-                <span class="app-head-divider" aria-hidden="true"></span>
-                <span class="app-head-scope">名单 · 档案 · 数据分析</span>
-              </p>
-            </div>
-          </div>
-          <el-dropdown trigger="click" @command="onHeadCommand">
-            <button class="app-icon-btn" type="button" aria-label="更多操作" title="更多操作">
-              <el-icon :size="18"><MoreFilled /></el-icon>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="export"><el-icon><Download /></el-icon>导出学生数据</el-dropdown-item>
-                <el-dropdown-item command="import"><el-icon><Upload /></el-icon>导入学生数据</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </header>
+      <!-- 移动端页头：问候 + 日期 + 吉祥物（与首页同一套吸顶头部，由 HomeMobileBoard 渲染） -->
 
-      <!-- 移动端下拉刷新：指示器必须插在吸顶页头之后，页头才能留在原位不动 -->
-      <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
+      <!-- ===== 首屏主导：原「首页」整块下沉到这里 =====
+           教师端首页位置改为校园资讯后，原首页（问候 + 今日重点 + KPI + 常用功能 + 我的节奏）
+           成为工作台页的首屏；下拉刷新手势由本页统一挂载，指示器交给看板组件渲染。 -->
+      <HomeMobileBoard
+        ref="boardRef"
+        :pull-indicator-style="pullStyle"
+        :pull-active="pull.active"
+        @open-records="openRoster"
+      />
 
-      <!-- 概况便当格（Bento Grid）：模块化磁贴，每格只做一件事 -->
-      <section class="bento">
-        <div class="bento-tile bento-tile-lg">
-          <span class="bento-label">在册学生</span>
-          <span class="bento-value">{{ stats.total_students }}</span>
-          <span class="bento-hint">成长档案 · 班级数据分析</span>
-        </div>
-        <div class="bento-tile">
-          <span class="bento-label">高危学生</span>
-          <span class="bento-value bento-value-warn">{{ stats.severe_alert_count }}</span>
-        </div>
-        <div class="bento-tile">
-          <span class="bento-label">有成长成果</span>
-          <span class="bento-value bento-value-ok">{{ growthCount }}</span>
-        </div>
-        <button class="bento-tile bento-tile-action" type="button" @click="showAnalyticsPage = true">
-          <span class="bento-action-icon"><el-icon :size="18"><DataAnalysis /></el-icon></span>
-          <span class="bento-action-main">
-            <span class="bento-label">班级数据分析</span>
-            <span class="bento-hint">成绩分布 · 心理危机 · 预警趋势</span>
+      <!-- ===== 班级数据分析：本页的二级入口 =====
+           学生名单入口保留在 KPI 与工作量卡，底部不再重复铺一张名单摘要卡。 -->
+      <section class="wb-entries">
+        <button class="tui-card wb-entry wb-entry-slim" type="button" @click="showAnalyticsPage = true">
+          <span class="wb-entry-icon"><el-icon :size="18"><DataAnalysis /></el-icon></span>
+          <span class="wb-entry-main">
+            <span class="wb-entry-title">班级数据分析</span>
+            <span class="wb-entry-hint">成绩分布 · 心理危机 · 预警趋势</span>
           </span>
           <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
         </button>
       </section>
 
-      <!-- 名单控制区：搜索 + 危机 chips + 筛选抽屉，紧贴所筛选的列表 -->
+      <!-- ===== 二级子页：学生名单 ===== -->
+      <transition name="subpage" :duration="320">
+        <div v-if="rosterSubPage" class="wb-subpage">
+          <div class="wb-subpage-head">
+            <button class="wb-back" type="button" aria-label="返回工作台" @click="rosterSubPage = false">
+              <el-icon :size="20"><ArrowLeft /></el-icon>
+            </button>
+            <span class="wb-subpage-title">学生名单</span>
+            <span class="wb-subpage-count">{{ filteredStudents.length }} 人</span>
+          </div>
+          <div class="wb-subpage-body">
+      <!-- 名单控制区：搜索 + 排序，紧贴所筛选的列表 -->
       <div class="ms-list-search">
         <el-input v-model="search" class="list-search" placeholder="搜索姓名 / 学号 / 学院" clearable @input="debouncedLoadStudents">
           <template #prefix><el-icon :size="16"><Search /></el-icon></template>
         </el-input>
+        <el-dropdown trigger="click" placement="bottom-end" @command="onSortCommand">
+          <button class="ms-icon-btn" type="button" aria-label="排序方式" :title="`排序：${sortLabel}`">
+            <svg class="ms-sort-svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M7 4v15M4 16l3 3 3-3" />
+              <path d="M14 7h7M14 12h5M14 17h3" />
+            </svg>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="o in sortOptions" :key="o.value" :command="o.value">
+                {{ o.label }}
+                <el-icon v-if="sortMode === o.value" :size="14" class="ms-sort-check"><Check /></el-icon>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
 
-      <div class="ms-list-toolbar">
-        <div class="ms-chip-scroll">
-          <button
-            v-for="c in crisisChips"
-            :key="c.value"
-            class="ms-chip"
-            :class="{ active: filterCrisis === c.value }"
-            @click="filterCrisis = c.value"
-          >{{ c.label }}</button>
-        </div>
-        <span class="ms-filter-btn" @click="showFilterSheet = true">
-          <el-icon :size="16"><Filter /></el-icon>
-          <span>筛选</span>
-        </span>
+      <!-- 危机等级：带计数的 chips，点之前就知道有几条 -->
+      <div class="ms-chip-scroll">
+        <button
+          v-for="c in crisisChips"
+          :key="c.value"
+          class="ms-chip"
+          :class="{ active: filterCrisis === c.value, 'is-risk': filterCrisis === c.value && c.value === 'severe' }"
+          @click="filterCrisis = c.value"
+        >{{ c.label }}<b>{{ crisisCounts[c.value] }}</b></button>
       </div>
 
       <div v-if="!filteredStudents.length && loaded" class="ms-empty">
         <img :src="siteMascot" :alt="siteName" class="ms-empty-mascot" />
         <span>{{ hasActiveFilter || isSearching ? '没有符合条件的学生' : '当前名下暂无学生' }}</span>
       </div>
-      <div v-else class="ms-card ms-student-list">
-        <div v-for="(s, i) in filteredStudents" :key="s.id" class="ms-student-card" :class="{ 'no-border': i === filteredStudents.length - 1 }" @click="openDetail(s)">
-          <el-avatar :size="36" :src="s.avatar || undefined" class="ms-student-avatar">{{ s.name[0] }}</el-avatar>
-          <div class="ms-student-info">
-            <div class="ms-student-name">
-              {{ s.name }}
-              <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="ms-student-tag">
-                {{ crisisLabel(s.crisis_level) }}
-              </el-tag>
+      <!-- ============================================================
+           分诊队列：不按危机等级单维分组，而是「今天必须处理 / 这周要跟进 / 状态平稳」。
+           搜索时降级回原来的平铺名单（搜索要的是「找到那个人」，不是分档）。
+           ============================================================ -->
+      <template v-if="!isSearching">
+        <div class="tm-page">
+          <div
+            v-for="g in triageGroups"
+            :key="g.key"
+            class="tm-tri"
+            :style="{ '--tm-tri-c': g.color }"
+          >
+            <div class="tm-tri-hd" @click="toggleTri(g.key)">
+              <span class="tm-tri-t">{{ g.title }}</span>
+              <span class="tm-tri-n">{{ g.items.length }} 人</span>
+              <span class="tm-tri-fold">{{ openTri.has(g.key) ? '收起' : '展开' }}</span>
             </div>
-            <div class="ms-student-sub">{{ s.college || '未分配' }} · 成果{{ s.growth_count }} · 请假{{ s.leave_count }}</div>
+            <div v-if="openTri.has(g.key)" class="tm-tri-body">
+              <div
+                v-for="s in g.items"
+                :key="s.id"
+                class="tm-row tap"
+                @click="openDetail(s)"
+              >
+                <div class="tm-r-ic" :style="triIconStyle(s)">{{ s.name[0] }}</div>
+                <div class="tm-r-bd">
+                  <div class="tm-r-t">
+                    {{ s.name }}
+                    <span v-if="s.crisis_level" class="tm-tag" :class="crisisTagCls(s.crisis_level)">{{
+                      crisisLabel(s.crisis_level)
+                    }}</span>
+                  </div>
+                  <div class="tm-r-s">
+                    {{ s.college || '未分配' }}<template v-if="lastSeen(s)"> · {{ lastSeen(s) }}</template>
+                  </div>
+                </div>
+                <div class="tm-r-e tm-r-num">
+                  {{ s.growth_count ?? 0 }} 成果 · {{ s.leave_count ?? 0 }} 请假
+                </div>
+              </div>
+              <div v-if="!g.items.length" class="tm-empty">这一档现在是空的</div>
+            </div>
           </div>
-          <el-icon class="ms-student-arrow" color="#c8c9cc"><ArrowRight /></el-icon>
+
+          <div class="tm-tail">
+            <b>分档依据：</b>危机等级（severe / moderate / mild）· 最近一次预警时间 ·
+            请假与成果记录；分档规则应落到后端 triage_bucket，前端只读不判断
+          </div>
         </div>
-      </div>
+      </template>
+      <template v-else>
+        <div v-for="s in filteredStudents" :key="s.id" class="ms-row" :data-risk="s.crisis_level || 'calm'" @click="openDetail(s)">
+          <el-avatar :size="40" :src="s.avatar || undefined" class="ms-row-avatar">{{ s.name[0] }}</el-avatar>
+          <div class="ms-row-main">
+            <div class="ms-row-name">
+              <span class="ms-row-nm">{{ s.name }}</span>
+              <span v-if="s.crisis_level" class="ms-tag" :class="`is-${s.crisis_level}`">{{ crisisLabel(s.crisis_level) }}</span>
+            </div>
+            <div class="ms-row-sub">
+              <span class="ms-row-college">{{ s.college || '未分配' }}</span>
+              <span v-if="lastSeen(s)" class="ms-row-time"><i class="ms-row-dot" aria-hidden="true">·</i>{{ lastSeen(s) }}</span>
+            </div>
+          </div>
+          <div class="ms-row-metrics">
+            <div class="ms-m">
+              <b :class="{ 'is-zero': !s.growth_count }">{{ s.growth_count ?? 0 }}</b>
+              <i>成果</i>
+            </div>
+            <span class="ms-m-sep" aria-hidden="true"></span>
+            <div class="ms-m">
+              <b :class="{ 'is-zero': !s.leave_count }">{{ s.leave_count ?? 0 }}</b>
+              <i>请假</i>
+            </div>
+            <span class="ms-m-sep" aria-hidden="true"></span>
+            <div class="ms-m">
+              <b :class="s.score !== undefined ? scoreClass(s.score) : 'is-zero'">{{ s.score ?? '—' }}</b>
+              <i>评分</i>
+            </div>
+          </div>
+        </div>
+            <div class="ms-list-foot">共 {{ filteredStudents.length }} 人 · 已显示全部</div>
+          </template>
+          </div>
+        </div>
+      </transition>
     </template>
 
-    <!-- 移动端筛选抽屉 -->
-    <el-drawer v-if="isMobile" v-model="showFilterSheet" title="筛选学生" direction="btt" size="55%" :close-on-click-modal="false">
-      <div class="ms-drawer-body">
-        <div class="ms-drawer-group">
-          <div class="ms-drawer-label">危机等级</div>
-          <div class="ms-filter-chips">
-            <button v-for="c in crisisChips" :key="c.value" class="ms-chip" :class="{ active: filterCrisis === c.value }" @click="filterCrisis = c.value">{{ c.label }}</button>
-          </div>
-        </div>
-        <div class="ms-drawer-group">
-          <div class="ms-drawer-label">成长成果</div>
-          <div class="ms-filter-chips">
-            <button v-for="c in growthChips" :key="c.value" class="ms-chip" :class="{ active: filterGrowth === c.value }" @click="filterGrowth = c.value">{{ c.label }}</button>
-          </div>
-        </div>
-        <div class="ms-drawer-group">
-          <div class="ms-drawer-label">综合评分</div>
-          <div class="ms-filter-chips">
-            <button v-for="c in scoreChips" :key="c.value" class="ms-chip" :class="{ active: filterScore === c.value }" @click="filterScore = c.value">{{ c.label }}</button>
-          </div>
-        </div>
-        <div class="ms-drawer-group">
-          <div class="ms-drawer-label">技能画像</div>
-          <div class="ms-filter-chips">
-            <button v-for="c in skillChips" :key="c.value" class="ms-chip" :class="{ active: filterSkill === c.value }" @click="filterSkill = c.value">{{ c.label }}</button>
-          </div>
-        </div>
-        <div class="ms-drawer-actions">
-          <el-button text class="ms-clear-btn" @click="clearFilters">清除筛选</el-button>
-          <el-button class="ms-confirm-btn" @click="showFilterSheet = false">完成</el-button>
-        </div>
-      </div>
-    </el-drawer>
-
     <!-- 移动端学生详情右滑页 -->
-    <transition name="slide-right-in">
+    <transition name="subpage" :duration="320">
       <div v-if="isMobile && detailVisible && detail" class="mobile-detail-page">
         <div class="mobile-detail-header">
           <el-button text circle @click="detailVisible = false"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
@@ -684,7 +749,7 @@
             </el-tab-pane>
             <el-tab-pane label="工作" name="work">
               <div class="mobile-tab-content">
-                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/care-center')">
+                <button type="button" class="loop-bar" @click="gotoFeature('/teacher/care-center', { view: 'profile' })">
                   <span class="loop-bar-text">关怀中心 · 关怀日历 / 家访台账 / 正向激励</span>
                   <el-icon :size="14"><ArrowRight /></el-icon>
                 </button>
@@ -849,14 +914,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onActivated, onUnmounted } from 'vue'
 // v6.1 弹窗减负：导入流程走全屏子页承接
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Search, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
-  Filter, Download, Upload, DataAnalysis, MoreFilled,
+  Download, Upload, DataAnalysis, MoreFilled,
   MagicStick, WarningFilled, ChatLineRound, Star, Picture,
+  Check,
 } from '@element-plus/icons-vue'
 import {
   getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats, importStudents,
@@ -873,6 +939,7 @@ import ClassAnalyticsMobile from '@/components/teacher/analytics/ClassAnalyticsM
 import ClassAnalysisDialog from '@/components/teacher/analytics/ClassAnalysisDialog.vue'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import HomeMobileBoard from './HomeMobileBoard.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
@@ -953,8 +1020,6 @@ const filterSkill = ref('')
 const currentPage = ref(1)
 const pageSize = ref(12)
 
-const showFilterSheet = ref(false)
-
 // ===== 统计 =====
 const stats = ref<DashboardStats>({
   total_students: 0, alert_count: 0, pending_leave_count: 0,
@@ -981,9 +1046,28 @@ const classStats = ref<ClassStats>({
   political_stats: {}, hometown_stats: {}, crisis_trend: [],
 })
 const showAnalyticsPage = ref(false)
+/** 桌面端「班级数据分析」折叠状态：默认收起，让名单占首屏 */
+const analyticsOpen = ref(false)
 
-// 移动端页内二级页面（学生详情 / 班级分析）：打开时让出底部悬浮导航
-useMobileSubPage(computed(() => isMobile.value && (detailVisible.value || showAnalyticsPage.value)))
+// ===== 移动端二级子页：学生名单（B 版式：首屏主导，名单下沉为子页） =====
+const rosterSubPage = ref(false)
+/** 首屏看板实例：下拉刷新时一并带上看板数据（看板自己不挂手势，手势在本页根容器） */
+const boardRef = ref<InstanceType<typeof HomeMobileBoard> | null>(null)
+/** 下拉指示器位移：类型从 CSSProperties 转成组件接受的 Record<string, string> */
+const pullStyle = computed<Record<string, string>>(() => ({ ...(pull.indicatorStyle as Record<string, string>) }))
+
+/**
+ * 打开名单子页：从首屏看板的「我的学生」KPI、工作量卡、名单摘要卡进来都走这里。
+ * 进子页时清掉筛选，避免上次的高危筛选让教师以为「名单只剩这几个人」。
+ */
+function openRoster() {
+  filterCrisis.value = ''
+  search.value = ''
+  rosterSubPage.value = true
+}
+
+// 移动端页内二级页面（学生详情 / 班级分析 / 名单子页）：打开时让出底部悬浮导航
+useMobileSubPage(computed(() => isMobile.value && (detailVisible.value || showAnalyticsPage.value || rosterSubPage.value)))
 
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 
@@ -1080,6 +1164,25 @@ const conversationTimeMap = computed(() => {
   return map
 })
 
+/**
+ * 最近互动时间：把 ISO 时间压成「今天 / 昨天 / 3天前 / 2周前」。
+ * 名单里只用来做一次轻量提示，没有互动记录时返回空串，副标题就只剩学院。
+ */
+function lastSeen(s: StudentSummary) {
+  const iso = conversationTimeMap.value.get(s.id)
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const day = 86400000
+  const diff = Date.now() - t
+  if (diff < day) return '今天'
+  if (diff < day * 2) return '昨天'
+  if (diff < day * 7) return `${Math.floor(diff / day)}天前`
+  if (diff < day * 30) return `${Math.floor(diff / (day * 7))}周前`
+  if (diff < day * 365) return `${Math.floor(diff / (day * 30))}个月前`
+  return `${Math.floor(diff / (day * 365))}年前`
+}
+
 // ===== 筛选 chips =====
 const crisisChips = [
   { label: '全部', value: '' },
@@ -1088,23 +1191,6 @@ const crisisChips = [
   { label: '轻度', value: 'mild' },
   { label: '无预警', value: 'none' },
 ]
-const growthChips = [
-  { label: '全部', value: '' },
-  { label: '有成果', value: 'has' },
-  { label: '无成果', value: 'none' },
-]
-const scoreChips = [
-  { label: '全部', value: '' },
-  { label: '优秀≥90', value: 'excellent' },
-  { label: '良好≥75', value: 'good' },
-  { label: '及格≥60', value: 'average' },
-  { label: '不及格', value: 'poor' },
-]
-const skillChips = [
-  { label: '全部', value: '' },
-  { label: '有技能', value: 'has' },
-  { label: '无技能', value: 'none' },
-]
 
 const hasActiveFilter = computed(() => {
   return filterCrisis.value || filterGrowth.value || filterScore.value || filterSkill.value
@@ -1112,27 +1198,24 @@ const hasActiveFilter = computed(() => {
 
 const isSearching = computed(() => search.value.trim() !== '')
 
-const filteredStudents = computed(() => {
-  const timeMap = conversationTimeMap.value
+/**
+ * 危机等级之外的筛选（成长 / 评分 / 技能）。
+ * 单独抽出来是因为 chips 上的计数要按「除危机等级以外」的口径统计：
+ * 否则选中「高危」时其余 chips 会跟着变成 0，用户无法在档位之间横向切换。
+ */
+const preStudents = computed(() => {
   return students.value.filter(s => {
-    if (filterCrisis.value) {
-      if (filterCrisis.value === 'none') {
-        if (s.crisis_level) return false
-      } else {
-        if (s.crisis_level !== filterCrisis.value) return false
-      }
-    }
-
     if (filterGrowth.value) {
       if (filterGrowth.value === 'has' && (!s.growth_count || s.growth_count === 0)) return false
       if (filterGrowth.value === 'none' && s.growth_count && s.growth_count > 0) return false
     }
 
     if (filterScore.value && s.score !== undefined) {
-      if (filterScore.value === 'excellent' && s.score < 90) return false
-      if (filterScore.value === 'good' && (s.score < 75 || s.score >= 90)) return false
-      if (filterScore.value === 'average' && (s.score < 60 || s.score >= 75)) return false
-      if (filterScore.value === 'poor' && s.score >= 60) return false
+      // 与 scoreClass() 的四档保持完全一致，否则「筛选出的」和「标红的」会打架
+      if (filterScore.value === 'excellent' && s.score < 80) return false
+      if (filterScore.value === 'good' && (s.score < 65 || s.score >= 80)) return false
+      if (filterScore.value === 'average' && (s.score < 50 || s.score >= 65)) return false
+      if (filterScore.value === 'poor' && s.score >= 50) return false
     }
 
     if (filterSkill.value) {
@@ -1142,7 +1225,57 @@ const filteredStudents = computed(() => {
     }
 
     return true
+  })
+})
+
+/** chips 计数：键与 crisisChips 的 value 一一对应，'' 为全部 */
+const crisisCounts = computed(() => {
+  const list = preStudents.value
+  const byLevel = (level: string) => list.filter(s => s.crisis_level === level).length
+  return {
+    '': list.length,
+    severe: byLevel('severe'),
+    moderate: byLevel('moderate'),
+    mild: byLevel('mild'),
+    none: list.filter(s => !s.crisis_level).length,
+  } as Record<string, number>
+})
+
+// ===== 排序（移动端搜索框右侧的排序入口） =====
+const sortMode = ref<'recent' | 'risk' | 'score' | 'name'>('recent')
+const sortOptions = [
+  { label: '最近互动', value: 'recent' },
+  { label: '风险优先', value: 'risk' },
+  { label: '评分从高到低', value: 'score' },
+  { label: '按姓名', value: 'name' },
+]
+const sortLabel = computed(() => sortOptions.find(o => o.value === sortMode.value)?.label || '')
+function onSortCommand(cmd: string | number | object) {
+  sortMode.value = cmd as typeof sortMode.value
+}
+const RISK_ORDER: Record<string, number> = { severe: 3, moderate: 2, mild: 1 }
+
+const filteredStudents = computed(() => {
+  const timeMap = conversationTimeMap.value
+  return preStudents.value.filter(s => {
+    if (filterCrisis.value) {
+      if (filterCrisis.value === 'none') {
+        if (s.crisis_level) return false
+      } else {
+        if (s.crisis_level !== filterCrisis.value) return false
+      }
+    }
+    return true
   }).sort((a, b) => {
+    if (sortMode.value === 'risk') {
+      const diff = (RISK_ORDER[b.crisis_level || ''] || 0) - (RISK_ORDER[a.crisis_level || ''] || 0)
+      if (diff) return diff
+    } else if (sortMode.value === 'score') {
+      return (b.score ?? -1) - (a.score ?? -1)
+    } else if (sortMode.value === 'name') {
+      return a.name.localeCompare(b.name, 'zh-Hans-CN')
+    }
+    // 默认（以及风险/评分相同时）按最近互动倒序：最近沟通过的排前面
     const ta = timeMap.get(a.id)
     const tb = timeMap.get(b.id)
     if (ta && tb) return tb.localeCompare(ta)
@@ -1201,7 +1334,12 @@ async function loadDashboard() {
 
 /** 下拉刷新：静默重载学生名单与统计，失败不提示 */
 async function refreshAll() {
-  await Promise.all([loadStudents(), loadDashboard()])
+  await Promise.all([
+    loadStudents(),
+    loadDashboard(),
+    // 首屏看板（原首页那块）的数据也要跟着一起刷新
+    boardRef.value?.refresh?.().catch(() => {}),
+  ])
 }
 
 /** 学生详情下拉刷新：重拉当前详情，失败保持原样 */
@@ -1344,6 +1482,46 @@ function crisisLabel(level: string) {
   return map[level] || level
 }
 
+/* ── 移动端分诊队列 ──
+   分档只读真实字段：crisis_level 为主，latest_crisis_time 只用来算「多久没更新」。
+   注意：后端目前没有 triage_bucket，这里是前端临时推导；等后端落字段后改成只读。 */
+const openTri = ref<Set<string>>(new Set())
+function toggleTri(key: string) {
+  const next = new Set(openTri.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  openTri.value = next
+}
+const triToday = computed(() => filteredStudents.value.filter((s) => s.crisis_level === 'severe'))
+const triWeek = computed(() => filteredStudents.value.filter((s) => s.crisis_level === 'moderate'))
+const triCalm = computed(() =>
+  filteredStudents.value.filter((s) => s.crisis_level !== 'severe' && s.crisis_level !== 'moderate')
+)
+const triageGroups = computed(() => [
+  { key: 'today', title: '必须今天处理', color: '#dd4257', items: triToday.value },
+  { key: 'week', title: '这周要跟进', color: '#d98317', items: triWeek.value },
+  { key: 'calm', title: '状态平稳', color: '#0f8e6b', items: triCalm.value },
+])
+// 默认不写死档位：数据到位后自动展开「第一个有人的档」，
+// 避免出现「空档摊开、有人的那档反而收起」的情况。
+watch(triageGroups, (gs) => {
+  const nonEmpty = gs.filter((g) => g.items.length)
+  if (!nonEmpty.length) return // 数据还没来，保持全收起
+  if (nonEmpty.some((g) => openTri.value.has(g.key))) return // 已有非空的档展开，不打断用户
+  openTri.value = new Set([nonEmpty[0].key])
+})
+function crisisTagCls(level?: string | null) {
+  if (level === 'severe') return 'tm-bad'
+  if (level === 'moderate') return 'tm-warn'
+  if (level === 'mild') return 'tm-ai'
+  return 'tm-mute'
+}
+function triIconStyle(s: StudentSummary) {
+  if (s.crisis_level === 'severe') return { background: 'var(--tm-bad-soft)', color: 'var(--tm-bad)' }
+  if (s.crisis_level === 'moderate') return { background: 'var(--tm-warn-soft)', color: 'var(--tm-warn)' }
+  return { background: 'var(--tm-brand-soft)', color: 'var(--tm-brand-deep)' }
+}
+
 function crisisLevelLabel(level?: string | null) {
   const map: Record<string, string> = { severe: '高危预警', moderate: '中危预警', mild: '低危预警', resolved: '已解决' }
   return level ? (map[level] || level) : '暂无预警'
@@ -1368,10 +1546,19 @@ function formatTime(t: string) {
   try { return new Date(t).toLocaleString('zh-CN') } catch { return t }
 }
 
+/**
+ * 成长综合分档位（0–100）。
+ *
+ * 这里的阈值必须对齐分数的**实际分布**，不能拍「90 分优秀」这种考试口径。
+ * 后端 calc_radar_score 是「成果数 × 系数」累加后取五维均值（见 services/scoring.py），
+ * 实测全校学生的分布是 42–88、中位数 ~70 —— 按 ≥90 划分的话，
+ * 满屏都是「不及格红」，会把正常学生标成需要干预。
+ * 现在的四档：≥80 突出 / ≥65 良好 / ≥50 一般 / <50 偏低，与真实分布同构。
+ */
 function scoreClass(score: number) {
-  if (score >= 90) return 'score-excellent'
-  if (score >= 75) return 'score-good'
-  if (score >= 60) return 'score-average'
+  if (score >= 80) return 'score-excellent'
+  if (score >= 65) return 'score-good'
+  if (score >= 50) return 'score-average'
   return 'score-poor'
 }
 
@@ -1525,63 +1712,10 @@ onUnmounted(() => {
   --sp-line-strong: #e4e7ec;
 }
 
-/* ===== 概况便当格（Bento Grid）：模块化磁贴，每格只做一件事 ===== */
-.bento {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.bento-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--sp-line);
-  border-radius: 10px;
-  background: #fff;
-}
-.bento-tile-lg { grid-column: span 2; }
-.bento-label { font-size: 11.5px; color: #71717a; }
-.bento-value {
-  font-size: 21px;
-  font-weight: 700;
-  line-height: 1.1;
-  color: #101828;
-  font-variant-numeric: tabular-nums;
-}
-.bento-value-warn { color: #d92d20; }
-.bento-value-ok { color: #079455; }
-.bento-hint { font-size: 11px; color: #a1a1aa; }
-.bento-tile-action {
-  grid-column: span 2;
-  flex-direction: row;
-  align-items: center;
-  gap: 9px;
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  background: #f8fafc;
-  border-color: #e6ecf6;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-.bento-tile-action:hover { border-color: #cfdcf3; }
-.bento-tile-action:active { background: #eff4ff; }
-.bento-action-icon {
-  width: 30px; height: 30px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 9px;
-  background: #eff4ff;
-  color: #2563eb;
-}
-.bento-action-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-.bento-tile-action .bento-label { font-size: 13px; font-weight: 600; color: #101828; }
-.bento-tile-action .bento-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-@media (max-width: 767px) {
-  .bento { margin: 10px 16px 10px; }
-}
+/* ===== 概况条 =====
+   桌面端原来的 4 格 Bento（2 格各占两列）已换成 .roster-panel 里的一行 .metric-strip：
+   便当格占了半屏却只放 3 个数字，真正的主角「学生名单」被挤到首屏之外。
+   移动端仍沿用 bento（图标+数字横排在窄屏上更省地方），所以样式保留但限定作用域。 */
 
 /* ===== 学生页头（品牌栏：形象 + 标题 + 实时状态 + 更多操作） ===== */
 /* 吸顶：滚动页面时页头固定不动，内容从其下方滑过 */
@@ -1732,53 +1866,244 @@ onUnmounted(() => {
   }
 }
 
-.filter-bar {
-  display: flex; gap: 8px; margin-bottom: 10px; padding: 8px 10px;
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid var(--sp-line);
-  flex-wrap: wrap; align-items: center;
-}
-
 /* 空态：吉祥物在此处出现，承担产品个性 */
 .empty-mascot { width: 96px; height: 96px; object-fit: contain; opacity: 0.9; }
 .empty-text { color: #98a2b3; font-size: 13px; margin: 8px 0 0; }
 
-.analytics-section { margin-bottom: 10px; }
-.analytics-section-head { display: flex; align-items: baseline; gap: 10px; padding: 0 4px 6px; }
-.analytics-section-title { font-size: 14px; font-weight: 700; color: #101828; }
-.analytics-section-sub { font-size: 12px; color: #98a2b3; }
-
-.student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); gap: 8px; }
-.student-card {
-  background: #fff; border-radius: 10px; padding: 11px 12px;
+/* ===== 主功能区：指标条 + 工具条 + 名单，一个整体卡片 ===== */
+.roster-panel {
+  background: #fff;
   border: 1px solid var(--sp-line);
-  transition: border-color 0.15s ease; cursor: default;
+  border-radius: 12px;
+  padding: 0 14px 14px;
+  margin-bottom: 10px;
 }
-.student-card:hover { border-color: #cfdcf3; }
+/* 移动端概况便当格（模块化磁贴，每格只做一件事）。
+   桌面端已改用 .metric-strip，这里只在移动端模板（v-else 分支）里生效。 */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 16px 10px;
+}
+.bento-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sp-line);
+  border-radius: 10px;
+  background: #fff;
+}
+.bento-tile-lg { grid-column: span 2; }
+.bento-label { font-size: 11.5px; color: #71717a; }
+.bento-value {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #101828;
+  font-variant-numeric: tabular-nums;
+}
+.bento-value-warn { color: #d92d20; }
+.bento-value-ok { color: #079455; }
+.bento-hint { font-size: 11px; color: #a1a1aa; }
+.bento-tile-action {
+  grid-column: span 2;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  background: #f8fafc;
+  border-color: #e6ecf6;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.bento-tile-action:hover { border-color: #cfdcf3; }
+.bento-tile-action:active { background: #eff4ff; }
+.bento-action-icon {
+  width: 30px; height: 30px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  background: #eff4ff;
+  color: #2563eb;
+}
+.bento-action-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.bento-tile-action .bento-label { font-size: 13px; font-weight: 600; color: #101828; }
+.bento-tile-action .bento-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== 概况条桌面端 ===== */
+.metric-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 11px 0 12px;
+  border-bottom: 1px solid #f2f4f7;
+  flex-wrap: wrap;
+}
+.ms-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 14px;
+  border-radius: 8px;
+  border-right: 1px solid #f2f4f7;
+}
+.ms-item:last-of-type { border-right: none; }
+.ms-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #101828;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.ms-label { font-size: 12px; color: #98a2b3; white-space: nowrap; }
+/* 只有「需要注意」的指标上色，其余保持中性，避免数字全都抢眼 */
+.ms-item.is-alert { background: #fef3f2; }
+.ms-item.is-alert .ms-num { color: #d92d20; }
+.ms-item.is-alert .ms-label { color: #b42318; }
+.ms-item.is-warn { background: #fffaeb; }
+.ms-item.is-warn .ms-num { color: #b54708; }
+.ms-item.is-warn .ms-label { color: #b54708; }
+.ms-spacer { flex: 1; min-width: 8px; }
+.ms-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--sp-line);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475467;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.ms-action:hover { border-color: #2563eb; color: #2563eb; background: #eff4ff; }
+
+/* 工具条：搜索独占较大宽度，筛选器靠右成一排 */
+.roster-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 10px;
+  flex-wrap: wrap;
+}
+.roster-search { max-width: 320px; }
+.roster-filters { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.rf-select { width: 128px; }
+.rf-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font-size: 12px;
+  color: #667085;
+  cursor: pointer;
+}
+.rf-clear:hover { color: #d92d20; }
+
+/* ===== 数据分析折叠区 ===== */
+.analytics-section { margin-bottom: 10px; }
+.analytics-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.analytics-toggle:hover { border-color: #cfdcf3; background: #fbfcfe; }
+.at-main { display: flex; align-items: baseline; gap: 10px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.at-title { font-size: 13.5px; font-weight: 700; color: #101828; }
+.at-sub { font-size: 12px; color: #98a2b3; }
+.at-arrow { color: #98a2b3; transition: transform 0.18s ease; flex-shrink: 0; }
+.at-arrow.is-open { transform: rotate(90deg); }
+.analytics-body { margin-top: 10px; }
+
+/*
+  名单网格：列宽从 224 收到 196，一行能多放一列。
+  原来 1440 屏下只能排 4 列、每张卡右侧留一大片空白，
+  而卡片里真正的内容不到 200px 宽 —— 空白全浪费在「凑满列」上。
+*/
+.student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 8px; }
+.student-card {
+  background: #fff; border-radius: 10px; padding: 10px 12px;
+  border: 1px solid var(--sp-line);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+}
+.student-card:hover {
+  border-color: #cfdcf3;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.06);
+}
 .student-card.level-severe { border-left: 3px solid #f56c6c; }
 .student-card.level-moderate { border-left: 3px solid #e6a23c; }
 .student-card.level-mild { border-left: 3px solid #909399; }
-.card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
 .card-avatar { flex-shrink: 0; }
 .card-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .card-name { font-size: 13.5px; font-weight: 600; color: #1a1a2e; }
 .card-college { font-size: 11px; color: #999; margin-top: 1px; }
 .crisis-tag { flex-shrink: 0; }
-.card-stats {
-  display: flex; gap: 10px; margin-bottom: 8px;
-  padding: 6px 0; border-top: 1px solid #f5f5f5; border-bottom: 1px solid #f5f5f5;
+
+/*
+  「关键事实」一行：成果 · 请假 · 综合分。
+  原来是三个等宽列各放一个大数字 + 小标签，卡片下半部分显得很空；
+  改成一个 inline 事实串，读起来像一句话，卡片也更紧凑。
+*/
+.card-facts {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 0;
+  margin-bottom: 8px;
+  border-top: 1px solid #f5f5f5;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 11.5px;
+  color: #667085;
+  flex-wrap: wrap;
 }
-.stat-item { display: flex; flex-direction: column; align-items: center; flex: 1; }
-.stat-num { font-size: 14px; font-weight: 700; color: #333; line-height: 1.2; }
-.stat-text { font-size: 10px; color: #999; margin-top: 1px; }
-.score-excellent .stat-num, .score-excellent { color: #67c23a; }
-.score-good .stat-num, .score-good { color: #409eff; }
-.score-average .stat-num, .score-average { color: #e6a23c; }
-.score-poor .stat-num, .score-poor { color: #f56c6c; }
+.cf-item b { font-size: 13px; font-weight: 700; color: #101828; margin-right: 2px; }
+.cf-item.is-quiet b { color: #b0b7c3; font-weight: 600; }
+.cf-item.is-quiet { color: #b0b7c3; }
+.cf-sep { width: 3px; height: 3px; border-radius: 50%; background: #e4e7ec; flex-shrink: 0; }
+.score-excellent b, .cf-item.score-excellent { color: #079455; }
+.score-good b, .cf-item.score-good { color: #2563eb; }
+.score-average b, .cf-item.score-average { color: #b54708; }
+.score-poor b, .cf-item.score-poor { color: #d92d20; }
+
+/* 最近一条预警摘要：卡片里唯一需要「读」的句子，给一行半的呼吸空间 */
+.card-crisis-note {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #b42318;
+  background: #fef3f2;
+  border-radius: 6px;
+  padding: 5px 7px;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .card-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .card-actions { display: flex; gap: 6px; }
-.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; padding: 8px 0; }
+.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; padding: 8px 0 0; }
 
 :deep(.student-detail-dialog .el-dialog) { height: 520px !important; margin: 12vh auto !important; }
 :deep(.student-detail-dialog .el-dialog__body) {
@@ -1809,20 +2134,70 @@ onUnmounted(() => {
   border: 1px solid var(--sp-line);
   overflow: hidden;
 }
-.ms-student-list { margin: 0 12px; }
-.ms-student-card {
-  display: flex; align-items: center; gap: 12px;
-  min-height: 62px; padding: 12px 14px; margin: 0 2px;
-  border-bottom: 1px solid #f5f6f7; cursor: pointer;
+/* ===== 名单行：色条 + 头像 + 三列定量（成果 / 请假 / 评分） =====
+   三列固定 38px 且数字等宽，纵向扫读时刻度才对得上；
+   风险用「左侧 3px 色条 + 头像描边」双编码，扫一眼就能挑出要处理的人。 */
+.ms-row {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  margin: 0 14px 8px; padding: 11px 12px 11px 13px;
+  background: #fff; border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 17, 21, 0.04), 0 2px 8px rgba(15, 17, 21, 0.035);
+  overflow: hidden; cursor: pointer;
+  transition: transform 0.12s var(--tui-ease, ease), background 0.12s ease;
 }
-.ms-student-card.no-border { border-bottom: none; }
-.ms-student-card:active { background: #fafafa; }
-.ms-student-avatar { flex-shrink: 0; }
-.ms-student-info { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ms-student-name { display: flex; align-items: center; font-size: 14.5px; font-weight: 600; color: #1a1a2e; }
-.ms-student-tag { margin-left: 6px; }
-.ms-student-sub { font-size: 12px; color: #8a94a6; }
-.ms-student-arrow { flex-shrink: 0; }
+.ms-row:active { transform: scale(0.985); background: #fcfcfd; }
+.ms-row::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: transparent;
+}
+.ms-row[data-risk="severe"]::before { background: #d92d20; }
+.ms-row[data-risk="moderate"]::before { background: #b54708; }
+.ms-row[data-risk="mild"]::before { background: #ca8a04; }
+
+.ms-row-avatar { flex-shrink: 0; background: #f2f4f7; color: #5b6472; font-size: 14px; font-weight: 600; }
+.ms-row[data-risk="severe"] .ms-row-avatar {
+  background: #fff; color: #d92d20; box-shadow: 0 0 0 2px #d92d20;
+}
+.ms-row[data-risk="moderate"] .ms-row-avatar {
+  background: #fff; color: #b54708; box-shadow: 0 0 0 2px #b54708;
+}
+
+.ms-row-main { flex: 1; min-width: 0; }
+.ms-row-name { display: flex; align-items: center; gap: 5px; }
+.ms-row-nm { font-size: 14.5px; font-weight: 600; color: #0f1115; letter-spacing: 0.1px; }
+.ms-tag {
+  flex-shrink: 0; font-size: 10px; font-weight: 600; line-height: 1.5;
+  padding: 1px 6px; border-radius: 5px;
+}
+.ms-tag.is-severe { color: #d92d20; background: #fef3f2; }
+.ms-tag.is-moderate { color: #b54708; background: #fff4ec; }
+.ms-tag.is-mild { color: #ca8a04; background: #fefce8; }
+.ms-row-sub {
+  display: flex; align-items: center; min-width: 0;
+  margin-top: 3px; font-size: 11px; color: #9ca3af;
+}
+/* 学院名让位给时间：先压学院、保时间，避免「3天前」被截成「3…」 */
+.ms-row-college { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+.ms-row-time { flex: none; white-space: nowrap; }
+.ms-row-dot { margin: 0 4px; font-style: normal; color: #ced3da; }
+
+.ms-row-metrics { display: flex; align-items: center; flex-shrink: 0; }
+.ms-m { width: 38px; text-align: center; }
+.ms-m b {
+  display: block; font-size: 14px; font-weight: 650; line-height: 1.15;
+  color: #1f2329; font-variant-numeric: tabular-nums;
+}
+.ms-m b.is-zero { color: #c4c9d1; font-weight: 500; }
+.ms-m b.score-excellent { color: #079455; }
+.ms-m b.score-good { color: #2563eb; }
+.ms-m b.score-average { color: #b54708; }
+.ms-m b.score-poor { color: #d92d20; }
+.ms-m i { display: block; font-style: normal; font-size: 9.5px; color: #a3a9b4; margin-top: 2px; }
+.ms-m-sep { width: 1px; height: 22px; background: #eef0f3; flex-shrink: 0; margin: 0 7px; }
+.ms-list-foot {
+  text-align: center; font-size: 10.5px; color: #b9bfc9;
+  padding: 4px 0 2px; letter-spacing: 0.02em;
+}
 
 .ms-empty {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -1830,8 +2205,22 @@ onUnmounted(() => {
 }
 .ms-empty-mascot { width: 64px; height: 64px; object-fit: contain; opacity: 0.85; }
 
-/* 名单区搜索：全宽单行，紧贴它所筛选的列表 */
-.ms-list-search { margin: 0 16px 8px; }
+/* 名单区搜索：搜索框 + 排序入口，紧贴它所筛选的列表 */
+.ms-list-search { display: flex; align-items: center; gap: 8px; margin: 0 14px 8px; }
+.ms-list-search .list-search { flex: 1; min-width: 0; }
+
+/* 排序入口：与搜索框同高的图标按钮，不抢搜索的注意力 */
+.ms-icon-btn {
+  flex-shrink: 0; width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; background: #fff; color: #4b5563;
+  border: 1px solid var(--sp-line); cursor: pointer; font-family: inherit;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: border-color 0.16s ease, color 0.16s ease;
+}
+.ms-icon-btn:active { background: #f7f8fa; color: #1677ff; border-color: #cfdcf3; }
+.ms-sort-svg { display: block; }
+.ms-sort-check { margin-left: auto; color: #1677ff; }
 
 /* 移动端搜索框：胶囊形 + 轻投影，聚焦时品牌描边与图标染色 */
 .ms-list-search .list-search :deep(.el-input__wrapper) {
@@ -1862,30 +2251,23 @@ onUnmounted(() => {
 .ms-list-search .list-search :deep(.el-input__clear) { color: #b0b8c4; }
 .ms-list-search .list-search :deep(.el-input__clear:hover) { color: #6b7280; }
 
-/* ===== 移动端学生列表工具条 ===== */
-.ms-list-toolbar { display: flex; align-items: center; gap: 8px; margin: 0 12px; }
-.ms-list-toolbar .ms-chip-scroll { flex: 1; margin: 0; padding: 0 0 4px; }
-.ms-list-toolbar .ms-filter-btn { margin-bottom: 4px; }
-
-.ms-filter-btn {
-  display: flex; align-items: center; gap: 4px;
-  height: 34px; padding: 0 11px; border-radius: 17px;
-  background: #fff; color: #1f2329; font-size: 13px; cursor: pointer; flex-shrink: 0;
-  border: 1px solid #e5e7eb;
-}
-.ms-filter-btn:active { opacity: 0.7; }
-
+/* ===== 移动端学生列表：危机等级 chips ===== */
 .ms-chip-scroll {
-  display: flex; gap: 7px; overflow-x: auto; padding: 4px 2px 10px;
+  display: flex; gap: 6px; overflow-x: auto; margin: 0 14px; padding: 2px 0 10px;
   -ms-overflow-style: none; scrollbar-width: none;
 }
 .ms-chip-scroll::-webkit-scrollbar { display: none; }
 .ms-chip {
-  flex-shrink: 0; padding: 5px 13px; border-radius: 16px; border: none;
-  background: #fff; color: #555; font-size: 12.5px; cursor: pointer;
-  border: 1px solid #e5e7eb;
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  height: 30px; padding: 0 10px; border-radius: 15px;
+  background: #fff; color: #555; font-size: 12.5px; font-weight: 500;
+  cursor: pointer; border: 1px solid #e5e7eb; font-family: inherit;
 }
+/* 计数：选中前后都保留，点之前就知道有几条 */
+.ms-chip b { font-size: 11px; font-weight: 600; color: #a6adb8; font-variant-numeric: tabular-nums; }
 .ms-chip.active { background: #1f2329; color: #fff; font-weight: 600; border-color: #1f2329; }
+.ms-chip.active b { color: rgba(255, 255, 255, 0.62); }
+.ms-chip.active.is-risk { background: #d92d20; border-color: #d92d20; }
 
 /* ===== 导入学生数据 ===== */
 .ms-import-tip { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 14px; }
@@ -1909,26 +2291,8 @@ onUnmounted(() => {
 .ms-import-preview-college { color: #999; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-import-skipped { margin-top: 8px; font-size: 12px; color: #e6a23c; }
 
-.ms-drawer-body { padding: 0 8px; }
-.ms-drawer-group { margin-bottom: 20px; }
-.ms-drawer-label { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 12px; }
-.ms-filter-chips { display: flex; flex-wrap: wrap; gap: 10px; }
-.ms-drawer-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.ms-drawer-actions .ms-clear-btn { color: #8a94a6; }
-.ms-drawer-actions .ms-clear-btn:hover { color: #1f2329; background: transparent; }
-.ms-drawer-actions .ms-confirm-btn {
-  background: #1f2329; border-color: #1f2329; color: #fff;
-  border-radius: 8px; font-weight: 600;
-}
-.ms-drawer-actions .ms-confirm-btn:hover {
-  background: #101318; border-color: #101318; color: #fff;
-}
-
 /* 移动端右滑动画 */
-.slide-right-in-enter-active,
-.slide-right-in-leave-active { transition: transform 0.25s ease; }
-.slide-right-in-enter-from,
-.slide-right-in-leave-to { transform: translateX(100%); }
+/* 子页切换动画统一使用全局 .subpage（styles/subpage-transition.css），此处不再自建 */
 
 .mobile-detail-page {
   position: fixed; inset: 0; top: 0; left: 0; right: 0; bottom: 0;
@@ -1938,6 +2302,14 @@ onUnmounted(() => {
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 10px; background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
 }
+/* 返回键统一规格：34px 触控区，无外圈底色，仅图标本身 */
+.mobile-detail-header > .el-button:first-child,
+.qhome-bar > .el-button:first-child {
+  width: 34px; height: 34px; margin: 0;
+  border-radius: 50%; background: transparent; color: #1f2430;
+}
+.mobile-detail-header > .el-button:first-child:active,
+.qhome-bar > .el-button:first-child:active { background: rgba(20, 23, 26, 0.06); }
 .mobile-detail-title { font-size: 14px; font-weight: 600; color: #1a1a1a; }
 .mobile-detail-body { flex: 1; overflow-y: auto; overscroll-behavior-y: contain; padding: 14px; }
 .mobile-profile {
@@ -1986,7 +2358,13 @@ onUnmounted(() => {
   padding: 10px 12px; border-radius: 10px; background: #f7f8fa;
   font-size: 12px; color: #5b6472;
 }
-.crisis-summary-total { font-weight: 600; color: #101828; }
+.crisis-summary-total {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #b54708;
+  background: #fffaeb;
+}
 .crisis-summary-item { display: inline-flex; align-items: center; gap: 5px; }
 .crisis-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .crisis-dot.is-severe { background: #d92d20; }
@@ -2343,6 +2721,180 @@ onUnmounted(() => {
   gap: 6px;
   font-size: 12px;
 }
+/* ============================================================
+   移动端工作台（B 版式）：首屏主导 + 二级子页
+   首屏 = 原首页整块（HomeMobileBoard）；学生名单收成一张摘要卡，
+   点进去整页推入子页。子页动效与学生端「校园资讯」分页同规格：
+   200ms cubic-bezier(.22,.61,.36,1)，整页从右侧推入 / 推回右侧。
+   ============================================================ */
+.wb-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.wb-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.wb-entry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.wb-entry-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #101828;
+}
+.wb-entry-more {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--tui-text-quiet, #98a2b3);
+}
+/* 三个数字：等宽对齐，一眼扫完「多少人 / 几个高危 / 多少有成果」 */
+.wb-entry-metrics {
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+}
+.wb-m {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.wb-m b {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #101828;
+  font-variant-numeric: tabular-nums;
+}
+.wb-m i {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet, #98a2b3);
+}
+.wb-m.is-warn b { color: #d92d20; }
+.wb-m.is-ok b { color: #12b76a; }
+/* 优先跟进：把「今天最该看谁」直接摆到首屏，不必先点进名单 */
+.wb-entry-risk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-top: 2px;
+  border-top: 1px solid var(--tui-border, #eaecf0);
+}
+.wb-entry-risk::-webkit-scrollbar { display: none; }
+.wb-risk-chip {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #f2f4f7;
+  color: #475467;
+}
+.wb-risk-chip.is-severe { background: #fef3f2; color: #d92d20; }
+.wb-risk-chip.is-moderate { background: #fffaeb; color: #b54708; }
+.wb-risk-chip.is-mild { background: #eff4ff; color: #1d4ed8; }
+.wb-risk-more {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet, #98a2b3);
+}
+
+/* 班级数据分析：横向一行（图标 + 标题 + 说明 + 箭头） */
+.wb-entry-slim {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.wb-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #f4f3ff;
+  color: #6941c6;
+  flex-shrink: 0;
+}
+.wb-entry-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wb-entry-hint {
+  font-size: 11.5px;
+  color: var(--tui-text-quiet, #98a2b3);
+}
+
+/* ===== 二级子页：学生名单 ===== */
+.wb-subpage {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  background: #f2f3f5;
+  overflow: hidden;
+}
+.wb-subpage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+.wb-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+.wb-back:active { background: #f2f4f7; }
+.wb-subpage-title { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+.wb-subpage-count {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #1d4ed8;
+  background: #eff4ff;
+  font-variant-numeric: tabular-nums;
+}
+.wb-subpage-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 10px 8px 20px;
+}
+/* 入场 / 出场：与校园资讯分页同一条曲线（整页推入，不缩放不淡出） */
+/* 子页切换动画统一使用全局 .subpage（styles/subpage-transition.css），此处不再自建 */
+
 .qhome-post-ops { display: flex; border-top: 1px solid var(--sp-line); margin-top: 11px; padding-top: 9px; }
 .qhome-op {
   flex: 1;

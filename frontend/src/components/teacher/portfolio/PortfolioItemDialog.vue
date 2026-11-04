@@ -9,29 +9,67 @@
     destroy-on-close
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <div class="tui-section-hint">
-      <el-icon><InfoFilled /></el-icon>
+    <!-- 两种录入方式：手动逐项填写，或让 AI 根据口述先起草 -->
+    <div class="pf-ai">
+      <button type="button" class="pf-ai-toggle" @click="aiOpen = !aiOpen">
+        <AiMascotMark :size="16" />
+        <span class="pf-ai-title">AI 帮写</span>
+        <span class="pf-ai-sub">说说大体情况，自动填好标题与反思</span>
+        <el-icon class="pf-ai-arrow" :class="{ open: aiOpen }"><ArrowDown /></el-icon>
+      </button>
+
+      <div v-if="aiOpen" class="pf-ai-body">
+        <el-input
+          v-model="aiBrief"
+          type="textarea"
+          :rows="2"
+          maxlength="500"
+          show-word-limit
+          resize="none"
+          placeholder="简单说说时间、对象、做法和结果即可"
+        />
+        <div class="pf-ai-foot">
+          <span class="pf-ai-hint">先说明大体情况；AI 只负责起草，填充后请核对再保存</span>
+          <el-button size="small" :loading="aiLoading" :disabled="aiLoading" @click="runAiDraft">
+            生成
+          </el-button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="aiFilled" class="pf-ai-filled">
+      <el-icon><Check /></el-icon>
       <span>
-        {{ isEdit ? '正在编辑这条育人档案，保存后会同步更新成长报告。' : '记录一次育人经历：选好类型、写清做法与反思，即可计入成长报告。' }}
+        {{ aiSource === 'rule'
+          ? '模型暂不可用，已按你的描述整理初稿，请补充细节后保存。'
+          : 'AI 已填入类型、标题、时间与反思，请核对后保存。' }}
       </span>
     </div>
+
+    <!-- 当前填写摘要：单行小字，不占版面 -->
     <div class="pf-ctx">
       <span class="pf-ctx-item">类型：{{ typeLabel(form.item_type) }}</span>
       <span class="pf-ctx-item">可见性：{{ form.visibility === 'public' ? '公开展示' : '仅自己可见' }}</span>
       <span class="pf-ctx-item">时间：{{ form.occurred_on || '未选择' }}</span>
     </div>
+
     <div class="pf-form">
-      <!-- 条目类型：下拉选择 -->
+      <!-- 类型：四选一，点选即可 -->
       <div class="pf-field">
         <label class="pf-label">类型</label>
-        <el-select v-model="form.item_type" placeholder="请选择档案类型" style="width: 100%">
-          <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value">
-            <span class="pf-opt">
-              <el-icon :size="14"><component :is="t.icon" /></el-icon>
-              {{ t.label }}
-            </span>
-          </el-option>
-        </el-select>
+        <div class="pf-types">
+          <button
+            v-for="t in typeOptions"
+            :key="t.value"
+            type="button"
+            class="pf-type"
+            :class="{ active: form.item_type === t.value }"
+            @click="form.item_type = t.value"
+          >
+            <el-icon :size="14"><component :is="t.icon" /></el-icon>
+            <span>{{ t.label }}</span>
+          </button>
+        </div>
       </div>
 
       <div class="pf-field">
@@ -42,20 +80,65 @@
       <div class="pf-grid2">
         <div class="pf-field">
           <label class="pf-label">发生时间</label>
-          <el-date-picker
-            v-model="form.occurred_on"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="选择日期"
-            style="width: 100%"
-          />
+          <div ref="dateBoxRef" class="pf-date-box">
+            <button type="button" class="pf-date-trigger" @click="toggleDatePanel">
+              <el-icon class="pf-date-icon"><Calendar /></el-icon>
+              <span :class="{ 'is-placeholder': !form.occurred_on }">
+                {{ form.occurred_on || '选择日期' }}
+              </span>
+              <el-icon class="pf-date-arrow" :class="{ open: dateOpen }"><ArrowDown /></el-icon>
+            </button>
+
+            <div v-if="dateOpen" class="pf-date-panel">
+              <div class="pf-dp-head">
+                <button type="button" @click="changeMonth(-1)">‹</button>
+                <span>{{ viewYear }}年{{ viewMonth + 1 }}月</span>
+                <button type="button" @click="changeMonth(1)">›</button>
+              </div>
+              <div class="pf-dp-week">
+                <span v-for="w in weekLabels" :key="w">{{ w }}</span>
+              </div>
+              <div class="pf-dp-grid">
+                <button
+                  v-for="cell in calendarCells"
+                  :key="cell.key"
+                  type="button"
+                  class="pf-dp-day"
+                  :class="{
+                    'is-out': !cell.current,
+                    'is-today': cell.today,
+                    'is-selected': cell.selected,
+                  }"
+                  @click="pickDate(cell)"
+                >
+                  {{ cell.day }}
+                </button>
+              </div>
+              <div class="pf-dp-foot">
+                <button type="button" @click="clearDate">清除</button>
+                <button type="button" @click="pickToday">今天</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="pf-field">
           <label class="pf-label">可见性</label>
-          <el-select v-model="form.visibility" placeholder="请选择可见性" style="width: 100%">
-            <el-option label="仅自己可见" value="private" />
-            <el-option label="公开展示" value="public" />
-          </el-select>
+          <div class="pf-seg">
+            <button
+              type="button"
+              :class="{ active: form.visibility === 'private' }"
+              @click="form.visibility = 'private'"
+            >
+              仅自己可见
+            </button>
+            <button
+              type="button"
+              :class="{ active: form.visibility === 'public' }"
+              @click="form.visibility = 'public'"
+            >
+              公开展示
+            </button>
+          </div>
         </div>
       </div>
 
@@ -72,18 +155,18 @@
             <el-icon><Delete /></el-icon>
           </el-button>
         </div>
-        <el-button size="small" round :icon="Plus" @click="addEvidence">添加证据</el-button>
+        <el-button round :icon="Plus" @click="addEvidence">添加证据</el-button>
       </div>
 
-      <!-- 反思：AI 辅助填写 -->
+      <!-- 反思：AI 提醒式填写（AI 帮写入上方统一触发） -->
       <AiDraftField
         v-model="form.reflection"
         label="反思"
         :rows="4"
         :maxlength="1000"
         placeholder="记录你的做法与反思，让经验可复用……"
-        :draft="aiDraft"
         :points="aiPoints"
+        :show-generate="false"
       />
     </div>
 
@@ -97,16 +180,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 // v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import {
-  Delete, InfoFilled, Medal, Plus, Reading, Suitcase, TrendCharts,
+  ArrowDown, Calendar, Check, Delete, Medal, Plus, Reading, Suitcase, TrendCharts,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import {
+  aiDraftPortfolio,
   createPortfolioItem,
   updatePortfolioItem,
   type EvidenceItem,
@@ -138,9 +223,6 @@ const typeOptions: { value: PortfolioItemType; label: string; icon: unknown }[] 
 const typeLabel = (t: PortfolioItemType) =>
   typeOptions.find((o) => o.value === t)?.label || '档案'
 
-/** 今日日期（YYYY-MM-DD）：无发生时间时的 AI 草稿兜底 */
-const today = new Date().toISOString().slice(0, 10)
-
 /** AI 建议要点：随档案类型变化 */
 const aiPoints = computed(() => {
   const map: Record<PortfolioItemType, string[]> = {
@@ -150,22 +232,6 @@ const aiPoints = computed(() => {
     research: ['研究问题', '方法过程', '研究结论', '应用价值'],
   }
   return map[form.item_type]
-})
-
-/** AI 草稿：结合所选类型 + 日期，写成教师第一人称反思口吻 */
-const aiDraft = computed(() => {
-  const d = form.occurred_on || today
-  const t = typeLabel(form.item_type)
-  if (form.item_type === 'case') {
-    return `${d}，我围绕班级中的典型问题开展了一次${t}：先摸清学生情况与问题成因，再联合家长、任课教师共同制定帮扶措施并跟进落实，学生状态较前期有所好转。有效的关键在于及时介入、多方协同，后续将继续跟踪记录。`
-  }
-  if (form.item_type === 'honor') {
-    return `${d}，本人获得${t}。这份荣誉来自日常教学与班级管理的持续投入，也离不开团队支持。我会把其中的做法梳理成可复用的经验，继续用于育人实践，带动更多学生成长。`
-  }
-  if (form.item_type === 'training') {
-    return `${d}，我参加了${t}，系统学习了相关理念与实操方法，印象最深的是与日常工作紧密结合的案例讲解。我已尝试把其中两点做法迁移到班级管理中，效果有待持续观察与调整。`
-  }
-  return `${d}，我完成了${t}：围绕工作中的实际问题梳理现状、分析成因，并提出可落地的改进方案。成果将在后续实践中检验，再根据反馈持续优化，形成可推广的经验。`
 })
 
 const form = reactive<{
@@ -187,7 +253,96 @@ const form = reactive<{
 const saving = ref(false)
 const isEdit = computed(() => !!props.item)
 
+/** 自绘日期面板：避免浏览器原生日历样式不统一，保持黑白灰 */
+const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
+const dateOpen = ref(false)
+const dateBoxRef = ref<HTMLElement | null>(null)
+const viewYear = ref(new Date().getFullYear())
+const viewMonth = ref(new Date().getMonth())
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0')
+}
+function formatDate(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+function initCalendarView() {
+  const base = form.occurred_on ? new Date(`${form.occurred_on}T00:00:00`) : new Date()
+  viewYear.value = base.getFullYear()
+  viewMonth.value = base.getMonth()
+}
+
+function toggleDatePanel() {
+  if (!dateOpen.value) initCalendarView()
+  dateOpen.value = !dateOpen.value
+}
+
+function changeMonth(step: number) {
+  const next = new Date(viewYear.value, viewMonth.value + step, 1)
+  viewYear.value = next.getFullYear()
+  viewMonth.value = next.getMonth()
+}
+
+const calendarCells = computed(() => {
+  const first = new Date(viewYear.value, viewMonth.value, 1)
+  // 周一为一周起点
+  const offset = (first.getDay() + 6) % 7
+  const start = new Date(viewYear.value, viewMonth.value, 1 - offset)
+  const today = formatDate(new Date())
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
+    const value = formatDate(d)
+    return {
+      key: `${value}-${i}`,
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      day: d.getDate(),
+      current: d.getMonth() === viewMonth.value,
+      today: value === today,
+      selected: form.occurred_on === value,
+    }
+  })
+})
+
+function pickDate(cell: { year: number; month: number; day: number }) {
+  form.occurred_on = formatDate(new Date(cell.year, cell.month, cell.day))
+  dateOpen.value = false
+}
+function pickToday() {
+  form.occurred_on = formatDate(new Date())
+  dateOpen.value = false
+}
+function clearDate() {
+  form.occurred_on = null
+  dateOpen.value = false
+}
+
+function onDocumentClick(e: MouseEvent) {
+  if (dateOpen.value && dateBoxRef.value && !dateBoxRef.value.contains(e.target as Node)) {
+    dateOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
+
+/** AI 帮写：口述内容 → 自动填充表单 → 老师核对后保存 */
+const aiOpen = ref(false)
+const aiBrief = ref('')
+const aiLoading = ref(false)
+const aiFilled = ref(false)
+const aiSource = ref<'ai' | 'rule'>('ai')
+
+function resetAi() {
+  aiOpen.value = false
+  aiBrief.value = ''
+  aiFilled.value = false
+  aiSource.value = 'ai'
+}
+
 function reset() {
+  resetAi()
+  dateOpen.value = false
   if (props.item) {
     form.item_type = props.item.item_type
     form.title = props.item.title
@@ -212,6 +367,32 @@ watch(
   }
 )
 
+async function runAiDraft() {
+  const brief = aiBrief.value.trim()
+  if (!brief) {
+    aiOpen.value = true
+    ElMessage.warning('请先说明这次经历的大体情况，AI 才能帮你生成')
+    return
+  }
+  if (aiLoading.value) return
+  aiLoading.value = true
+  try {
+    const draft = await aiDraftPortfolio(brief)
+    form.item_type = draft.item_type
+    form.title = draft.title
+    form.reflection = draft.reflection
+    if (draft.occurred_on) form.occurred_on = draft.occurred_on
+    aiSource.value = draft.source
+    aiFilled.value = true
+    aiOpen.value = false
+    ElMessage.success(draft.source === 'ai' ? 'AI 已填充，请核对后保存' : '已按描述整理初稿，请补充细节')
+  } catch {
+    ElMessage.error('AI 生成失败，请手动填写')
+  } finally {
+    aiLoading.value = false
+  }
+}
+
 function addEvidence() {
   form.evidence.push({ name: '', url: '' })
 }
@@ -232,7 +413,7 @@ async function submit() {
     const payload = {
       item_type: form.item_type,
       title,
-      occurred_on: form.occurred_on,
+      occurred_on: form.occurred_on || null,
       visibility: form.visibility,
       evidence,
       reflection: form.reflection.trim() || null,
@@ -275,26 +456,344 @@ async function submit() {
   color: var(--tui-text-quiet);
 }
 
-/* 下拉选项内的图标 + 文字 */
-.pf-opt {
-  display: inline-flex;
-  align-items: center;
+/* 类型：四选一，直接可见可点 */
+.pf-types {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
+.pf-type {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 2px;
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  color: #667085;
+  cursor: pointer;
+}
+.pf-type.active {
+  border-color: #1f2430;
+  background: #f2f4f7;
+  color: #1f2430;
+  font-weight: 600;
+}
 
-/* 弹窗上下文信息条 */
+/* 发生时间：紧凑日期框 + 自绘黑白日历面板 */
+.pf-date-box {
+  position: relative;
+}
+.pf-date-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #e4e8ef;
+  border-radius: 9px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: #1f2430;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.pf-date-trigger:hover {
+  border-color: #d6dbe3;
+}
+.pf-date-trigger:focus-visible,
+.pf-date-box:focus-within .pf-date-trigger {
+  border-color: #1f2430;
+  box-shadow: 0 0 0 3px rgba(31, 36, 48, 0.05);
+}
+.pf-date-trigger .is-placeholder {
+  color: #98a2b3;
+}
+.pf-date-icon {
+  flex-shrink: 0;
+  margin-right: 6px;
+  font-size: 13px;
+  color: #98a2b3;
+}
+.pf-date-arrow {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 12px;
+  color: #98a2b3;
+  transition: transform 0.18s ease;
+}
+.pf-date-arrow.open {
+  transform: rotate(180deg);
+}
+
+/* 日历面板 */
+.pf-date-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 252px;
+  padding: 10px;
+  border: 1px solid #e4e8ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(17, 24, 39, 0.12);
+}
+.pf-dp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.pf-dp-head span {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1f2430;
+}
+.pf-dp-head button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: #f6f7f9;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: #475467;
+  cursor: pointer;
+}
+.pf-dp-head button:hover {
+  background: #eceff3;
+}
+.pf-dp-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.pf-dp-week span {
+  font-size: 10.5px;
+  line-height: 22px;
+  color: #98a2b3;
+  text-align: center;
+}
+.pf-dp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.pf-dp-day {
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: #1f2430;
+  cursor: pointer;
+}
+.pf-dp-day:hover {
+  background: #f2f4f7;
+}
+.pf-dp-day.is-out {
+  color: #c4c9d2;
+}
+.pf-dp-day.is-today {
+  box-shadow: inset 0 0 0 1px #d6dbe3;
+}
+.pf-dp-day.is-selected {
+  background: #f0f2f5;
+  box-shadow: inset 0 0 0 1px #1f2430;
+  font-weight: 700;
+  color: #111;
+}
+.pf-dp-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f2f5;
+}
+.pf-dp-foot button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #e4e8ef;
+  border-radius: 999px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  color: #475467;
+  cursor: pointer;
+}
+.pf-dp-foot button:hover {
+  background: #f6f7f9;
+}
+
+/* 可见性：二选一分段控件 */
+.pf-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+  background: #f7f8fa;
+}
+.pf-seg button {
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  color: #667085;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pf-seg button.active {
+  background: #1f2430;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* AI 帮写入口：中性浅灰卡片，可展开 */
+.pf-ai {
+  margin-bottom: 12px;
+  border: 1px solid #e4e8ef;
+  border-radius: 12px;
+  background: #fbfcfe;
+  overflow: hidden;
+}
+.pf-ai-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-ai-title {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2430;
+}
+.pf-ai-sub {
+  font-size: 11.5px;
+  color: #667085;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-ai-arrow {
+  margin-left: auto;
+  font-size: 13px;
+  color: #98a2b3;
+  transition: transform 0.18s ease;
+}
+.pf-ai-arrow.open {
+  transform: rotate(180deg);
+}
+.pf-ai-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 0 11px 11px;
+}
+.pf-ai :deep(.el-textarea__inner) {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid #e4e8ef;
+  box-shadow: none;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #1f2430;
+}
+.pf-ai :deep(.el-textarea__inner:focus) {
+  border-color: #1f2430;
+  box-shadow: 0 0 0 3px rgba(31, 36, 48, 0.05);
+}
+.pf-ai :deep(.el-input__count) {
+  background: transparent;
+  color: #9aa1ad;
+}
+.pf-ai-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pf-ai-hint {
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #98a2b3;
+}
+.pf-ai-foot :deep(.el-button) {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border-color: #1f2430;
+  background: #1f2430;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pf-ai-foot :deep(.el-button:hover) {
+  border-color: #333a47;
+  background: #333a47;
+  color: #fff;
+}
+.pf-ai-foot :deep(.el-button.is-disabled) {
+  opacity: 0.45;
+}
+
+/* AI 填充后的确认提示：提醒老师核对，不直接提交 */
+.pf-ai-filled {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+  background: #f4f6f8;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #475467;
+}
+.pf-ai-filled .el-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #1f2430;
+}
+
+/* 当前填写摘要：压成一行小字，弱化展示 */
 .pf-ctx {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-bottom: 12px;
-  padding: 8px 10px;
-  border-radius: 9px;
-  background: var(--tui-surface-muted);
-  font-size: 11.5px;
-  color: var(--tui-text-tertiary);
+  gap: 2px 10px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #98a2b3;
 }
-.pf-ctx-item { white-space: nowrap; }
+.pf-ctx-item {
+  white-space: nowrap;
+}
 
 .pf-grid2 {
   display: grid;

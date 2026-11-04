@@ -52,14 +52,34 @@ class ClassGroup(Base):
 
 
 class Course(Base):
-    """课程 - 按班级维度"""
+    """课程 - 按班级维度
+
+    授课教师有两种表达，必须同时保留：
+
+    - ``teacher_id``：结构化外键，指向 ``users.id``。**新数据一律写这个**，
+      只有它能回答「这位老师教哪些课」，也是教师端「我的教学」全部查询的入口。
+    - ``teacher``：历史沿用的姓名字符串。教务导入的原始数据只有姓名，
+      一次性回填无法保证 100% 命中（同名、离职、教师账号尚未创建），
+      所以保留它作为读取兜底，并供管理端在回填核对清单里修正。
+
+    过渡期查询约定（见 ``app/api/academic.py::_teacher_course_filter``）：
+    ``teacher_id == me`` 或 ``(teacher_id IS NULL AND teacher == 我的姓名)``。
+    一旦回填覆盖率达标，可下线后半个条件。
+    """
     __tablename__ = "courses"
-    __table_args__ = (Index("ix_courses_class_semester", "class_group_id", "semester"),)
+    __table_args__ = (
+        Index("ix_courses_class_semester", "class_group_id", "semester"),
+        Index("ix_courses_teacher_semester", "teacher_id", "semester"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     class_group_id: Mapped[int] = mapped_column(ForeignKey("class_groups.id"), index=True)
     name: Mapped[str] = mapped_column(String(100))
-    teacher: Mapped[str] = mapped_column(String(50))
+    # 结构化授课教师（可空：允许先建课再指派，也兼容历史未回填数据）
+    teacher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), index=True, default=None, comment="授课教师用户 id"
+    )
+    teacher: Mapped[str] = mapped_column(String(50), comment="授课教师姓名（历史字段，读取兜底）")
     location: Mapped[str] = mapped_column(String(100))
     day_of_week: Mapped[int] = mapped_column(Integer, comment="星期几 1-7")
     start_period: Mapped[int] = mapped_column(Integer)
@@ -72,6 +92,7 @@ class Course(Base):
     updated_at: Mapped[datetime] = mapped_column(default=datetime.now, onupdate=datetime.now)
 
     class_group = relationship("ClassGroup", back_populates="courses")
+    teacher_user = relationship("User", foreign_keys=[teacher_id])
 
 
 class Semester(Base):

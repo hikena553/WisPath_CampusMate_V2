@@ -226,6 +226,54 @@ def build_daily_report_prompt(*, student_name: str, facts: str) -> str:
 
 # ==================== 学习计划：阶段拆解 / 阶段评估 ====================
 
+# ==================== 教师日报：昨日复盘 / 今日梳理 / 学生关注 / 明日规划 + 运势 ====================
+
+_TEACHER_REPORT_JSON_SPEC = """只输出 JSON（不要额外文字、不要代码块标记）：
+{
+  "fortune": {"keyword": "", "summary": ""},
+  "sections": [
+    {"key": "review", "title": "昨日复盘", "items": ["", ""]},
+    {"key": "today", "title": "今日梳理", "items": ["", ""]},
+    {"key": "student", "title": "学生成长关注", "items": ["", ""]},
+    {"key": "plan", "title": "明日规划", "items": ["", ""]}
+  ]
+}
+
+标注规则（非常重要）：
+- 需要老师立刻抓住的重点，用 ==重点内容== 包裹；
+- 需要留意但不必马上行动的信息，用 __留意内容__ 包裹（双下划线会渲染成虚线下划线）；
+- 全部数字、学生姓名、任务名只能来自事实，每一条 item 30-60 字，短句、克制，不要使用其他 Markdown。"""
+
+
+def build_teacher_daily_report_prompt(*, teacher_name: str, facts: str) -> str:
+    """把系统计算好的教师真实工作事实，改写成一份克制的日报。"""
+    identity = section(
+        TAG_IDENTITY,
+        f"你是校园 AI 助手「绵小城」，正在给辅导员「{teacher_name}」写今天的工作日报。",
+    )
+    goal = section(
+        TAG_GOAL,
+        "先用昨天真实做的事做一次简短复盘，再把今天要处理的事排好轻重，"
+        "然后点出需要关注的学生，最后给一个明天的小规划。",
+    )
+    context = section(TAG_CONTEXT, f"系统采集到的今日真实工作事实：\n{facts}")
+    constraints = section(TAG_CONSTRAINTS, bullets(
+        "review 段只写昨天已成事实的事（办结了几项、有哪些逾期没做完、昨天新增了什么），不得把今天或明天的事写进去",
+        "today 段按重要性排序，先说最该先动手的一件事，再补一到两件；有截止时间的要点出时间",
+        "student 段每条必须带具体学生姓名与具体信号（预警等级/学情/荣誉），不要写泛泛的「多关注学生」",
+        "plan 段给 1-2 条明天可执行的小安排，不要排满，不要虚构会议或课程",
+        "每一段 2 条以内，宁缺毋滥；全文不要出现「加油」「辛苦了」这类空话",
+        "只能使用事实中出现的信息，不得编造任务数量、学生姓名、预警等级、荣誉或天气",
+        "fortune.summary 不复述等级和分数，只写一句 20-40 字、针对今天工作节奏的具体提醒",
+        "运势只作为轻松的打气话术，不做命理吉凶断言，不给医疗或心理诊断",
+        INJECTION_GUARD,
+    ))
+    output_format = section(TAG_OUTPUT_FORMAT, _TEACHER_REPORT_JSON_SPEC)
+    return compose(identity, goal, context, constraints, output_format)
+
+
+# ==================== 学习计划：阶段拆解 / 阶段评估 ====================
+
 def build_plan_stages_prompt(
     *, title: str, objective: str, start_date, end_date, days_left
 ) -> str:

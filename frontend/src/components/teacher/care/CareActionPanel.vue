@@ -5,7 +5,7 @@
        这样留痕口径（侧写 / 家访 / 激励 / 家校沟通）与被复用的既有弹窗完全一致。 -->
   <section class="tui-section cc-act">
     <div class="tui-section-head">
-      <h3><el-icon><MagicStick /></el-icon>关怀行动</h3>
+      <h3><AiMascotMark :size="16" />关怀行动</h3>
       <div class="tui-section-extra">
         <span v-if="student" class="cc-act-who">{{ student.name }}</span>
         <el-button v-if="student" text size="small" @click="clear">更换学生</el-button>
@@ -84,7 +84,8 @@ export interface CareContextItem {
 
 <script setup lang="ts">
 import { computed, ref, watch, type Component } from 'vue'
-import { ChatDotRound, HomeFilled, InfoFilled, MagicStick, Notebook, Star } from '@element-plus/icons-vue'
+import { ChatDotRound, HomeFilled, InfoFilled, Notebook, Star } from '@element-plus/icons-vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 
 const props = defineProps<{

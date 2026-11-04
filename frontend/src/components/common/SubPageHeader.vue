@@ -100,10 +100,14 @@ function goBack() {
    48px 固定高度 + 白底 + 永久发丝线 + 识别色圆点，与学业中心子页 .subpage-bar 同规格。
    教师端沿用 .tui-page 的 sticky 行为，不受影响。 */
 .tui-appbar {
-  height: 48px;
-  min-height: 48px;
-  gap: 6px;
-  padding: 0 12px;
+  height: 52px;
+  min-height: 52px;
+  gap: 8px;
+  /* 左右内边距从 12 收到 4：抬头本身就是满宽（390=视口），
+     能让它"更宽"的只有内边距和字号这两个变量。
+     12px 时标题可用区只剩 334px（返回键 + 内边距占掉 56px），
+     中文六个字以上的页面名会直接贴边；收到 4px 后可用区 344px。 */
+  padding: 0 4px;
   background: var(--sp-surface, #ffffff);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -118,20 +122,23 @@ function goBack() {
 }
 
 .tui-appbar-back {
-  width: 30px;
-  height: 30px;
-  margin-left: -4px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  margin-left: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #1f2430;
 }
+.tui-appbar-back:hover { background: rgba(20, 23, 26, 0.05); }
 .tui-appbar-back:active { background: rgba(20, 23, 26, 0.06); }
 
 .tui-appbar-title {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0;
+  font-size: 17.5px;
+  font-weight: 680;
+  letter-spacing: -0.2px;
 }
 .tui-appbar-dot {
   width: 7px; height: 7px; border-radius: 50%;

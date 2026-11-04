@@ -44,7 +44,7 @@
           <span>左右滑动选择学生，下方徽章墙与成长时间轴会随之切换。</span>
         </div>
         <div v-if="studentsLoading" class="tui-empty">
-          <span class="tui-empty-title">学生名单加载中…</span>
+          <AgentLoading block :tips="['正在读取学生名单', '正在整理成果与人像']" />
         </div>
         <div v-else-if="!students.length" class="tui-empty">
           <span class="tui-empty-icon"><el-icon :size="24"><User /></el-icon></span>
@@ -66,8 +66,58 @@
         </div>
       </section>
 
+      <!-- ============================================================
+           移动端 · 定稿版「能力条 + 成果轨道」
+           桌面端的徽章墙与时间轴在移动端由这一块替代（下方两节对移动端隐藏），
+           避免同一份数据在手机上出现两遍。
+           条形全部来自真实字段，且刻度是「全班最高值」，竖线是「全班均值」——
+           后端没有五维能力打分，不编造维度分。
+           ============================================================ -->
+      <div v-if="isMobile && activeStudent" class="tm-page">
+        <div class="tm-pp-line">
+          <span class="tm-pl-t">指标条</span>
+          <span class="tm-pl-c">竖线 = 全班均值 · 满格 = 全班最高</span>
+        </div>
+        <div class="tm-cap">
+          <div v-for="c in capBars" :key="c.label" class="tm-cap-i">
+            <span class="tm-cap-n">{{ c.label }}</span>
+            <div class="tm-cap-b">
+              <i :style="{ width: c.pct + '%' }"></i>
+              <em :style="{ left: c.avgPct + '%' }"></em>
+            </div>
+            <span class="tm-cap-v">{{ c.value }}</span>
+          </div>
+        </div>
+
+        <div class="tm-pp-line">
+          <span class="tm-pl-t">成果轨道</span>
+          <span class="tm-pl-c">{{ timeline.length }} 条 · 按时间倒序</span>
+        </div>
+        <div v-if="growthLoading" class="tm-empty">正在读取成长轨迹…</div>
+        <div v-else-if="timeline.length" class="tm-trk">
+          <div
+            v-for="r in timeline"
+            :key="r.id"
+            class="tm-trk-i"
+            :style="{ '--tm-tc': recordColor(r.type) }"
+          >
+            <div class="tm-trk-y">{{ r.date }}</div>
+            <div class="tm-trk-t">
+              <span class="tm-tag tm-brand">{{ RECORD_META[r.type].label }}</span>{{ r.title }}
+            </div>
+            <div v-if="r.description" class="tm-trk-s">{{ r.description }}</div>
+          </div>
+        </div>
+        <div v-else class="tm-empty">这位学生还没有成长记录</div>
+
+        <div class="tm-tail">
+          <b>数据来自：</b>成长记录（荣誉 / 竞赛 / 实践 / 论文 / 成果）· 学生技能与评分 ·
+          全班同名指标的最高值与均值
+        </div>
+      </div>
+
       <!-- 2. 徽章墙 -->
-      <section class="tui-section">
+      <section v-if="!isMobile" class="tui-section">
         <div class="tui-section-head">
           <h3><el-icon><Medal /></el-icon>成长徽章墙</h3>
           <span v-if="activeStudent" class="tui-section-extra">
@@ -98,8 +148,8 @@
         </div>
       </section>
 
-      <!-- 3. 成长时间轴 -->
-      <section class="tui-section">
+      <!-- 3. 成长时间轴（移动端由上面的「成果轨道」承担） -->
+      <section v-if="!isMobile" class="tui-section">
         <div class="tui-section-head">
           <h3><el-icon><Clock /></el-icon>成长时间轴</h3>
           <span v-if="activeStudent" class="tui-section-extra tui-text-quiet">{{ activeStudent.name }}</span>
@@ -113,7 +163,7 @@
           <span class="tui-empty-desc">选择学生后即可查看其成长轨迹。</span>
         </div>
         <div v-else-if="growthLoading" class="tui-empty">
-          <span class="tui-empty-title">成长轨迹加载中…</span>
+          <AgentLoading block :tips="['正在读取成长轨迹', '正在按时间排好记录']" />
         </div>
         <div v-else-if="!timeline.length" class="tui-empty">
           <span class="tui-empty-icon"><el-icon :size="24"><Clock /></el-icon></span>
@@ -135,120 +185,71 @@
         </div>
       </section>
 
-      <!-- 4. 我的育人档案（保留原有增删改 + 报告） -->
-      <section class="tui-section">
-        <div class="tui-section-head">
-          <h3><el-icon><Collection /></el-icon>我的育人档案</h3>
-          <span class="tui-section-extra">
-            <el-button size="small" :icon="Plus" @click="openCreate">新增档案</el-button>
-          </span>
-        </div>
-        <div class="tui-section-hint">
-          <el-icon><InfoFilled /></el-icon>
-          <span>沉淀你的工作案例、荣誉、研修与研究成果，全部计入成长报告。</span>
-        </div>
-        <div class="tui-section-tools">
-          <button type="button" class="tui-chip" :class="{ 'tui-chip-brand': filter === '' }" @click="setFilter('')">
-            全部 {{ items.length }}
-          </button>
-          <button
-            v-for="t in typeOrder"
-            :key="t"
-            type="button"
-            class="tui-chip"
-            :class="{ 'tui-chip-brand': filter === t }"
-            @click="setFilter(t)"
-          >
-            {{ PORTFOLIO_TYPE_LABEL[t] }} {{ countOf(t) }}
-          </button>
-        </div>
+      <PortfolioItemDialog v-model="dialogVisible" :item="editing" />
 
-        <div v-if="loading" class="tui-empty">
-          <span class="tui-empty-title">加载中…</span>
-        </div>
-        <div v-else-if="!filteredItems.length" class="tui-empty">
-          <span class="tui-empty-icon"><el-icon :size="24"><Collection /></el-icon></span>
-          <span class="tui-empty-title">{{ filter ? '该类型暂无档案' : '还没有育人档案' }}</span>
-          <span class="tui-empty-desc">{{ filter ? '换个类型看看，或点击「新增档案」补一条。' : '点击「新增档案」，沉淀第一条育人档案。' }}</span>
-        </div>
-        <template v-else>
-          <div class="tui-groups">
-            <section v-for="g in grouped" :key="g.year">
-              <div class="tui-group-title">
-                {{ g.year }}
-                <span class="tui-group-count">{{ g.items.length }} 条</span>
-              </div>
-              <div class="tui-stack">
-                <PortfolioItemCard
-                  v-for="it in g.items"
-                  :key="it.id"
-                  :item="it"
-                  @edit="openEdit"
-                  @delete="handleDelete"
-                />
-              </div>
-            </section>
-          </div>
-          <div class="pagination-wrapper">
-            <el-pagination
-              v-model:current-page="archivePage"
-              v-model:page-size="archivePageSize"
-              :page-sizes="[10, 20, 50]"
-              :total="filteredItems.length"
-              :pager-count="5"
-              small
-              background
-              layout="total, prev, pager, next"
-              @size-change="handleArchiveSizeChange"
-              @current-change="handleArchiveCurrentChange"
-            />
-          </div>
-        </template>
-      </section>
-
-      <PortfolioItemDialog v-model="dialogVisible" :item="editing" @saved="load" />
-
-      <!-- 成长报告 -->
-      <!-- 成长报告（长列表：移动端=全屏子页） -->
+      <!-- 成长报告（移动端=全屏子页；操作内联在报告内，不再压底部按钮栏） -->
       <ResponsivePopup
         v-model="reportVisible"
         title="成长报告"
-        width="400px"
+        width="420px"
         align-center
         :close-on-click-modal="false"
         class="tui-dialog"
         destroy-on-close
       >
-        <div class="tui-section-hint">
-          <el-icon><InfoFilled /></el-icon>
-          <span>汇总你的全部育人档案，可直接打印或导出 PDF 存档。</span>
-        </div>
         <div v-if="report" class="pf-report">
-          <div class="rpt-head">
-            <h3>{{ report.teacher_name }} · 教师成长报告</h3>
-            <span>{{ (report.generated_at || '').slice(0, 10) }}</span>
+          <div class="rpt-cover">
+            <img class="rpt-mascot" :src="siteMascot" :alt="siteName" />
+            <div class="rpt-cover-bd">
+              <h3>{{ report.teacher_name }} · 教师成长报告</h3>
+              <span>生成于 {{ (report.generated_at || '').slice(0, 10) }} · 共 {{ report.total }} 条育人档案</span>
+            </div>
+            <el-button class="rpt-print" size="small" :icon="Printer" @click="printReport">打印 / PDF</el-button>
           </div>
-          <div class="rpt-total">共 {{ report.total }} 条育人档案</div>
+
           <div class="rpt-types">
             <div v-for="t in report.by_type" :key="t.type" class="rpt-type">
-              <span class="rpt-num">{{ t.count }}</span>
-              <span class="rpt-lb">{{ t.label }}</span>
+              <div class="rpt-type-hd">
+                <span class="rpt-lb">{{ t.label }}</span>
+                <span class="rpt-num">{{ t.count }}</span>
+              </div>
+              <div class="rpt-bar">
+                <i
+                  :style="{
+                    width: (report.total ? Math.round((t.count / report.total) * 100) : 0) + '%',
+                    background: PORTFOLIO_TYPE_COLOR[t.type],
+                  }"
+                ></i>
+              </div>
             </div>
           </div>
-          <div class="rpt-list">
-            <div v-for="(it, i) in report.items" :key="it.id" class="rpt-item">
-              <span class="rpt-idx">{{ i + 1 }}</span>
-              <span class="rpt-title">{{ it.title }}</span>
-              <span class="rpt-meta">
-                {{ PORTFOLIO_TYPE_LABEL[it.item_type] }}<template v-if="it.occurred_on"> · {{ it.occurred_on }}</template>
-              </span>
+
+          <template v-if="report.items.length">
+            <div class="rpt-sec">
+              <span>档案明细</span>
+              <span>{{ report.items.length }} 条</span>
             </div>
+            <div class="rpt-list">
+              <div v-for="(it, i) in report.items" :key="it.id" class="rpt-item">
+                <span class="rpt-idx">{{ i + 1 }}</span>
+                <span class="rpt-dot" :style="{ background: PORTFOLIO_TYPE_COLOR[it.item_type] }"></span>
+                <span class="rpt-title">{{ it.title }}</span>
+                <span class="rpt-meta">
+                  {{ PORTFOLIO_TYPE_LABEL[it.item_type] }}<template v-if="it.occurred_on"> · {{ it.occurred_on }}</template>
+                </span>
+              </div>
+            </div>
+          </template>
+
+          <div v-else class="rpt-empty">
+            <img :src="siteMascot" :alt="siteName" class="rpt-empty-mascot" />
+            <b>还没有可汇总的育人档案</b>
+            <span>工作案例、荣誉表彰、培训研修与研究成果会自动归入成长报告。</span>
+            <el-button type="primary" size="small" :icon="Plus" class="rpt-add-btn" @click="createFromReport">去新增档案</el-button>
           </div>
+
+          <div class="rpt-note">数据来自你的育人档案，补充档案后重新打开即可生成最新报告。</div>
         </div>
-        <template #footer>
-          <el-button @click="reportVisible = false">关闭</el-button>
-          <el-button type="primary" :icon="Printer" @click="printReport">打印 / 导出 PDF</el-button>
-        </template>
       </ResponsivePopup>
     </div>
   </div>
@@ -256,9 +257,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-// v6.1 弹窗减负：报告走全屏子页，删除确认走底部动作面板
+import { useRoute, useRouter } from 'vue-router'
+// v6.1 弹窗减负：报告走全屏子页
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
-import { actionConfirm } from '@/composables/useActionSheet'
 import {
   Clock,
   Collection,
@@ -274,15 +275,15 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import AgentLoading from '@/components/common/AgentLoading.vue'
 import {
-  deletePortfolioItem,
-  getPortfolioItems,
   getPortfolioReport,
+  PORTFOLIO_TYPE_COLOR,
   PORTFOLIO_TYPE_LABEL,
   type PortfolioItem,
-  type PortfolioItemType,
   type PortfolioReport,
 } from '@/api/teacherPortfolio'
 import { getStudents, type StudentSummary } from '@/api/teacher'
@@ -290,22 +291,19 @@ import { getGrowthRecords } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
-import PortfolioItemCard from '@/components/teacher/portfolio/PortfolioItemCard.vue'
 import PortfolioItemDialog from '@/components/teacher/portfolio/PortfolioItemDialog.vue'
 
 defineOptions({ name: 'teacher-portfolio' })
 
 const { isMobile } = useResponsive()
+const { siteMascot, siteName } = useSiteConfig()
 
 // 移动端下拉刷新：桌面端不响应手势
 const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
-const typeOrder: PortfolioItemType[] = ['case', 'honor', 'training', 'research']
-
-const items = ref<PortfolioItem[]>([])
-const loading = ref(false)
-const filter = ref<'' | PortfolioItemType>('')
 const dialogVisible = ref(false)
+const route = useRoute()
+const router = useRouter()
 const editing = ref<PortfolioItem | null>(null)
 const report = ref<PortfolioReport | null>(null)
 const reportVisible = ref(false)
@@ -317,10 +315,6 @@ const studentsLoading = ref(false)
 const activeStudentId = ref<number | null>(null)
 const growthRecords = ref<GrowthRecord[]>([])
 const growthLoading = ref(false)
-
-// 育人档案分页（契约 §2）
-const archivePage = ref(1)
-const archivePageSize = ref(10)
 
 const activeStudent = computed(
   () => students.value.find((s) => s.id === activeStudentId.value) ?? null
@@ -349,57 +343,54 @@ const timeline = computed(() =>
   [...growthRecords.value].sort((a, b) => (a.date < b.date ? 1 : -1))
 )
 
-const filteredItems = computed(() =>
-  filter.value ? items.value.filter((i) => i.item_type === filter.value) : items.value
-)
-
-const pagedItems = computed(() =>
-  filteredItems.value.slice(
-    (archivePage.value - 1) * archivePageSize.value,
-    archivePage.value * archivePageSize.value
-  )
-)
-
-function countOf(t: PortfolioItemType) {
-  return items.value.filter((i) => i.item_type === t).length
+/* ── 移动端：指标条 + 成果轨道 ──
+   后端没有五维能力打分，所以条形用真实存在的四项指标，
+   刻度取「全班最高值」，竖线取「全班均值」—— 都是算出来的，不是拍的。 */
+const RECORD_COLOR: Record<string, string> = {
+  honor: '#0f8e6b',
+  competition: '#7c5cf0',
+  practice: '#2f6df6',
+  paper: '#d98317',
+  achievement: '#0f97a6',
 }
-
-function setFilter(t: '' | PortfolioItemType) {
-  filter.value = filter.value === t ? '' : t
-  archivePage.value = 1
+function recordColor(t: string) {
+  return RECORD_COLOR[t] || '#5b5bd6'
 }
-
-/** 时间线分组：优先按发生年份，其次按创建年份（对分页后的当页数据分组） */
-const grouped = computed(() => {
-  const map = new Map<string, PortfolioItem[]>()
-  for (const it of pagedItems.value) {
-    const year = (it.occurred_on || it.created_at || '').slice(0, 4) || '未标注'
-    if (!map.has(year)) map.set(year, [])
-    map.get(year)!.push(it)
-  }
-  return [...map.entries()]
-    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-    .map(([year, its]) => ({ year, items: its }))
+function skillCount(s: StudentSummary) {
+  return s.skills_json?.skills?.length ?? 0
+}
+function interestCount(s: StudentSummary) {
+  return s.skills_json?.interests?.length ?? 0
+}
+const capBars = computed(() => {
+  const pool = students.value
+  const max = (fn: (s: StudentSummary) => number) =>
+    pool.reduce((m, s) => Math.max(m, fn(s)), 0) || 1
+  const avg = (fn: (s: StudentSummary) => number) =>
+    pool.length ? pool.reduce((t, s) => t + fn(s), 0) / pool.length : 0
+  const s = activeStudent.value
+  if (!s) return [] as { label: string; value: number; pct: number; avgPct: number }[]
+  const defs: { label: string; value: number; fn: (x: StudentSummary) => number }[] = [
+    { label: '成长记录', value: s.growth_count ?? 0, fn: (x) => x.growth_count ?? 0 },
+    { label: '技能标签', value: skillCount(s), fn: skillCount },
+    { label: '兴趣方向', value: interestCount(s), fn: interestCount },
+    { label: '综合评分', value: s.score ?? 0, fn: (x) => x.score ?? 0 },
+  ]
+  return defs.map((d) => ({
+    label: d.label,
+    value: d.value,
+    pct: Math.min(100, Math.round((d.value / max(d.fn)) * 100)),
+    avgPct: Math.min(100, Math.round((avg(d.fn) / max(d.fn)) * 100)),
+  }))
 })
 
 function selectStudent(id: number) {
   activeStudentId.value = id
 }
 
-async function load(silent = false) {
-  loading.value = true
-  try {
-    items.value = await getPortfolioItems()
-  } catch {
-    if (!silent) ElMessage.error('成长档案加载失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-/** 下拉刷新：复用档案与学生名单加载，失败不提示 */
+/** 下拉刷新：复用学生名单加载，失败不提示 */
 async function refreshAll() {
-  await Promise.all([load(true), loadStudents()])
+  await loadStudents()
 }
 
 async function loadStudents() {
@@ -433,37 +424,15 @@ async function loadGrowth() {
 
 watch(activeStudentId, loadGrowth)
 
-function handleArchiveSizeChange() {
-  archivePage.value = 1
-}
-function handleArchiveCurrentChange() {
-  // 页码由 v-model 同步，这里保留契约要求的回调入口
-  archivePage.value = archivePage.value || 1
-}
-
 function openCreate() {
   editing.value = null
   dialogVisible.value = true
 }
 
-function openEdit(item: PortfolioItem) {
-  editing.value = item
-  dialogVisible.value = true
-}
-
-async function handleDelete(item: PortfolioItem) {
-  try {
-    if (!(await actionConfirm(`确定删除「${item.title}」？删除后不再计入成长报告。`, '删除确认', { danger: true, confirmButtonText: '删除' }))) return
-  } catch {
-    return
-  }
-  try {
-    await deletePortfolioItem(item.id)
-    ElMessage.success('已删除')
-    load()
-  } catch {
-    ElMessage.error('删除失败')
-  }
+/** 成长报告空态：先收起报告再打开新增档案，避免两层弹层叠加 */
+function createFromReport() {
+  reportVisible.value = false
+  openCreate()
 }
 
 async function openReport() {
@@ -526,9 +495,16 @@ function escapeHtml(s: string) {
   )
 }
 
-onMounted(() => {
-  load()
-  loadStudents()
+onMounted(async () => {
+  await loadStudents()
+  // 深链 ?student_id=<id>：从关怀聚焦等入口直达该生成长档案
+  const deepId = Number(route.query.student_id || route.query.student)
+  if (deepId) {
+    if (students.value.some((s) => s.id === deepId)) activeStudentId.value = deepId
+    router.replace({ path: '/teacher/portfolio' })
+  }
+  // 从「我的成长」上传入口进入时直接打开新增档案，减少一次点击
+  if (route.query.create === '1') openCreate()
 })
 </script>
 
@@ -714,37 +690,49 @@ onMounted(() => {
   line-height: 1.55;
 }
 
-/* 类型筛选：让 chip 作为按钮可点 */
-.tui-section-tools button.tui-chip {
-  cursor: pointer;
-  font-family: inherit;
-}
-
-/* 成长报告弹窗内容 */
+/* 成长报告：封面 + 分类占比 + 明细 + 空态（操作内联，不再压底部按钮栏） */
 .pf-report {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
-.rpt-head {
+.rpt-cover {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-md, 14px);
+  background: linear-gradient(135deg, #f4f7ff 0%, #fbfcff 70%);
 }
-.rpt-head h3 {
+.rpt-mascot {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  object-fit: contain;
+}
+.rpt-cover-bd {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rpt-cover-bd h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 14.5px;
+  font-weight: 700;
   color: var(--tui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.rpt-head span {
+.rpt-cover-bd span {
   font-size: 11.5px;
   color: var(--tui-text-quiet);
-  flex-shrink: 0;
 }
-.rpt-total {
-  font-size: 12px;
-  color: var(--tui-text-secondary);
+.rpt-print {
+  flex: 0 0 auto;
 }
 .rpt-types {
   display: grid;
@@ -754,32 +742,61 @@ onMounted(() => {
 .rpt-type {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   background: var(--tui-surface-muted);
   border-radius: var(--tui-radius-sm);
   padding: 8px 10px;
 }
+.rpt-type-hd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
 .rpt-num {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 750;
   color: var(--tui-brand-strong);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .rpt-lb {
   font-size: 11px;
   color: var(--tui-text-quiet);
 }
+.rpt-bar {
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(17, 24, 39, 0.08);
+  overflow: hidden;
+}
+.rpt-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+.rpt-sec {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+}
+.rpt-sec span:first-child {
+  font-weight: 700;
+  color: var(--tui-text-secondary);
+}
 .rpt-list {
   display: flex;
   flex-direction: column;
-  max-height: 320px;
-  overflow-y: auto;
 }
 .rpt-item {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 7px 2px;
+  padding: 8px 2px;
   border-bottom: 1px solid var(--tui-border);
   font-size: 12.5px;
 }
@@ -793,15 +810,71 @@ onMounted(() => {
   font-size: 11px;
   flex-shrink: 0;
 }
+.rpt-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  align-self: center;
+  border-radius: 50%;
+}
 .rpt-title {
   color: var(--tui-text-secondary);
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rpt-meta {
   font-size: 11px;
   color: var(--tui-text-quiet);
   flex-shrink: 0;
+}
+.rpt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 18px 12px 14px;
+  text-align: center;
+  border: 1px dashed var(--tui-border);
+  border-radius: var(--tui-radius-md, 14px);
+  background: var(--tui-surface-muted);
+}
+.rpt-empty-mascot {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  margin-bottom: 2px;
+}
+.rpt-empty b {
+  font-size: 13.5px;
+  color: var(--tui-text);
+}
+.rpt-empty span {
+  max-width: 260px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--tui-text-quiet);
+}
+.rpt-empty .el-button {
+  margin-top: 4px;
+}
+/* 空态入口：紧凑胶囊按钮，不抢内容 */
+.rpt-add-btn {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+}
+.rpt-add-btn :deep(.el-icon) {
+  font-size: 12px;
+}
+.rpt-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--tui-text-quiet);
+  text-align: center;
 }
 
 @media (max-width: 767px) {

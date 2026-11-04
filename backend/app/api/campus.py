@@ -27,6 +27,7 @@ from app.schemas.campus import (
     CampusArticleCommentOut,
     CampusArticleDetailOut,
     CampusArticleFavoriteIn,
+    CampusArticleFavoriteItemOut,
     CampusArticleFavoriteOut,
     CampusArticleInteractOut,
     CampusArticleLikeIn,
@@ -367,6 +368,43 @@ def get_interactions(
             updated_at=row.updated_at,
         )
     return out
+
+
+@router.get("/articles/favorites", response_model=list[CampusArticleFavoriteItemOut])
+def list_article_favorites(
+    limit: int = Query(60, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """我的资讯收藏：按收藏时间倒序，标题/来源取互动汇总行的快照。"""
+    favs = (
+        db.query(CampusArticleFavorite)
+        .filter(CampusArticleFavorite.user_id == current_user.id)
+        .order_by(CampusArticleFavorite.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    if not favs:
+        return []
+    urls = [f.article_url for f in favs]
+    socials = {
+        s.url: s
+        for s in db.query(CampusArticleSocial).filter(CampusArticleSocial.url.in_(urls)).all()
+    }
+    items: list[CampusArticleFavoriteItemOut] = []
+    for f in favs:
+        s = socials.get(f.article_url)
+        items.append(
+            CampusArticleFavoriteItemOut(
+                id=f.id,
+                url=f.article_url,
+                title=(s.title if s else "") or f.article_url,
+                source=(s.source if s else "") or "",
+                image_url=s.image_url if s else None,
+                created_at=f.created_at,
+            )
+        )
+    return items
 
 
 @router.get("/articles/detail", response_model=CampusArticleDetailOut)

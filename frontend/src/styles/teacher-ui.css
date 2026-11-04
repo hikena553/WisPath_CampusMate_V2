@@ -107,15 +107,13 @@
 :is(.tui-page, .teacher-scope) .msg-list::-webkit-scrollbar,
 :is(.tui-page, .teacher-scope) .msg-drawer-nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
-/* 内容区：移动端 14~16px 页边距，桌面端限宽居中 */
+/* 内容区：移动端 14~16px 页边距，桌面端与 .main-area 同宽（铺满） */
 .tui-content {
   padding: 12px 14px 28px;
 }
 @media (min-width: 768px) {
   .tui-content {
-    padding: 20px 24px 40px;
-    max-width: 1160px;
-    margin: 0 auto;
+    padding: 20px 18px 40px;
   }
 }
 
@@ -139,9 +137,10 @@
   top: 0;
   z-index: 30;
 }
+/* 返回键统一规格：34px 触控区，无外圈底色，仅图标本身 */
 .tui-appbar-back {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -784,16 +783,16 @@ button.tui-stat:active { transform: scale(0.98); }
    学生端/管理端零回归。
    目标：组件整体收紧约 15%，信息密度更高、滚动更短，同时保留 44px 移动热区。
    ========================================================================= */
-:is(.tui-page, .teacher-scope) .tui-content { padding: 10px 12px 24px; }
+:is(.tui-page, .teacher-scope) .tui-content { padding: 10px 8px 24px; }
 @media (min-width: 768px) {
-  :is(.tui-page, .teacher-scope) .tui-content { padding: 16px 20px 32px; }
+  :is(.tui-page, .teacher-scope) .tui-content { padding: 16px 18px 32px; }
 }
 
 /* 吸顶栏 */
-:is(.tui-page, .teacher-scope) .tui-appbar { min-height: 48px; padding: 0 8px; }
+:is(.tui-page, .teacher-scope) .tui-appbar { min-height: 52px; padding: 0 4px; }
 :is(.tui-page, .teacher-scope) .tui-appbar-brand { min-height: 56px; padding: 6px 8px 6px 12px; }
-:is(.tui-page, .teacher-scope) .tui-appbar-back { width: 36px; height: 36px; }
-:is(.tui-page, .teacher-scope) .tui-appbar-title { font-size: 15.5px; }
+:is(.tui-page, .teacher-scope) .tui-appbar-back { width: 34px; height: 34px; }
+:is(.tui-page, .teacher-scope) .tui-appbar-title { font-size: 17.5px; font-weight: 680; letter-spacing: -0.2px; }
 :is(.tui-page, .teacher-scope) .tui-appbar-sub { font-size: 11px; }
 :is(.tui-page, .teacher-scope) .tui-mascot-sm { width: 34px; height: 34px; }
 :is(.tui-page, .teacher-scope) .tui-mascot-md { width: 40px; height: 40px; }
@@ -858,7 +857,7 @@ button.tui-stat:active { transform: scale(0.98); }
   :is(.tui-page, .teacher-scope) .tui-stat { padding: 9px 10px; }
   :is(.tui-page, .teacher-scope) .tui-stat-num { font-size: 17px; }
   :is(.tui-page, .teacher-scope) .tui-header-title { font-size: 17px; }
-  :is(.tui-page, .teacher-scope) .tui-content { padding: 10px 10px 22px; }
+  :is(.tui-page, .teacher-scope) .tui-content { padding: 10px 8px 22px; }
 }
 
 /* =========================================================================
@@ -1310,9 +1309,11 @@ button.tui-stat:active { transform: scale(0.98); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 15px 18px;
-  margin-bottom: 14px;
+  gap: 24px;
+  /* 上下 18 / 左右 22：原来 15/18 在 1320 宽的容器里显得扁而挤，
+     图标和标题缩在左上角，右侧指标又紧贴边缘。 */
+  padding: 18px 22px;
+  margin-bottom: 16px;
   border: 1px solid var(--tui-border);
   border-radius: var(--tui-radius);
   background:
@@ -1375,7 +1376,7 @@ button.tui-stat:active { transform: scale(0.98); }
 .tui-hero-side {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
 }
 /* 指标胶囊：默认素色底，is-accent 用页面语义色强调关键数字 */
@@ -1383,15 +1384,15 @@ button.tui-stat:active { transform: scale(0.98); }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  min-width: 78px;
-  padding: 7px 12px;
+  gap: 2px;
+  min-width: 92px;
+  padding: 9px 16px;
   border: 1px solid var(--tui-border);
   border-radius: 10px;
   background: var(--tui-surface);
 }
 .tui-hero-metric b {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
   line-height: 1.15;
   color: var(--tui-text);
@@ -1441,7 +1442,14 @@ button.tui-stat:active { transform: scale(0.98); }
 
 /* ---------- 2) 内容区留白（对齐管理端 .page-container） ---------- */
 .main-area.teacher-scope .tui-content {
-  padding: 24px 28px 40px;
+  /*
+    左右留白 28 → 18：桌面端子页 header 想再宽一点，只能从这里挤。
+    注意上面 111~122 给 .tui-content 写的 max-width: 1320px 是被下面这条
+    max-width: none 覆盖掉的 —— 也就是说「限宽居中」从来没生效过，
+    页头一直是铺满 .main-area（1920 屏约 1700px）。所以这里不能再靠改
+    max-width 去"加宽"，唯一有效的就是把左右内边距收窄。
+  */
+  padding: 20px 18px 40px;
   max-width: none;
 }
 /* 自建骨架页：统一左右留白与页底色，消除与管理端并排时的错位感 */
@@ -1452,11 +1460,11 @@ button.tui-stat:active { transform: scale(0.98); }
 /* 桌面返回行（SubPageHeader）与顶栏面包屑重复，桌面端隐藏，交由顶栏统一承载 */
 .main-area.teacher-scope .tui-back-row { display: none; }
 
-/* 页头吸顶：负外边距需与新留白（24 / 28）一致，否则滚动内容会从四周缝隙透出 */
+/* 页头吸顶：负外边距需与新留白（20 / 18）一致，否则滚动内容会从四周缝隙透出 */
 @media (min-width: 768px) {
   .main-area.teacher-scope .tui-page > .tui-content > .tui-header {
-    margin: -24px -28px 4px;
-    padding: 24px 28px 14px;
+    margin: -20px -18px 4px;
+    padding: 20px 18px 14px;
   }
 }
 
@@ -1617,11 +1625,6 @@ button.tui-stat:active { transform: scale(0.98); }
 .main-area.teacher-scope .el-tag { border-radius: 4px; font-weight: 500; }
 
 /* ---------- 8) 首页页头：与管理端 .page-header 同语言（标题 + 副标题 + 右侧操作） ---------- */
-.main-area.teacher-scope .hm-head-sticky {
-  background: var(--tui-bg);
-  margin: 0 -28px;
-  padding: 20px 28px 0;
-}
 .main-area.teacher-scope .hm-head-desk {
   padding: 0 0 14px;
   border: none;

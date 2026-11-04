@@ -1,9 +1,5 @@
 <template>
-  <div class="home-dashboard"
-    @touchstart.passive="pull.onStart"
-    @touchmove="pull.onMove"
-    @touchend="pull.onEnd"
-    @touchcancel="pull.onCancel">
+  <div class="home-dashboard" :class="{ 'is-campus': isMobile }">
     <!-- ============ 桌面端工作台（本次改造：主控台 + 双栏工作流 + 复盘层） ============ -->
     <template v-if="!isMobile">
       <!-- ===== 主控台（深色）：问候 / 身份 / 日期 + 四个关键指标内联 =====
@@ -142,74 +138,12 @@
       </section>
     </template>
 
-    <!-- ============ 移动端首页：保持原有 UI 设计不变 ============ -->
+    <!-- ============ 移动端首页：校园资讯（直接复用学生端 CampusPage） ============
+         UI 与内容与学生端完全一致（同一组件、同一份数据与交互）。 -->
     <template v-else>
-      <!-- 移动端头部 + 欢迎横幅（吸顶固定，不参与下拉位移） -->
-      <HomeTopBanner :is-mobile="isMobile" :user-name="authStore.userName || '教师'" :greeting="greeting"
-        :today-str="todayStr" :identity="teacherIdentity">
-        <template #actions>
-          <span class="hm-sync-hint">
-            <i class="hm-sync-dot" />每 30 秒自动同步
-          </span>
-        </template>
-      </HomeTopBanner>
-
-      <!-- 移动端下拉刷新：吉祥物指示器（与消息页共用同一模块）
-           必须插在吸顶头之后：靠自身高度把下方内容下推，头部才能留在原位不动 -->
-      <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
-
-      <!-- ===== 今日重点（置顶，突出教师个人事务） ===== -->
-      <TodayFocusCard @navigate="navigateTo" />
-
-      <!-- ===== 第一层：KPI统计卡片 ===== -->
-      <HomeKpiCards :cards="statCards" @navigate="navigateTo" />
-
-      <!-- ===== 常用功能：原「更多」页签内的模块入口，统一收敛为首页彩色圆角宫格 ===== -->
-      <section class="home-features">
-        <div class="tui-card">
-          <div class="tui-card-head">
-            <span class="tui-card-head-icon feat-head-icon">
-              <el-icon :size="13"><Grid /></el-icon>
-            </span>
-            常用功能
-            <button class="feat-all" type="button" @click="navigateTo('/teacher/features')">
-              全部功能
-              <el-icon :size="12"><ArrowRight /></el-icon>
-            </button>
-          </div>
-          <div class="tui-grid-nav">
-            <button
-              v-for="f in featureEntries"
-              :key="f.path"
-              type="button"
-              class="tui-nav-cell"
-              @click="navigateTo(f.path)"
-            >
-              <span class="tui-nav-icon" :style="{ background: f.tint, color: f.color }">
-                <el-icon :size="21"><component :is="f.icon" /></el-icon>
-              </span>
-              <span class="tui-nav-label">{{ f.label }}</span>
-              <span
-                v-if="f.count > 0"
-                class="tui-count"
-                :class="{ 'tui-count-warn': f.tone === 'warn' }"
-              >{{ f.count > 99 ? '99+' : f.count }}</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===== 我的节奏：本周计划 / 工作量 ===== -->
-      <section class="workbench-section">
-        <div class="workbench-head">
-          <span class="workbench-title">我的节奏</span>
-          <span class="workbench-sub">本周安排与工作沉淀</span>
-        </div>
-        <div class="workbench-grid">
-          <WeekPlanCard @open-schedule="openSchedulePanel" />
-          <WorkloadCard @open-records="router.push('/teacher/students')" />
-        </div>
-      </section>
+      <div class="home-campus">
+        <CampusPage role="teacher" />
+      </div>
     </template>
 
     <!-- ===== AI 悬浮按钮 + 决策支持层 ===== -->
@@ -225,23 +159,11 @@
     <!-- 添加日程弹窗（桌面端「去安排」/ 桌面日历点击日期） -->
     <HomeAddScheduleDialog v-model:visible="scheduleDialogVisible" v-model:date="selectedDateStr"
       v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="loadSchedules" />
-
-    <!-- 本周计划「去安排」子页（移动端）：任务管理页，直观展示并可直接添加任务 -->
-    <HomeMobileTodayTasks v-if="isMobile && showTodaySubPage" :selected-date="selectedTaskDate"
-      :today-leaves="todayLeaves" :today-schedules="todaySchedules" :overdue-schedules="overdueSchedules"
-      :schedules="schedules" :pending-leaves="pendingLeaves" :urgency-options="urgencyOptions"
-      @close="showTodaySubPage = false" @select-date="handlePopupDateSelect"
-      @open-quick-add="openQuickAddDialog" @toggle-complete="toggleScheduleComplete"
-      @delete-schedule="handleDeleteSchedule" @navigate="navigateTo" @task-added="handleTaskAdded" />
-
-    <!-- 快捷添加任务弹窗 -->
-    <HomeQuickAddTask v-model:visible="quickAddDialogVisible" :selected-task-date="selectedTaskDate"
-      :urgency-options="urgencyOptions" @added="handleQuickTaskAdded" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, type Component } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, type Component } from 'vue'
 // v6.1 弹窗减负：删除确认走底部动作面板
 import { actionConfirm } from '@/composables/useActionSheet'
 import { useRouter } from 'vue-router'
@@ -249,30 +171,24 @@ import { useAuthStore } from '@/stores/auth'
 import {
   UserFilled,
   WarningFilled as WarnIcon,
-  Grid, Stamp, Bell, Collection, EditPen, Sunny, Connection,
-  ArrowRight, TrendCharts, Clock,
+  Stamp, ArrowRight, TrendCharts, Clock, Calendar,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 const { isMobile } = useResponsive()
 import { getAlerts } from '@/api/crisis'
 import { fetchProactiveActions, type ProactiveAction } from '@/api/agent'
 import { getPendingLeaves } from '@/api/leave'
-import { getDashboardStats, getTeacherSchedules, updateTeacherSchedule, deleteTeacherSchedule, getOverdueSchedules, suggestContacts, getTeacherGrowthStats, getClassEvaluation } from '@/api/teacher'
+import { getDashboardStats, getTeacherSchedules, suggestContacts, getTeacherGrowthStats, getClassEvaluation } from '@/api/teacher'
 import type { DashboardStats, ScheduleItem, ScheduleUrgency, ContactSuggestion, GrowthStats, ClassEvaluation } from '@/api/teacher'
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
 import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 import { ElMessage } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
-import { usePullRefresh } from '@/composables/usePullRefresh'
-import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
-import HomeKpiCards from './HomeKpiCards.vue'
-import HomeTopBanner from './HomeTopBanner.vue'
 import HomeAiPanel from './HomeAiPanel.vue'
 import HomeDesktopSchedule from './HomeDesktopSchedule.vue'
-import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
-import HomeQuickAddTask from './HomeQuickAddTask.vue'
-import { useMobileSubPage } from '@/composables/useMobileSubPage'
+// 移动端首页 = 学生端校园资讯（同一组件，UI 与内容零改动；教师端通过插槽补一枚发布入口）
+import CampusPage from '@/views/student/CampusPage.vue'
 import HomeAnnouncementDialog from './HomeAnnouncementDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import HomeAddScheduleDialog from './HomeAddScheduleDialog.vue'
@@ -290,6 +206,12 @@ const authStore = useAuthStore()
 const stats = ref<DashboardStats>({
   total_students: 0, alert_count: 0, pending_leave_count: 0,
   severe_alert_count: 0, resolved_alert_count: 0,
+  // 我主语（辅导员工作台）+ 教学域：缺省会显示 undefined，务必给 0 兜底
+  my_open_tasks: 0, my_overdue_tasks: 0, my_due_today: 0,
+  my_care_month: 0, my_visits_month: 0, my_guardian_month: 0,
+  my_done_rate: 0, my_coverage_rate: 0,
+  my_course_count: 0, today_course_count: 0, my_pending_submissions: 0,
+  current_week: 0, semester: '',
 })
 const alerts = ref<CrisisAlert[]>([])
 const proactiveActions = ref<ProactiveAction[]>([])
@@ -321,19 +243,7 @@ const taskSummary = ref<TeacherTaskSummary>({
 })
 const myAnnouncements = ref<AnnouncementItem[]>([])
 const createDialogVisible = ref(false)
-// 移动端「去安排」任务管理子页
-const showTodaySubPage = ref(false)
 
-// 移动端「今日任务」子页：打开时让出底部悬浮导航
-useMobileSubPage(computed(() => isMobile.value && showTodaySubPage.value))
-// 任务子页选中日期（默认今天）
-const selectedTaskDate = ref(new Date().toISOString().slice(0, 10))
-// 快捷添加任务弹窗开关（表单状态在 HomeQuickAddTask 内部维护）
-const quickAddDialogVisible = ref(false)
-// 打开任务子页时把选中日期重置为今天
-watch(showTodaySubPage, (open) => {
-  if (open) selectedTaskDate.value = new Date().toISOString().slice(0, 10)
-})
 const dataReady = ref(false) // 标记数据是否已加载完成，防止空状态闪烁
 
 // 同步读取预加载缓存：setup 阶段直接填充数据，避免首次渲染时空状态闪现
@@ -343,21 +253,19 @@ function initFromCache() {
   const cachedPendingLeaves = getCachedData<LeaveRequestOut[]>('pending-leaves')
   const cachedSchedules = getCachedData<ScheduleItem[]>('teacher-schedules')
   const cachedMyAnn = getCachedData<AnnouncementItem[]>('teacher-announcements')
-  const cachedOverdue = getCachedData<ScheduleItem[]>('overdue-schedules')
   const cachedTaskSummary = getCachedData<TeacherTaskSummary>('teacher-task-summary')
   if (cachedStats) stats.value = cachedStats
   if (cachedAlerts) alerts.value = cachedAlerts
   if (cachedPendingLeaves) pendingLeaves.value = cachedPendingLeaves
   if (cachedSchedules) schedules.value = cachedSchedules
   if (cachedMyAnn) myAnnouncements.value = cachedMyAnn
-  if (cachedOverdue) overdueSchedules.value = cachedOverdue
   if (cachedTaskSummary) taskSummary.value = cachedTaskSummary
   // 只要任意缓存有数据，就标记为 ready，避免显示加载占位符
   if (cachedStats || cachedAlerts || cachedPendingLeaves || cachedSchedules || cachedMyAnn) {
     dataReady.value = true
   }
 }
-// 注意：initFromCache 必须在所有 ref（schedules / overdueSchedules 等）声明之后再调用，
+// 注意：initFromCache 必须在所有 ref（schedules 等）声明之后再调用，
 // 否则缓存命中时会命中暂时性死区（TDZ），导致首页 setup 抛错、整页白屏
 
 const greeting = computed(() => {
@@ -386,18 +294,6 @@ const teacherIdentity = computed(() => {
   if (u.class_name) parts.push(`所带 ${u.class_name}`)
   return parts.join(' · ')
 })
-
-// 概览 KPI（移动端）：只保留班级维度的只读统计；个人待办统一收敛到「今日重点」，避免同页重复
-const statCards = computed(() => [
-  {
-    label: '我的学生', value: stats.value.total_students,
-    color: '#2563eb', icon: UserFilled, link: '/teacher/students',
-  },
-  {
-    label: '高危预警', value: stats.value.severe_alert_count,
-    color: '#d92d20', icon: WarnIcon, link: '/teacher/crisis',
-  },
-])
 
 // 概览 KPI（桌面端）：主控台指标带的指标格。
 // ratio / hint 一律由真实统计派生（已闭环数、占比），没有分母的指标不画假进度。
@@ -446,30 +342,15 @@ const statCardsDesktop = computed<HeroMetric[]>(() => {
       label: '待批请假', value: stats.value.pending_leave_count,
       color: '#0891b2', icon: Stamp, link: '/teacher/approval',
     },
+    // 教学维度：教师端独有。今天有课是最强的时间锚点，放在指标带末尾不抢育人主战场。
+    {
+      label: '今天有课', value: stats.value.today_course_count ?? 0,
+      color: '#2563eb', icon: Calendar, link: '/teacher/schedule',
+      hint: stats.value.semester ? `${stats.value.semester} · 第${stats.value.current_week}周` : undefined,
+    },
   ]
 })
 
-/**
- * 常用功能宫格（移动端）：原「更多」页签内的模块入口，点击下钻到对应子页面。
- * 图标底色取自设计令牌（teacher-ui.css）的同源色值，避免各处硬编码散色；
- * 审批 / 预警挂实时角标，来源为首页已预取的 dashboard 统计数据。
- */
-const featureEntries = computed(() => [
-  { path: '/teacher/approval', label: '审批', icon: Stamp, color: '#b54708', tint: '#fffaeb', count: stats.value.pending_leave_count || 0, tone: 'warn' },
-  { path: '/teacher/crisis', label: '预警', icon: WarnIcon, color: '#d92d20', tint: '#fef3f2', count: stats.value.severe_alert_count || 0, tone: 'danger' },
-  { path: '/teacher/announcement', label: '公告', icon: Bell, color: '#2563eb', tint: '#eff4ff', count: 0, tone: 'brand' },
-  { path: '/teacher/portfolio', label: '成长档案', icon: Collection, color: '#6941c6', tint: '#f4f3ff', count: 0, tone: 'violet' },
-  { path: '/teacher/survey', label: '问卷互评', icon: EditPen, color: '#2563eb', tint: '#eff4ff', count: 0, tone: 'brand' },
-  { path: '/teacher/care-center', label: '关怀中心', icon: Sunny, color: '#f79009', tint: '#fffaeb', count: 0, tone: 'warn' },
-  { path: '/teacher/guardian', label: '家校沟通', icon: Connection, color: '#0891b2', tint: '#ecfeff', count: 0, tone: 'cyan' },
-])
-
-/**
- * 学生成长与学业（桌面端首页的「数据赋能」主带）：
- * 数据来自学生成长档案统计与班级学业评估，把原本散落在「学生档案」里的直观数据
- * 提到首页第一屏——教师打开工作台即可看到班级成长面貌，学生档案页只保留名册类数据。
- * 全部为真实统计值，条形长度按各项相对最大值等比换算，不做任何估算。
- */
 const growthStats = ref<GrowthStats | null>(null)
 const classEval = ref<ClassEvaluation | null>(null)
 
@@ -497,28 +378,12 @@ async function loadGrowthAndEval() {
   if (e.status === 'fulfilled') classEval.value = e.value
 }
 
-// 任务等级选项（普通/重要/紧急）
-const urgencyOptions: { value: ScheduleUrgency; label: string }[] = [
-  { value: 'normal', label: '普通' },
-  { value: 'important', label: '重要' },
-  { value: 'urgent', label: '紧急' },
-]
-
-// 逾期未完成任务提醒（已过期且未完成，跨月份）
-const overdueSchedules = ref<ScheduleItem[]>([])
-// 逾期列表请求序号：仅写入最新请求的响应，避免轮询旧数据覆盖刚勾选完成的状态
-let overdueReqSeq = 0
-
 function navigateTo(path: string) {
   router.push(path)
 }
 
-/** 我的节奏：周计划「去安排」——移动端进任务管理子页，桌面端打开添加日程弹窗 */
+/** 我的节奏：周计划「去安排」——桌面端打开添加日程弹窗 */
 function openSchedulePanel() {
-  if (isMobile.value) {
-    showTodaySubPage.value = true
-    return
-  }
   selectedDateStr.value = new Date().toISOString().slice(0, 10)
   scheduleContent.value = ''
   scheduleUrgency.value = 'normal'
@@ -547,14 +412,6 @@ const scheduleUrgency = ref<ScheduleUrgency>('normal')
 const selectedDateStr = ref('')
 const leaveDetailVisible = ref(false)
 const selectedDayLeaves = ref<LeaveRequestOut[]>([])
-
-// 任务子页：所选日期的请假与日程（请假以审批为完成路径，日程可勾选完成）
-const todayLeaves = computed(() =>
-  pendingLeaves.value.filter(l => l.start_date <= selectedTaskDate.value && l.end_date >= selectedTaskDate.value)
-)
-const todaySchedules = computed(() =>
-  schedules.value.filter(s => s.date === selectedTaskDate.value)
-)
 
 function prevMonth() {
   if (calMonth.value === 1) { calYear.value--; calMonth.value = 12 }
@@ -586,66 +443,6 @@ function onDayClick(day: CalDay) {
   }
 }
 
-/** 勾选/取消完成：持久化到后端；原地更新状态不重排列表（勾选后卡片不跳位置）；刷新后不丢失 */
-async function toggleScheduleComplete(s: ScheduleItem) {
-  const target = !s.completed
-  try {
-    await updateTeacherSchedule(s.id, target)
-    // PATCH 已提交，作废在途的逾期列表请求，防止其旧响应覆盖即将更新的本地状态
-    overdueReqSeq++
-    s.completed = target
-    s.completed_at = target ? new Date().toISOString() : null
-    // 逾期提醒条本地即时同步（不等网络往返）
-    const todayStr = new Date().toISOString().slice(0, 10)
-    if (target) {
-      overdueSchedules.value = overdueSchedules.value.filter(o => o.id !== s.id)
-    } else if (s.date < todayStr) {
-      overdueSchedules.value = [s, ...overdueSchedules.value.filter(o => o.id !== s.id)]
-    }
-    await loadOverdueSchedules() // 本地同步后与服务器对齐（内部有 guard，失败不抛）
-  } catch {
-    ElMessage.error('操作失败')
-  }
-}
-
-/** 打开快捷添加任务弹窗（表单重置与聚焦由子组件负责） */
-function openQuickAddDialog() {
-  quickAddDialogVisible.value = true
-}
-
-/** 任务子页弹窗选择日期：同步共享状态并重载对应月份数据 */
-function handlePopupDateSelect(date: string) {
-  selectedTaskDate.value = date
-  const d = new Date(date)
-  calYear.value = d.getFullYear()
-  calMonth.value = d.getMonth() + 1
-  loadSchedules()
-}
-
-/** 任务子页内添加任务成功后：同步日历年月以加载对应月份数据 */
-function handleTaskAdded() {
-  const d = new Date(selectedTaskDate.value)
-  calYear.value = d.getFullYear()
-  calMonth.value = d.getMonth() + 1
-  loadSchedules()
-}
-
-/** 快捷添加任务成功回调：同步日历年月并重载当月数据 */
-function handleQuickTaskAdded(date: string) {
-  const d = new Date(date)
-  calYear.value = d.getFullYear()
-  calMonth.value = d.getMonth() + 1
-  loadSchedules()
-}
-
-async function handleDeleteSchedule(id: number) {
-  try {
-    await deleteTeacherSchedule(id)
-    ElMessage.success('已删除')
-    loadSchedules()
-  } catch { ElMessage.error('删除失败') }
-}
-
 async function loadSchedules() {
   const prefetch = getPrefetchPromise()
   if (prefetch) await prefetch
@@ -654,15 +451,6 @@ async function loadSchedules() {
   if (cached && schedules.value.length === 0) schedules.value = cached
   try {
     schedules.value = await getTeacherSchedules(calYear.value, calMonth.value)
-  } catch { /* ignore */ }
-}
-
-async function loadOverdueSchedules() {
-  const seq = ++overdueReqSeq
-  try {
-    const data = await getOverdueSchedules()
-    // 仅当前最新请求的响应才写入，防止过期响应覆盖本地刚同步的勾选状态
-    if (seq === overdueReqSeq) overdueSchedules.value = data
   } catch { /* ignore */ }
 }
 
@@ -729,20 +517,11 @@ async function silentRefresh() {
     loadData(),
     loadSchedules(),
     loadMyAnnouncements(),
-    loadOverdueSchedules(),
     loadGrowthAndEval(),
   ]).catch(() => {})
   lastRefreshAt = Date.now()
   dataReady.value = true // 数据加载完成，允许显示空状态
 }
-
-/** 下拉刷新：静默重载首页全部数据（含 AI 决策支持），复用轮询的加载逻辑，不触发骨架/加载态 */
-async function refreshAll() {
-  await Promise.all([silentRefresh(), loadAiDecisions()])
-}
-
-// 移动端下拉刷新：桌面端不响应手势；指示器（吉祥物起跳动画）与消息页共用同一模块
-const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 initFromCache()
 
@@ -753,8 +532,6 @@ onMounted(() => {
 })
 
 onActivated(() => {
-  // 返回首页时重置任务子页日期到今天
-  selectedTaskDate.value = new Date().toISOString().slice(0, 10)
   // 距上次刷新超过60秒才触发静默刷新（后台更新数据，不触发加载动画）
   if (Date.now() - lastRefreshAt >= 60_000) {
     silentRefresh()
@@ -783,11 +560,13 @@ onUnmounted(() => {
 
 <style>
 /* 全局禁用教师首页所有 CSS 动效（非 scoped：覆盖 Element Plus 内部元素与伪元素；ECharts 动画已在各图表选项中单独关闭）。
-   下拉刷新指示器（.ptr-ind / .ptr-mascot）除外：它需要保留吉祥物起跳与下拉位移的收起过渡 */
-.home-dashboard,
-.home-dashboard *:not(.ptr-ind):not(.ptr-mascot),
-.home-dashboard *:not(.ptr-ind):not(.ptr-mascot)::before,
-.home-dashboard *:not(.ptr-ind):not(.ptr-mascot)::after {
+   下拉刷新指示器（.ptr-ind / .ptr-mascot）除外：它需要保留吉祥物起跳与下拉位移的收起过渡。
+   移动端首页 = 校园资讯（.is-campus）：资讯页有自己的分页轨道动画与轮播过渡，此处必须放行，
+   否则整页推入/吸附与轮播会被这条规则一起掐死。 */
+.home-dashboard:not(.is-campus),
+.home-dashboard:not(.is-campus) *:not(.ptr-ind):not(.ptr-mascot),
+.home-dashboard:not(.is-campus) *:not(.ptr-ind):not(.ptr-mascot)::before,
+.home-dashboard:not(.is-campus) *:not(.ptr-ind):not(.ptr-mascot)::after {
   transition: none !important;
   animation: none !important;
 }
@@ -804,6 +583,18 @@ onUnmounted(() => {
   /* 移动端顶部留白交由吸顶问候卡（HomeTopBanner）自身内边距提供，便于其铺满整行遮挡滚动内容；
      桌面端没有吸顶卡，顶部间距由主控台自身的 margin 控制 */
   padding: 0 16px 12px;
+}
+
+/* ===== 移动端首页 = 校园资讯 =====
+   资讯页自带滚动容器与左右内边距（.campus-page 是 height:100% + overflow-y:auto），
+   外层只负责「把壳让出来」：去掉本页 padding 与滚动，避免嵌套双滚动条。 */
+.home-dashboard.is-campus {
+  padding: 0;
+  overflow: hidden;
+}
+.home-campus {
+  height: 100%;
+  min-height: 0;
 }
 
 /* ===== Responsive ===== */
@@ -1274,10 +1065,6 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 700;
   color: #101828;
-}
-.workbench-sub {
-  font-size: 12px;
-  color: #98a2b3;
 }
 .workbench-grid {
   display: grid;

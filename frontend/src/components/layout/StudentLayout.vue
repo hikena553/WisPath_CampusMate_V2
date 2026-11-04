@@ -56,6 +56,8 @@
         </template>
       </div>
     </header>
+    <!-- 系统公告：与教师端同一份管理端配置，管理员发布后各端同步展示 -->
+    <SiteAnnouncementBar />
     <main class="main-area" :class="{ 'has-bottom-bar': isMobile }">
       <router-view v-slot="{ Component }">
         <!-- 两种过渡都用默认的「同时」模式（新旧同时在场），因此两者都必须让离场页脱流，
@@ -110,6 +112,7 @@ import { useDockInset } from '@/composables/useDockInset'
 import { hasOpenSubPage, isSubpagePushed } from '@/composables/useMobileSubPage'
 import { pageTransition, setPageTransition, resolvePageTransition } from '@/utils/routeTransition'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
+import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
 import UserHomepage from '@/components/profile/UserHomepage.vue'
 import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
 import { useBadgeAward } from '@/composables/useBadgeAward'

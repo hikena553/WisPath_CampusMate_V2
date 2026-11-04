@@ -44,6 +44,7 @@ from .tasks import (
     build_skill_extraction_prompt,
     build_stage_evaluation_prompt,
     build_student_insights_prompt,
+    build_teacher_daily_report_prompt,
     build_teacher_outreach_prompt,
     build_tts_style_suffix,
     build_voice_emotion_context_prompt,
@@ -67,6 +68,6 @@ __all__ = [
     "build_recommend_questions_prompt", "build_resource_recommend_prompt",
     "build_semantic_risk_prompt", "build_skill_extraction_prompt",
     "build_stage_evaluation_prompt", "build_student_insights_prompt",
-    "build_teacher_outreach_prompt", "build_tts_style_suffix", "build_voice_greeting_prompt",
+    "build_teacher_daily_report_prompt", "build_teacher_outreach_prompt", "build_tts_style_suffix", "build_voice_greeting_prompt",
     "build_voice_emotion_context_prompt",
 ]

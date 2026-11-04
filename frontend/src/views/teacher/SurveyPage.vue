@@ -13,7 +13,130 @@
     <!-- 移动端下拉刷新：指示器插在吸顶栏之后 -->
     <PullRefreshIndicator v-if="isMobile" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
-    <div class="tui-content">
+    <!-- ============================================================
+         移动端 · 定稿版「题卡」版式
+         列表页只回答「哪几份要你填、填到哪了」；真正的填答点进去是题卡流
+         ============================================================ -->
+    <div v-if="isMobile" class="tm-page tm-m">
+      <!-- ① 三个数 -->
+      <div class="tm-kpis">
+        <div class="tm-kpi tm-ok"><b>{{ overall.rate }}%</b><span>整体回收</span></div>
+        <div class="tm-kpi"><b>{{ overall.responses }}</b><span>已回收</span></div>
+        <div class="tm-kpi" :class="pendingCount > 0 ? 'tm-warn' : ''"><b>{{ pendingCount }}</b><span>待我参与</span></div>
+      </div>
+
+      <!-- 发起入口 + AI 辅助设计：移动端原先没有「发起问卷」按钮，空状态文案指向右上角却无处可点 -->
+      <button type="button" class="tm-ai-launch" @click="createVisible = true">
+        <img class="tm-ai-launch-ic" :src="siteMascot" alt="绵小城" />
+        <span class="tm-ai-launch-bd">
+          <b>AI 辅助发起问卷</b>
+          <em>描述场景自动推荐维度，也可手动创建；匿名收集只出聚合结果</em>
+        </span>
+        <span class="tm-ai-launch-go">发起</span>
+      </button>
+
+      <div class="tm-seg">
+        <button type="button" :class="{ 'tm-on': tab === 'join' }" @click="tab = 'join'">待参与 {{ pendingCount }}</button>
+        <button type="button" :class="{ 'tm-on': tab === 'created' }" @click="tab = 'created'">我创建的 {{ mySurveys.length }}</button>
+        <button type="button" :class="{ 'tm-on': tab === 'mine' }" @click="tab = 'mine'">我的被评 {{ mineResults.length }}</button>
+      </div>
+
+      <div v-if="loading" class="tm-m-load">
+        <AgentLoading block :tips="['正在读取问卷', '正在核对参与状态']" />
+      </div>
+
+      <!-- ③ 待参与：题卡入口 -->
+      <template v-else-if="tab === 'join'">
+        <div v-if="!pendingList.length" class="tm-empty">
+          <b>当前没有开放中的问卷</b>
+          <span>有同事发起互评或被指派评价任务时，这里会出现</span>
+        </div>
+        <div v-else class="tm-feed">
+          <button v-for="s in pendingList" :key="s.id" type="button" class="tm-sv" @click="openFill(s)">
+            <div class="tm-sv-hd">
+              <span class="tm-sv-t">{{ s.title }}</span>
+              <span class="tm-tag tm-ai">{{ SURVEY_TARGET_LABEL[s.target_type] }}</span>
+            </div>
+            <div class="tm-sv-chips">
+              <span v-for="q in s.questions.slice(0, 4)" :key="q.key" class="tm-chip">{{ q.label }}</span>
+            </div>
+            <div class="tm-sv-ft">
+              <span>{{ s.questions.length }} 题 · 约 {{ s.questions.length * 15 }} 秒 · {{ s.period || '未标注周期' }}</span>
+              <span class="tm-sv-go">开始填 ›</span>
+            </div>
+          </button>
+        </div>
+        <div v-if="submittedToday.length" class="tm-sec" style="margin-top: 11px">
+          <span class="tm-sec-t">已提交</span>
+          <span class="tm-sec-m">{{ submittedToday.length }} 份</span>
+        </div>
+        <div v-if="submittedToday.length" class="tm-feed">
+          <div v-for="s in submittedToday" :key="s.id" class="tm-sv tm-sv-done">
+            <div class="tm-sv-hd">
+              <span class="tm-sv-t">{{ s.title }}</span>
+              <span class="tm-tag tm-ok">已提交</span>
+            </div>
+            <div class="tm-sv-ft"><span>提交后不可修改，结果只做聚合</span></div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ④ 我创建的：回收率 + 结束/开放 -->
+      <template v-else-if="tab === 'created'">
+        <div v-if="!mySurveys.length" class="tm-empty">
+          <b>你还没有发起过问卷</b>
+          <span>点上方「AI 辅助发起问卷」，描述场景即可自动推荐维度并开始收集</span>
+        </div>
+        <div v-else class="tm-feed">
+          <div v-for="s in mySurveys" :key="s.id" class="tm-sv">
+            <div class="tm-sv-hd">
+              <span class="tm-sv-t">{{ s.title }}</span>
+              <span class="tm-tag" :class="s.status === 'open' ? 'tm-ok' : s.status === 'draft' ? 'tm-mute' : 'tm-warn'">
+                {{ SURVEY_STATUS_LABEL[s.status] }}
+              </span>
+            </div>
+            <div class="tm-sv-bar">
+              <div class="tm-sv-tr"><i :style="{ width: rateOf(s) + '%' }"></i></div>
+              <span class="tm-sv-v">{{ rateOf(s) }}%</span>
+            </div>
+            <div class="tm-sv-ft">
+              <span>已收集 {{ s.response_count }} 份 · {{ SURVEY_TARGET_LABEL[s.target_type] }}</span>
+              <span class="tm-sv-ops">
+                <button type="button" @click="viewResult(s)">结果</button>
+                <button
+                  v-if="s.status === 'open'"
+                  type="button"
+                  class="tm-sv-danger"
+                  @click="toggleStatus(s, 'closed')"
+                >结束</button>
+                <button v-else-if="s.status === 'draft'" type="button" @click="toggleStatus(s, 'open')">开放</button>
+              </span>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ⑤ 我的被评：聚合结果 -->
+      <template v-else>
+        <div v-if="!mineResults.length" class="tm-empty">
+          <b>暂未收到对你的评价</b>
+          <span>样本不足时只显示均值区间，不回溯到个人</span>
+        </div>
+        <div v-else class="tm-feed">
+          <div v-for="r in mineResults" :key="r.survey_id" class="tm-sv">
+            <div class="tm-sv-hd">
+              <span class="tm-sv-t">{{ r.title }}</span>
+              <span class="tm-tag tm-ai">{{ SURVEY_TARGET_LABEL[r.target_type] }}</span>
+            </div>
+            <SurveyResultPanel :result="r" />
+          </div>
+        </div>
+      </template>
+
+      <div class="tm-tail">匿名保护：系统不记录填写人，样本不足不展示分布</div>
+    </div>
+
+    <div v-else class="tui-content">
       <!-- 桌面端特色头部：问卷语义色 + 编辑图标；右侧是本页的回收概况与发起入口 -->
       <TuiPageHero
         v-if="!isMobile"
@@ -84,7 +207,7 @@
           <span>这里列出发放给你的开放问卷，提交后不可修改，结果只做聚合展示。</span>
         </div>
         <div v-if="loading" class="tui-empty">
-          <span class="tui-empty-title">加载中…</span>
+          <AgentLoading block :tips="['正在读取开放中的问卷', '正在核对参与状态']" />
         </div>
         <div v-else-if="!openSurveys.length" class="tui-empty">
           <span class="tui-empty-icon"><el-icon :size="24"><EditPen /></el-icon></span>
@@ -257,30 +380,34 @@
         </template>
       </template>
 
-      <SurveyCreateDialog v-model="createVisible" @created="loadAll" />
-
-      <SurveyFillDialog v-model="fillVisible" :survey="filling" @saved="loadAll" />
-
-      <!-- 聚合结果（长内容：移动端=全屏子页） -->
-      <ResponsivePopup
-        v-model="resultVisible"
-        :title="resultTitle"
-        width="400px"
-        align-center
-        :close-on-click-modal="false"
-        class="tui-dialog"
-        destroy-on-close
-      >
-        <div class="tui-section-hint">
-          <el-icon><InfoFilled /></el-icon>
-          <span>以下为聚合统计结果，不包含任何可回溯到个人的信息。</span>
-        </div>
-        <div v-if="resultLoading" class="tui-empty">
-          <span class="tui-empty-title">统计中…</span>
-        </div>
-        <SurveyResultPanel v-else-if="result" :result="result" />
-      </ResponsivePopup>
     </div>
+
+    <!-- 发起 / 填答 / 结果三个浮层放在移动端·桌面端分支之外：
+         此前它们嵌在桌面端 v-else 内，移动端点击「AI 辅助发起问卷」或「开始填」时组件根本不渲染，
+         表现就是“点击没有反应”。 -->
+    <SurveyCreateDialog v-model="createVisible" @created="loadAll" />
+
+    <SurveyFillDialog v-model="fillVisible" :survey="filling" @saved="loadAll" />
+
+    <!-- 聚合结果（长内容：移动端=全屏子页） -->
+    <ResponsivePopup
+      v-model="resultVisible"
+      :title="resultTitle"
+      width="400px"
+      align-center
+      :close-on-click-modal="false"
+      class="tui-dialog"
+      destroy-on-close
+    >
+      <div class="tui-section-hint">
+        <el-icon><InfoFilled /></el-icon>
+        <span>以下为聚合统计结果，不包含任何可回溯到个人的信息。</span>
+      </div>
+      <div v-if="resultLoading" class="tui-empty">
+        <span class="tui-empty-title">统计中…</span>
+      </div>
+      <SurveyResultPanel v-else-if="result" :result="result" />
+    </ResponsivePopup>
   </div>
 </template>
 
@@ -291,8 +418,10 @@ import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { EditPen, InfoFilled, Lock, Plus, Tickets, TrendCharts } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import AgentLoading from '@/components/common/AgentLoading.vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getMySurveyResults,
@@ -319,6 +448,7 @@ import SurveyResultPanel from '@/components/teacher/survey/SurveyResultPanel.vue
 defineOptions({ name: 'teacher-survey' })
 
 const { isMobile } = useResponsive()
+const { siteMascot } = useSiteConfig()
 const auth = useAuthStore()
 
 // 移动端下拉刷新：桌面端不响应手势
@@ -352,6 +482,13 @@ const minePageSize = ref(10)
 
 const openSurveys = computed(() => surveys.value.filter((s) => s.status === 'open'))
 const mySurveys = computed(() => surveys.value.filter((s) => s.created_by === auth.user?.id))
+
+/* ---------- 移动端（定稿版·题卡）私有计算 ---------- */
+/** 待我参与：开放中且我没提交过的 */
+const pendingList = computed(() => openSurveys.value.filter((s) => !s.my_submitted))
+const pendingCount = computed(() => pendingList.value.length)
+/** 已提交过（同一批公开问卷里） */
+const submittedToday = computed(() => openSurveys.value.filter((s) => s.my_submitted))
 
 function paged<T>(list: T[], page: number, size: number) {
   return list.slice((page - 1) * size, page * size)
@@ -472,6 +609,66 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ---------- 移动端（定稿版·题卡）私有件 ---------- */
+/* 首屏指标块与吸顶栏之间留出呼吸感，避免三个数字贴在 Header 下沿 */
+.tm-m > .tm-kpis:first-child {
+  margin-top: 16px;
+}
+.tm-sv {
+  width: 100%;
+  display: block;
+  text-align: left;
+  font-family: inherit;
+  background: var(--tm-surf);
+  border: 1px solid var(--tm-line);
+  border-radius: 11px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.tm-sv-done { opacity: 0.72; cursor: default; }
+.tm-sv-hd { display: flex; align-items: flex-start; gap: 6px; }
+.tm-sv-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.8px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #16233a;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tm-sv-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tm-sv-bar { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+.tm-sv-tr { flex: 1; height: 4px; border-radius: 99px; background: #eef2f9; overflow: hidden; }
+.tm-sv-tr i { display: block; height: 100%; border-radius: 99px; background: var(--tm-brand); }
+.tm-sv-v { font-size: 10px; font-weight: 750; color: var(--tm-brand); font-variant-numeric: tabular-nums; }
+.tm-sv-ft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--tm-line);
+  font-size: 10.2px;
+  color: var(--tm-ink3);
+  font-weight: 600;
+}
+.tm-sv-ft > span:first-child { flex: 1; min-width: 0; }
+.tm-sv-go { color: var(--tm-brand-deep); font-weight: 750; }
+.tm-sv-ops { display: flex; align-items: center; gap: 9px; }
+.tm-sv-ops button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 10.6px;
+  font-weight: 700;
+  color: var(--tm-brand-deep);
+  cursor: pointer;
+}
+.tm-sv-ops .tm-sv-danger { color: var(--tm-warn); }
 .tui-page.pull-enabled { overscroll-behavior-y: contain; }
 
 /* 移动端高频操作条 */
@@ -595,5 +792,44 @@ onMounted(() => {
   .sv-side {
     justify-content: space-between;
   }
+}
+
+/* ================= 移动端 AI 发起入口 ================= */
+.tm-ai-launch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 28px);
+  margin: 10px 14px 4px;
+  padding: 12px 13px;
+  background: var(--tm-surf, #fff);
+  border: 1px solid var(--tm-line, #e8eaef);
+  border-radius: var(--tm-r, 14px);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.tm-ai-launch:active { background: var(--tm-surf2, #f6f7f9); }
+/* 产品形象替掉原先的 MagicStick 图标块：透明底、等比缩放，不裁切吉祥物 */
+.tm-ai-launch-ic {
+  width: 38px; height: 38px; flex: 0 0 38px;
+  object-fit: contain;
+  display: block;
+  border-radius: 10px;
+  background: transparent;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.tm-ai-launch-bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tm-ai-launch-bd b { font-size: 14.5px; font-weight: 700; color: var(--tm-ink, #171a20); }
+.tm-ai-launch-bd em { font-style: normal; font-size: 12px; line-height: 1.45; color: var(--tm-ink3, #8a91a0); }
+.tm-ai-launch-go {
+  flex: 0 0 auto;
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: #1f2430;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
 }
 </style>

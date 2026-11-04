@@ -68,11 +68,28 @@ export function importStudents(students: StudentImportItem[]) {
 }
 
 export interface DashboardStats {
+  // ===== 学生主语（原有口径，保持不变，首页统计卡仍在用）=====
   total_students: number
   alert_count: number
   pending_leave_count: number
   severe_alert_count: number
   resolved_alert_count: number
+  // ===== 我主语（辅导员工作台：看"我要做什么"）=====
+  // 新增字段一律给默认值：旧页面用对象字面量初始化时无需同步补字段
+  my_open_tasks?: number
+  my_overdue_tasks?: number
+  my_due_today?: number
+  my_care_month?: number
+  my_visits_month?: number
+  my_guardian_month?: number
+  my_done_rate?: number
+  my_coverage_rate?: number
+  // ===== 教学（教师端专属：看"我今天要上什么课"）=====
+  my_course_count?: number
+  today_course_count?: number
+  my_pending_submissions?: number
+  current_week?: number
+  semester?: string
 }
 
 export function getDashboardStats() {

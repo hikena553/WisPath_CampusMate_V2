@@ -1,37 +1,34 @@
 <template>
   <!-- 首页头部：简约问候卡（吸顶固定）
-       克制留白 + 一条品牌发丝边；吉祥物与品牌点承载产品个性，不再使用整块大渐变。
-       外层 sticky 容器铺满整行并以页面底色遮挡，滚动时下方内容从卡片背后穿过。 -->
-  <div class="hm-head-sticky">
-    <section v-if="isMobile" class="hm-head">
-      <div class="hm-head-main">
-        <h1 class="hm-head-title">{{ greeting }}，{{ userName }}</h1>
-        <p class="hm-head-meta">
-          <span class="hm-dot"></span>{{ siteName }} · 教师端
-          <span class="hm-sep">·</span>{{ todayShort }}
-        </p>
-      </div>
-      <img :src="siteMascot" :alt="siteName" class="hm-head-mascot" />
-    </section>
+       克制留白 + 一条品牌发丝边；吉祥物与品牌点承载产品个性，不再使用整块大渐变。 -->
+  <section v-if="isMobile" class="hm-head">
+    <div class="hm-head-main">
+      <h1 class="hm-head-title">{{ greeting }}，{{ userName }}</h1>
+      <p class="hm-head-meta">
+        <span class="hm-dot"></span>{{ siteName }} · 教师端
+        <span class="hm-sep">·</span>{{ todayShort }}
+      </p>
+    </div>
+    <img :src="siteMascot" :alt="siteName" class="hm-head-mascot" />
+  </section>
 
-    <!-- 桌面端：整页唯一的页头（问候 + 教师身份 + 日期 + 页面级操作），不再另设标题栏 -->
-    <section v-else class="hm-head hm-head-desk">
-      <div class="hm-head-main">
-        <h2 class="hm-head-title">{{ greeting }}，{{ userName }}</h2>
-        <p class="hm-head-meta">
-          <span class="hm-dot"></span>{{ siteName }} · 教师工作台
-          <template v-if="identity">
-            <span class="hm-sep">·</span>
-            <span class="hm-identity">{{ identity }}</span>
-          </template>
-          <span class="hm-sep">·</span>{{ todayStr }}
-        </p>
-      </div>
-      <div v-if="$slots.actions" class="hm-head-actions">
-        <slot name="actions" />
-      </div>
-    </section>
-  </div>
+  <!-- 桌面端：整页唯一的页头（问候 + 教师身份 + 日期 + 页面级操作），不再另设标题栏 -->
+  <section v-else class="hm-head hm-head-desk">
+    <div class="hm-head-main">
+      <h2 class="hm-head-title">{{ greeting }}，{{ userName }}</h2>
+      <p class="hm-head-meta">
+        <span class="hm-dot"></span>{{ siteName }} · 教师工作台
+        <template v-if="identity">
+          <span class="hm-sep">·</span>
+          <span class="hm-identity">{{ identity }}</span>
+        </template>
+        <span class="hm-sep">·</span>{{ todayStr }}
+      </p>
+    </div>
+    <div v-if="$slots.actions" class="hm-head-actions">
+      <slot name="actions" />
+    </div>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -59,20 +56,11 @@ defineProps<{
 </script>
 
 <style scoped>
-/* ===== 吸顶容器 ===== */
-/* 铺满整行（抵消 .home-dashboard 的左右内边距），以页面底色遮挡下方滚动内容，
-   使问候卡在滚动时固定于顶部不动。 */
-.hm-head-sticky {
+/* ===== 问候卡（吸顶固定：滚动时停留在顶部，不随内容位移） ===== */
+.hm-head {
   position: sticky;
   top: 0;
   z-index: 30;
-  margin: 0 -16px;
-  padding: 12px 16px;
-  background: #f5f6f8;
-}
-
-/* ===== 问候卡 ===== */
-.hm-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -141,11 +129,15 @@ defineProps<{
   flex-shrink: 0;
 }
 
-/* 移动端：容器左右内边距为 8px，吸顶容器同步收窄，保持铺满整行 */
 @media (max-width: 767px) {
-  .hm-head-sticky {
-    margin: 0 -8px;
-    padding: 8px 8px;
+  /* 吸顶时内容从下方穿过：整行不留圆角与左右边框，避免圆角处透出滚动内容；
+     同时去掉顶部留白，卡片才能贴着滚动容器上沿固定而不露出缝隙 */
+  .hm-head {
+    margin-top: 0;
+    padding: 12px 16px;
+    border: none;
+    border-bottom: 1px solid rgba(37, 99, 235, 0.14);
+    border-radius: 0;
   }
 }
 

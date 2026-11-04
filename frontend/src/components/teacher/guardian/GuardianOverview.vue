@@ -112,8 +112,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{ focus: [studentId: number, studentName: string] }>()
 
-/** 与教师端语义色一致的图表调色板（echarts 无法直接读 CSS 变量，故按令牌取值硬编码副本） */
-const PALETTE = ['#2563eb', '#7f56d9', '#0ea5e9', '#f79009', '#d92d20', '#079455']
+/** 关系地图主题调色板：墨绿主色 + 由深到浅的绿灰阶梯（echarts 无法直接读 CSS 变量，故硬编码副本） */
+const PALETTE = ['#12554a', '#2c6b59', '#5f9c83', '#8fb8a6', '#a9cdbb', '#cfe0d7']
+const AXIS_COLOR = '#71867c'
 
 const totals = computed(() => props.overview?.totals ?? { students: 0, contacts: 0, logs: 0, sms: 0 })
 const scopeLabel = computed(() => props.studentName || '全部学生')
@@ -130,7 +131,7 @@ const sceneOption = computed(() => {
   return {
     animation: false,
     tooltip: { trigger: 'item', formatter: '{b}: {c} 条 ({d}%)' },
-    legend: { bottom: 0, textStyle: { color: '#6b7280', fontSize: 11 } },
+    legend: { bottom: 0, textStyle: { color: AXIS_COLOR, fontSize: 11 } },
     series: [
       {
         type: 'pie',
@@ -155,14 +156,14 @@ const channelOption = computed(() => {
     xAxis: {
       type: 'value',
       minInterval: 1,
-      axisLabel: { color: '#6b7280', fontSize: 11 },
-      splitLine: { lineStyle: { color: 'rgba(0,0,0,0.05)' } },
+      axisLabel: { color: AXIS_COLOR, fontSize: 11 },
+      splitLine: { lineStyle: { color: 'rgba(18,85,74,0.06)' } },
     },
     yAxis: {
       type: 'category',
       data: list.map((i) => i.label),
-      axisLabel: { color: '#6b7280', fontSize: 11 },
-      axisLine: { lineStyle: { color: 'rgba(0,0,0,0.08)' } },
+      axisLabel: { color: AXIS_COLOR, fontSize: 11 },
+      axisLine: { lineStyle: { color: 'rgba(18,85,74,0.10)' } },
     },
     series: [
       {
@@ -187,13 +188,13 @@ const trendOption = computed(() => {
       type: 'category',
       boundaryGap: false,
       data: list.map((d) => d.day.slice(5)),
-      axisLabel: { color: '#6b7280', fontSize: 11 },
+      axisLabel: { color: AXIS_COLOR, fontSize: 11 },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      axisLabel: { color: '#6b7280', fontSize: 11 },
-      splitLine: { lineStyle: { color: 'rgba(0,0,0,0.05)' } },
+      axisLabel: { color: AXIS_COLOR, fontSize: 11 },
+      splitLine: { lineStyle: { color: 'rgba(18,85,74,0.06)' } },
     },
     series: [
       {
@@ -201,15 +202,15 @@ const trendOption = computed(() => {
         smooth: true,
         symbol: 'none',
         data: list.map((d) => d.count),
-        lineStyle: { color: '#2563eb', width: 2 },
-        itemStyle: { color: '#2563eb' },
+        lineStyle: { color: '#12554a', width: 2 },
+        itemStyle: { color: '#12554a' },
         areaStyle: {
           color: {
             type: 'linear',
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(37,99,235,0.24)' },
-              { offset: 1, color: 'rgba(37,99,235,0.03)' },
+              { offset: 0, color: 'rgba(18,85,74,0.22)' },
+              { offset: 1, color: 'rgba(18,85,74,0.02)' },
             ],
           },
         },
@@ -220,7 +221,12 @@ const trendOption = computed(() => {
 </script>
 
 <style scoped>
-.gp-ov { margin-bottom: 12px; }
+.gp-ov {
+  margin-bottom: 12px;
+  --ov-ink: #12554a;
+  --ov-ink-soft: #e9f4ef;
+  --ov-line: #cfe0d7;
+}
 .gp-ov-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -229,9 +235,9 @@ const trendOption = computed(() => {
 .gp-ov-cell {
   min-width: 0;
   padding: 10px 11px;
-  border: 1px solid var(--tui-border);
+  border: 1px solid var(--ov-line);
   border-radius: var(--tui-radius-sm);
-  background: var(--tui-surface-muted);
+  background: #fff;
 }
 .gp-ov-wide { grid-column: 1 / -1; }
 .gp-ov-title {
@@ -259,7 +265,7 @@ const trendOption = computed(() => {
   cursor: pointer;
   transition: border-color 0.15s var(--tui-ease), background 0.15s var(--tui-ease);
 }
-.gp-ov-top-row:hover { border-color: var(--tui-brand); background: var(--tui-brand-soft); }
+.gp-ov-top-row:hover { border-color: var(--ov-line); background: #fbfefc; }
 .gp-ov-rank {
   flex-shrink: 0;
   width: 18px;
@@ -273,9 +279,9 @@ const trendOption = computed(() => {
   font-size: 11px;
   font-weight: 700;
 }
-.gp-ov-rank.r1 { background: var(--tui-brand-soft); color: var(--tui-brand-strong); }
-.gp-ov-rank.r2 { background: #f4f3ff; color: #5925dc; }
-.gp-ov-rank.r3 { background: var(--tui-warn-soft); color: var(--tui-warn); }
+.gp-ov-rank.r1 { background: var(--ov-ink-soft); color: var(--ov-ink); }
+.gp-ov-rank.r2 { background: #f1f7f4; color: #2c6b59; }
+.gp-ov-rank.r3 { background: #f5f8f6; color: #5f9c83; }
 .gp-ov-top-name {
   flex: 1;
   min-width: 0;

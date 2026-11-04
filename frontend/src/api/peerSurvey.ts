@@ -58,13 +58,25 @@ export const SURVEY_TARGET_LABEL: Record<SurveyTargetType, string> = {
   student: '学生评辅导员',
 }
 
-/** 默认问卷模板：四项通用评价维度 */
+/** 默认问卷模板：四道通用评分题 */
 export const DEFAULT_SURVEY_QUESTIONS: SurveyQuestion[] = [
-  { key: 'care', label: '关心学生', max: 5 },
-  { key: 'fair', label: '处事公正', max: 5 },
-  { key: 'comm', label: '沟通及时', max: 5 },
-  { key: 'duty', label: '工作负责', max: 5 },
+  { key: 'care', label: '他/她在关心学生方面做得如何？', max: 5 },
+  { key: 'fair', label: '他/她在处事公正方面做得如何？', max: 5 },
+  { key: 'comm', label: '他/她与学生、同事的沟通是否及时？', max: 5 },
+  { key: 'duty', label: '他/她对工作是否认真负责？', max: 5 },
 ]
+
+export interface SurveyAIDraft {
+  title: string
+  questions: SurveyQuestion[]
+  /** ai=大模型生成；rule=未配置模型时的本地规则兜底 */
+  source: 'ai' | 'rule'
+}
+
+/** AI 辅助发起：一句场景描述 → 推荐问卷标题与评价维度 */
+export function generateSurveyDraft(data: { scene: string; target_type: SurveyTargetType }) {
+  return request.post<SurveyAIDraft>('/peer-surveys/ai-draft', data)
+}
 
 export function listSurveys() {
   return request.get<PeerSurvey[]>('/peer-surveys')

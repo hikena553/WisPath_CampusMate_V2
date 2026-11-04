@@ -83,12 +83,33 @@
               </div>
               <el-input v-model="settingsMap['site_name']" placeholder="请输入系统名称" style="width: 300px" />
             </div>
-            <div class="setting-item">
+            <div class="setting-item announce-item">
               <div class="setting-info">
                 <div class="setting-name">系统公告</div>
-                <div class="setting-desc">显示在首页的公告内容</div>
+                <div class="setting-desc">发布后同步到教师端 / 学生端顶部公告条，无需重启或刷新页面</div>
               </div>
-              <el-input v-model="settingsMap['site_announcement']" type="textarea" :rows="3" placeholder="请输入公告内容" style="width: 360px" />
+              <div class="announce-editor">
+                <el-input
+                  v-model="settingsMap['site_announcement']"
+                  type="textarea"
+                  :rows="3"
+                  maxlength="120"
+                  show-word-limit
+                  placeholder="请输入公告内容，例如：系统将于今晚 23:00 进行维护"
+                />
+                <div class="announce-actions">
+                  <span class="announce-tip">各端公告条自动同步</span>
+                  <el-button size="small" :loading="savingAnnouncement" @click="clearSiteAnnouncement">清除公告</el-button>
+                  <el-button
+                    size="small"
+                    class="announce-publish"
+                    :loading="savingAnnouncement"
+                    @click="publishSiteAnnouncement"
+                  >
+                    立即发布
+                  </el-button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -696,6 +717,7 @@ import { refreshSiteConfig } from '@/composables/useSiteConfig'
 const loading = ref(true)
 const saving = ref(false)
 const savingAI = ref(false)
+const savingAnnouncement = ref(false)
 const testing = ref(false)
 const settings = ref<SettingType[]>([])
 const settingsMap = reactive<Record<string, string>>({})
@@ -1348,6 +1370,45 @@ async function handleSave() {
   }
 }
 
+/** 单独发布系统公告：不受基础设置其它必填项影响，发布后立即广播到各端公告条 */
+async function publishSiteAnnouncement() {
+  const text = String(settingsMap['site_announcement'] || '').trim()
+  if (!text) {
+    ElMessage.warning('请先填写公告内容')
+    return
+  }
+  savingAnnouncement.value = true
+  try {
+    await batchUpdateSettings({ site_announcement: text })
+    settingsMap['site_announcement'] = text
+    await refreshSiteConfig()
+    ElMessage.success('系统公告已发布，教师端 / 学生端将同步显示')
+  } catch {
+    ElMessage.error('公告发布失败')
+  } finally {
+    savingAnnouncement.value = false
+  }
+}
+
+/** 清除系统公告：各端公告条随之隐藏 */
+async function clearSiteAnnouncement() {
+  if (!String(settingsMap['site_announcement'] || '').trim()) {
+    ElMessage.info('当前没有需要清除的公告')
+    return
+  }
+  savingAnnouncement.value = true
+  try {
+    await batchUpdateSettings({ site_announcement: '' })
+    settingsMap['site_announcement'] = ''
+    await refreshSiteConfig()
+    ElMessage.success('系统公告已清除')
+  } catch {
+    ElMessage.error('清除公告失败')
+  } finally {
+    savingAnnouncement.value = false
+  }
+}
+
 async function handleSaveAI() {
   if (!validateAISettings()) return
   savingAI.value = true
@@ -1672,6 +1733,29 @@ onMounted(() => {
   color: #f56c6c;
   margin-left: 2px;
 }
+/* 系统公告：右侧编辑区固定 360px，底部提供独立的发布 / 清除动作 */
+.announce-editor { width: 360px; max-width: 100%; flex-shrink: 0; }
+.announce-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.announce-tip {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #99a1b3;
+}
+.announce-publish.el-button {
+  --el-button-bg-color: #1f2329;
+  --el-button-border-color: #1f2329;
+  --el-button-text-color: #fff;
+  --el-button-hover-bg-color: #111827;
+  --el-button-hover-border-color: #111827;
+  --el-button-hover-text-color: #fff;
+}
+html.dark .announce-tip { color: #8b93a7; }
 .ai-section {
   border: 1px solid rgba(64, 158, 255, 0.18);
   background: linear-gradient(135deg, rgba(64, 158, 255, 0.02), rgba(103, 194, 58, 0.02));

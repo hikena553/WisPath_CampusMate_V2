@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="cAnReDZ9d1gVhKGjd8CrSM">
+<head data-page-node-id="PN8JQ8dmw1UahSbZyC2ODq">
+<meta charset="UTF-8" data-page-node-id="Z6nJxQbjZVjSbAB2TAmRNp" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="i0bFVNx75IduJ9osythjDL" />
+<title>教师端功能审查 · v3 · 与主流教师端的能力断层</title>
+<style>
+  :root {
+    --bg: #f6f8fc;
+    --surface: #ffffff;
+    --ink: #101828;
+    --ink-2: #344054;
+    --muted: #667085;
+    --line: #e4e7ec;
+    --brand: #2563eb;
+    --brand-soft: #eff4ff;
+    --danger: #d92d20;
+    --danger-soft: #fef3f2;
+    --warn: #b54708;
+    --warn-soft: #fffaeb;
+    --ok: #067647;
+    --ok-soft: #ecfdf3;
+    --purple: #6941c6;
+    --purple-soft: #f4f3ff;
+    --cyan: #0e7090;
+    --cyan-soft: #ecfeff;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px -12px rgba(16,24,40,.18);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+    line-height: 1.75;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 22px 90px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    background: linear-gradient(140deg, #101828 0%, #1d3a8a 50%, #2563eb 100%);
+    color: #fff;
+    padding: 54px 22px 46px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: ""; position: absolute; right: -120px; top: -120px;
+    width: 380px; height: 380px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.16), transparent 68%);
+  }
+  .hero-inner { max-width: 1120px; margin: 0 auto; position: relative; z-index: 1; }
+  .eyebrow {
+    display: inline-block; font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22);
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 18px;
+  }
+  .hero h1 { font-size: 32px; line-height: 1.3; margin: 0 0 12px; font-weight: 700; letter-spacing: -.01em; }
+  .hero p { margin: 0; color: rgba(255,255,255,.82); max-width: 760px; font-size: 15px; }
+  .hero-meta { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    font-size: 12.5px; padding: 6px 13px; border-radius: 999px;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); color: #fff;
+  }
+
+  /* ---------- Sections ---------- */
+  section { margin-top: 46px; }
+  h2 {
+    font-size: 22px; margin: 0 0 6px; font-weight: 700; letter-spacing: -.01em;
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2 .num {
+    flex: none; width: 30px; height: 30px; border-radius: 9px;
+    background: var(--brand); color: #fff; font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+  }
+  h3 { font-size: 16.5px; margin: 30px 0 10px; font-weight: 700; color: var(--ink); }
+  h4 { font-size: 14.5px; margin: 20px 0 8px; font-weight: 700; color: var(--ink-2); }
+  .lead { color: var(--muted); margin: 0 0 20px; font-size: 14.5px; }
+  p { margin: 0 0 14px; }
+  strong { color: var(--ink); font-weight: 650; }
+
+  /* ---------- Cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 22px 24px; box-shadow: var(--shadow);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* ---------- Verdict ---------- */
+  .verdict {
+    background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--brand);
+    border-radius: var(--radius); padding: 24px 26px; box-shadow: var(--shadow);
+  }
+  .verdict.warn { border-left-color: var(--danger); }
+  .verdict .kicker { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--brand); font-weight: 700; }
+  .verdict.warn .kicker { color: var(--danger); }
+  .verdict h3 { margin: 8px 0 10px; font-size: 19px; line-height: 1.5; }
+  .verdict p:last-child { margin-bottom: 0; }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .mini {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+  }
+  .mini .tag {
+    display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+    padding: 3px 9px; border-radius: 6px; margin-bottom: 10px;
+  }
+  .t-red { background: var(--danger-soft); color: var(--danger); }
+  .t-amber { background: var(--warn-soft); color: var(--warn); }
+  .t-blue { background: var(--brand-soft); color: var(--brand); }
+  .t-green { background: var(--ok-soft); color: var(--ok); }
+  .t-purple { background: var(--purple-soft); color: var(--purple); }
+  .t-cyan { background: var(--cyan-soft); color: var(--cyan); }
+  .mini h4 { margin: 0 0 6px; font-size: 15px; }
+  .mini p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .mini .num-big { font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; margin-bottom: 2px; }
+
+  /* ---------- Tables ---------- */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 640px; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    background: #f9fafb; font-weight: 700; color: var(--ink-2);
+    font-size: 12.5px; letter-spacing: .02em; white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fcfdff; }
+  td code, th code, p code, li code {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    background: #f2f4f7; padding: 1px 6px; border-radius: 5px; color: #3538cd;
+  }
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .p-ok { background: var(--ok-soft); color: var(--ok); }
+  .p-part { background: var(--warn-soft); color: var(--warn); }
+  .p-no { background: var(--danger-soft); color: var(--danger); }
+  .p-new { background: var(--purple-soft); color: var(--purple); }
+  .p-idle { background: #f2f4f7; color: var(--muted); }
+
+  /* ---------- Score bar ---------- */
+  .score { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .score .track { flex: 1; min-width: 64px; height: 7px; border-radius: 4px; background: #e4e7ec; overflow: hidden; }
+  .score .track i { display: block; height: 100%; border-radius: 4px; }
+  .score .v { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12.5px; width: 34px; text-align: right; }
+  .f-ok { background: #12b76a; }
+  .f-part { background: #f79009; }
+  .f-no { background: #f04438; }
+
+  /* ---------- Loop diagram ---------- */
+  .loop { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 18px 0 6px; }
+  .loop-step {
+    flex: 1 1 150px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; position: relative;
+  }
+  .loop-step .s-no { font-size: 11px; font-weight: 700; color: var(--brand); letter-spacing: .1em; }
+  .loop-step .s-name { font-weight: 700; margin: 2px 0 4px; font-size: 14.5px; }
+  .loop-step .s-desc { font-size: 12.5px; color: var(--muted); }
+  .loop-step.broken { border-color: #fda29b; background: var(--danger-soft); }
+  .loop-step.broken .s-no { color: var(--danger); }
+  .loop-step.broken .s-desc { color: #912018; }
+  .loop-step.planned { border-color: #b2ccff; background: var(--brand-soft); }
+  .loop-step.planned .s-no { color: var(--brand); }
+  .loop-step.planned .s-desc { color: #194185; }
+
+  /* ---------- Two column ---------- */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .col-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow); }
+  .col-box h4 { margin-top: 0; }
+  .col-box .hd { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+  .col-box .hd .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .d-blue { background: var(--brand); }
+  .d-purple { background: var(--purple); }
+  .d-amber { background: var(--warn); }
+  .d-red { background: var(--danger); }
+  .d-cyan { background: var(--cyan); }
+  .d-green { background: var(--ok); }
+
+  /* ---------- Decision list ---------- */
+  .decide { list-style: none; padding: 0; margin: 16px 0 0; }
+  .decide li {
+    display: grid; grid-template-columns: 108px 1fr; gap: 14px; align-items: start;
+    padding: 12px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; margin: 0;
+  }
+  .decide li:last-child { border-bottom: none; }
+  .decide .k { font-weight: 700; color: var(--purple); }
+  .decide .v { color: var(--ink-2); }
+
+  /* ---------- Layer stack ---------- */
+  .layer { display: grid; grid-template-columns: 62px 1fr; gap: 14px; align-items: stretch; margin-top: 12px; }
+  .layer .lv {
+    background: linear-gradient(160deg, #1d3a8a, #2563eb); color: #fff; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;
+  }
+  .layer .lv.p2 { background: linear-gradient(160deg, #5925dc, #6941c6); }
+  .layer .lv.p3 { background: linear-gradient(160deg, #93370d, #b54708); }
+  .layer .body { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 15px 18px; box-shadow: var(--shadow); }
+  .layer .body .t { font-weight: 700; font-size: 14.5px; margin-bottom: 3px; }
+  .layer .body .d { font-size: 13px; color: var(--muted); margin: 0; }
+
+  /* ---------- Coverage matrix ---------- */
+  .mx td:first-child { font-weight: 700; white-space: nowrap; }
+
+  /* ---------- Roadmap ---------- */
+  .phase { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-top: 16px; }
+  .phase-head { display: flex; align-items: center; gap: 14px; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+  .phase-badge { flex: none; font-weight: 800; font-size: 13px; color: #fff; padding: 5px 13px; border-radius: 8px; letter-spacing: .04em; }
+  .ph0 { background: var(--danger); }
+  .ph1 { background: var(--brand); }
+  .ph2 { background: var(--purple); }
+  .ph3 { background: var(--cyan); }
+  .phase-head .ph-title { font-weight: 700; font-size: 15.5px; }
+  .phase-head .ph-sub { color: var(--muted); font-size: 13px; margin-left: auto; white-space: nowrap; }
+  .phase-body { padding: 6px 22px 18px; }
+  .item { padding: 14px 0; border-bottom: 1px dashed var(--line); display: grid; grid-template-columns: 26px 1fr; gap: 12px; }
+  .item:last-child { border-bottom: none; }
+  .item .idx { font-weight: 800; color: var(--brand); font-size: 13px; padding-top: 2px; }
+  .item h4 { margin: 0 0 4px; font-size: 14.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .item .why { font-size: 13.5px; color: var(--ink-2); margin: 0 0 6px; }
+  .item .ref { font-size: 12.5px; color: var(--muted); }
+  .item .ref b { color: var(--purple); font-weight: 700; }
+  .item .tech { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+
+  /* ---------- Callout ---------- */
+  .callout { border-radius: 12px; padding: 15px 18px; font-size: 13.5px; margin: 16px 0; border: 1px solid; }
+  .co-info { background: var(--brand-soft); border-color: #b2ccff; color: #194185; }
+  .co-warn { background: var(--warn-soft); border-color: #fedf89; color: #7a2e0e; }
+  .co-ok { background: var(--ok-soft); border-color: #abefc6; color: #054f31; }
+  .co-danger { background: var(--danger-soft); border-color: #fda29b; color: #912018; }
+  .co-purple { background: var(--purple-soft); border-color: #d9d6fe; color: #3e1c96; }
+  .callout b { font-weight: 750; }
+
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+
+  /* ---------- TOC ---------- */
+  .toc { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
+  .toc a {
+    display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 11px 14px; text-decoration: none; color: var(--ink-2); font-size: 13.5px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04); transition: .15s;
+  }
+  .toc a:hover { border-color: #b2ccff; background: var(--brand-soft); color: var(--brand); }
+  .toc a b { color: var(--brand); margin-right: 6px; }
+
+  footer { margin-top: 50px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+
+  @media (max-width: 860px) {
+    .toc { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .hero h1 { font-size: 24px; }
+    .grid-3, .grid-2, .two-col { grid-template-columns: 1fr; }
+    .layer { grid-template-columns: 48px 1fr; }
+    .decide li { grid-template-columns: 1fr; gap: 4px; }
+    .phase-head { flex-wrap: wrap; }
+    .phase-head .ph-sub { margin-left: 0; width: 100%; }
+    .wrap { padding: 0 16px 70px; }
+  }
+</style>
+</head>
+<body data-page-node-id="Jetv0yzVUzZ5FV5QYlKIBu">
+
+<div class="hero" data-page-node-id="Qa2nhDihUValEyJFuUZ7Ul">
+  <div class="hero-inner" data-page-node-id="GVXHqa5IianXu4VFYbxEsD">
+    <span class="eyebrow" data-page-node-id="JObe2fb3DlgGyznF9AhZsw">功能审查报告 · v3 · Teacher-Side Capability Audit</span>
+    <h1 data-page-node-id="q0ANBtQ4e9fCrpCVzQ2JW8">教师端功能审查：功能不少，但「教师」缺席</h1>
+    <p data-page-node-id="9NvjLhNnrMA6MbKGeAGfTa">v2 报告给出的判断是「闭环已通，特色未立」。本轮按代码逐项复核后，结论要更精确一些：<strong data-page-node-id="ADh0VeEn0ClYIFWFCoEpmA">教师端的模块数量并不少——14 个路由、12 张教师专属业务表、22 个 AI 工具、7 枚教师徽章，横向对比开源校园系统已属中上。</strong>真正的问题不在「量」，而在两处结构性错位：一是所有能力都以「学生」为坐标，教师是操作员而不是主角；二是所有能力都盘踞在「育人事务」一条线上，主流教师端赖以成立的「教学」那条线整体缺位。</p>
+    <div class="hero-meta" data-page-node-id="tEBgv24QcnPj7EPPRGqTVL">
+      <span class="chip" data-page-node-id="lYzijkUgMOnpQlXddfK2tW">审查范围：14 个路由 · 12 张业务表 · 9 个服务 · 22 个 AI 工具</span>
+      <span class="chip" data-page-node-id="XlslGivZGnihvZNmfEONXU">对标：教务类 / 互动教学类 / 协同管理类 三条产品线</span>
+      <span class="chip" data-page-node-id="B2UnasEpml0MtUX913sfjv">结论：能力不缺，坐标错了</span>
+      <span class="chip" data-page-node-id="eXHiu7urFicwDvD262cHjS">18 项补强 · 4 个阶段</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" data-page-node-id="QveOE28QwCUukD0OqxfSme">
+
+  <div class="toc" data-page-node-id="YOV5LbjMiZFkIvMq1CekOE">
+    <a href="#verdict" data-page-node-id="uYfjEa5GJXm0DzachjLISL"><b data-page-node-id="7ApN0VMhf4dUTyfFk1ULeQ">0</b>核心结论</a>
+    <a href="#inventory" data-page-node-id="uQf3x4SRDvDUBAobbG5BGb"><b data-page-node-id="8kjcFCxtvhEQaIR2DPQASA">1</b>现状实测盘点</a>
+    <a href="#structure" data-page-node-id="c2dmG21QlCeXI0EXCZ5WyU"><b data-page-node-id="2O8qGzff85TFMTFBYH2UxE">2</b>三个结构性病灶</a>
+    <a href="#benchmark" data-page-node-id="vu8PPZtfr6LvIcNFZXaxMR"><b data-page-node-id="xZ6WfjpA38BcS46gBIqa7r">3</b>主流教师端对标矩阵</a>
+    <a href="#teacher" data-page-node-id="tjpEmA7X7235htqHoo1GRA"><b data-page-node-id="HlnUn6V0UGJYo1HON3RShL">4</b>个人特色：教师作为第一人称</a>
+    <a href="#mainstream" data-page-node-id="vdqGB35yCWNJQH8CW9UKFp"><b data-page-node-id="RYGZmLKDCFqI2Mv6IChX2F">5</b>主流特色：教学线补位方案</a>
+    <a href="#realtime" data-page-node-id="AZ3O1kDTqCWxVCuvHcaEP5"><b data-page-node-id="BMfIAREhn1GBd19a8B0WVV">6</b>实时能力专项</a>
+    <a href="#roadmap" data-page-node-id="VC5ALlqc8L5USJNnNwHNKZ"><b data-page-node-id="wUROWK86qSKkZGQDAtJqL2">7</b>分阶段路线图</a>
+    <a href="#closing" data-page-node-id="RlwSrRbtgdsTwDyE6zaPj2"><b data-page-node-id="AM8E1VV9URFUqj5ob5DlCs">8</b>结语与取舍建议</a>
+  </div>
+
+  <!-- ============ 0. 结论 ============ -->
+  <section id="verdict" data-page-node-id="OGnCILVGgY5qQGD0VROE3S">
+    <div class="verdict warn" data-page-node-id="ZGWnwu9SkFjYaRFoLk20ft">
+      <div class="kicker" data-page-node-id="5GmXKBKRhiqxrQnqzGN6Wk">核心结论</div>
+      <h3 data-page-node-id="yJatq6Tu3UHj2BtIUvKy2e">不是「功能太少」，是「功能的坐标系装错了」——所有能力都以学生为主体、以育人为轴线，教师既没有自己在产品里的位置，也没有属于教师行业的主业。</h3>
+      <p data-page-node-id="33y9SFig2J1mfG4FvOWQET">把教师端的能力摊开数：统一待办 <code data-page-node-id="1RabpXtR2nhHZOJy1wedU6">TeacherTask</code>、危机四级闭环、关怀中心三子域、家校沟通留痕、公告真实触达回执、匿名互评、教师 e-Portfolio、AI 主动洞察 + 周报、22 个可被对话调用的工具——<strong data-page-node-id="5A0zypKEFieNaqfetE0Gvq">单看清单，这已经比多数开源校园系统厚重</strong>。所以「感觉太少」不是数量错觉，而是<strong data-page-node-id="3nZ68MhbVIxv5hb2Z5UElb">打开之后找不到「我」和「我的课」</strong>带来的空洞感。</p>
+      <p data-page-node-id="DgU5vNcp66KrxyYCnDRq9F">两处错位是根因：<strong data-page-node-id="ONIs8lKBGKCuwMLP5hALsW">其一，缺「我」</strong>——教师的一切数据都是「我的学生怎样」，没有「我做得怎样、我成长到哪、我的付出值多少」。侧栏「我的工作台」分组只有 1 项，是最直白的证据。<strong data-page-node-id="TSORzijhIPHbOSOZdmblD5">其二，缺「课」</strong>——<code data-page-node-id="ED0ygGcfNtaTmNfwvSX7Ei">Course</code> 表里教师是 <code data-page-node-id="WIlJ26EEsRtiJxUj82wCmI">String(50)</code> 而非外键，<code data-page-node-id="hyC7o9WRFSzplAzhYveLkV">TeacherSchedule</code> 是私人备忘而非课表，考勤 / 作业 / 成绩录入 / 听课评课一条都没有。教师端只有「辅导员」的一半，没有「教师」的另一半。</p>
+    </div>
+
+    <div class="grid-3" data-page-node-id="AIPaTGkBBvOMlrMzVzVB8e">
+      <div class="mini" data-page-node-id="3cBEC3lku9TDGbGBI2e5AQ">
+        <span class="tag t-green" data-page-node-id="AV38LE6dqg4ZPWj9ZSGHaz">已经很强 · 别推翻</span>
+        <h4 data-page-node-id="uob1sS4N6xjjNiv8SXjANO">育人事务的闭环密度</h4>
+        <p data-page-node-id="tyo5VM2m7IaL2TjNZHT0jT">危机四级状态机、待办统一表与幂等去重、公告真实已读回执、匿名互评的 HMAC 匿名令牌——这几处工程完成度高于同类产品，是护城河。</p>
+      </div>
+      <div class="mini" data-page-node-id="daC0dRbCwdxVMEDOWZeyOo">
+        <span class="tag t-red" data-page-node-id="FOf1ieRjnrS8BXBxtf4lUd">结构性缺口 · 教师缺席</span>
+        <h4 data-page-node-id="4HhEUtPKWCyqzqAx8zaS6A">没有一页属于教师自己</h4>
+        <p data-page-node-id="ATxfLFWXyg64RXcKQsVtGI">教师徽章 7 枚、e-Portfolio 四段式、成长值等级——素材全齐，但没有承载页。能力被埋在学生档案页和社交化资料卡里。</p>
+      </div>
+      <div class="mini" data-page-node-id="cKysiBGSlYxxDr7r5FNOKV">
+        <span class="tag t-amber" data-page-node-id="BcvCUsaj787gysfoDZ1sQQ">结构性缺口 · 教学缺位</span>
+        <h4 data-page-node-id="Wtzri18zIa1711z9n5mmML">没有课表、没有课堂</h4>
+        <p data-page-node-id="pLN2n44TOEGhDubhGnUZnH">主流教师端的第一屏是「今天上什么课、哪个班、几个人没到」。这一整条线在本项目里是空的。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 1. 现状盘点 ============ -->
+  <section id="inventory" data-page-node-id="eeSzKWwnD8n9w7PQiIqRaH">
+    <h2 data-page-node-id="Ka0pjfRH6EGEDYeG9mDH3y"><span class="num" data-page-node-id="8Lyb5YwN9LtcCAvHqqQJP1">1</span>现状实测盘点</h2>
+    <p class="lead" data-page-node-id="O71vy4eOi3HS94HFk3enQn">以下清单按代码实测生成，标注每个模块的<strong data-page-node-id="nhnbfP6PV4hAYRxG8F1Fb1">能力强度</strong>与它<strong data-page-node-id="LAcXY1a6CtTFBrobtaI1CS">服务的主语</strong>。请注意最后一列——它比第一列更能解释「为什么感觉空」。</p>
+
+    <div class="tbl-wrap" data-page-node-id="7IMttfwKPf9oyYgmc0yGT5">
+      <table data-page-node-id="KF6wSSBhqiXBDIM9kKSlh5">
+        <thead data-page-node-id="bs2NhwR9UeA0DaTOVT6NgN">
+          <tr data-page-node-id="CdK4I6w19hPsCyvDtLgctN"><th data-page-node-id="iGDxSM20SUOT5M9Kje0TTt">模块</th><th data-page-node-id="voOknLncEylH96A8GSQxGK">路由</th><th data-page-node-id="ysE72P6cRKEvoIy6YmXiQR">已实现能力（实测）</th><th data-page-node-id="IwTdh1En50OXTZ952YCs7V">主语</th><th data-page-node-id="LtjSeqYEj2mG9P2KqotxR6">强度</th></tr>
+        </thead>
+        <tbody data-page-node-id="WV7Nrzv5KdbKS5XQZeGyfN">
+          <tr data-page-node-id="zxwOVMtybp85tG0ipMrVRj">
+            <td data-page-node-id="I50hiIZy1CsfzfZGg0A5bk"><strong data-page-node-id="wNdtfHDwo7oCfFVt22jB3u">首页工作台</strong></td>
+            <td data-page-node-id="PHzpNKPI9ivzSU5YCivMTy"><code data-page-node-id="znuVcH5ambQLopkyCz8BR1">/teacher</code></td>
+            <td data-page-node-id="eZs4qDz0OZakcaBVbwKDSU">5 项 KPI、教学育人进度卡（等级 / 成长值 / 完成度环 / 成就徽章）、常用功能宫格、成长五类成果条、桌面日程、AI 面板、班级图表</td>
+            <td data-page-node-id="jc7HjnQEVh46KjCGZWSYcH">混合（学生为主）</td>
+            <td data-page-node-id="ChRB0nJZkx9SITrW8wmVry"><span class="pill p-part" data-page-node-id="HPf2n8F0RNtaGprvtJHb6R">中</span></td>
+          </tr>
+          <tr data-page-node-id="X4poc3y9Jg1VEvhbG9Z2YN">
+            <td data-page-node-id="DFGnqaxRP2K3ql8creqvyD"><strong data-page-node-id="fQPwOo0BEl5KYpvEX5IWLm">任务清单</strong></td>
+            <td data-page-node-id="HVdO8EYE6U5l4HthedRcDU"><code data-page-node-id="LrHiWzTtuj2Qs1ll5NyqKm">/teacher/tasks</code></td>
+            <td data-page-node-id="tjRkbY9CNNJXXq2kCVRt86"><code data-page-node-id="gxRpDSgEkZwO1Iqip1P8fK">TeacherTask</code> 统一待办：7 种来源（AI / 随访 / 审批 / 关怀 / 预警 / 手动 / 管理员下发）、5 状态机、<code data-page-node-id="2NqEDj4e0QRE6xNA0UhlPD">(source_type, source_id, teacher_id)</code> 幂等去重、自动生成</td>
+            <td data-page-node-id="DRgeFu2hZjG8AE2d1pMJdQ">学生事务</td>
+            <td data-page-node-id="A6PZTQ39tGMbPtUY8d0aVe"><span class="pill p-ok" data-page-node-id="DS5laBZeaAWPCektBES9Lb">强</span></td>
+          </tr>
+          <tr data-page-node-id="Oy994Ta4nt6jo5A4euRvql">
+            <td data-page-node-id="YUDrRCHCZm8ilSScwWDq2e"><strong data-page-node-id="HaBv5aFrHnonZRLhkmBzpL">审批管理</strong></td>
+            <td data-page-node-id="bGiLjA9OR2mxQzyYUTDyRv"><code data-page-node-id="Fnqf2dyaugE8qdBb4fwssO">/teacher/approval</code></td>
+            <td data-page-node-id="osyy6WhaiJ4jzTbzLK5bTH">请假 / 办事 / 材料三类审批，待批—通过—拒绝分页，请假带 AI 风险分析，仅限 <code data-page-node-id="jcJOHEiT2SoIMf9ZgbCEeA">User.tutor_id</code> 名下学生</td>
+            <td data-page-node-id="b8N48DBoB1YLjD1lc6dGkA">学生事务</td>
+            <td data-page-node-id="tdWYCzhBB67pfCGdXg5aGi"><span class="pill p-ok" data-page-node-id="sCz7yuJ5FMih2CCOnhneuT">强</span></td>
+          </tr>
+          <tr data-page-node-id="7hyL8EFjZb5ykRbegx7wMr">
+            <td data-page-node-id="pNa2oNO5d19KTm0EeLj1Bd"><strong data-page-node-id="7ReMomfiBpCUNHJqB5EDgH">心理预警</strong></td>
+            <td data-page-node-id="VWQi26T3ekjnutOeUYjTEr"><code data-page-node-id="hTDmbAUH8GlVS2Llr66Ezw">/teacher/crisis</code></td>
+            <td data-page-node-id="tRYMczHPoDhEZUhJ263LOn">发现 → 干预（方式 / 备注）→ 随访（日期）→ 闭环（resolved）四级状态；<code data-page-node-id="RVignKSCAu5CllisBKyd9d">scan_for_teacher</code> 规则化扫描</td>
+            <td data-page-node-id="nkNig0FAtKMG7nvGUiojqE">学生事务</td>
+            <td data-page-node-id="KGHrwSdlSZ6ALpDDtfRT4Z"><span class="pill p-ok" data-page-node-id="OH7jgIP17gshGTdE6O3bl6">强</span></td>
+          </tr>
+          <tr data-page-node-id="9OGeAREXPDaZDKk3vpKkS4">
+            <td data-page-node-id="brHFGIaBGZYlhZ0mbznEfT"><strong data-page-node-id="xbC670C4mYEkUUu35JT5Gp">学生档案</strong></td>
+            <td data-page-node-id="IiVitF7kHSbtEWbjnzeQZU"><code data-page-node-id="vttw79fqobMAhw5Qsmi7AD">/teacher/students</code></td>
+            <td data-page-node-id="GyrOvp2VhtGC7tOIZC3MOh">列表多维筛选 + 详情 7 个 Tab：技能 / 成长 / 预警 / 项目 / 请假 / 工作 / 诊断；CSV 导入；AI 学生洞察与"转任务"</td>
+            <td data-page-node-id="tTUF6M1kt4dz4LWXTHlsFj">学生</td>
+            <td data-page-node-id="NnQfonDg0XeF0h9k0o7MY9"><span class="pill p-ok" data-page-node-id="5M6CdH53VEhGDYcGzcfwiL">强</span></td>
+          </tr>
+          <tr data-page-node-id="YIEN4LHfOD7XjHf5HQdE5d">
+            <td data-page-node-id="aOGmcIrk9X5c2W7mbR1LGI"><strong data-page-node-id="8ObM7qYVNhHTriDOdGLEiE">班级公告</strong></td>
+            <td data-page-node-id="VB8XxWZHkEqk1YrL2xyA8B"><code data-page-node-id="z3dEYnrn79DXSQdm9uvVps">/teacher/announcement</code></td>
+            <td data-page-node-id="a4smI0YxTvWV2Nhj8njRpg">发布 / 紧急 / 置顶；<strong data-page-node-id="pbZoz7FFWVS5IuhYcUIcbm">真实触达回执</strong>（<code data-page-node-id="HhNzagIXDrjCXZgvHNQTym">AnnouncementRead</code> 已读 ÷ 应读），触达率环形 + 三等级分布</td>
+            <td data-page-node-id="L0F0PAU29lwiUuxzVDJv5s">学生</td>
+            <td data-page-node-id="Tf2rsZFirYSwj2cmrdFVz8"><span class="pill p-ok" data-page-node-id="Rkbncyri9uTIXsH8W0yweg">强</span></td>
+          </tr>
+          <tr data-page-node-id="zjfGBrV1rGFVakTRMuBWJL">
+            <td data-page-node-id="FosTzsjiMdPy3Y4stuPoWg"><strong data-page-node-id="bXKnnRbHy9R0CtFlzIym8x">家校沟通</strong></td>
+            <td data-page-node-id="oDc0tPZANq4ZT2g9MjN0yQ"><code data-page-node-id="rwdQc9Mwcurr77iZBDOqge">/teacher/guardian</code></td>
+            <td data-page-node-id="h1tpifKlotOqp3mnP3xGEX">家长联系人管理、沟通留痕、免登录家长只读分享页（<code data-page-node-id="K7EOHI7hvyBQXxyqO6WyzK">/share/guardian/:token</code>）</td>
+            <td data-page-node-id="OIRvK93XOOB8JBSGu20KHG">学生家庭</td>
+            <td data-page-node-id="0MSPlsPwa5q0zDPkljy4o6"><span class="pill p-ok" data-page-node-id="yk7tGhZ76Y1tGOhIB6KpnJ">强</span></td>
+          </tr>
+          <tr data-page-node-id="Z5hmAVY6sHCf8QDJ1Cjkj2">
+            <td data-page-node-id="zwFdCK4dXrLi2eOuIaHCCB"><strong data-page-node-id="HKGIrxYKeUDwaCcWaHk9G0">人文关怀</strong></td>
+            <td data-page-node-id="hBHpVBCO590lEaayeSyk2C"><code data-page-node-id="Cw3vPerNVecxEO37Yuphw5">/teacher/care-center</code></td>
+            <td data-page-node-id="eP5zqjU1FCkELgeS6ZGmNr">三子域：关怀日历（生日 / 困难 / 学业预警，可自动生成）、家访记录（5 种方式 + 回访状态）、正向激励（表扬 / 徽章）</td>
+            <td data-page-node-id="ZJtbBH6GqFPod7fSaHzFx4">学生</td>
+            <td data-page-node-id="Rsvls4G1EJrUcjXc79iv77"><span class="pill p-ok" data-page-node-id="X0EgXiF0gWsEfTJrlj8916">强</span></td>
+          </tr>
+          <tr data-page-node-id="42zpZAZyQcfmpdbQFAMNmK">
+            <td data-page-node-id="VRgTvnD48ZCa52F87RhfFM"><strong data-page-node-id="NtBD895a2o1YL66OEkJBqS">成长档案</strong></td>
+            <td data-page-node-id="lYWFpj0LGQnyX9vfIrGifR"><code data-page-node-id="ly8wjjjeOHy4YpyfWNdgBj">/teacher/portfolio</code></td>
+            <td data-page-node-id="FITtPtwbAiQgyc4Qa8IRWI">学生侧：横向选择器 / 徽章墙 / 成长时间轴 / 成长报告打印导出。<strong data-page-node-id="fdFdLeUms8MC6XDQP0VVIC">教师侧：我的育人档案（<code data-page-node-id="lMlJu46WsTFDrbNnMr37wr">TeacherPortfolioItem</code> 四段式，含 reviewer 评价预留）</strong></td>
+            <td data-page-node-id="hykXIm9TdFae31cj0dhqc7">学生 + 教师</td>
+            <td data-page-node-id="DNORqXvXR4U1OlNiMLTIgi"><span class="pill p-part" data-page-node-id="iJH9KSsGoFXx5bGKWIzxb0">中（教师侧被埋）</span></td>
+          </tr>
+          <tr data-page-node-id="IZatfjcLLlyWgSc1wIg1gz">
+            <td data-page-node-id="HxFvidQEoVMW0RHK4U0W9H"><strong data-page-node-id="qazlN9JauGaB9NcGVGODbY">问卷中心</strong></td>
+            <td data-page-node-id="bib3tSlLrw2d2o0Oc8FFu0"><code data-page-node-id="SIWc3aSiB4YzSQbVLWvM6T">/teacher/survey</code></td>
+            <td data-page-node-id="vS6yqRQNQKDPVZ80u6hOpX">待参与 / 我创建的 / 我的被评 三页签；<code data-page-node-id="vja3XOUdqJ2O8vwlQHnBGG">PeerSurvey</code> + HMAC <code data-page-node-id="m05Ntq17gBROglPFEvp0ab">anonymous_token</code>，只出聚合分布</td>
+            <td data-page-node-id="PjKFL80FsIBTar8tKGOw4C">教师互评</td>
+            <td data-page-node-id="psSeBvXMSBtH8nCj0vrsmt"><span class="pill p-part" data-page-node-id="lVWsXfm6jPE9ZMhDG1l0ub">中（未进侧栏）</span></td>
+          </tr>
+          <tr data-page-node-id="0YuhTikze5oZVHSlA2c6ao">
+            <td data-page-node-id="Dit9SdTuqRmVTwwWmMwWs2"><strong data-page-node-id="OCe8cBGfzoHm0CDi6tAFR4">AI 洞察</strong></td>
+            <td data-page-node-id="QnVNqD0vO5LZP9oejByON9"><code data-page-node-id="fSrLFibogoImyweKuSvAwW">/teacher/ai</code></td>
+            <td data-page-node-id="QT2sjC3tiXiObTCnenTHkZ">主动发现 / 高危信号 / 建议联系 / 涉及学生 四项指标 + 本周洞察周报；<code data-page-node-id="ZRlC4erfbzeM8y4LPBKqqn">proactive_engine</code> 驱动</td>
+            <td data-page-node-id="t6vptUgEBgMa0jChIcefQd">学生</td>
+            <td data-page-node-id="sGKcFsPl0WsyqOMkng7e8d"><span class="pill p-part" data-page-node-id="A9HyfajIg6NVnJN24FEbgs">中</span></td>
+          </tr>
+          <tr data-page-node-id="DK83IecL1m1bgJu54HtzYG">
+            <td data-page-node-id="sDF9WsnEvlrwxUmWxKwNMt"><strong data-page-node-id="ULXsD9S3H9msvlqmuoC4Vy">消息中心</strong></td>
+            <td data-page-node-id="7CNByOYULoQu4UOJkBsoFU"><code data-page-node-id="nAtBh8w72WnVddxqqsRgDo">/teacher/messages</code></td>
+            <td data-page-node-id="9oiSGjFOz3GUV9ArQ6U1tX">钉钉式会话 / 通讯录 / 通知三合一，194KB 前端单页，是体积最大的模块</td>
+            <td data-page-node-id="wcywgfkf8RpzhJrFjha6y1">协同</td>
+            <td data-page-node-id="GO2GlpZCofoDzSH3YLmr8d"><span class="pill p-ok" data-page-node-id="vCTRNVDvQPhxA0kGDPBNOd">强</span></td>
+          </tr>
+          <tr data-page-node-id="PvBfBF8yfKcAHG6vbwh5Sk">
+            <td data-page-node-id="0cYEDi5PJEVFJNHParVJZz"><strong data-page-node-id="4m8fImHG7rf3V3uojZfr3a">个人中心</strong></td>
+            <td data-page-node-id="QKHQfeRzadXK3F6zV29rCu"><code data-page-node-id="bGkG6FkOMRvAQEqDFPBRmN">/teacher/profile</code></td>
+            <td data-page-node-id="cTPJJlAi9o9xGdnWp3kgg0">QQ 风格资料卡（封面 / 勋章条 / 完成度 / 个性签名）、快捷入口、设置与隐私、所带学生综合情况</td>
+            <td data-page-node-id="S28n5cmOdsqZStZDHMpgJg">教师（社交向）</td>
+            <td data-page-node-id="dRVMd1rIDVud71HITGyCme"><span class="pill p-part" data-page-node-id="wSVWIZtqWNBUkwqhxQJmAA">中（社交化，非专业向）</span></td>
+          </tr>
+          <tr data-page-node-id="m5qcLhOGlV0tUAfkwZMgDR">
+            <td data-page-node-id="p5NaaJODY9pOd10yMxgBIM"><strong data-page-node-id="LhjPxGfwOplYR02RFE4hH9">智能体 / 桌面宠物</strong></td>
+            <td data-page-node-id="GcTGvd26MGs6kI7sXFrzrV"><code data-page-node-id="1IEaFJ46vfGNBmgJzGGJ0W">/teacher/agent</code></td>
+            <td data-page-node-id="Im20Gh9bvtbd5Xjdl3t8Hq">SSE 流式对话 + <code data-page-node-id="SXR91NYiG7IB95wko0pTzd">TEACHER_TOOL_DEFINITIONS</code> 22 个工具（请假审批、学生查询、危机查询、任务 CRUD、关怀记录、档案、问卷结果、家访、学情事件、工作流、求助回复…），桌面端悬浮窗常驻</td>
+            <td data-page-node-id="STqTvOzgURFmjD3KPAaHLV">贯穿</td>
+            <td data-page-node-id="0kGjDBAahDR2x5bpN3FrAe"><span class="pill p-ok" data-page-node-id="OEzAhS2TXxg9Mo4RkvFyjB">强</span></td>
+          </tr>
+          <tr data-page-node-id="65ZmRvvdPcZDym96gewmHs">
+            <td data-page-node-id="yfUEDDCjlOXuFSeZzCISUT"><strong data-page-node-id="k2NCBHABqXQKHJrnb8d81G">功能总览</strong></td>
+            <td data-page-node-id="SJ6XHhAa0mDI2rrDlRH3W2"><code data-page-node-id="wtxp07goxcMcAhWy81e6x2">/teacher/features</code></td>
+            <td data-page-node-id="lriW5wCLU7YntYpjHZWGYw">三组 9 项入口 + 实时角标 + 搜索。但会话 / 通讯录不在其中，其余模块靠首页宫格与总览页双份维护</td>
+            <td data-page-node-id="bXPFnLfFnJJfuB5pJD9pES">导航</td>
+            <td data-page-node-id="9sBvlvdftVEvpFMud65hzw"><span class="pill p-idle" data-page-node-id="u8UpK8hBQBgAdUUFIpyeq0">弱（信息架构补丁）</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-info" data-page-node-id="70QewZxiT5XedDZkI1jt8x">
+      <b data-page-node-id="GYPxXlSDuCZlz1Wr3KrVMn">盘点的直接结论：</b>14 个模块里有 <b data-page-node-id="5StRUe6ZPAF84YDmLpDlOi">11 个的主语是「学生」</b>，只有个人中心 1 个主语是「教师」，且是社交向的。这就是「没有教师端个人特色」的量化证据——不是没做，而是做在了别人的坐标系里。
+    </div>
+
+    <h3 data-page-node-id="1t2L5Y6h0CkJETyhDwlGOt">1.1 侧栏信息架构的实际形态</h3>
+    <p data-page-node-id="m5R1OGfStPkUx0egeuNTsS">桌面端 <code data-page-node-id="2musOm3Lzs9FZSQ2SFNVs2">navGroups</code> 分三组，共 10 项；移动端 5 个底部页签。三组分别是：</p>
+    <div class="two-col" data-page-node-id="bMVuOOv3NL5TbWdnAGQbVr">
+      <div class="col-box" data-page-node-id="PsdC4eDA7QhDNGAu1qbmdt">
+        <div class="hd" data-page-node-id="9hmKuCWQ7p3GBbKBfePiDE"><span class="dot d-blue" data-page-node-id="18DPkcLI6RpPVZCnAuHcQt"></span><h4 data-page-node-id="DVeFJu9F6UvO6RZxQ6q6y1">教学工&#8203;作 · 5 项</h4></div>
+        <p style="font-size:13.5px;color:var(--muted);margin:0" data-page-node-id="KG2Ho0GuBEfpX2Bcq1Wg27">首页 / 任务清单 / 审批管理 / 心理预警 / 消息</p>
+        <p style="font-size:13px;color:var(--danger);margin:10px 0 0" data-page-node-id="d9nEt6eI8Ks8EBcjZocTHY">⚠ 名为「教学工作」，实际全部是学生事务——没有一个模块与「教学」有关。这个命名本身就在提示问题。</p>
+      </div>
+      <div class="col-box" data-page-node-id="Fu8MTAB43EU1PJ7wxQNyzd">
+        <div class="hd" data-page-node-id="3USX9em8YvRVGwZ7Hc7riS"><span class="dot d-green" data-page-node-id="dgfMyfqcCEWluqVnR2YoWC"></span><h4 data-page-node-id="4vm8Wlc6Jvkm5xowqG1jQk">班级育人 · 4 项</h4></div>
+        <p style="font-size:13.5px;color:var(--muted);margin:0" data-page-node-id="SCOE8uZutKrD91TbpMZLpV">学生档案 / 班级公告 / 家校沟通 / 人文关怀</p>
+        <p style="font-size:13px;color:var(--muted);margin:10px 0 0" data-page-node-id="ntNmm8CRbnpkCP9t3zcOLM">这一组是教师端最扎实的部分，闭环与留痕都到位，不需要动。</p>
+      </div>
+    </div>
+    <div class="col-box" style="margin-top:16px" data-page-node-id="Np3vS4JzcTbvghY34NsveR">
+      <div class="hd" data-page-node-id="oC47KjrcZBTJ9K5FnD5MMO"><span class="dot d-red" data-page-node-id="3mtRNjhbmicl78qFueIKZt"></span><h4 data-page-node-id="YbYsQ1bQiUvxTexHCTsJIv">我的工作台 · 1 项</h4></div>
+      <p style="font-size:13.5px;color:var(--muted);margin:0" data-page-node-id="rqFLpDbVRcW25AVFJdTeNU">个人中心</p>
+      <p style="font-size:13px;color:var(--ink-2);margin:10px 0 0" data-page-node-id="JazLRBr3wph3AN589ZNNmN">三组里最小的一组，只有一项。而 <code data-page-node-id="S4GtnnhZh7eNKwIfbwiCrG">/teacher/portfolio</code>（我的育人档案）、<code data-page-node-id="fHbWuGJv3OPHomxFsAzxUJ">/teacher/survey</code>（我的被评）、<code data-page-node-id="VAh02nyDaG5uL4CYa22hJI">/teacher/ai</code>（我的洞察）三个「属于我」的页面<strong data-page-node-id="LRVRIxofBIJRWHydgCIoQn">都不在侧栏</strong>，只能从首页宫格或功能总览页钻进去。这就是「感觉空」的界面根因：<strong data-page-node-id="prgKxemUNrEJqsR2sHwta5">教师自己的东西全被藏在二级入口里。</strong></p>
+    </div>
+  </section>
+
+  <!-- ============ 2. 结构性病灶 ============ -->
+  <section id="structure" data-page-node-id="EEG12GGKz5n8pHfj0T1ofL">
+    <h2 data-page-node-id="AQi9I1PeU06GYsCoPnfw3l"><span class="num" data-page-node-id="fM17xm0mykQDjGduEn4mr6">2</span>三个结构性病灶</h2>
+    <p class="lead" data-page-node-id="Chbq9dkqgQRP7toNOwbwtK">把上面的盘点往下挖一层，会看到三处「表结构 / 数据模型」层面的错位。它们的共同特征：<strong data-page-node-id="fk6GNNb02fwsRlECgEoHhK">不是缺模块，而是既有数据用错了方式建模，导致再怎么加功能也长不出教师的视角。</strong></p>
+
+    <h3 data-page-node-id="jvFMPBvI24F2zCJSHsaUa4">2.1 病灶一：<code data-page-node-id="M4MnGpHzOw36IDvqofZ4E5">Course.teacher</code> 是字符串，不是外键</h3>
+    <p data-page-node-id="eEzzWFA4lwmOkUxo1nfeye"><code data-page-node-id="YCD7oEFtoOoLYMCEOmsM9B">backend/app/models/academic.py:62</code> 里，课程的授课教师字段是 <code data-page-node-id="yvJ8aDBZGEemwKJ6RnNGAs">teacher: Mapped[str] = mapped_column(String(50))</code>。这意味着：</p>
+    <ul data-page-node-id="8FRSsCgCbwhsTeBTW2VPNo">
+      <li data-page-node-id="mEObJFtwVDetbZtieMbaBY">系统<strong data-page-node-id="62J0HFjPnRM3WHEh1uNOCi">无法回答「张老师教哪些课」</strong>——只能靠姓名模糊匹配，同名即错</li>
+      <li data-page-node-id="7Gsy0JoyBrLxAJjv4olxWm">教师端<strong data-page-node-id="P1OrSQHEp4B47jCy58U1Qc">无法按「我的课」过滤任何数据</strong>：全站教师数据范围一律是 <code data-page-node-id="GEgR47CdGOpkmdZnGQ0JPA">User.tutor_id == user.id</code>（见 <code data-page-node-id="zqBNKFuroDUP3nodpiS0q4">api/academic.py</code>、<code data-page-node-id="7lHXXp0Ryyqt6udCGc1oKZ">api/crisis.py</code>、<code data-page-node-id="Mfl1NnZ9AxgVSaesKOTQcs">api/announcement.py</code>、<code data-page-node-id="y7howGF7X60JKvC5P1WmhV">api/care_center.py</code>、<code data-page-node-id="AGuxD91doIwvnxYY3fucvQ">api/care_record.py</code> 共 20 余处）</li>
+      <li data-page-node-id="JWgPJgEvHMwsJVvZQXg0s6">「我教的班」与「我带的班」在数据层是<strong data-page-node-id="fH8sWEW6kvue9dW7pF7FSd">同一个东西</strong>，进一步强化了「教师 = 辅导员」的单一定位</li>
+    </ul>
+    <div class="callout co-danger" data-page-node-id="cfzy2Yy21qD6leMLoufX9I">
+      <b data-page-node-id="KloCt100CuvWK7FR7manc0">这是本轮审查发现的最关键一行代码。</b>只要 <code data-page-node-id="KbBpOxumChkWcXcECgGhI3">Course.teacher</code> 不落成 <code data-page-node-id="Ouhl4HN0YKZ2X3lOoZ1gKH">teacher_id</code>，第五章要说的课表、考勤、作业、成绩、课堂表现——<b data-page-node-id="QAmCDjwGxcIzayALEhwkNu">全部无法落地</b>。它是整条教学线的总闸。改造代价极低（新增列 + 数据回填 + 保留字符串做兼容），收益是解锁整个「教学」域。
+    </div>
+
+    <h3 data-page-node-id="NIkZOArFoMdbs6RpKYAl9z">2.2 病灶二：<code data-page-node-id="4jnKGKyOqsG4CU1Y1O5iQn">TeacherSchedule</code> 是私人备忘，不是课表</h3>
+    <p data-page-node-id="9UGMajPftshUZDUhjgMrPj"><code data-page-node-id="WljZnIcjsQpU4sncJWlSQ1">models/announcement.py:38</code> 的 <code data-page-node-id="wnSFz4sis1d99LBqbndcgK">TeacherSchedule</code> 只有 <code data-page-node-id="LOQjDIQ43G25AKsIjcP9or">date / content / urgency / completed</code> 五个业务字段——它是<strong data-page-node-id="RSJGWav79Ly9hRghEXX7j4">教师手记的日程条目</strong>，不是排课数据。教师端首页的「桌面日程」（<code data-page-node-id="1IKvfpCFDqrVjTLrF5tFrS">HomeDesktopSchedule.vue</code>）渲染的就是它。</p>
+    <p data-page-node-id="NwcCe3xM2EuwDyX7QuHUSU">而真正结构化的课表在 <code data-page-node-id="p24lSF50daNDSFqfWB1cet">Course</code> 表里（<code data-page-node-id="wEsnYXkM3aFM6VHWOWJRIF">day_of_week / start_period / end_period / week_start / week_end / location</code>），却被学生端 <code data-page-node-id="bPS1kMDAP7uJkxDm0g3fHh">SchedulePage.vue</code> 独占使用，「第 N 教学周」这个概念也只在学生端出现。教师端<strong data-page-node-id="KW6CHbAS7D3H6gXFF7L7gD">看不到自己的课表视图</strong>。这解释了为什么教师端首页「看起来像 HR 系统而不像教师应用」——真正的教师应用第一屏是课表。</p>
+
+    <h3 data-page-node-id="G6RbWc5YKsDYYEAzMgl0Xn">2.3 病灶三：<code data-page-node-id="LiGNeyxlA5CqdKjlFiCcNS">DashboardOut</code> 只有 5 个数字，且没有一个是「我」的</h3>
+    <p data-page-node-id="dTyCOQHUtJs96FdjgVH6j1"><code data-page-node-id="dTxHYmsuFbXxSFYBxllrlT">api/teacher.py:88</code> 的 <code data-page-node-id="LGMDbV69bCgQEuJhvTjpj1">dashboard_stats</code> 返回字段只有：</p>
+    <div class="tbl-wrap" style="margin-top:12px" data-page-node-id="1BMiZCRWGMvGIdF5sYBKTX">
+      <table style="min-width:auto" data-page-node-id="g1MagcpgpS1bPPbkIDpnMG">
+        <thead data-page-node-id="TIM3Ged5bI7xJYms7C8z7X"><tr data-page-node-id="WUGFJieugpQH7vnEzkcUL8"><th data-page-node-id="7jJ2sG44Rl2Yvjngp3COjS">字段</th><th data-page-node-id="pOjvL3IqrHsUuUnRRS2LYM">含义</th><th data-page-node-id="Jnp6FM3H5P5apzete7gcQh">主语</th></tr></thead>
+        <tbody data-page-node-id="GqORiVHWT0RaBG6qtA0eF1">
+          <tr data-page-node-id="TEFS1a2Bd8BJ13SCP45Bnu"><td data-page-node-id="5DMiIaIgplKEY8iSYv6ubq"><code data-page-node-id="5qpEUrHTDokcDYPtwngG5y">total_students</code></td><td data-page-node-id="Q4hChUOvOYc3gDzEFGIxV7">名下学生总数</td><td data-page-node-id="xZ6y5LpJmNkjAn7lIlBly5">学生</td></tr>
+          <tr data-page-node-id="YgJlLTrzGdA2VjRo0WEXoi"><td data-page-node-id="hFcVTcB4S28BafHSCF7XtT"><code data-page-node-id="OyCczouT4Z6CNZ7ZJiAZIP">alert_count</code></td><td data-page-node-id="E77GGwh3POJTroMMlE024N">AI 对话预警总数</td><td data-page-node-id="IoeoUFFdWoAT8xqmWdjefF">学生</td></tr>
+          <tr data-page-node-id="OIMQeDdtZGX2ddAUBqMP8S"><td data-page-node-id="QdGIDGmNeNFoTvMQOzr2lN"><code data-page-node-id="88JUQGxoeIBRNvq288ZZ7C">pending_leave_count</code></td><td data-page-node-id="MrC8gXdBi8s9AHWctaaZpB">待批请假数</td><td data-page-node-id="HLvZGuCLM3YUq9DQDshSGf">学生</td></tr>
+          <tr data-page-node-id="CpcVbBCf9Fv1XirX63vxXI"><td data-page-node-id="nFifvy39ljOAS6NqshrNOI"><code data-page-node-id="SKC1c42NgWFFVc2w4P1HHO">severe_alert_count</code></td><td data-page-node-id="h93BDDeF9FcP9CWoGX4FDO">高危预警数</td><td data-page-node-id="EiWfRUyzk4uZ6pGO0VvLyf">学生</td></tr>
+          <tr data-page-node-id="Uf1EdkoRKe4iPVmkFb3ar5"><td data-page-node-id="dVbeGzNnsymlRbFCGSJNCU"><code data-page-node-id="4u1Fp1JI2UVuDaAKx3fjva">resolved_alert_count</code></td><td data-page-node-id="GbWuywdhu1uLqM9J6Lgobz">已闭环预警数</td><td data-page-node-id="49s7TB1TKvqfdNmKUJBxRI">学生</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px" data-page-node-id="EDjCZaGucwRTqoJTGfruG5">5 个指标<strong data-page-node-id="36eiXYRW77KCEGWcEulSL1">全部以学生为主语</strong>，没有「今日待办 / 本周家访 / 待回访家长 / 我的响应时长 / 我的关怀密度」中的任何一个。而讽刺的是，这些数据后端<strong data-page-node-id="nQC1hT42mNTWAYmpOin7il">全都已经存在</strong>：<code data-page-node-id="Y7PyyYsJp5SfEz0TZ13eiP">TeacherTask</code> 有待办状态、<code data-page-node-id="R7l5wFUT0xlXJfZww6QG61">HomeVisitRecord</code> 有回访状态、<code data-page-node-id="Jzys58CPvgVLzmdxgAF2DF">GuardianContactLog</code> 有留痕、<code data-page-node-id="SArAcuK9eKNe9Xl0BeSIiG">CareRecord</code> 有记录——只是没有一个接口把它们聚合成「我的履职」。这是典型的<strong data-page-node-id="JKXnUYoqvNDf8OZI8g6Vsv">数据齐、视角缺</strong>。</p>
+
+    <h3 data-page-node-id="Yv0WaVbZH3PlDFf5brCecn">2.4 三个病灶的共同根因</h3>
+    <div class="verdict" style="margin-top:16px" data-page-node-id="D8ysNlYtUh9x3z8H6UftbO">
+      <div class="kicker" data-page-node-id="s8euyjRYPvFmAMBcfTfql6">Root Cause</div>
+      <h3 data-page-node-id="2VFtt4AERlrGTIycokT969">产品把「教师」定义成了「学生数据的管理者」，而不是「一个有职业成长与教学主业的专业角色」。</h3>
+      <p data-page-node-id="KjE29hHM6b7jJ8i5c4ZrGZ">这一定义贯穿了数据模型（教师没有课程外键）、接口设计（教师数据范围 = 名下学生）、信息架构（「我的工作台」只有一项）、界面语言（KPI 全说学生）。用户感受到的「太少」「没特色」，是这一定义在体验层的必然结果。</p>
+      <p data-page-node-id="Ibh91op5u76zeCkNFAQGID">要改的不是「加功能」，而是<strong data-page-node-id="cpEHcnjfWpmQcVCGvqGzEs">换主语</strong>：把教师从「第三人称的操作者」改为「第一人称的主体」。第四章给出的方案，本质上是这件事的界面与数据落地。</p>
+    </div>
+  </section>
+
+  <!-- ============ 3. 对标矩阵 ============ -->
+  <section id="benchmark" data-page-node-id="3JBIawtgO6Cx0FQEjJkMFs">
+    <h2 data-page-node-id="NSb87VcbyzqYDusxI45hkg"><span class="num" data-page-node-id="5IiES9wpEcE2Jw333EctlN">3</span>主流教师端对标矩阵</h2>
+    <p class="lead" data-page-node-id="tj4TVKwfvokhaGDIBNkaqa">市面上的教师端大致分三条产品线，各自的「杀手级界面」完全不同。本项目只覆盖了第三条线的一部分，这是「没有市面上主流教师端特色」的直接原因。</p>
+
+    <div class="grid-3" data-page-node-id="PJCe2He38dTbfPO8gpRcjD">
+      <div class="mini" data-page-node-id="HbRFXfivkMISVzrCMiDWPd">
+        <span class="tag t-blue" data-page-node-id="SBM9CXcRlXApLBwOultJkP">教务线</span>
+        <h4 data-page-node-id="EdE9i91y6Gjdme7QXXnPxi">正方 / 金智 / 强智</h4>
+        <p data-page-node-id="ZJk14XXKl7q7NtFrtFemf3">杀手界面：<b data-page-node-id="aFBpZBCAqWGq1oRdm7eTKI">课表 + 点名 + 成绩录入</b>。用户预期：打开就是「今天第 3-4 节，计科 2201，应到 42 实到 39」。本项目覆盖度：约 1 成。</p>
+      </div>
+      <div class="mini" data-page-node-id="pBZGxOJ62G9wYDlTmEiLkP">
+        <span class="tag t-purple" data-page-node-id="nMg888U4RLQfMxB61oUrMV">互动教学线</span>
+        <h4 data-page-node-id="jlkTXGgzJ93RuhSdfed1h9">学习通 / 雨课堂 / 智慧职教</h4>
+        <p data-page-node-id="LaCuPHcPxc275skJXX850M">杀手界面：<b data-page-node-id="CqAF61nJNzY0uV9qYcwrYJ">课堂活动流</b>（签到、抢答、随堂测、作业、讨论）。用户预期：课上手机就是遥控器。本项目覆盖度：0。</p>
+      </div>
+      <div class="mini" data-page-node-id="DN4IXyrvbUuiG7hYBxr4VE">
+        <span class="tag t-cyan" data-page-node-id="rj92AD3yzkGJhMf5ChjRzs">协同育人线</span>
+        <h4 data-page-node-id="JHd9SzpWp3P0zJnDpi5gO8">钉钉教育版 / 企业微信 / 今日校园</h4>
+        <p data-page-node-id="XixwiZN6EjGvHjP6nfpqdG">杀手界面：<b data-page-node-id="Lfs8JIa2FQJG5DSEOqEInf">待办 + 通知 + 审批 + 沟通</b>。用户预期：一件事从头到尾有人管。本项目覆盖度：约 7 成，是<b data-page-node-id="08Ex6DDklwjTZB0wlfFBYY">唯一有护城河</b>的一条。</p>
+      </div>
+    </div>
+
+    <h3 data-page-node-id="LO4Jwt9FSH0ITYMbLa86hS">3.1 逐项能力对标</h3>
+    <p data-page-node-id="WJXqVhhKSFQgILza3jIhGL">下表 20 项能力取自三条产品线的交集与各自标志性功能。评分栏里，绿色为已达标、橙色为半成品、红色为缺失。</p>
+
+    <div class="tbl-wrap" data-page-node-id="UmxLjVefHFu9xCadI2p7GK">
+      <table class="mx" data-page-node-id="URTtMjGMwxvUOtEbyxourx">
+        <thead data-page-node-id="cOLTuHJAa8GxEMd1YXEfJo">
+          <tr data-page-node-id="KjM8qJnfjP35Dzngr9O7qb"><th data-page-node-id="Vi7hZImegAQbWoMYMxa9T0">能力项</th><th data-page-node-id="iIKH1Q5BOD9xMb19WSnV9S">所属线</th><th data-page-node-id="bu8VehROt1S4fShANRqQ8y">主流形态（用户预期）</th><th data-page-node-id="SqyfQEaHxecRCoSoFm8kBK">本项目实测</th><th data-page-node-id="OwG6XoJYc07FZcREKHtre7">评分</th></tr>
+        </thead>
+        <tbody data-page-node-id="OHr35NrbStoehWKNE05exi">
+          <tr data-page-node-id="G2b7MmH3uUo9LQt1ua3a1T">
+            <td data-page-node-id="720VGsUXWH96W7AsICKNJK">课表主视图</td><td data-page-node-id="dbwKvDAJx4PjlQclWuQCit">教务</td>
+            <td data-page-node-id="OpTcAKZ9FLkRED1lxCtZvZ">周课表 + 当前教学周 + 下次上课倒计时 + 教室</td>
+            <td data-page-node-id="l9c15DeEZMdshwR28MbrPT"><span class="pill p-no" data-page-node-id="t2JDwMvxoxXmexD9yd1T0N">缺失</span> <code data-page-node-id="STVqlNlQAeCo7pFN0H9y1N">Course</code> 表有数据但教师端无视图；<code data-page-node-id="hkHPnY93o6YBbMRU1DiQ7I">TeacherSchedule</code> 是手记日程</td>
+            <td data-page-node-id="12gLOxCbNknvSmNrN8kTro"><div class="score" data-page-node-id="G3JLRy3QNUiWeQnj3DeF4o"><span class="track" data-page-node-id="U9xRDeGbxgfeFU45QypkL1"><i class="f-no" style="width:0%" data-page-node-id="pl7FIeHT8wvI4vNYkb9BBL"></i></span><span class="v" data-page-node-id="Fjth0tbGmmtkLSjfN7D0Wb">0</span></div></td>
+          </tr>
+          <tr data-page-node-id="3WkJrqIHA021Z8gDwBfGET">
+            <td data-page-node-id="7SSxAZ9aLycGR0cvqMSzwz">考勤 / 点名</td><td data-page-node-id="EzNsDoiyAXvgTHtvW2rrEY">教务</td>
+            <td data-page-node-id="cqDDtIhQdnFl88MVHYXkUE">按课次点名，缺勤自动通知辅导员，与请假联动销假</td>
+            <td data-page-node-id="zhWc3nXOoZ2ZDoY49bLBc9"><span class="pill p-no" data-page-node-id="IMXfcBYxJFHppjUnHk340w">缺失</span> 无 <code data-page-node-id="AXv33sgYkIzudIWnUghaLs">Attendance</code> 模型；请假是独立审批流，不校验实际到课</td>
+            <td data-page-node-id="eKUWyAI0jvETtVffYArlrD"><div class="score" data-page-node-id="kkxZnNFKbCs3jWoYPVVRhd"><span class="track" data-page-node-id="qtnUw4y1SDFoQ7eDKGUqvp"><i class="f-no" style="width:0%" data-page-node-id="fGIzHC39r0k1C3Sto8Pf3X"></i></span><span class="v" data-page-node-id="EiRYsrImvrlbwyE2XeCqpB">0</span></div></td>
+          </tr>
+          <tr data-page-node-id="RYVkGW7n4psb1RoIRMRW5t">
+            <td data-page-node-id="RqdDPAtvPH3XNjMupl1L43">成绩录入与分析</td><td data-page-node-id="bhcohHorzgtFIHx0LBjFC2">教务</td>
+            <td data-page-node-id="GkqCujtcWF90Mw17fLEw7f">教师录入 → 班级分布 / 及格率 / 排名趋势 → 低于线自动预警</td>
+            <td data-page-node-id="qlZwoH28Cl23QekHvIUE8a"><span class="pill p-part" data-page-node-id="8cyL7Zzjp3aDhgIJEnB9qh">半成品</span> <code data-page-node-id="RI4HltoqLNhfuYstTkZzZT">Grade</code> 只读；<code data-page-node-id="mCPEx5LBQC8nHDG76AKncq">class-evaluation</code> 出平均分与分布；<b data-page-node-id="x3dvTJ0jBQv3MIC5UQPPI9">无录入、无及格率、无排名趋势</b></td>
+            <td data-page-node-id="DztwHtIF8A36mqYIhuUfSM"><div class="score" data-page-node-id="ENf8eIS65t3UmFeRvlw4E2"><span class="track" data-page-node-id="gOPaHZd0EYZAsXR4ipYaFv"><i class="f-part" style="width:45%" data-page-node-id="M1DXy3rk5aMsYupqkEAHlm"></i></span><span class="v" data-page-node-id="lHbRK2brTuYRrw3Es8Tifg">45</span></div></td>
+          </tr>
+          <tr data-page-node-id="zV1P7goIXlR1xakpyTs5J3">
+            <td data-page-node-id="3SoF42hShnF5DjOOOEJGTn">作业布置与批改</td><td data-page-node-id="m81pcZGH7EatPbBUJDSQ6N">互动</td>
+            <td data-page-node-id="JvkhJ0E0Qc3Qm7Wz8kqCbS">布置 → 提交 → 批改 → 退回，带截止提醒</td>
+            <td data-page-node-id="EsMFcxmgEM3FjER23rns2P"><span class="pill p-no" data-page-node-id="CrOYxwjOZkzh0lm94HWOtQ">缺失</span> 无作业模型</td>
+            <td data-page-node-id="VqiCliRblb7QBGlksBnNSv"><div class="score" data-page-node-id="1e1o0DRfZzaP3akW7ZVeU1"><span class="track" data-page-node-id="YGtMaH7jgRidnALyXYhhvf"><i class="f-no" style="width:0%" data-page-node-id="v6J83TILvjBOFjKB8qXFrp"></i></span><span class="v" data-page-node-id="qxVPorKHCUB2kPz8Tan2Ff">0</span></div></td>
+          </tr>
+          <tr data-page-node-id="VSBqA93qOiSfU3nMFuwZFH">
+            <td data-page-node-id="dDJaXaMLJuYthTrJ1WUc7u">课堂互动</td><td data-page-node-id="s19jZraq1GtwO1oGxITzK5">互动</td>
+            <td data-page-node-id="y3vbytXUuhn1OucnGEuQPf">签到码、随机点名、抢答、随堂测、弹幕</td>
+            <td data-page-node-id="xHt6iqzVEDMcdQXgOvliAm"><span class="pill p-no" data-page-node-id="P1mm0kL5KkMOgGwPKvYh2z">缺失</span></td>
+            <td data-page-node-id="MTEU13YBebCe9LGcjUJKnb"><div class="score" data-page-node-id="WBzjcuvuG10p172uDDYh4Z"><span class="track" data-page-node-id="TI7fS0feXxaI4ZeCaEbIdp"><i class="f-no" style="width:0%" data-page-node-id="TRwS5XMsPekLH2O0E5rbuL"></i></span><span class="v" data-page-node-id="2qP4AhBBoV140PhV089bnM">0</span></div></td>
+          </tr>
+          <tr data-page-node-id="BsWs4o6eZb38JZjozMyXd6">
+            <td data-page-node-id="FQ4rdqeu9HIaSIan09iFSE">听课 / 巡课 / 评课</td><td data-page-node-id="BLpBvixvNWEkzyfFv0smUE">教务</td>
+            <td data-page-node-id="0eqwQBz9vt98NsCXX3681f">同行或督导听课记录、评分量规、改进建议回执</td>
+            <td data-page-node-id="tE3zunwOqC1HmPdVJP7H1d"><span class="pill p-part" data-page-node-id="Bhik2zavSkpfcm3AfuCaWL">部分</span> <code data-page-node-id="RANzkvP0Qv9G366oYbu4wk">PeerSurvey</code> 匿名互评可承载「评」，但无听课单、无量规、无改进回执</td>
+            <td data-page-node-id="9kdwpmyliKDdoE4Sl3aIrW"><div class="score" data-page-node-id="1DmqCf7r0zbEGkYSCLxACE"><span class="track" data-page-node-id="BazkNe82rMy3eJ96WtmM8C"><i class="f-part" style="width:30%" data-page-node-id="vv47Ray9MqnzdqzHCbCymZ"></i></span><span class="v" data-page-node-id="ADZQkDoGGGtoPUXpRDkebf">30</span></div></td>
+          </tr>
+          <tr data-page-node-id="Gyk63tHMqJrF7hJLkJTpTO">
+            <td data-page-node-id="bEHJjgJMrdDNDTtoWD1MxQ">学生分层标签</td><td data-page-node-id="vhgDCOcoPPEYHGjXLEBVUX">协同</td>
+            <td data-page-node-id="1PhShwQvyZcGQICv4MCeNo">自定义标签 + 规则自动打标（经济困难 / 学业预警 / 高频请假）</td>
+            <td data-page-node-id="Neo1n3tHIZ2KqRarwTHCCr"><span class="pill p-part" data-page-node-id="IPui3PhFtczZfRC1BE3uA2">半成品</span> 有 <code data-page-node-id="M63SqABTT2NilDJHx1pOG6">alert_pipeline</code> 规则与 <code data-page-node-id="cd2SBxEGW486MWQUkFwvGA">growth_tags</code>，但无教师侧自定义标签与可视化规则配置</td>
+            <td data-page-node-id="8vrUiqM7HNYpDB7Rfq1v28"><div class="score" data-page-node-id="NEvwMjKNxJnUW6E1BXP1qf"><span class="track" data-page-node-id="YnBggIaq7WhpJlPQHpAJL9"><i class="f-part" style="width:40%" data-page-node-id="qdwkMobIua4rLNk0rMkzGy"></i></span><span class="v" data-page-node-id="oMTeEPx2SzmtK0hImego0y">40</span></div></td>
+          </tr>
+          <tr data-page-node-id="keiJfrJl5amlNfnzbKdki6">
+            <td data-page-node-id="HNTFifW57Bpzxf7ZEsD5hJ">通知触达闭环</td><td data-page-node-id="zdGp6OoQYld1xHHDiXjnmC">协同</td>
+            <td data-page-node-id="a713lxIfbvtzt29ULvM8eG">发布 → 已读回执 → 未读催办 → 家长代收</td>
+            <td data-page-node-id="Ak8cUMky4F54MxOX3BLUJ8"><span class="pill p-part" data-page-node-id="xPD5G24R7vf6J1PRzrMDfj">接近</span> <b data-page-node-id="Yvzrtq3TOMuHK5bFjffX0h">真实已读回执已实现</b>（<code data-page-node-id="A4SkqrGPzGeHftQqbfTAeM">AnnouncementRead</code>），缺「未读名单催办」这一击</td>
+            <td data-page-node-id="MObLiVqFgJCHb2LJLsqPFf"><div class="score" data-page-node-id="1z0FPE7J1cQD0EpPoZ5I0M"><span class="track" data-page-node-id="GfFUrkRa6k8PPinG8DwpcA"><i class="f-part" style="width:70%" data-page-node-id="CL9Yu8vrETi4lGK28gYAWJ"></i></span><span class="v" data-page-node-id="vKZofGYGcYs8JZsNZI0r6q">70</span></div></td>
+          </tr>
+          <tr data-page-node-id="6IWu0HyDnITXBFw3uQ6G4U">
+            <td data-page-node-id="W31NvVRSZfc6uOHSh6z7Ai">统一待办</td><td data-page-node-id="Wcti9Urirjovpun4j2tawa">协同</td>
+            <td data-page-node-id="9L3G1EajFMtJ80FmG4xwUs">多来源汇聚、状态机、到期提醒、逾期升级</td>
+            <td data-page-node-id="dYusUXL4pXBvRDQf9e3bb2"><span class="pill p-ok" data-page-node-id="kZyo2UFB0li6RlCMhfGGoB">达标</span> <code data-page-node-id="R00BtSaZMbT29T2xHCqYK2">TeacherTask</code> 7 来源 + 5 状态 + 幂等去重，<b data-page-node-id="8PwOEa7kESMWZFKWlsWspD">优于多数同类</b></td>
+            <td data-page-node-id="TnJKe9KtIsq2iKvrBbrwoY"><div class="score" data-page-node-id="FYcAUIAeSFnAXrIQ9Xr09r"><span class="track" data-page-node-id="TT73LStIz4t8R0MHSCDzT5"><i class="f-ok" style="width:90%" data-page-node-id="esZr5FjqDCVGvxvrN3D57S"></i></span><span class="v" data-page-node-id="8ZBXlT8oTDz1hVg7i8kq9n">90</span></div></td>
+          </tr>
+          <tr data-page-node-id="ZWpXJXjzz3FTzGWP6RvnAK">
+            <td data-page-node-id="jTvzuCcjsB1JUs2NjYp9T6">审批流</td><td data-page-node-id="u09pH15WsQ72Wtu6bBihjT">协同</td>
+            <td data-page-node-id="TeC4q1VoVyPCCOitiDiCAz">可配置工作流、多级审批、销假闭环</td>
+            <td data-page-node-id="FIwRDoa2QZ18ZsHF02nTTc"><span class="pill p-part" data-page-node-id="Wi4ExXxL6kxSIWLhC8IQfZ">半成品</span> 三类审批可用，逻辑硬编码；<code data-page-node-id="svr4hFj8ZBYhzwQ96WtlPR">workflow_engine</code> 已存在但审批未接入；无销假确认</td>
+            <td data-page-node-id="bxuVRkcJlobbCQ9NqX4HW9"><div class="score" data-page-node-id="9boBZAPmHXgOy5vPzXDBt3"><span class="track" data-page-node-id="qy8p8Tv1nc2dYVvJDaRY4k"><i class="f-part" style="width:55%" data-page-node-id="FYAU3mjBtNaJsxtn3aTiJx"></i></span><span class="v" data-page-node-id="HtyTGKDtuhbqbyKPof6Yg3">55</span></div></td>
+          </tr>
+          <tr data-page-node-id="JqUexV2RPBcDD3zwAZ9g6w">
+            <td data-page-node-id="irJBRrxztXz4S8nJjGJlRm">心理危机干预</td><td data-page-node-id="hfAYCoPH2NK9eaIpgtAyQe">协同</td>
+            <td data-page-node-id="otejGZ6PUxnCrAc3pXRA0s">分级预警 → 干预 → 随访 → 闭环 → 档案</td>
+            <td data-page-node-id="B0UEhXDPwWd2FBfO0cyrn2"><span class="pill p-ok" data-page-node-id="AFdHZ5HcNT2mAhFpsGK9F6">达标</span> 四级状态机完整，是本项目最扎实的模块</td>
+            <td data-page-node-id="RG3oRigOZdbIfNCc7IMuJI"><div class="score" data-page-node-id="rySExBgun3mZUb0wJYQgQD"><span class="track" data-page-node-id="TleC6aqwmHSy1yEaPnMBEo"><i class="f-ok" style="width:92%" data-page-node-id="fkosYDHyMssYv2f8uU7OZd"></i></span><span class="v" data-page-node-id="IEO8U7YwOTd8P2PETwkDGk">92</span></div></td>
+          </tr>
+          <tr data-page-node-id="kg3JrfYkXPVn4vsXwGtz9K">
+            <td data-page-node-id="fiWlAG72Fu7t9wQuDVuDY4">家校沟通</td><td data-page-node-id="nUOvbHqVCU0FPgS3DNPKzE">协同</td>
+            <td data-page-node-id="eRxtbuCaZG5eQl4IYwxJtD">联系人 + 留痕 + 家长门户</td>
+            <td data-page-node-id="5GSEmHhpWC1uflTgJLdmyp"><span class="pill p-ok" data-page-node-id="HSOkxDqk7t0qTUafRTMRPV">达标</span> 含免登录家长只读分享页，设计优于多数开源方案</td>
+            <td data-page-node-id="FxUzxrMdz5zZq8ItV5gEfE"><div class="score" data-page-node-id="vnVIdRlTKgu04Hkvxm4Cp0"><span class="track" data-page-node-id="E75q9ZgbXSPSdUuAbugILb"><i class="f-ok" style="width:85%" data-page-node-id="l2lCCsLF5unbx2uoBaKuCm"></i></span><span class="v" data-page-node-id="b7FAcfLowAzQOcU2lBIhIC">85</span></div></td>
+          </tr>
+          <tr data-page-node-id="mldWImVWlMW90QDChBtmNe">
+            <td data-page-node-id="jVCeDQ2ip0BaUK2DqE5f6L">关怀 / 家访</td><td data-page-node-id="VhJrFbPCPJHzsexofg7mBB">协同</td>
+            <td data-page-node-id="2Pqk6mkSXCgbUqk3uOEdf9">关怀日历 + 家访记录 + 回访提醒</td>
+            <td data-page-node-id="E3KRs7NTHASkkILteTUCLs"><span class="pill p-ok" data-page-node-id="bANWKXqTeJa6vngcAdWKvZ">达标</span> 三子域齐全，<code data-page-node-id="MGRHK76vR3jcmicmaRQ8Q0">follow_up_status</code> 有回访状态</td>
+            <td data-page-node-id="f8bCq8FuPcwovWcmNKCKSz"><div class="score" data-page-node-id="x6uzXlTx0wJYVSzHaew4Aj"><span class="track" data-page-node-id="MGZO7cBvE5mKME16HbMXS7"><i class="f-ok" style="width:85%" data-page-node-id="8Up1T2AJNNEG6ugjyVsvna"></i></span><span class="v" data-page-node-id="tju0RoE85XuL1c6c02VQk0">85</span></div></td>
+          </tr>
+          <tr data-page-node-id="7PHcCfNSbEtaOb1YFPlBCp">
+            <td data-page-node-id="ASkugXCk00PY2SpdR5VbVq">学生画像</td><td data-page-node-id="OBOBDmZgGAHDp5kcyae7ow">协同</td>
+            <td data-page-node-id="alUL1qal3F7BcHxbybN8oZ">技能 / 成长 / 风险 / 家庭多维画像 + AI 诊断</td>
+            <td data-page-node-id="TDN4sY22COcB4FTvEcFIZV"><span class="pill p-ok" data-page-node-id="3ukwTeNJG58FdDOm4dZApQ">达标</span> 7 Tab + AI 洞察 + 转任务，深度足够</td>
+            <td data-page-node-id="Nb7cX4yWbJT0Vq3tFOxM4s"><div class="score" data-page-node-id="vM6kO73uefwKJMDxJaaCVC"><span class="track" data-page-node-id="11B95vEc8xcJ0HdLwgNG33"><i class="f-ok" style="width:85%" data-page-node-id="58or6kI4pPDYvB7eFwIPyQ"></i></span><span class="v" data-page-node-id="GMuYTliAxXofZAiUXIQ26t">85</span></div></td>
+          </tr>
+          <tr data-page-node-id="wsJXnKil22tEhmEQkVis3I">
+            <td data-page-node-id="UNtVvwlBNclixNEu2mSnhM">消息协同</td><td data-page-node-id="5DWWP4EC0xsViIiBAsb3LY">协同</td>
+            <td data-page-node-id="g4TERKKJWsfQjn0m95EV8r">会话 / 通讯录 / 通知，多端同步</td>
+            <td data-page-node-id="XlDZ9NiDSRIGvRDqp9MlrH"><span class="pill p-ok" data-page-node-id="JTe8olci6QvcXDaunQDO3N">达标</span> 钉钉式三合一，前端 194KB 是最大单页</td>
+            <td data-page-node-id="jIuIDV0COzj2tB2yqjNXVD"><div class="score" data-page-node-id="SosCHaTOhNev4pmOYg3cVi"><span class="track" data-page-node-id="YJBwhRGO0qCwJThyL3Jsnl"><i class="f-ok" style="width:85%" data-page-node-id="pIcUgF2vzbSCuDfCq0X3It"></i></span><span class="v" data-page-node-id="pnA1VWfAq6BEEAzBKxZ8ge">85</span></div></td>
+          </tr>
+          <tr data-page-node-id="WPjLf1v8Y7jqE6kEJjgEc2">
+            <td data-page-node-id="ZaPREsdharXxW1scTjGATY">AI 助手</td><td data-page-node-id="5pVliuGHZCDJ06YSGoGa7R">全线</td>
+            <td data-page-node-id="ZD0ffYAftnxq6uD81BAQVN">能查数据、能办事、有记忆</td>
+            <td data-page-node-id="DHbuLCTW41M20NQFrvLvgk"><span class="pill p-ok" data-page-node-id="SCYJLSCFgPM3WOm6WNv6U8">达标</span> 22 个工具可写操作，SSE 流式，桌面常驻——<b data-page-node-id="gh4neRGTDJ91fuzpATKIkD">强于多数同类产品</b></td>
+            <td data-page-node-id="IwO3hhGzf9weDEp3ZyT5Hu"><div class="score" data-page-node-id="geOqOgJXCScdtFuTrtyHkg"><span class="track" data-page-node-id="R3PpFpRjrQHsCM94dimkSe"><i class="f-ok" style="width:88%" data-page-node-id="aCSHloW1cN7oodoGgk8QXI"></i></span><span class="v" data-page-node-id="dN0aZ9t9HcgEhLKLZefBfX">88</span></div></td>
+          </tr>
+          <tr data-page-node-id="30vpGiXPDWkTHfKlFjDs4I">
+            <td data-page-node-id="RxGraDfUxGEMVUufVlcvdD">教师个人成长档案</td><td data-page-node-id="CkqymSmLtzfmht0GY6rDPd">专属</td>
+            <td data-page-node-id="hRJYgDhNjXoNo4icJa6aEq">（行业均无独立模块）</td>
+            <td data-page-node-id="Z2KYHYMOXKkPgKG078yueT"><span class="pill p-part" data-page-node-id="MSbG2Fa3cmtGKbNyk1G503">被埋</span> <code data-page-node-id="NB6n6pk8AoDa7XKhUxqnhg">TeacherPortfolioItem</code> 四段式已建，但入口藏在学生档案页里</td>
+            <td data-page-node-id="e2but6n2MX8W0dfgJUPq7g"><div class="score" data-page-node-id="7kQUPIrff2jb3zeZ5G3nao"><span class="track" data-page-node-id="p0g7j1GSSF8yjMIs6G9qHr"><i class="f-part" style="width:50%" data-page-node-id="mhZ2rDQDUAmOyYeEA27lYS"></i></span><span class="v" data-page-node-id="dJHdW5j3wyyCVgl3CuzXPg">50</span></div></td>
+          </tr>
+          <tr data-page-node-id="1wG4cn2GrVEXmheVzvAzLw">
+            <td data-page-node-id="dA9ncXlvcToWIldADHAnjN">教师履职画像</td><td data-page-node-id="XIb7RfLjmwlI2Kb0K0x2yn">专属</td>
+            <td data-page-node-id="BZPHQhPFs4zZNm2yppXt4v">（行业均无）</td>
+            <td data-page-node-id="nOMogGYXbBKELiyx0tVLRu"><span class="pill p-no" data-page-node-id="TDBnL5kNtrvJBQi4g71CNv">缺失</span> 数据全在（关怀/家访/留痕/任务），但无聚合接口与视图</td>
+            <td data-page-node-id="fVc69Yo98z3sMp5r6cFvBi"><div class="score" data-page-node-id="wUBPwIwWsbJ81NfFW1v9t2"><span class="track" data-page-node-id="WajuNbq0uM74tFqVWeEsMP"><i class="f-no" style="width:8%" data-page-node-id="RHZSeoBHBKu5AfQ7I34JEs"></i></span><span class="v" data-page-node-id="6ZY3CJTXNBHsqfKUTlmYqz">8</span></div></td>
+          </tr>
+          <tr data-page-node-id="cVKTxqGFjhp1se1HDIrjSe">
+            <td data-page-node-id="iLErdTQXoTP5CaUXRCFEUb">教师激励体系</td><td data-page-node-id="K6PmC5jAQTfHPSRubNpGVM">专属</td>
+            <td data-page-node-id="uglIsEdWyDBcsh35dFfGtB">（行业多为空）</td>
+            <td data-page-node-id="KZLVcZS7g1u2Qbde1EvAYA"><span class="pill p-part" data-page-node-id="FOSL0nDby9W5VqnC9mZTnK">半成品</span> 7 枚教师徽章 + 6 级等级已实现，但与教学、成长档案未打通，等级文案偏 C 端（新芽/幼苗/领航）</td>
+            <td data-page-node-id="MG5CGiCvw4JiuZ9KTLjFDE"><div class="score" data-page-node-id="8SFSH2ihaCOQM3U6BmIikB"><span class="track" data-page-node-id="pdHPlMBTu2SC4d71kDs1NL"><i class="f-part" style="width:55%" data-page-node-id="xSF6h5bOi4dID5M1R4so9r"></i></span><span class="v" data-page-node-id="dYAoNsZwbccUHl8Dncd17M">55</span></div></td>
+          </tr>
+          <tr data-page-node-id="sU9fGa3fk7Glhzmd3WIcE6">
+            <td data-page-node-id="QNFM73BlkjCZl8hL7eRIFA">教学资源库</td><td data-page-node-id="E0WR9B8roXH34RmfqsH0Gb">互动</td>
+            <td data-page-node-id="B50JoxkRMMNdSKpBQ7BNJL">按课程组织的课件 / 习题 / 素材共享</td>
+            <td data-page-node-id="OXm6AYvPrvQb3CIRtiuxq6"><span class="pill p-part" data-page-node-id="HBIfv9rhKuwaAIM6nKwPmn">偏学生</span> 有 <code data-page-node-id="gmbKHfQfAUwuPB0soTB1hO">material</code> 模块但面向学生材料归档，非教师课件库</td>
+            <td data-page-node-id="5KvIA2diH9ZyfPyv5Y6knR"><div class="score" data-page-node-id="rMNJvJ7plBbJjMTluExO18"><span class="track" data-page-node-id="Ce6h01UYh1RuA8B9S90yQm"><i class="f-part" style="width:25%" data-page-node-id="UxtVnTYO94BoA4y04By1T7"></i></span><span class="v" data-page-node-id="ErNsMOCM8cE1rZhzbwrOxg">25</span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-warn" style="margin-top:22px" data-page-node-id="H9f3DxfQuRufM4VoV656yP">
+      <b data-page-node-id="ebwSWnAfRdkr7NuoSElrLi">矩阵读法：</b>本项目在「协同育人线」平均 82 分，在「教务线」平均 9 分，在「互动教学线」平均 8 分。而<b data-page-node-id="ig1gA0W3Q86Gh8BFxDuQYY">教师职业的重心在教务线与互动线上</b>——这正是「没有市面上主流教师端特色」的精确解释。不是做得差，是做在了侧线上。
+    </div>
+  </section>
+
+  <!-- ============ 4. 个人特色 ============ -->
+  <section id="teacher" data-page-node-id="xX6O7C5Oq99XDwkS4P2YGm">
+    <h2 data-page-node-id="5GgkQ3651U4OlnnRFaZFt5"><span class="num" data-page-node-id="1UKKoDPHoo4nSm8YAa7iKc">4</span>个人特色：把「教师」放回第一人称</h2>
+    <p class="lead" data-page-node-id="Fu0C2WXn6tRgOhFQQV6LQM">这一章解决「没有教师端个人特色」。核心判断是：<strong data-page-node-id="CukCtNz0n1CGVHd2RR4c0Z">素材已经齐了，缺的是承载页与叙事。</strong>不需要新造业务，只需要把已经躺在数据库里的东西，换一个主语重新呈现。</p>
+
+    <h3 data-page-node-id="bvhwO5FNSmKmBHQOlBWNIw">4.1 素材盘点：已经存在但没被用起来的资产</h3>
+    <div class="grid-2" data-page-node-id="Z1LdX3P3FlxQMf9FeESgFh">
+      <div class="col-box" data-page-node-id="Bo4iFiHJAF4HxDQ36W0SDV">
+        <div class="hd" data-page-node-id="6CYCwOfvsofwHg9PxElaHB"><span class="dot d-purple" data-page-node-id="LeQq3nHBxKcYHJvDH9k62h"></span><h4 data-page-node-id="5NeDWFuLOUjsKIGdRKOAah">7 枚教师徽章（<code data-page-node-id="iQYTHKkQoNyPb8h9w5BSHl">badge_service.py</code>）</h4></div>
+        <ul style="font-size:13.5px;margin:8px 0 0" data-page-node-id="rMd6gd2CiRboDhtHBFPkBx">
+          <li data-page-node-id="yU4KwHXgK4xKE6Yp1yDoh0"><b data-page-node-id="lrBdHx3gTymZ77hAZ6mkGc">初见关怀</b> 🫶 1 条关怀记录</li>
+          <li data-page-node-id="jlnDR4KpjURyl5WSdMRB8g"><b data-page-node-id="75ma6A8H0VvJCdPZtKCMyj">走进家门</b> 🏠 3 次家访</li>
+          <li data-page-node-id="6hxrQvPUbHQKyg7oDCWwuy"><b data-page-node-id="eRSbMyMGUA9n2jSiah4o9H">及时表扬</b> 🌻 5 次正向激励</li>
+          <li data-page-node-id="Ry8P6CJFMeV1p5QyglnVl5"><b data-page-node-id="23bxDwJQff4mrZoOZcfTRD">家校连心</b> 📞 10 条家校留痕</li>
+          <li data-page-node-id="IZ1Ml5yB5LUhC2yAoxuuoA"><b data-page-node-id="hMY7v0mat6tO0n0bo3wLhv">雷厉风行</b> ⚡ 办结 20 条任务</li>
+          <li data-page-node-id="lzJM0Ci0T0lySvVR1K8t3K"><b data-page-node-id="0BliPAPBCbLfevhLHOSvly">教学展示</b> 📚 5 条档案成果</li>
+          <li data-page-node-id="V5DH4LkBHD9sZxTN4tEBbK"><b data-page-node-id="qmFhyh4GNnbw1T8UaEi4UL">桃李满园</b> 🎓 名下 10 位学生</li>
+        </ul>
+      </div>
+      <div class="col-box" data-page-node-id="154nYzHvhhxTPMdcbPPjO7">
+        <div class="hd" data-page-node-id="WhCB3GcE8FYXLSrWFTbnNe"><span class="dot d-amber" data-page-node-id="BrR2QN6nhwI83QWG5YCtie"></span><h4 data-page-node-id="tCXO8tQewJmQAp9PvymAYg">6 级等级阶梯 + 成长值</h4></div>
+        <p style="font-size:13.5px;margin:8px 0 0" data-page-node-id="XQot1ll15oC5hNgX8jXb6J">新芽 0 → 幼苗 60 → 青苗 180 → 繁花 400 → 硕果 800 → 领航 1500</p>
+        <p style="font-size:13px;color:var(--danger);margin:10px 0 0" data-page-node-id="oajff5ZrstYJH5RCPj801x">⚠ <b data-page-node-id="4kBDjIaBPhpG8RO0g3Zcfj">问题：</b>这套等级与学生端共用，文案是 C 端游戏化语言（「刚刚开启校园智能之旅」）。对一个 35 岁的辅导员说「你是新芽」，不会产生职业认同，只会产生违和感。教师激励必须换语言。</p>
+      </div>
+    </div>
+
+    <h3 data-page-node-id="lkVYQ3BMGtIZ7gEQTcXIJR">4.2 建议一：新增「我的育人成长」独立页面（My Growth）</h3>
+    <p data-page-node-id="VLgNsQHSSjzBUUinJKtkmu">这是本轮最重要的一个建议。它的位置不是「再加一个功能」，而是<strong data-page-node-id="EwA3LMv8q827E0CBu4AfHc">把散落的教师侧数据第一次聚合成一个叙事完整的页面</strong>。建议路由 <code data-page-node-id="X9iBlvnImLpn2XZZuapKD8">/teacher/me</code>，并置于侧栏「我的工作台」分组首位。</p>
+
+    <div class="layer" data-page-node-id="APD5XtKTtHx1A4YycTvbvS">
+      <div class="lv" data-page-node-id="OI3jkPWv3mPg99Uh8mBJAG">A</div>
+      <div class="body" data-page-node-id="5DB07rsn6lIdAtxYpksMt9">
+        <div class="t" data-page-node-id="0VTDxDwDwprbHPsqnKEYSG">履职画像 —— 「我做了什么」</div>
+        <p class="d" data-page-node-id="4QNlK76s08UEfaqn1A0J19">四维指标 + 环比：关怀密度（<code data-page-node-id="nwBNcXuLD5Et3VumgGBhIb">CareRecord</code>）、家访完成（<code data-page-node-id="KGRyldS8GFw3AnG3ZgoBeJ">HomeVisitRecord</code> + 回访状态）、家校留痕（<code data-page-node-id="ciUv46t9Wf1PjQrZUTEJfE">GuardianContactLog</code>）、待办办结率（<code data-page-node-id="5ld9P4K4HlLs01xHAOdiaV">TeacherTask</code> done/total）。数据全部已存在，只需一个 <code data-page-node-id="C9t21aELst1uGM6lhrnJov">/api/teacher/me/profile</code> 聚合接口。这是最能让教师产生「被看见」感的一屏。</p>
+      </div>
+    </div>
+    <div class="layer" data-page-node-id="hd6CSrqi06BxakdHA1TBhn">
+      <div class="lv p2" data-page-node-id="zGrkqz4qxBf8y8yy5Vnu6V">B</div>
+      <div class="body" data-page-node-id="apglWW3Mxyzv3x7wqxpsyw">
+        <div class="t" data-page-node-id="camXfkOF6xYslzzoGtNacm">成长轨迹 —— 「我走到哪了」</div>
+        <p class="d" data-page-node-id="beHb7CWpUooPKGoEawH2Eh">把 <code data-page-node-id="es8zrJcD8kjfzLCORfbD2n">TeacherPortfolioItem</code>（工作案例 / 荣誉 / 培训研修 / 工作研究成果）+ 徽章解锁 + 等级晋升合并成一条时间线；配一张<strong data-page-node-id="L7lWTxAjcFjGg6o1aDHOA4">育人影响力曲线</strong>（覆盖学生数 × 关怀次数 × 闭环率）。</p>
+      </div>
+    </div>
+    <div class="layer" data-page-node-id="9MRTD7vaOgvfMmKYXoBXbf">
+      <div class="lv p3" data-page-node-id="TCy4ylwu0YV2ypehVSqoL1">C</div>
+      <div class="body" data-page-node-id="DV7bq8xuODqJdeAUuOWyrZ">
+        <div class="t" data-page-node-id="NgJdikYTCW0GGhJqqtlUqv">专业能力雷达 —— 「我强在哪、弱在哪」</div>
+        <p class="d" data-page-node-id="FsU83NGENjhKmRML6OVY7P">对标《高等学校辅导员职业能力标准（暂行）》九项能力：思想理论教育、党团建设、学业指导、心理健康、网络思政、危机应对、职业规划、资助育人、班级管理。初始分由既有业务自动折算，后续可由 <code data-page-node-id="lYsGFFXj7oaQhMf6fLWmRb">PeerSurvey</code> 的「我的被评」聚合分回填（<code data-page-node-id="T2oQKu844e2paKhnWWwLT9">reviewer_id / review_comment</code> 字段就是为此预留的）。</p>
+      </div>
+    </div>
+
+    <div class="callout co-purple" data-page-node-id="RlR4qllS4E0fcrYcZ4cX3I">
+      <b data-page-node-id="LBEBIitxjxZfqaVwv06wX1">为什么这一页能立住「教师端个人特色」：</b>调研的 20+ 个开源校园系统<b data-page-node-id="4PISYewTb7xEY151S8fLGF">没有一个有独立的教师成长模块</b>——它们都有教师端，但教师端里没有「教师」。这一页做出来，就是产品层面唯一的、抄不走的差异点。它同时也是把「育人事务」升华为「教师职业发展」的枢纽：每一件琐事都会在这里变成一次成长。
+    </div>
+
+    <h3 data-page-node-id="ZiaaTiVhBRhB6rp3qVwezH">4.3 建议二：重排信息架构，让「我」在侧栏可见</h3>
+    <p data-page-node-id="WcLOhZUtgJZGFbOBrddCU1">当前「我的工作台」只有 1 项，是界面层最刺眼的空洞。建议重构为 4 项，且命名从「工作台」升格为更专业的口径：</p>
+
+    <div class="tbl-wrap" data-page-node-id="c9xOE2wIjXVUQlmpsdcM3Y">
+      <table style="min-width:auto" data-page-node-id="cjMOCRItshsU7Q7sWlMZiF">
+        <thead data-page-node-id="U69UfwtvUmfIlCQ3xX15jv"><tr data-page-node-id="Z0KDR1WjmudUm2IIUyJ96e"><th data-page-node-id="yCBXY1eFQDiQ9f6iOMzPsh">分组</th><th data-page-node-id="flyuRAZO4otalulOsI9OrL">现有项</th><th data-page-node-id="jSikiWXhmUIFNo9MKNs2ET">建议调整</th><th data-page-node-id="00GFNu1eitaLlJDiSBA5BW">理由</th></tr></thead>
+        <tbody data-page-node-id="oqoRFEcnAH0ERiaWBFVN1I">
+          <tr data-page-node-id="844FvCk5wBcUnuae9qR1Tn">
+            <td data-page-node-id="zrQiPfDuPP6WUjRxtlpSkx"><strong data-page-node-id="quIlqgblv7ZJmyhOnAFgQb">我的成长</strong><br data-page-node-id="CNLAYHSMQASivee9ScqWSs"><span style="color:var(--muted);font-size:12px" data-page-node-id="ntHGwIXQg4uIi0T7NMlrIB">原「我的工作台」</span></td>
+            <td data-page-node-id="TmXaRPVmRFDbqjr7bLNHE2">个人中心</td>
+            <td data-page-node-id="d9UXqvxCnkie9qFVShNqwT">
+              <b data-page-node-id="w3kyqDDiggBzg9OGG4lI5n">+ 我的育人成长</b>（<code data-page-node-id="TlQQDkWx44x38hSwFsBrfG">/teacher/me</code>，新）<br data-page-node-id="jNNpnoRzTgDGAdHzb4OdOf">
+              <b data-page-node-id="ej1pgon93WGfvGfSEmPt8x">+ 我的育人档案</b>（<code data-page-node-id="4XseCQpZrH3E7Lhy9cz6s3">/teacher/portfolio</code>，从学生档案页剥离出教师侧入口）<br data-page-node-id="DrchD2kCPUPoR8xMIy58tw">
+              <b data-page-node-id="VfMqAQwetVrgFBd5TKyFrS">+ 我的被评与问卷</b>（<code data-page-node-id="7qlnYduyMBFBpek4KyYaRl">/teacher/survey</code>，原不在侧栏）<br data-page-node-id="CIoiJFxPYVlL8JrgfNGgPE">
+              <b data-page-node-id="TYZ132dduzQqmsm4sYSKzS">+ AI 洞察周报</b>（<code data-page-node-id="PcZ7aZsUJwaqe7Y8Rxh2tl">/teacher/ai</code>，原不在侧栏）<br data-page-node-id="yDkmbiuzNEdXqIDNSCT7uP">
+              个人中心（保留，社交向资料与设置）
+            </td>
+            <td data-page-node-id="2NfFrzHKflqohJ5MxsRHhT">把 3 个已存在但被埋的教师专属页面提到一级；新页面承接叙事。分组名从「工作台」改为「我的成长」，语义从「工具集合」变为「职业发展」。</td>
+          </tr>
+          <tr data-page-node-id="nWIM8Emv7STe6jFm9uSB6U">
+            <td data-page-node-id="3rPyPxqxfbcBC7HUGvrBeU"><strong data-page-node-id="o49F3tEL63kInoagkztwxj">教学工作</strong></td>
+            <td data-page-node-id="Qng9jtrGYSkhNoE1uDjtkV">首页 / 任务 / 审批 / 预警 / 消息</td>
+            <td data-page-node-id="VRNHzHop5GaAvB9u2FZEfF">
+              改名 <b data-page-node-id="Kb2qgv2fxPCHCfeF2ZgiGN">「班级育人」</b>（与现有第二组「班级育人」合并去重）<br data-page-node-id="EuFICr4OCZOTvTYcgHv1Qu">
+              新增独立分组 <b data-page-node-id="b0DOxhrQALja0hzKPgqCgV">「我的教学」</b>：课表 / 考勤 / 成绩 / 作业（第五章落地后）
+            </td>
+            <td data-page-node-id="8HigjbpE2FhK3eziZbwjk7">现「教学工作」名不副实（5 项全是学生事务）。改名后腾出「教学」这个词，专门留给真正的教学线，命名即产品定义。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-info" data-page-node-id="ZCeF6YihrxWAJ3Ygi9yab8">
+      <b data-page-node-id="GjPCgd26ZKkrmHgDjsagJz">顺带解决一个隐患：</b>现在 <code data-page-node-id="lGM5fiCFjKrLNm1O9UzRwj">AllFeaturesPage.vue</code> 里手工维护了一份 9 项功能清单，首页宫格又维护一份，侧栏再维护一份——三处重复，且已经不同步（会话/通讯录不在总览页）。建议抽成一份 <code data-page-node-id="ieG6vhIIEnt1CvCvFt248U">teacherNav.ts</code> 单一数据源，三处共读。这也能让后续每次加页面只改一处。
+    </div>
+
+    <h3 data-page-node-id="hg2yj4WV4TXukdlGjFvLbg">4.4 建议三：教师激励体系换语言</h3>
+    <p data-page-node-id="ZoNtRsOhazMWKDpveyc68Y">现有等级阶梯（新芽 / 幼苗 / 青苗 / 繁花 / 硕果 / 领航）是学生成长隐喻，对教师不合适。建议教师侧独立一套，用<strong data-page-node-id="pIwGd3IDGRtnOOrbDBpa0l">职业资历 + 育人实绩</strong>双维度命名：</p>
+    <div class="tbl-wrap" data-page-node-id="N3BnQA0mMHjS3tfixvGUSn">
+      <table style="min-width:auto" data-page-node-id="k9DazU1tS6dG1siRTkZN5s">
+        <thead data-page-node-id="EAgwRzA1gwLofxlaEZ4B4N"><tr data-page-node-id="d121Y5x4MZnATLTl4wW7AX"><th data-page-node-id="OlPgVad4R1sWEZSA3w1Hcu">成长值</th><th data-page-node-id="7zUsUSVYM4a6kSRDvNyYnU">教师等级（建议）</th><th data-page-node-id="ULUl7tISnvb7zfcUjAOs6x">一句话</th><th data-page-node-id="CC1KxUpBKpzkWCjQqEz5cG">对照现有</th></tr></thead>
+        <tbody data-page-node-id="CCbnL9q74QFnxzs5IGv7x4">
+          <tr data-page-node-id="4z9ujQbObefPDN7s64PN3i"><td data-page-node-id="BOpEeEh6kwl7FliYMUQ0fY">0</td><td data-page-node-id="WGdRj7UFHDBhD8ZkgejEvj"><strong data-page-node-id="YJFrhdzXdXnrr6KVvos3Cp">初任辅导员</strong></td><td data-page-node-id="SPJe4Qxd9i6BpDehAh7rEH">刚接手班级，正在建立工作节奏</td><td data-page-node-id="om6fIvHA1vk58LlNj4Ivyw">新芽</td></tr>
+          <tr data-page-node-id="t8QofXBryt6PfCC8MQseH9"><td data-page-node-id="COCXhJzIXjVgrIBoAFOFvH">60</td><td data-page-node-id="4NjzM2OzQvWerKstwRNkEE"><strong data-page-node-id="uY6YtswC22kClcfnOAaskF">在岗辅导员</strong></td><td data-page-node-id="o61PBmIfVFqFTw8paUGKiC">日常工作已流程化</td><td data-page-node-id="RMYEQIWeEt7FxmbQaokFDz">幼苗</td></tr>
+          <tr data-page-node-id="vSVXAoEWo6TdSNTnHoncGR"><td data-page-node-id="I2K4BInylgCT7CJTlGxFdD">180</td><td data-page-node-id="8Ramm1gHo5neSFpY7ZnF37"><strong data-page-node-id="D2sVgWInVbIKitGEvNg4Dn">熟练辅导员</strong></td><td data-page-node-id="PKEzkROu8W1pEUTyu2tyJM">能独立处理复杂个案</td><td data-page-node-id="m1JpsOj0jogVyYknjN9kZP">青苗</td></tr>
+          <tr data-page-node-id="1O5WEHIAEKaQU8KFQGO5A1"><td data-page-node-id="AS5emvmxOcrKtgEL6tFM8p">400</td><td data-page-node-id="bDTRF61CCPGssvli5t3baN"><strong data-page-node-id="xiCFhoUaMRe0HZZgZM3k4x">骨干辅导员</strong></td><td data-page-node-id="s9jEIPUxrwr0kjezCfxbFS">育人成果开始被同行看见</td><td data-page-node-id="fhw8xRMh07mR5ZieCTWdkR">繁花</td></tr>
+          <tr data-page-node-id="OvfjRn3HHcTQXZqQd3cgCX"><td data-page-node-id="qs4FcN10a9Iu1YHpau6iWl">800</td><td data-page-node-id="HJDcjTq0A72rwUo1IoIVVk"><strong data-page-node-id="l8dAfJ9BLznP2ynGRkmeeN">资深辅导员</strong></td><td data-page-node-id="bMwDAKNaNI7euHm0Nv8PHs">形成个人育人方法论</td><td data-page-node-id="skx8D6b24O9tDkC2BoMrK0">硕果</td></tr>
+          <tr data-page-node-id="asflvqgPOPUvVsnDJUGI0c"><td data-page-node-id="w8MwPDcDPjjGc3sjkzVxGi">1500</td><td data-page-node-id="y1MTzVRW0qfgH9SJ80A0tY"><strong data-page-node-id="U1BT3n9nWyb9Ul8jYpPdBx">育人导师</strong></td><td data-page-node-id="VBUPNWAMESSkrYWpnfMPEa">能带教新辅导员、输出经验</td><td data-page-node-id="JBx0KbVoULdJHjnOCKVSpT">领航</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:12px" data-page-node-id="DSRGXH9UNw5mhEWnLZkt0D">同时给「教学展示」这枚徽章改名——它当前叫「教学展示」但指标是 <code data-page-node-id="DFSoc65po4px5LFMK5Zp4u">portfolio_items</code>（档案成果），与教学无关，容易误导。建议改为<strong data-page-node-id="jLgcWatt8rpcC9ghkLSWFO">「育人沉淀」</strong>。并补 3 枚教学线徽章：<strong data-page-node-id="CCROIIPUVGTsy0vKxQaFKv">「课堂常客」</strong>（完成 20 次点名）、<strong data-page-node-id="QAllWUQ4lxroixBf5Cdgh2">「全程跟进」</strong>（连续 4 周布置作业）、<strong data-page-node-id="uUKq1UdPXNra4PyZCn8YFW">「学情洞察」</strong>（首次完成班级成绩分析）。</p>
+  </section>
+
+  <!-- ============ 5. 主流特色 ============ -->
+  <section id="mainstream" data-page-node-id="7Nji3C9cQ4C0fAlUxGBBv4">
+    <h2 data-page-node-id="cudktVRU8ezBp3rl9PvLsd"><span class="num" data-page-node-id="tsRqGQRdMHNxXyY6mtUgzf">5</span>主流特色：补上「教学」这条线</h2>
+    <p class="lead" data-page-node-id="1z866EEWueUvnEcDQxHkBh">这一章解决「没有市面上主流教师端特色」。策略上不建议真去对标学习通做全套互动教学——那是另一个产品。建议<strong data-page-node-id="1lUMdvdDsYdJie9zyt0G5A">只补主流教师端「不可或缺的最小集」</strong>，并且用本项目已有的 AI 与闭环优势去做差异化。</p>
+
+    <h3 data-page-node-id="eX295TOI09DAhn8yoOoM3G">5.1 前置改造：一条几乎零成本、解锁全局的迁移</h3>
+    <div class="card" data-page-node-id="U8tgwFm0n85BiKhk0RaQHU">
+      <h4 style="margin-top:0" data-page-node-id="GRjOIeiE9nEBwjvkk2tWgC">把 <code data-page-node-id="Rm6MvSDA5729oRRLnpiX3V">Course.teacher: str</code> 改为 <code data-page-node-id="otPS3OhOLtLuMvHjWNFEuC">teacher_id: int | FK</code></h4>
+      <ul style="margin-bottom:0" data-page-node-id="v4q4wbGsnfesYtJyHms5aA">
+        <li data-page-node-id="6iMpMywB2RNw3sV4uuhDRz"><b data-page-node-id="keXQwYY3ankxXBA5msFKKs">迁移方案：</b>新增 <code data-page-node-id="j1lISFMr3BscG1n0i6YGwD">teacher_id</code> 列（可空）→ 回填脚本按 <code data-page-node-id="AkGFSejEPJr0HxwX9mo6PP">Course.teacher</code> 字符串匹配 <code data-page-node-id="T0jz5O117QCqFfRXZC5lhA">User.name + role=teacher</code> → 无法唯一匹配的记录留空并输出核对清单 → 保留原字符串列一学期做兼容读兜底 → 教师端接口增加 <code data-page-node-id="zLhlHmUxWa3Sklq7kOB6r3">OR (teacher_id = me) OR (teacher_id IS NULL AND teacher = my_name)</code> 过渡查询</li>
+        <li data-page-node-id="vDhRkpHKT9zjmyASnZUqOa"><b data-page-node-id="rFQ20t8t7eRzhZ6W3ZRQDE">影响面：</b>仅 <code data-page-node-id="zpznzczngmuT2Ft1G2lQg4">models/academic.py</code>、<code data-page-node-id="BxO94xD00xQX5ya0AqsHvx">api/academic.py</code> 两处；现有学生端课程查询走 <code data-page-node-id="acOjEAHPN4XifQcc3LM1rK">class_group_id</code>，完全不受影响</li>
+        <li data-page-node-id="xAAVEwnVU2sme6KbNQOW4C"><b data-page-node-id="5tTQF3I5u1rXrZi3M3p2rp">收益：</b>解锁「我的课表 / 我的课堂 / 我的成绩录入 / 我的作业」全部四个模块；让「我教的班」与「我带的班」第一次在数据上分开</li>
+      </ul>
+    </div>
+
+    <h3 data-page-node-id="hE3tvhPshdrMEzlSNnOoTu">5.2 四个必修模块</h3>
+
+    <div class="two-col" data-page-node-id="j5D8YpZ2l69gQhBmXeW5ir">
+      <div class="col-box" data-page-node-id="0jQG7sckg7XF5VQEqkugBn">
+        <div class="hd" data-page-node-id="o9WbczjP0lUhvYpNyN45wy"><span class="dot d-blue" data-page-node-id="fHUdH0WFvRZDrttcqfrFbV"></span><h4 data-page-node-id="SMT3gi3OBmGUK9bDeooa19">① 我的课表与教学周</h4></div>
+        <p style="font-size:13.5px" data-page-node-id="wGGBt8PLbjXlLAIKVMz9yL"><b data-page-node-id="ur2vanretmCGqD7mZS6nAU">为什么必须有：</b>主流教师端的第一屏。打开就知道「今天几节课、在哪、哪个班、第几教学周」。</p>
+        <p style="font-size:13.5px" data-page-node-id="G3ymtw5QsCqCi7FVV5EgQD"><b data-page-node-id="Pzs4YGB6edxWxYqDcZanyr">做什么：</b>复用学生端 <code data-page-node-id="9eRUv2G5irCg9lr2S9o7EO">SchedulePage.vue</code> 的周课表组件（已相当成熟），改为按 <code data-page-node-id="LwEastm2sepl1FJyL9OIq3">Course.teacher_id == me</code> 过滤；顶部加「第 N 教学周 + 下次上课倒计时 + 今日课时数」；点击课程卡弹出当次课堂面板（考勤入口）。</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:0" data-page-node-id="jDTv0hfxBIGYrFWK5riaTH"><b data-page-node-id="mn7RRqSKeeiX83hT6nbppg">成本：</b>低（组件复用 + 一个查询接口）。<b data-page-node-id="MCMGAO2rJrESaqHAGHuXeC">强烈建议作为教学线第一件事。</b></p>
+      </div>
+      <div class="col-box" data-page-node-id="AzxESMMI9dMNCIhGkkRBkF">
+        <div class="hd" data-page-node-id="1cnFqRUEwKhiMC7Zsg5Mtv"><span class="dot d-amber" data-page-node-id="VNWxEbJEjpXlotuIBqsBg8"></span><h4 data-page-node-id="dWDBxuARrJACaP0BuxQjyK">② 课堂考勤与请假联动</h4></div>
+        <p style="font-size:13.5px" data-page-node-id="ccLrFCqDc3Cy0oRcDvEG8w"><b data-page-node-id="sRvO37ZwIqqaE7laR2hBK8">为什么必须有：</b>点名是教师端使用频率最高的动作，也是「课堂」这个概念的入口。</p>
+        <p style="font-size:13.5px" data-page-node-id="RlfCLpsHotROm1e1gAYVst"><b data-page-node-id="kDH8amd86VAKeE0AZo6pNt">做什么：</b>新增 <code data-page-node-id="tXVQAsjtGugiZH9mFAGdk6">Attendance</code> 模型（course_id / date / period / student_id / status: present/absent/late/leave）；一次点名按班批量落库；<b data-page-node-id="LKovEHoJi6CVYY7KIe8k3u">关键差异化</b>——点名时自动比对当次时间窗内的 <code data-page-node-id="m8k7H1vYVPxwpDnOO6JVyR">LeaveRequest</code>，已批假的自动标为 <code data-page-node-id="wIHvUwGBCYxKpTOhpxTVBz">leave</code> 不误判旷课；未批假缺勤一键生成 <code data-page-node-id="iqrwtx7skgRER9QoHYMEYb">TeacherTask</code>（来源 <code data-page-node-id="FBzILHVePZ1JRshIkSoNl4">follow_up</code>）通知本人与辅导员。</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:0" data-page-node-id="bZJ8QlqraadvpNT9yoQsTb"><b data-page-node-id="KbYFNboeZcWLmR1inO5vLj">成本：</b>中。<b data-page-node-id="VU0qclyvBM8zvZEeEMBfUf">差异化点：</b>主流产品的考勤与请假是两张皮，本项目能天然打通。</p>
+      </div>
+      <div class="col-box" data-page-node-id="AjPxlsicoR2vdBpVT8Lwes">
+        <div class="hd" data-page-node-id="MFYEJm9XkOA4OB93BER4vS"><span class="dot d-purple" data-page-node-id="FcqsNRCSx6yZFmv4FzljnX"></span><h4 data-page-node-id="joyCFsl3ZZ8vVKxVLzpU8G">③ 成绩录入与学业预警联动</h4></div>
+        <p style="font-size:13.5px" data-page-node-id="Y9apHBSBOL7lVzfuLWW4v9"><b data-page-node-id="jYF5mxXwLxGZ48hOTPADag">为什么必须有：</b>成绩是教师的「产出」，无录入则教师端永远只是行政工具。</p>
+        <p style="font-size:13.5px" data-page-node-id="5Gtd4TS8twM8PV2xGaH9ZK"><b data-page-node-id="uT3Q8jlxHx3ELb1D9AY7RM">做什么：</b>按课程批量录入（表格粘贴 / Excel 导入）；自动算 GPA 与班级分布；出及格率、优秀率、<b data-page-node-id="9f36ZHKo1wAq7b7QzkYLu9">班级排名趋势</b>（跨学期）；<b data-page-node-id="PoNOaEnkjbOqwUFwibaGbd">关键差异化</b>——低于阈值自动触发既有 <code data-page-node-id="GUl47iU4ni1zKPDbb1nnmh">alert_pipeline</code>（新增一条 <code data-page-node-id="BIs5hFZ67JEt3nfwcBEeaK">grade_low</code> 规则），生成学业预警与跟进任务，与「人文关怀 · 学业预警类关怀事件」自动衔接。</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:0" data-page-node-id="7TVH2uBhpQNf0QbjTSf9k4"><b data-page-node-id="uQvDjyGXHlwCG2ORB3WN2y">成本：</b>中。<b data-page-node-id="tWGgXNaFs59BFsMcLlUgzr">差异化点：</b>成绩→预警→关怀→跟进，闭环跑通的产品极少。</p>
+      </div>
+      <div class="col-box" data-page-node-id="ztrRgZfiEQ4sCvWMJtTiEm">
+        <div class="hd" data-page-node-id="8VtOIbA3MLz9KUiWfGyYkv"><span class="dot d-cyan" data-page-node-id="F5XCOe8GYaHLea2N5h4KFR"></span><h4 data-page-node-id="hlDV1ZLW00CCGg0bMzVVIP">④ 作业布置与提交跟踪</h4></div>
+        <p style="font-size:13.5px" data-page-node-id="eepJ7XBOICFEiBMFNIH75m"><b data-page-node-id="36yZCrBDwd34oiD0ggRi2t">为什么必须有：</b>是「教学过程」里唯一能留下频次数据的载体，且直接喂给学情画像。</p>
+        <p style="font-size:13.5px" data-page-node-id="qQv6qh1SNwmdGL0T3ZSvor"><b data-page-node-id="yCTEy0RlRa1DsNmthkKTON">做什么：</b>布置（题目 / 附件 / 截止时间）→ 学生提交 → 教师批改（分数 + 评语）→ 退回重做；<b data-page-node-id="A2mbHfyVQWXMiqHPUXoPoM">关键差异化</b>——提交率与未交名单直接进「履职画像」与「学生画像」，未交学生自动进 AI 洞察的「建议联系」候选，而不是靠教师手工翻。</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:0" data-page-node-id="731akGptOx3ehL0QSM2kVf"><b data-page-node-id="ENHhwckivHLGQvWx4cDRIy">成本：</b>中高（涉及学生端提交页）。<b data-page-node-id="zEosliM52L5WP1eB3BV7wT">可后置到第 3 阶段。</b></p>
+      </div>
+    </div>
+
+    <h3 data-page-node-id="YRu18rz3QZBzE668mjW3xN">5.3 两个低成本高观感的补强</h3>
+    <div class="layer" data-page-node-id="JdrsflAc3NcHQaxIHgMCmO">
+      <div class="lv" data-page-node-id="vj531OL2C1ATLugqUQfRZE">⑤</div>
+      <div class="body" data-page-node-id="FVvW2zNNYYuhbHIdD9l6Gq">
+        <div class="t" data-page-node-id="lxWU82RAhgTtEwj6KwqKnh">未读催办：把已实现的「触达回执」用满</div>
+        <p class="d" data-page-node-id="PDQZZJNJUvHEvQwVNV0ZIx">公告页已有真实 <code data-page-node-id="H4Yr8A4fqRZiEpDroJIfqx">AnnouncementRead</code> 回执与触达率。只差一步：点击触达率数字 → 展开<b data-page-node-id="2pmSY0Dm5cYqxUYAHATzAN">未读学生名单</b> → 一键「站内提醒 / 生成本人待办 / 通知家长」。这是从「知道有几个人没看」到「让没看的人看到」的闭环最后一击，改动极小，体感极强。</p>
+      </div>
+    </div>
+    <div class="layer" data-page-node-id="RyAV3ByACpH01ZXChHpEFR">
+      <div class="lv p2" data-page-node-id="JxyAEVvtQPrvaKUCWo1pgM">⑥</div>
+      <div class="body" data-page-node-id="Vi3cuuh1eHKxCULbaEBKmv">
+        <div class="t" data-page-node-id="L4Rvxu7aOSOVQtb4Bx8flS">预警规则可视化：把 <code data-page-node-id="F0wwhkHNzASjLM2ywlvW7z">alert_pipeline</code> 的能力开放给教师</div>
+        <p class="d" data-page-node-id="5LD20TBhq93l7N5FtBMtSU"><code data-page-node-id="3SXqkElGj3cfNNBXcHIbI9">alert_pipeline_service.py</code> 已支持完整规则结构（<code data-page-node-id="uGx2iwuk0FEK4bKNGQ0Tz5">code / name / verb / metric / threshold / window_days / baseline_days / due_in_days</code>），且优先读 <code data-page-node-id="Qh7tiO6UDAtclFqFejUVpP">SystemSetting</code>。但前端<b data-page-node-id="jpM2PLYKUBnylMbOYkQoP6">没有任何配置入口</b>，默认只有「频繁请假」与「近期学情沉默」两条规则。建议加一个规则管理页（教师可管自己班级的规则、管理员管全校），教师能自定义「连续两周成绩下滑」「连续三次未交作业」「夜间求助 2 次」这类真正贴合自己班级的规则。<b data-page-node-id="59kC5xjPgVFfcA341jq3ZU">这是把规则引擎从暗处搬到明处的关键一步。</b></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 6. 实时能力专项 ============ -->
+  <section id="realtime" data-page-node-id="KNJg9Qxuhp5lkUDQEIbGA8">
+    <h2 data-page-node-id="8jOOlbKP7CLZrZc1wkTUAZ"><span class="num" data-page-node-id="CkXoPm8ghiGFVNU5EU7wsO">6</span>被忽略的优势：实时能力已经具备</h2>
+    <p class="lead" data-page-node-id="17F6NNr45jTQcGlCDWtFyM">审查中发现一个容易被低估的事实：本项目<strong data-page-node-id="qU6PubpslTauC0iIhskhVZ">已经具备做主流教师端「实时课堂」的底层能力</strong>，只是还没接上教学场景。这一点值得单独指出，因为它意味着「互动教学」不需要从零建。</p>
+
+    <div class="tbl-wrap" data-page-node-id="BKD5bqKPZmDp2cV5KX5JM1">
+      <table data-page-node-id="8S85PD5KI6NdimMSXQuINQ">
+        <thead data-page-node-id="z5PYL8E7D3MrekvEiWwYri"><tr data-page-node-id="HkQFRsxFoucAOLWx3vYSZ2"><th data-page-node-id="RCuksAmNI56LTqGqjQC0Fb">已有能力</th><th data-page-node-id="XAIPZnbtuVbNlYKum3QYwS">位置</th><th data-page-node-id="I3150tvnOFNg77HHh9lhjo">当前用途</th><th data-page-node-id="EwMZP2kJodTBUBCYYaUDRN">可迁移到的教学场景</th></tr></thead>
+        <tbody data-page-node-id="oC6n3CLK6aUqntRtFmJfnr">
+          <tr data-page-node-id="KrG9DQAhRjBLNofhDdD6Aq">
+            <td data-page-node-id="wOle6cjLCUuzPiZPTaBHGp"><strong data-page-node-id="0ZuLBpbv047N0ZW5ylCzyw">WebSocket 管理器</strong></td>
+            <td data-page-node-id="04wTKGw4m5r8XZRaH21mDc"><code data-page-node-id="lGpWpMgTrnNtancxUC2cXd">services/ws_manager.py</code></td>
+            <td data-page-node-id="H4fQj1J6BOd0l6v9HocEPF">消息实时推送、在线状态</td>
+            <td data-page-node-id="fIxj2ZsDaatWsGfs8rZ1HJ">点名实时同步（教师端点，学生端立即看到自己被点到）、课堂签到倒计时广播</td>
+          </tr>
+          <tr data-page-node-id="TzmcyP9pJ8MZUiPaVEYCiN">
+            <td data-page-node-id="5dG7jPJ7He2Mcv5c7mMyA0"><strong data-page-node-id="i26IhLaqcC75rWJggRET2O">SSE 流式对话</strong></td>
+            <td data-page-node-id="Femr2q0DW6LGO78h7LH2Vr"><code data-page-node-id="QBhbSiR2pDKdzyG7p3eWRG">AgentPage.vue</code> + agent 服务</td>
+            <td data-page-node-id="aZ4hYxRHYew0ho6wJFrsae">绵小城对话流式输出</td>
+            <td data-page-node-id="3RBIJHrZ0DmF7HVaXtMfn5">课堂实时问答、AI 现场答疑投影</td>
+          </tr>
+          <tr data-page-node-id="5nhurB6qE3B9Q4hADLZnsp">
+            <td data-page-node-id="p0HABHZL39xnymBslx1UOd"><strong data-page-node-id="VHwrUDHGxR5Gg2JI5LGygn">22 个可写操作工具</strong></td>
+            <td data-page-node-id="YRfu8ZAI5vwParCnoSlJOZ"><code data-page-node-id="Cj5ppMwUDrpk2GBEXNniv6">services/tools/teacher.py</code></td>
+            <td data-page-node-id="SoFKicztsrFJuVNHPmWiHC">对话内完成审批 / 建任务 / 写关怀</td>
+            <td data-page-node-id="2OBWoQ0JGJwFA6zQOfoix7">扩展 <code data-page-node-id="uj6rkXHKFeGUOcZuVMC2vB">_create_attendance</code> / <code data-page-node-id="fiBfiuzTVDh3tULUka9t37">_query_class_grade</code> / <code data-page-node-id="CSPtYalAGOPHcDRtoT06cg">_publish_homework</code> 后，教师可用一句话完成教学动作</td>
+          </tr>
+          <tr data-page-node-id="iD7MCtzd7mXvUxLQimrrPE">
+            <td data-page-node-id="RnLF9AAxGG4tGnkj3R9Hlo"><strong data-page-node-id="rxRjOdMdGFGjvFpC5r0poe">桌面常驻宠物</strong></td>
+            <td data-page-node-id="JwVamWd3GEWhBXIo5KnQjG"><code data-page-node-id="ha5Rg6n6cclf300Q8SE93m">DesktopPet.vue</code> + <code data-page-node-id="jC9IVqmFCwpYBB54xuK2fg">PetChatPanel.vue</code></td>
+            <td data-page-node-id="8A0WAogwZN376KpKclsqYN">陪伴式问答入口</td>
+            <td data-page-node-id="pKmLHFjcxrbqP1eoLNO2aU">课前 5 分钟主动提醒「下节课计科 2201，上次有 2 人未交作业」——这是主流产品都还没有的「主动副驾」</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-ok" style="margin-top:18px" data-page-node-id="4qoIyhDJpCiwgeFC01MmLX">
+      <b data-page-node-id="zzqbC1ubLVmvA9jxQVzJEZ">战略判断：</b>不必去追学习通的「抢答 / 弹幕 / 随堂测」全家桶，那是重投入的军备竞赛且很难超越。更聪明的路线是<b data-page-node-id="uYRuuSExxcwQEheYCyztvQ">用已有的 AI 常驻副驾 + 闭环待办，做「事务型教师端里最懂教学的，教学型教师端里最省事的」</b>。点名、成绩、作业三件做到位，加上主动提醒，教师体感已经超过九成产品的日常使用深度。
+    </div>
+  </section>
+
+  <!-- ============ 7. 路线图 ============ -->
+  <section id="roadmap" data-page-node-id="BAxkgiOufz0LOmYLB04Kgi">
+    <h2 data-page-node-id="7L3BYoPWFZOgBKnzcEnFEG"><span class="num" data-page-node-id="iZ4CQlfVA5GjDEYtu5ziHe">7</span>分阶段路线图</h2>
+    <p class="lead" data-page-node-id="cVJ7zjE9AEQVCK4Now7iTx">原则与 v2 一致：<strong data-page-node-id="TCh8jdyALSujXHUG1i9l1e">先补结构（改模型与信息架构），再补维度（教师视角），最后补主业（教学线）</strong>。共 18 项，按依赖顺序排列。前一阶段是后一阶段的前置，请勿并行跳跃——尤其是第 0 阶段的数据迁移。</p>
+
+    <div class="phase" data-page-node-id="bYAqvTvB0T7XD1ry8Fgqno">
+      <div class="phase-head" data-page-node-id="c4DaGmKF2GzV8BXSON74jL">
+        <span class="phase-badge ph0" data-page-node-id="Ki9yLKvwMnoa3MvToAam7T">PH0</span>
+        <span class="ph-title" data-page-node-id="45jaG3iJvSwSDr9LOj958E">改结构 —— 让「教师」在数据层与界面层第一次存在</span>
+        <span class="ph-sub" data-page-node-id="ekvvRPoRg9Ef4X2AIzR5Mg">低成本 · 前置必做</span>
+      </div>
+      <div class="phase-body" data-page-node-id="bQEf3IyrpKkJ6rENf2RjBM">
+        <div class="item" data-page-node-id="SIf8V4RAQRV47kyozvmKbu">
+          <span class="idx" data-page-node-id="POGfUSNsqC3WGbKYmUs0qS">01</span>
+          <div data-page-node-id="NIu911QTiK2g2WKTnRX911">
+            <h4 data-page-node-id="NNVZTgjkiRxyW4rUWx4dBv">教师侧栏信息架构重排 <span class="pill p-new" data-page-node-id="KgpK8MN9MLPq01XgHl9OE8">界面</span></h4>
+            <p class="why" data-page-node-id="3EzlZtb6Tm4EFmCGWAIvZD">「我的工作台」只有 1 项是全站最刺眼的空洞。重排为「我的成长」4 项，并把 3 个已被埋的教师专属页面提到一级。</p>
+            <div class="ref" data-page-node-id="XFbK6tzm7AAix2U9GCFkOC">落地：<code data-page-node-id="XBhhJ6ahAJaOnsWqnPoGxe">TeacherLayout.vue</code> 的 <code data-page-node-id="tUnXrb1QyrWFTLFRWxOZSc">navGroups</code> 重写；移动端 5 页签的「个人中心」改为「我的」，承载成长主页</div>
+            <div class="tech" data-page-node-id="02KombYoD8PBBVT9sH3OME">同时抽 <code data-page-node-id="4GY5N4NQHWEFrriyaBcgsw">teacherNav.ts</code> 单一数据源，替换 <code data-page-node-id="TE1UlQ1fw5OlcKbk5Hgbth">AllFeaturesPage.vue</code> 与首页宫格的重复清单</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="VMdeNh8BAszWPPcilQDABN">
+          <span class="idx" data-page-node-id="drZLbC4ZZSSUJ5RT7F9iXG">02</span>
+          <div data-page-node-id="xwgQbiFH8dhSdF3sfauQwc">
+            <h4 data-page-node-id="U0R0cGMgZmXkhgTLTbnak1">教师徽章与等级语言重构 <span class="pill p-new" data-page-node-id="StZBxltosTkvb0wW8khuBN">文案 + 配置</span></h4>
+            <p class="why" data-page-node-id="ChFcBlJ8JERLmzHuoXLt3L">当前等级与学生端共用 C 端话术（新芽 / 幼苗），对教师是违和而非激励。7 枚徽章也与教学线无关联。</p>
+            <div class="ref" data-page-node-id="2zjOSLWVe0dxyAq6UyeEzl">落地：<code data-page-node-id="KBM8v4X3V59BGzUFFzPdTx">badge_service.py</code> 的 <code data-page-node-id="pl3asvfB2kD4x8g0max1Cf">LEVELS</code> 按 <code data-page-node-id="kipfUPGGBLKM0WVfVuaTgv">audience</code> 分角色；新增 <code data-page-node-id="awtnuLmQkFi0telNKyFWMY">TEACHER_LEVELS</code>；徽章「教学展示」改名「育人沉淀」</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="aARlxleXcw5r9GZGLv7vCy">
+          <span class="idx" data-page-node-id="wFm5ecSLueZ8Xd3XMpeQIy">03</span>
+          <div data-page-node-id="tFLZag1jSfbui0Zc2FKpg9">
+            <h4 data-page-node-id="iXux3Un5F4GAIq64h4ZEJb"><code data-page-node-id="sNOqDzsNaApERd5hAEh68C">Course.teacher</code> → <code data-page-node-id="f8au3SeXZQy2STRjAVWWqN">teacher_id</code> 迁移 <span class="pill p-new" data-page-node-id="FuH3DaU9hyydI51jeaXGVV">数据迁移</span></h4>
+            <p class="why" data-page-node-id="bLbHxqSEF66hZgIDh0wnhM"><b data-page-node-id="wc0WHUvUwVrCvpzTlGQHn1">整条教学线的总闸。</b>不做这一步，第五章全部模块无法落地。代价极低但收益最大。</p>
+            <div class="ref" data-page-node-id="D5Mo0lKG9wI24uS6KDRQFP">落地：Alembic 新增可空列 + 回填脚本 + 过渡期 OR 查询；影响面仅 <code data-page-node-id="F8zBZTE5YgKqdk32nbPyDa">models/academic.py</code> 与 <code data-page-node-id="rOQdrqAL4895WDjmKSQ4zk">api/academic.py</code></div>
+            <div class="tech" data-page-node-id="gU8iIS4aBBsk8TQcLkyx4H">回填失败记录输出核对清单，交管理员在后台修正；保留字符串列一学期</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase" data-page-node-id="HzE3bQPTlRXgZRO9EbC6eT">
+      <div class="phase-head" data-page-node-id="UwSb5FIUxHgEJ1fqlmbPSF">
+        <span class="phase-badge ph1" data-page-node-id="DiSX2pY6fYYx52fN0slkHT">PH1</span>
+        <span class="ph-title" data-page-node-id="GJPZOEWes75dNdiM1r0HVU">立特色 —— 教师第一次成为第一人称主语</span>
+        <span class="ph-sub" data-page-node-id="DsANIMBS4Cwhrt62CMABMN">中成本 · 核心差异化</span>
+      </div>
+      <div class="phase-body" data-page-node-id="dsNMFEFMWwXZ46HRqBFstr">
+        <div class="item" data-page-node-id="JrlBY6JUvJpgRoeWtpTjVN">
+          <span class="idx" data-page-node-id="gnTCgO2GZblWLsG1lJy9XI">04</span>
+          <div data-page-node-id="1Rzmn3vohZpGbIaOTTTpZX">
+            <h4 data-page-node-id="Eh8UJAJ4r2taLeWMClnYdA">「我的育人成长」主页 <span class="pill p-new" data-page-node-id="ruNBLt3Z47hZw72RVveTh8">新模块</span></h4>
+            <p class="why" data-page-node-id="aYBsqU9QvYMH1ND5AU5GM0"><b data-page-node-id="YxOinxvH7ADgIEZV5ucrGp">本轮最重要的单项建议。</b>履职画像 + 成长轨迹 + 能力雷达三合一，把散落的教师数据聚合成一个完整叙事。开源生态无同类，做出来即唯一差异点。</p>
+            <div class="ref" data-page-node-id="DiMAhcPUmK7F7A7N8ymtTq">落地：<code data-page-node-id="ijTw2wGxNECGe0OVFEM6B2">GET /api/teacher/me/profile</code> 聚合接口（关怀 / 家访 / 留痕 / 任务办结 / 档案 / 徽章）+ <code data-page-node-id="MtFbc5KNHdnTDHvH2runu3">views/teacher/MyGrowthPage.vue</code></div>
+            <div class="tech" data-page-node-id="nTAf1gj5DYUiwVxCW3TjDv">数据全部已存在，<b data-page-node-id="jJApn37enaWies9Og7CyL6">零新增业务表</b>，仅做聚合与呈现。这是性价比最高的一项</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="nTC3op2TnMt1aU3avseD9b">
+          <span class="idx" data-page-node-id="9OnxdDoXmqh6YVQVrfOXFH">05</span>
+          <div data-page-node-id="T9HStgmBeLUMLm6l8THC4h">
+            <h4 data-page-node-id="Bfb3PlRrSCDeyeGZQgkWOL">教师履职画像指标扩展 <span class="pill p-new" data-page-node-id="x9glpJxnG4iEpd9dcjhd6h">接口</span></h4>
+            <p class="why" data-page-node-id="NNWC23K0pMcDAAMfFshPjR"><code data-page-node-id="AzKG95LQtGFieUOQM5Ld0m">DashboardOut</code> 5 个字段全是学生主语的指标。补「我的」维度，首页才从「看班级」变成「看我今天」。 </p>
+            <div class="ref" data-page-node-id="BCg9NkKFt68TdIXeERKFaX">落地：<code data-page-node-id="rDU3mkXAyD5H1cW69YFTlV">DashboardOut</code> 增 <code data-page-node-id="9aoTBoi5sUMtbCmSGELGOF">my_open_tasks / my_overdue / my_visits_week / my_care_month / my_reply_rate</code>；<code data-page-node-id="vTi5cmOSCgHKzcBk2KCqpZ">HomeKpiCards.vue</code> 增第二行</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="SVLmpEL3CKJj1PszMPwhBB">
+          <span class="idx" data-page-node-id="lcJFHpBkOFgR1vzAFpyZHy">06</span>
+          <div data-page-node-id="mmLDTYRkEfCsDSVF9KWwKn">
+            <h4 data-page-node-id="JuU15luG9IoiH5e5ecD2MO">教师 e-Portfolio 独立成页 <span class="pill p-new" data-page-node-id="nBAhY8TKDg3sgOAD1ErdVD">信息架构</span></h4>
+            <p class="why" data-page-node-id="WJhVARlu3ZzS0EXthUDxK5">四段式（证据 → 反思 → 展示 → 评价）模型已建好，<code data-page-node-id="KwNBIu64kr2LCTYAfMcb0k">reviewer_id / review_comment</code> 也为互评预留，但它现在只是「学生成长档案」页里的一个区块，教师几乎发现不了。</p>
+            <div class="ref" data-page-node-id="UUs65VWLxCdP9dSgCFIeBM">落地：从 <code data-page-node-id="HxCMrubJbSx8HOQYXVd6Ag">PortfolioPage.vue</code> 拆出教师侧为 <code data-page-node-id="f4u9UNtEGHXhdZ9SbO9Cby">/teacher/my-portfolio</code>；补「导出成长报告」（复用学生成长报告的打印方案）</div>
+            <div class="tech" data-page-node-id="K3K6x3WFgRGUyXHytucYZa">同时补「评价段」回写：<code data-page-node-id="jiUFWnD8p03JBB1yD89IvQ">PeerSurvey</code> 的「我的被评」聚合分可回填 <code data-page-node-id="pwhHY6PhnBWje1aatWwWrn">review_comment</code></div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="RzIc6aTvTxyhBEU4Ia48Ow">
+          <span class="idx" data-page-node-id="NLY2DsNCdILrSuaDEsaq8r">07</span>
+          <div data-page-node-id="hp0qZFsYdEUxz7YP9m7S9H">
+            <h4 data-page-node-id="CThxzPQQWIubLP9XO6bXd4">未读催办闭环 <span class="pill p-new" data-page-node-id="G9c3iX3g9wOCOgvEBEbgkv">补闭环</span></h4>
+            <p class="why" data-page-node-id="cuZemD594SByE1XO2rdGUV">公告已有真实触达回执，是本项目做得最漂亮的一处。但「知道 3 人没看」之后没有下一步，闭环断在最后一厘米。</p>
+            <div class="ref" data-page-node-id="ar6OpDOfeFOCdRtTA9HTfC">落地：<code data-page-node-id="5hrJ6hvjYu5FSoFsDhrIKG">/api/teacher/announcements/reach</code> 增返回未读名单；<code data-page-node-id="IngL6Uo2Bp2vMpVUHWFn76">AnnouncementPage.vue</code> 触达率可点击展开 → 一键提醒 / 生成本人待办 / 通知家长</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="UxLEvRXZSxH1aFtElhsKqd">
+          <span class="idx" data-page-node-id="7itYhmt4OeRTT5xvZDDdNh">08</span>
+          <div data-page-node-id="o6l14Nc2Dn2K44tBzYYfnp">
+            <h4 data-page-node-id="9efzB2hIKf4RleBW4oyEXh">预警规则可视化配置 <span class="pill p-new" data-page-node-id="TL391dm0rOXwg8zdPPMnE5">补闭环</span></h4>
+            <p class="why" data-page-node-id="J89bJDIGkhYAI406A2ubJU">规则引擎完整（含 window_days / baseline_days / due_in_days），但前端零入口，默认只有 2 条规则。教师无法用自己的经验定义预警。</p>
+            <div class="ref" data-page-node-id="M5XorEKYwxqluo8p2fDl9e">落地：新增规则管理页（教师管本班 / 管理员管全校），写 <code data-page-node-id="2VdJyIGusi2uJkgvrAdGjF">SystemSetting</code> 的 <code data-page-node-id="93LLZYce3J61zlYvgql0vB">RULES_KEY</code>；<code data-page-node-id="uJ5mcuYAlO7HEWNpjzTRdC">load_rules</code> 已支持，无需改后端</div>
+            <div class="tech" data-page-node-id="RXPb4BE6HhnJsjtNCRyhHL">预置可选项：成绩下滑 / 连续未交作业 / 夜间求助 / 门禁未归 / 食堂消费骤降</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase" data-page-node-id="5jH9Wgo8d3wlPXESkG6tld">
+      <div class="phase-head" data-page-node-id="WBIUFo2sYa8wAvCJh8LFpE">
+        <span class="phase-badge ph2" data-page-node-id="5EGIso1pJOOHBCYVJELCg3">PH2</span>
+        <span class="ph-title" data-page-node-id="3reQCVF9h9Nw1Rfjdikgfl">补主业 —— 让「教学工作」四个字名实相符</span>
+        <span class="ph-sub" data-page-node-id="sUGkSitVKGVf20YRErLDqd">中高成本 · 依赖 PH0-03</span>
+      </div>
+      <div class="phase-body" data-page-node-id="zrFIoN6hafJsav3qEWhEAg">
+        <div class="item" data-page-node-id="oEcwsro1232tWDwOOH9HqD">
+          <span class="idx" data-page-node-id="2WrU1s3z2nopicCDZ0jP6H">09</span>
+          <div data-page-node-id="AGvOSs0ydU6UUS5GwGQYAT">
+            <h4 data-page-node-id="uNJPtnz1nDsU8lgHt8NiJw">我的课表与教学周 <span class="pill p-new" data-page-node-id="qvvZw64v9FhPmWkmCULhGO">新模块</span></h4>
+            <p class="why" data-page-node-id="8W6ZLnKczmyAAH65mwikHD">主流教师端的第一屏。当前教师端没有任何课表视图，「第 N 教学周」只在学生端出现。</p>
+            <div class="ref" data-page-node-id="Pq4TY4VDxReBkPAQycIsgs">落地：复用 <code data-page-node-id="Xh6zmY0vMXFuFztsr1teaM">SchedulePage.vue</code> 周课表组件，按 <code data-page-node-id="auHS79s9BsMHC3wqVI6hZK">Course.teacher_id == me</code> 过滤；顶部「第 N 周 + 下次上课倒计时」；点击课程进课堂面板</div>
+            <div class="tech" data-page-node-id="N5ClPcBZTcVh515THv2RdY">建议作为 PH2 第一件事落地，观感提升最直接</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="6FAzM7CWzeDGHmC76HKdw6">
+          <span class="idx" data-page-node-id="DBVu35sjCO5UuO8SqBUnax">10</span>
+          <div data-page-node-id="EMheQjksaKOYmEDMqq3aKF">
+            <h4 data-page-node-id="hWEa0B6vKQ7klI3ZPPKSJs">课堂考勤与请假自动核销 <span class="pill p-new" data-page-node-id="cezrlzQwFei2Fa1a5twbU2">新模型</span></h4>
+            <p class="why" data-page-node-id="pSyVlBbZyimxT5DSYqbsfM">点名是教师端使用频率最高的动作。差异化点在于：点名时自动比对已批假期，不误判旷课，缺勤自动建跟进任务。</p>
+            <div class="ref" data-page-node-id="FOmurBZvgU1bNRWBfGQwlD">落地：新增 <code data-page-node-id="BGvmQMdPYnylaaCNF4ZloU">models/attendance.py</code>（course_id / date / period / student_id / status）+ <code data-page-node-id="AHiUmIEcdnKme92u4Sg0ge">/api/teacher/attendance</code> 批量点名接口</div>
+            <div class="tech" data-page-node-id="aWyIXIdVKcDEUmITjuOkTL">与 <code data-page-node-id="cCZrcZ97aCNa5eiKnpBUXG">LeaveRequest</code> 时间窗比对；未批假缺勤 → <code data-page-node-id="rF32g9iDTBHb19KgmwvetE">TeacherTask(source_type=follow_up)</code>，幂等去重已被 <code data-page-node-id="u8qXu8fNzIpw1ZG5pdSSBW">TeacherTask</code> 保证</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="eidAANo0A4SANTy5j8dEe3">
+          <span class="idx" data-page-node-id="WPHlRBIBB1yQPMsEWRRtpP">11</span>
+          <div data-page-node-id="kFtI2TUWzHzYj0CNxPhp3M">
+            <h4 data-page-node-id="DBaDtAgwfg8Yd1nxBsNWuf">成绩录入与学业预警联动 <span class="pill p-new" data-page-node-id="2dQtXP8u5YHYVnNFofJt5G">新能力</span></h4>
+            <p class="why" data-page-node-id="IhBB0gxH1qgQiFffK6ee6k">成绩是教师的产出。当前 <code data-page-node-id="Upxj7sIxTM5mkMTeNe9Ddw">Grade</code> 只读，教师端无法录入，也无法把「这门课及格率 62%」变成行动。</p>
+            <div class="ref" data-page-node-id="Ut3ECRqDmjxCS6FEQkzSC1">落地：<code data-page-node-id="AZXIGp4HGAyRuQZyGp9wVF">/api/teacher/grades</code> 批量录入（表格粘贴 / Excel 导入）+ 班级分布 / 及格率 / 跨学期排名趋势；<code data-page-node-id="QrLGLBNPTU9zowMSBlufay">alert_pipeline</code> 增 <code data-page-node-id="iDTBOoEdFweKU0xARjE5vt">grade_low</code> 规则</div>
+            <div class="tech" data-page-node-id="ewjfQTfgNnq8Irfw9qucER">低分自动生成学业预警关怀事件，衔接 <code data-page-node-id="W4O8g30DrJgQuJz9UCYAuD">CareEventType.ACADEMIC</code>（已有该枚举）</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="5HvJY3OkyNmKGhHTjAZLXc">
+          <span class="idx" data-page-node-id="M8APsfTmqZsTkQJKKoz0Om">12</span>
+          <div data-page-node-id="0Ghq9e7M6N08FGvtxY1ws4">
+            <h4 data-page-node-id="SJnjPoko5ALTCRMtRwjzRd">作业布置与提交跟踪 <span class="pill p-new" data-page-node-id="FetiblqaarN1maIwfwOZwo">新模型</span></h4>
+            <p class="why" data-page-node-id="ekchfJKJEJNzaQyoYbXnqS">教学过程中唯一能留下频次数据的载体。提交率直接喂给履职画像与学生画像，未交学生自动进 AI 洞察候选。</p>
+            <div class="ref" data-page-node-id="t74DGJr35yEfRJhmSdiMYN">落地：新增 <code data-page-node-id="hpXOumN3i7IuOrt9WbsI11">models/homework.py</code>（作业 / 提交 / 批改三表）+ 教师端布置与批改页 + 学生端提交页</div>
+            <div class="tech" data-page-node-id="WhnO0TujB9fLB6GIU8VtC1">涉及学生端，工作量最大的一项，可作为 PH2 收尾</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="CAQFPTZAXW1Wcz4E6haZb6">
+          <span class="idx" data-page-node-id="DT7mgCGqCbrKXl2tKi7M5n">13</span>
+          <div data-page-node-id="3zmQjQSm5QoAeXD4vpRd0a">
+            <h4 data-page-node-id="AoBFF5tAM0CUsXrcPTEdj2">听课与同伴评课 <span class="pill p-new" data-page-node-id="D4EiC8Dd0BWiGec6CbwFMl">扩展现有</span></h4>
+            <p class="why" data-page-node-id="giiAQbVUx9BcTj0tRVfAlk"><code data-page-node-id="pucgEafoI1MhjsxNtB6kll">PeerSurvey</code> 已能承载「评」，但缺听课单与量规。主流教务系统里这是教师专业发展的固定动作。</p>
+            <div class="ref" data-page-node-id="wZC8rDSbBpCwHWKMaoUJHA">落地：基于 <code data-page-node-id="xypsem5uTG1poqtxTWp52s">PeerSurvey</code> 增「听课单」题型模板（教学设计 / 课堂组织 / 师生互动 / 目标达成四维量规）；结果回填 <code data-page-node-id="auXQ4mQoyIUtov8DzchFyG">TeacherPortfolioItem.review_comment</code></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase" data-page-node-id="jBV6t36CyFWOzT1JgTScnG">
+      <div class="phase-head" data-page-node-id="B5rtvNYp8FQZZtVlSIAZPA">
+        <span class="phase-badge ph3" data-page-node-id="iuCChDDW07GweK1QzSRdh6">PH3</span>
+        <span class="ph-title" data-page-node-id="1PFAFLOdz0PnqBsAMfO55c">建优势 —— 把已有的 AI 与实时能力接到教学场景</span>
+        <span class="ph-sub" data-page-node-id="Q9WlEBvRFf1G6h9hi4Gc6m">持续投入 · 拉高天花板</span>
+      </div>
+      <div class="phase-body" data-page-node-id="TmLNy3dqmnZimGVKsAfjfC">
+        <div class="item" data-page-node-id="5RUIGI4biQqMliRSGR61nG">
+          <span class="idx" data-page-node-id="V973UBWheP6UQrzxaiog0O">14</span>
+          <div data-page-node-id="dq6ML2ERRYhLWbMsVsxfU4">
+            <h4 data-page-node-id="Poj5vuHPGV7kfdEeSV38Xk">教师工具集扩展至教学域 <span class="pill p-new" data-page-node-id="34R6SdKW9NNHpxJntX6tgV">AI</span></h4>
+            <p class="why" data-page-node-id="EeaVmomhYcvRiI9seu0PmB">现有 22 个教师工具全部围绕育人事务。教师无法对绵小城说「帮我查计科 2201 上次作业交了几个人」。</p>
+            <div class="ref" data-page-node-id="przHHomgDh5BBqeNmYIcyO">落地：<code data-page-node-id="K2SGZBSR4frEV6IJBV7JEH">TOOL_DEFINITIONS</code> 增 <code data-page-node-id="1CUCxuqgOSmrauawiO4aNm">_query_my_courses</code> <code data-page-node-id="s13EOq4Qb7OkBndmFvHnf1">_query_class_grade</code> <code data-page-node-id="WPMvmYisu9fkwYPuVyslKT">_query_attendance</code> <code data-page-node-id="NFECmy2piOHFiGPZxhJ8e4">_publish_homework</code> <code data-page-node-id="sri0s3NJ7FqaNcs4njYjff">_create_attendance</code></div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="HlpcDpiJPo5Jtbeiu4q8hf">
+          <span class="idx" data-page-node-id="3bWQlJE6JKSfEcxZQU0RFc">15</span>
+          <div data-page-node-id="xWrLaKQPACqQmr7RXjzAeF">
+            <h4 data-page-node-id="mWvndW5LfhY23kNsok1lyE">课前主动提醒 <span class="pill p-new" data-page-node-id="cU5wEbf9z2Q3poS3cq764Z">AI + 实时</span></h4>
+            <p class="why" data-page-node-id="b7HJq5aVTcaJqOqDtz9GrP">主流产品都还没有的「主动副驾」。用已有 <code data-page-node-id="BQriIwB50kH8aFSToAgOIZ">DesktopPet</code> + <code data-page-node-id="o8NTvDFkWYU7Ytn0PRb1AF">proactive_engine</code>，在课前 5 分钟主动推送「下节课计科 2201，上次 2 人未交作业，1 人连续缺勤」。</p>
+            <div class="ref" data-page-node-id="wqQw0UWBKl0AjwEbpN0R1N">落地：<code data-page-node-id="CxWkAT0p4yGJ3lPYgvGgRg">proactive_signals.py</code> 增课堂信号源；<code data-page-node-id="GS77roS3wkdgGarKHCAdbu">cron_task_service.py</code> 定时扫描课表</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="dLGJj9XOXGYIJAQQFa1Ml4">
+          <span class="idx" data-page-node-id="t9H2G9L8xNQPZ472J9ftby">16</span>
+          <div data-page-node-id="ezZSEbMTQo3VuqMuYeW59E">
+            <h4 data-page-node-id="jU1xxC8AdJWIgdm5vZXznt">教师日报升级为「教学 + 育人」双维 <span class="pill p-new" data-page-node-id="SIoy7kb2N3hozjwjPEAItK">AI</span></h4>
+            <p class="why" data-page-node-id="MrHmj7DwBtFn1wZlCpMzAo"><code data-page-node-id="5xEvay3ZghyheWjzGFms5Y">teacher_daily_report.py</code> 已相当成熟（规则段 + LLM 段合并 + 趣味运势），但 <code data-page-node-id="5pnuTdcSfQLN3tWN7lnzOT">collect_facts</code> 只采集育人事务，没有课与课堂。</p>
+            <div class="ref" data-page-node-id="kqxD5NUJ7AwfD1SpH1g81O">落地：<code data-page-node-id="VxJI7l3x0B3CcLhfj8KAjT">collect_facts</code> 增今日课时 / 待批作业 / 近 7 天考勤异常；<code data-page-node-id="4usCercWMCXnA159NzSCJq">_rule_sections</code> 增「今日课堂」段</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="0sAArsOQqoS4u2bGI8W4T4">
+          <span class="idx" data-page-node-id="bZIRq1ESog2BUTujCfBfix">17</span>
+          <div data-page-node-id="NALP12pJ3I3WJlVmBPd49N">
+            <h4 data-page-node-id="biEmAHPhQiGpLhYZafMZlJ">审批接入工作流引擎 <span class="pill p-new" data-page-node-id="BmwGwEp69wPWHRLeO6zVAP">重构</span></h4>
+            <p class="why" data-page-node-id="zBjhIhLCrGKsSUKQeuE23y"><code data-page-node-id="HdEYba6uxKFfbXQnWdgbSR">workflow_engine.py</code> 已存在但审批未接入，逻辑仍硬编码在 <code data-page-node-id="XDq75Y5PPvHwZr28xCYDrr">leave.py</code> / <code data-page-node-id="jcb0Dvy5NhAadXOnL2KtZV">service.py</code> / <code data-page-node-id="E9MtZoF4LD9F6WzluRQaGd">material.py</code>。学校新增审批类型需改代码。</p>
+            <div class="ref" data-page-node-id="wNEzRL68eNvdRmwSgE7AjT">落地：三类审批迁移为工作流定义；补「销假 / 返校确认」节点闭合请假闭环</div>
+          </div>
+        </div>
+        <div class="item" data-page-node-id="FDY2AwCDakPaqylWOFLMsU">
+          <span class="idx" data-page-node-id="TPxL3H2hpNIxf94Vcd4W1b">18</span>
+          <div data-page-node-id="dL9NLQu4c7wgzrnyocf9ek">
+            <h4 data-page-node-id="fCXKCEUcROZDFHQE7BuWDo">教师侧学情数据底座 <span class="pill p-new" data-page-node-id="fNbsujPFXfnfqSwxZkjAS0">底座</span></h4>
+            <p class="why" data-page-node-id="YIFPnPQUnq1GJ65WQsU1rA"><code data-page-node-id="nIijjcxsiVECAEFeCXtUNa">learning_event.py</code> 的 xAPI 精简结构已存在并被 AI 工具 <code data-page-node-id="JhelpAdNVpsiotwP7An03g">_query_learning_events</code> 使用，但教学数据（考勤 / 作业 / 成绩）尚未接入为事件。</p>
+            <div class="ref" data-page-node-id="ONTf00EGKpmT1MHXUmTQHf">落地：考勤、作业提交、成绩发布统一写 <code data-page-node-id="GXx71woDDCDOSCusehKdUz">learning_events</code>；<code data-page-node-id="PRrHLKVHa4gdgKgmiXB7Un">low_activity</code> 规则自动覆盖教学维度</div>
+            <div class="tech" data-page-node-id="vYxX0s1l0pBpaCDW6aEjqZ">这是让第四章的育人画像与第五章的教学画像同源的最后一层</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 8. 结语 ============ -->
+  <section id="closing" data-page-node-id="XvRSWOoULq0xCEbDhtZHrI">
+    <h2 data-page-node-id="fSrPBkZSDnhOK8fgCLCtwM"><span class="num" data-page-node-id="oJLvVBlfFahXA6vEPcMpN1">8</span>结语与取舍建议</h2>
+
+    <div class="verdict" data-page-node-id="FnqJUxH1FNyuo691hvADnV">
+      <div class="kicker" data-page-node-id="Ci3OS96m5A7yVwfBQB1dKT">一句话回答</div>
+      <h3 data-page-node-id="iNouuXrInbNrMXhR2PrRhN">功能不少，坐标错了。教师端需要两次视角切换：从「学生的管理者」切到「第一人称的主体」，从「只有育人」切到「育人 + 教学」。</h3>
+      <p data-page-node-id="bg6ERQ3YIdPg1fi1DSGkjM">如果是预算有限、只能做三件事，建议按这个顺序：<strong data-page-node-id="hUNzHtgnFm0CVH6tOGaUeK">① 重排侧栏 + 上线「我的育人成长」主页</strong>（立刻解决「没个人特色」，零新增业务表）→ <strong data-page-node-id="dGeTKuAdwg2RyieF62YARE">② 迁移 <code data-page-node-id="ayrakAZpu74vTATbyTHPxA">Course.teacher_id</code></strong>（解锁教学线）→ <strong data-page-node-id="5VdFvCsOaGgFHdItWOKJ5a">③ 上「我的课表」</strong>（立刻解决「不像教师端」）。这三件做完，用户打开教师端的第一感受就会完全不同。</p>
+      <p data-page-node-id="u6xWwrlQaQQLIBsEaNInxY">如果预算充足，第五章的考勤与成绩才是真正补齐「主流教师端」的部分。但要清醒一点：<strong data-page-node-id="Hb6Kzvt0uqjm6ABC3WsGa6">不要试图在互动教学上与学习通正面竞争</strong>。本项目真正的机会在于——主流产品要么只管教学不管育人，要么只管育人不管教学，而<strong data-page-node-id="PdyUpYx2rIrMW5HTCAkSkf">「点完名发现 2 人缺勤，一键就变成跟进任务；批完作业发现 3 人连续低分，自动生成学业预警关怀事件」</strong>这个动作，市面上还没有产品能一气呵成地做完。这比多做十个课堂小工具更有价值。</p>
+    </div>
+
+    <h3 data-page-node-id="ONCr5d5uWysDmgsVGhruvG">建议优先阅读/决策的三个问题</h3>
+    <ol data-page-node-id="91MToi38b99CIjlC6gy8zE">
+      <li data-page-node-id="o6mcabumsTVYRpvyicrFBs"><strong data-page-node-id="bgVKXC0d8eaQU4gHSW78QX">教师端的服务对象到底包含不含「任课教师」？</strong>如果平台定位永远只是「辅导员工作台」，第五章可以大幅缩减为「课表 + 成绩查看」两项，把重心全押在第四章的个人成长上。这个定位必须先定，否则第 03 项迁移不该启动。</li>
+      <li data-page-node-id="SN5AeV0XNneL62eW5ZcBck"><strong data-page-node-id="tHAOfvhExRxSERW8OeGftH">「我的育人成长」主页由谁看？</strong>仅教师本人可见？还是院系领导也能看（即变成考核工具）？这直接决定指标的取舍与隐私边界，也决定 <code data-page-node-id="QAJHTaEvuaTKXeuwqdAx8S">TeacherPortfolioItem.visibility</code> 的默认值是否需要调整。</li>
+      <li data-page-node-id="S3Qmo1OwFAQFh3MeMec4hT"><strong data-page-node-id="SWxxoA705wGjgUgy2l8xLI">教师等级是否与任何实际权益挂钩？</strong>若只是荣誉，现有游戏化即可；若要挂钩评优、进修推荐，则等级计算规则必须可审计、可申诉，需要在 PH1 就设计好快照与追溯机制。</li>
+    </ol>
+
+    <div class="callout co-warn" data-page-node-id="c0YM2DAHbMEhBhRd6ZyuwA">
+      <b data-page-node-id="Kol6H8Txl5ey2OBWwA2e9j">一个提醒：</b>本报告指出的最大风险不在功能，而在<b data-page-node-id="eqh0fd8RAHqBz1DMEfhhZF">命名与自我认知</b>。侧栏那个叫「教学工作」的分组里全是学生事务——这种名实不符会持续误导后续开发者的判断（新功能该放哪？会倾向于往「教学」组塞学生功能）。<b data-page-node-id="KE4VUH9scDFk6KN7GGG5IE">先改名字，比先加功能更重要。</b>
+    </div>
+  </section>
+
+  <footer data-page-node-id="WW2O727awpv5bzs31IV6Nw">
+    <p data-page-node-id="p88ERaXzGYtH3SboflLwbW">审查基于代码实测：<code data-page-node-id="YxmMSq5lICAPnMgYeFVToC">frontend/src/router/index.ts</code>、<code data-page-node-id="giQ46gTDyH34tzgvPdtCAJ">components/layout/TeacherLayout.vue</code>、<code data-page-node-id="FDeHaNx6YiC9UVvIV1eCXk">views/teacher/*.vue</code>（14 个路由页 + 10 个组件）、<code data-page-node-id="deOeudBNCxnNGtAM9LVrfj">backend/app/api/teacher.py</code>、<code data-page-node-id="t3pzQPOlC2BfrLFCVSorBl">api/academic.py</code>、<code data-page-node-id="p3z8sP8aIbrpRZd5yUBHq9">api/care_center.py</code>、<code data-page-node-id="O0NeGg6zE2fsHmC3oqylWI">api/announcement.py</code>、<code data-page-node-id="Bxj4CRK7knNAku7tHbCzVI">models/*.py</code>（12 张教师业务表）、<code data-page-node-id="dB69CO44kAwB1V98DNT8zD">services/badge_service.py</code>、<code data-page-node-id="kd70C6Mb4ZuYw4hPEgCfiY">services/alert_pipeline_service.py</code>、<code data-page-node-id="DA686Q8BOHsgoyTimuJTp5">services/teacher_daily_report.py</code>、<code data-page-node-id="F6DxO1TsrVOnvhj5xZeQ4r">services/tools/teacher.py</code>（22 个工具）。</p>
+    <p style="margin-bottom:0" data-page-node-id="G4sPx3HlWX3Gxzn9f9GDRy">WisPath CampusMate · 教师端功能审查 v3 · 配套文档：<code data-page-node-id="iWoNofKBi60dMAnCmFzqx8">docs/teacher-end-review.html</code>（v2 闭环审查）、<code data-page-node-id="fmA0cZu5BqUVPrkr1RhqRL">docs/teacher-end-plan.html</code>（模块化实现规划）</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -47,6 +47,11 @@ export function getAnnouncementReach() {
   return request.get<AnnouncementReach>('/teacher/announcements/reach')
 }
 
+/** 对最近公告中仍未读的学生补发站内提醒 */
+export function remindAnnouncementUnread() {
+  return request.post<{ ok: boolean; reminded: number }>('/teacher/announcements/remind')
+}
+
 // 学生端
 export function getStudentAnnouncements(unreadOnly = false) {
   return request.get<AnnouncementItem[]>('/student/announcements', {

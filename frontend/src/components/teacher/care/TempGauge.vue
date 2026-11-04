@@ -1,38 +1,39 @@
 <template>
   <div class="cc-temp-gauge" :class="`lv-${lv.tone}`">
-    <!-- 左：趣味温度计（竖直液柱 + 刻度 + 底部球泡），液柱高度按 score 做 CSS transition -->
+    <!-- 顶部一行：等级图标 + 文案 + 分值 -->
+    <div class="cc-gauge-head">
+      <span class="cc-gauge-icon" :style="{ color }" v-html="iconMarkup" />
+      <span class="cc-gauge-level">{{ level || lv.label }}</span>
+      <span class="cc-gauge-score">本月关怀温度</span>
+      <b class="cc-gauge-pct">{{ clamped }}<i>%</i></b>
+    </div>
+
+    <!-- 横向温度计：左侧球泡 + 横向管身，液柱从左往右填充 -->
     <div class="cc-gauge-visual">
-      <svg viewBox="0 0 44 176" class="cc-gauge-svg" role="img" aria-label="本月关怀温度">
+      <svg viewBox="0 0 260 32" class="cc-gauge-svg" role="img" :aria-label="`本月关怀温度 ${clamped}%`">
         <!-- 刻度 -->
-        <line v-for="t in TICKS" :key="t.v" :x1="30" :x2="t.len" :y1="t.y" :y2="t.y" class="cc-gauge-tick" />
+        <line v-for="t in TICKS" :key="t.v" :x1="t.x" :x2="t.x" y1="4" y2="8" class="cc-gauge-tick" />
         <!-- 管身 -->
-        <rect x="11" y="18" width="18" height="132" rx="9" class="cc-gauge-tube" />
-        <!-- 液柱：全高的 rect 通过 y 下移实现按比例填充（差值即水位） -->
+        <rect x="21" y="9" width="218" height="14" rx="7" class="cc-gauge-tube" />
+        <!-- 液柱：宽度按分值比例从左侧延伸 -->
         <rect
-          x="14" y="21" width="12" height="126" rx="6"
+          x="21" y="9" :width="liquidW" height="14" rx="7"
           class="cc-gauge-liquid"
-          :style="{ fill: color, height: liquidH + 'px', y: liquidY + 'px' }"
+          :style="{ fill: color }"
         />
-        <!-- 底部球泡（始终充盈） -->
-        <circle cx="20" cy="158" r="15" class="cc-gauge-bulb" :style="{ fill: color }" />
+        <!-- 左侧球泡（始终充盈） -->
+        <circle cx="15" cy="16" r="12" class="cc-gauge-bulb" :style="{ fill: color }" />
       </svg>
-      <div class="cc-gauge-num">
-        <b>{{ clamped }}</b><i>%</i>
+      <div class="cc-gauge-scale" aria-hidden="true">
+        <span v-for="t in TICKS" :key="t.v" :style="{ left: tickLeft(t.v) }">{{ t.v }}</span>
       </div>
     </div>
 
-    <!-- 右：等级图标 + 文案 + 加温建议 chips -->
-    <div class="cc-gauge-info">
-      <div class="cc-gauge-head">
-        <span class="cc-gauge-icon" :style="{ color }" v-html="iconMarkup" />
-        <span class="cc-gauge-level">{{ level || lv.label }}</span>
-        <span class="cc-gauge-score">本月关怀温度 {{ clamped }}%</span>
-      </div>
-      <div v-if="tipList.length" class="cc-gauge-tips">
-        <span v-for="(tip, i) in tipList" :key="i" class="cc-gauge-tip">{{ tip }}</span>
-      </div>
-      <div v-else class="cc-gauge-tips cc-gauge-tip-ok">本月关怀节奏不错，继续保持～</div>
+    <!-- 加温建议 chips（看板页会隐藏，由可点击的加温行动替代） -->
+    <div v-if="tipList.length" class="cc-gauge-tips">
+      <span v-for="(tip, i) in tipList" :key="i" class="cc-gauge-tip">{{ tip }}</span>
     </div>
+    <div v-else class="cc-gauge-tips cc-gauge-tip-ok">本月关怀节奏不错，继续保持～</div>
   </div>
 </template>
 
@@ -50,21 +51,19 @@ const props = defineProps<{
 
 const clamped = computed(() => Math.max(0, Math.min(100, Math.round(props.score || 0))))
 
-/** 液柱几何：管身内区间 y 21 → 147（高 126），按分值换算水位 */
-const TUBE_TOP = 21
-const TUBE_BOTTOM = 147
-const TUBE_H = TUBE_BOTTOM - TUBE_TOP
+/** 液柱几何：管身 x 21 → 239（长 218），按分值换算填充宽度 */
+const TUBE_X = 21
+const TUBE_W = 218
 
-const liquidH = computed(() => Math.max(2, Math.round((TUBE_H * clamped.value) / 100)))
-const liquidY = computed(() => TUBE_BOTTOM - liquidH.value)
+const liquidW = computed(() => Math.max(3, Math.round((TUBE_W * clamped.value) / 100)))
 
-const TICKS = [
-  { v: 100, y: 21, len: 40 },
-  { v: 75, y: 52.5, len: 40 },
-  { v: 50, y: 84, len: 40 },
-  { v: 25, y: 115.5, len: 40 },
-  { v: 0, y: 147, len: 40 },
-]
+/** 刻度：0/25/50/75/100 对应管身等分位置 */
+const TICKS = [0, 25, 50, 75, 100].map((v) => ({ v, x: TUBE_X + (TUBE_W * v) / 100 }))
+
+/** 刻度读数与 SVG 管身同一坐标系对齐（viewBox 宽 260） */
+function tickLeft(v: number) {
+  return `${((TUBE_X + (TUBE_W * v) / 100) / 260) * 100}%`
+}
 
 /** 等级：≥80 太阳 / ≥50 温暖 / ≥25 雪花 / 否则 火焰 */
 const lv = computed(() => {
@@ -116,50 +115,53 @@ const tipList = computed(() => props.tips ?? [])
 <style scoped>
 .cc-temp-gauge {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
 }
 
-/* 温度计主体 */
-.cc-gauge-visual {
-  position: relative;
-  flex-shrink: 0;
-  width: 44px;
-  height: 176px;
-}
-.cc-gauge-svg { width: 44px; height: 176px; display: block; }
-
-.cc-gauge-tick { stroke: var(--tui-border-strong); stroke-width: 1.5; }
-.cc-gauge-tube { fill: var(--tui-surface-muted); stroke: var(--tui-border-strong); stroke-width: 2; }
-.cc-gauge-bulb { opacity: 0.9; }
-.cc-gauge-liquid {
-  opacity: 0.92;
-  transition: y 0.7s cubic-bezier(0.34, 1.4, 0.5, 1), height 0.7s cubic-bezier(0.34, 1.4, 0.5, 1);
-}
-
-/* 分值读数压在下半部 */
-.cc-gauge-num {
-  position: absolute;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: baseline;
-  gap: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--tui-text);
-  text-shadow: 0 0 4px var(--tui-surface), 0 0 2px var(--tui-surface);
-}
-.cc-gauge-num b { font-size: 15px; font-weight: 700; line-height: 1; }
-.cc-gauge-num i { font-size: 9px; font-style: normal; color: var(--tui-text-quiet); }
-
-/* 右侧信息区 */
-.cc-gauge-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
-.cc-gauge-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+/* 顶部信息行 */
+.cc-gauge-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .cc-gauge-icon { display: inline-flex; line-height: 0; }
 .cc-gauge-level { font-size: 13px; font-weight: 700; color: var(--tui-text); }
 .cc-gauge-score { font-size: 11.5px; color: var(--tui-text-quiet); }
+.cc-gauge-pct {
+  margin-left: auto;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--tui-text);
+  font-variant-numeric: tabular-nums;
+}
+.cc-gauge-pct i { font-style: normal; font-size: 10px; font-weight: 400; color: var(--tui-text-quiet); }
+
+/* 横向温度计：球泡在左，液柱向右延伸 */
+.cc-gauge-visual { min-width: 0; }
+.cc-gauge-svg { display: block; width: 100%; max-width: 420px; height: auto; }
+
+.cc-gauge-tick { stroke: #c2d5c9; stroke-width: 1.5; }
+.cc-gauge-tube { fill: var(--tui-surface-muted); stroke: var(--tui-border-strong); stroke-width: 1.5; }
+.cc-gauge-bulb { opacity: 0.9; }
+.cc-gauge-liquid {
+  opacity: 0.92;
+  transition: width 0.7s cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+
+/* 刻度读数：与 SVG 管身两端对齐 */
+.cc-gauge-scale {
+  position: relative;
+  height: 13px;
+  margin-top: 1px;
+  font-size: 9.5px;
+  color: #96a89f;
+  font-variant-numeric: tabular-nums;
+}
+.cc-gauge-scale span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  line-height: 1.2;
+}
 
 .cc-gauge-tips { display: flex; flex-wrap: wrap; gap: 6px; }
 .cc-gauge-tip {

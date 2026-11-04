@@ -7,7 +7,7 @@
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
     @closed="onClosed"
   >
-    <el-form :model="form" label-width="76px" @submit.prevent>
+    <el-form :model="form" label-width="88px" @submit.prevent>
       <el-form-item label="任务标题" required>
         <el-input v-model="form.title" maxlength="200" show-word-limit placeholder="例如：跟进联系张同学家长" />
       </el-form-item>

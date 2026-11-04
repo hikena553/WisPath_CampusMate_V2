@@ -8,6 +8,8 @@ from app.core.database import get_db
 from app.core.deps import require_role
 from app.models.user import User, UserRole
 from app.schemas.teacher_portfolio import (
+    PortfolioAIDraftIn,
+    PortfolioAIDraftOut,
     PortfolioItemCreate,
     PortfolioItemOut,
     PortfolioItemUpdate,
@@ -26,6 +28,15 @@ _teacher_only = require_role(UserRole.TEACHER, UserRole.ADMIN)
 def get_report(user: User = Depends(_teacher_only), db: Session = Depends(get_db)):
     """成长报告数据（前端复用打印方案导出）。"""
     return teacher_portfolio_service.report(db, user.id)
+
+
+@router.post("/ai-draft", response_model=PortfolioAIDraftOut)
+async def ai_draft(
+    payload: PortfolioAIDraftIn,
+    user: User = Depends(_teacher_only),
+):
+    """AI 帮写：老师口述大体情况 → 自动填充类型、标题、日期与反思（模型不可用时本地兜底）。"""
+    return await teacher_portfolio_service.ai_draft(payload.description, payload.item_type)
 
 
 @router.get("", response_model=list[PortfolioItemOut])

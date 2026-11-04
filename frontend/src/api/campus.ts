@@ -142,6 +142,20 @@ export function toggleArticleFavorite(url: string) {
   return request.post<{ favorited: boolean; count: number }>('/campus/articles/favorite', { url })
 }
 
+export interface CampusArticleFavoriteItem {
+  id: number
+  url: string
+  title: string
+  source: string
+  image_url: string | null
+  created_at: string | null
+}
+
+/** 我的资讯收藏（资讯详情「收藏」写入的明细，与资源收藏不是同一张表） */
+export function getArticleFavorites() {
+  return request.get<CampusArticleFavoriteItem[]>('/campus/articles/favorites')
+}
+
 export function createArticleComment(url: string, content: string) {
   return request.post<CampusArticleComment>('/campus/articles/comments', { url, content })
 }

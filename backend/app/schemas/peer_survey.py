@@ -20,6 +20,20 @@ class PeerSurveyStatusUpdate(BaseModel):
     status: str
 
 
+class PeerSurveyAIDraftIn(BaseModel):
+    """AI 辅助发起：用一句场景描述推荐问卷标题与评价维度。"""
+
+    scene: str = Field(default="", max_length=200)
+    target_type: str = "peer"
+
+
+class PeerSurveyAIDraftOut(BaseModel):
+    title: str
+    questions: list[SurveyQuestion] = []
+    # ai=大模型生成；rule=未配置模型时的本地规则兜底（前端如实标注）
+    source: str = "ai"
+
+
 class PeerSurveyOut(BaseModel):
     id: int
     title: str

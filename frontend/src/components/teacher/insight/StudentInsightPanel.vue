@@ -25,7 +25,7 @@
       <!-- AI 建议 -->
       <div class="si-advice">
         <div class="si-advice-head">
-          <el-icon><MagicStick /></el-icon>
+          <AiMascotMark :size="15" />
           <span>辅导建议</span>
           <el-tag v-if="insight.degraded" size="small" type="warning" effect="plain" round>
             已降级为规则建议
@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { MagicStick } from '@element-plus/icons-vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import { ElMessage } from 'element-plus'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'

@@ -101,6 +101,23 @@ def create_post(req: CommunityPostCreate, db: Session = Depends(get_db), current
     return _post_out(db, post, current_user)
 
 
+@router.get("/posts/mine", response_model=list[CommunityPostOut])
+def list_my_posts(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """我发布的帖子：按发布时间倒序（个人中心「我发布的」使用）。"""
+    posts = (
+        db.query(CommunityPost)
+        .filter(CommunityPost.student_id == current_user.id)
+        .order_by(CommunityPost.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_post_out(db, p, current_user) for p in posts]
+
+
 @router.get("/posts/{post_id}", response_model=CommunityPostOut)
 def get_post(post_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post = db.query(CommunityPost).filter(CommunityPost.id == post_id).first()

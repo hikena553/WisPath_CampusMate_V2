@@ -411,8 +411,15 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
                 ),
             ).all()
             created = False
-            # 主动触达通知必须带可跳转目标，否则前端点击「只标已读、无反应」
-            teacher_link = "/teacher/crisis" if action.action_type == "escalation" else "/teacher/students"
+            # 主动触达通知必须带可跳转目标，且落到具体学生，否则前端丢失上下文。
+            # 危机升级 → 预警中心（支持 ?student_id=）；其余跟进 → 学生档案（支持 ?student=）。
+            if action.student_id:
+                if action.action_type == "escalation":
+                    teacher_link = f"/teacher/crisis?student_id={action.student_id}"
+                else:
+                    teacher_link = f"/teacher/students?student={action.student_id}"
+            else:
+                teacher_link = "/teacher/crisis" if action.action_type == "escalation" else "/teacher/students"
             for tutor in tutors:
                 if _notification_exists(db, tutor.id, action.title):
                     # 48h 查重命中属正常路径，逐条记 INFO 会让全量扫描刷出上千行日志，降为 DEBUG

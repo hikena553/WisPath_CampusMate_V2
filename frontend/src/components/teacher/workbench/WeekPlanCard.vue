@@ -3,7 +3,7 @@
     <div class="wb-head">
       <div class="wb-title">
         <el-icon class="wb-ic purple"><Calendar /></el-icon>
-        <span>本周计划</span>
+        <span>我的计划</span>
         <span class="wb-range">{{ rangeLabel }}</span>
       </div>
       <button class="wb-more" @click="emit('open-schedule')">

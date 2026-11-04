@@ -8,6 +8,8 @@
 import hashlib
 import hmac
 import json
+import logging
+import re
 from datetime import datetime
 
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +25,8 @@ from app.models.peer_survey import (
 
 # 低于该样本量不出分布（防止小样本反推个人）
 MIN_SAMPLE = 5
+
+logger = logging.getLogger(__name__)
 
 
 def _target_type(value: str | PeerSurveyTargetType | None) -> PeerSurveyTargetType:
@@ -245,6 +249,116 @@ def my_results(db: Session, teacher_id: int) -> list[dict]:
 
 def serialize(survey: PeerSurvey, response_count: int = 0, my_submitted: bool = False) -> dict:
     return _serialize_survey(survey, response_count, my_submitted)
+
+
+# ==================== AI 辅助发起问卷 ====================
+_TARGET_LABEL = {
+    PeerSurveyTargetType.PEER: "辅导员互评",
+    PeerSurveyTargetType.STUDENT: "学生评辅导员",
+}
+
+# 大模型不可用时的本地兜底：按场景关键词推荐可聚合的评分维度
+_DRAFT_RULES: list[tuple[tuple[str, ...], str, list[str]]] = [
+    (
+        ("教学", "课堂", "评教", "课程"),
+        "课程教学反馈",
+        ["讲解清晰", "课堂互动", "进度适中", "学习收获", "资料实用"],
+    ),
+    (
+        ("活动", "比赛", "讲座", "培训"),
+        "活动组织反馈",
+        ["组织有序", "内容有用", "时间安排", "参与收获", "愿意推荐"],
+    ),
+    (
+        ("家访", "家长", "家校", "沟通"),
+        "家校沟通反馈",
+        ["沟通及时", "信息清晰", "态度耐心", "协同有效"],
+    ),
+    (
+        ("互评", "辅导员", "同事", "协作"),
+        "辅导员互评",
+        ["关心学生", "处事公正", "沟通及时", "工作负责"],
+    ),
+]
+
+_DEFAULT_LABELS = {
+    PeerSurveyTargetType.PEER: ["关心学生", "处事公正", "沟通及时", "工作负责"],
+    PeerSurveyTargetType.STUDENT: ["讲解清晰", "答疑及时", "要求明确", "关注成长", "愿意推荐"],
+}
+
+
+def _fallback_draft(scene: str, target: PeerSurveyTargetType) -> dict:
+    hit = next((r for r in _DRAFT_RULES if any(k in scene for k in r[0])), None)
+    labels = hit[2] if hit else _DEFAULT_LABELS[target]
+    base = hit[1] if hit else (scene or _TARGET_LABEL[target])
+    title = f"{datetime.now().year}年{_TARGET_LABEL[target]} · {base}"[:200]
+    questions = [
+        {"key": f"q{i + 1}", "label": label, "max": 5}
+        for i, label in enumerate(labels)
+    ]
+    return {"title": title, "questions": questions, "source": "rule"}
+
+
+def _clean_questions(raw: object) -> list[dict]:
+    """清洗模型输出：3–8 个维度、中文标签、ASCII 键名、1–5 分。"""
+    if not isinstance(raw, list):
+        return []
+    labels: list[str] = []
+    keys: list[str] = []
+    for item in raw:
+        if isinstance(item, str):
+            label, key = item.strip(), ""
+        elif isinstance(item, dict):
+            label = str(item.get("label") or item.get("name") or "").strip()
+            key = str(item.get("key") or "").strip()
+        else:
+            continue
+        label = label[:14]
+        if not label or label in labels:
+            continue
+        key = re.sub(r"[^a-z0-9_]", "", key.lower())[:24] or f"q{len(labels) + 1}"
+        if key in keys:
+            key = f"q{len(labels) + 1}"
+        labels.append(label)
+        keys.append(key)
+        if len(labels) >= 8:
+            break
+    return [
+        {"key": keys[i], "label": labels[i], "max": 5}
+        for i in range(len(labels))
+    ]
+
+
+async def ai_draft(scene: str, target_type: str | PeerSurveyTargetType) -> dict:
+    """AI 辅助发起：场景描述 → 问卷标题 + 评价维度；模型不可用时本地规则兜底。"""
+    target = _target_type(target_type)
+    scene = (scene or "").strip()[:200]
+    fallback = _fallback_draft(scene, target)
+
+    prompt = (
+        "你是高校辅导员的问卷设计助手。请根据下面的使用场景，设计一份匿名评价问卷。\n"
+        f"评价类型：{_TARGET_LABEL[target]}；使用场景：{scene or '常规匿名互评'}。\n"
+        "要求：\n"
+        "1. 标题不超过 40 字，说明周期或对象；\n"
+        "2. 给出 4–6 个可量化、可聚合的评价维度，每个维度为 1–5 分；\n"
+        "3. 维度名称不超过 8 个汉字，具体可观察，不要空泛套话；\n"
+        "4. 只输出 JSON，不要解释。格式："
+        '{"title":"标题","questions":[{"key":"english_key","label":"维度名称","max":5}]}'
+    )
+    try:
+        from app.services.llm_service import _parse_json_loose, complete
+
+        raw = await complete(prompt, temperature=0.35, max_tokens=700)
+        data = _parse_json_loose(raw) or {}
+        questions = _clean_questions(data.get("questions"))
+        if len(questions) < 3:
+            raise ValueError("模型未返回足够的评价维度")
+        title = str(data.get("title") or "").strip()[:200] or fallback["title"]
+        return {"title": title, "questions": questions, "source": "ai"}
+    except Exception:
+        # 未配置模型 / 网络异常 / 输出不合法，一律静默降级，保证按钮永远有结果
+        logger.warning("问卷 AI 生成失败，使用本地规则兜底", exc_info=True)
+        return fallback
 
 
 def now() -> datetime:

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>教师端改进 · 实现规划 · WisPath CampusMate</title>
+<style>
+  :root {
+    --bg:#f6f8fc; --surface:#fff; --ink:#101828; --ink-2:#344054; --muted:#667085;
+    --line:#e4e7ec; --brand:#2563eb; --brand-soft:#eff4ff;
+    --ok:#067647; --ok-soft:#ecfdf3; --warn:#b54708; --warn-soft:#fffaeb;
+    --danger:#d92d20; --danger-soft:#fef3f2; --purple:#6941c6; --purple-soft:#f4f3ff;
+    --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.06), 0 8px 24px -12px rgba(16,24,40,.18);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.75;font-size:15px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px 90px;}
+  .hero{background:linear-gradient(140deg,#101828 0%,#1d3a8a 55%,#2563eb 100%);color:#fff;padding:54px 22px 46px;position:relative;overflow:hidden;}
+  .hero::after{content:"";position:absolute;right:-120px;top:-120px;width:380px;height:380px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.16),transparent 68%);}
+  .hero-inner{max-width:1080px;margin:0 auto;position:relative;z-index:1;}
+  .eyebrow{display:inline-block;font-size:12px;letter-spacing:.16em;text-transform:uppercase;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:5px 12px;border-radius:999px;margin-bottom:18px;}
+  .hero h1{font-size:32px;line-height:1.3;margin:0 0 12px;font-weight:700;letter-spacing:-.01em;}
+  .hero p{margin:0;color:rgba(255,255,255,.82);max-width:760px;font-size:15px;}
+  .hero-meta{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px;}
+  .chip{font-size:12.5px;padding:6px 13px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;}
+  section{margin-top:44px;}
+  h2{font-size:22px;margin:0 0 14px;display:flex;align-items:center;gap:12px;font-weight:700;letter-spacing:-.01em;}
+  h2 .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--brand);color:#fff;font-size:14px;flex:none;}
+  h3{font-size:17px;margin:30px 0 12px;font-weight:700;}
+  h4{font-size:15px;margin:0 0 6px;font-weight:700;}
+  .lead{color:var(--muted);margin:0 0 18px;font-size:14.5px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow);}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px;}
+  .mini{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);}
+  .mini h4{margin:8px 0 6px;}
+  .mini p{margin:0;color:var(--muted);font-size:13.5px;}
+  .tag{display:inline-block;font-size:11.5px;padding:3px 9px;border-radius:999px;font-weight:600;letter-spacing:.02em;}
+  .t-blue{background:var(--brand-soft);color:var(--brand);}
+  .t-green{background:var(--ok-soft);color:var(--ok);}
+  .t-amber{background:var(--warn-soft);color:var(--warn);}
+  .t-red{background:var(--danger-soft);color:var(--danger);}
+  .t-purple{background:var(--purple-soft);color:var(--purple);}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);margin:16px 0;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{background:#f9fafb;font-weight:700;color:var(--ink-2);font-size:12.5px;letter-spacing:.02em;white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+  code{background:#f2f4f7;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12.5px;
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;color:#1d3a8a;}
+  .phase{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:20px;}
+  .phase-head{display:flex;align-items:center;gap:12px;padding:15px 20px;background:#f9fafb;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .phase-badge{font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px;color:#fff;flex:none;}
+  .ph0{background:#067647;} .ph1{background:#2563eb;} .ph2{background:#6941c6;}
+  .ph-title{font-weight:700;font-size:15px;}
+  .ph-sub{color:var(--muted);font-size:12.5px;margin-left:auto;}
+  .phase-body{padding:6px 20px 16px;}
+  .item{display:flex;gap:14px;padding:16px 0;border-bottom:1px dashed var(--line);}
+  .item:last-child{border-bottom:none;}
+  .idx{flex:none;width:26px;height:26px;border-radius:8px;background:var(--brand-soft);color:var(--brand);font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px;}
+  .item h4{margin:0 0 5px;}
+  .item p{margin:0 0 5px;font-size:13.5px;}
+  .why{color:var(--ink-2);}
+  .tech{color:var(--muted);font-size:12.5px;}
+  .tech b,.ref b{color:var(--ink-2);}
+  .callout{border-radius:var(--radius);padding:14px 18px;margin:16px 0;font-size:13.5px;border:1px solid;}
+  .co-info{background:var(--brand-soft);border-color:#c7d7fe;color:#1d3a8a;}
+  .co-ok{background:var(--ok-soft);border-color:#abefc6;color:#05603a;}
+  .co-warn{background:var(--warn-soft);border-color:#fedf89;color:#93370d;}
+  .co-purple{background:var(--purple-soft);border-color:#d9d6fe;color:#4a1fb8;}
+  .layer{display:flex;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 18px;margin-bottom:12px;box-shadow:var(--shadow);}
+  .lv{flex:none;width:36px;height:36px;border-radius:10px;background:var(--brand);color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  .lv.p2{background:var(--purple);} .lv.p3{background:var(--warn);}
+  .layer .t{font-weight:700;font-size:14.5px;margin-bottom:4px;}
+  .layer .d{margin:0;color:var(--muted);font-size:13.5px;}
+  .tree{background:#0d1117;color:#c9d1d9;border-radius:var(--radius);padding:18px 20px;font-family:"SFMono-Regular",Consolas,Menlo,monospace;font-size:12.5px;line-height:1.85;overflow-x:auto;box-shadow:var(--shadow);}
+  .tree .c{color:#7d8590;}
+  .tree .g{color:#7ee787;}
+  .tree .b{color:#79c0ff;}
+  .tree .y{color:#e3b341;}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;margin-left:6px;}
+  .p-yes{background:var(--ok-soft);color:var(--ok);}
+  .p-no{background:var(--danger-soft);color:var(--danger);}
+  ul.decide{list-style:none;padding:0;margin:14px 0;}
+  ul.decide li{display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed var(--line);font-size:13.5px;}
+  ul.decide li:last-child{border-bottom:none;}
+  ul.decide .k{flex:none;width:150px;font-weight:700;color:var(--ink-2);}
+  ul.decide .v{color:var(--muted);}
+  .footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;text-align:center;}
+  @media(max-width:820px){
+    .grid-3,.grid-2{grid-template-columns:1fr;}
+    .hero h1{font-size:26px;}
+    ul.decide .k{width:110px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <span class="eyebrow">实现规划 · v1 · Implementation Plan</span>
+    <h1>教师端改进 · 模块化实现规划</h1>
+    <p>25 项设计已逐项确认。本规划把它们拆成<strong>独立数据模型 + 独立 API + 独立服务 + 独立前端组件</strong>的模块，明确依赖顺序与验收标准，确保高内聚、低耦合，且每个模块都能单独交付。</p>
+    <div class="hero-meta">
+      <span class="chip">定位：高校辅导员工作台</span>
+      <span class="chip">25 项设计 · 4 个阶段</span>
+      <span class="chip">模块化 · 高内聚低耦合</span>
+      <span class="chip">智能体工具同步集成</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ============ 0. 架构原则 ============ -->
+  <section id="principles">
+    <h2><span class="num">0</span>架构原则</h2>
+    <p class="lead">沿用现有工程的既有约定（<code>models/</code> + <code>api/</code> + <code>services/</code> + <code>registry.py</code> 统一登记），新增能力全部按同一骨架落地，不引入新范式。</p>
+
+    <div class="grid-3">
+      <div class="mini">
+        <span class="tag t-blue">分层</span>
+        <h4>四层骨架，单向依赖</h4>
+        <p>API 层只做参数校验与编排，业务规则全部下沉到 Service 层，数据访问只通过 Model 层。禁止 API 里直接写复杂业务逻辑。</p>
+      </div>
+      <div class="mini">
+        <span class="tag t-green">边界</span>
+        <h4>一模块一域，不互相 import</h4>
+        <p>跨模块协作只通过 Service 公开函数或事件表，不允许 A 模块的 API 直接调用 B 模块的内部实现。</p>
+      </div>
+      <div class="mini">
+        <span class="tag t-purple">可插拔</span>
+        <h4>注册即接入，删除即下线</h4>
+        <p>每个模块在 <code>registry.py</code> 追加一行完成接入；模块自身不修改 <code>main.py</code> 或其它模块的代码。</p>
+      </div>
+    </div>
+
+    <div class="callout co-info">
+      <b>命名约定：</b>模型 <code>models/&lt;domain&gt;.py</code>；接口 <code>api/&lt;domain&gt;.py</code>（<code>prefix=/api/&lt;domain&gt;</code>）；服务 <code>services/&lt;domain&gt;_service.py</code>；前端页面 <code>views/teacher/&lt;Domain&gt;Page.vue</code>，组件 <code>components/teacher/&lt;domain&gt;/</code>。表名统一复数下划线，外键统一 <code>&lt;entity&gt;_id</code>。
+    </div>
+
+    <div class="callout co-purple">
+      <b>强制项 · 智能体工具同步：</b>每个新增模块必须同时在 <code>services/tools/</code> 下注册对应的智能体工具（<code>definitions.py</code> 登记 + <code>dispatcher.py</code> 分发），确保绵小城智能体可调用，这是项目既有硬约束。
+    </div>
+  </section>
+
+  <!-- ============ 1. 模块清单 ============ -->
+  <section id="modules">
+    <h2><span class="num">1</span>模块清单与边界</h2>
+    <p class="lead">下表是全部新增模块的落地坐标。凡是"复用"列非空的，一律通过调用既有 Service / API 完成，不复制逻辑。</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>模块</th><th>新增数据模型</th><th>新增 API</th><th>新增 Service</th><th>前端</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag t-green">P0</span></td>
+            <td><strong>统一待办任务层</strong></td>
+            <td><code>teacher_task.py</code><br><code>TeacherTask</code></td>
+            <td><code>teacher_task.py</code><br><code>/api/teacher-tasks</code></td>
+            <td><code>teacher_task_service.py</code></td>
+            <td><code>components/teacher/task/</code><br>TaskCard / TaskList</td>
+          </tr>
+          <tr>
+            <td><span class="tag t-green">P0</span></td>
+            <td><strong>教师侧写记录</strong></td>
+            <td><code>care_record.py</code><br><code>CareRecord</code></td>
+            <td><code>care_record.py</code><br><code>/api/care-records</code></td>
+            <td><code>care_record_service.py</code></td>
+            <td>StudentsPage 新增可写 Tab</td>
+          </tr>
+          <tr>
+            <td><span class="tag t-green">P0</span></td>
+            <td><strong>销假确认</strong></td>
+            <td>复用 <code>LeaveRequest</code><br>+2 字段</td>
+            <td>扩展 <code>leave.py</code><br><code>/confirm-return</code></td>
+            <td>扩展 <code>leave</code> 逻辑</td>
+            <td>ApprovalPage 统计 Tab</td>
+          </tr>
+          <tr>
+            <td><span class="tag t-blue">P1</span></td>
+            <td><strong>教师成长档案</strong></td>
+            <td><code>teacher_portfolio.py</code><br><code>TeacherPortfolioItem</code></td>
+            <td><code>teacher_portfolio.py</code><br><code>/api/teacher-portfolio</code></td>
+            <td><code>teacher_portfolio_service.py</code></td>
+            <td><code>views/teacher/PortfolioPage.vue</code></td>
+          </tr>
+          <tr>
+            <td><span class="tag t-blue">P1</span></td>
+            <td><strong>匿名问卷互评</strong></td>
+            <td><code>peer_survey.py</code><br><code>PeerSurvey</code> / <code>PeerSurveyResponse</code></td>
+            <td><code>peer_survey.py</code><br><code>/api/peer-surveys</code></td>
+            <td><code>peer_survey_service.py</code></td>
+            <td><code>views/teacher/SurveyPage.vue</code></td>
+          </tr>
+          <tr>
+            <td><span class="tag t-blue">P1</span></td>
+            <td><strong>人文关怀中心</strong></td>
+            <td><code>care_center.py</code><br><code>CareEvent</code> / <code>HomeVisitRecord</code> / <code>PraiseRecord</code></td>
+            <td><code>care_center.py</code><br><code>/api/care-center</code></td>
+            <td><code>care_center_service.py</code></td>
+            <td><code>views/teacher/CareCenterPage.vue</code></td>
+          </tr>
+          <tr>
+            <td><span class="tag t-blue">P1</span></td>
+            <td><strong>家校沟通</strong></td>
+            <td><code>guardian.py</code><br><code>Guardian</code> / <code>GuardianContactLog</code> / <code>GuardianShareLink</code></td>
+            <td><code>guardian.py</code><br><code>/api/guardians</code></td>
+            <td><code>guardian_service.py</code></td>
+            <td><code>views/teacher/GuardianPage.vue</code></td>
+          </tr>
+          <tr>
+            <td><span class="tag t-purple">P2</span></td>
+            <td><strong>学情数据底座</strong></td>
+            <td><code>learning_event.py</code><br><code>LearningEvent</code></td>
+            <td><code>learning_event.py</code><br><code>/api/learning-events</code></td>
+            <td><code>learning_event_service.py</code></td>
+            <td>无页面（供其它模块调用）</td>
+          </tr>
+          <tr>
+            <td><span class="tag t-purple">P2</span></td>
+            <td><strong>AI 学情助手</strong></td>
+            <td>无新表（读 <code>learning_events</code>）</td>
+            <td>扩展 <code>teacher.py</code></td>
+            <td><code>student_insight_service.py</code></td>
+            <td>复用 <code>HomeAiPanel</code> 组件</td>
+          </tr>
+          <tr>
+            <td><span class="tag t-purple">P2</span></td>
+            <td><strong>审批流程引擎</strong></td>
+            <td><code>workflow.py</code><br><code>WorkflowDef</code> / <code>WorkflowInstance</code></td>
+            <td><code>workflow.py</code><br><code>/api/workflows</code></td>
+            <td><code>workflow_engine.py</code></td>
+            <td>复用 ApprovalPage</td>
+          </tr>
+          <tr>
+            <td><span class="tag t-purple">P2</span></td>
+            <td><strong>预警 pipeline</strong></td>
+            <td>复用 <code>LearningEvent</code> + <code>TeacherTask</code></td>
+            <td>内部任务，无对外接口</td>
+            <td><code>alert_pipeline_service.py</code><br><code>tasks/learning_alert.py</code></td>
+            <td>复用 CrisisWorkbench</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>1.1 目录结构规划</h3>
+    <div class="tree">
+<span class="c"># 后端：新增文件用 + 标记，扩展既有文件用 ~ 标记</span>
+backend/app/
+├── models/
+│   ├── <span class="g">+ teacher_task.py</span>        <span class="c"># TeacherTask</span>
+│   ├── <span class="g">+ care_record.py</span>         <span class="c"># CareRecord（教师侧写）</span>
+│   ├── <span class="g">+ teacher_portfolio.py</span>   <span class="c"># TeacherPortfolioItem</span>
+│   ├── <span class="g">+ peer_survey.py</span>          <span class="c"># PeerSurvey / PeerSurveyResponse</span>
+│   ├── <span class="g">+ care_center.py</span>          <span class="c"># CareEvent / HomeVisitRecord / PraiseRecord</span>
+│   ├── <span class="g">+ guardian.py</span>             <span class="c"># Guardian / GuardianContactLog / GuardianShareLink</span>
+│   ├── <span class="g">+ learning_event.py</span>       <span class="c"># LearningEvent（xAPI 精简）</span>
+│   ├── <span class="g">+ workflow.py</span>             <span class="c"># WorkflowDef / WorkflowInstance</span>
+│   └── <span class="y">~ __init__.py</span>            <span class="c"># 逐行登记新模型</span>
+├── api/
+│   ├── <span class="g">+ teacher_task.py</span>        ├── <span class="g">+ care_record.py</span>
+│   ├── <span class="g">+ teacher_portfolio.py</span>   ├── <span class="g">+ peer_survey.py</span>
+│   ├── <span class="g">+ care_center.py</span>          ├── <span class="g">+ guardian.py</span>
+│   ├── <span class="g">+ learning_event.py</span>      ├── <span class="g">+ workflow.py</span>
+│   ├── <span class="y">~ leave.py</span>              <span class="c"># + /confirm-return</span>
+│   ├── <span class="y">~ crisis.py</span>             <span class="c"># + /follow-up-due</span>
+│   ├── <span class="y">~ teacher.py</span>            <span class="c"># + persist 参数、学情诊断</span>
+│   └── <span class="y">~ registry.py</span>           <span class="c"># 每个新 Router 追加一行</span>
+├── services/
+│   ├── <span class="g">+ teacher_task_service.py</span>   ├── <span class="g">+ care_record_service.py</span>
+│   ├── <span class="g">+ teacher_portfolio_service.py</span>├── <span class="g">+ peer_survey_service.py</span>
+│   ├── <span class="g">+ care_center_service.py</span>    ├── <span class="g">+ guardian_service.py</span>
+│   ├── <span class="g">+ learning_event_service.py</span> ├── <span class="g">+ student_insight_service.py</span>
+│   ├── <span class="g">+ workflow_engine.py</span>        ├── <span class="g">+ alert_pipeline_service.py</span>
+│   └── tools/  <span class="c"># 每个模块在此登记智能体工具</span>
+│       └── <span class="y">~ definitions.py / dispatcher.py</span>
+└── tasks/
+    └── <span class="g">+ learning_alert.py</span>      <span class="c"># 定时扫描入口</span>
+
+frontend/src/
+├── views/teacher/
+│   ├── <span class="g">+ PortfolioPage.vue</span>     <span class="c"># 成长档案</span>
+│   ├── <span class="g">+ SurveyPage.vue</span>        <span class="c"># 匿名问卷互评</span>
+│   ├── <span class="g">+ CareCenterPage.vue</span>    <span class="c"># 人文关怀中心</span>
+│   ├── <span class="g">+ GuardianPage.vue</span>      <span class="c"># 家校沟通</span>
+│   ├── <span class="y">~ HomePage.vue</span>          <span class="c"># 第二屏：我的工作台</span>
+│   ├── <span class="y">~ StudentsPage.vue</span>      <span class="c"># 侧写可写 Tab</span>
+│   ├── <span class="y">~ ApprovalPage.vue</span>      <span class="c"># 销假 + 统计</span>
+│   ├── <span class="y">~ CrisisWorkbench.vue</span>   <span class="c"># 待随访视图</span>
+│   └── <span class="y">~ MessagesPage.vue</span>      <span class="c"># 聊天操作菜单</span>
+└── components/teacher/          <span class="c"># 新增组件按模块分子目录</span>
+    ├── <span class="g">+ task/</span>  ├── <span class="g">+ portfolio/</span>  ├── <span class="g">+ survey/</span>
+    ├── <span class="g">+ care/</span>  ├── <span class="g">+ guardian/</span>   └── <span class="g">+ insight/</span>
+    </div>
+  </section>
+
+  <!-- ============ 2. 依赖顺序 ============ -->
+  <section id="order">
+    <h2><span class="num">2</span>依赖顺序与关键路径</h2>
+    <p class="lead">有依赖关系的模块必须串行，无依赖的可以并行开发。核心判断：<strong>任务层是所有闭环的公共基座，必须最先做</strong>。</p>
+
+    <div class="callout co-warn">
+      <b>关键路径：</b>统一待办任务层（模块 1）→ 教师侧写记录（模块 2）→ 其它 P0 模块。原因：随访提醒、AI 建议落库、销假待办、关怀计划全部要挂到 <code>TeacherTask</code> 上；工作量统计也要读侧写记录。这两块不先落地，后面的闭环都会退化成"假闭环"。
+    </div>
+
+    <div class="layer">
+      <div class="lv">B</div>
+      <div class="body">
+        <div class="t">底座层（无依赖，可并行）</div>
+        <p class="d">学情数据底座（模块 12）· 审批流程引擎（模块 14）。这两块只提供能力，不依赖任何新模块，但被 P0 的部分功能引用——建议与 P0 同期启动，P2 才验收。</p>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lv p2">C</div>
+      <div class="body">
+        <div class="t">依赖层（串行）</div>
+        <p class="d">预警 pipeline（模块 15）依赖 12 + 1；AI 学情助手（模块 13）依赖 12；家校沟通（模块 11）依赖 2 与既有 crisis/leave。</p>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lv p3">D</div>
+      <div class="body">
+        <div class="t">独立层（无依赖，可并行）</div>
+        <p class="d">成长档案（8）· 匿名问卷互评（9）· 关怀中心（10）· 教师工作台（7）。这四个模块互不依赖，是 P1 的主要交付物，可多线并行。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. P0 任务卡 ============ -->
+  <section id="p0">
+    <h2><span class="num">3</span>P0 任务卡（补闭环）</h2>
+    <p class="lead">每张任务卡给出：数据模型字段、接口签名、前端改动、验收标准。P0 全部完成即代表"流程能转起来"。</p>
+
+    <h3>3.1 模块 1 · 统一待办任务层 <span class="pill p-yes">公共基座</span></h3>
+    <div class="card">
+      <h4>数据模型 <code>TeacherTask</code></h4>
+      <p class="tech">
+        <code>id</code> · <code>teacher_id</code>（负责人）· <code>source_type</code>（枚举：<code>ai_suggest</code> / <code>follow_up</code> / <code>approval</code> / <code>care_plan</code> / <code>alert</code> / <code>manual</code>）·
+        <code>source_id</code>（关联对象 id）· <code>student_id</code>（可空）· <code>title</code> · <code>detail</code> ·
+        <code>status</code>（枚举：<code>pending</code> / <code>contacted</code> / <code>cared</code> / <code>done</code> / <code>expired</code>）·
+        <code>due_at</code> · <code>done_at</code> · <code>created_at</code> · <code>updated_at</code>
+      </p>
+      <p class="tech"><b>唯一约束：</b><code>(source_type, source_id, teacher_id)</code> 唯一，从数据库层杜绝重复推荐（对应设计里"避免重复推荐"）。</p>
+
+      <h4 style="margin-top:14px">接口</h4>
+      <p class="tech">
+        <code>GET /api/teacher-tasks</code>（按 status / source_type / due 筛选，分页）·
+        <code>POST /api/teacher-tasks</code>（手动建）·
+        <code>PATCH /api/teacher-tasks/{id}</code>（改状态，状态机校验）·
+        <code>GET /api/teacher-tasks/summary</code>（今日待跟进 / 逾期 / 本周完成数，供首页 KPI）
+      </p>
+
+      <h4 style="margin-top:14px">前端</h4>
+      <p class="tech"><code>components/teacher/task/TaskCard.vue</code>（单条卡片，含状态流转按钮）、<code>TaskList.vue</code>（列表 + 筛选）；首页 KPI 卡片增加"今日待跟进"。</p>
+
+      <h4 style="margin-top:14px">验收标准</h4>
+      <p class="tech">① 同一 AI 建议重复触发不产生重复任务；② 首页能显示今日待跟进数；③ 任务状态可流转且非法流转被拒。</p>
+    </div>
+
+    <h3>3.2 模块 2 · 教师侧写记录 <span class="pill p-yes">工作量数据源</span></h3>
+    <div class="card">
+      <h4>数据模型 <code>CareRecord</code></h4>
+      <p class="tech">
+        <code>id</code> · <code>student_id</code> · <code>teacher_id</code> ·
+        <code>record_type</code>（枚举：<code>care</code> 关怀记录 / <code>talk</code> 谈心谈话 / <code>comment</code> 评语）·
+        <code>content</code> · <code>is_private</code>（是否仅教师可见）· <code>task_id</code>（可空，回链任务）· <code>created_at</code>
+      </p>
+      <p class="tech"><b>设计要点：</b>该表同时是"工作量统计"的唯一数据源，成长看板的工作量趋势直接读它，不再另建计数表。</p>
+
+      <h4 style="margin-top:14px">接口</h4>
+      <p class="tech"><code>GET /api/care-records?student_id=</code>（按学生聚合）· <code>POST /api/care-records</code> · <code>PATCH /api/care-records/{id}</code> · <code>DELETE /api/care-records/{id}</code>（软删除）</p>
+
+      <h4 style="margin-top:14px">前端</h4>
+      <p class="tech">StudentsPage 在现有只读 5 个 Tab 后新增"工作记录"可写 Tab；支持从任务卡"记录关怀"一键带出表单。</p>
+
+      <h4 style="margin-top:14px">验收标准</h4>
+      <p class="tech">① 教师可写入三类记录并回显；② 记录可关联任务；③ 删除为软删除、数据可追溯。</p>
+    </div>
+
+    <h3>3.3 模块 3–6 · 闭环补齐四项</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>模块</th><th>改动要点</th><th>验收标准</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>3</td>
+            <td><strong>AI 建议落库为任务</strong></td>
+            <td><code>teacher.py</code> 的 <code>/suggest-contacts</code> 增 <code>persist: bool</code> 参数；<code>persist=true</code> 时调用 <code>teacher_task_service.bulk_upsert()</code>；<code>HomeAiPanel</code> 增加"转为跟进"按钮</td>
+            <td>点"转为跟进"后首页待跟进 +1；重复点击不重复建</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><strong>随访到期提醒</strong></td>
+            <td><code>crisis.py</code> 增 <code>GET /follow-up-due</code>（读 <code>follow_up_date &lt;= today &amp; not resolved</code>）；CrisisWorkbench 增"待随访"筛选；首页提醒读同接口</td>
+            <td>到期随访能在工作台与首页同时看到</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td><strong>销假确认 + 统计</strong></td>
+            <td><code>LeaveRequest</code> 增 <code>return_confirmed</code> / <code>return_confirmed_at</code>；<code>leave.py</code> 增 <code>POST /{id}/confirm-return</code>（学生提交返校、教师确认）；ApprovalPage 增统计 Tab（按班级 / 类型 / 时段），并做异常请假模式识别（同生频繁请假 → 生成 <code>alert</code> 任务）</td>
+            <td>审批通过的请假能走完"返校确认"；统计可导出；频繁请假能触发提醒</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td><strong>消息与档案/任务打通</strong></td>
+            <td>MessagesPage 聊天头部增操作菜单："查看档案"（跳转学生详情）/"记录关怀"（复用模块 2 接口）</td>
+            <td>沟通后能一键落记录，无需切页重新找人</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 4. P1 任务卡 ============ -->
+  <section id="p1">
+    <h2><span class="num">4</span>P1 任务卡（补维度）</h2>
+    <p class="lead">这四个模块相互独立，是本期的"特色交付物"。全部按独立域实现，彼此不 import。</p>
+
+    <h3>4.1 模块 7 · 教师个人工作台</h3>
+    <div class="card">
+      <p class="tech"><b>形态：</b>不新建页面，重构 <code>HomePage.vue</code> 第二屏，以"我"为主语组织三块内容——今日待办聚合（读 <code>teacher_task</code> summary）、周计划（复用既有日程）、工作量统计（读 <code>care_record</code> + 审批数）。</p>
+      <p class="tech"><b>耦合控制：</b>三块各自封装为独立组件（<code>TodayTasksCard</code> / <code>WeekPlanCard</code> / <code>WorkloadCard</code>），首页只做布局编排，数据由各组件自己拉取。</p>
+      <p class="tech"><b>验收：</b>首页打开即可回答"我今天该做什么"；三块数据与各自源模块一致。</p>
+    </div>
+
+    <h3>4.2 模块 8 · 教师成长档案（e-Portfolio）</h3>
+    <div class="card">
+      <h4>数据模型 <code>TeacherPortfolioItem</code></h4>
+      <p class="tech">
+        <code>id</code> · <code>teacher_id</code> ·
+        <code>item_type</code>（枚举：<code>case</code> 工作案例 / <code>honor</code> 荣誉 / <code>training</code> 培训研修 / <code>research</code> 工作研究成果）·
+        <code>title</code> · <code>evidence_json</code>（证据附件 / 链接）· <code>reflection</code>（反思）·
+        <code>occurred_on</code> · <code>visibility</code>（私有 / 公开）· <code>created_at</code>
+      </p>
+      <p class="tech"><b>四段式：</b>证据 → 反思 → 展示 → 评价。评价段留 <code>reviewer_id</code> / <code>review_comment</code>（可空，为后续互评预留）。</p>
+      <p class="tech"><b>接口：</b><code>GET/POST/PATCH/DELETE /api/teacher-portfolio</code> + <code>GET /api/teacher-portfolio/report</code>（成长报告数据，前端复用打印方案导出）。</p>
+      <p class="tech"><b>前端：</b><code>PortfolioPage.vue</code> + <code>components/teacher/portfolio/</code>（时间线、条目卡、编辑表单）。</p>
+      <p class="tech"><b>验收：</b>四类条目可增删改；能生成并导出成长报告。</p>
+    </div>
+
+    <h3>4.3 模块 9 · 匿名工作问卷互评</h3>
+    <div class="card">
+      <h4>数据模型</h4>
+      <p class="tech">
+        <code>PeerSurvey</code>：<code>id</code> · <code>title</code> · <code>target_type</code>（<code>peer</code> 辅导员互评 / <code>student</code> 学生评辅导员）· <code>period</code>（学期 / 自定义）· <code>questions_json</code> · <code>status</code>（draft / open / closed）· <code>created_by</code><br>
+        <code>PeerSurveyResponse</code>：<code>id</code> · <code>survey_id</code> · <code>target_teacher_id</code> · <code>scores_json</code> · <code>suggestion</code> · <code>submitted_at</code> · <strong>无 submitter_id</strong>（匿名保证：数据库层不存填写人）
+      </p>
+      <p class="tech"><b>匿名硬约束：</b>答卷表<strong>不设提交人字段</strong>，从存储层杜绝回溯；接口只返回聚合分布（均分 / 分布 / 匿名建议列表），任何单条答卷不出接口。</p>
+      <p class="tech"><b>接口：</b><code>POST /api/peer-surveys</code>（建问卷）· <code>POST /api/peer-surveys/{id}/responses</code>（匿名提交）· <code>GET /api/peer-surveys/{id}/result</code>（仅聚合）· <code>GET /api/peer-surveys/mine</code>（我的被评结果）</p>
+      <p class="tech"><b>验收：</b>答卷不可回溯到个人；同一人重复提交有防重（按 问卷+被评人 限一次，用匿名令牌而非身份）；结果页只有聚合数据。</p>
+    </div>
+
+    <h3>4.4 模块 10 · 人文关怀中心</h3>
+    <div class="card">
+      <p class="tech"><b>三个子域，同一模块内聚：</b></p>
+      <p class="tech">
+        ① <code>CareEvent</code>（关怀日历事件：生日 / 困难学生 / 学业预警，<code>event_type</code> + <code>event_date</code> + <code>student_id</code>，支持自动生成与手动添加）<br>
+        ② <code>HomeVisitRecord</code>（家访记录：时间 / 方式 / 对象 / 内容 / 后续计划）<br>
+        ③ <code>PraiseRecord</code>（正向激励：表扬 / 徽章，<code>praise_type</code> + <code>reason</code>）
+      </p>
+      <p class="tech"><b>匿名求助入口：</b>不建新表，复用既有 <code>Feedback</code> 匿名通道（<code>feedback.py</code>），在关怀中心页面提供入口即可，避免重复实现。</p>
+      <p class="tech"><b>验收：</b>日历能自动列出当月关怀事项；家访与表扬可记录；匿名求助可直达既有反馈流。</p>
+    </div>
+
+    <h3>4.5 模块 11 · 家校沟通（家长观察者）</h3>
+    <div class="card">
+      <h4>数据模型（3 张新表，按 A1–A10 定稿）</h4>
+      <p class="tech">
+        <code>Guardian</code>：<code>student_id</code> · <code>name</code> · <code>relation</code> · <code>phone</code> · <code>is_primary</code> · <code>remark</code>（无账号、无登录）<br>
+        <code>GuardianContactLog</code>：<code>student_id</code> · <code>guardian_id</code> · <code>teacher_id</code> · <code>scene</code>（五类场景）· <code>channel</code>（sms / report / link / note）· <code>status</code>（sent / pending / failed / draft）· <code>content_summary</code> · <code>is_deleted</code>（软删除）<br>
+        <code>GuardianShareLink</code>：<code>log_id</code> · <code>token</code> · <code>expires_at</code> · <code>revoked</code> · <code>view_count</code> · <code>last_viewed_at</code>（二期）
+      </p>
+      <p class="tech"><b>三通道：</b>短信走既有 <code>notification_service.send_sms()</code>（只发提示+引导，A4）；报告走既有打印/导出方案；链接走 <code>GuardianShareLink</code> 只读页（7 天有效、可撤销、限流，A6）。</p>
+      <p class="tech"><b>三挂接点（全手动触发）：</b>① 请假提交时提示（A8，读 <code>leave</code> 状态决定文案）；② 危机干预新增"约谈家长"类型时同步生成台账（A9，扩展 <code>crisis_service</code>）；③ 学生档案页手动发起。</p>
+      <p class="tech"><b>安全（A10）：</b>手机号脱敏输出；危机类记录禁止生成分享链接；所有操作写审计。</p>
+      <p class="tech"><b>验收：</b>能建档联系人、能记录沟通、短信通道在未配置时优雅降级为 <code>pending</code>（不报错）；危机约谈能自动留痕；链接不可越权访问。</p>
+    </div>
+  </section>
+
+  <!-- ============ 5. P2 ============ -->
+  <section id="p2">
+    <h2><span class="num">5</span>P2 底座（立得住）</h2>
+    <p class="lead">P2 不直接面向教师，但决定"数字教育"能不能真正成立。建议与 P0 同期启动、P2 阶段验收。</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>模块</th><th>核心设计</th><th>关键约束</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>12</td>
+            <td><strong>学情数据底座</strong></td>
+            <td><code>LearningEvent</code>（xAPI 精简版）：<code>actor_id</code> / <code>verb</code> / <code>object_type</code> / <code>object_id</code> / <code>result_json</code> / <code>context_json</code> / <code>occurred_at</code>；各业务模块通过 <code>learning_event_service.emit()</code> 单点写入</td>
+            <td>只提供写入与查询，不做业务判断；<strong>写入失败不得影响主流程</strong>（旁路、异常吞掉并记日志）</td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td><strong>AI 学情助手</strong></td>
+            <td><code>student_insight_service</code>：读 <code>learning_events</code> 聚合成风险画像 → 调 LLM 生成辅导建议 → 结果可一键转 <code>TeacherTask</code></td>
+            <td>LLM 调用失败要有降级文案；建议必须可溯源到数据（不给无据结论）</td>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td><strong>审批流程引擎</strong></td>
+            <td><code>WorkflowDef</code>（节点定义 JSON）+ <code>WorkflowInstance</code>（当前节点 / 审批人 / 历史）；<code>workflow_engine</code> 提供 <code>start / approve / reject / cancel</code> 四个原语</td>
+            <td>迁移期新旧并存：<code>leave</code> / <code>service</code> / <code>material</code> 逐个切换，不一次性推翻</td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td><strong>预警 pipeline</strong></td>
+            <td><code>tasks/learning_alert.py</code> 定时（如每日 07:00）扫描 <code>learning_events</code> → 命中规则 → 生成 <code>TeacherTask(source_type=alert)</code> → 按班级分配教师 → 跟踪闭环</td>
+            <td>幂等：同规则同学生当日只生成一次；规则可配置，不硬编码</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 6. 排期 ============ -->
+  <section id="milestones">
+    <h2><span class="num">6</span>里程碑与验收</h2>
+
+    <div class="phase">
+      <div class="phase-head">
+        <span class="phase-badge ph0">M1</span>
+        <span class="ph-title">闭环跑通 · P0 六模块</span>
+        <span class="ph-sub">1–2 周</span>
+      </div>
+      <div class="phase-body">
+        <div class="item">
+          <div class="idx">1</div>
+          <div>
+            <h4>交付物</h4>
+            <p class="why">待办任务层 + 教师侧写 + 随访提醒 + 建议落库 + 销假确认 + 消息打通。</p>
+            <p class="tech"><b>验收口径：</b>教师端每条"感知→决策→执行→反馈→沉淀"链路都有一张表或一个状态可查，不再靠人记。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head">
+        <span class="phase-badge ph1">M2</span>
+        <span class="ph-title">特色成型 · P1 五模块</span>
+        <span class="ph-sub">约 1 个月</span>
+      </div>
+      <div class="phase-body">
+        <div class="item">
+          <div class="idx">2</div>
+          <div>
+            <h4>交付物</h4>
+            <p class="why">教师工作台 + 成长档案 + 匿名问卷互评 + 关怀中心 + 家校沟通。</p>
+            <p class="tech"><b>验收口径：</b>教师端出现第一个"属于教师自己"的页面；匿名互评结果不可回溯个人；家校沟通零家长端可完整留痕。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head">
+        <span class="phase-badge ph2">M3</span>
+        <span class="ph-title">底座支撑 · P2 四模块</span>
+        <span class="ph-sub">长期投入</span>
+      </div>
+      <div class="phase-body">
+        <div class="item">
+          <div class="idx">3</div>
+          <div>
+            <h4>交付物</h4>
+            <p class="why">学情数据底座 + AI 学情助手 + 审批引擎 + 预警 pipeline。</p>
+            <p class="tech"><b>验收口径：</b>预警能自动生成待办；AI 建议可溯源；新增审批类型无需改代码。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 7. 风险 ============ -->
+  <section id="risks">
+    <h2><span class="num">7</span>风险与应对</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>风险</th><th>影响</th><th>应对</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>短信服务商未接入</td>
+            <td>家校沟通短信通道不可用</td>
+            <td>既有 <code>notification_service</code> 已预留降级：未配置时记 <code>pending</code> / <code>not_configured</code>，不报错，业务不阻塞；接入后零改动生效</td>
+          </tr>
+          <tr>
+            <td>匿名互评被"小样本反推"</td>
+            <td>匿名性被破坏，教师不敢填</td>
+            <td>结果页设最小样本阈值（如 &lt; 5 份不出分布）；答卷表不存提交人；同一被评人限一次</td>
+          </tr>
+          <tr>
+            <td>任务表膨胀 / 重复推荐</td>
+            <td>首页待办噪音，教师不再信任</td>
+            <td>唯一约束 <code>(source_type, source_id, teacher_id)</code> + 过期自动归档 <code>expired</code></td>
+          </tr>
+          <tr>
+            <td>P2 底座改造面过大</td>
+            <td>拖慢整体节奏，引发回归问题</td>
+            <td>审批引擎新旧并存、逐个迁移；学情底座旁路写入，失败不影响主流程</td>
+          </tr>
+          <tr>
+            <td>模块间隐性耦合</td>
+            <td>违背低耦合目标，后续难维护</td>
+            <td>跨模块只经 Service 公开函数；Code Review 检查是否存在跨模块 Model 直接 import</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-ok">
+      <b>执行顺序建议：</b>M1 的第 1、2 号模块先行（公共基座），同期启动 P2 的 12、14（只做骨架不验收）；M1 完成后立即并行推进 M2 的四个独立模块。
+    </div>
+  </section>
+
+  <div class="footer">
+    教师端改进实现规划 · v1 · 生成于 2026-10-05 · 配套文档：教师端功能审查与改进建议 v2
+  </div>
+
+</div>
+</body>
+</html>

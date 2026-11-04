@@ -120,6 +120,16 @@ class CampusArticleFavoriteOut(BaseModel):
     count: int
 
 
+class CampusArticleFavoriteItemOut(BaseModel):
+    """我的收藏列表项：标题/来源来自互动汇总行的快照，链接即原文地址。"""
+    id: int
+    url: str
+    title: str = ""
+    source: str = ""
+    image_url: str | None = None
+    created_at: datetime | None = None
+
+
 class CampusArticleRepostIn(BaseModel):
     url: str = Field(..., min_length=8, max_length=700)
     # 附言可空：转发本身是「把这条资讯放进我的动态」的语义，附言只是可选补充

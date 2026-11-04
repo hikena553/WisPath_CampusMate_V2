@@ -164,6 +164,56 @@ def announcement_reach(
     )
 
 
+@router.post("/api/teacher/announcements/remind")
+def remind_unread_announcements(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """对最近公告中仍未读的学生补发站内提醒（真实写入通知，不是前端假提示）。"""
+    if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(403)
+    student_ids = [
+        row[0] for row in db.query(User.id).filter(
+            User.role == UserRole.STUDENT,
+            User.tutor_id == user.id,
+        ).all()
+    ]
+    if not student_ids:
+        return {"ok": True, "reminded": 0}
+    items = db.query(TeacherAnnouncement).filter(
+        TeacherAnnouncement.teacher_id == user.id
+    ).order_by(TeacherAnnouncement.created_at.desc()).limit(10).all()
+    if not items:
+        return {"ok": True, "reminded": 0}
+
+    reminded = 0
+    for a in items:
+        read_ids = {
+            row[0] for row in db.query(AnnouncementRead.student_id).filter(
+                AnnouncementRead.announcement_id == a.id
+            ).all()
+        }
+        unread_ids = [sid for sid in student_ids if sid not in read_ids]
+        if not unread_ids:
+            continue
+        try:
+            send_batch_notifications(
+                db,
+                unread_ids,
+                title=f"【提醒】{a.title}",
+                content=(a.content or "")[:200],
+                notification_type=NotificationType.ANNOUNCEMENT,
+                link="/student/workbench",
+                related_id=a.id,
+                sender_id=user.id,
+                level=a.urgency,
+            )
+            reminded += len(unread_ids)
+        except Exception:
+            logger.exception("补发公告提醒失败 announcement_id=%s", a.id)
+    return {"ok": True, "reminded": reminded}
+
+
 @router.delete("/api/teacher/announcements/{announcement_id}")
 def delete_announcement(
     announcement_id: int,

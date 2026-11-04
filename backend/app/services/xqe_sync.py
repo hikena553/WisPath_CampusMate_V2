@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 import requests
 
 from app.services.kingo_des import KingoDES
+from app.services.teaching_scope import resolve_teacher_id
 
 try:
     from bs4 import BeautifulSoup
@@ -411,6 +412,9 @@ def sync_timetable(
             ])
             if changed:
                 dup.teacher = item["teacher"]
+                # 教务侧的教师姓名可能变化（换老师），teacher_id 必须跟着重算，
+                # 否则「我的教学」里这门课会永远挂在上一位老师名下
+                dup.teacher_id = resolve_teacher_id(db, item["teacher"])
                 dup.location = item["location"]
                 dup.end_period = item["end_period"]
                 dup.week_start = item["week_start"]
@@ -425,6 +429,7 @@ def sync_timetable(
             semester=semester,
             name=item["title"],
             teacher=item["teacher"],
+            teacher_id=resolve_teacher_id(db, item["teacher"]),
             location=item["location"],
             day_of_week=item["weekday"],
             start_period=item["start_period"],

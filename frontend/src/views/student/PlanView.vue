@@ -200,7 +200,7 @@
               :disabled="aiGenLoading === pmPlan?.id"
               @click="pmPlan && handleAiGenerate(pmPlan.id)"
             >
-              <el-icon :size="14"><MagicStick /></el-icon>
+              <AiMascotMark :size="15" />
               {{ aiGenLoading === pmPlan?.id ? 'AI 拆解中…' : 'AI 拆解关卡' }}
             </button>
           </div>
@@ -391,7 +391,7 @@
         <div class="today-task-info">
           <div class="today-task-title" :class="{ 'task-done': t.status === 'done' }">{{ t.title }}</div>
           <div class="today-task-meta">
-            <span class="meta-plan"><el-icon :size="12"><MagicStick /></el-icon>{{ t.plan_title }}</span>
+            <span class="meta-plan"><AiMascotMark :size="12" />{{ t.plan_title }}</span>
             <el-tag v-if="t.due_date" size="small" type="danger" effect="plain" round class="meta-tag">
               {{ t.due_date }}
             </el-tag>
@@ -483,7 +483,7 @@
                   :loading="aiGenLoading === p.id"
                   @click="handleAiGenerate(p.id)"
                 >
-                  <el-icon style="margin-right:4px"><MagicStick /></el-icon>AI 拆解关卡
+                  <AiMascotMark :size="13" style="margin-right:4px" />AI 拆解关卡
                 </el-button>
                 <el-button size="small" plain type="primary" round @click="openStageDialog(p.id)">
                   <el-icon style="margin-right:4px"><Plus /></el-icon>添加阶段
@@ -830,7 +830,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
     隐藏自带 SubPageHeader；.plan-page 在 embedded 下由父级样式接管（透明背景、无独立滚动）。 */
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 import { ElMessage } from 'element-plus'
-import { Plus, ArrowDown, Calendar, WarningFilled, MagicStick, Lock, Check } from '@element-plus/icons-vue'
+import { Plus, ArrowDown, Calendar, WarningFilled, Lock, Check } from '@element-plus/icons-vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { useResponsive } from '@/composables/useResponsive'

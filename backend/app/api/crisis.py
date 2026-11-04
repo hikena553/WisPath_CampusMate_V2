@@ -8,7 +8,13 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.user import User, UserRole
 from app.models.crisis import AIDialogSummary, InterventionType
-from app.schemas.crisis import AIDialogSummaryOut, CrisisAnalyticsOut, CrisisResolve, CrisisInterveneIn
+from app.schemas.crisis import (
+    AIDialogSummaryOut,
+    CrisisAnalyticsOut,
+    CrisisInsightOut,
+    CrisisResolve,
+    CrisisInterveneIn,
+)
 from app.services import guardian_service
 from app.utils.enum_helpers import safe_enum_val
 
@@ -121,6 +127,21 @@ def get_crisis_analytics(
     from app.services.crisis_service import analytics as crisis_analytics
     teacher_id = None if user.role == UserRole.ADMIN else user.id
     return crisis_analytics(db, teacher_id=teacher_id, days=days, top_n=top_n)
+
+
+@router.get("/analytics/insight", response_model=CrisisInsightOut)
+async def get_crisis_insight(
+    days: int = 30,
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """处置态势智能分析：基于聚合指标生成态势研判与今日处置建议。
+
+    模型未配置或生成失败时回退规则化结论（source=rule），保证接口始终 200。
+    """
+    from app.services.crisis_service import insight as crisis_insight
+    teacher_id = None if user.role == UserRole.ADMIN else user.id
+    return await crisis_insight(db, teacher_id=teacher_id, days=days)
 
 
 @router.get("/follow-up-due", response_model=list[AIDialogSummaryOut])

@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="j2fKByTm7dx7pn3ab3dkl0">
+<head data-page-node-id="1kjlXfVfzBijLIMw54TEUf">
+<meta charset="UTF-8" data-page-node-id="ixPFjZfKgM4MhOaJevfc6f">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="O3VCT2HqpNGaABWWWdLzQU">
+<title>教师端 · 功能页信息架构 三方案（可交互演示）</title>
+<style>
+:root{
+  --bg:#0e1013; --surface:#15181d; --raised:#1b1f26; --sunken:#0a0c0f;
+  --text:#e8eaed; --text2:#a8b0bb; --text3:#7d8694; --quiet:#5a6270;
+  --border:#242932; --border2:#2e3540;
+  --brand:#4f8bf9; --brand-soft:rgba(79,139,249,.14);
+  --ok:#3dd68c; --warn:#f5a623; --bad:#f5555d; --violet:#a78bfa;
+  --rl:16px; --sh:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--text);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  padding:32px 24px 80px;
+}
+.wrap{max-width:1560px;margin:0 auto}
+
+/* ============ 顶部 ============ */
+.top{display:flex;gap:24px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px}
+.top-main{flex:1;min-width:320px}
+.top-tag{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--brand-soft);color:var(--brand);
+  padding:5px 11px;border-radius:99px;font-size:11.5px;font-weight:700;letter-spacing:.3px;
+}
+.top h1{margin:14px 0 8px;font-size:26px;line-height:1.3;font-weight:750;letter-spacing:-.4px}
+.top p{margin:0;font-size:13.5px;color:var(--text2);line-height:1.75;max-width:820px}
+.top p b{color:var(--text);font-weight:650}
+.viewswitch{display:flex;gap:0;background:var(--raised);border:1px solid var(--border);border-radius:10px;padding:3px;height:fit-content}
+.viewswitch button{
+  border:0;background:transparent;color:var(--text3);font:inherit;font-size:12.5px;font-weight:600;
+  padding:7px 15px;border-radius:7px;cursor:pointer;transition:.16s;
+}
+.viewswitch button.on{background:var(--border2);color:var(--text)}
+
+/* ============ 诊断条 ============ */
+.diag{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:18px}
+.diag-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;
+  border-left:3px solid var(--accent);
+}
+.diag-card b{display:block;font-size:21px;font-weight:750;letter-spacing:-.6px;color:var(--accent);line-height:1.15}
+.diag-card span{display:block;font-size:12px;color:var(--text2);font-weight:600;margin-top:1px}
+.diag-card em{display:block;font-style:normal;font-size:10.5px;color:var(--quiet);margin-top:3px}
+
+.hint{
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  background:var(--raised);border:1px solid var(--border);border-left:3px solid var(--brand);
+  border-radius:10px;padding:11px 16px;margin-bottom:22px;font-size:12.5px;color:var(--text2);
+}
+.hint b{color:var(--text);font-weight:650}
+.hint .kbd{display:inline-block;background:var(--sunken);border:1px solid var(--border2);border-radius:5px;
+  padding:1px 7px;font-size:11px;color:var(--text2);margin:0 2px}
+
+/* ============ 方案布局 ============ */
+.plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:stretch}
+.plans.one{grid-template-columns:minmax(0,860px);justify-content:center}
+/* 单方案放大时手机壳不要撑满整栏——方案 1/3 本来就是手机宽度，撑满会失真 */
+.plans.one .phone{max-width:430px;margin:0 auto;width:100%}
+/* 但方案 2 是分栏形态，必须给足宽度才看得出「左窄右宽」 */
+.plans.one .plan:nth-child(2) .phone{max-width:860px}
+.plans.one .plan{display:none}
+.plans.one .plan.show{display:flex}
+
+.plan{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);
+  overflow:hidden;box-shadow:var(--sh);display:flex;flex-direction:column;
+}
+.plan-head{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex:0 0 auto}
+.plan-badge{display:inline-block;background:var(--accent-soft);color:var(--accent);
+  padding:3px 10px;border-radius:99px;font-size:11px;font-weight:750;letter-spacing:.2px}
+.plan-title{margin:10px 0 4px;font-size:16.5px;font-weight:700;letter-spacing:-.2px}
+.plan-src{margin:0;font-size:11.5px;color:var(--text3)}
+.plan-body{padding:16px 18px;flex:1;display:flex;flex-direction:column}
+.plan-foot{padding:0 20px 18px;flex:0 0 auto}
+
+/* ============ 手机壳 ============ */
+.phone{
+  background:var(--sunken);border:1px solid var(--border2);border-radius:16px;
+  overflow:hidden;display:flex;flex-direction:column;flex:1;min-height:520px;
+}
+.status-bar{display:flex;justify-content:space-between;align-items:center;
+  padding:8px 16px 4px;font-size:11px;color:var(--text3);font-weight:600;flex:0 0 auto;background:var(--sunken)}
+.appbar{display:flex;align-items:center;gap:10px;padding:6px 14px 10px;flex:0 0 auto;
+  background:var(--sunken);border-bottom:1px solid var(--border)}
+.appbar-title{font-size:15.5px;font-weight:700;letter-spacing:-.2px}
+.appbar-sub{font-size:11px;color:var(--text3);font-weight:500}
+.appbar-sp{flex:1}
+.appbar-ic{width:30px;height:30px;border-radius:9px;border:1px solid var(--border2);background:var(--raised);
+  display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer;transition:.15s;font-size:13px}
+.appbar-ic:hover{background:var(--border);color:var(--text)}
+.scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:12px 14px 18px}
+.scroll::-webkit-scrollbar{width:6px}
+.scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ============ 通用 ============ */
+.row{display:flex;align-items:center;gap:8px}
+.card{background:var(--raised);border:1px solid var(--border);border-radius:11px;overflow:hidden}
+.avatar{width:32px;height:32px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  font-size:12.5px;font-weight:700;background:var(--border2);color:var(--text2)}
+.tag{display:inline-block;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.2px;vertical-align:middle;white-space:nowrap}
+.t-sick{background:rgba(245,85,93,.16);color:#ff8a90}
+.t-personal{background:rgba(79,139,249,.16);color:#8fb8ff}
+.t-competition{background:rgba(167,139,250,.16);color:#c4b0ff}
+.t-other{background:var(--border2);color:var(--text3)}
+.t-pending{background:rgba(245,166,35,.16);color:#ffc264}
+.t-approved{background:rgba(61,214,140,.16);color:#6ee7ab}
+.t-rejected{background:rgba(245,85,93,.16);color:#ff8a90}
+.muted{color:var(--quiet)}
+.empty{text-align:center;padding:40px 18px;color:var(--text3);font-size:13px}
+.empty b{display:block;color:var(--text2);font-size:13.5px;margin-bottom:4px}
+.empty-ic{font-size:26px;opacity:.5;margin-bottom:8px}
+
+/* ══════════ 方案 1：顶部 Tab ══════════ */
+.t1-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--sunken);flex:0 0 auto;padding:0 6px;overflow-x:auto}
+.t1-tabs::-webkit-scrollbar{display:none}
+.t1-tab{
+  border:0;background:transparent;color:var(--text3);font:inherit;font-size:12.5px;font-weight:650;
+  padding:10px 11px;cursor:pointer;position:relative;white-space:nowrap;transition:.15s;
+}
+.t1-tab:hover{color:var(--text2)}
+.t1-tab.on{color:var(--text)}
+.t1-tab.on::after{content:'';position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px}
+.t1-badge{
+  display:inline-block;min-width:16px;height:16px;line-height:16px;padding:0 4px;margin-left:5px;
+  border-radius:8px;background:var(--bad);color:#fff;font-size:9.5px;font-weight:750;vertical-align:1px;
+}
+.t1-sum{
+  display:flex;gap:8px;padding:10px 14px;background:var(--raised);border-bottom:1px solid var(--border);
+  font-size:11px;color:var(--text3);flex:0 0 auto;
+}
+.t1-sum b{color:var(--text);font-weight:700}
+
+/* 审批行 */
+.ap-item{display:flex;gap:10px;padding:11px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:.13s;align-items:flex-start}
+.ap-item:last-child{border-bottom:0}
+.ap-item:hover{background:var(--border)}
+.ap-body{flex:1;min-width:0}
+.ap-top{display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap}
+.ap-name{font-size:12.5px;font-weight:680}
+.ap-no{font-size:10px;color:var(--quiet);font-variant-numeric:tabular-nums}
+.ap-desc{font-size:11px;color:var(--text3);line-height:1.55}
+.ap-desc em{font-style:normal;color:var(--warn);font-weight:650}
+.ap-side{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:0 0 auto}
+.ap-time{font-size:9.5px;color:var(--quiet)}
+.ap-acts{display:flex;gap:4px}
+.mini{
+  border:0;border-radius:6px;padding:3px 9px;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;
+  transition:.14s;font-family:inherit;white-space:nowrap;
+}
+.mini.ok{background:rgba(61,214,140,.16);color:#6ee7ab}
+.mini.ok:hover{background:var(--ok);color:#062a18}
+.mini.no{background:var(--border2);color:var(--text3)}
+.mini.no:hover{background:var(--bad);color:#fff}
+.mini.blue{background:var(--brand-soft);color:var(--brand)}
+.mini.blue:hover{background:var(--brand);color:#fff}
+
+/* ══════════ 方案 2：主从分栏 ══════════ */
+.t2-split{display:flex;flex:1;overflow:hidden;min-height:0}
+.t2-list{width:44%;min-width:150px;border-right:1px solid var(--border);overflow-y:auto;flex:0 0 auto}
+.t2-list::-webkit-scrollbar{width:5px}
+.t2-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.t2-li{padding:10px 11px;border-bottom:1px solid var(--border);cursor:pointer;transition:.13s;border-left:2px solid transparent}
+.t2-li:hover{background:var(--raised)}
+.t2-li.on{background:var(--raised);border-left-color:var(--accent)}
+.t2-li-n{font-size:12px;font-weight:660;margin-bottom:2px;display:flex;align-items:center;gap:5px}
+.t2-li-d{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t2-li-t{font-size:9px;color:var(--quiet);margin-top:3px}
+.t2-detail{flex:1;overflow-y:auto;padding:14px;min-width:0}
+.t2-detail::-webkit-scrollbar{width:5px}
+.t2-detail::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.t2-dh{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.t2-dn{font-size:14px;font-weight:720;letter-spacing:-.2px}
+.t2-ds{font-size:10.5px;color:var(--text3);font-variant-numeric:tabular-nums}
+.t2-sec{margin-bottom:13px}
+.t2-st{font-size:9.5px;font-weight:750;letter-spacing:.6px;color:var(--quiet);text-transform:uppercase;margin-bottom:6px}
+.t2-kv{display:flex;justify-content:space-between;font-size:11.5px;padding:5px 0;border-bottom:1px dashed var(--border)}
+.t2-kv:last-child{border-bottom:0}
+.t2-kv span:first-child{color:var(--text3)}
+.t2-kv span:last-child{color:var(--text2);font-weight:600}
+.t2-actions{display:flex;gap:6px;padding-top:12px;border-top:1px solid var(--border)}
+.t2-btn{flex:1;border:0;border-radius:8px;padding:8px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;
+  transition:.15s;font-family:inherit}
+.t2-btn.p{background:var(--ok);color:#062a18}
+.t2-btn.p:hover{filter:brightness(1.1)}
+.t2-btn.g{background:var(--raised);color:var(--text2);border:1px solid var(--border2)}
+.t2-btn.g:hover{background:var(--border);color:var(--text)}
+
+/* ══════════ 方案 3：工作台卡片 ══════════ */
+.t3-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.t3-card{
+  background:var(--raised);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;
+  transition:.16s;position:relative;overflow:hidden;
+}
+.t3-card:hover{border-color:var(--quiet);transform:translateY(-1px)}
+.t3-top{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.t3-ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex:0 0 auto}
+.t3-t{font-size:12px;font-weight:680}
+.t3-big{font-size:24px;font-weight:750;letter-spacing:-.8px;line-height:1;margin-bottom:2px;font-variant-numeric:tabular-nums}
+.t3-sub{font-size:10px;color:var(--text3);margin-bottom:8px}
+.t3-row{display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--text3);
+  padding:3px 0;border-top:1px dashed var(--border2)}
+.t3-row b{color:var(--text2);font-weight:650}
+.t3-full{grid-column:1/-1}
+.t3-spark{display:flex;align-items:flex-end;gap:2px;height:28px;margin-top:8px}
+.t3-spark i{flex:1;background:var(--accent);border-radius:2px 2px 0 0;opacity:.75;min-height:2px}
+
+/* ============ 详情抽屉 ============ */
+.drawer-mask{position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);
+  opacity:0;pointer-events:none;transition:.22s;z-index:90}
+.drawer-mask.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,92vw);background:var(--surface);
+  border-left:1px solid var(--border2);box-shadow:-16px 0 48px rgba(0,0,0,.5);
+  transform:translateX(100%);transition:transform .26s cubic-bezier(.32,.72,0,1);z-index:91;
+  display:flex;flex-direction:column}
+.drawer.on{transform:translateX(0)}
+.drawer-head{padding:20px 22px 16px;border-bottom:1px solid var(--border);position:relative}
+.drawer-close{position:absolute;top:16px;right:18px;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);
+  background:var(--raised);color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+.drawer-close:hover{background:var(--border);color:var(--text)}
+.drawer-n{font-size:16px;font-weight:750;margin-bottom:3px}
+.drawer-s{font-size:11.5px;color:var(--text3)}
+.drawer-body{flex:1;overflow-y:auto;padding:18px 22px 26px}
+.drawer-foot{padding:14px 22px 18px;border-top:1px solid var(--border);display:flex;gap:8px}
+
+/* ============ 对比表 ============ */
+.compare{margin-top:26px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.cmp-head{padding:18px 22px 14px;border-bottom:1px solid var(--border)}
+.cmp-head h2{margin:0 0 4px;font-size:16px;font-weight:700}
+.cmp-head p{margin:0;font-size:12px;color:var(--text3)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:11px 15px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--raised);font-size:10.5px;font-weight:750;letter-spacing:.5px;color:var(--text3);text-transform:uppercase}
+td:first-child{font-weight:650;color:var(--text);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.yes{color:var(--ok);font-weight:700}
+.no{color:var(--quiet)}
+.part{color:var(--warn);font-weight:650}
+
+/* 拆分清单 */
+.splits{margin-top:24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:22px 24px}
+.splits h2{margin:0 0 4px;font-size:16px;font-weight:700}
+.splits>p{margin:0 0 18px;font-size:12px;color:var(--text3)}
+.split-row{display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.split-row:last-child{border-bottom:0}
+.sp-name{flex:0 0 84px;font-weight:650}
+.sp-bar{flex:1;height:7px;background:var(--sunken);border-radius:4px;overflow:hidden;display:flex}
+.sp-bar .before{background:var(--bad);opacity:.55;height:100%}
+.sp-bar .after{background:var(--ok);height:100%}
+.sp-num{flex:0 0 150px;text-align:right;font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums}
+.sp-num b{color:var(--text);font-weight:700}
+
+.pick{margin-top:24px;background:linear-gradient(135deg,rgba(79,139,249,.12),rgba(167,139,250,.1));
+  border:1px solid var(--border2);border-radius:var(--rl);padding:22px 26px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.pick img{width:64px;height:64px;object-fit:contain;flex:0 0 auto}
+.pick-main{flex:1;min-width:280px}
+.pick-main h3{margin:0 0 5px;font-size:15px;font-weight:700}
+.pick-main p{margin:0;font-size:12.5px;color:var(--text2);line-height:1.75}
+.pick-main code{background:var(--sunken);padding:1px 5px;border-radius:4px;font-size:11.5px;color:var(--brand)}
+@media(max-width:1240px){.plans{grid-template-columns:1fr}.plans.one{grid-template-columns:1fr}}
+</style>
+</head>
+<body data-page-node-id="pXAnlFYdOPPDBcWBRxopBL">
+<div class="wrap" data-page-node-id="nJ1vNQMoC6rEAM1mhFC9UB">
+
+  <div class="top" data-page-node-id="nEkaIEwbR4tESgPDIxWP0I">
+    <div class="top-main" data-page-node-id="IecHLzBiHDPutesqdVjDB9">
+      <span class="top-tag" data-page-node-id="GYxR5wnEwv9vsAZg6y9vAY">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" data-page-node-id="AFebAQsiaaBbmguwKbK8in"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" data-page-node-id="Iwry78uitYZjgCVsIPLjd6"/></svg>
+        功能页信息架构 · 三选一
+      </span>
+      <h1 data-page-node-id="BlpWYbFzRDM3KmWpDJ34Hu">同一个页面，三种「信息怎么摆」</h1>
+      <p data-page-node-id="u5IW80jkW2wvxRZwNJEUdG">
+        现在的问题不是页面难看，是<b data-page-node-id="h2sRtaEi3uinYuCHysogZS">每个功能页都做成了超长的单列流水</b>——审批 2107 行、关怀 1794 行、家校 1026 行，手机上要滚十几屏才能看全。
+        下面三套是<b data-page-node-id="zhQPti6JEk6y2BcQXTv1ex">真的能切换、能点开、能操作</b>的：Tab 会切内容、左右分栏能选人、卡片能进详情。先玩一遍。
+      </p>
+    </div>
+    <div class="viewswitch" data-page-node-id="pH5ZliU3fZtgWjsES8G2WO">
+      <button class="on" data-v="all" data-page-node-id="Xw5O6FOY6AWuHRkeVaWjNi">三栏并排</button>
+      <button data-v="one" data-page-node-id="meFWdCrdk0NsEDBSEKHt97">单方案放大</button>
+    </div>
+  </div>
+
+  <div class="diag" data-page-node-id="CWPXZ0vfm2iIcGipRrxBB0">
+    <div class="diag-card" style="--accent:#f5555d" data-page-node-id="VdVKGETFFne32ZEfdt9XRi"><b data-page-node-id="sViPehRsICFRQcEFHwsL44">2107</b><span data-page-node-id="wq0psTQDSGqwyoRJY4OLre">审批管理页行数</span><em data-page-node-id="emCzsHeoo9Cs7uuGBiRLqX">移动端要滚 12 屏以上</em></div>
+    <div class="diag-card" style="--accent:#f5555d" data-page-node-id="UQzlHpafQiX2hy2EN8rINm"><b data-page-node-id="XDuTFHqgjwCRayHGekqk77">1794</b><span data-page-node-id="fDC8pJvcKVzyWnzktG5sKd">人文关怀页行数</span><em data-page-node-id="Le36IkkJjKp5WnwHDchdcW">8 个 section 平铺无导航</em></div>
+    <div class="diag-card" style="--accent:#f5a623" data-page-node-id="9uDLX8ylCYJBieiBtI3AKw"><b data-page-node-id="tctX1CLDbcH91lqsKsVOqV">1026</b><span data-page-node-id="9nGgfHFpETEit5fQjo2wOT">家校沟通页行数</span><em data-page-node-id="HUVJx8aAkruxAJC2HRLZCS">无分区，全靠滚动</em></div>
+    <div class="diag-card" style="--accent:#f5a623" data-page-node-id="R2ba4tnDAdrFiGMyrXKlIg"><b data-page-node-id="XTQC0V5XUNBkZhgBVbPSpQ">811</b><span data-page-node-id="3A3bUU3pWEHT26qQQehwjB">成长档案页行数</span><em data-page-node-id="MfAJhpYVwbMYZePDXsAMZL">5 类记录混排</em></div>
+    <div class="diag-card" style="--accent:#4f8bf9" data-page-node-id="8pIZydGew117KpJ53ZcIl6"><b data-page-node-id="eiEawoul5rL3RfVzxcXJNX">704 / 598</b><span data-page-node-id="tNamWEh1AbLXvXAArXA3UJ">公告 / 问卷行数</span><em data-page-node-id="sj08yRFpV9NnVofRXKOdCV">相对正常，只需微调</em></div>
+  </div>
+
+  <div class="hint" data-page-node-id="ihDdBr2Fj6eYef6UoTIN2U">
+    <span data-page-node-id="uN1BXprKVlgbX6op9FLH7j">可以试的操作：</span>
+    <b data-page-node-id="H4vdPGmMuiD3SitKDjMyM5">方案 1</b><span class="kbd" data-page-node-id="bMWdxTLaMmEukxhLHv7LJA">点顶部 Tab 切待办/已批/已拒</span>
+    <b data-page-node-id="Z2o4bMjA4H5KBDu3Rpd63M">方案 2</b><span class="kbd" data-page-node-id="O0NYIGtQvEimztF1mE75Mg">点左侧列表，右侧详情跟着换</span>
+    <b data-page-node-id="nEAURDZ4EqEoeRi1NkjiAX">方案 3</b><span class="kbd" data-page-node-id="ZLNllNkjEA2Ap23LFsow6V">点卡片进详情</span>
+    <b data-page-node-id="o7jku16SFNiIQpa0E3a18E">通用</b><span class="kbd" data-page-node-id="Uf8ul7H05LHUBMNHJrQUP7">点通过 / 拒绝会真的从列表消失</span>
+  </div>
+
+  <div class="plans" id="plans" data-page-node-id="Bp4J0NWLv9JdVNwvUht1Z1">
+
+    <!-- ══════════════ 方案 1：顶部 Tab ══════════════ -->
+    <div class="plan show" style="--accent:#4f8bf9;--accent-soft:rgba(79,139,249,.14)" data-page-node-id="9y49tguKfv4aWyiy9JqK24">
+      <div class="plan-head" data-page-node-id="8YrcDu2H6NshovuvwNUOcy">
+        <span class="plan-badge" data-page-node-id="ZdkIEvjpO3yUcRiHfHXeAC">方案 1 · 顶部 Tab</span>
+        <h2 class="plan-title" data-page-node-id="syECXWvsHPRj8JstxlAjfZ">把长页切成几段</h2>
+        <p class="plan-src" data-page-node-id="MJe2WPCaNj4gtj9fCDUijq">参考 Linear · GitHub Issues · 飞书审批</p>
+      </div>
+      <div class="plan-body" data-page-node-id="bVPbmHnjUtAts7POklbocO">
+        <div class="phone" data-page-node-id="KDp1hJNtvvsFSLmVQrHuPQ">
+          <div class="status-bar" data-page-node-id="ldUkp7RMZbrXlRmv6Z6S47"><span data-page-node-id="H22d0XilRAERPj1SvHSdzR">9:41</span><span data-page-node-id="v0H6arD2z5sXK7vcdXhFCz">审批管理</span><span data-page-node-id="gc34QcpXH5u7kNqMNYJRRI">●●●</span></div>
+          <div class="appbar" data-page-node-id="UOQcQ5zKh4DmCHrsDpT8YP">
+            <div data-page-node-id="8NKzoBQoSWHKMHAXMcHmmO">
+              <div class="appbar-title" data-page-node-id="VIns5NQLceDS0gWKCNnJFi">审批管理</div>
+              <div class="appbar-sub" id="p1Sub" data-page-node-id="JxUvL1DQSJFC1Y2aIkLweM">3 类待办 · 共 8 条</div>
+            </div>
+            <div class="appbar-sp" data-page-node-id="iHxhatJXlGwF1wCbfVWLHf"></div>
+            <div class="appbar-ic" title="搜索" data-page-node-id="kjd50S5R213xhCbQJEAB8i">⌕</div>
+          </div>
+          <div class="t1-tabs" id="p1Tabs" data-page-node-id="nCdfdgZN4rYe8bJ5UOaSP3">
+            <button class="t1-tab on" data-t="pending" data-page-node-id="TsmAgCYOEM6S6VzW8WZfhT">待处理<span class="t1-badge" id="p1Badge" data-page-node-id="p9bQs8SwhE0gYrwLMxhFTN">8</span></button>
+            <button class="t1-tab" data-t="approved" data-page-node-id="hITXKEaYIEpQkcsLkBQjJG">已通过</button>
+            <button class="t1-tab" data-t="rejected" data-page-node-id="ZI16jQFy3RccUXXGfFEgcz">已拒绝</button>
+          </div>
+          <div class="t1-sum" id="p1Sum" data-page-node-id="bXuY6cD2yXg6zdUAjCz1tW"></div>
+          <div class="scroll" id="p1Body" data-page-node-id="jEouOcsQD9sZsRN44roQTx"></div>
+        </div>
+      </div>
+      <div class="plan-foot" data-page-node-id="fG1jMW24hJv1yAzIgnSoHw">
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0;border-top:1px solid var(--border)" data-page-node-id="XNLOE6pH7aumuHwY7B4u4s">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="0OjSF9MyLLBumMSz6QnJMS">解决了</span>
+          <span style="color:var(--text2)" data-page-node-id="jT4jw6SAfJj9ZHI7ckFwji"><b style="color:var(--ok)" data-page-node-id="wyeHY5gHE3g86P3RfFratA">长页焦虑</b>——每屏只装一类事，2107 行被切成 3 个各 1~1.5 屏</span>
+        </div>
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0" data-page-node-id="RWwappcDytdZapJBKe2UFn">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="T4SEdvwqWJVxp0qwUf8DMR">代价</span>
+          <span style="color:var(--text2)" data-page-node-id="cvZSr4i5ls7KUuSvUshnth">Tab 之间<b style="color:var(--warn)" data-page-node-id="bgN6BSFKoNvhf4a7XRXDL3">互相看不见</b>；超过 5 个 Tab 就横向塞不下了</span>
+        </div>
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0" data-page-node-id="QGAv07DPe0vlQYxz4f38wJ">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="TTOpq15whaL6neDCBhxSex">适合</span>
+          <span style="color:var(--text2)" data-page-node-id="ppX2pna13QBGCTNCpSUoJo">6 个功能页统一改造，改动最小、认知成本最低</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 方案 2：主从分栏 ══════════════ -->
+    <div class="plan show" style="--accent:#3dd68c;--accent-soft:rgba(61,214,140,.14)" data-page-node-id="8pdiWdQ4BAbk8ENJSGU3cQ">
+      <div class="plan-head" data-page-node-id="1EdzVWxBaa4iNfQdZZqDc3">
+        <span class="plan-badge" data-page-node-id="FktUcSInzBA3NsF8C3bKyl">方案 2 · 主从分栏</span>
+        <h2 class="plan-title" data-page-node-id="UXP401VdpaqpB42ihWR5ee">左边挑人，右边办事</h2>
+        <p class="plan-src" data-page-node-id="NQms0ZnKG7JFiKB0dXGaaK">参考 Gmail · 钉钉审批 · Outlook</p>
+      </div>
+      <div class="plan-body" data-page-node-id="9W8CGEsHwzsOrCvBok71mF">
+        <div class="phone" data-page-node-id="ALjHiBIbjcjjvToYmZzSq3">
+          <div class="status-bar" data-page-node-id="4xpQC0ealcDkuxyaxU43ha"><span data-page-node-id="wDv6HAjugMNGvbntGgGq4d">9:41</span><span data-page-node-id="JHM3hoPpKUWoetGnGD9fJX">审批管理</span><span data-page-node-id="MDDcI5vzqvSCl07CAZeUqN">●●●</span></div>
+          <div class="appbar" data-page-node-id="BY1H8Cjd6DjbwEdWjNoe62">
+            <div data-page-node-id="7ERdsAyCA63fEo9piQexaq">
+              <div class="appbar-title" data-page-node-id="NeIyx5OUjTrvfyoeZ0PsP0">审批管理</div>
+              <div class="appbar-sub" id="p2Sub" data-page-node-id="1ixPAxGFzsYIGraMCbu3hn">8 条待处理</div>
+            </div>
+            <div class="appbar-sp" data-page-node-id="mGSk4QDoANlauGWBaEXT81"></div>
+            <div class="appbar-ic" title="筛选" data-page-node-id="UGcrnbLd27za4ffHvMtKmd">≡</div>
+          </div>
+          <div class="t2-split" data-page-node-id="cgAEWMD5HXl4ysisDg6NXR">
+            <div class="t2-list" id="p2List" data-page-node-id="KUU4kT3cWz8xq7vWKwvDPL"></div>
+            <div class="t2-detail" id="p2Detail" data-page-node-id="EUdGCLC0CXH4EFBcdeUayJ"></div>
+          </div>
+        </div>
+      </div>
+      <div class="plan-foot" data-page-node-id="ENXKxD7dnOAow6SCLiCEYR">
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0;border-top:1px solid var(--border)" data-page-node-id="WupWzGs958Z1ToLHQlIQLL">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="KohGGdipdroVTzRJGhqBvE">解决了</span>
+          <span style="color:var(--text2)" data-page-node-id="a6qNiF7PLEgdXLnfAPMAUz"><b style="color:var(--ok)" data-page-node-id="rLUZYLrJSMdqSFfBQPbuJN">连续处理效率</b>——不用「点进详情再退回列表」，左边一直挂着</span>
+        </div>
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0" data-page-node-id="Tun6u16Ukk0vcPmBvhW4Ui">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="VZVjlLH9NIyqFRKYXtCyj3">代价</span>
+          <span style="color:var(--text2)" data-page-node-id="mVeqxqyUpDKVYzqbCbDPFZ">手机宽度只有 390px，<b style="color:var(--warn)" data-page-node-id="l0n0GJU3xNNE7B3ED1Jygw">两栏都很窄</b>；建议只在 ≥768px 生效，手机降级成方案 1</span>
+        </div>
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0" data-page-node-id="EwooIm6zTPWNZATSyjDNbO">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="Xn8vyAEFFmFmCHPAQULQwl">适合</span>
+          <span style="color:var(--text2)" data-page-node-id="megh4s5ujoGICpRDTl8OLU">桌面端为主、一次要批十几条的老师</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 方案 3：工作台卡片 ══════════════ -->
+    <div class="plan show" style="--accent:#a78bfa;--accent-soft:rgba(167,139,250,.14)" data-page-node-id="jVrvXoVK8MWaHHtlPFt5dy">
+      <div class="plan-head" data-page-node-id="0GT8dlCXOtgDYyNHp2BuH9">
+        <span class="plan-badge" data-page-node-id="pCshq75fgy0DJ50TCXD5RA">方案 3 · 工作台卡片</span>
+        <h2 class="plan-title" data-page-node-id="Q06oBg54RPdJKCWdOvkrOq">先看总量，再进细节</h2>
+        <p class="plan-src" data-page-node-id="7lPlVOF7tmUYQc7Uz3Jc2L">参考 Vercel Dashboard · Sentry · Datadog</p>
+      </div>
+      <div class="plan-body" data-page-node-id="5CR9xpjygTJDj3J9c3SaiG">
+        <div class="phone" data-page-node-id="ViWQa5h0QFjPDaSWw6YDRU">
+          <div class="status-bar" data-page-node-id="BuAEV4clCDVuxe6VINHjNe"><span data-page-node-id="h0wJVW02JAaqP6uHKEJMyl">9:41</span><span data-page-node-id="8gHRysHTr7aoveFKfPgE9I">教师工作台</span><span data-page-node-id="FmXlVXJ2V8rpG0tvepbCLR">●●●</span></div>
+          <div class="appbar" data-page-node-id="Nf0BKhlUQLIJrm4HjJRluH">
+            <div data-page-node-id="KJYJ4Tj6TKbpC5SQ1CNQqT">
+              <div class="appbar-title" data-page-node-id="w8ab3SdhcsilTncFB4ECDS">教师工作台</div>
+              <div class="appbar-sub" id="p3Sub" data-page-node-id="DvJa9MNVLO7kIuTsawhsu7">本周 6 项待办</div>
+            </div>
+            <div class="appbar-sp" data-page-node-id="WgGMSY2FWplvku6JfrZFPH"></div>
+            <div class="appbar-ic" title="刷新" data-page-node-id="vAwY4dSFvRucq2E7bVjl3W">↻</div>
+          </div>
+          <div class="scroll" id="p3Body" data-page-node-id="94pqq5rGGqmPMLFFNat0vF"></div>
+        </div>
+      </div>
+      <div class="plan-foot" data-page-node-id="GApS719x37MeKjmWvg5wOd">
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0;border-top:1px solid var(--border)" data-page-node-id="MFe2xA1uVOa4Qj9A3V15Gl">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="TgZbaLi84djmiP7CyQ3Eon">解决了</span>
+          <span style="color:var(--text2)" data-page-node-id="RpZNIFhezYhSwITno6nFtQ"><b style="color:var(--ok)" data-page-node-id="UlMK6SsVGpZEgBUMk7Fa5Q">全局感</b>——「今天哪儿出事了」一屏可见，适合做首页而不是二级页</span>
+        </div>
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0" data-page-node-id="ER9TAqqmwdiRbXEFvMRApE">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="NbMWpJ2QbnDvWTnOQD0vB4">代价</span>
+          <span style="color:var(--text2)" data-page-node-id="pJxX0bDfl2XVzIExXRtjUu"><b style="color:var(--warn)" data-page-node-id="yTO35qlUHr8KB2x4WDuKDX">不适合当功能页</b>——卡片只能给摘要，真正办事还得点进去</span>
+        </div>
+        <div style="display:flex;gap:10px;font-size:12px;padding:6px 0" data-page-node-id="GV26R6sBzEi86jUUHFhwlS">
+          <span style="color:var(--text3);flex:0 0 44px;font-weight:650" data-page-node-id="Q3fztBhU6EGDd0LnpmD32S">适合</span>
+          <span style="color:var(--text2)" data-page-node-id="euuBDfjHGkuxGgF5l8CpiC">做教师端首页/工作台，不适合替代审批、关怀这类操作页</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 对比表 -->
+  <div class="compare" data-page-node-id="f20xp9An7URa1lcboSs8yx">
+    <div class="cmp-head" data-page-node-id="dzO3LOSFb9UJSYVv1lgcuj">
+      <h2 data-page-node-id="ZitCjbEPMbmk0iAD7CJRtE">三方案横向对比</h2>
+      <p data-page-node-id="urcVxF0f0jIyfxFKzd5k6o">关键判断点：你的老师主要在电脑上批，还是在手机上批</p>
+    </div>
+    <table data-page-node-id="MkvRCI4IB6I7i3RrKNvHNU">
+      <thead data-page-node-id="C45ay02UO5LUumCDyRI5K6"><tr data-page-node-id="HuYo5UzyEOAwIFPgR5U8v4"><th data-page-node-id="r4iOEP3t3TiGJwnSBIia7X">维度</th><th data-page-node-id="tWwbzy5hCe3uHXsAWICALS">1 顶部 Tab</th><th data-page-node-id="m3vEVQIMvDzSp9b97qaaJd">2 主从分栏</th><th data-page-node-id="rIxpxaOkSrmsAnNUEfMEIB">3 工作台卡片</th></tr></thead>
+      <tbody data-page-node-id="FwichMdpuGRyAyx8adDMyk">
+        <tr data-page-node-id="mk4F9xZsgaqTbDVtN4DxO7"><td data-page-node-id="xUQafMLidcxxQkPrAp2tn4">首屏信息密度</td><td class="yes" data-page-node-id="i3GAwUZgIJFch6zRDpH8w2">高（一屏一类事）</td><td data-page-node-id="ROqlIO7ZzR5KWEkkV2ONL8">中（左列表右详情）</td><td class="no" data-page-node-id="rWgJB9Zfazrs98pD9VF8q4">低（只有摘要）</td></tr>
+        <tr data-page-node-id="9DUlVEQwGbDZebqg5MRYSe"><td data-page-node-id="Snr0Wbqq8AAFVEFDnihj7y">连续处理多条</td><td class="part" data-page-node-id="ciHDSTpF4zviMb1XpDxK2Z">需来回切 Tab</td><td class="yes" data-page-node-id="7KsIHXirLqLAkoS2wET2nY">最快（不离开列表）</td><td class="no" data-page-node-id="n3cdhzEmxE47RlZfwqGZ4r">最慢</td></tr>
+        <tr data-page-node-id="z9TfyAYz2KipsOuclb0nI3"><td data-page-node-id="pE8Jzz0DOnySkr7uYtgE5K">手机适配</td><td class="yes" data-page-node-id="ZiTSe2YGpAVfDcUmeMlCkt">原生就好用</td><td class="no" data-page-node-id="fvc6GClNLozVWC0icZGX3e">太窄，需降级</td><td class="part" data-page-node-id="sjwvh3qt6FbU5M832DI3fS">可，但信息不够</td></tr>
+        <tr data-page-node-id="JAiXtqzt7DKKoSnXbnMCjX"><td data-page-node-id="3FdpHg96vl9rOCxIYUDQ1t">桌面端适配</td><td class="part" data-page-node-id="Xazb3qIznJec5AteRBlQR4">偏空</td><td class="yes" data-page-node-id="fG4yS8DyVFBolE4GdBVGIU">最合适</td><td class="part" data-page-node-id="py7SFlMXUQwCBsBusYByBo">可，但浪费宽度</td></tr>
+        <tr data-page-node-id="1q3698GcciTX9F9AXjb8Wv"><td data-page-node-id="JGNDjvFiTqmonM9tEPGDWs">能否看清详情</td><td class="no" data-page-node-id="EFkSMRMqhycMtpAghElrpI">必须点进抽屉</td><td class="yes" data-page-node-id="rR0IN9wfyZB5L8DXGefkIn">一直在右侧</td><td class="no" data-page-node-id="EfZSZfD0mcCWRI1yPemMzY">必须点进抽屉</td></tr>
+        <tr data-page-node-id="ZiZpD0xDyKHyqJVCyk5OGF"><td data-page-node-id="EN4vNskGNyoclBUUCct9Uu">改造成本</td><td class="yes" data-page-node-id="1s2jWixwldJt7DU4OFMc8j">低（加个 Tab 容器）</td><td data-page-node-id="rb0CP7InJRVyC71Pq5bgYI">中（要拆列表/详情组件）</td><td data-page-node-id="5gNbDI35vZKCoG6lkX3YD2">高（要重新设计聚合接口）</td></tr>
+        <tr data-page-node-id="sWVeQU0OfjPn6ePVecwI1g"><td data-page-node-id="ETa0vphim7AVPTLNWi0FfQ">适合放的位置</td><td class="yes" data-page-node-id="54H5p2DlChAij9kmmm4JhB">6 个功能页</td><td class="yes" data-page-node-id="X87lfgDcrGw2F0NCMmk35i">审批 / 关怀（操作密集）</td><td class="yes" data-page-node-id="eGzRQIAEeR9BpQA7IhFvSH">首页工作台</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="splits" data-page-node-id="Wga1v87c7XApYUBZCKeJ2R">
+    <h2 data-page-node-id="baF0lX4ipSwVEVg5c6k02W">如果选方案 1，6 个页面会这样拆</h2>
+    <p data-page-node-id="yOumwNPNUzbavH8MpEoOHJ">条形长度代表拆分后单个 Tab 的滚动长度（相对值），绿段是改造后</p>
+    <div class="split-row" data-page-node-id="HUSOoEb3uvhP378GZ0Hgs6">
+      <span class="sp-name" data-page-node-id="pvjMj8PJmxyUzB34qGF4k6">审批管理</span>
+      <div class="sp-bar" data-page-node-id="U4VU4AVCRgBrcU9A08agIP"><i class="before" style="width:100%" data-page-node-id="VpzUIDDXZStAYBEh2ByL8a"></i><i class="after" style="width:12%" data-page-node-id="qYL7rFuqE0XAN8SIHCduGi"></i></div>
+      <span class="sp-num" data-page-node-id="I4l82NCXG0yYfk8BcbHIq0">2107 行 → 3 个 Tab，每个约 <b data-page-node-id="ULKIt5EkE5KliPAA7k60m6">1.5 屏</b></span>
+    </div>
+    <div class="split-row" data-page-node-id="NVK6FmDsdJB5B3Tq5UVx7Y">
+      <span class="sp-name" data-page-node-id="QohAPnQ28oOr5CIBG03K4Z">人文关怀</span>
+      <div class="sp-bar" data-page-node-id="6PFbo9EBXXI7hQdelpL7Zq"><i class="before" style="width:85%" data-page-node-id="wscZfXVt75w8V3KKGdDmNK"></i><i class="after" style="width:15%" data-page-node-id="IgdK4NjPG06ZEnjXX53fEh"></i></div>
+      <span class="sp-num" data-page-node-id="4PPg1F2FyTWCEKkzkhcHT2">1794 行 → 4 个 Tab，每个约 <b data-page-node-id="A2KWDQ2hbxGqoNgmYSKkAf">2 屏</b></span>
+    </div>
+    <div class="split-row" data-page-node-id="yrN3YIjlafO52a3EJuAdGU">
+      <span class="sp-name" data-page-node-id="lIpgLyBT6ZsbMpOL6OprYa">家校沟通</span>
+      <div class="sp-bar" data-page-node-id="FAEBYEEa64EPV3E6iuyFCM"><i class="before" style="width:49%" data-page-node-id="eyXwWdQWl2TGtaosVEvy1D"></i><i class="after" style="width:26%" data-page-node-id="2C5NdlSVt2AFBIv1qXmWBf"></i></div>
+      <span class="sp-num" data-page-node-id="Ti6E5bi16La4545sU83vz8">1026 行 → 3 个 Tab，每个约 <b data-page-node-id="BpGGaqBKJssss1NlJzOpuf">1.5 屏</b></span>
+    </div>
+    <div class="split-row" data-page-node-id="vKhCH7srLsj1LueqXQDmd0">
+      <span class="sp-name" data-page-node-id="k4E2ylHnwHCF4H1hTlyRaA">成长档案</span>
+      <div class="sp-bar" data-page-node-id="iq6iSLbrASym7aoZUcCTjf"><i class="before" style="width:38%" data-page-node-id="aeQVVtC4b9SHh5a2JiLy3D"></i><i class="after" style="width:30%" data-page-node-id="w4DuEO8eTjk4mDcobe4WtO"></i></div>
+      <span class="sp-num" data-page-node-id="EtlmvijEmKKMNYrIv92xt3">811 行 → 2 个 Tab，每个约 <b data-page-node-id="rZPi9KNFk34BWWWianlQ08">1.5 屏</b></span>
+    </div>
+    <div class="split-row" data-page-node-id="2GPdEvqBk3GcblEE2CJ4Dk">
+      <span class="sp-name" data-page-node-id="1PUE1MdL1GXLVA81lam3fr">公告管理</span>
+      <div class="sp-bar" data-page-node-id="BM5KDhslpZVkUY6V8yoAiv"><i class="before" style="width:33%" data-page-node-id="cQbgxyXhYFmCMenvYS0o2Z"></i><i class="after" style="width:60%" data-page-node-id="YTU4xDniwOfUtXnyySdhUy"></i></div>
+      <span class="sp-num" data-page-node-id="OzmJYlVt8YYvYFPzPMvGHf">704 行 → <b data-page-node-id="imHlCeGBiz4Lhpu9N8gp1J">1 屏</b>即可，只需微调</span>
+    </div>
+    <div class="split-row" data-page-node-id="XCNZa2eGxU6pKrEkWSSAlm">
+      <span class="sp-name" data-page-node-id="czFaex4fQ6ebaBFzzDqjn0">问卷管理</span>
+      <div class="sp-bar" data-page-node-id="bdy7qZ9P0FXMlrglag3DAt"><i class="before" style="width:28%" data-page-node-id="E6BUuDOGGm1jqPcSPJt40d"></i><i class="after" style="width:72%" data-page-node-id="gJyWCj7nlIve18tBF4Shuj"></i></div>
+      <span class="sp-num" data-page-node-id="CQ8opRWOpuWeWqNIOdiGsC">598 行 → <b data-page-node-id="XIyg2TIcjZdAcUBLCF84IL">1 屏</b>即可，只需微调</span>
+    </div>
+  </div>
+
+  <div class="pick" data-page-node-id="UMiAZvJPfZyEL14FigKsSV">
+    <img id="mascot" alt="助手" src="data:image/png;base64,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" data-page-node-id="hgNNdUP35aJwyqQsapst1E">
+    <div class="pick-main" data-page-node-id="ORDTn7200mGhbcsMNLApzx">
+      <h3 data-page-node-id="wcD3aue2OI86sc6yZHVPzY">我的建议：方案 1 打底，方案 2 只给审批用</h3>
+      <p data-page-node-id="6ISPZtI1yAtajw2sAF0mEQ">
+        你们 6 个功能页本来就不在同一个复杂度量级：公告 704 行、问卷 598 行其实只需要微调，真正要治的是审批 2107 和关怀 1794。
+        所以别一刀切——<b data-page-node-id="gB6tB34HsRhEy9QIhxObqF">6 个页面统一用方案 1 的 Tab 骨架</b>（改动小、手机上稳），只把<b data-page-node-id="mEDeB1MriGHpjgXOyRuEYm">审批管理单独做成方案 2 的主从分栏，且只在 ≥768px 生效</b>，
+        手机端自动降级成方案 1。方案 3 别用来改功能页，它更适合你已经在做的「今日重点」——那里本来就是的工作台。
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- 详情抽屉 -->
+<div class="drawer-mask" id="mask" data-page-node-id="J8T41ttG4qVdf6oHYhCWI9"></div>
+<aside class="drawer" id="drawer" data-page-node-id="ke9Za9gv5KI3Sn5ObPqbaU">
+  <div class="drawer-head" data-page-node-id="Hgk4gK8vLU4Z969fI6DXU8">
+    <button class="drawer-close" id="drawerClose" data-page-node-id="yuAAgdEsLStgEfpt5DXqNF">✕</button>
+    <div class="drawer-n" id="dName" data-page-node-id="uXlOa4V6EBSXpK18qOP3f9">—</div>
+    <div class="drawer-s" id="dSub" data-page-node-id="Zmk4qWr9Hgx1rvYuKj5NmA">—</div>
+  </div>
+  <div class="drawer-body" id="dBody" data-page-node-id="mjbxwKPt6NHT31IyP4yp45"></div>
+  <div class="drawer-foot" id="dFoot" data-page-node-id="GOakebbVY5NYtsJc5g8a6b"></div>
+</aside>
+
+<script>
+/*!
+ * 演示数据：与真实后端字段对齐
+ *   LeaveRequest: applicant_name / applicant_no / leave_type(sick|personal|competition|other)
+ *                 / start_date / end_date / reason / status(pending|approved|rejected) / created_at
+ *   ServiceTicket: type(certificate|project|feedback) / title / status
+ */
+const APPROVALS = [
+  { id: 1, kind: 'leave', applicant_name: '林晓阳', applicant_no: '2023011012', leave_type: 'sick',
+    start_date: '11-01', end_date: '11-03', reason: '急性肠胃炎，附三甲医院诊断证明', status: 'pending',
+    created_at: '20 分钟前', urgent: true },
+  { id: 2, kind: 'leave', applicant_name: '苏雨欣', applicant_no: '2023011034', leave_type: 'personal',
+    start_date: '11-02', end_date: '11-02', reason: '家庭事务，需当日往返', status: 'pending',
+    created_at: '1 小时前' },
+  { id: 3, kind: 'ticket', applicant_name: '陈子豪', applicant_no: '2023011057', ticket_type: 'certificate',
+    title: '在读证明（用于办签证）', reason: '需加盖学院公章', status: 'pending', created_at: '2 小时前' },
+  { id: 4, kind: 'leave', applicant_name: '黄佳琪', applicant_no: '2023011078', leave_type: 'competition',
+    start_date: '11-05', end_date: '11-07', reason: '参加省大学生程序设计竞赛', status: 'pending',
+    created_at: '3 小时前' },
+  { id: 5, kind: 'ticket', applicant_name: '吴浩然', applicant_no: '2023011091', ticket_type: 'project',
+    title: '创新创业项目立项材料审核', reason: '需指导教师签署意见', status: 'pending', created_at: '昨天 16:20' },
+  { id: 6, kind: 'leave', applicant_name: '何书宁', applicant_no: '2023011137', leave_type: 'sick',
+    start_date: '10-31', end_date: '11-01', reason: '发热 38.5℃，已报校医院', status: 'pending',
+    created_at: '昨天 09:12' },
+  { id: 7, kind: 'ticket', applicant_name: '郑心怡', applicant_no: '2023011103', ticket_type: 'feedback',
+    title: '宿舍热水供应问题反馈', reason: '已连续三天无热水', status: 'pending', created_at: '昨天 08:40' },
+  { id: 8, kind: 'leave', applicant_name: '邓一鸣', applicant_no: '2023011168', leave_type: 'personal',
+    start_date: '11-04', end_date: '11-06', reason: '家中长辈住院需陪护', status: 'pending',
+    created_at: '前天 21:05', urgent: true },
+  { id: 9, kind: 'leave', applicant_name: '周天佑', applicant_no: '2023011119', leave_type: 'sick',
+    start_date: '10-28', end_date: '10-29', reason: '牙科手术', status: 'approved', created_at: '10-27' },
+  { id: 10, kind: 'leave', applicant_name: '许清和', applicant_no: '2023011125', leave_type: 'competition',
+    start_date: '10-25', end_date: '10-27', reason: '数学建模国赛', status: 'approved', created_at: '10-24' },
+  { id: 11, kind: 'ticket', applicant_name: '冯雨桐', applicant_no: '2023011156', ticket_type: 'certificate',
+    title: '成绩单打印', status: 'approved', created_at: '10-23' },
+  { id: 12, kind: 'leave', applicant_name: '马思远', applicant_no: '2023011144', leave_type: 'personal',
+    start_date: '10-30', end_date: '10-31', reason: '外出考试', status: 'rejected', created_at: '10-29' }
+];
+
+const LEAVE_TYPE = { sick: '病假', personal: '事假', competition: '比赛', other: '其他' };
+const TICKET_TYPE = { certificate: '证明', project: '项目', feedback: '反馈', leave: '补假' };
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const initial = n => n.slice(0, 1);
+
+const state = {
+  p1: 'pending',
+  p2: 1,
+  rows: APPROVALS.map(a => ({ ...a }))
+};
+const live = () => state.rows;
+const pending = () => live().filter(a => a.status === 'pending');
+
+function typeBadge(a) {
+  const t = a.kind === 'leave' ? a.leave_type : a.ticket_type;
+  const label = a.kind === 'leave' ? LEAVE_TYPE[a.leave_type] : TICKET_TYPE[a.ticket_type];
+  const cls = a.kind === 'ticket' ? 't-other' : 't-' + (a.leave_type || 'other');
+  return `<span class="tag ${cls}">${label}</span>`;
+}
+function statusBadge(s) {
+  return `<span class="tag t-${s}">${{pending:'待处理',approved:'已通过',rejected:'已拒绝'}[s]}</span>`;
+}
+function descOf(a) {
+  if (a.kind === 'ticket') return a.title + (a.reason ? ` · ${a.reason}` : '');
+  return `${a.start_date} ~ ${a.end_date} · ${a.reason || ''}`;
+}
+
+/* ══════════ 抽屉 ══════════ */
+const mask = $('#mask'), drawer = $('#drawer');
+function openDrawer(a) {
+  $('#dName').textContent = a.applicant_name;
+  $('#dSub').textContent = `${a.applicant_no} · ${a.kind === 'leave' ? '请假申请' : '办事申请'}`;
+  const rows = a.kind === 'leave'
+    ? [['请假类型', LEAVE_TYPE[a.leave_type]],
+       ['起止', `${a.start_date} ~ ${a.end_date}`],
+       ['事由', a.reason || '—'],
+       ['提交时间', a.created_at]]
+    : [['申请类型', TICKET_TYPE[a.ticket_type]],
+       ['事项', a.title],
+       ['说明', a.reason || '—'],
+       ['提交时间', a.created_at]];
+  let html = `<div style="margin-bottom:16px">${statusBadge(a.status)} ${typeBadge(a)}</div>
+    <div style="font-size:9.5px;font-weight:750;letter-spacing:.6px;color:var(--quiet);text-transform:uppercase;margin-bottom:8px">申请详情</div>`;
+  html += rows.map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:16px;font-size:12px;padding:7px 0;border-bottom:1px dashed var(--border)">
+    <span style="color:var(--text3);flex:0 0 auto">${k}</span>
+    <span style="color:var(--text2);font-weight:600;text-align:right">${v}</span></div>`).join('');
+  $('#dBody').innerHTML = html;
+
+  $('#dFoot').innerHTML = a.status === 'pending'
+    ? `<button class="t2-btn g" data-op="reject">拒绝</button><button class="t2-btn p" data-op="approve">通过</button>`
+    : `<button class="t2-btn g" style="flex:1" disabled>已处理，不可再改</button>`;
+  $$('#dFoot [data-op]').forEach(b => b.addEventListener('click', () => {
+    doAct(a.id, b.dataset.op === 'approve' ? 'approved' : 'rejected');
+    closeDrawer();
+  }));
+  mask.classList.add('on'); drawer.classList.add('on');
+}
+function closeDrawer() { mask.classList.remove('on'); drawer.classList.remove('on'); }
+mask.addEventListener('click', closeDrawer);
+$('#drawerClose').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+function doAct(id, status) {
+  const row = state.rows.find(r => r.id === id);
+  if (row) row.status = status;
+  renderP1(); renderP2(); renderP3();
+}
+
+/* ══════════ 视图切换 ══════════ */
+$$('.viewswitch button').forEach(btn => btn.addEventListener('click', () => {
+  $$('.viewswitch button').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  const one = btn.dataset.v === 'one';
+  $('#plans').classList.toggle('one', one);
+  if (!one) $$('.plan').forEach(p => p.classList.add('show'));
+}));
+
+/* ══════════ 方案 1：顶部 Tab ══════════ */
+function renderP1() {
+  const p = pending();
+  $('#p1Badge').textContent = p.length;
+  $('#p1Sub').textContent = `${p.length} 条待处理 · 共 ${live().length} 条`;
+
+  $$('#p1Tabs .t1-tab').forEach(t => t.classList.toggle('on', t.dataset.t === state.p1));
+
+  const leaveN = p.filter(a => a.kind === 'leave').length;
+  const ticketN = p.filter(a => a.kind === 'ticket').length;
+  $('#p1Sum').innerHTML = state.p1 === 'pending'
+    ? `<span>请假 <b>${leaveN}</b></span><span style="color:var(--quiet)">·</span><span>办事 <b>${ticketN}</b></span>
+       <span style="margin-left:auto;color:var(--warn);font-weight:650">${p.filter(a=>a.urgent).length} 条加急</span>`
+    : `<span>共 <b>${live().filter(a=>a.status===state.p1).length}</b> 条</span>`;
+
+  const list = live().filter(a => a.status === state.p1);
+  if (!list.length) {
+    $('#p1Body').innerHTML = `<div class="empty"><div class="empty-ic">✓</div><b>这里空了</b>${
+      state.p1 === 'pending' ? '所有申请都处理完了' : '还没有这类记录'}</div>`;
+    return;
+  }
+
+  $('#p1Body').innerHTML = `<div class="card">` + list.map(a => `
+    <div class="ap-item" data-id="${a.id}">
+      <div class="avatar">${initial(a.applicant_name)}</div>
+      <div class="ap-body">
+        <div class="ap-top">
+          <span class="ap-name">${a.applicant_name}</span>
+          <span class="ap-no">${a.applicant_no}</span>
+          ${typeBadge(a)}
+          ${a.urgent && a.status === 'pending' ? '<span class="tag t-sick">加急</span>' : ''}
+        </div>
+        <div class="ap-desc">${descOf(a)}</div>
+      </div>
+      <div class="ap-side">
+        <span class="ap-time">${a.created_at}</span>
+        ${a.status === 'pending'
+          ? `<div class="ap-acts">
+               <button class="mini no" data-op="reject" data-id="${a.id}">拒</button>
+               <button class="mini ok" data-op="approve" data-id="${a.id}">通过</button>
+             </div>`
+          : statusBadge(a.status)}
+      </div>
+    </div>`).join('') + `</div>`;
+
+  $$('#p1Body .ap-item').forEach(el => el.addEventListener('click', e => {
+    const op = e.target.closest('[data-op]');
+    if (op) {
+      e.stopPropagation();
+      doAct(Number(el.dataset.id), op.dataset.op === 'approve' ? 'approved' : 'rejected');
+      return;
+    }
+    openDrawer(live().find(a => a.id === Number(el.dataset.id)));
+  }));
+}
+$$('#p1Tabs .t1-tab').forEach(t => t.addEventListener('click', () => {
+  state.p1 = t.dataset.t;
+  renderP1();
+}));
+
+/* ══════════ 方案 2：主从分栏 ══════════ */
+function renderP2() {
+  const list = pending();
+  $('#p2Sub').textContent = `${list.length} 条待处理`;
+
+  if (!state.p2 || !list.some(a => a.id === state.p2)) state.p2 = list[0] ? list[0].id : null;
+
+  if (!list.length) {
+    $('#p2List').innerHTML = `<div class="empty" style="padding:30px 12px;font-size:12px"><b>全部处理完了</b></div>`;
+    $('#p2Detail').innerHTML = `<div class="empty"><div class="empty-ic">✓</div><b>没有待处理</b>今天的审批已清空</div>`;
+    return;
+  }
+
+  $('#p2List').innerHTML = list.map(a => `
+    <div class="t2-li ${a.id === state.p2 ? 'on' : ''}" data-id="${a.id}">
+      <div class="t2-li-n">${a.applicant_name}${a.urgent ? ' <span class="tag t-sick">急</span>' : ''}</div>
+      <div class="t2-li-d">${a.kind === 'leave' ? LEAVE_TYPE[a.leave_type] : TICKET_TYPE[a.ticket_type]} · ${
+        a.kind === 'leave' ? `${a.start_date}~${a.end_date}` : a.title}</div>
+      <div class="t2-li-t">${a.created_at}</div>
+    </div>`).join('');
+
+  $$('#p2List .t2-li').forEach(el => el.addEventListener('click', () => {
+    state.p2 = Number(el.dataset.id);
+    renderP2();
+  }));
+
+  const a = list.find(x => x.id === state.p2);
+  if (!a) return;
+  const kv = a.kind === 'leave'
+    ? [['类型', LEAVE_TYPE[a.leave_type]], ['起止', `${a.start_date} ~ ${a.end_date}`],
+       ['提交', a.created_at], ['学号', a.applicant_no]]
+    : [['类型', TICKET_TYPE[a.ticket_type]], ['提交', a.created_at], ['学号', a.applicant_no]];
+
+  $('#p2Detail').innerHTML = `
+    <div class="t2-dh">
+      <div class="avatar" style="width:36px;height:36px;border-radius:11px;font-size:14px">${initial(a.applicant_name)}</div>
+      <div style="min-width:0">
+        <div class="t2-dn">${a.applicant_name}</div>
+        <div class="t2-ds">${a.applicant_no}</div>
+      </div>
+    </div>
+    <div class="t2-sec">
+      <div class="t2-st">申请信息</div>
+      ${kv.map(([k, v]) => `<div class="t2-kv"><span>${k}</span><span>${v}</span></div>`).join('')}
+    </div>
+    <div class="t2-sec">
+      <div class="t2-st">${a.kind === 'leave' ? '请假事由' : '事项说明'}</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">${a.kind === 'ticket' ? a.title + '<br>' : ''}${a.reason || '（未填写）'}</div>
+    </div>
+    <div class="t2-actions">
+      <button class="t2-btn g" data-op="reject" data-id="${a.id}">拒绝</button>
+      <button class="t2-btn p" data-op="approve" data-id="${a.id}">通过</button>
+    </div>`;
+
+  $$('#p2Detail [data-op]').forEach(b => b.addEventListener('click', () => {
+    doAct(Number(b.dataset.id), b.dataset.op === 'approve' ? 'approved' : 'rejected');
+  }));
+}
+
+/* ══════════ 方案 3：工作台卡片 ══════════ */
+const SPARK = [3, 5, 2, 6, 4, 8, 5];
+function renderP3() {
+  const p = pending();
+  const leaveN = p.filter(a => a.kind === 'leave').length;
+  const ticketN = p.filter(a => a.kind === 'ticket').length;
+  const urgentN = p.filter(a => a.urgent).length;
+  $('#p3Sub').textContent = `本周 ${p.length} 项待办`;
+
+  const cards = [
+    { ic: '✓', color: '#3dd68c', t: '待批请假', big: leaveN, sub: '含 ' + urgentN + ' 条加急', act: '去处理',
+      extra: [['今天到期', urgentN], ['平均等待', '4.2 小时']] },
+    { ic: '▤', color: '#4f8bf9', t: '办事申请', big: ticketN, sub: '证明 / 项目 / 反馈', act: '去处理',
+      extra: [['待出证', 1], ['待签意见', 1]] },
+    { ic: '⚠', color: '#f5555d', t: '危机预警', big: 3, sub: '2 高危 · 1 中度', act: '去处置',
+      extra: [['未联系', 1], ['超 7 天', 2]] },
+    { ic: '◈', color: '#a78bfa', t: '成长档案', big: 12, sub: '本月新增记录', act: '去看看',
+      extra: [['待审核', 4], ['学生提交', 8]] }
+  ];
+
+  $('#p3Body').innerHTML = `<div class="t3-grid">` + cards.map((c, i) => `
+    <div class="t3-card" data-card="${i}" style="--accent:${c.color}">
+      <div class="t3-top">
+        <div class="t3-ic" style="background:${c.color}22;color:${c.color}">${c.ic}</div>
+        <div class="t3-t">${c.t}</div>
+      </div>
+      <div class="t3-big" style="color:${c.color}">${c.big}</div>
+      <div class="t3-sub">${c.sub}</div>
+      ${c.extra.map(([k, v]) => `<div class="t3-row"><span>${k}</span><b>${v}</b></div>`).join('')}
+      <div class="t3-spark">${SPARK.map(h => `<i style="height:${h * 3}px;background:${c.color}"></i>`).join('')}</div>
+    </div>`).join('') + `
+    <div class="t3-card t3-full" data-card="4" style="--accent:#4f8bf9">
+      <div class="t3-top">
+        <div class="t3-ic" style="background:rgba(79,139,249,.13);color:#4f8bf9">◎</div>
+        <div class="t3-t">今日重点进度</div>
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)">3 / 7 已完成</span>
+      </div>
+      <div style="height:5px;background:var(--sunken);border-radius:3px;overflow:hidden;margin:9px 0 8px">
+        <i style="display:block;height:100%;width:43%;background:#4f8bf9;border-radius:3px"></i>
+      </div>
+      <div style="font-size:10.5px;color:var(--text3)">还剩 4 项：批 3 条请假、联系 1 名失联学生</div>
+    </div>
+  </div>
+  <div style="text-align:center;font-size:10.5px;color:var(--quiet);padding:12px 0">
+    卡片只给「总量 + 趋势」，具体谁的事要点进去——这就是它不能当功能页的原因
+  </div>`;
+
+  $$('#p3Body .t3-card').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = Number(el.dataset.card);
+      if (idx === 0 || idx === 1) {
+        const a = pending().find(x => (idx === 0 ? x.kind === 'leave' : x.kind === 'ticket'));
+        if (a) openDrawer(a); else alert('演示：这一类的待办已经清空');
+      } else if (idx === 2) {
+        alert('演示：跳转到「危机干预工作台」');
+      } else if (idx === 3) {
+        alert('演示：跳转到「成长档案」');
+      } else {
+        alert('演示：跳转到「今日重点」');
+      }
+    });
+  });
+}
+
+renderP1(); renderP2(); renderP3();
+</script>
+</body>
+</html>

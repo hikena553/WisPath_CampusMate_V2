@@ -112,11 +112,25 @@
         </div>
       </div>
     </div>
+    <!-- 下一步：进度不是终点，给出可执行的三条推进路径 -->
+    <div class="prog-next">
+      <span class="prog-next-label">下一步</span>
+      <el-button link type="primary" size="small" @click="router.push('/teacher/tasks')">
+        处理待办{{ summary.pending ? `（${summary.pending}）` : '' }}
+      </el-button>
+      <el-button link type="primary" size="small" @click="router.push('/teacher/crisis')">
+        跟进预警
+      </el-button>
+      <el-button link type="primary" size="small" @click="router.push('/teacher/portfolio')">
+        沉淀成长
+      </el-button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, type Component } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   TrendCharts, Trophy, Medal, Star, CircleCheckFilled, BellFilled, UserFilled,
 } from '@element-plus/icons-vue'
@@ -131,6 +145,7 @@ const props = defineProps<{
 }>()
 
 const summary = ref<TeacherTaskSummary>({ pending: 0, overdue: 0, today: 0, done_this_week: 0, total: 0 })
+const router = useRouter()
 
 // 任务推进数据由卡片自取（与「任务清单」页同源同接口，不新增 API）
 onMounted(async () => {
@@ -300,6 +315,21 @@ const unlockedCount = computed(() => badges.value.filter((b) => b.unlocked).leng
 
 /* 徽章墙与上方进度区之间留足呼吸（契约 §5 的间距口径） */
 .prog-badges { margin-top: 24px; }
+
+/* 下一步：三条真实可执行路径 */
+.prog-next {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tui-border);
+}
+.prog-next-label {
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+}
 .prog-badges-head {
   display: flex;
   align-items: baseline;

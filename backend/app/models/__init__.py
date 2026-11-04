@@ -55,6 +55,14 @@ from app.models.care_center import (
     PraiseRecord,
     PraiseType,
 )
+from app.models.teaching import (
+    Attendance,
+    AttendanceStatus,
+    Homework,
+    HomeworkStatus,
+    HomeworkSubmission,
+    SubmissionStatus,
+)
 from app.models.guardian import (
     Guardian,
     GuardianChannel,

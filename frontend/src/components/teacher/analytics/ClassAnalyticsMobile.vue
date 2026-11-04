@@ -3,7 +3,7 @@
     <div class="sub-page-header">
       <el-button text circle @click="emit('close')"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
       <span class="sub-page-title">班级数据分析</span>
-      <div style="width:36px"></div>
+      <div class="sub-page-head-spacer"></div>
     </div>
     <div class="sub-page-body">
       <!-- 核心数据图表 -->
@@ -113,13 +113,23 @@ function handleMascotClick() {
   z-index: 100; display: flex; flex-direction: column;
 }
 .sub-page-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 12px; background: #fff;
+  /* 与 SubPageHeader .tui-appbar 同尺寸：52px 高 / 左右 4px / 标题 17.5px·680 */
+  display: flex; align-items: center; gap: 8px;
+  min-height: 52px; padding: 0 4px; background: #fff;
   border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
 }
 .sub-page-title {
-  font-size: 16px; font-weight: 600; color: #1a1a1a;
+  flex: 1; min-width: 0;
+  font-size: 17.5px; font-weight: 680; letter-spacing: -0.2px; color: #1a1a1a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.sub-page-head-spacer { display: none; }
+/* 返回键统一规格：34px 触控区，无外圈底色，仅图标本身 */
+.sub-page-header .el-button {
+  width: 34px; height: 34px; margin: 0;
+  border-radius: 50%; background: transparent; color: #1f2430;
+}
+.sub-page-header .el-button:active { background: rgba(20, 23, 26, 0.06); }
 .sub-page-body {
   flex: 1; overflow-y: auto; padding: 12px;
   display: flex; flex-direction: column; gap: 10px;

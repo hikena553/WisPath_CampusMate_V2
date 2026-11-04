@@ -72,11 +72,35 @@ class StudentDetailOut(BaseModel):
 
 
 class DashboardOut(BaseModel):
+    # ── 学生维度（既有口径，保持不变：首页班级图表依赖它）──
     total_students: int = 0
     alert_count: int = 0
     pending_leave_count: int = 0
     severe_alert_count: int = 0
     resolved_alert_count: int = 0
+
+    # ── 我的维度（v3 新增）──
+    #
+    # 为什么非要加这一组：原来 5 个指标的主语全是「学生」，教师打开首页看到的是
+    # 「我的人在怎样」，看不到「我今天该做什么、我这周做了多少」。有了这组，
+    # 首页第一屏才有资格说「我的工作台」。
+    my_open_tasks: int = 0
+    my_overdue_tasks: int = 0
+    my_due_today: int = 0
+    my_care_month: int = 0
+    my_visits_month: int = 0
+    my_guardian_month: int = 0
+    my_done_rate: float = 0
+    #: 本月被关怀过的学生占名下学生的比例
+    my_coverage_rate: float = 0
+
+    # ── 教学维度（v3 新增，需要 courses.teacher_id）──
+    my_course_count: int = 0
+    today_course_count: int = 0
+    current_week: int | None = None
+    semester: str | None = None
+    #: 未交作业的待提醒学生数（跨全部作业累计）
+    my_pending_submissions: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -114,12 +138,110 @@ def dashboard_stats(user: User = Depends(require_role(UserRole.TEACHER, UserRole
         severe_count = 0
         resolved_count = 0
         pending_leave = 0
+
+    # ── 「我的」指标 ────────────────────────────────────────────────
+    #
+    # 全部从既有表现算，不做缓存：数据量都在「一个教师的」量级（几十到几千行），
+    # 上缓存反而引入不一致风险。若日后慢，再按 teacher_id 加短 TTL 缓存。
+    from datetime import date as _date, datetime as _dt, timedelta as _td
+
+    from app.models.care_center import HomeVisitRecord
+    from app.models.care_record import CareRecord
+    from app.models.guardian import GuardianContactLog
+    from app.models.teacher_task import TaskStatus, TeacherTask
+    from app.models.teaching import Homework, HomeworkSubmission, SubmissionStatus
+
+    today = _date.today()
+    month_start = _dt.now() - _td(days=30)
+
+    open_statuses = [TaskStatus.PENDING, TaskStatus.CONTACTED, TaskStatus.CARED]
+    my_open = db.query(func.count(TeacherTask.id)).filter(
+        TeacherTask.teacher_id == user.id, TeacherTask.status.in_(open_statuses)
+    ).scalar() or 0
+    my_overdue = db.query(func.count(TeacherTask.id)).filter(
+        TeacherTask.teacher_id == user.id,
+        TeacherTask.status.in_(open_statuses),
+        TeacherTask.due_at.isnot(None),
+        TeacherTask.due_at < today,
+    ).scalar() or 0
+    my_due_today = db.query(func.count(TeacherTask.id)).filter(
+        TeacherTask.teacher_id == user.id,
+        TeacherTask.status.in_(open_statuses),
+        TeacherTask.due_at == today,
+    ).scalar() or 0
+    my_done = db.query(func.count(TeacherTask.id)).filter(
+        TeacherTask.teacher_id == user.id, TeacherTask.status == TaskStatus.DONE
+    ).scalar() or 0
+    my_total = db.query(func.count(TeacherTask.id)).filter(TeacherTask.teacher_id == user.id).scalar() or 0
+
+    my_care = db.query(func.count(CareRecord.id)).filter(
+        CareRecord.teacher_id == user.id, CareRecord.is_deleted.is_(False),
+        CareRecord.created_at >= month_start,
+    ).scalar() or 0
+    my_visits = db.query(func.count(HomeVisitRecord.id)).filter(
+        HomeVisitRecord.teacher_id == user.id, HomeVisitRecord.is_deleted.is_(False),
+        HomeVisitRecord.created_at >= month_start,
+    ).scalar() or 0
+    my_guardian = db.query(func.count(GuardianContactLog.id)).filter(
+        GuardianContactLog.teacher_id == user.id, GuardianContactLog.is_deleted.is_(False),
+        GuardianContactLog.created_at >= month_start,
+    ).scalar() or 0
+
+    cared_students = 0
+    if student_ids:
+        cared_students = db.query(func.count(func.distinct(CareRecord.student_id))).filter(
+            CareRecord.teacher_id == user.id,
+            CareRecord.is_deleted.is_(False),
+            CareRecord.created_at >= month_start,
+            CareRecord.student_id.in_(student_ids),
+        ).scalar() or 0
+
+    # ── 教学指标：只算「我任教的课」，与「我带的班」严格区分 ──
+    from app.models.academic import Course
+    from app.services.teaching_scope import default_semester
+
+    sem = default_semester(db)
+    course_q = db.query(Course).filter(Course.teacher_id == user.id)
+    if sem:
+        course_q = course_q.filter(Course.semester == sem)
+    my_courses = course_q.all()
+    today_courses = [c for c in my_courses if c.day_of_week == today.isoweekday()]
+
+    my_pending_subs = 0
+    course_ids = [c.id for c in my_courses]
+    if course_ids:
+        my_pending_subs = db.query(func.count(HomeworkSubmission.id)).join(
+            Homework, Homework.id == HomeworkSubmission.homework_id
+        ).filter(
+            Homework.teacher_id == user.id,
+            Homework.is_deleted.is_(False),
+            HomeworkSubmission.status == SubmissionStatus.PENDING,
+        ).scalar() or 0
+
+    # 教学周与「最新学期」的口径和「我的教学」页保持一致，避免首页与课表页
+    # 对「第 N 周」给出两个不同答案
+    from app.api.teaching import _week_of_semester
+
+    week, _ = _week_of_semester(sem)
     return DashboardOut(
         total_students=total,
         alert_count=alert_count,
         pending_leave_count=pending_leave,
         severe_alert_count=severe_count,
         resolved_alert_count=resolved_count,
+        my_open_tasks=int(my_open),
+        my_overdue_tasks=int(my_overdue),
+        my_due_today=int(my_due_today),
+        my_care_month=int(my_care),
+        my_visits_month=int(my_visits),
+        my_guardian_month=int(my_guardian),
+        my_done_rate=round(my_done / my_total * 100, 1) if my_total else 0.0,
+        my_coverage_rate=round(cared_students / total * 100, 1) if total else 0.0,
+        my_course_count=len(my_courses),
+        today_course_count=len(today_courses),
+        current_week=week,
+        semester=sem,
+        my_pending_submissions=int(my_pending_subs),
     )
 
 

@@ -1,95 +1,86 @@
 <template>
   <div class="msg-page">
-    <!-- 移动端吸顶栏：会话 / 通讯录 / 通知 三视图共用（聊天态由会话页头接管） -->
-    <header v-if="isMobile && !activeId" class="msg-appbar">
-      <button class="msg-appbar-btn" type="button" aria-label="打开侧边导航" @click="drawerOpen = true">
-        <DtIcon name="menu" :size="21" />
-      </button>
-      <div class="msg-appbar-title">{{ mobileViewTitle }}</div>
-      <div class="msg-appbar-actions">
-        <el-dropdown
-          v-if="mobileView === 'messages'"
-          trigger="click"
-          @command="handleHeaderAction"
-        >
-          <button class="msg-appbar-btn" type="button" aria-label="更多操作">
-            <DtIcon name="plus" :size="20" />
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="createGroup">
-                <DtIcon name="message" :size="15" /> 创建群聊
-              </el-dropdown-item>
-              <el-dropdown-item command="addFriend">
-                <DtIcon name="user" :size="15" /> 发起会话
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+    <!-- 移动端吸顶栏（与学生端消息中心同款）：滑动下划线页签切换视图 + 右侧「＋」面板
+         视图顺序：消息 / 通讯录 / 文件 / 通知；聊天态由会话页头接管 -->
+    <header
+      v-if="isMobile && !activeId"
+      class="msg-appbar"
+      :class="{ 'is-menu-open': plusOpen }"
+    >
+      <SlidingTabs
+        class="msg-appbar-tabs"
+        :tabs="headerTabs"
+        :model-value="mobileView"
+        @select="onAppbarSelect"
+      />
+      <div class="msg-appbar-acts">
         <button
-          v-if="hasUnread"
-          class="msg-appbar-btn"
           type="button"
-          aria-label="清除未读提示"
-          @click="handleClearUnread"
+          class="msg-appbar-icon msg-appbar-plus"
+          :class="{ 'is-open': plusOpen }"
+          aria-label="新建"
+          aria-haspopup="menu"
+          :aria-expanded="plusOpen"
+          @click.stop="plusOpen = !plusOpen"
         >
-          <DtIcon name="check" :size="19" />
+          <el-icon :size="22"><Plus /></el-icon>
         </button>
       </div>
+      <Transition name="msg-plus-mask">
+        <div v-if="plusOpen" class="msg-plus-mask" @click="plusOpen = false" />
+      </Transition>
+      <Transition name="msg-plus-panel">
+        <div v-if="plusOpen" class="msg-plus-panel" role="menu" @click.stop>
+          <button type="button" class="msg-plus-item" role="menuitem" @click="createGroupFromMenu">
+            <el-icon :size="18"><ChatLineRound /></el-icon>
+            <span>发起群聊</span>
+          </button>
+          <button type="button" class="msg-plus-item" role="menuitem" @click="addFriendFromMenu">
+            <el-icon :size="18"><User /></el-icon>
+            <span>发起会话</span>
+          </button>
+          <div class="msg-plus-sep" />
+          <button
+            type="button"
+            class="msg-plus-item"
+            role="menuitem"
+            :disabled="!hasUnread"
+            @click="clearUnreadFromMenu"
+          >
+            <el-icon :size="18"><Check /></el-icon>
+            <span>全部标为已读</span>
+          </button>
+        </div>
+      </Transition>
     </header>
 
-    <!-- 移动端：视图切换收进侧边抽屉（吸顶栏汉堡按钮唤起），左栏只承载当前视图内容 -->
+    <!-- 移动端：左栏只承载当前视图内容（视图切换由页头滑动页签完成） -->
     <div class="msg-sidebar" v-show="isMobile ? !activeId : true">
-      <!-- 桌面端头部（钉钉式）：整行搜索框 + 右侧「+」新建；刷新 / 清除未读收进「+」菜单 -->
-      <div v-if="!isMobile" class="sidebar-header">
-        <div class="sidebar-searchbar">
-          <el-input
-            v-if="mobileView !== 'notifications'"
-            v-model="headerKeyword"
-            :placeholder="headerSearchPlaceholder"
-            size="small"
-            clearable
-            @input="onHeaderSearch"
-          >
-            <template #prefix><DtIcon name="search" :size="15" /></template>
-          </el-input>
-        </div>
-        <el-dropdown trigger="click" @command="handleHeaderAction">
-          <button class="header-plus-btn" type="button" aria-label="新建 / 更多">
-            <DtIcon name="plus" :size="20" />
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="createGroup">
-                <DtIcon name="message" :size="15" /> 创建群聊
-              </el-dropdown-item>
-              <el-dropdown-item command="addFriend">
-                <DtIcon name="user" :size="15" /> 发起会话
-              </el-dropdown-item>
-              <el-dropdown-item command="clearUnread">
-                <DtIcon name="bell" :size="15" /> 清除未读提示
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+      <!-- 桌面端搜索：与学生端消息中心同款胶囊输入框，就地过滤当前视图 -->
+      <div v-if="!isMobile" class="msg-search">
+        <el-icon :size="14"><Search /></el-icon>
+        <input
+          v-model="headerKeyword"
+          type="search"
+          :placeholder="headerSearchPlaceholder"
+          :disabled="mobileView === 'notifications'"
+          @input="onHeaderSearch"
+        />
       </div>
 
-      <!-- 桌面端视图切换：消息 / 通讯录 / 通知（移动端收进侧边抽屉） -->
-      <div v-if="!isMobile" class="sidebar-seg">
-        <div class="tui-seg">
-          <button
-            v-for="v in viewTabs"
-            :key="v.key"
-            type="button"
-            class="tui-seg-item"
-            :class="{ active: mobileView === v.key }"
-            @click="switchView(v.key)"
-          >
-            {{ v.label }}
-            <span v-if="v.count > 0" class="seg-count">{{ v.count > 99 ? '99+' : v.count }}</span>
-          </button>
-        </div>
-      </div>
+      <!-- 桌面端视图切换：消息 / 通讯录 / 文件 / 通知，与学生端同款黑色胶囊页签 -->
+      <nav v-if="!isMobile" class="msg-tabs">
+        <button
+          v-for="v in viewTabs"
+          :key="v.key"
+          type="button"
+          :class="['msg-tab', { active: mobileView === v.key }]"
+          @click="switchView(v.key)"
+        >
+          {{ v.label }}
+          <i v-if="v.count > 0" class="msg-tab-badge">{{ v.count > 99 ? '99+' : v.count }}</i>
+        </button>
+      </nav>
 
       <div class="sidebar-scroll"
         @touchstart.passive="sidebarPull.onStart"
@@ -274,7 +265,7 @@
 
           <div v-if="contactKeyword.trim()" class="addr-search-results">
             <div v-if="contactSearching" class="addr-loading">
-              <el-icon class="is-loading"><Loading /></el-icon><span>搜索中…</span>
+              <AgentLoading text="正在搜索师生" />
             </div>
             <div v-else-if="!contactResults.length" class="addr-empty">未找到匹配的师生</div>
             <button
@@ -325,7 +316,7 @@
               <span class="addr-section-count">{{ contactStudents.length }} 人</span>
             </div>
             <div v-if="contactsLoading" class="addr-loading">
-              <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
+              <AgentLoading text="正在读取联系人与学生" />
             </div>
             <div v-else-if="!contactStudents.length" class="addr-empty">暂无名下学生</div>
             <button
@@ -353,7 +344,7 @@
               </span>
             </div>
             <div v-if="orgLoading" class="addr-loading">
-              <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
+              <AgentLoading text="正在读取组织架构" />
             </div>
             <div v-else-if="!orgColleges.length" class="addr-empty">暂无组织架构数据</div>
             <template v-else>
@@ -403,7 +394,7 @@
                       <!-- 班级 → 学生名单 → 点任意学生直接发起会话（闭环） -->
                       <template v-if="expandedClasses.has(cg.id)">
                         <div v-if="classStudentsLoading[cg.id]" class="addr-loading">
-                          <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
+                          <AgentLoading text="正在读取班级学生" />
                         </div>
                         <div v-else-if="!(classStudents[cg.id] || []).length" class="addr-empty">该班级暂无学生</div>
                         <button
@@ -454,7 +445,7 @@
           </div>
 
           <div v-if="filesLoading" class="addr-loading">
-            <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
+            <AgentLoading text="正在读取聊天文件" />
           </div>
           <div v-else-if="!sharedFiles.length" class="empty-state">
             <DtIcon name="empty" :size="40" style="color: var(--dt-text-quiet);" />
@@ -501,7 +492,7 @@
             </button>
           </div>
           <div v-if="notifLoading && !notifications.length" class="addr-loading">
-            <el-icon class="is-loading"><Loading /></el-icon><span>加载中…</span>
+            <AgentLoading text="正在读取通知" />
           </div>
           <div v-else-if="!notifications.length" class="empty-state">
             <DtIcon name="bell" :size="40" style="color: var(--dt-text-quiet);" />
@@ -1430,38 +1421,6 @@
       :student-name="careStudentName"
     />
 
-    <!-- ============= 移动端侧边抽屉（钉钉式）：消息 / 通讯录 / 通知 ============= -->
-    <Transition name="drawer-mask">
-      <div v-if="isMobile && drawerOpen" class="msg-drawer-mask" @click="drawerOpen = false" />
-    </Transition>
-    <Transition name="drawer-panel">
-      <aside v-if="isMobile && drawerOpen" class="msg-drawer">
-        <div class="msg-drawer-head">
-          <el-avatar :size="52" :src="auth.user?.avatar || ''">
-            {{ auth.userName?.[0] || '师' }}
-          </el-avatar>
-          <div class="msg-drawer-user">
-            <span class="msg-drawer-name">{{ auth.userName || '教师' }}</span>
-            <span class="msg-drawer-sub">{{ auth.user?.college || siteName }}</span>
-          </div>
-        </div>
-        <nav class="msg-drawer-nav">
-          <div class="msg-drawer-section">消息中心</div>
-          <button
-            v-for="v in viewTabs"
-            :key="v.key"
-            type="button"
-            class="msg-drawer-item"
-            :class="{ active: mobileView === v.key }"
-            @click="switchView(v.key)"
-          >
-            <span class="msg-drawer-icon"><DtIcon :name="v.dtIcon" :size="19" /></span>
-            <span class="msg-drawer-label">{{ v.label }}</span>
-            <span v-if="v.count > 0" class="tui-count">{{ v.count > 99 ? '99+' : v.count }}</span>
-          </button>
-        </nav>
-      </aside>
-    </Transition>
   </div>
 </template>
 
@@ -1473,6 +1432,7 @@ import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import { actionConfirm } from '@/composables/useActionSheet'
 import { useRoute, useRouter } from 'vue-router'
+import SlidingTabs from '@/components/common/SlidingTabs.vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { useAuthStore } from '@/stores/auth'
@@ -1498,6 +1458,7 @@ import { useButlerPreview } from '@/composables/useButlerPreview'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 // 下拉刷新指示器：教师端首页 / 学生端首页 / 消息页共用同一套吉祥物动画
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import AgentLoading from '@/components/common/AgentLoading.vue'
 import CareRecordDialog from '@/components/teacher/care/CareRecordDialog.vue'
 // 小绵管家：教师端与学生端共用的常驻会话（自动推送资讯 + 总结对话）
 import ButlerChat from '@/components/butler/ButlerChat.vue'
@@ -1513,7 +1474,7 @@ import {
   Bell, Loading, InfoFilled, Stamp, Collection, Notebook,
   OfficeBuilding,
   UploadFilled, Document, Picture, Setting, WarningFilled, Download,
-  Microphone, EditPen, VideoPlay, VideoPause, View
+  Microphone, EditPen, VideoPlay, VideoPause, View, Plus, Search, Check
 } from '@element-plus/icons-vue'
 
 const auth = useAuthStore()
@@ -1521,7 +1482,7 @@ const route = useRoute()
 const router = useRouter()
 const userId = auth.user?.id ?? 0
 const { isMobile } = useResponsive()
-const { siteName, siteMascot, agentName } = useSiteConfig()
+const { siteMascot, agentName } = useSiteConfig()
 // 小绵管家入口的动态摘要（取最新一条资讯标题）
 const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
@@ -1529,10 +1490,10 @@ const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 // 消息为默认主视图；其余在移动端收进侧边抽屉，桌面端置于左栏分段切换
 type MsgView = 'messages' | 'contacts' | 'files' | 'notifications'
 const mobileView = ref<MsgView>('messages')
-const drawerOpen = ref(false)
-const mobileViewTitle = computed(
-  () => ({ messages: '消息', contacts: '通讯录', files: '文件', notifications: '通知' } as Record<MsgView, string>)[mobileView.value]
-)
+/** 移动端「＋」面板：新建会话 / 群聊与一键已读 */
+const plusOpen = ref(false)
+/** 移动端页头页签（SlidingTabs 只消费 key / label，角标由页面内容自行呈现） */
+const headerTabs = computed(() => viewTabs.value.map((v) => ({ key: v.key, label: v.label })))
 
 const viewTabs = computed(() => [
   // dtIcon：钉钉风格导航图标（见 components/common/DtIcon.vue）
@@ -1542,9 +1503,14 @@ const viewTabs = computed(() => [
   { key: 'notifications' as MsgView, label: '通知', icon: Bell, dtIcon: 'bell', count: unreadNotifCount.value },
 ])
 
+/** SlidingTabs 只回传字符串 key，收窄后再交给 switchView */
+function onAppbarSelect(key: string) {
+  switchView(key as MsgView)
+}
+
 function switchView(v: MsgView) {
   mobileView.value = v
-  drawerOpen.value = false
+  plusOpen.value = false
   if (v === 'contacts') ensureContacts()
   if (v === 'files') loadSharedFiles()
   if (v === 'notifications') loadNotifications()
@@ -1648,6 +1614,7 @@ const headerKeyword = computed({
 const headerSearchPlaceholder = computed(() => {
   if (mobileView.value === 'contacts') return '搜索姓名 / 学号 / 工号'
   if (mobileView.value === 'files') return '搜索文件名'
+  if (mobileView.value === 'notifications') return '通知无需搜索'
   return '搜索已有会话'
 })
 function onHeaderSearch() {
@@ -2680,8 +2647,14 @@ async function openNotification(n: NotificationItem) {
   if (!n.is_read) {
     try { await markNotificationsRead([n.id]); n.is_read = true } catch { /* 标记失败不阻断跳转 */ }
   }
-  if (n.link) {
-    router.push(n.link)
+  // 历史通知可能只写了 /teacher/students 而没带学生参数：用 related_id 补上，
+  // 保证点进去直接聚焦到该学生，而不是落在一张全量列表上。
+  let link = n.link || ''
+  if (link.startsWith('/teacher/students') && n.related_id && !link.includes('student=')) {
+    link += `${link.includes('?') ? '&' : '?'}student=${n.related_id}`
+  }
+  if (link) {
+    router.push(link)
   } else {
     // 部分通知（历史数据 / 无跳转目标）没有 link，此前点击完全无反应，
     // 这里给出明确反馈，避免用户以为页面坏了。
@@ -2749,7 +2722,7 @@ function openButler() {
   messages.value = []
   currentGroup.value = null
   groupSubPage.value = null
-  drawerOpen.value = false
+  plusOpen.value = false
 }
 function scrollToBottom() { nextTick(() => msgListRef.value?.scrollTo({ top: msgListRef.value.scrollHeight, behavior: 'smooth' })) }
 
@@ -3024,11 +2997,18 @@ async function onPaste(e: ClipboardEvent) {
   }
 }
 
-// +号菜单
-function handleHeaderAction(cmd: string) {
-  if (cmd === 'createGroup') { showCreateGroup.value = true }
-  else if (cmd === 'addFriend') { showAddFriend.value = true }
-  else if (cmd === 'clearUnread') { if (hasUnread.value) void handleClearUnread() }
+// 移动端「＋」面板动作
+function createGroupFromMenu() {
+  plusOpen.value = false
+  showCreateGroup.value = true
+}
+function addFriendFromMenu() {
+  plusOpen.value = false
+  showAddFriend.value = true
+}
+function clearUnreadFromMenu() {
+  plusOpen.value = false
+  if (hasUnread.value) void handleClearUnread()
 }
 
 /* ==================== 移动端下拉刷新 ==================== */
@@ -3769,90 +3749,94 @@ function onGlobalClick(e: MouseEvent) {
 .manage-danger-actions { display: flex; gap: 10px; }
 
 /* ==================== 消息中心：移动端吸顶栏 ==================== */
+/* 与学生端消息中心同款：滑动下划线页签 + 右侧「＋」面板，视图切换不再走抽屉 */
 .msg-appbar {
-  display: flex; align-items: center; gap: 6px;
-  min-height: 52px; padding: 0 8px; flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(180%) blur(14px);
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
-  border-bottom: 1px solid var(--dt-divider);
+  position: relative; z-index: 20; flex-shrink: 0;
+  display: flex; align-items: stretch; height: 48px;
+  background: #fff; border-bottom: 1px solid #f0f1f3;
 }
-.msg-appbar-btn {
-  width: 40px; height: 40px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  border: none; border-radius: 50%; background: transparent;
-  color: var(--dt-text); cursor: pointer;
-  transition: background .18s var(--dt-ease);
-  -webkit-tap-highlight-color: transparent;
-}
-.msg-appbar-btn:active { background: var(--dt-hover); }
-.msg-appbar-title {
+/* 四枚页签：字号比学生端两枚页签略小，保证 390px 屏仍能居中排开 */
+.msg-appbar-tabs {
   flex: 1; min-width: 0;
-  font-size: 16.5px; font-weight: 600; letter-spacing: -0.2px; color: var(--dt-text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  --st-height: 48px;
+  --st-pad: 0 44px;
+  --st-justify: center;
+  --st-gap: 18px;
+  --st-font: 17px;
+  --st-font-weight: 700;
+  --st-color: #9aa0a8;
+  --st-color-active: #1d2129;
+  --st-bg: transparent;
+  --st-shadow: none;
+  --st-tab-pad-b: 0px;
+  --st-indicator-h: 2.5px;
+  --st-indicator-bottom: 6px;
+  --st-indicator-radius: 2px;
 }
-.msg-appbar-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-
-/* ==================== 桌面端视图切换 ==================== */
-.sidebar-seg { padding: 8px 10px 2px; }
-.sidebar-seg .tui-seg { width: 100%; }
-.seg-count {
-  margin-left: 4px; padding: 0 5px; border-radius: 999px;
-  background: var(--dt-danger); color: var(--dt-text-inverse);
-  font-size: 10px; font-weight: 600; line-height: 15px;
-  display: inline-block; vertical-align: 1px;
+.msg-appbar-acts {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 2px;
 }
-
-/* ==================== 移动端侧边抽屉（钉钉式） ==================== */
-.msg-drawer-mask {
-  position: fixed; inset: 0; z-index: 1200;
-  background: rgba(15, 17, 21, 0.42);
+.msg-appbar-icon {
+  position: relative; width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%; background: transparent;
+  color: #1d2129; cursor: pointer; transition: background 0.16s ease;
 }
-.msg-drawer {
-  position: fixed; top: 0; left: 0; bottom: 0; z-index: 1201;
-  width: 78vw; max-width: 302px;
-  display: flex; flex-direction: column;
-  background: var(--dt-surface);
-  box-shadow: var(--dt-shadow-2);
+.msg-appbar-icon:active { background: #f2f3f5; }
+.msg-appbar-plus.is-open { background: #f2f3f5; }
+.msg-appbar-plus .el-icon { transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
+.msg-appbar-plus.is-open .el-icon { transform: rotate(45deg); }
+.msg-appbar.is-menu-open { z-index: 1900; }
+.msg-plus-mask {
+  position: fixed; inset: 0; z-index: 1;
+  background: rgba(17, 24, 39, 0.18);
 }
-.msg-drawer-head {
-  display: flex; align-items: center; gap: 12px;
-  padding: calc(20px + env(safe-area-inset-top)) 18px 18px;
-  background: var(--dt-surface);
-  border-bottom: 1px solid var(--dt-divider);
-  color: var(--dt-text);
+.msg-plus-mask-enter-active { transition: opacity 0.2s ease; }
+.msg-plus-mask-leave-active { transition: opacity 0.16s ease; }
+.msg-plus-mask-enter-from, .msg-plus-mask-leave-to { opacity: 0; }
+.msg-plus-panel {
+  position: absolute; right: 8px; top: calc(100% + 10px); z-index: 40;
+  min-width: 186px; padding: 6px; border-radius: 16px; background: #fff;
+  box-shadow: 0 14px 36px rgba(17, 24, 39, 0.16), 0 2px 8px rgba(17, 24, 39, 0.06);
+  transform-origin: top right;
 }
-.msg-drawer-head :deep(.el-avatar) { border-radius: 50%; background: var(--dt-primary-soft); color: var(--dt-primary-strong); flex-shrink: 0; }
-.msg-drawer-user { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.msg-drawer-name { font-size: 14px; font-weight: 600; color: var(--dt-text); }
-.msg-drawer-sub {
-  font-size: 11.5px; color: var(--dt-text-quiet);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.msg-drawer-nav { flex: 1; overflow-y: auto; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 2px; }
-.msg-drawer-item {
+.msg-plus-panel-enter-active { transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1); }
+.msg-plus-panel-leave-active { transition: opacity 0.14s ease, transform 0.14s ease; }
+.msg-plus-panel-enter-from, .msg-plus-panel-leave-to { opacity: 0; transform: translateY(-6px) scale(0.94); }
+.msg-plus-item {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 10px; border: none; border-radius: var(--dt-radius-sm);
-  background: transparent; cursor: pointer; font-family: inherit; text-align: left;
-  color: var(--dt-text-secondary); font-size: 13.5px; font-weight: 500;
-  transition: background .15s var(--dt-ease), color .15s var(--dt-ease);
+  padding: 11px 12px; border: none; border-radius: 10px; background: transparent;
+  color: #1d2129; font-size: 14px; font-family: inherit; text-align: left; cursor: pointer;
 }
-.msg-drawer-item:active { background: var(--dt-hover); }
-.msg-drawer-item.active { background: var(--dt-primary-soft); color: var(--dt-primary-strong); font-weight: 600; }
-.msg-drawer-icon { display: flex; color: inherit; }
-.msg-drawer-label { flex: 1; }
-.msg-drawer-section {
-  padding: 10px 10px 6px; font-size: 12px; font-weight: 600;
-  color: var(--tui-text-quiet); letter-spacing: .3px;
-}
-.msg-appbar-btn.is-busy .dt-icon { animation: msg-spin 1s linear infinite; }
-@keyframes msg-spin { to { transform: rotate(360deg); } }
+.msg-plus-item:active { background: #f2f3f5; }
+.msg-plus-item:disabled { color: #c9ccd1; cursor: default; }
+.msg-plus-item .el-icon { color: #6b7280; }
+.msg-plus-sep { height: 1px; margin: 4px 8px; background: #f0f1f3; }
 
-.drawer-mask-enter-active, .drawer-mask-leave-active { transition: opacity .22s ease; }
-.drawer-mask-enter-from, .drawer-mask-leave-to { opacity: 0; }
-.drawer-panel-enter-active { transition: transform .26s cubic-bezier(.22, .68, 0, 1); }
-.drawer-panel-leave-active { transition: transform .2s ease-in; }
-.drawer-panel-enter-from, .drawer-panel-leave-to { transform: translateX(-100%); }
+/* ==================== 桌面端搜索 / 页签（与学生端消息中心同款） ==================== */
+.msg-search {
+  display: flex; align-items: center; gap: 6px;
+  margin: 12px 14px 8px; padding: 7px 10px;
+  background: #f5f6f8; border-radius: 9px; color: #9aa0a6;
+}
+.msg-search input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font-size: 13px; color: #1f2329;
+}
+.msg-tabs { display: flex; gap: 4px; padding: 0 14px 8px; }
+.msg-tab {
+  position: relative; flex: 1; border: none; background: transparent;
+  font-size: 13px; color: #6b7280; padding: 7px 0;
+  border-radius: 8px; cursor: pointer;
+}
+.msg-tab.active { background: #111827; color: #fff; font-weight: 500; }
+.msg-tab-badge {
+  position: absolute; top: 1px; right: 4px; min-width: 15px; padding: 1px 4px;
+  border-radius: 8px; background: #111827; color: #fff;
+  font-size: 10px; font-style: normal; line-height: 1.4;
+}
+.msg-tab.active .msg-tab-badge { background: #fff; color: #111827; }
 
 /* ==================== 通讯录（钉钉列表行规范：52px 行高 + 发丝线） ==================== */
 .addr-section-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; }
@@ -4036,7 +4020,13 @@ function onGlobalClick(e: MouseEvent) {
 
   /* 聊天页 */
   .msg-chat { width: 100%; flex: 1; background: var(--dt-surface); }
-  .back-btn { display: inline-flex; color: var(--dt-text); }
+  /* 返回键统一规格：34px 触控区，无外圈底色，仅图标本身 */
+  .back-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; margin: 0;
+    border-radius: 50%; background: transparent; color: var(--dt-text);
+  }
+  .back-btn:active { background: rgba(20, 23, 26, 0.06); }
   .chat-header {
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: saturate(180%) blur(14px);
@@ -4097,6 +4087,12 @@ function onGlobalClick(e: MouseEvent) {
   min-height: 48px; padding: 4px 8px; background: var(--dt-surface); border-bottom: 1px solid var(--dt-divider);
   flex-shrink: 0;
 }
+/* 返回键统一规格：34px 触控区，无外圈底色，仅图标本身（仅首个返回按钮） */
+.gsp-header > .el-button:first-child {
+  width: 34px; height: 34px; margin: 0;
+  border-radius: 50%; background: transparent; color: var(--dt-text);
+}
+.gsp-header > .el-button:first-child:active { background: rgba(20, 23, 26, 0.06); }
 .gsp-title { font-size: 15px; font-weight: 600; color: var(--dt-text); letter-spacing: -0.2px; }
 .gsp-edit-btn { color: var(--dt-primary); font-size: 14px; }
 /* 钉钉式群设置：分组卡片 + 成员九宫格 */

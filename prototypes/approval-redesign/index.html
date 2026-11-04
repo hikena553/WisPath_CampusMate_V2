@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>审批管理 · 移动端重构方案</title>
+<style>
+:root{
+  --brand:#2f6df6; --brand-deep:#1b4fd1; --brand-soft:#e7efff;
+  --bg:#f3f6fb; --surface:#fff; --sunken:#eef1f6; --line:#e3e9f3;
+  --ink:#101725; --ink2:#3d4a5e; --ink3:#78849a; --quiet:#9aa6b8;
+  --ok:#0f8e6b; --ok-soft:#e4f6f0; --ok-line:#c4e9de;
+  --warn:#c4700e; --warn-soft:#fdf3e2;
+  --bad:#d63a4f; --bad-soft:#fdecef; --bad-line:#f6cfd6;
+  --r-sm:12px; --r:16px; --r-lg:20px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+body{font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;background:#e9ebef;color:var(--ink);padding-bottom:70px}
+svg.ic{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+button{font-family:inherit;border:0;background:none;cursor:pointer;color:inherit}
+
+/* ===== 页头 ===== */
+.page-head{background:linear-gradient(135deg,#111827 0%,#1f2937 100%);color:#fff;padding:38px 32px 32px}
+.page-head h1{font-size:25px;letter-spacing:.4px}
+.page-head p{margin-top:12px;color:#aeb7c4;font-size:13.5px;line-height:1.75;max-width:900px}
+.page-head p b{color:#fff;font-weight:600}
+.page-head .tags{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap}
+.page-head .tags span{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14)}
+
+.wrap{max-width:1332px;margin:0 auto;padding:0 24px}
+
+/* ===== 现状对照 ===== */
+.diag{display:flex;gap:14px;margin-top:26px}
+.diag>div{flex:1;background:#fff;border-radius:var(--r-lg);padding:16px 18px;box-shadow:0 1px 2px rgba(15,17,21,.04),0 6px 20px rgba(15,17,21,.05);border:1px solid rgba(15,17,21,.04)}
+.diag h5{font-size:12px;color:var(--ink3);font-weight:600;letter-spacing:.3px}
+.diag .now{margin-top:10px;font-size:13px;line-height:1.9;color:var(--ink2)}
+.diag .now s{color:var(--ink3);text-decoration-color:#e5b8be;text-decoration-thickness:1px}
+.diag .new{margin-top:10px;font-size:13px;line-height:1.9;color:var(--ink2)}
+.diag .new b{color:var(--brand-deep)}
+.diag .k{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.diag .k.bad{background:var(--bad-soft);color:var(--bad)}
+.diag .k.good{background:var(--brand-soft);color:var(--brand-deep)}
+
+/* ===== 切换条 ===== */
+.switcher{display:flex;gap:8px;margin:26px 0 20px;flex-wrap:wrap}
+.switcher button{height:34px;padding:0 15px;border-radius:999px;background:#fff;color:var(--ink2);font-size:12.5px;font-weight:600;border:1px solid rgba(15,17,21,.07);box-shadow:0 1px 2px rgba(15,17,21,.03)}
+.switcher button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* ===== 方案网格 ===== */
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start}
+.grid.solo{grid-template-columns:1fr}
+.grid.solo .opt{max-width:446px;margin:0 auto}
+.opt{background:linear-gradient(180deg,#fff 0%,#fbfcfe 100%);border-radius:22px;padding:18px 15px 16px;box-shadow:0 1px 2px rgba(15,17,21,.04),0 10px 30px rgba(15,17,21,.06);border:1px solid rgba(15,17,21,.04);display:flex;flex-direction:column}
+.opt-hd{display:flex;align-items:center;gap:9px;padding:0 3px}
+.opt-mark{width:26px;height:26px;border-radius:8px;background:var(--brand-soft);color:var(--brand-deep);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none}
+.opt-hd h3{font-size:15px;letter-spacing:.2px}
+.rec{font-size:10.5px;color:var(--brand-deep);background:var(--brand-soft);border:1px solid #d5e2ff;padding:2px 8px;border-radius:999px;font-weight:700;margin-left:auto}
+.opt-sub{font-size:11.5px;color:var(--ink3);padding:0 3px;margin-top:5px}
+.opt ul{list-style:none;margin:12px 0 0;padding:0 3px}
+.opt li{font-size:12px;color:var(--ink2);line-height:1.68;padding-left:14px;position:relative}
+.opt li::before{content:"";position:absolute;left:1px;top:8px;width:5px;height:5px;border-radius:50%;background:var(--brand);opacity:.5}
+.opt li b{color:var(--ink);font-weight:650}
+.opt .ref{margin:11px 3px 13px;font-size:11px;color:var(--ink3);background:var(--sunken);border-radius:10px;padding:7px 9px;line-height:1.55}
+.opt .ref b{color:var(--ink2);font-weight:600}
+
+/* ===== 手机 ===== */
+.phone{width:360px;height:752px;background:var(--bg);border-radius:36px;border:8px solid #111827;overflow:hidden;position:relative;box-shadow:0 16px 40px rgba(15,17,21,.18);margin:0 auto;flex:none}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+.statusbar{height:28px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font-size:10.5px;color:var(--ink3);flex:none}
+.statusbar b{font-weight:600;color:var(--ink2)}
+.appbar{height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;flex:none}
+.appbar h4{font-size:16.5px;font-weight:700;letter-spacing:.2px}
+.appbar .sp{flex:1}
+.ibtn{width:31px;height:31px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--ink2);box-shadow:0 1px 3px rgba(15,17,21,.06);flex:none}
+.body{flex:1;overflow-y:auto;padding:0 14px 22px;scrollbar-width:none}
+.body::-webkit-scrollbar{display:none}
+
+/* 通用 */
+.card{background:var(--surface);border-radius:var(--r);box-shadow:0 1px 2px rgba(15,17,21,.04),0 3px 10px rgba(15,17,21,.04)}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12.5px;font-weight:700;flex:none}
+.chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:999px;font-size:10.5px;font-weight:600;background:var(--sunken);color:var(--ink3);flex:none}
+.chip.leave{background:#eef4ff;color:#2b5fd9}
+.chip.ticket{background:#eef8f5;color:#0f8e6b}
+.chip.material{background:#f4f0fb;color:#6b42c8}
+.chip.red{background:var(--bad-soft);color:var(--bad)}
+.chip.green{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.mini{height:27px;padding:0 11px;border-radius:8px;background:var(--sunken);color:var(--ink2);font-size:11.5px;font-weight:600}
+.mini.ok{background:var(--ok);color:#fff}
+.mini.red{background:#fff;color:var(--bad);border:1px solid var(--bad-line)}
+.btn{border-radius:12px;height:42px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:650;gap:6px}
+.btn.primary{background:var(--brand);color:#fff}
+.btn.ghost{background:#fff;color:var(--ink2);border:1px solid #e1e7f1}
+.btn.danger{background:#fff;color:var(--bad);border:1px solid var(--bad-line)}
+.empty{font-size:12px;color:var(--ink3);text-align:center;padding:30px 0}
+
+/* 分段 */
+.seg{display:flex;background:#e8edf5;border-radius:12px;padding:3px;gap:2px}
+.seg button{flex:1;height:33px;border-radius:9px;font-size:12px;color:var(--ink3);font-weight:600;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+.seg button i{font-style:normal;font-size:10.5px;font-weight:700;color:var(--ink3)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(15,17,21,.1)}
+.seg button.on i{color:var(--brand-deep)}
+
+/* 顶部一句汇总 */
+.lead{display:flex;align-items:baseline;gap:7px;padding:2px 2px 12px}
+.lead b{font-size:26px;font-weight:750;letter-spacing:-.5px;line-height:1}
+.lead span{font-size:12.5px;color:var(--ink2)}
+.lead .sp{flex:1}
+.lead em{font-style:normal;font-size:10.5px;color:var(--warn);background:var(--warn-soft);padding:3px 8px;border-radius:999px;font-weight:600}
+
+/* 筛选 chips */
+.chips{display:flex;gap:7px;padding:11px 0 10px;overflow:hidden}
+.chips .chip{height:25px;background:#fff;border:1px solid var(--line);color:var(--ink3);box-shadow:0 1px 1px rgba(15,17,21,.02)}
+.chips .chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+
+/* ===== A 收件箱列表 ===== */
+.req{padding:12px 12px 10px;margin-bottom:9px}
+.req-hd{display:flex;align-items:center;gap:9px}
+.req-hd .who{flex:1;min-width:0}
+.req-hd .who b{display:block;font-size:14px;font-weight:700;line-height:1.25}
+.req-hd .who span{display:block;font-size:10.5px;color:var(--ink3);margin-top:2px}
+.req-hd .wait{font-size:10px;font-weight:600;color:var(--ink3);background:var(--sunken);padding:3px 7px;border-radius:6px;flex:none}
+.req-hd .wait.hot{background:var(--warn-soft);color:var(--warn)}
+.req-meta{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink2);margin-top:9px}
+.req-meta svg{width:13px;height:13px;color:var(--quiet)}
+.req-desc{font-size:11.5px;color:var(--ink3);line-height:1.5;margin-top:5px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.req-ft{display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;border-top:1px solid #f0f3f8}
+.req-ai{font-size:10.5px;color:#5b5bd6;display:flex;align-items:center;gap:4px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.req-ai svg{width:12px;height:12px}
+.req-ops{display:flex;gap:6px;flex:none}
+.trow{display:flex;align-items:center;gap:9px;padding:11px 12px;margin-bottom:9px}
+.trow .who{flex:1;min-width:0}
+.trow .who b{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:650}
+.trow .who span{display:block;font-size:10.5px;color:var(--ink3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.footnote{font-size:10.5px;color:var(--quiet);text-align:center;padding:6px 0 2px}
+
+/* 已通过 / 已拒绝 */
+.ledger-row{display:flex;align-items:center;gap:9px;padding:12px;margin-bottom:8px}
+.ledger-row .who{flex:1;min-width:0}
+.ledger-row .who b{font-size:13px;display:flex;gap:6px;align-items:center}
+.ledger-row .who b .chip{height:19px;font-size:9.5px;padding:0 6px}
+.ledger-row .who span{display:block;font-size:10.5px;color:var(--ink3);margin-top:3px}
+.ledger-row time{font-size:10px;color:var(--quiet);flex:none}
+.rej-box{margin-top:8px;background:var(--bad-soft);border:1px solid var(--bad-line);border-radius:9px;padding:7px 9px;font-size:10.5px;color:#a8283a;line-height:1.5}
+.rej-box b{font-weight:650}
+.pane{display:none}
+.pane.active{display:block}
+
+/* ===== B 单卡聚焦 ===== */
+.pill{height:27px;padding:0 10px;border-radius:999px;background:#fff;color:var(--bad);border:1px solid var(--bad-line);font-size:11px;font-weight:650;display:flex;align-items:center;gap:4px;box-shadow:0 1px 2px rgba(15,17,21,.04)}
+.pill.on{background:var(--bad);color:#fff;border-color:var(--bad)}
+.b-lead{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 11px}
+.b-lead .l{font-size:12.5px;color:var(--ink2)}
+.b-lead .l b{font-size:19px;font-weight:750;color:var(--ink);margin-right:3px}
+.b-lead .r{font-size:10.5px;color:var(--ink3)}
+.focus{padding:15px;border-radius:18px;margin-bottom:14px}
+.focus-top{display:flex;align-items:center;gap:7px}
+.focus-top .sp{flex:1}
+.focus-who{display:flex;align-items:center;gap:11px;margin-top:12px}
+.focus-who .meta b{display:block;font-size:19px;font-weight:750;letter-spacing:-.2px}
+.focus-who .meta span{display:block;font-size:11px;color:var(--ink3);margin-top:2px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#eef2f8;border-radius:11px;overflow:hidden;margin-top:13px}
+.facts>div{background:#fafbfe;padding:9px 11px}
+.facts i{display:block;font-style:normal;font-size:10px;color:var(--ink3);margin-bottom:3px}
+.facts b{font-size:12.5px;font-weight:650;display:block;line-height:1.4}
+.facts b span{font-weight:400;color:var(--ink3);font-size:10.5px;margin-left:3px}
+.reason{margin-top:12px}
+.reason i{display:block;font-style:normal;font-size:10px;color:var(--ink3);margin-bottom:4px}
+.reason p{font-size:12px;color:var(--ink2);line-height:1.6}
+.file{display:inline-flex;align-items:center;gap:4px;margin-top:7px;height:23px;padding:0 8px;border-radius:6px;background:var(--sunken);color:var(--ink2);font-size:10.5px}
+.file svg{width:11px;height:11px}
+.ai-line{margin-top:12px;background:linear-gradient(90deg,#f3f2ff,#f7f6ff);border:1px solid #e3e1f8;border-radius:9px;padding:7px 9px;font-size:10.5px;color:#514bc4;line-height:1.5;display:flex;gap:6px;align-items:flex-start}
+.ai-line svg{width:13px;height:13px;margin-top:1px}
+.focus-ops{display:flex;gap:9px;margin-top:14px}
+.focus-ops .btn{flex:1}
+.b-sec{font-size:10.5px;color:var(--ink3);padding:0 3px 8px;display:flex;justify-content:space-between}
+.next{padding:2px 12px;border-radius:14px}
+.next-row{display:flex;align-items:center;gap:9px;padding:11px 0;border-bottom:1px solid #f1f4f9}
+.next-row:last-child{border-bottom:0}
+.next-row .who{flex:1;min-width:0}
+.next-row .who b{font-size:12.5px;display:flex;align-items:center;gap:6px;font-weight:650}
+.next-row .who b .chip{height:18px;font-size:9.5px;padding:0 6px}
+.next-row .who span{display:block;font-size:10.5px;color:var(--ink3);margin-top:2px}
+.next-row .t{font-size:10px;color:var(--quiet);flex:none}
+.back-row{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink3);padding:2px 2px 10px}
+.back-row svg{width:14px;height:14px}
+
+/* ===== C 分组收件箱 ===== */
+.utabs{display:flex;gap:20px;padding:2px 3px 0;border-bottom:1px solid #e4eaf4;margin-bottom:8px}
+.utabs button{padding:8px 0 10px;font-size:12.5px;color:var(--ink3);font-weight:600;position:relative}
+.utabs button b{font-weight:700;margin-left:3px;font-size:11px;color:var(--ink3)}
+.utabs button.on{color:var(--ink)}
+.utabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--brand);border-radius:2px}
+.utabs button.on b{color:var(--brand-deep)}
+.grp{display:flex;align-items:center;justify-content:space-between;padding:12px 3px 7px}
+.grp b{font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+.grp b i{font-style:normal;font-size:10px;font-weight:600;color:var(--ink3);background:#e9eef7;border-radius:5px;padding:1px 5px}
+.grp span{font-size:10px;color:var(--quiet)}
+.inbox{overflow:hidden;margin-bottom:4px}
+.inbox-row{border-bottom:1px solid #f1f4f9}
+.inbox-row:last-child{border-bottom:0}
+.row-main{width:100%;display:flex;align-items:center;gap:9px;padding:10px 12px;text-align:left}
+.row-main .who{flex:1;min-width:0}
+.row-main .who b{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;line-height:1.3}
+.row-main .who b .chip{height:18px;font-size:9.5px;padding:0 6px}
+.row-main .who span{display:block;font-size:10.5px;color:var(--ink3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-main .chev{width:14px;height:14px;color:var(--quiet);transition:transform .18s}
+.inbox-row.open .row-main .chev{transform:rotate(180deg)}
+.row-detail{display:none;padding:0 12px 11px}
+.inbox-row.open .row-detail{display:block}
+.detail-box{background:#f7f9fd;border-radius:10px;padding:9px 10px;font-size:10.5px;color:var(--ink2);line-height:1.6}
+.detail-box b{font-weight:650;color:var(--ink)}
+.detail-box .ai{color:#514bc4;display:flex;gap:4px;margin-top:5px}
+.detail-box .ai svg{width:12px;height:12px;margin-top:1px}
+.row-ops{display:flex;gap:7px;margin-top:9px}
+.row-ops .mini{flex:1;height:30px}
+.row-ops .mini.ok{background:var(--ok);color:#fff}
+.rej-note{font-size:10.5px;color:var(--ink3);text-align:center;padding:8px 0 2px}
+.rej-note b{color:var(--bad)}
+
+/* ===== 页脚建议 ===== */
+.pick{max-width:1332px;margin:34px auto 0;padding:0 24px}
+.pick h2{font-size:17px;margin-bottom:12px}
+.pick-table{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(15,17,21,.04),0 8px 24px rgba(15,17,21,.05);border:1px solid rgba(15,17,21,.04)}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:13px 16px;font-size:12.5px;border-bottom:1px solid #f1f4f9;vertical-align:top}
+th{font-size:11px;color:var(--ink3);font-weight:650;background:#fafbfe;letter-spacing:.2px}
+td:first-child{font-weight:650;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td b{color:var(--brand-deep)}
+.pick .note{margin-top:12px;font-size:12px;color:var(--ink3);line-height:1.7}
+.pick .note b{color:var(--ink2)}
+
+@media (max-width:1180px){
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid.solo .opt{max-width:446px}
+}
+@media (max-width:820px){
+  .grid{grid-template-columns:1fr}
+  .diag{flex-direction:column}
+  .page-head{padding:28px 20px}
+  .wrap,.pick{padding:0 14px}
+}
+</style>
+</head>
+<body>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="M8.5 12.5l6-6a3.5 3.5 0 015 5l-8 8a5 5 0 01-7-7l8-8"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+</svg>
+
+<header class="page-head">
+  <h1>审批管理 · 移动端重构方案</h1>
+  <p>现在的首屏把「四宫格统计、办理规则、流程五步、第二组指标、处理构成」全部铺出来，真正要批的请假条反而被压到下面。下面三套方案都只回答一个问题：<b>进来第一眼，看到学生请假条和未处理数量</b>。状态切换（待审批 / 已通过 / 已拒绝）保留，其余说明性区块全部移除。</p>
+  <div class="tags"><span>点击手机里的 Tab 可切换状态</span><span>方案 C 的列表行可点击展开</span><span>360 × 752 真机比例</span></div>
+</header>
+
+<div class="wrap">
+  <div class="diag">
+    <div>
+      <h5>现状 · 首屏 7 个区块</h5>
+      <div class="now">
+        <span class="k bad">过载</span>
+        <s>待处理四宫格</s> · <s>办理顺序说明</s> · <s>流程五步</s> · <s>第二组指标</s> · <s>处理构成条</s> · 分类入口 · AI 说明
+      </div>
+    </div>
+    <div>
+      <h5>新方案 · 首屏 3 个区块</h5>
+      <div class="new">
+        <span class="k good">收敛</span>
+        <b>一句汇总</b> · <b>状态切换</b> · <b>事项列表（请假条优先）</b><br>
+        说明类内容收进「?」，不再占用首屏。
+      </div>
+    </div>
+  </div>
+
+  <div class="switcher" id="switcher">
+    <button class="on" data-view="all">三套并排对比</button>
+    <button data-view="a">只看方案 A</button>
+    <button data-view="b">只看方案 B</button>
+    <button data-view="c">只看方案 C</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="grid" id="grid">
+
+    <!-- ================= A 收件箱式 ================= -->
+    <section class="opt" data-key="a">
+      <div class="opt-hd"><span class="opt-mark">A</span><h3>收件箱式</h3><span class="rec">推荐</span></div>
+      <div class="opt-sub">一句汇总 + 状态分段 + 待办列表</div>
+      <ul>
+        <li><b>进来即列表</b>：5 条待办直接铺开，请假条带学生、班级、起止、事由、等待时长</li>
+        <li>每张卡底部就是<b>通过 / 驳回</b>，不用点进详情再操作</li>
+        <li>已通过、已拒绝和待审批在同一处分段，拒绝理由在列表里直接回看</li>
+        <li>删掉统计宫格、流程条、规则卡与处理构成，首屏只剩 3 个区块</li>
+      </ul>
+      <div class="ref"><b>参考：</b>飞书审批 / 企业微信审批 / Gmail 收件箱</div>
+
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar"><b>9:41</b><span>●●● 82%</span></div>
+          <div class="appbar">
+            <button class="ibtn" aria-label="返回"><svg class="ic"><use href="#i-back"/></svg></button>
+            <h4>审批管理</h4>
+            <div class="sp"></div>
+            <button class="ibtn" aria-label="搜索"><svg class="ic"><use href="#i-search"/></svg></button>
+          </div>
+          <div class="body">
+
+            <div class="lead">
+              <b>5</b><span>条待你处理</span>
+              <div class="sp"></div>
+              <em>最早等待 6h</em>
+            </div>
+
+            <div class="seg" style="margin-bottom:2px">
+              <button class="on" data-pane="a-pending">待审批 <i>5</i></button>
+              <button data-pane="a-approved">已通过 <i>9</i></button>
+              <button data-pane="a-rejected">已拒绝 <i>2</i></button>
+            </div>
+
+            <!-- 待审批 -->
+            <div class="pane active" id="a-pending">
+              <div class="chips">
+                <span class="chip on">全部 5</span>
+                <span class="chip">请假 3</span>
+                <span class="chip">办事 2</span>
+                <span class="chip">材料 0</span>
+              </div>
+
+              <article class="req card">
+                <div class="req-hd">
+                  <span class="av" style="background:#2f6df6">刘</span>
+                  <div class="who"><b>刘一诺</b><span>软件 2201 · 病假 2 天</span></div>
+                  <span class="wait hot">等 6h</span>
+                </div>
+                <div class="req-meta"><svg class="ic"><use href="#i-clock"/></svg>11.03 – 11.04 · 共 2 天</div>
+                <p class="req-desc">急性肠胃炎，需居家休息，附门诊病历。</p>
+                <div class="req-ft">
+                  <span class="req-ai"><svg class="ic"><use href="#i-spark"/></svg>出勤正常、材料齐全 · 建议通过</span>
+                  <div class="req-ops">
+                    <button class="mini red">驳回</button>
+                    <button class="mini ok">通过</button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="req card">
+                <div class="req-hd">
+                  <span class="av" style="background:#0f97a6">王</span>
+                  <div class="who"><b>王梓豪</b><span>软件 2202 · 事假 1 天</span></div>
+                  <span class="wait">等 3h</span>
+                </div>
+                <div class="req-meta"><svg class="ic"><use href="#i-clock"/></svg>11.05 · 共 1 天</div>
+                <p class="req-desc">省级技能大赛赛前集训，已附参赛通知。</p>
+                <div class="req-ft">
+                  <span class="req-ai"><svg class="ic"><use href="#i-spark"/></svg>材料齐全 · 建议通过</span>
+                  <div class="req-ops">
+                    <button class="mini red">驳回</button>
+                    <button class="mini ok">通过</button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="req card">
+                <div class="req-hd">
+                  <span class="av" style="background:#6941c6">陈</span>
+                  <div class="who"><b>陈雨桐</b><span>数媒 2201 · 病假 0.5 天</span></div>
+                  <span class="wait">等 1h</span>
+                </div>
+                <div class="req-meta"><svg class="ic"><use href="#i-clock"/></svg>11.04 下午 · 共 0.5 天</div>
+                <p class="req-desc">牙科复诊，附挂号凭证。</p>
+                <div class="req-ft">
+                  <span class="req-ai"><svg class="ic"><use href="#i-spark"/></svg>近 30 天第 1 次请假 · 建议通过</span>
+                  <div class="req-ops">
+                    <button class="mini red">驳回</button>
+                    <button class="mini ok">通过</button>
+                  </div>
+                </div>
+              </article>
+
+              <div class="trow card">
+                <span class="av" style="background:#0f8e6b;width:30px;height:30px;font-size:11px">张</span>
+                <div class="who">
+                  <b>张子轩 <span class="chip ticket">办事</span></b>
+                  <span>在读证明申请 · 软件 2201 · 3 小时前</span>
+                </div>
+                <button class="mini">受理</button>
+              </div>
+
+              <div class="trow card">
+                <span class="av" style="background:#d98317;width:30px;height:30px;font-size:11px">李</span>
+                <div class="who">
+                  <b>李思远 <span class="chip ticket">办事</span></b>
+                  <span>失物招领 · 网络 2201 · 昨天 16:20</span>
+                </div>
+                <button class="mini">受理</button>
+              </div>
+
+              <div class="footnote">5 条已全部展示</div>
+            </div>
+
+            <!-- 已通过 -->
+            <div class="pane" id="a-approved">
+              <div class="chips">
+                <span class="chip on">近 30 天 9 条</span>
+                <span class="chip">请假 6</span>
+                <span class="chip">办事 3</span>
+              </div>
+              <div class="ledger-row card">
+                <span class="av" style="background:#0f8e6b;width:30px;height:30px;font-size:11px">赵</span>
+                <div class="who"><b>赵一鸣 <span class="chip green">已通过</span></b><span>病假 2 天 · 11.01 – 11.02</span></div>
+                <time>昨天</time>
+              </div>
+              <div class="ledger-row card">
+                <span class="av" style="background:#2f6df6;width:30px;height:30px;font-size:11px">孙</span>
+                <div class="who"><b>孙浩然 <span class="chip green">已通过</span></b><span>补办学生证 · 网络 2201</span></div>
+                <time>11.01</time>
+              </div>
+              <div class="ledger-row card">
+                <span class="av" style="background:#6941c6;width:30px;height:30px;font-size:11px">林</span>
+                <div class="who"><b>林可欣 <span class="chip green">已通过</span></b><span>事假 1 天 · 10.30</span></div>
+                <time>10.30</time>
+              </div>
+              <div class="footnote">通过后已自动同步考勤销假</div>
+            </div>
+
+            <!-- 已拒绝 -->
+            <div class="pane" id="a-rejected">
+              <div class="chips">
+                <span class="chip on">近 30 天 2 条</span>
+                <span class="chip">已即时推送学生</span>
+              </div>
+              <article class="ledger-row card" style="display:block">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span class="av" style="background:#d63a4f;width:30px;height:30px;font-size:11px">赵</span>
+                  <div class="who"><b>赵一鸣 <span class="chip red">已拒绝</span></b><span>事假 4 天 · 11.06 – 11.09</span></div>
+                  <time>11.02</time>
+                </div>
+                <div class="rej-box"><b>驳回理由</b> · 事由不充分，请补充说明并附相关证明</div>
+              </article>
+              <article class="ledger-row card" style="display:block">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span class="av" style="background:#d63a4f;width:30px;height:30px;font-size:11px">周</span>
+                  <div class="who"><b>周雨萱 <span class="chip red">已拒绝</span></b><span>办事 · 补办学生证 · 数媒 2202</span></div>
+                  <time>11.01</time>
+                </div>
+                <div class="rej-box"><b>驳回理由</b> · 证件照不清晰，请重新上传</div>
+              </article>
+              <div class="footnote">学生端会收到驳回理由，可修改后重新提交</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= B 单卡聚焦式 ================= -->
+    <section class="opt" data-key="b">
+      <div class="opt-hd"><span class="opt-mark">B</span><h3>单卡聚焦式</h3></div>
+      <div class="opt-sub">一次只把一条请假条摊开</div>
+      <ul>
+        <li>首屏只完整展示<b>下一条要批的请假条</b>，其余 4 条压成一行预览</li>
+        <li>事由、附件、AI 依据、双操作按钮在一张卡内完成，单手可达</li>
+        <li>已驳回收进右上角胶囊，不占列表空间</li>
+        <li>元素最少，但需要下滑才能看到队列全貌</li>
+      </ul>
+      <div class="ref"><b>参考：</b>钉钉待办 / Things / Superhuman</div>
+
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar"><b>9:41</b><span>●●● 82%</span></div>
+          <div class="appbar">
+            <button class="ibtn" aria-label="返回"><svg class="ic"><use href="#i-back"/></svg></button>
+            <h4>审批管理</h4>
+            <div class="sp"></div>
+            <button class="pill" data-pane="b-rejected" id="b-pill"><svg class="ic" style="width:12px;height:12px"><use href="#i-x"/></svg>已驳回 2</button>
+          </div>
+          <div class="body">
+
+            <div class="pane active" id="b-pending">
+              <div class="b-lead">
+                <span class="l"><b>5</b>条待处理</span>
+                <span class="r">请假 3 · 办事 2 · 材料 0</span>
+              </div>
+
+              <div class="chips" style="padding-top:0">
+                <span class="chip on">请假优先</span>
+                <span class="chip">全部</span>
+                <span class="chip">按等待时长</span>
+              </div>
+
+              <article class="focus card">
+                <div class="focus-top">
+                  <span class="chip leave">请假 · 待审批</span>
+                  <div class="sp"></div>
+                  <span class="chip warn">已等待 6 小时</span>
+                </div>
+                <div class="focus-who">
+                  <span class="av" style="width:44px;height:44px;font-size:16px;background:#2f6df6">刘</span>
+                  <div class="meta"><b>刘一诺</b><span>软件 2201 · 学号 20220311</span></div>
+                </div>
+                <div class="facts">
+                  <div><i>请假时间</i><b>11.03 – 11.04<span>2 天</span></b></div>
+                  <div><i>请假类型</i><b>病假</b></div>
+                </div>
+                <div class="reason">
+                  <i>事由</i>
+                  <p>急性肠胃炎，需居家休息两天，已附门诊病历。</p>
+                  <span class="file"><svg class="ic"><use href="#i-clip"/></svg>门诊病历.jpg</span>
+                </div>
+                <div class="ai-line"><svg class="ic"><use href="#i-spark"/></svg><span>出勤率 96%，材料齐全，与历史请假无冲突 · 建议通过</span></div>
+                <div class="focus-ops">
+                  <button class="btn danger">驳回</button>
+                  <button class="btn primary">通过</button>
+                </div>
+              </article>
+
+              <div class="b-sec"><span>接下来 4 条</span><span>按等待时长排序</span></div>
+              <div class="next card">
+                <div class="next-row">
+                  <span class="av" style="width:28px;height:28px;font-size:10.5px;background:#0f97a6">王</span>
+                  <div class="who"><b>王梓豪 <span class="chip leave">事假 1 天</span></b><span>11.05 · 省级技能大赛集训</span></div>
+                  <span class="t">3h</span>
+                </div>
+                <div class="next-row">
+                  <span class="av" style="width:28px;height:28px;font-size:10.5px;background:#6941c6">陈</span>
+                  <div class="who"><b>陈雨桐 <span class="chip leave">病假 0.5 天</span></b><span>11.04 下午 · 牙科复诊</span></div>
+                  <span class="t">1h</span>
+                </div>
+                <div class="next-row">
+                  <span class="av" style="width:28px;height:28px;font-size:10.5px;background:#0f8e6b">张</span>
+                  <div class="who"><b>张子轩 <span class="chip ticket">办事</span></b><span>在读证明 · 待受理</span></div>
+                  <span class="t">3h</span>
+                </div>
+                <div class="next-row">
+                  <span class="av" style="width:28px;height:28px;font-size:10.5px;background:#d98317">李</span>
+                  <div class="who"><b>李思远 <span class="chip ticket">办事</span></b><span>失物招领 · 待受理</span></div>
+                  <span class="t">昨天</span>
+                </div>
+              </div>
+              <div class="footnote">左右滑动可切换到下一条请假</div>
+            </div>
+
+            <!-- 已驳回 -->
+            <div class="pane" id="b-rejected">
+              <button class="back-row" data-pane="b-pending"><svg class="ic"><use href="#i-back"/></svg>返回待审批</button>
+              <div class="b-lead"><span class="l"><b>2</b>条已驳回</span><span class="r">已推送学生</span></div>
+              <div class="ledger-row card" style="display:block">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span class="av" style="width:30px;height:30px;font-size:11px;background:#d63a4f">赵</span>
+                  <div class="who"><b>赵一鸣 <span class="chip red">事假 4 天</span></b><span>11.06 – 11.09 · 软件 2202</span></div>
+                  <time>11.02</time>
+                </div>
+                <div class="rej-box"><b>驳回理由</b> · 事由不充分，请补充说明并附相关证明</div>
+              </div>
+              <div class="ledger-row card" style="display:block">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span class="av" style="width:30px;height:30px;font-size:11px;background:#d63a4f">周</span>
+                  <div class="who"><b>周雨萱 <span class="chip red">办事</span></b><span>补办学生证 · 数媒 2202</span></div>
+                  <time>11.01</time>
+                </div>
+                <div class="rej-box"><b>驳回理由</b> · 证件照不清晰，请重新上传</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= C 分组收件箱 ================= -->
+    <section class="opt" data-key="c">
+      <div class="opt-hd"><span class="opt-mark">C</span><h3>分组收件箱式</h3></div>
+      <div class="opt-sub">邮件式紧凑列表，按类型分组</div>
+      <ul>
+        <li>下划线 Tab 切换<b>待处理 / 已驳回 / 已通过</b>，状态关系更清楚</li>
+        <li>关闭状态的事项压成一行，点击才展开事由与操作，一屏能扫 7~8 条</li>
+        <li>请假、办事、材料分三组，积压多时定位最快</li>
+        <li>信息密度最高，但单条的“临场感”弱于方案 B</li>
+      </ul>
+      <div class="ref"><b>参考：</b>Linear Inbox / Notion 收件箱 / Outlook</div>
+
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar"><b>9:41</b><span>●●● 82%</span></div>
+          <div class="appbar">
+            <button class="ibtn" aria-label="返回"><svg class="ic"><use href="#i-back"/></svg></button>
+            <h4>审批管理</h4>
+            <div class="sp"></div>
+            <button class="ibtn" aria-label="筛选"><svg class="ic"><use href="#i-filter"/></svg></button>
+          </div>
+          <div class="body">
+
+            <div class="utabs">
+              <button class="on" data-pane="c-pending">待处理<b>5</b></button>
+              <button data-pane="c-rejected">已驳回<b>2</b></button>
+              <button data-pane="c-approved">已通过<b>9</b></button>
+            </div>
+
+            <!-- 待处理 -->
+            <div class="pane active" id="c-pending">
+              <div class="grp"><b>请假 <i>3</i></b><span>按等待时长</span></div>
+              <div class="inbox card">
+
+                <div class="inbox-row open">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#2f6df6">刘</span>
+                    <span class="who">
+                      <b>刘一诺 <span class="chip leave">病假 2 天</span></b>
+                      <span>11.03 – 11.04 · 急性肠胃炎，附病历</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box">
+                      <b>软件 2201 · 学号 20220311</b> · 等待 6 小时<br>
+                      事由：急性肠胃炎，需居家休息两天，已附门诊病历。
+                      <div class="ai"><svg class="ic"><use href="#i-spark"/></svg><span>出勤率 96%，材料齐全 · 建议通过</span></div>
+                    </div>
+                    <div class="row-ops">
+                      <button class="mini red">驳回</button>
+                      <button class="mini ok">通过</button>
+                      <button class="mini">只看他</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#0f97a6">王</span>
+                    <span class="who">
+                      <b>王梓豪 <span class="chip leave">事假 1 天</span></b>
+                      <span>11.05 · 省级技能大赛赛前集训</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box">
+                      <b>软件 2202</b> · 等待 3 小时<br>
+                      事由：参加省级技能大赛赛前集训，已附参赛通知。
+                      <div class="ai"><svg class="ic"><use href="#i-spark"/></svg><span>材料齐全 · 建议通过</span></div>
+                    </div>
+                    <div class="row-ops">
+                      <button class="mini red">驳回</button>
+                      <button class="mini ok">通过</button>
+                      <button class="mini">只看他</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#6941c6">陈</span>
+                    <span class="who">
+                      <b>陈雨桐 <span class="chip leave">病假 0.5 天</span></b>
+                      <span>11.04 下午 · 牙科复诊</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box">
+                      <b>数媒 2201</b> · 等待 1 小时<br>
+                      事由：牙科复诊，已附挂号凭证。
+                      <div class="ai"><svg class="ic"><use href="#i-spark"/></svg><span>近 30 天第 1 次请假 · 建议通过</span></div>
+                    </div>
+                    <div class="row-ops">
+                      <button class="mini red">驳回</button>
+                      <button class="mini ok">通过</button>
+                      <button class="mini">只看他</button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <div class="grp"><b>办事 <i>2</i></b><span>共享队列</span></div>
+              <div class="inbox card">
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#0f8e6b">张</span>
+                    <span class="who">
+                      <b>张子轩 <span class="chip ticket">在读证明</span></b>
+                      <span>软件 2201 · 3 小时前 · 待受理</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box">
+                      <b>用途：</b>暑期实习入职材料<br>
+                      <b>备注：</b>需要加盖学院公章，本周五前取件。
+                    </div>
+                    <div class="row-ops">
+                      <button class="mini" style="flex:1">受理并出证</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#d98317">李</span>
+                    <span class="who">
+                      <b>李思远 <span class="chip ticket">失物招领</span></b>
+                      <span>网络 2201 · 昨天 16:20 · 待受理</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box">
+                      <b>物品：</b>黑色雨伞，编号 A-032<br>
+                      <b>地点：</b>图书馆一楼失物柜
+                    </div>
+                    <div class="row-ops">
+                      <button class="mini" style="flex:1">确认认领</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grp"><b>材料 <i>0</i></b><span>暂无待归档</span></div>
+              <div class="footnote">材料归档类事项会出现在这里，可批量处理</div>
+            </div>
+
+            <!-- 已驳回 -->
+            <div class="pane" id="c-rejected">
+              <div class="grp"><b>全部 <i>2</i></b><span>已推送学生</span></div>
+              <div class="inbox card">
+                <div class="inbox-row open">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#d63a4f">赵</span>
+                    <span class="who">
+                      <b>赵一鸣 <span class="chip red">已驳回</span></b>
+                      <span>事假 4 天 · 11.06 – 11.09</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box">
+                      <b>驳回理由：</b>事由不充分，请补充说明并附相关证明。<br>
+                      <b>处理人：</b>王老师 · 11.02 14:20
+                    </div>
+                    <div class="row-ops">
+                      <button class="mini" style="flex:1">查看学生档案</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#d63a4f">周</span>
+                    <span class="who">
+                      <b>周雨萱 <span class="chip red">已驳回</span></b>
+                      <span>补办学生证 · 数媒 2202</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box">
+                      <b>驳回理由：</b>证件照不清晰，请重新上传。<br>
+                      <b>处理人：</b>王老师 · 11.01 09:10
+                    </div>
+                    <div class="row-ops">
+                      <button class="mini" style="flex:1">查看学生档案</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="rej-note">学生端会收到 <b>驳回理由</b>，可修改后重新提交</div>
+            </div>
+
+            <!-- 已通过 -->
+            <div class="pane" id="c-approved">
+              <div class="grp"><b>近 30 天 <i>9</i></b><span>已自动同步考勤</span></div>
+              <div class="inbox card">
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#0f8e6b">赵</span>
+                    <span class="who">
+                      <b>赵一鸣 <span class="chip green">已通过</span></b>
+                      <span>病假 2 天 · 11.01 – 11.02</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box"><b>处理人：</b>王老师 · 11.01 10:05<br><b>结果：</b>考勤已销假</div>
+                  </div>
+                </div>
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#2f6df6">孙</span>
+                    <span class="who">
+                      <b>孙浩然 <span class="chip green">已通过</span></b>
+                      <span>补办学生证 · 网络 2201</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box"><b>处理人：</b>王老师 · 11.01 09:40<br><b>结果：</b>已通知制证</div>
+                  </div>
+                </div>
+                <div class="inbox-row">
+                  <button class="row-main">
+                    <span class="av" style="width:32px;height:32px;font-size:11.5px;background:#6941c6">林</span>
+                    <span class="who">
+                      <b>林可欣 <span class="chip green">已通过</span></b>
+                      <span>事假 1 天 · 10.30</span>
+                    </span>
+                    <svg class="ic chev"><use href="#i-chev"/></svg>
+                  </button>
+                  <div class="row-detail">
+                    <div class="detail-box"><b>处理人：</b>李老师 · 10.30 16:10<br><b>结果：</b>考勤已销假</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="pick">
+  <h2>怎么选</h2>
+  <div class="pick-table">
+    <table>
+      <thead>
+        <tr><th>方案</th><th>首屏能看到</th><th>元素密度</th><th>适合场景</th><th>代价</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>A · 收件箱式</td><td>5 条待办全量 + 每条的操作</td><td>低</td><td>每天高频、进页面就处理</td><td>列表条目多时需要下滑</td></tr>
+        <tr><td>B · 单卡聚焦</td><td>1 条完整请假条 + 4 条预览</td><td>最低</td><td>待办少、重决策</td><td>不看全量队列，批量效率低</td></tr>
+        <tr><td>C · 分组收件箱</td><td>7~8 条 + 分组结构</td><td>高</td><td>月底集中审批、积压多</td><td>单条细节要点击展开</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note"><b>建议先试 A：</b>它同时满足“进来就看到请假条”和“未处理 / 已拒绝随时可达”，且与飞书、企业微信的审批习惯一致，老师不需要学习成本。如果更希望一次只专心处理一件事，选 B；如果月底经常一次过十几条，选 C。</p>
+</div>
+
+<script>
+/* 顶部视图切换 */
+(function(){
+  const grid = document.getElementById('grid');
+  const btns = document.querySelectorAll('#switcher button');
+  const opts = document.querySelectorAll('.opt');
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){
+      btns.forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      const v = b.dataset.view;
+      grid.classList.toggle('solo', v !== 'all');
+      opts.forEach(function(o){ o.style.display = (v === 'all' || o.dataset.key === v) ? '' : 'none'; });
+    });
+  });
+})();
+
+/* 每台手机内的状态 Tab / 返回 */
+document.querySelectorAll('.phone').forEach(function(phone){
+  phone.querySelectorAll('[data-pane]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.dataset.pane;
+      var pane = phone.querySelector('#' + id);
+      if (!pane) return;
+      phone.querySelectorAll('.pane').forEach(function(p){ p.classList.toggle('active', p.id === id); });
+      phone.querySelectorAll('.utabs button').forEach(function(t){ t.classList.toggle('on', t.dataset.pane === id); });
+      var seg = phone.querySelector('.seg');
+      if (seg) seg.querySelectorAll('button').forEach(function(t){ t.classList.toggle('on', t.dataset.pane === id); });
+      var pill = phone.querySelector('#b-pill');
+      if (pill) pill.classList.toggle('on', id === 'b-rejected');
+      var lead = phone.querySelector('.lead');
+      if (lead) lead.style.display = (id === 'a-pending') ? '' : 'none';
+      phone.querySelector('.body').scrollTop = 0;
+    });
+  });
+
+  /* C 方案：点击行头展开 */
+  phone.querySelectorAll('.inbox-row .row-main').forEach(function(head){
+    head.addEventListener('click', function(){
+      var row = head.closest('.inbox-row');
+      row.classList.toggle('open');
+    });
+  });
+});
+</script>
+</body>
+</html>

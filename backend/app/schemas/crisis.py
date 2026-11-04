@@ -87,3 +87,12 @@ class CrisisAnalyticsOut(BaseModel):
     total: int = 0
     unresolved: int = 0
     high_risk: int = 0
+
+
+class CrisisInsightOut(BaseModel):
+    """处置态势智能分析：一段态势研判 + 今日可执行的处置建议"""
+    summary: str = ""
+    advice: list[str] = Field(default_factory=list)
+    # ai：模型生成；rule：模型不可用时按指标规则生成
+    source: str = "rule"
+    generated_at: str = ""

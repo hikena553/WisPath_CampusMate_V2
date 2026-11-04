@@ -21,6 +21,7 @@ from app.models.care_center import HomeVisitRecord, PraiseRecord
 from app.models.care_record import CareRecord
 from app.models.certificate import Certificate
 from app.models.community import CommunityPost
+from app.models.academic import Course, Grade
 from app.models.group import GroupMember, GroupMessage
 from app.models.growth import GrowthRecord, StudentProject
 from app.models.guardian import GuardianContactLog
@@ -29,6 +30,7 @@ from app.models.message import Message
 from app.models.plan import PlanCheckin
 from app.models.teacher_portfolio import TeacherPortfolioItem
 from app.models.teacher_task import TaskStatus, TeacherTask
+from app.models.teaching import Attendance, Homework, HomeworkSubmission, SubmissionStatus
 from app.models.user import User, UserRole
 from app.services.plan_streak import compute_streak
 from app.services.social_service import is_following as social_is_following
@@ -113,16 +115,32 @@ BADGE_CATALOG: list[dict] = [
     dict(code="executor", name="雷厉风行", desc="办结 20 条待办任务", icon="⚡",
          tier="gold", category="工作", audience="teacher", metric="tasks_done", threshold=20,
          target_label="办结 20 条任务"),
-    dict(code="showcase", name="教学展示", desc="在成长档案积累 5 条成果", icon="📚",
+    dict(code="showcase", name="育人沉淀", desc="在育人档案积累 5 条成果", icon="📚",
          tier="silver", category="工作", audience="teacher", metric="portfolio_items", threshold=5,
          target_label="5 条档案成果"),
     dict(code="mentor", name="桃李满园", desc="名下关注 10 位学生", icon="🎓",
          tier="diamond", category="育人", audience="teacher", metric="students", threshold=10,
          target_label="名下 10 位学生"),
+
+    # ── 教师专属 · 教学线（v3 新增：补上「教学」这一半身份）──
+    dict(code="class_present", name="课堂常客", desc="完成 20 次课堂点名", icon="📋",
+         tier="bronze", category="教学", audience="teacher", metric="attendance_sessions", threshold=20,
+         target_label="20 次点名"),
+    dict(code="homework_flow", name="全程跟进", desc="布置并批改 10 份作业", icon="📝",
+         tier="silver", category="教学", audience="teacher", metric="homework_graded", threshold=10,
+         target_label="批改 10 份作业"),
+    dict(code="grade_insight", name="学情洞察", desc="完成 5 门课的成绩分析", icon="📊",
+         tier="gold", category="教学", audience="teacher", metric="grade_courses", threshold=5,
+         target_label="5 门课成绩分析"),
 ]
 
-# 等级阶梯：(成长值下限, 等级名, 一句话描述)
-LEVELS: list[tuple[int, str, str]] = [
+# ── 等级阶梯（按角色分设）─────────────────────────────────────────
+#
+# 学生侧沿用游戏化隐喻：学生正处在「成长」这个动作里，比喻是合适的。
+# 教师侧不能共用——对一个三十多岁的辅导员说「你是新芽」不是激励，是违和。
+# 教师等级用职业资历 + 育人实绩的双维度语言，让「等级」读起来像职称而不是
+# 游戏段位，才谈得上职业认同。
+STUDENT_LEVELS: list[tuple[int, str, str]] = [
     (0, "新芽", "刚刚开启校园智能之旅"),
     (60, "幼苗", "已熟悉基础功能"),
     (180, "青苗", "稳定的日常使用者"),
@@ -130,6 +148,18 @@ LEVELS: list[tuple[int, str, str]] = [
     (800, "硕果", "深度使用者，校园达人"),
     (1500, "领航", "资深领航者，平台典范用户"),
 ]
+
+TEACHER_LEVELS: list[tuple[int, str, str]] = [
+    (0, "初任辅导员", "刚接手班级，正在建立工作节奏"),
+    (60, "在岗辅导员", "日常工作已流程化"),
+    (180, "熟练辅导员", "能独立处理复杂个案"),
+    (400, "骨干辅导员", "育人成果开始被同行看见"),
+    (800, "资深辅导员", "已形成个人育人方法论"),
+    (1500, "育人导师", "能带教新任辅导员、输出经验"),
+]
+
+#: 兼容旧引用：默认指学生阶梯，新代码请用 ``levels_for(user)``
+LEVELS: list[tuple[int, str, str]] = STUDENT_LEVELS
 
 # 成长值权重：不同行为对平台理解的深浅不同，权重体现「使用的程度」
 POINT_WEIGHTS: dict[str, int] = {
@@ -153,6 +183,11 @@ POINT_WEIGHTS: dict[str, int] = {
     "tasks_done": 4,
     "portfolio_items": 12,
     "students": 5,
+    # 教学线：单次点名的权重刻意低于关怀记录——点名是高频动作，
+    # 若权重过高，天天点名的老师会无脑刷分，成长值就失去「实绩」含义。
+    "attendance_sessions": 2,
+    "homework_graded": 3,
+    "grade_courses": 8,
 }
 
 
@@ -220,6 +255,47 @@ def collect_metrics(db: Session, user: User) -> dict[str, int]:
             praises_received=_count(db, PraiseRecord, student_id=uid, is_deleted=False),
         )
     elif user.role == UserRole.TEACHER:
+        # 教学线指标：只统计「我任教的课」，与育人线互不重叠，
+        # 这样成长值里既有「带了多少人」，也有「上了多少课」。
+        my_course_ids = [
+            cid
+            for (cid,) in db.query(Course.id).filter(Course.teacher_id == uid).all()
+        ]
+        attendance_sessions = 0
+        homework_graded = 0
+        grade_courses = 0
+        if my_course_ids:
+            attendance_sessions = int(
+                db.query(func.count(func.distinct(Attendance.attend_date)))
+                .filter(Attendance.course_id.in_(my_course_ids))
+                .scalar()
+                or 0
+            )
+            homework_graded = int(
+                db.query(func.count(HomeworkSubmission.id))
+                .join(Homework, Homework.id == HomeworkSubmission.homework_id)
+                .filter(
+                    Homework.teacher_id == uid,
+                    HomeworkSubmission.status == SubmissionStatus.GRADED,
+                )
+                .scalar()
+                or 0
+            )
+            grade_courses = int(
+                db.query(func.count(func.distinct(Grade.course_name)))
+                .filter(
+                    Grade.student_id.in_(
+                        db.query(User.id).filter(
+                            User.role == UserRole.STUDENT,
+                            User.class_group_id.in_(
+                                db.query(Course.class_group_id).filter(Course.id.in_(my_course_ids))
+                            ),
+                        )
+                    )
+                )
+                .scalar()
+                or 0
+            )
         metrics.update(
             care_records=_count(db, CareRecord, teacher_id=uid, is_deleted=False),
             home_visits=_count(db, HomeVisitRecord, teacher_id=uid, is_deleted=False),
@@ -228,6 +304,9 @@ def collect_metrics(db: Session, user: User) -> dict[str, int]:
             tasks_done=_count(db, TeacherTask, teacher_id=uid, status=TaskStatus.DONE),
             portfolio_items=_count(db, TeacherPortfolioItem, teacher_id=uid, is_deleted=False),
             students=_count(db, User, tutor_id=uid),
+            attendance_sessions=attendance_sessions,
+            homework_graded=homework_graded,
+            grade_courses=grade_courses,
         )
     return metrics
 
@@ -236,14 +315,26 @@ def compute_points(metrics: dict[str, int]) -> int:
     return int(sum(POINT_WEIGHTS.get(key, 0) * value for key, value in metrics.items()))
 
 
-def build_level(points: int) -> dict:
-    """把成长值换算成等级：level 序号 + 称号 + 距下一级的进度。"""
+def levels_for(user: User | None = None) -> list[tuple[int, str, str]]:
+    """当前用户适用的等级阶梯：教师与学生各一套语言。"""
+    if user is not None and user.role == UserRole.TEACHER:
+        return TEACHER_LEVELS
+    return STUDENT_LEVELS
+
+
+def build_level(points: int, user: User | None = None) -> dict:
+    """把成长值换算成等级：level 序号 + 称号 + 距下一级的进度。
+
+    ``user`` 用于选择等级语言（教师 / 学生）。不传则按学生阶梯处理，
+    保证旧的调用点行为不变。
+    """
+    ladder = levels_for(user)
     idx = 0
-    for i, (floor, _name, _desc) in enumerate(LEVELS):
+    for i, (floor, _name, _desc) in enumerate(ladder):
         if points >= floor:
             idx = i
-    floor, name, desc = LEVELS[idx]
-    next_points = LEVELS[idx + 1][0] if idx + 1 < len(LEVELS) else None
+    floor, name, desc = ladder[idx]
+    next_points = ladder[idx + 1][0] if idx + 1 < len(ladder) else None
     if next_points is None:
         progress = 100
     else:
@@ -345,7 +436,7 @@ def build_wall(db: Session, user: User) -> dict:
     # 直接比较 datetime 会因 aware/naive 混用抛 TypeError。
     earned.sort(key=lambda b: "" if b["awarded_at"] is None else str(b["awarded_at"])[:19])
     return {
-        "level": build_level(compute_points(metrics)),
+        "level": build_level(compute_points(metrics), user),
         "earned": earned,
         "locked": locked,
         "earned_count": len(earned),
@@ -502,6 +593,9 @@ def update_signature(db: Session, user: User, signature: str) -> str:
 __all__ = [
     "BADGE_CATALOG",
     "LEVELS",
+    "levels_for",
+    "STUDENT_LEVELS",
+    "TEACHER_LEVELS",
     "collect_metrics",
     "compute_points",
     "build_level",

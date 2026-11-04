@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>心理预警 · 按市面成熟产品风格重设计</title>
+<style>
+:root{
+  --page:#eef0f3;--card:#fff;--ink:#171a1d;--sub:#5b626d;--quiet:#8a919c;--line:#e5e7ec;
+  --blue:#3370FF;--red:#D83931;--orange:#B26A00;--green:#2E7D5B;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;padding-bottom:60px}
+button{font-family:inherit;cursor:default}
+
+/* ---------- 方案页骨架 ---------- */
+.hero{background:#101418;color:#fff;padding:34px 40px 30px}
+.hero h1{font-size:22px;letter-spacing:.2px}
+.hero h1 span{font-size:12px;font-weight:400;color:#8c95a1;margin-left:12px;letter-spacing:0}
+.hero p{margin-top:10px;max-width:940px;font-size:12.5px;line-height:1.7;color:#a9b1bd}
+.hero .facts{display:flex;gap:26px;margin-top:16px;font-size:11.5px;color:#8c95a1;flex-wrap:wrap}
+.hero .facts b{display:block;color:#e7ebf1;font-size:13px;font-weight:600;margin-bottom:2px}
+.nav{position:sticky;top:0;z-index:20;display:flex;gap:8px;align-items:center;
+  padding:10px 40px;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);font-size:12px}
+.nav a{text-decoration:none;color:var(--sub);padding:5px 11px;border-radius:999px;border:1px solid var(--line)}
+.nav a:hover{color:var(--ink);border-color:#c8ced8}
+.nav em{font-style:normal;margin-left:auto;color:var(--quiet);font-size:11px}
+
+.sec{max-width:1400px;margin:28px auto 0;padding:0 40px}
+.opt-head{display:flex;align-items:flex-start;gap:12px}
+.opt-no{width:28px;height:28px;border-radius:7px;background:#101418;color:#fff;display:grid;place-items:center;
+  font-size:13px;font-weight:700;flex:none;margin-top:2px}
+.opt-title{font-size:18px;font-weight:700;letter-spacing:.1px}
+.opt-title small{font-size:11.5px;font-weight:400;color:var(--quiet);margin-left:9px}
+.opt-desc{margin-top:6px;max-width:850px;font-size:12.5px;line-height:1.68;color:var(--sub)}
+.ref{display:flex;gap:6px;align-items:center;margin-top:9px;flex-wrap:wrap;font-size:11px;color:var(--sub)}
+.ref b{font-size:11px;color:var(--ink)}
+.ref span{padding:3px 8px;border-radius:5px;background:#fff;border:1px solid var(--line);color:#5b626d}
+
+.screens{display:flex;gap:24px;align-items:flex-start;margin-top:18px;flex-wrap:wrap}
+.frame{background:#d9dce1;border-radius:15px;padding:9px;box-shadow:0 10px 28px rgba(15,18,24,.10)}
+.frame-bar{display:flex;align-items:center;gap:6px;padding:1px 3px 7px;font-size:10px;color:#5e6672}
+.frame-bar i{width:6px;height:6px;border-radius:50%;background:#b9bec7}
+.frame-bar b{margin-left:6px;font-weight:600;color:#3c424c;font-size:10.5px}
+.frame-bar span{margin-left:auto;font-variant-numeric:tabular-nums}
+.desk{width:1180px;border-radius:8px;overflow:hidden;background:#fff}
+.desk-scroll{max-width:100%;overflow-x:auto}
+.phone{width:390px;border-radius:24px;overflow:hidden;background:#fff;border:1px solid #cfd4dc;
+  box-shadow:0 10px 26px rgba(15,18,24,.12)}
+.phone-scroll{max-width:100%;overflow-x:auto}
+.coverage{margin-top:14px;display:flex;gap:7px;flex-wrap:wrap;font-size:11px;color:var(--sub);align-items:center}
+.coverage b{color:var(--ink);font-size:11px}
+.coverage span{padding:3px 8px;border-radius:5px;background:#fff;border:1px solid var(--line)}
+
+/* ==================================================================
+   方案 1 · 飞书风格（Lark）
+   ================================================================== */
+.lk{display:flex;min-height:640px;background:#F5F6F7;color:#1F2329;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px}
+.lk-side{width:188px;background:#fff;border-right:1px solid #E4E6EB;padding:12px 8px;flex:none}
+.lk-brand{display:flex;align-items:center;gap:8px;padding:2px 8px 16px}
+.lk-logo{width:22px;height:22px;border-radius:6px;background:#3370FF;color:#fff;display:grid;place-items:center;
+  font-size:11px;font-weight:700;flex:none}
+.lk-brand b{font-size:12.5px;font-weight:600}
+.lk-nav{display:flex;flex-direction:column;gap:2px}
+.lk-nav span{height:32px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:#646A73;font-size:12px}
+.lk-nav span.on{background:#EAF1FF;color:#3370FF;font-weight:600}
+.lk-nav i{width:15px;height:15px;border-radius:4px;background:#E4E6EB;flex:none}
+.lk-nav span.on i{background:#3370FF;opacity:.9}
+.lk-nav em{font-style:normal;margin-left:auto;font-size:10px;color:#8F959E}
+.lk-main{flex:1;min-width:0;padding:14px 18px 16px;display:flex;flex-direction:column}
+.lk-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+.lk-title{font-size:19px;font-weight:600;letter-spacing:-.2px}
+.lk-desc{margin-top:4px;font-size:11.5px;color:#8F959E}
+.lk-head-r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.lk-btn{height:28px;padding:0 11px;border-radius:6px;border:1px solid #DEE0E3;background:#fff;color:#1F2329;font-size:11.5px}
+.lk-btn.primary{background:#3370FF;border-color:#3370FF;color:#fff}
+.lk-panel{background:#fff;border:1px solid #E4E6EB;border-radius:8px;display:flex;flex-direction:column;flex:1;overflow:hidden}
+.lk-stats{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #F0F1F2;gap:20px}
+.lk-stat span{font-size:10.5px;color:#8F959E;margin-right:5px}
+.lk-stat b{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.lk-stat b.red{color:#D83931}
+.lk-stat b.orange{color:#B26A00}
+.lk-stat b.green{color:#2E7D5B}
+.lk-filter{margin-left:auto;display:flex;gap:6px;align-items:center}
+.lk-select{height:26px;padding:0 8px;border:1px solid #DEE0E3;border-radius:6px;background:#fff;
+  font-size:10.5px;color:#646A73;display:flex;align-items:center;gap:4px}
+.lk-search{height:26px;width:148px;border:1px solid #DEE0E3;border-radius:6px;display:flex;align-items:center;
+  padding:0 8px;color:#8F959E;font-size:10.5px;gap:4px}
+.lk-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.lk-table th{height:34px;background:#F7F8FA;color:#646A73;font-weight:500;font-size:10.5px;text-align:left;
+  padding:0 10px;border-bottom:1px solid #E4E6EB;white-space:nowrap}
+.lk-table td{height:46px;padding:0 10px;border-bottom:1px solid #F0F1F2;font-size:11px;vertical-align:middle;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk-stu{display:flex;align-items:center;gap:8px}
+.lk-ava{width:24px;height:24px;border-radius:50%;background:#EAF1FF;color:#3370FF;display:grid;place-items:center;
+  font-size:10.5px;font-weight:600;flex:none}
+.lk-stu b{font-weight:500;display:block}
+.lk-stu span{display:block;font-size:9.5px;color:#8F959E;margin-top:1px}
+.lk-lv{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#1F2329}
+.lk-lv i{width:6px;height:6px;border-radius:50%;background:#D83931;flex:none}
+.lk-lv.mid i{background:#B26A00}
+.lk-lv.low i{background:#8F959E}
+.lk-lv.ok i{background:#2E7D5B}
+.lk-tag{display:inline-block;padding:1px 6px;border-radius:4px;background:#F2F3F5;color:#646A73;font-size:10px}
+.lk-tag.risk{background:#FDECEC;color:#D83931}
+.lk-tag.warn{background:#FFF4E0;color:#B26A00}
+.lk-tag.ok{background:#E8F5EE;color:#2E7D5B}
+.lk-signal{color:#646A73;font-size:10.5px}
+.lk-date{font-size:10.5px;color:#646A73;font-variant-numeric:tabular-nums}
+.lk-date.red{color:#D83931}
+.lk-link{color:#3370FF;font-size:10.5px}
+.lk-foot{display:flex;align-items:center;padding:8px 14px;margin-top:auto;border-top:1px solid #F0F1F2;
+  font-size:10.5px;color:#8F959E}
+.lk-foot .pg{margin-left:auto;display:flex;gap:3px}
+.lk-foot .pg b{min-width:20px;height:20px;border:1px solid #DEE0E3;border-radius:4px;display:grid;place-items:center;
+  font-weight:400;font-size:10px;color:#646A73}
+.lk-foot .pg b.on{background:#3370FF;border-color:#3370FF;color:#fff}
+
+/* 飞书移动端 */
+.lkm{display:flex;flex-direction:column;min-height:760px;background:#fff;color:#1F2329;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.lkm-status{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 22px;
+  font-size:11.5px;font-weight:600}
+.lkm-status .sr{display:flex;align-items:center;gap:5px;font-size:10.5px}
+.lkm-batt{width:15px;height:8px;border:1px solid currentColor;border-radius:2px;position:relative;opacity:.85}
+.lkm-batt::before{content:"";position:absolute;inset:1px;background:currentColor;border-radius:1px}
+.lkm-nav{height:44px;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #F0F1F2;position:relative}
+.lkm-back{width:24px;font-size:19px;color:#1F2329;line-height:1}
+.lkm-title{position:absolute;left:64px;right:64px;text-align:center;font-size:16.5px;font-weight:600}
+.lkm-act{margin-left:auto;font-size:12px;color:#646A73}
+.lkm-tabs{display:flex;gap:18px;padding:0 16px;height:42px;align-items:center;border-bottom:1px solid #F0F1F2}
+.lkm-tab{font-size:13px;color:#646A73;height:42px;display:flex;align-items:center;position:relative}
+.lkm-tab.on{color:#1F2329;font-weight:600}
+.lkm-tab.on::after{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:18px;height:2px;border-radius:1px;background:#3370FF}
+.lkm-sum{padding:10px 16px;font-size:11px;color:#8F959E}
+.lkm-item{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid #F2F3F5}
+.lkm-ava{width:36px;height:36px;border-radius:50%;background:#EAF1FF;color:#3370FF;display:grid;place-items:center;
+  font-size:13px;font-weight:600;flex:none}
+.lkm-bd{flex:1;min-width:0}
+.lkm-t{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:500}
+.lkm-t .tag{font-size:9.5px;padding:1px 5px;border-radius:3px;background:#FDECEC;color:#D83931;font-weight:500}
+.lkm-t .tag.warn{background:#FFF4E0;color:#B26A00}
+.lkm-t .tag.ok{background:#E8F5EE;color:#2E7D5B}
+.lkm-s{margin-top:3px;font-size:12px;color:#646A73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lkm-r{flex:none;text-align:right;font-size:10.5px;color:#8F959E;line-height:1.5}
+.lkm-r b{display:block;color:#D83931;font-weight:500}
+.lkm-r b.warn{color:#B26A00}
+.lkm-entry{display:flex;align-items:center;padding:13px 16px;border-top:1px solid #F2F3F5;font-size:13px;color:#646A73}
+.lkm-entry span{margin-left:auto;color:#3370FF;font-size:12px}
+.lkm-foot{margin-top:auto;padding:10px 16px 16px;font-size:10px;color:#8F959E;line-height:1.6}
+
+/* ==================================================================
+   方案 2 · 钉钉风格（DingTalk）
+   ================================================================== */
+.dt{min-height:640px;background:#F2F3F5;color:#171A1D;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px}
+.dt-top{height:50px;background:#fff;border-bottom:1px solid #E5E6E8;display:flex;align-items:center;gap:12px;padding:0 16px}
+.dt-brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.dt-logo{width:24px;height:24px;border-radius:6px;background:#1677FF;color:#fff;display:grid;place-items:center;
+  font-size:11px;font-weight:700}
+.dt-search{margin:0 auto;width:240px;height:30px;background:#F2F3F5;border-radius:15px;display:flex;align-items:center;
+  padding:0 12px;color:#8C8C8C;font-size:11px;gap:5px}
+.dt-ava{width:26px;height:26px;border-radius:50%;background:#E8F0FF;color:#1677FF;display:grid;place-items:center;
+  font-size:11px;font-weight:600}
+.dt-body{display:flex;min-height:590px}
+.dt-side{width:170px;background:#fff;border-right:1px solid #E5E6E8;padding:10px 6px}
+.dt-nav{display:flex;flex-direction:column;gap:2px}
+.dt-nav span{height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:6px;
+  font-size:12px;color:#4E5969}
+.dt-nav span.on{background:#E8F0FF;color:#1677FF;font-weight:600}
+.dt-nav i{width:14px;height:14px;border-radius:3px;background:#E5E6E8;flex:none}
+.dt-nav span.on i{background:#1677FF;opacity:.9}
+.dt-main{flex:1;min-width:0;padding:14px 16px 16px}
+.dt-h{display:flex;align-items:center;margin-bottom:10px}
+.dt-h h2{font-size:17px;font-weight:600}
+.dt-h span{margin-left:8px;font-size:11px;color:#86909C}
+.dt-h .r{margin-left:auto;display:flex;gap:8px}
+.dt-btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid #E5E6E8;background:#fff;font-size:11px;color:#4E5969}
+.dt-btn.primary{background:#1677FF;border-color:#1677FF;color:#fff}
+.dt-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.dt-kpi{background:#fff;border-radius:8px;padding:12px 13px;display:flex;align-items:center;gap:10px}
+.dt-ic{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:600;flex:none}
+.dt-ic.blue{background:#E8F0FF;color:#1677FF}
+.dt-ic.orange{background:#FFF3E6;color:#D46B08}
+.dt-ic.red{background:#FDECEC;color:#D83931}
+.dt-ic.green{background:#E8F5EE;color:#2E7D5B}
+.dt-kpi span{display:block;font-size:10.5px;color:#86909C}
+.dt-kpi b{display:block;font-size:21px;font-weight:600;line-height:1.15;margin-top:2px;font-variant-numeric:tabular-nums}
+.dt-cols{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:10px;margin-top:10px}
+.dt-card{background:#fff;border-radius:8px;overflow:hidden}
+.dt-card-h{height:50px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #F0F1F2}
+.dt-card-h b{font-size:13px;font-weight:600}
+.dt-card-h span{margin-left:auto;font-size:10.5px;color:#1677FF}
+.dt-todo-i{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid #F2F3F5}
+.dt-todo-i:last-child{border-bottom:0}
+.dt-check{width:15px;height:15px;border:1px solid #C9CDD4;border-radius:50%;flex:none}
+.dt-todo-bd{flex:1;min-width:0}
+.dt-todo-bd b{font-size:12px;font-weight:500}
+.dt-todo-bd span{display:block;margin-top:2px;font-size:10.5px;color:#86909C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-todo-date{font-size:10.5px;color:#D83931;flex:none}
+.dt-todo-date.warn{color:#D46B08}
+.dt-tl-i{display:flex;gap:9px;padding:10px 16px;border-bottom:1px solid #F2F3F5;font-size:11px}
+.dt-tl-i:last-child{border-bottom:0}
+.dt-tl-i .d{width:6px;height:6px;border-radius:50%;background:#1677FF;margin-top:4px;flex:none}
+.dt-tl-i .d.red{background:#D83931}
+.dt-tl-i .d.green{background:#2E7D5B}
+.dt-tl-bd b{font-weight:500}
+.dt-tl-bd span{display:block;margin-top:2px;color:#86909C;font-size:10px}
+.dt-tl-time{margin-left:auto;color:#86909C;font-size:9.5px;flex:none}
+
+.dt-list{margin-top:10px;background:#fff;border-radius:8px;overflow:hidden}
+.dt-lth{display:grid;grid-template-columns:132px minmax(0,1fr) 70px 104px;gap:10px;align-items:center;
+  height:30px;padding:0 16px;background:#FAFBFC;border-bottom:1px solid #F0F1F2;font-size:10px;color:#86909C}
+.dt-li{display:grid;grid-template-columns:132px minmax(0,1fr) 70px 104px;gap:10px;align-items:center;
+  padding:9px 16px;border-bottom:1px solid #F2F3F5;font-size:11px}
+.dt-li:last-child{border-bottom:0}
+.dt-li .who{display:flex;align-items:center;gap:6px;font-weight:500}
+.dt-li .lv{font-size:9.5px;padding:1px 5px;border-radius:3px;background:#FDECEC;color:#D83931;font-weight:500}
+.dt-li .lv.mid{background:#FFF3E6;color:#D46B08}
+.dt-li .lv.low{background:#F2F3F5;color:#86909C}
+.dt-li .sig{color:#86909C;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt-li .st{font-size:10.5px;color:#4E5969}
+.dt-li .dt-date{font-size:10.5px;color:#86909C}
+.dt-li .dt-date.red{color:#D83931}
+
+/* 钉钉移动端 */
+.dtm{display:flex;flex-direction:column;min-height:760px;background:#F2F3F5;color:#171A1D;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.dtm-status{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 22px;
+  font-size:11.5px;font-weight:600;color:#fff;background:#1E2227}
+.dtm-status .sr{display:flex;align-items:center;gap:5px;font-size:10.5px}
+.dtm-batt{width:15px;height:8px;border:1px solid currentColor;border-radius:2px;position:relative;opacity:.9}
+.dtm-batt::before{content:"";position:absolute;inset:1px;background:currentColor;border-radius:1px}
+.dtm-hero{background:#1E2227;color:#fff;padding:4px 16px 58px}
+.dtm-nav{display:flex;align-items:center;gap:10px}
+.dtm-nav b{font-size:17px;font-weight:600}
+.dtm-nav span{margin-left:auto;font-size:10.5px;opacity:.65}
+.dtm-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.dtm-kpi{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 4px;text-align:center}
+.dtm-kpi b{display:block;font-size:16px;font-weight:600}
+.dtm-kpi b.risk{color:#FF9A8F}
+.dtm-kpi b.warn{color:#F2B45C}
+.dtm-kpi span{font-size:9px;opacity:.7}
+.dtm-sheet{margin:-44px 12px 0;background:#fff;border-radius:12px;padding:12px 0 2px;position:relative;z-index:2}
+.dtm-sh{display:flex;align-items:center;padding:0 14px 8px}
+.dtm-sh b{font-size:13px;font-weight:600}
+.dtm-sh span{margin-left:auto;font-size:10px;color:#86909C}
+.dtm-todo-i{display:flex;align-items:center;gap:9px;padding:10px 14px;border-top:1px solid #F2F3F5}
+.dtm-todo-i .d{width:6px;height:6px;border-radius:50%;background:#D83931;flex:none}
+.dtm-todo-i .d.warn{background:#D46B08}
+.dtm-todo-i .d.gray{background:#C9CDD4}
+.dtm-todo-bd{flex:1;min-width:0}
+.dtm-todo-bd b{display:block;font-size:12.5px;font-weight:500}
+.dtm-todo-bd span{display:block;margin-top:2px;font-size:10px;color:#86909C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dtm-todo-date{font-size:10px;color:#D83931;flex:none}
+.dtm-todo-date.warn{color:#D46B08}
+.dtm-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 8px;margin:12px 12px 0;background:#fff;border-radius:12px}
+.dtm-gi{text-align:center}
+.dtm-gic{width:40px;height:40px;border-radius:10px;margin:0 auto 6px;display:grid;place-items:center;
+  background:#E8F0FF;color:#1677FF;font-size:12px;font-weight:600}
+.dtm-gic.orange{background:#FFF3E6;color:#D46B08}
+.dtm-gic.green{background:#E8F5EE;color:#2E7D5B}
+.dtm-gic.gray{background:#F2F3F5;color:#4E5969}
+.dtm-gi span{font-size:10px;color:#4E5969}
+.dtm-card{margin:12px 12px 0;background:#fff;border-radius:12px;padding:12px 0 2px}
+.dtm-card .dtm-sh{padding:0 14px 8px}
+.dtm-tl-i{display:flex;gap:9px;padding:9px 14px;border-top:1px solid #F2F3F5}
+.dtm-tl-i .d{width:6px;height:6px;border-radius:50%;background:#1677FF;margin-top:4px;flex:none}
+.dtm-tl-i .d.red{background:#D83931}
+.dtm-tl-i .d.green{background:#2E7D5B}
+.dtm-tl-bd{flex:1;min-width:0}
+.dtm-tl-bd b{display:block;font-size:12px;font-weight:500}
+.dtm-tl-bd span{display:block;margin-top:2px;font-size:10px;color:#86909C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dtm-tl-time{flex:none;font-size:9.5px;color:#86909C;margin-top:1px}
+.dtm-tab{margin-top:auto;height:56px;background:#fff;border-top:1px solid #E5E6E8;display:grid;
+  grid-template-columns:repeat(4,1fr);align-items:center;padding-bottom:4px}
+.dtm-tab a{text-align:center;font-size:9.5px;color:#86909C;text-decoration:none}
+.dtm-tab a.on{color:#1677FF;font-weight:600}
+.dtm-tab i{display:block;width:18px;height:18px;border:1px solid currentColor;border-radius:5px;margin:0 auto 3px}
+
+/* ==================================================================
+   方案 3 · Apple 原生（macOS / iOS）
+   ================================================================== */
+.ap{display:flex;flex-direction:column;min-height:640px;background:#fff;color:#000;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;font-size:12px}
+.ap-bar{height:38px;background:#F6F6F6;border-bottom:1px solid #DEDEDE;display:flex;align-items:center;
+  gap:10px;padding:0 12px}
+.ap-lights{display:flex;gap:6px}
+.ap-lights i{width:10px;height:10px;border-radius:50%}
+.ap-lights i:nth-child(1){background:#FF5F57}
+.ap-lights i:nth-child(2){background:#FEBC2E}
+.ap-lights i:nth-child(3){background:#28C840}
+.ap-tool{font-size:12px;font-weight:600}
+.ap-seg{margin-left:auto;display:flex;border:1px solid #D1D1D1;border-radius:6px;overflow:hidden}
+.ap-seg b{padding:3px 10px;font-size:10.5px;font-weight:400;color:#666}
+.ap-seg b.on{background:#E8E8ED;color:#000}
+.ap-search{width:140px;height:24px;border:1px solid #D1D1D1;border-radius:6px;display:flex;align-items:center;
+  padding:0 7px;color:#999;font-size:10px;gap:4px}
+.ap-body{display:grid;grid-template-columns:196px 292px minmax(0,1fr);flex:1;min-height:600px}
+.ap-side{background:#F5F5F7;border-right:1px solid #DEDEDE;padding:10px 8px;font-size:11px}
+.ap-grp{font-size:10px;color:#8E8E93;padding:8px 8px 4px;letter-spacing:.3px}
+.ap-item{display:flex;align-items:center;gap:7px;height:28px;padding:0 8px;border-radius:5px;color:#333}
+.ap-item.on{background:#E4E4E9;color:#000;font-weight:500}
+.ap-item .dot{width:6px;height:6px;border-radius:50%;background:#FF3B30;flex:none}
+.ap-item .dot.mid{background:#FF9500}
+.ap-item .dot.ok{background:#34C759}
+.ap-item b{margin-left:auto;font-weight:400;color:#8E8E93;font-size:10px}
+.ap-list{border-right:1px solid #DEDEDE;background:#fff;overflow:hidden}
+.ap-list-h{height:34px;display:flex;align-items:center;padding:0 12px;font-size:10.5px;color:#8E8E93;
+  border-bottom:1px solid #EFEFEF}
+.ap-li{padding:9px 12px;border-bottom:1px solid #F2F2F2}
+.ap-li.on{background:#EAF2FF}
+.ap-li b{font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px}
+.ap-li b i{width:6px;height:6px;border-radius:50%;background:#FF3B30;flex:none}
+.ap-li p{margin-top:3px;font-size:10px;color:#8E8E93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-li span{display:block;margin-top:3px;font-size:9.5px;color:#B0B0B5}
+.ap-det{padding:16px 20px;min-width:0}
+.ap-name{display:flex;align-items:center;gap:10px}
+.ap-avatar{width:38px;height:38px;border-radius:50%;background:#E8E8ED;color:#666;display:grid;place-items:center;
+  font-size:15px;font-weight:500}
+.ap-name h3{font-size:18px;font-weight:600;letter-spacing:-.2px}
+.ap-name .m{font-size:10.5px;color:#8E8E93;margin-top:2px}
+.ap-name .lv{margin-left:auto;font-size:11px;color:#FF3B30;background:#FFECEC;padding:2px 7px;border-radius:5px}
+.ap-quote{margin-top:12px;background:#F9F9F9;border-left:2px solid #C7C7CC;border-radius:0 7px 7px 0;
+  padding:10px 12px;font-size:12px;line-height:1.6}
+.ap-quote .src{margin-top:6px;font-size:9.5px;color:#8E8E93}
+.ap-sec{margin-top:14px;font-size:10px;color:#8E8E93;letter-spacing:.3px}
+.ap-tl{margin-top:6px;border-left:1px solid #E5E5EA;padding-left:10px;margin-left:3px}
+.ap-tl-i{position:relative;padding-bottom:9px}
+.ap-tl-i::before{content:"";position:absolute;left:-13px;top:3px;width:6px;height:6px;border-radius:50%;background:#C7C7CC}
+.ap-tl-i.key::before{background:#FF3B30}
+.ap-tl-i.ok::before{background:#34C759}
+.ap-tl-i b{font-size:11px;font-weight:600}
+.ap-tl-i span{font-size:9.5px;color:#8E8E93;margin-left:6px}
+.ap-tl-i p{margin-top:2px;font-size:10px;color:#666;line-height:1.5}
+.ap-adv{margin-top:6px;background:#F9F9F9;border-radius:7px;padding:2px 10px}
+.ap-adv-i{display:flex;align-items:center;gap:7px;padding:6px 0;border-top:1px solid #F0F0F0;font-size:10.5px}
+.ap-adv-i:first-child{border-top:0}
+.ap-adv-i b{font-weight:500}
+.ap-adv-i span{margin-left:auto;color:#8E8E93;font-size:9.5px}
+.ap-actions{margin-top:12px;display:flex;gap:8px}
+.ap-btn{height:28px;padding:0 12px;border-radius:6px;border:1px solid #D1D1D1;background:#fff;font-size:10.5px}
+.ap-btn.primary{background:#007AFF;border-color:#007AFF;color:#fff}
+
+/* Apple 移动端 */
+.iosm{display:flex;flex-direction:column;min-height:760px;background:#F2F2F7;color:#000;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif}
+.ios-status{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 22px;
+  font-size:11.5px;font-weight:600}
+.ios-status .sr{display:flex;align-items:center;gap:5px;font-size:10.5px}
+.ios-batt{width:15px;height:8px;border:1px solid currentColor;border-radius:2px;position:relative;opacity:.85}
+.ios-batt::before{content:"";position:absolute;inset:1px;background:currentColor;border-radius:1px}
+.ios-nav{height:44px;display:flex;align-items:center;padding:0 12px;background:rgba(249,249,249,.94);
+  border-bottom:.5px solid rgba(60,60,67,.29);position:relative}
+.ios-back{display:flex;align-items:center;gap:1px;color:#007AFF;font-size:15px}
+.ios-back .chev{font-size:19px;line-height:1;margin-top:-2px}
+.ios-title{position:absolute;left:64px;right:64px;text-align:center;font-size:17px;font-weight:600}
+.ios-act{margin-left:auto;color:#007AFF;font-size:15px}
+.ios-hero{padding:14px 20px 0}
+.ios-lt{font-size:27px;line-height:1.18;font-weight:700;letter-spacing:-.5px}
+.ios-sub{margin-top:4px;font-size:13px;color:#8E8E93}
+.ios-group{margin:14px 16px 0;background:#fff;border-radius:10px;overflow:hidden}
+.ios-gh{padding:18px 16px 7px;font-size:12.5px;color:#8E8E93;display:flex}
+.ios-gh span{margin-left:auto;font-size:12px}
+.ios-row{display:flex;align-items:center;gap:12px;padding:10px 16px;min-height:44px;
+  border-top:.5px solid rgba(60,60,67,.16)}
+.ios-row:first-child{border-top:0}
+.ios-ava{width:34px;height:34px;border-radius:50%;background:#E9E9ED;color:#6C6C70;display:grid;place-items:center;
+  font-size:14px;font-weight:600;flex:none}
+.ios-main{flex:1;min-width:0}
+.ios-name{display:flex;align-items:center;gap:7px;font-size:16.5px;font-weight:500}
+.ios-name i{width:7px;height:7px;border-radius:50%;background:#FF3B30;flex:none}
+.ios-name i.warn{background:#FF9500}
+.ios-desc{margin-top:1px;font-size:13.5px;color:#8E8E93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ios-trail{flex:none;display:flex;align-items:center;gap:3px;font-size:13px;color:#8E8E93}
+.ios-trail b{font-weight:500;color:#FF3B30}
+.ios-trail b.warn{color:#FF9500}
+.ios-chev{color:#C7C7CC;font-size:16px}
+.ios-plain{display:flex;align-items:center;padding:11px 16px;min-height:46px;font-size:16px;
+  border-top:.5px solid rgba(60,60,67,.16)}
+.ios-plain:first-child{border-top:0}
+.ios-plain .v{margin-left:auto;color:#8E8E93;font-size:15px;margin-right:3px}
+.ios-plain .ios-chev{margin-left:auto}
+.ios-plain .v+.ios-chev{margin-left:3px}
+.ios-stats{display:grid;grid-template-columns:repeat(4,1fr);padding:11px 0 12px}
+.ios-stat{position:relative;text-align:center}
+.ios-stat+.ios-stat::before{content:"";position:absolute;left:0;top:5px;bottom:5px;width:.5px;background:rgba(60,60,67,.2)}
+.ios-stat b{display:block;font-size:21px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.ios-stat span{display:block;margin-top:2px;font-size:11px;color:#8E8E93}
+.ios-stat.risk b{color:#FF3B30}
+.ios-stat.ok b{color:#34C759}
+.ios-foot{margin-top:auto;height:24px;display:flex;align-items:center;justify-content:center}
+.ios-foot i{width:134px;height:5px;border-radius:3px;background:rgba(0,0,0,.85)}
+.ios-note{padding:10px 20px 0;font-size:12px;line-height:1.55;color:#8E8E93}
+
+/* ---------- 对比 ---------- */
+.compare{max-width:1400px;margin:34px auto 0;padding:0 40px}
+.compare h2{font-size:16.5px}
+.compare p{margin-top:6px;font-size:12.5px;color:var(--sub);line-height:1.7}
+table{width:100%;border-collapse:collapse;margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+th,td{padding:9px 12px;text-align:left;font-size:12px;border-bottom:1px solid #f0f1f4;vertical-align:top}
+th{background:#f6f7f9;font-weight:650;font-size:11.5px;color:#3c424c}
+tr:last-child td{border-bottom:0}
+.reco{margin-top:20px;padding:13px 15px;border:1px solid var(--line);border-left:3px solid #101418;
+  border-radius:0 9px 9px 0;background:#fff;font-size:12.5px;line-height:1.75;color:var(--sub)}
+.reco b{color:var(--ink)}
+.foot{max-width:1400px;margin:20px auto 0;padding:0 40px;font-size:11.5px;color:var(--quiet);line-height:1.8}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>心理预警 · 按市面成熟产品风格重设计<span>3 套可直接对标的产品语言</span></h1>
+  <p>这次不再做概念稿，直接沿用老师们每天在用的产品结构：飞书的多维表格、钉钉的工作台卡片、Apple 的分栏与分组列表。三套都覆盖现有全部预警功能，桌面端与移动端同源。</p>
+  <div class="facts">
+    <div><b>飞书</b>表格工作台 · 高密度</div>
+    <div><b>钉钉</b>待办工作台 · 卡片化</div>
+    <div><b>Apple</b>原生分栏 · 低密度</div>
+  </div>
+</header>
+
+<nav class="nav">
+  <a href="#lark">1 · 飞书风格</a>
+  <a href="#ding">2 · 钉钉风格</a>
+  <a href="#apple">3 · Apple 原生</a>
+  <em>每套均含桌面端 + 移动端</em>
+</nav>
+
+<!-- ======================================================== 1 飞书 -->
+<section class="sec" id="lark">
+  <div class="opt-head">
+    <span class="opt-no">1</span>
+    <div>
+      <div class="opt-title">飞书风格 <small>Lark · 多维表格 / 审批</small></div>
+      <p class="opt-desc">老师在一张表里完成全部处置：左侧模块导航，上方状态统计，表格按「等级 / 触发信号 / 状态 / 随访 / 负责人」排列，行内直接操作。没有多余的大卡片，信息一屏读完，和飞书后台的日常使用手感一致。</p>
+      <div class="ref"><b>对标：</b><span>飞书多维表格</span><span>飞书审批</span><span>飞书管理后台</span><span>12px 字号 / 6px 圆角 / 蓝 #3370FF</span></div>
+    </div>
+  </div>
+
+  <div class="screens">
+    <div class="frame desk-scroll">
+      <div class="frame-bar"><i></i><i></i><i></i><b>桌面端 · 预警表格</b><span>1440 × 900</span></div>
+      <div class="desk">
+        <div class="lk">
+          <div class="lk-side">
+            <div class="lk-brand"><span class="lk-logo">绵</span><b>绵小城 · 教师端</b></div>
+            <div class="lk-nav">
+              <span><i></i>工作台</span>
+              <span><i></i>学生档案<em>42</em></span>
+              <span class="on"><i></i>心理预警<em>12</em></span>
+              <span><i></i>家校沟通<em>3</em></span>
+              <span><i></i>成长档案</span>
+            </div>
+          </div>
+
+          <div class="lk-main">
+            <div class="lk-head">
+              <div>
+                <div class="lk-title">心理预警</div>
+                <div class="lk-desc">发现 → 干预 → 随访 → 闭环 · 数据更新于 11-04 09:42</div>
+              </div>
+              <div class="lk-head-r">
+                <button class="lk-btn">导出记录</button>
+                <button class="lk-btn primary">新建干预记录</button>
+              </div>
+            </div>
+
+            <div class="lk-panel">
+              <div class="lk-stats">
+                <div class="lk-stat"><span>待处置</span><b>12</b></div>
+                <div class="lk-stat"><span>高危未闭环</span><b class="red">3</b></div>
+                <div class="lk-stat"><span>随访逾期</span><b class="orange">2</b></div>
+                <div class="lk-stat"><span>已闭环</span><b class="green">28</b></div>
+                <div class="lk-filter">
+                  <span class="lk-select">全部等级 ⌄</span>
+                  <span class="lk-select">全部状态 ⌄</span>
+                  <span class="lk-search">搜索学生或关键词</span>
+                </div>
+              </div>
+
+              <table class="lk-table">
+                <colgroup>
+                  <col style="width:19%"><col style="width:9%"><col style="width:21%"><col style="width:11%">
+                  <col style="width:12%"><col style="width:9%"><col style="width:10%">
+                </colgroup>
+                <thead>
+                  <tr><th>学生</th><th>风险等级</th><th>触发信号</th><th>处置状态</th><th>随访日期</th><th>负责人</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">陈</span><div><b>陈雨桐</b><span>2024 级 · 软件工程</span></div></div></td>
+                    <td><span class="lk-lv"><i></i>高危</span></td>
+                    <td><span class="lk-signal">失眠、撑不下去、回避上课</span></td>
+                    <td><span class="lk-tag risk">待处置</span></td>
+                    <td><span class="lk-date red">11-01 · 逾期 2 天</span></td>
+                    <td>王老师</td>
+                    <td><span class="lk-link">登记干预</span></td>
+                  </tr>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">张</span><div><b>张一鸣</b><span>2023 级 · 数据科学</span></div></div></td>
+                    <td><span class="lk-lv"><i></i>高危</span></td>
+                    <td><span class="lk-signal">没有意义、两周未参加晚自习</span></td>
+                    <td><span class="lk-tag risk">待处置</span></td>
+                    <td><span class="lk-date red">11-03 · 今日到期</span></td>
+                    <td>王老师</td>
+                    <td><span class="lk-link">登记干预</span></td>
+                  </tr>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">徐</span><div><b>徐若曦</b><span>2024 级 · 视觉传达</span></div></div></td>
+                    <td><span class="lk-lv"><i></i>高危</span></td>
+                    <td><span class="lk-signal">人际关系受挫、频繁请假</span></td>
+                    <td><span class="lk-tag risk">待处置</span></td>
+                    <td><span class="lk-date">11-05 · 明日到期</span></td>
+                    <td>王老师</td>
+                    <td><span class="lk-link">登记干预</span></td>
+                  </tr>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">李</span><div><b>李思彤</b><span>2024 级 · 数字媒体</span></div></div></td>
+                    <td><span class="lk-lv mid"><i></i>中度</span></td>
+                    <td><span class="lk-signal">考试焦虑、心慌、入睡困难</span></td>
+                    <td><span class="lk-tag warn">待随访</span></td>
+                    <td><span class="lk-date">11-06 · 3 天后</span></td>
+                    <td>王老师</td>
+                    <td><span class="lk-link">查看记录</span></td>
+                  </tr>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">王</span><div><b>王浩然</b><span>2022 级 · 土木工程</span></div></div></td>
+                    <td><span class="lk-lv low"><i></i>轻度</span></td>
+                    <td><span class="lk-signal">室友冲突、社交回避</span></td>
+                    <td><span class="lk-tag">未排随访</span></td>
+                    <td><span class="lk-date">未安排 · 已等待 2 天</span></td>
+                    <td>王老师</td>
+                    <td><span class="lk-link">安排随访</span></td>
+                  </tr>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">孙</span><div><b>孙可欣</b><span>2023 级 · 会计学</span></div></div></td>
+                    <td><span class="lk-lv mid"><i></i>中度</span></td>
+                    <td><span class="lk-signal">家庭矛盾、夜间情绪波动</span></td>
+                    <td><span class="lk-tag warn">待随访</span></td>
+                    <td><span class="lk-date">11-08 · 5 天后</span></td>
+                    <td>王老师</td>
+                    <td><span class="lk-link">查看记录</span></td>
+                  </tr>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">赵</span><div><b>赵梓涵</b><span>2023 级 · 汉语言文学</span></div></div></td>
+                    <td><span class="lk-lv mid"><i></i>中度</span></td>
+                    <td><span class="lk-signal">家庭冲突、情绪波动</span></td>
+                    <td><span class="lk-tag ok">已闭环</span></td>
+                    <td><span class="lk-date">11-02 已闭环</span></td>
+                    <td>李老师</td>
+                    <td><span class="lk-link">查看</span></td>
+                  </tr>
+                  <tr>
+                    <td><div class="lk-stu"><span class="lk-ava">周</span><div><b>周知远</b><span>2022 级 · 软件工程</span></div></div></td>
+                    <td><span class="lk-lv low"><i></i>轻度</span></td>
+                    <td><span class="lk-signal">情绪低落、缺课 1 次</span></td>
+                    <td><span class="lk-tag ok">已闭环</span></td>
+                    <td><span class="lk-date">10-30 已闭环</span></td>
+                    <td>李老师</td>
+                    <td><span class="lk-link">查看</span></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="lk-foot"><span>共 49 条 · 每页 10 条</span>
+                <div class="pg"><b>‹</b><b class="on">1</b><b>2</b><b>3</b><b>4</b><b>5</b><b>›</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-scroll">
+      <div class="frame">
+        <div class="frame-bar"><i></i><i></i><i></i><b>移动端 · 预警列表</b><span>390 × 844</span></div>
+        <div class="phone">
+          <div class="lkm">
+            <div class="lkm-status"><span>9:41</span><span class="sr"><span>5G</span><span class="lkm-batt"></span></span></div>
+            <div class="lkm-nav">
+              <span class="lkm-back">‹</span>
+              <span class="lkm-title">心理预警</span>
+              <span class="lkm-act">搜索</span>
+            </div>
+            <div class="lkm-tabs">
+              <span class="lkm-tab on">待处置 12</span><span class="lkm-tab">待随访 9</span><span class="lkm-tab">已闭环 28</span>
+            </div>
+            <div class="lkm-sum">3 条高危，2 条随访逾期</div>
+
+            <div class="lkm-item">
+              <span class="lkm-ava">陈</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">陈雨桐<span class="tag">高危</span></div>
+                <div class="lkm-s">失眠、回避上课与集体活动</div>
+              </div>
+              <div class="lkm-r"><b>逾期 2 天</b>11-01</div>
+            </div>
+            <div class="lkm-item">
+              <span class="lkm-ava">张</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">张一鸣<span class="tag">高危</span></div>
+                <div class="lkm-s">两周未参加晚自习，情绪低落</div>
+              </div>
+              <div class="lkm-r"><b>今日到期</b>11-03</div>
+            </div>
+            <div class="lkm-item">
+              <span class="lkm-ava">徐</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">徐若曦<span class="tag">高危</span></div>
+                <div class="lkm-s">人际关系受挫、频繁请假</div>
+              </div>
+              <div class="lkm-r"><b>明日到期</b>11-05</div>
+            </div>
+            <div class="lkm-item">
+              <span class="lkm-ava">李</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">李思彤<span class="tag warn">中度</span></div>
+                <div class="lkm-s">考试焦虑、心慌、入睡困难</div>
+              </div>
+              <div class="lkm-r"><b class="warn">3 天后</b>11-06</div>
+            </div>
+            <div class="lkm-item">
+              <span class="lkm-ava">孙</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">孙可欣<span class="tag warn">中度</span></div>
+                <div class="lkm-s">家庭矛盾、夜间情绪波动</div>
+              </div>
+              <div class="lkm-r"><b class="warn">5 天后</b>11-08</div>
+            </div>
+            <div class="lkm-item">
+              <span class="lkm-ava">王</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">王浩然<span class="tag ok">轻度</span></div>
+                <div class="lkm-s">室友冲突后社交回避</div>
+              </div>
+              <div class="lkm-r">未排期<br>等待 2 天</div>
+            </div>
+            <div class="lkm-item">
+              <span class="lkm-ava">何</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">何一诺<span class="tag ok">轻度</span></div>
+                <div class="lkm-s">长期失眠、白天注意力下降</div>
+              </div>
+              <div class="lkm-r">未排期<br>等待 1 天</div>
+            </div>
+            <div class="lkm-item">
+              <span class="lkm-ava">吴</span>
+              <div class="lkm-bd">
+                <div class="lkm-t">吴桐<span class="tag warn">中度</span></div>
+                <div class="lkm-s">学业压力、自我否定表述</div>
+              </div>
+              <div class="lkm-r"><b class="warn">7 天后</b>11-10</div>
+            </div>
+
+            <div class="lkm-entry">全部预警<span>49 条 ›</span></div>
+            <div class="lkm-entry">处置态势<span>趋势 · 词云 ›</span></div>
+            <div class="lkm-foot">按随访日期与风险等级排序 · 数据每 60 秒同步</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="coverage"><b>功能落点：</b><span>模块导航</span><span>状态统计</span><span>等级 / 状态筛选</span><span>搜索</span><span>随访时限</span><span>行内处置</span><span>分页</span><span>移动端状态页签</span></div>
+</section>
+
+<!-- ======================================================== 2 钉钉 -->
+<section class="sec" id="ding">
+  <div class="opt-head">
+    <span class="opt-no">2</span>
+    <div>
+      <div class="opt-title">钉钉风格 <small>DingTalk · 工作台 / 待办</small></div>
+      <p class="opt-desc">把心理预警做成「工作台」：顶部搜索栏、左侧菜单、四张指标卡，下面是今日待办和预警动态。移动端保留钉钉的浮层卡、宫格入口与底部页签，头部换成项目的深墨色，避免大面积品牌蓝。</p>
+      <div class="ref"><b>对标：</b><span>钉钉工作台</span><span>钉钉待办</span><span>钉钉宫格组件</span><span>工作台卡片 50px 标题区 / 16px 内边距</span></div>
+    </div>
+  </div>
+
+  <div class="screens">
+    <div class="frame desk-scroll">
+      <div class="frame-bar"><i></i><i></i><i></i><b>桌面端 · 预警工作台</b><span>1440 × 900</span></div>
+      <div class="desk">
+        <div class="dt">
+          <div class="dt-top">
+            <div class="dt-brand"><span class="dt-logo">绵</span>绵小城 · 教师工作台</div>
+            <div class="dt-search">搜索学生、预警或功能</div>
+            <span class="dt-ava">王</span>
+          </div>
+
+          <div class="dt-body">
+            <div class="dt-side">
+              <div class="dt-nav">
+                <span><i></i>工作台</span>
+                <span class="on"><i></i>心理预警</span>
+                <span><i></i>学生档案</span>
+                <span><i></i>家校沟通</span>
+                <span><i></i>成长档案</span>
+              </div>
+            </div>
+
+            <div class="dt-main">
+              <div class="dt-h">
+                <h2>心理预警</h2><span>今天 12 条待处置</span>
+                <div class="r"><button class="dt-btn">筛选</button><button class="dt-btn primary">登记干预</button></div>
+              </div>
+
+              <div class="dt-kpis">
+                <div class="dt-kpi"><span class="dt-ic blue">待</span><div><span>待处置</span><b>12</b></div></div>
+                <div class="dt-kpi"><span class="dt-ic red">危</span><div><span>高危未闭环</span><b>3</b></div></div>
+                <div class="dt-kpi"><span class="dt-ic orange">时</span><div><span>随访逾期</span><b>2</b></div></div>
+                <div class="dt-kpi"><span class="dt-ic green">闭</span><div><span>已闭环</span><b>28</b></div></div>
+              </div>
+
+              <div class="dt-cols">
+                <div class="dt-card">
+                  <div class="dt-card-h"><b>今日待办</b><span>全部 ›</span></div>
+                  <div class="dt-todo-i"><span class="dt-check"></span><div class="dt-todo-bd"><b>陈雨桐 · 高危随访</b><span>连续三晚失眠，回避上课与集体活动</span></div><span class="dt-todo-date">逾期 2 天</span></div>
+                  <div class="dt-todo-i"><span class="dt-check"></span><div class="dt-todo-bd"><b>张一鸣 · 高危谈话</b><span>两周未参加晚自习，需今日面谈</span></div><span class="dt-todo-date">今日 18:00</span></div>
+                  <div class="dt-todo-i"><span class="dt-check"></span><div class="dt-todo-bd"><b>李思彤 · 中度随访</b><span>考试焦虑，确认睡眠与出勤</span></div><span class="dt-todo-date warn">11-06</span></div>
+                  <div class="dt-todo-i"><span class="dt-check"></span><div class="dt-todo-bd"><b>王浩然 · 安排随访</b><span>室友冲突后社交回避</span></div><span class="dt-todo-date warn">未排期</span></div>
+                  <div class="dt-todo-i"><span class="dt-check"></span><div class="dt-todo-bd"><b>赵梓涵 · 闭环确认</b><span>家长约谈已完成，等待确认</span></div><span class="dt-todo-date" style="color:#2E7D5B">已完成</span></div>
+                </div>
+
+                <div class="dt-card">
+                  <div class="dt-card-h"><b>预警动态</b><span>近 3 天 ›</span></div>
+                  <div class="dt-tl-i"><span class="d red"></span><div class="dt-tl-bd"><b>陈雨桐 触发高危预警</b><span>命中 3 个敏感词，已生成脱敏摘要</span></div><span class="dt-tl-time">11-01 22:40</span></div>
+                  <div class="dt-tl-i"><span class="d"></span><div class="dt-tl-bd"><b>陈雨桐 辅导员谈话</b><span>学生愿意继续沟通，约定今日跟进</span></div><span class="dt-tl-time">11-02 09:20</span></div>
+                  <div class="dt-tl-i"><span class="d green"></span><div class="dt-tl-bd"><b>赵梓涵 已闭环</b><span>家长约谈完成，两周后回访</span></div><span class="dt-tl-time">11-02 16:40</span></div>
+                  <div class="dt-tl-i"><span class="d red"></span><div class="dt-tl-bd"><b>张一鸣 触发高危预警</b><span>两周未参加晚自习</span></div><span class="dt-tl-time">11-03 08:15</span></div>
+                </div>
+              </div>
+
+              <div class="dt-list">
+                <div class="dt-card-h"><b>预警清单</b><span>全部 49 条 ›</span></div>
+                <div class="dt-lth"><span>学生</span><span>触发信号</span><span>处置状态</span><span>随访</span></div>
+                <div class="dt-li"><span class="who">陈雨桐<span class="lv">高危</span></span><span class="sig">失眠、回避上课与集体活动</span><span class="st">待处置</span><span class="dt-date red">11-01 · 逾期 2 天</span></div>
+                <div class="dt-li"><span class="who">张一鸣<span class="lv">高危</span></span><span class="sig">两周未参加晚自习，情绪低落</span><span class="st">待处置</span><span class="dt-date red">11-03 · 今日到期</span></div>
+                <div class="dt-li"><span class="who">徐若曦<span class="lv">高危</span></span><span class="sig">人际关系受挫、频繁请假</span><span class="st">待处置</span><span class="dt-date">11-05 · 明日</span></div>
+                <div class="dt-li"><span class="who">李思彤<span class="lv mid">中度</span></span><span class="sig">考试焦虑、心慌、入睡困难</span><span class="st">待随访</span><span class="dt-date">11-06 · 3 天后</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-scroll">
+      <div class="frame">
+        <div class="frame-bar"><i></i><i></i><i></i><b>移动端 · 工作台</b><span>390 × 844</span></div>
+        <div class="phone">
+          <div class="dtm">
+            <div class="dtm-status"><span>9:41</span><span class="sr"><span>5G</span><span class="dtm-batt"></span></span></div>
+            <div class="dtm-hero">
+              <div class="dtm-nav"><b>心理预警</b><span>王老师 · 今日</span></div>
+              <div class="dtm-kpis">
+                <div class="dtm-kpi"><b>12</b><span>待处置</span></div>
+                <div class="dtm-kpi"><b class="risk">3</b><span>高危</span></div>
+                <div class="dtm-kpi"><b class="warn">2</b><span>逾期</span></div>
+                <div class="dtm-kpi"><b>28</b><span>闭环</span></div>
+              </div>
+            </div>
+
+            <div class="dtm-sheet">
+              <div class="dtm-sh"><b>今日待办</b><span>全部 12 条 ›</span></div>
+              <div class="dtm-todo-i"><span class="d"></span><div class="dtm-todo-bd"><b>陈雨桐 · 高危随访</b><span>连续三晚失眠，回避上课</span></div><span class="dtm-todo-date">逾期 2 天</span></div>
+              <div class="dtm-todo-i"><span class="d"></span><div class="dtm-todo-bd"><b>张一鸣 · 今日面谈</b><span>两周未参加晚自习</span></div><span class="dtm-todo-date">18:00</span></div>
+              <div class="dtm-todo-i"><span class="d warn"></span><div class="dtm-todo-bd"><b>李思彤 · 随访</b><span>考试焦虑，确认睡眠</span></div><span class="dtm-todo-date warn">11-06</span></div>
+              <div class="dtm-todo-i"><span class="d gray"></span><div class="dtm-todo-bd"><b>王浩然 · 安排随访</b><span>室友冲突后社交回避</span></div><span class="dtm-todo-date" style="color:#86909C">未排期</span></div>
+            </div>
+
+            <div class="dtm-grid">
+              <div class="dtm-gi"><span class="dtm-gic">单</span><span>预警清单</span></div>
+              <div class="dtm-gi"><span class="dtm-gic orange">时</span><span>处置时限</span></div>
+              <div class="dtm-gi"><span class="dtm-gic green">势</span><span>态势分析</span></div>
+              <div class="dtm-gi"><span class="dtm-gic gray">档</span><span>学生档案</span></div>
+            </div>
+
+            <div class="dtm-card">
+              <div class="dtm-sh"><b>预警动态</b><span>近 3 天 ›</span></div>
+              <div class="dtm-tl-i"><span class="d red"></span><div class="dtm-tl-bd"><b>陈雨桐 触发高危预警</b><span>命中 3 个敏感词，已脱敏</span></div><span class="dtm-tl-time">22:40</span></div>
+              <div class="dtm-tl-i"><span class="d"></span><div class="dtm-tl-bd"><b>陈雨桐 辅导员谈话</b><span>约定今日继续跟进</span></div><span class="dtm-tl-time">昨天</span></div>
+              <div class="dtm-tl-i"><span class="d green"></span><div class="dtm-tl-bd"><b>赵梓涵 已闭环</b><span>家长约谈完成，两周后回访</span></div><span class="dtm-tl-time">11-02</span></div>
+            </div>
+
+            <div class="dtm-tab">
+              <a><i></i>消息</a><a><i></i>协作</a><a class="on"><i></i>工作台</a><a><i></i>我的</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="coverage"><b>功能落点：</b><span>指标卡</span><span>今日待办</span><span>预警动态</span><span>预警清单</span><span>宫格入口</span><span>干预登记</span><span>移动端底部页签</span></div>
+</section>
+
+<!-- ======================================================== 3 Apple -->
+<section class="sec" id="apple">
+  <div class="opt-head">
+    <span class="opt-no">3</span>
+    <div>
+      <div class="opt-title">Apple 原生 <small>macOS 分栏 / iOS 分组列表</small></div>
+      <p class="opt-desc">完全按苹果系统应用的结构来做：桌面是「侧边栏 + 列表 + 详情」三栏，对应 macOS 邮件 / 备忘录；移动端是大标题 + 分组列表，对应 iOS 健康 / 提醒事项。信息密度最低，读起来最轻，适合谈心与个案跟进。</p>
+      <div class="ref"><b>对标：</b><span>macOS 邮件三栏</span><span>iOS 提醒事项</span><span>Apple 健康</span><span>SF 字体 / 系统分组 / 44pt 行高</span></div>
+    </div>
+  </div>
+
+  <div class="screens">
+    <div class="frame desk-scroll">
+      <div class="frame-bar"><i></i><i></i><i></i><b>桌面端 · 三栏个案</b><span>1440 × 900</span></div>
+      <div class="desk">
+        <div class="ap">
+          <div class="ap-bar">
+            <div class="ap-lights"><i></i><i></i><i></i></div>
+            <span class="ap-tool">心理预警</span>
+            <div class="ap-seg"><b>待处置</b><b class="on">全部</b><b>已闭环</b></div>
+            <span class="ap-search">搜索</span>
+          </div>
+
+          <div class="ap-body">
+            <div class="ap-side">
+              <div class="ap-grp">预警</div>
+              <div class="ap-item on"><i class="dot"></i>待处置<b>12</b></div>
+              <div class="ap-item"><i class="dot"></i>高危未闭环<b>3</b></div>
+              <div class="ap-item"><i class="dot mid"></i>随访逾期<b>2</b></div>
+              <div class="ap-item"><i class="dot ok"></i>已闭环<b>28</b></div>
+              <div class="ap-grp">学生</div>
+              <div class="ap-item">陈雨桐</div>
+              <div class="ap-item">张一鸣</div>
+              <div class="ap-item">李思彤</div>
+              <div class="ap-item">全部 42 人<b>›</b></div>
+            </div>
+
+            <div class="ap-list">
+              <div class="ap-list-h">12 条待处置 · 按紧急度</div>
+              <div class="ap-li on"><b><i></i>陈雨桐</b><p>连续三晚失眠，回避上课与集体活动</p><span>随访逾期 2 天</span></div>
+              <div class="ap-li"><b><i></i>张一鸣</b><p>两周未参加晚自习，情绪持续低落</p><span>今日到期</span></div>
+              <div class="ap-li"><b><i style="background:#FF9500"></i>李思彤</b><p>考试焦虑，心慌、入睡困难</p><span>11-06 · 3 天后</span></div>
+              <div class="ap-li"><b><i style="background:#8E8E93"></i>王浩然</b><p>室友冲突后出现社交回避</p><span>未排随访</span></div>
+              <div class="ap-li"><b><i style="background:#8E8E93"></i>周知远</b><p>情绪低落，缺课 1 次</p><span>已等待 2 天</span></div>
+            </div>
+
+            <div class="ap-det">
+              <div class="ap-name">
+                <span class="ap-avatar">陈</span>
+                <div><h3>陈雨桐</h3><div class="m">2024 级 · 软件工程 · 随访逾期 48h</div></div>
+                <span class="lv">高危</span>
+              </div>
+
+              <div class="ap-quote">
+                “最近三晚都没怎么睡……感觉自己撑不下去了，不太想去上课，也不想跟人说话。”
+                <div class="src">AI 识别摘要 · 绵小城对话 11-01 22:40 · 已脱敏</div>
+              </div>
+
+              <div class="ap-sec">处置时间线</div>
+              <div class="ap-tl">
+                <div class="ap-tl-i key"><b>AI 识别 · 高危</b><span>11-01 22:40</span><p>命中 3 个敏感词，生成脱敏摘要并上报</p></div>
+                <div class="ap-tl-i"><b>辅导员谈话</b><span>11-02 09:20</span><p>学生愿意继续沟通，约定今日跟进</p></div>
+                <div class="ap-tl-i ok"><b>随访 · 今日到期</b><span>11-03</span><p>确认睡眠与出勤变化，必要时转介心理咨询</p></div>
+              </div>
+
+              <div class="ap-sec">建议下一步</div>
+              <div class="ap-adv">
+                <div class="ap-adv-i"><b>1. 今日完成面对面谈话</b><span>15 分钟内</span></div>
+                <div class="ap-adv-i"><b>2. 评估是否约谈家长</b><span>已持续 3 天</span></div>
+                <div class="ap-adv-i"><b>3. 准备心理咨询转介</b><span>按需</span></div>
+              </div>
+
+              <div class="ap-actions">
+                <button class="ap-btn primary">登记干预</button>
+                <button class="ap-btn">标记闭环</button>
+                <button class="ap-btn">查看成长档案</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-scroll">
+      <div class="frame">
+        <div class="frame-bar"><i></i><i></i><i></i><b>移动端 · 分组列表</b><span>390 × 844</span></div>
+        <div class="phone">
+          <div class="iosm">
+            <div class="ios-status"><span>9:41</span><span class="sr"><span>5G</span><span class="ios-batt"></span></span></div>
+            <div class="ios-nav">
+              <span class="ios-back"><span class="chev">‹</span>首页</span>
+              <span class="ios-title">心理预警</span>
+              <span class="ios-act">筛选</span>
+            </div>
+
+            <div class="ios-hero">
+              <div class="ios-lt">12 条待处理</div>
+              <div class="ios-sub">其中 3 条高危，2 条随访已逾期</div>
+            </div>
+
+            <div class="ios-group">
+              <div class="ios-stats">
+                <div class="ios-stat"><b>12</b><span>待处置</span></div>
+                <div class="ios-stat risk"><b>3</b><span>高危</span></div>
+                <div class="ios-stat"><b>2</b><span>逾期</span></div>
+                <div class="ios-stat ok"><b>28</b><span>已闭环</span></div>
+              </div>
+            </div>
+
+            <div class="ios-gh">最紧急<span>按随访时间</span></div>
+            <div class="ios-group">
+              <div class="ios-row">
+                <span class="ios-ava">陈</span>
+                <div class="ios-main"><div class="ios-name"><i></i>陈雨桐</div><div class="ios-desc">连续三晚失眠，回避上课与集体活动</div></div>
+                <div class="ios-trail"><b>逾期 2 天</b><span class="ios-chev">›</span></div>
+              </div>
+              <div class="ios-row">
+                <span class="ios-ava">张</span>
+                <div class="ios-main"><div class="ios-name"><i></i>张一鸣</div><div class="ios-desc">两周未参加晚自习，情绪持续低落</div></div>
+                <div class="ios-trail"><b>今日到期</b><span class="ios-chev">›</span></div>
+              </div>
+              <div class="ios-row">
+                <span class="ios-ava">李</span>
+                <div class="ios-main"><div class="ios-name"><i class="warn"></i>李思彤</div><div class="ios-desc">考试焦虑，心慌、入睡困难</div></div>
+                <div class="ios-trail"><b class="warn">3 天后</b><span class="ios-chev">›</span></div>
+              </div>
+              <div class="ios-row">
+                <span class="ios-ava">王</span>
+                <div class="ios-main"><div class="ios-name"><i style="background:#8E8E93"></i>王浩然</div><div class="ios-desc">室友冲突后社交回避</div></div>
+                <div class="ios-trail"><span>未排期</span><span class="ios-chev">›</span></div>
+              </div>
+            </div>
+
+            <div class="ios-gh">全部预警</div>
+            <div class="ios-group">
+              <div class="ios-plain">预警清单<span class="v">49 条</span><span class="ios-chev">›</span></div>
+              <div class="ios-plain">处置时限<span class="v">逾期 2</span><span class="ios-chev">›</span></div>
+              <div class="ios-plain">处置态势<span class="ios-chev">›</span></div>
+            </div>
+
+            <div class="ios-note">按随访日期与风险等级排序；数据与桌面端同源。</div>
+            <div class="ios-foot"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="coverage"><b>功能落点：</b><span>三栏个案</span><span>状态侧边栏</span><span>原话证据</span><span>处置时间线</span><span>建议下一步</span><span>干预 / 闭环 / 档案</span><span>iOS 分组列表</span></div>
+</section>
+
+<!-- ======================================================== 对比 -->
+<section class="compare">
+  <h2>三套的差别，用一句话说清</h2>
+  <p>都是市面上真实存在的产品结构，只是密度和重心不同。选哪套，取决于老师每天打开这个页面时最想先看到什么。</p>
+  <table>
+    <thead><tr><th style="width:15%">维度</th><th style="width:28%">1 · 飞书风格</th><th style="width:28%">2 · 钉钉风格</th><th style="width:29%">3 · Apple 原生</th></tr></thead>
+    <tbody>
+      <tr><td><b>核心页面</b></td><td>一张预警表格</td><td>工作台 + 待办</td><td>个案三栏 / 分组列表</td></tr>
+      <tr><td><b>老师第一眼</b></td><td>49 条预警的全貌与筛选</td><td>今天要处理哪几件事</td><td>这个学生发生了什么</td></tr>
+      <tr><td><b>信息密度</b></td><td>最高</td><td>中高</td><td>最低</td></tr>
+      <tr><td><b>学习成本</b></td><td>低（用过飞书几乎零成本）</td><td>低（和现有工作台一致）</td><td>中（需要重做一套组件）</td></tr>
+      <tr><td><b>与现有产品一致性</td><td>中（需引入飞书蓝与表格规范）</td><td>高（项目已有钉钉式模块）</td><td>低（原生系统语言差异明显）</td></tr>
+      <tr><td><b>移动端</b></td><td>列表 + 状态页签</td><td>深墨头部 + 浮层 + 宫格 + 页签</td><td>大标题 + 分组列表</td></tr>
+      <tr><td><b>适用场景</b></td><td>桌面批量处置为主</td><td>桌面 + 移动日常办公</td><td>深谈与个案跟进</td></tr>
+    </tbody>
+  </table>
+
+  <div class="reco">
+    <b>已选方向：</b><b>2 · 钉钉风格</b>，移动端头部由品牌蓝改为项目深墨色（#1E2227）。蓝色只保留在链接与选中态这类小面积元素，大面积色块全部交给黑白灰，红色仅用于高危与逾期这类风险语义。<br>
+    桌面端为「工作台 + 今日待办 + 预警动态 + 预警清单」，移动端为「深墨头部 + 白色浮层 + 宫格入口 + 底部页签」。全部现有能力均已落位：指标总览、等级 / 状态筛选、随访时限与逾期、清单分页、干预登记、标记闭环、跳转学生档案、学生 / 预警深链、移动端二级页与下拉刷新。
+  </div>
+</section>
+
+<div class="foot">
+  说明：以上为设计参考稿，不含真实学生数据；所有姓名与记录均为示例。参考产品结构：飞书多维表格 / 审批、钉钉工作台与宫格组件、Apple Human Interface Guidelines（分栏、分组列表、44pt 行高）。
+</div>
+
+<script>
+document.querySelectorAll('.nav a').forEach(function (a) {
+  a.addEventListener('click', function (e) {
+    var t = document.querySelector(a.getAttribute('href'));
+    if (!t) return;
+    e.preventDefault();
+    t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+</body>
+</html>

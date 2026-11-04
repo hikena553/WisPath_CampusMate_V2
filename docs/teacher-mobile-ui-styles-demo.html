@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="dqgkUgIuLy0DjrfxBXopAH">
+<head data-page-node-id="YtcCXBWGrgWBNp0oq2XkHh">
+<meta charset="UTF-8" data-page-node-id="wbYOEYAhjMUU4KTggUIOlX">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="8iglyyVWwELNluTfrZ8YGG">
+<title>教师端移动端 · 功能子页三套样式（可交互）</title>
+<style>
+/* ============================================================
+   0. 演示外壳（桌面端）
+   ============================================================ */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:#08090c;color:#e8edf4;
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(900px 520px at 16% -12%,rgba(79,139,249,.16),transparent 62%),
+    radial-gradient(760px 420px at 88% -6%,rgba(124,58,237,.14),transparent 62%),
+    radial-gradient(600px 400px at 60% 110%,rgba(34,211,238,.06),transparent 60%);
+}
+.shell{position:relative;z-index:1;max-width:1620px;margin:0 auto;padding:30px 26px 70px}
+
+/* 顶部 */
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:28px;flex-wrap:wrap;margin-bottom:24px}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 11px;border-radius:99px;
+  background:#0f131a;border:1px solid #1c222b;color:#8494a8;
+  font-size:10.5px;font-weight:750;letter-spacing:1.5px;text-transform:uppercase;
+}
+.eyebrow b{width:5px;height:5px;border-radius:99px;background:#4f8bf9;box-shadow:0 0 8px #4f8bf9}
+h1{margin:14px 0 9px;font-size:31px;line-height:1.24;letter-spacing:-1px;font-weight:770}
+h1 em{
+  font-style:normal;
+  background:linear-gradient(94deg,#7dd3fc 0%,#a78bfa 60%,#f0abfc 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.top p{margin:0;max-width:790px;font-size:13.5px;line-height:1.78;color:#93a0b2}
+.top p b{color:#dfe7f1;font-weight:650}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.stats span{
+  display:inline-flex;align-items:baseline;gap:5px;padding:5px 10px;border-radius:8px;
+  background:#0e1218;border:1px solid #1b2129;color:#7f8d9f;font-size:11px;
+}
+.stats span b{color:#c8d5e3;font-size:13px;font-weight:750;font-variant-numeric:tabular-nums}
+
+.modes{display:flex;gap:3px;padding:3px;background:#0f131a;border:1px solid #1c222b;border-radius:11px;height:fit-content}
+.modes button{
+  border:0;background:transparent;color:#7d8b9c;font:inherit;font-size:12.5px;font-weight:650;
+  padding:7px 15px;border-radius:8px;cursor:pointer;transition:.16s;
+}
+.modes button:hover{color:#c9d5e2}
+.modes button.on{background:#1e2530;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4)}
+
+/* 布局 */
+.grid{display:grid;grid-template-columns:252px minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:1180px){.grid{grid-template-columns:1fr}.rail{position:static!important;display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+
+/* 左侧栏 */
+.rail{position:sticky;top:18px;display:flex;flex-direction:column;gap:12px}
+.rail-box{background:#0d1116;border:1px solid #191f27;border-radius:13px;padding:11px 10px 10px}
+.rail-t{
+  margin:0 0 9px 4px;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#5f6d7d;
+}
+.skin-card{
+  display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;gap:1px 9px;
+  width:100%;text-align:left;border:1px solid transparent;background:transparent;
+  padding:8px 9px;border-radius:9px;cursor:pointer;transition:.15s;margin-bottom:2px;
+}
+.skin-card:hover{background:#12181f}
+.skin-card.on{background:#141b24;border-color:#26303d;box-shadow:inset 2px 0 0 #4f8bf9}
+.sc-dots{grid-row:1 / span 2;align-self:center;display:flex;gap:2px;padding:3px;border-radius:6px;background:#0a0d11}
+.sc-dots i{width:7px;height:14px;border-radius:2px;display:block}
+.sc-n{font-size:12.5px;font-weight:680;color:#d3dde8;letter-spacing:-.1px}
+.sc-d{font-size:10.5px;color:#6f7d8e}
+
+.page-item{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:7px;border:0;
+  background:transparent;color:#a2aebd;font:inherit;font-size:12.5px;text-align:left;cursor:pointer;transition:.13s;
+}
+.page-item:hover{background:#12181f;color:#e3ebf4}
+.page-item.on{background:#16202e;color:#fff;box-shadow:inset 2px 0 0 #4f8bf9}
+.pi-n{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:#53616f;width:15px;flex:0 0 auto}
+.pi-dot{width:5px;height:5px;border-radius:99px;background:#2f3a47;flex:0 0 auto}
+.page-item.on .pi-dot{background:#4f8bf9;box-shadow:0 0 6px #4f8bf9}
+.pi-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-pill{font-size:9px;color:#5c6b7b;background:#141a22;border:1px solid #1e2631;border-radius:4px;padding:0 4px;line-height:15px}
+
+.note{font-size:11.5px;line-height:1.72;color:#7b8899}
+.note b{color:#cdd8e5;font-weight:680}
+.note .nt{display:block;margin-bottom:7px;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#5f6d7d}
+.note .kv{display:flex;gap:6px;margin-top:6px}
+.note .kv span{flex:0 0 auto;color:#5f6d7d;font-size:10.5px}
+.note .kv em{font-style:normal;color:#a9b6c5;font-size:10.5px}
+.note code{
+  display:inline-block;margin-top:7px;font:10px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:#7d8fa8;background:#0a0e13;border:1px solid #1a2129;border-radius:5px;padding:3px 6px;
+}
+
+/* 怎么选 */
+.choose{margin:34px 0 0;padding:24px;background:#0c0f14;border:1px solid #191f27;border-radius:16px}
+.choose-hd{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.choose-hd h2{margin:0;font-size:16px;font-weight:760;letter-spacing:-.2px;color:#e8eef6}
+.choose-hd p{margin:0;font-size:12px;color:#7f8c9d;max-width:720px;line-height:1.65}
+.choose-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:1000px){.choose-grid{grid-template-columns:1fr}}
+.choose-card{position:relative;padding:14px 15px 15px;background:#0f141a;border:1px solid #1c232c;border-radius:12px;overflow:hidden}
+.choose-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--k)}
+.cc-top{display:flex;align-items:center;gap:8px}
+.cc-top b{font-size:13.5px;font-weight:760;color:#e9eff7;letter-spacing:-.1px}
+.cc-top span{margin-left:auto;font-size:9.5px;font-weight:700;color:var(--k);background:rgba(255,255,255,.04);border:1px solid #222a35;border-radius:99px;padding:2px 7px}
+.cc-d{margin:8px 0 10px;font-size:11.8px;line-height:1.66;color:#93a1b2}
+.choose-card dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 9px;font-size:11px}
+.choose-card dt{color:#5f6d7e;font-weight:700}
+.choose-card dd{margin:0;color:#a9b6c6;line-height:1.55}
+.mix{margin-top:14px;padding-top:13px;border-top:1px solid #1a2028;font-size:11.5px;line-height:1.8;color:#8b98a8}
+.mix b{color:#dbe4ee;font-weight:700}
+.kbd{display:inline-block;margin-left:6px;background:#12181f;border:1px solid #222a35;border-radius:5px;padding:1px 7px;font-size:10px;color:#8492a3}
+
+/* 手机 */
+.phones{display:flex;gap:26px;align-items:flex-start;padding:4px 2px 24px;overflow-x:auto;scrollbar-width:thin}
+.phones.single{justify-content:center;overflow:visible}
+.ph-col{flex:0 0 auto}
+.ph-head{display:flex;align-items:center;gap:7px;margin:0 0 11px 12px;font-size:12px;font-weight:680;color:#c6d0dc}
+.ph-head i{width:7px;height:7px;border-radius:99px;display:block;flex:0 0 auto}
+.ph-head span{font-size:10.5px;font-weight:500;color:#6d7a8a}
+
+.ph-wrap{width:390px;height:844px}
+.phone{
+  width:390px;height:844px;padding:9px;border-radius:52px;position:relative;
+  background:linear-gradient(165deg,#343942 0%,#0d0f13 52%,#22262d 100%);
+  box-shadow:
+    0 50px 90px -30px rgba(0,0,0,.95),
+    0 0 0 1px rgba(255,255,255,.075),
+    inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.phones.compare .ph-wrap{width:330px;height:714px}
+.phones.compare .phone{transform:scale(.8462);transform-origin:top left}
+
+/* ============================================================
+   1. 屏幕骨架（三套共用）
+   ============================================================ */
+.screen{
+  width:100%;height:100%;border-radius:44px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;
+  background:var(--bg);color:var(--ink);font-size:14px;isolation:isolate;
+}
+.sb{
+  height:42px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px 0 27px;font-size:12.5px;font-weight:680;letter-spacing:.2px;color:var(--ink);
+}
+.sb-r{display:flex;align-items:center;color:var(--ink)}
+.sb-r svg{display:block}
+
+.bar{height:52px;flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:0 10px;position:relative}
+.bar-bk{
+  width:30px;height:30px;flex:0 0 auto;border:0;background:transparent;color:var(--ink);
+  display:grid;place-items:center;border-radius:9px;cursor:pointer;opacity:.9;
+}
+.bar-bk:active{background:var(--tint-neutral)}
+.bar-t{font-size:17px;font-weight:690;letter-spacing:-.35px;line-height:1.2;white-space:nowrap}
+.bar-sub{font-size:9.5px;font-weight:600;color:var(--ink3);margin-left:2px;align-self:center;padding-top:5px}
+.bar-idx{
+  font:10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink3);letter-spacing:.5px;
+  padding:1px 5px;border:1px solid var(--line);border-radius:4px;margin-right:3px;
+}
+.bar-x{margin-left:auto;display:flex;align-items:center;gap:6px}
+.bar-ai{
+  height:29px;padding:0 9px;border-radius:9px;display:flex;align-items:center;gap:4px;
+  border:1px solid var(--ai-line);background:var(--ai-chip);color:var(--ai-act-ink);
+  font-size:10.5px;font-weight:750;letter-spacing:.2px;cursor:pointer;
+}
+.bar-ai b{font-size:10px}
+
+.content{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding-bottom:6px;display:flex;flex-direction:column}
+.content::-webkit-scrollbar{display:none}
+.content > *{flex:0 0 auto}
+
+/* AI 卡（每页都有） */
+.ai{
+  position:relative;overflow:hidden;margin:2px 14px 10px;padding:11px 12px 11px;
+  border-radius:var(--r-ai);background:var(--ai-bg);border:1px solid var(--ai-line);
+}
+.ai::after{
+  content:'';position:absolute;right:-34px;top:-46px;width:130px;height:130px;border-radius:50%;
+  background:var(--ai-glow);filter:blur(4px);pointer-events:none;
+}
+.ai-hd{display:flex;align-items:center;gap:6px;position:relative}
+.ai-mk{
+  width:17px;height:17px;flex:0 0 auto;border-radius:5px;display:grid;place-items:center;
+  background:var(--ai-grad);color:#fff;font-size:9px;line-height:1;
+  box-shadow:0 3px 9px -3px var(--ai-shadow);
+}
+.ai-lb{font-size:9.5px;font-weight:820;letter-spacing:1px;color:var(--ai-ink)}
+.ai-time{margin-left:auto;font-size:9.5px;color:var(--ink3);font-weight:600}
+.ai-t{margin:6px 0 0;font-size:12.6px;line-height:1.56;font-weight:560;color:var(--ink);position:relative;letter-spacing:-.1px}
+.ai-t b{font-weight:780;color:var(--ai-strong)}
+.ai-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;position:relative}
+.ai-a{
+  border:1px solid var(--ai-line);background:var(--ai-btn);color:var(--ai-act-ink);white-space:nowrap;flex:0 0 auto;
+  font:inherit;font-size:10.5px;font-weight:700;letter-spacing:.1px;padding:5px 9px;border-radius:7px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;transition:.15s;
+}
+.ai-a:active{transform:scale(.97)}
+.ai-a.pri{background:var(--ai-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px -6px var(--ai-shadow)}
+
+/* 分段 */
+.seg{display:flex;gap:3px;margin:0 14px 10px;padding:3px;border-radius:9px;background:var(--seg-bg)}
+.seg button{
+  flex:1;border:0;background:transparent;font:inherit;font-size:11.5px;font-weight:640;color:var(--ink3);
+  padding:6px 1px;border-radius:7px;cursor:pointer;white-space:nowrap;transition:.15s;
+}
+.seg button.on{background:var(--seg-on);color:var(--ink);box-shadow:var(--seg-sh)}
+
+/* 区块标题 */
+.sec{display:flex;align-items:baseline;gap:6px;padding:0 16px;margin:2px 0 7px}
+.sec-t{font-size:11px;font-weight:780;letter-spacing:.5px;color:var(--ink2);text-transform:uppercase}
+.sec-m{margin-left:auto;font-size:10px;color:var(--ink3);font-weight:600}
+
+/* 列表行 */
+.rows{padding:0 14px;display:flex;flex-direction:column;gap:7px}
+.row{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;position:relative;
+  background:var(--surf);border:1px solid var(--line);border-radius:var(--r);
+}
+.row.tap{cursor:pointer}
+.row.tap:active{background:var(--surf2)}
+.r-ic{
+  width:33px;height:33px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;
+  background:var(--tint);color:var(--tone);font-size:12px;font-weight:800;letter-spacing:-.3px;
+  font-variant-numeric:tabular-nums;
+}
+.r-bd{flex:1 1 auto;min-width:0}
+.r-t{font-size:13.2px;font-weight:650;letter-spacing:-.15px;display:flex;align-items:center;gap:5px;min-width:0}
+.r-t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-s{
+  margin-top:2px;font-size:10.6px;line-height:1.45;color:var(--ink3);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.r-s b{color:var(--ink2);font-weight:650}
+.r-ai{
+  margin-top:3px;font-size:9.8px;line-height:1.4;color:var(--ai-act-ink);font-weight:600;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;
+}
+.r-e{flex:0 0 auto;text-align:right;display:flex;align-items:center;gap:6px}
+.r-num{white-space:nowrap;font-size:15px;font-weight:780;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.1}
+.r-num small{font-size:9px;font-weight:600;color:var(--ink3);margin-left:1px;vertical-align:2px}
+
+/* 标签 */
+.tag{
+  display:inline-block;font-size:9.5px;font-weight:780;line-height:1.55;padding:1px 5px;
+  border-radius:4px;letter-spacing:.1px;white-space:nowrap;
+}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.ai{background:var(--ai-btn);color:var(--ai-act-ink)}
+.tag.mute{background:var(--tint-neutral);color:var(--ink3)}
+
+/* 小按钮 */
+.mini{display:inline-flex;gap:4px}
+.mini button{
+  width:27px;height:27px;border-radius:8px;border:1px solid var(--line);background:var(--surf);
+  color:var(--ink2);font-size:11px;display:grid;place-items:center;cursor:pointer;line-height:1;
+}
+.mini button.ok{color:var(--ok);border-color:var(--ok-line);background:var(--ok-soft)}
+.mini button.no{color:var(--bad);border-color:var(--bad-line);background:var(--bad-soft)}
+.mini button:disabled{opacity:.4}
+
+/* 通用卡 */
+.card{
+  margin:0 14px 8px;padding:11px 12px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r);
+}
+.card-hd{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+.card-hd .ct{font-size:12px;font-weight:700;letter-spacing:-.1px}
+.card-hd .cm{margin-left:auto;font-size:10px;color:var(--ink3)}
+.card-p{margin:0;font-size:11.4px;line-height:1.62;color:var(--ink2)}
+.card-p b{color:var(--ink);font-weight:680}
+
+/* 指标条 */
+.kpis{display:flex;gap:0;margin:0 14px 10px;padding:9px 2px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r)}
+.kpi{flex:1;text-align:center;position:relative;padding:0 4px}
+.kpi+.kpi::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:1px;background:var(--line)}
+.kpi b{display:block;font-size:17px;font-weight:790;letter-spacing:-.6px;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi span{display:block;font-size:9.5px;color:var(--ink3);font-weight:600;margin-top:1px}
+.kpi.bad b{color:var(--bad)}
+.kpi.warn b{color:var(--warn)}
+.kpi.ok b{color:var(--ok)}
+.kpi.grad b{background:var(--ai-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* 进度条 */
+.pbar{height:4px;border-radius:99px;background:var(--seg-bg);overflow:hidden;margin-top:7px}
+.pbar i{display:block;height:100%;border-radius:99px;background:var(--brand);transition:width .35s}
+.pbar.ai i{background:var(--ai-grad)}
+
+/* 进度环 */
+.ring{position:relative;width:50px;height:50px;flex:0 0 auto}
+.ring svg{transform:rotate(-90deg);display:block}
+.ring-bg{fill:none;stroke:var(--seg-bg);stroke-width:5}
+.ring-fg{fill:none;stroke:var(--brand);stroke-width:5;stroke-linecap:round;transition:stroke-dasharray .4s}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:12.5px;font-weight:790;letter-spacing:-.4px}
+
+/* 周条 */
+.wk{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:0 14px 9px}
+.wk-i{padding:6px 2px 5px;text-align:center;border-radius:8px;background:var(--surf);border:1px solid var(--line)}
+.wk-i em{display:block;font-style:normal;font-size:9px;color:var(--ink3);font-weight:650}
+.wk-i b{display:block;font-size:12.5px;font-weight:730;margin-top:1px;font-variant-numeric:tabular-nums}
+.wk-i i{display:block;height:3px;border-radius:99px;margin:4px 6px 0;background:var(--seg-bg)}
+.wk-i i.on{background:var(--brand)}
+.wk-i.today{border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
+
+/* 时间轴 */
+.tl{margin:0 14px 9px;position:relative;padding-left:13px}
+.tl::before{content:'';position:absolute;left:3px;top:6px;bottom:6px;width:1px;background:var(--line)}
+.tl-i{position:relative;padding:6px 0 6px 8px}
+.tl-i::before{content:'';position:absolute;left:-13px;top:12px;width:5px;height:5px;border-radius:99px;background:var(--line);box-shadow:0 0 0 2px var(--bg)}
+.tl-i.act::before{background:var(--brand);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--brand-soft)}
+.tl-h{display:flex;align-items:center;gap:6px}
+.tl-h b{font-size:12.4px;font-weight:660;letter-spacing:-.1px}
+.tl-s{font-size:10.3px;color:var(--ink3);margin-top:2px}
+
+/* 底部操作条 */
+.foot{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:9px 14px 13px;
+  background:var(--foot-bg);border-top:1px solid var(--foot-line);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);position:relative;z-index:3;
+}
+.btn-p{
+  flex:1;height:44px;border:0;border-radius:12px;background:var(--btn-bg);color:var(--btn-ink);
+  font:inherit;font-size:13.5px;font-weight:720;letter-spacing:-.1px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s;
+}
+.btn-p:active{transform:scale(.985)}
+.btn-p .sp{font-size:12px;opacity:.9}
+.btn-p .hint{font-size:10px;font-weight:600;opacity:.6;margin-left:2px}
+.btn-g{
+  width:44px;height:44px;flex:0 0 auto;border-radius:12px;border:1px solid var(--line);
+  background:var(--surf);color:var(--ink2);display:grid;place-items:center;cursor:pointer;
+}
+
+/* 尾部说明 */
+.tail{
+  display:flex;align-items:center;gap:5px;margin-top:auto;padding:10px 18px 10px;
+  font-size:9.8px;color:var(--ink3);line-height:1.5;
+}
+.tail b{color:var(--ink2);font-weight:700}
+
+/* toast */
+.toast{
+  position:absolute;left:50%;bottom:76px;transform:translateX(-50%);z-index:20;
+  background:var(--toast-bg);color:var(--toast-ink);font-size:11.5px;font-weight:650;
+  padding:8px 13px;border-radius:10px;box-shadow:0 10px 26px -8px rgba(0,0,0,.5);
+  white-space:nowrap;animation:tin .22s cubic-bezier(.2,.8,.3,1) both;max-width:320px;
+}
+@keyframes tin{from{opacity:0;transform:translate(-50%,8px) scale(.96)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+
+/* 输入 */
+.inp{
+  width:100%;border:1px solid var(--line);background:var(--surf2);border-radius:9px;
+  font:inherit;font-size:12px;color:var(--ink);padding:8px 10px;outline:none;
+}
+.inp::placeholder{color:var(--ink3)}
+.search{display:flex;align-items:center;gap:6px;margin:0 14px 9px;padding:0 10px;height:34px;background:var(--surf);border:1px solid var(--line);border-radius:9px}
+.search svg{opacity:.45}
+.search input{flex:1;border:0;background:transparent;outline:none;font:inherit;font-size:12px;color:var(--ink);min-width:0}
+.search input::placeholder{color:var(--ink3)}
+
+/* 头像 */
+.ava{
+  width:33px;height:33px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto;
+  font-size:12.5px;font-weight:750;color:#fff;letter-spacing:-.3px;
+}
+
+/* AI 展开块 */
+.aibox{
+  margin:0 0 0 0;padding:10px 11px;border-radius:9px;background:var(--ai-bg);
+  border:1px dashed var(--ai-line);font-size:11.3px;line-height:1.65;color:var(--ink2);
+  animation:exp .24s cubic-bezier(.2,.8,.3,1) both;
+}
+.aibox b{color:var(--ink);font-weight:700}
+.aibox ol{margin:5px 0 0;padding-left:16px}
+.aibox li{margin:2px 0}
+.aibox li::marker{color:var(--ai-act-ink);font-weight:800}
+@keyframes exp{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* 文本域 */
+.ta{
+  width:100%;min-height:78px;border:1px solid var(--line);border-radius:9px;background:var(--surf2);
+  font:inherit;font-size:11.5px;line-height:1.65;color:var(--ink);padding:9px 10px;resize:none;outline:none;
+}
+.ta:focus{border-color:var(--brand)}
+
+/* 雷达 */
+.radar{width:112px;height:112px;flex:0 0 auto}
+.radar .rg{fill:none;stroke:var(--line);stroke-width:1}
+.radar .ra{fill:var(--brand-soft);stroke:var(--brand);stroke-width:1.6;stroke-linejoin:round}
+.radar .rd{fill:var(--brand);r:2.2}
+
+/* AI 推荐卡 */
+.icard{
+  margin:0 14px 8px;padding:11px 12px;border-radius:var(--r);background:var(--surf);
+  border:1px solid var(--line);position:relative;overflow:hidden;
+}
+.icard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--ai-grad)}
+.icard.done{opacity:.55}
+.icard-h{display:flex;align-items:center;gap:7px}
+.icard-q{margin:6px 0 0;font-size:11.5px;line-height:1.6;color:var(--ink2);font-style:italic}
+.icard-q b{font-style:normal;color:var(--ink);font-weight:650}
+.icard-a{display:flex;gap:6px;margin-top:8px}
+
+/* AI 备注 */
+.insight{
+  margin:9px 14px 6px;padding:10px 11px;border-radius:var(--r);background:var(--surf2);
+  border:1px dashed var(--line2);display:flex;gap:8px;align-items:flex-start;
+}
+.insight .ai-mk{margin-top:1px}
+.insight b{display:block;font-size:9.4px;letter-spacing:.7px;color:var(--ai-act-ink);font-weight:820;margin-bottom:2px}
+.insight p{margin:0;font-size:10.8px;line-height:1.62;color:var(--ink2)}
+.insight p b{display:inline;font-size:inherit;letter-spacing:0;color:var(--ink);font-weight:700;margin:0}
+
+/* 空态 */
+.empty{padding:26px 20px;text-align:center;color:var(--ink3);font-size:11.5px;line-height:1.7}
+.empty b{display:block;color:var(--ink2);font-size:13px;font-weight:700;margin-bottom:3px}
+
+/* ============================================================
+   2. 样式 A · Clarity（清爽白 · AI 前置）
+   ============================================================ */
+.screen[data-skin="a"]{
+  --bg:#f4f5f7;--surf:#ffffff;--surf2:#f7f8fa;--line:#e9ebef;--line2:#dfe3e9;
+  --ink:#101318;--ink2:#4d5563;--ink3:#8b93a1;
+  --brand:#2563eb;--brand-soft:#eef2ff;
+  --ok:#067647;--ok-soft:#ecfdf3;--ok-line:#abefc6;--bad:#d92d20;--bad-soft:#fef3f2;--bad-line:#fecdca;
+  --warn:#b54708;--warn-soft:#fffaeb;
+  --tint-neutral:#f2f4f7;
+  --r:12px;--r-ai:14px;
+  --seg-bg:#eceef2;--seg-on:#ffffff;--seg-sh:0 1px 3px rgba(16,19,24,.1);
+  --ai-grad:linear-gradient(135deg,#4f46e5,#7c3aed);
+  --ai-bg:linear-gradient(135deg,#f3f2ff 0%,#faf6ff 100%);--ai-line:#e2ddfb;
+  --ai-ink:#5b4bd6;--ai-strong:#4c1d95;--ai-glow:radial-gradient(circle,rgba(124,58,237,.16),transparent 70%);
+  --ai-chip:#f3f0ff;--ai-btn:#ffffff;--ai-act-ink:#4f46e5;--ai-shadow:rgba(79,70,229,.55);
+  --foot-bg:rgba(255,255,255,.94);--foot-line:#eceef2;
+  --btn-bg:#101318;--btn-ink:#ffffff;
+  --toast-bg:#101318;--toast-ink:#fff;
+}
+.screen[data-skin="a"] .bar{border-bottom:1px solid var(--line);background:var(--surf)}
+.screen[data-skin="a"] .bar-ai{box-shadow:0 1px 2px rgba(79,70,229,.08)}
+.screen[data-skin="a"] .r-num{color:var(--ink)}
+
+/* ============================================================
+   3. 样式 B · Paper（暖纸 · 卡片抽屉）
+   ============================================================ */
+.screen[data-skin="b"]{
+  --bg:#f5efe4;--surf:#fffcf6;--surf2:#faf4e9;--line:#e8ddc9;--line2:#dccfb6;
+  --ink:#241f19;--ink2:#5f5546;--ink3:#9a8d79;
+  --brand:#16695c;--brand-soft:#e6f4ef;
+  --ok:#1c6b47;--ok-soft:#e9f5ec;--ok-line:#b9dfc6;--bad:#a8402f;--bad-soft:#fbeae5;--bad-line:#f0c8bd;
+  --warn:#8a6320;--warn-soft:#fbf0d8;
+  --tint-neutral:#f0e8da;
+  --r:18px;--r-ai:16px;
+  --seg-bg:#ece1cd;--seg-on:#fffdf8;--seg-sh:0 1px 2px rgba(90,70,40,.12);
+  --ai-grad:linear-gradient(135deg,#16695c,#2f8f7a);
+  --ai-bg:#fffaee;--ai-line:#e7d6b0;
+  --ai-ink:#8a6320;--ai-strong:#6b4a12;--ai-glow:radial-gradient(circle,rgba(196,150,60,.18),transparent 70%);
+  --ai-chip:#fbf1d8;--ai-btn:#fffdf7;--ai-act-ink:#8a6320;--ai-shadow:rgba(160,110,30,.4);
+  --foot-bg:rgba(250,244,233,.96);--foot-line:#e2d5bd;
+  --btn-bg:#1c5a4e;--btn-ink:#fffdf6;
+  --toast-bg:#2b2419;--toast-ink:#fff8ec;
+  font-family:"Songti SC","Noto Serif SC","Source Han Serif SC","STSong",-apple-system,"PingFang SC",serif;
+  background-image:radial-gradient(rgba(120,90,45,.055) 1px,transparent 1px);
+  background-size:4px 4px;
+}
+.screen[data-skin="b"] .bar{background:transparent}
+.screen[data-skin="b"] .bar-t{font-size:18px;font-weight:700;letter-spacing:0}
+.screen[data-skin="b"] .sb{font-family:-apple-system,"PingFang SC",sans-serif}
+.screen[data-skin="b"] .ai{border-style:dashed;box-shadow:0 1px 0 rgba(255,255,255,.6) inset;margin-bottom:6px}
+.screen[data-skin="b"] .tail{padding-bottom:8px}
+.screen[data-skin="b"] .ai-lb{letter-spacing:1.6px}
+.screen[data-skin="b"] .ai-t{font-size:13px;line-height:1.7}
+.screen[data-skin="b"] .rows{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.screen[data-skin="b"] .row{
+  flex-direction:column;align-items:flex-start;gap:4px;padding:9px 10px 8px;
+  border-radius:var(--r);box-shadow:0 1px 2px rgba(90,70,40,.05),0 6px 14px -12px rgba(90,70,40,.5);
+  min-height:78px;
+}
+.screen[data-skin="b"] .rows > .row:nth-child(odd):last-child{grid-column:1 / -1}
+.screen[data-skin="b"] .r-bd{width:100%}
+.screen[data-skin="b"] .row > .r-ic{width:29px;height:29px;border-radius:9px;font-size:11px}
+.screen[data-skin="b"] .r-e{align-self:flex-end;margin-top:auto}
+.screen[data-skin="b"] .r-t{font-size:13px;font-weight:700}
+.screen[data-skin="b"] .r-s{font-size:10.5px;color:var(--ink3)}
+.screen[data-skin="b"] .r-ai{-webkit-line-clamp:1}
+.screen[data-skin="b"] .row .ai-a{font-size:10px;padding:4px 8px}
+.screen[data-skin="b"] .insight{margin-top:7px;padding:9px 10px}
+.screen[data-skin="b"] .insight p{font-size:10.4px;line-height:1.55}
+.screen[data-skin="b"] .row{min-height:74px}
+.screen[data-skin="b"] .tail{padding-top:6px;padding-bottom:6px}
+.screen[data-skin="b"] .btn-p{border-radius:99px}
+.screen[data-skin="b"] .btn-g{border-radius:99px}
+.screen[data-skin="b"] .foot{border-top:1px dashed var(--foot-line)}
+.screen[data-skin="b"] .seg{border-radius:99px;padding:3px}
+.screen[data-skin="b"] .seg button{border-radius:99px}
+.screen[data-skin="b"] .tag{border-radius:99px;padding:1px 7px;font-weight:700}
+.screen[data-skin="b"] .bar-ai{border-radius:99px}
+.screen[data-skin="b"] .kpi b{font-family:-apple-system,"PingFang SC",sans-serif}
+
+/* ============================================================
+   4. 样式 C · Console（深色高密度 · 指挥台）
+   ============================================================ */
+.screen[data-skin="c"]{
+  --bg:#0a0c10;--surf:#11151b;--surf2:#0e1218;--line:#1e2531;--line2:#2a3341;
+  --ink:#e7eef7;--ink2:#9aabc0;--ink3:#64748b;
+  --brand:#22d3ee;--brand-soft:rgba(34,211,238,.12);
+  --ok:#34d399;--ok-soft:rgba(52,211,153,.13);--ok-line:rgba(52,211,153,.35);
+  --bad:#fb7185;--bad-soft:rgba(251,113,133,.14);--bad-line:rgba(251,113,133,.34);
+  --warn:#fbbf24;--warn-soft:rgba(251,191,36,.13);
+  --tint-neutral:#171d26;
+  --r:7px;--r-ai:8px;
+  --seg-bg:#0e131a;--seg-on:#1b2430;--seg-sh:none;
+  --ai-grad:linear-gradient(135deg,#8b5cf6,#a78bfa);
+  --ai-bg:linear-gradient(90deg,rgba(139,92,246,.16),rgba(34,211,238,.05) 70%,transparent);
+  --ai-line:#2e2545;
+  --ai-ink:#c4b5fd;--ai-strong:#ddd6fe;--ai-glow:radial-gradient(circle,rgba(139,92,246,.25),transparent 70%);
+  --ai-chip:rgba(139,92,246,.14);--ai-btn:rgba(139,92,246,.12);--ai-act-ink:#c4b5fd;--ai-shadow:rgba(139,92,246,.5);
+  --foot-bg:rgba(10,12,16,.96);--foot-line:#1e2531;
+  --btn-bg:#22d3ee;--btn-ink:#04161b;
+  --toast-bg:#e7eef7;--toast-ink:#0a0c10;
+  font-variant-numeric:tabular-nums;
+}
+.screen[data-skin="c"] .bar{border-bottom:1px solid var(--line)}
+.screen[data-skin="c"] .bar-t{font-size:16px;font-weight:650;letter-spacing:0}
+.screen[data-skin="c"] .ai{border-left:2px solid #a78bfa;border-radius:4px;padding:9px 11px}
+.screen[data-skin="c"] .ai-lb{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;letter-spacing:1.2px}
+.screen[data-skin="c"] .ai-t{font-size:12.2px;line-height:1.55}
+.screen[data-skin="c"] .ai-a{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;letter-spacing:.3px;border-radius:4px;padding:4px 7px}
+.screen[data-skin="c"] .row{border-radius:6px;padding:7px 9px;border-left:2px solid var(--tone,var(--line2))}
+.screen[data-skin="c"] .r-ic{width:26px;height:26px;border-radius:5px;font-size:10px}
+.screen[data-skin="c"] .r-t{font-size:12.4px}
+.screen[data-skin="c"] .r-s{font-size:10px}
+.screen[data-skin="c"] .r-num{font-size:14px}
+.screen[data-skin="c"] .seg{border:1px solid var(--line);border-radius:5px;padding:2px}
+.screen[data-skin="c"] .seg button{border-radius:4px;font-size:10.5px;font-family:inherit}
+.screen[data-skin="c"] .tag{border-radius:3px;font-size:9px;letter-spacing:.3px;font-family:ui-monospace,monospace}
+.screen[data-skin="c"] .card{border-radius:6px;background:#0f141a}
+.screen[data-skin="c"] .btn-p{border-radius:6px;font-size:12.5px;font-weight:750;letter-spacing:.3px}
+.screen[data-skin="c"] .btn-g{border-radius:6px}
+.screen[data-skin="c"] .sec-t{font-size:9.5px;letter-spacing:1.2px;font-family:ui-monospace,monospace;color:var(--ink3)}
+.screen[data-skin="c"] .foot{border-top:1px solid var(--line)}
+.screen[data-skin="c"] .kpis{border-radius:6px;background:#0f141a}
+.screen[data-skin="c"] .kpi b{font-size:16px}
+</style>
+</head>
+<body data-page-node-id="cB1w7jf6WVj78hfQ55vMlL">
+<div class="shell" data-page-node-id="elpQpPV4zCHdkzbT7CYNWo">
+  <header class="top" data-page-node-id="QyEchsAnMgncxbg1aGe3uD">
+    <div class="top-l" data-page-node-id="CWUTy93mchp9Mg66KHIzM6">
+      <span class="eyebrow" data-page-node-id="cf29OM8Y9VLGHnaq41oAI3"><b data-page-node-id="gkquORl9gv9l9gC6hztjWI"></b>教师端 · 移动端 · 功能子页</span>
+      <h1 data-page-node-id="dOuU7AXVkxpLek257R72UD">13 个功能页 · <em data-page-node-id="BzTxXG0HUvl4CImgqOrmIm">3 套样式</em> · 每页压到 1 屏</h1>
+      <p data-page-node-id="DvlsGAbstZJIviKdjotnNg">同一套信息骨架，三种视觉语言。每页顶部先由 <b data-page-node-id="FdEP7OEXi2DgbRoWmBTS38">AI 给结论</b>，中间只留需要你决定的东西，长内容收进抽屉而不是往下堆；底部主按钮永远是 AI 动作。数据结构沿用现有接口字段，选定后可只改渲染层。</p>
+      <div class="stats" data-page-node-id="MDI0DjTsoRW20gZ93E2sc9">
+        <span data-page-node-id="uz1c8sSlPJ66rBhRjnjzJi"><b data-page-node-id="hHIDGFkx6SImufHnCGCoaD">13</b> 功能页</span>
+        <span data-page-node-id="bi0BaZniY5h3um0W9hUj43"><b data-page-node-id="hiq47Tx3larYv7nrw7g9d5">≤1.2</b> 屏 / 页</span>
+        <span data-page-node-id="xjFQMWgUVyz1q8tv102xhN"><b data-page-node-id="TlBz7pqL4knvpCUe4UjJEE">13/13</b> 顶部有 AI 结论</span>
+        <span data-page-node-id="XJSkhSGgstvjUBkiN0mXnr"><b data-page-node-id="P8HAhq4Ts3fE2FguGvBFVA">13/13</b> 底部是 AI 动作</span>
+      </div>
+    </div>
+    <div class="modes" id="modes" data-page-node-id="zTvbZOGexQNWEPuQI3nBdL">
+      <button data-mode="compare" class="on" data-page-node-id="mzk5JaqGjPFzB8OvwRqQlC">三套并排</button>
+      <button data-mode="single" data-page-node-id="GWRnIR1gHEdvYkrvbtg9fC">单套放大</button>
+    </div>
+  </header>
+
+  <div class="grid" data-page-node-id="2hYxoklj0W5Ytk4NH6GVVN">
+    <aside class="rail" data-page-node-id="HL4WS98Wg97D7THddVeuPA">
+      <div class="rail-box" data-page-node-id="1A6GzOF4egRy6n2eWxbbnl">
+        <p class="rail-t" data-page-node-id="pdmoc5Xf1aGVA4dHeGPCvz">视觉样式</p>
+        <div id="skins" data-page-node-id="Mdhxs0dtPg2evDwuobjA6z"></div>
+      </div>
+      <div class="rail-box" data-page-node-id="KAGtXw6lTnqbR4PEgToHRe">
+        <p class="rail-t" data-page-node-id="OXAdcuLBgyCsfakchuLR0H">功能子页</p>
+        <div id="pagelist" data-page-node-id="CoKZCDDpRtsBZiuyT7qO7X"></div>
+      </div>
+      <div class="rail-box note" id="note" data-page-node-id="RA9NKWtGLIsEqTU1jHCnkZ"></div>
+    </aside>
+    <main data-page-node-id="CwtqICGGot74qp0oWi4oRy">
+      <div class="phones compare" id="phones" data-page-node-id="2WITPsGihpszNYrnBloLVb"></div>
+    </main>
+  </div>
+
+  <section class="choose" data-page-node-id="tyKZeteVtn7G0IUdhCggN5">
+    <div class="choose-hd" data-page-node-id="xJYFzvbWUJTFHFmzDaQI3r">
+      <h2 data-page-node-id="3Vqs87L2yDCrW0NmD9bzlI">怎么选</h2>
+      <p data-page-node-id="obL7G89r2E65FhozbFzOer">三套共用同一套信息骨架和同一份数据，换样式只换 CSS 变量与容器形态 —— 也可以按页混用。</p>
+    </div>
+    <div class="choose-grid" data-page-node-id="ctLoPYO3STbp3Q2FK1Emwv">
+      <article class="choose-card" style="--k:#6366f1" data-page-node-id="xkjJcSVLtTo9mUBTAF1s0f">
+        <div class="cc-top" data-page-node-id="A4SFgjsH726nPkH7GTbzlA"><b data-page-node-id="lgvcjoBVb9swbXewywjvha">A · Clarity</b><span data-page-node-id="3NCntDZ0mINAfgq6CfHrkV">默认推荐</span></div>
+        <p class="cc-d" data-page-node-id="ROsLQBOQoYS4EdXBVgoC5n">清爽白 + AI 前置。每页第一块就是 AI 结论，列表单列、行高 60 上下，一屏 4 条。</p>
+        <dl data-page-node-id="fPPYYmgRa76OTuA0T6tL7D">
+          <dt data-page-node-id="3PSmT7yul0b3pvVAgAu6zo">适合</dt><dd data-page-node-id="jzmk90BM61eG64PyrdDp7R">日常高频使用，一盯一整天；老师要的是「结论先给我」</dd>
+          <dt data-page-node-id="32C6GCK3FCwsdQTUFzqgJH">代价</dt><dd data-page-node-id="r3mzBXBDxZJjQX4AJOsftD">视觉最常规，和市面工具同质化；AI 存在感靠紫色卡撑</dd>
+          <dt data-page-node-id="ClRBpxjJlu0m0tfFQharzY">留给</dt><dd data-page-node-id="ADt6ArQjqeLtxUGNUEcPU3">全部 13 页的默认皮肤</dd>
+        </dl>
+      </article>
+      <article class="choose-card" style="--k:#b08442" data-page-node-id="Ja4hVHlkAMO9icOOJbG0LO">
+        <div class="cc-top" data-page-node-id="fLb2FQP4ipItDuwvjAFakW"><b data-page-node-id="ttnq5z4gkkn8aydLGV2ccT">B · Paper</b><span data-page-node-id="wIzmneRqS4Expnm6L610Wg">有人情味</span></div>
+        <p class="cc-d" data-page-node-id="9TXyCixnFYu09FULMIu9ug">暖纸底 + 衬线标题 + 双列卡片，AI 变成贴在页面上的便签，点开才展开提纲。</p>
+        <dl data-page-node-id="XH4W6HWHazOW8EybMBmLEF">
+          <dt data-page-node-id="Z0xkWS6ja0HZMLceofTc0U">适合</dt><dd data-page-node-id="xjc1Bu6c2T57GGeMBiSXz2">育人 / 关怀 / 家校这类要「像老师写的」的页面</dd>
+          <dt data-page-node-id="7j5FAax8C7di3vEqGC0swi">代价</dt><dd data-page-node-id="eE7ZftK0PyGukNWQ97mepP">双列密度低 15%，长姓名会挤；深色模式需另做一版</dd>
+          <dt data-page-node-id="tFKSrcWDpQKL6zTtf2BHVZ">留给</dt><dd data-page-node-id="UMPMCYbFr0CyRp0BQO0c4i">关怀中心 · 成长档案 · 家校沟通</dd>
+        </dl>
+      </article>
+      <article class="choose-card" style="--k:#22d3ee" data-page-node-id="kcxITXQHupn0z6NoL3KJEc">
+        <div class="cc-top" data-page-node-id="ZkLVPSaFAR9a6wLaMrmJOL"><b data-page-node-id="A6Dwx8sIFtwbOfNSVWAMXi">C · Console</b><span data-page-node-id="2kmZ24fnqk72lO9faRdnFz">高压工作台</span></div>
+        <p class="cc-d" data-page-node-id="zRXFd1vqoBFivdxZVYArnO">深色 + 等宽数字 + 左侧状态条，一屏 6–8 条；AI 缩成一行紫色指令条。</p>
+        <dl data-page-node-id="rUtoVgn3bv1ONtcBW9hT5d">
+          <dt data-page-node-id="5BGr2F4rrEhMbSyKi67VFu">适合</dt><dd data-page-node-id="ORmYkQ5wiB1mqOtdEaWBNe">盯预警、批量审批这种「要在 30 秒内扫完」的场景</dd>
+          <dt data-page-node-id="d5hsyaJpAvDdnIujMiCuWY">代价</dt><dd data-page-node-id="CMA7TBSYQihRWuUpprSAmR">白天户外可读性差；深色下红绿对比要重调</dd>
+          <dt data-page-node-id="ll0Q2eBO5puRgDmvZlpRP4">留给</dt><dd data-page-node-id="WW2qCSS5GkGcUr66ApXYlt">预警 · 审批（也可只做夜间模式）</dd>
+        </dl>
+      </article>
+    </div>
+    <div class="mix" data-page-node-id="H1FVPKnAZLPJ7t9VA75J65">
+      <b data-page-node-id="s2VuyLVOiDMhDnxvh3gQg9">混用建议</b> A 打底 → 预警 / 审批换成 C → 关怀 / 档案 / 家校换成 B。共用骨架意味着换皮成本约等于一份 CSS 变量，不需要重写页面结构。
+      <span class="kbd" data-page-node-id="XSrFCGWjwKbjQ4Gdasto9o">点左侧页面切页</span><span class="kbd" data-page-node-id="apIAmEjdu7JZCaxaoxvcB5">三套并排对比</span><span class="kbd" data-page-node-id="N0frXft3S7NZCOK5ulPZlA">点样式卡放大</span>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ============================================================
+   数据层（字段对齐真实后端：crisis_level / score / growth_count）
+   ============================================================ */
+const T = { name:'王砚秋', className:'软件工程 2301', students:42 };
+
+const STU = [
+  {n:'林晓阳', sc:52, cr:'severe',  g:3,  last:'3 天前', note:'室友反馈连续失眠'},
+  {n:'邓一鸣', sc:45, cr:'severe',  g:0,  last:'5 天前', note:'两周内 3 次缺勤'},
+  {n:'苏雨欣', sc:61, cr:'moderate',g:2,  last:'6 天前', note:'作息紊乱'},
+  {n:'何书宁', sc:57, cr:'moderate',g:1,  last:'9 天前', note:'成绩下滑 12 分'},
+  {n:'黄佳琪', sc:74, cr:'mild',    g:5,  last:'2 天前', note:'社团冲突'},
+  {n:'罗嘉言', sc:66, cr:'mild',    g:2,  last:'4 天前', note:'请假偏多'},
+  {n:'吴浩然', sc:68, cr:null,      g:0,  last:'12 天前',note:'状态平稳'},
+  {n:'郑心怡', sc:82, cr:'mild',    g:7,  last:'昨天',   note:'竞赛备赛'},
+  {n:'周天佑', sc:88, cr:null,      g:9,  last:'今天',   note:'状态良好'},
+  {n:'韩以宁', sc:96, cr:null,      g:11, last:'今天',   note:'状态良好'}
+];
+const CR_TXT = {severe:'高危', moderate:'关注', mild:'观察'};
+const CR_TONE = {severe:'bad', moderate:'warn', mild:'ok'};
+
+const APPROVALS = [
+  {id:1, n:'林晓阳', type:'病假', span:'9/12 – 9/14 · 3 天', mat:'材料 3/4', ai:'缺诊断证明，建议先追问再批', tone:'warn', auto:false},
+  {id:2, n:'邓一鸣', type:'事假', span:'9/13 · 1 天',       mat:'材料 4/4', ai:'有未闭环预警，建议面谈后再批', tone:'bad', auto:false},
+  {id:3, n:'苏雨欣', type:'公假', span:'9/15 · 2 天',       mat:'材料 4/4', ai:'材料齐全，与课表无冲突', tone:'ok', auto:true},
+  {id:4, n:'黄佳琪', type:'病假', span:'9/16 · 1 天',       mat:'材料 4/4', ai:'医院盖章已核验', tone:'ok', auto:true},
+  {id:5, n:'罗嘉言', type:'事假', span:'9/17 · 1 天',       mat:'材料 4/4', ai:'本月第 3 次请假，可提醒', tone:'warn', auto:true},
+  {id:6, n:'何书宁', type:'公假', span:'9/18 · 2 天',       mat:'材料 4/4', ai:'赛事名单已比对一致', tone:'ok', auto:true}
+];
+
+const CARE = [
+  {n:'林晓阳', s:'7 天未联系 · 上次谈心提到「不想上课」', tone:'bad',  tag:'优先'},
+  {n:'苏雨欣', s:'5 天未联系 · 室友反映作息紊乱',        tone:'warn', tag:'本周'},
+  {n:'何书宁', s:'9 天未联系 · 学业下滑 12 分',          tone:'warn', tag:'本周'}
+];
+
+const GUARDIANS = [
+  {n:'林晓阳 妈妈', q:'"孩子这周怎么没去上课？"', t:'2 小时前', unread:true},
+  {n:'邓一鸣 爸爸', q:'"想问下实习单位怎么安排"', t:'5 小时前', unread:true},
+  {n:'苏雨欣 妈妈', q:'已回复 · 家长确认收到',    t:'昨天',    unread:false}
+];
+
+const PORT = {
+  '林晓阳':[
+    {ic:'竞', t:'省级 ACM 程序设计 铜奖', s:'2026-05 · 团队第 2 作者', tone:'ok'},
+    {ic:'志', t:'社区志愿服务 48 小时',   s:'2026-04 · 累计 6 次', tone:'ok'},
+    {ic:'课', t:'数据结构 62 分',         s:'2026-06 · 较上学期 -11', tone:'bad'}
+  ],
+  '苏雨欣':[
+    {ic:'文', t:'校园征文 二等奖', s:'2026-05 · 校级', tone:'ok'},
+    {ic:'社', t:'心理协会 组织部部长', s:'2026-03 至今', tone:'ok'},
+    {ic:'课', t:'高等数学 71 分', s:'2026-06 · 持平', tone:'warn'}
+  ],
+  '郑心怡':[
+    {ic:'竞', t:'蓝桥杯 省一', s:'2026-04 · 个人赛', tone:'ok'},
+    {ic:'项', t:'校园二手平台 前端负责人', s:'2026-05 · 上线', tone:'ok'},
+    {ic:'课', t:'平均绩点 3.7', s:'2026-06 · 专业前 8%', tone:'ok'}
+  ]
+};
+
+const TASKS = [
+  {id:'t1', t:'找 林晓阳 谈一次', s:'高危 · 74 小时无有效接触 · AI 已拟提纲', m:'12 分钟', tone:'bad',  pri:'现在'},
+  {id:'t2', t:'批 3 条请假申请',   s:'2 条材料齐全已核验，1 条需你判断',        m:'6 分钟',  tone:'warn', pri:'上午'},
+  {id:'t3', t:'回 林晓阳妈妈 的消息', s:'AI 草稿已就绪，改两句就能发',           m:'3 分钟',  tone:'ok',   pri:'今天'}
+];
+
+const AI_RECS = [
+  {id:'r1', n:'林晓阳', why:'高危 · 74 小时无接触 · 上次谈心提到失眠',
+   q:'「这周你几乎没来上课，我不想给你压力，只想先知道你还好吗。」'},
+  {id:'r2', n:'苏雨欣', why:'关注 · 分数 3 周连降 · 社团退部',
+   q:'「听说你退了社团，是时间排不开，还是有别的原因？」'},
+  {id:'r3', n:'何书宁', why:'关注 · 9 天未联系 · 高数挂科风险',
+   q:'「高数这学期有点吃力？我这边有个补课名单，要不要看看？」'}
+];
+
+const NAV = [
+  {g:'工作台', items:[
+    {id:'tasks',  n:'今日重点', pill:'AI 编排'},
+    {id:'ai',     n:'AI 洞察',  pill:'推荐'},
+    {id:'students',n:'学生档案',pill:'分诊'}
+  ]},
+  {g:'学生事务', items:[
+    {id:'approval', n:'审批',   pill:'待批 6'},
+    {id:'crisis',   n:'预警',   pill:'紧急 1'},
+    {id:'care',     n:'关怀中心',pill:'待谈 3'},
+    {id:'guardian', n:'家校沟通',pill:'未读 2'}
+  ]},
+  {g:'成长与教学', items:[
+    {id:'portfolio',n:'成长档案'},
+    {id:'survey',   n:'问卷互评'},
+    {id:'schedule', n:'查课表'},
+    {id:'teaching', n:'我的课堂'},
+    {id:'growth',   n:'我的成长'},
+    {id:'announcement', n:'公告', pill:'草稿 2'}
+  ]}
+];
+
+const SKINS = [
+  {id:'a', n:'A · Clarity', d:'AI 前置 · 清爽白', dot:['#f4f5f7','#101318','#4f46e5']},
+  {id:'b', n:'B · Paper',   d:'卡片抽屉 · 暖纸',   dot:['#f5efe4','#241f19','#16695c']},
+  {id:'c', n:'C · Console', d:'高密度 · 深色台',   dot:['#0a0c10','#e7eef7','#22d3ee']}
+];
+
+const NOTES = {
+  tasks:{len:'4 块长列表 → 1 屏', ai:'AI 排序 + 代办 2 项，人只剩 3 件事', api:'GET /teacher-tasks/summary'},
+  ai:{len:'独立 AI 页 → 3 张卡', ai:'理由 + 开场白都写好，一键采纳成任务', api:'POST /teacher-tasks'},
+  students:{len:'4 格指标 + 图表 → 1 屏', ai:'按「先联系谁」分诊，图表下沉', api:'GET /teacher/students'},
+  approval:{len:'2107 行 → 1.1 屏', ai:'材料核验 + 风险比对，只留 2 条要判断', api:'POST /approval/{kind}/{id}/review'},
+  crisis:{len:'6 段平铺 → 1 屏', ai:'72 小时接触计时 + 三步介入方案', api:'GET /crisis/students'},
+  care:{len:'1794 行 → 1 屏', ai:'按风险排序，提纲点开才出现', api:'POST /care-center/events/generate'},
+  guardian:{len:'1026 行 → 1 屏', ai:'分流「可自动回」与「必须你说」，草稿可改', api:'GET /guardians/overview'},
+  portfolio:{len:'5 类混排 → 1 屏', ai:'186 条记录归并 5 类，评语有素材', api:'GET /portfolio/certificates'},
+  survey:{len:'问卷列表 → 1 屏', ai:'区分度分析，直接换掉无效题', api:'GET /survey/list'},
+  schedule:{len:'周网格 → 1 屏', ai:'冲突检测 + 找空闲时段', api:'GET /teaching/classes'},
+  teaching:{len:'考勤/作业/成绩 → 1 屏', ai:'出勤趋势 + 预批 12 份（94%）', api:'GET /teaching/overview'},
+  growth:{len:'九维雷达 → 1 屏', ai:'对标同院均值，指出唯一短板', api:'GET /teacher-me/growth'},
+  announcement:{len:'704 行 → 1 屏', ai:'按课表冲突给发布时间建议 + 起草', api:'GET /announcement/list'}
+};
+
+/* ============================================================
+   状态
+   ============================================================ */
+const S = {
+  mode:'compare', skin:'a', page:'tasks',
+  seg:{}, approved:[], rejected:[], done:[], open:{}, pick:{},
+  reply:'', draft:'', evalTxt:'', surveyNew:false, admitted:[], q:'', stu:'林晓阳',
+  toast:null, plan:false, slot:false, preChecked:false
+};
+
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const segKey = id => S.seg[id] ?? 0;
+
+function toast(t){ S.toast = t; render(); clearTimeout(window.__tt); window.__tt = setTimeout(()=>{ S.toast=null; render(); }, 2100); }
+
+function tag(txt, tone){ return '<span class="tag '+(tone||'mute')+'">'+esc(txt)+'</span>'; }
+function num(v, unit){ return '<div class="r-num">'+v+(unit?'<small>'+unit+'</small>':'')+'</div>'; }
+
+function row(o){
+  return '<div class="row'+(o.tap?' tap':'')+'"'+(o.act?' data-act="'+o.act+'"':'')
+    +' style="--tone:'+(o.tone||'var(--line2)')+';--tint:'+(o.tint||'var(--tint-neutral)')+'">'
+    +(o.ic?'<span class="r-ic">'+o.ic+'</span>':'')
+    +'<div class="r-bd"><div class="r-t"><span>'+o.t+'</span>'+(o.tag||'')+'</div>'
+    +(o.s?'<div class="r-s">'+o.s+'</div>':'')
+    +(o.ai?'<div class="r-ai">'+o.ai+'</div>':'')+'</div>'
+    +(o.end?'<div class="r-e">'+o.end+'</div>':'')+'</div>';
+}
+function insight(txt){
+  return '<div class="insight"><span class="ai-mk">✦</span><div><b>AI 还注意到</b><p>'+txt+'</p></div></div>';
+}
+function seg(items){
+  return '<div class="seg">'+items.map((it,i)=>'<button class="'+(segKey(S.page)===i?'on':'')+'" data-act="seg:'+i+'">'+it+'</button>').join('')+'</div>';
+}
+function aiBlock(o){
+  return '<div class="ai"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">'+o.lb+'</span><span class="ai-time">'+(o.time||'刚刚')+'</span></div>'
+    +'<p class="ai-t">'+o.tx+'</p>'
+    +'<div class="ai-acts">'+(o.acts||[]).map((a,i)=>'<button class="ai-a'+(i===0?' pri':'')+'" data-act="'+a.a+'">'+a.t+'</button>').join('')+'</div>'
+    +'</div>';
+}
+
+/* ============================================================
+   渲染：三套共用同一套骨架
+   ============================================================ */
+const META = {
+  tasks:{t:'今日重点', sub:'周四 10:24', idx:'01'},
+  ai:{t:'AI 洞察', sub:'每周更新', idx:'02'},
+  students:{t:'学生档案', sub:'42 人', idx:'03'},
+  approval:{t:'审批', sub:'待批 6', idx:'04'},
+  crisis:{t:'预警', sub:'紧急 1', idx:'05'},
+  care:{t:'关怀中心', sub:'待谈 3', idx:'06'},
+  guardian:{t:'家校沟通', sub:'未读 2', idx:'07'},
+  portfolio:{t:'成长档案', sub:'186 条', idx:'08'},
+  survey:{t:'问卷互评', sub:'进行中 1', idx:'09'},
+  schedule:{t:'查课表', sub:'第 3 周', idx:'10'},
+  teaching:{t:'我的课堂', sub:'软件 2301', idx:'11'},
+  growth:{t:'我的成长', sub:'9 月', idx:'12'},
+  announcement:{t:'公告', sub:'草稿 2', idx:'13'}
+};
+
+const IC = {
+  back:'<svg width="9" height="15" viewBox="0 0 9 15" fill="none"><path d="M7.4 1.2L1.6 7.5l5.8 6.3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  search:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.4" stroke="currentColor" stroke-width="1.5"/><path d="M9.4 9.4L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  share:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.6v8.2M5 4.4L8 1.5l3 2.9M2.6 8.6v4.2c0 .6.5 1 1 1h8.8c.6 0 1-.4 1-1V8.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  ok:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1.4 6.3l3 3 6.2-6.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  no:'<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1.2 1.2l8.6 8.6M9.8 1.2L1.2 9.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
+};
+
+function statusbar(){
+  return '<div class="sb"><span>9:41</span><span class="sb-r">'
+    +'<svg width="54" height="12" viewBox="0 0 54 12" fill="none">'
+    +'<rect x="0" y="6.4" width="2.6" height="5.2" rx="0.8" fill="currentColor"/>'
+    +'<rect x="4.4" y="4.4" width="2.6" height="7.2" rx="0.8" fill="currentColor"/>'
+    +'<rect x="8.8" y="2.4" width="2.6" height="9.2" rx="0.8" fill="currentColor"/>'
+    +'<rect x="13.2" y="0.6" width="2.6" height="11" rx="0.8" fill="currentColor"/>'
+    +'<path d="M22.6 4.6a7.4 7.4 0 0 1 9.4 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+    +'<path d="M24.9 7.2a4.1 4.1 0 0 1 4.8 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+    +'<circle cx="27.3" cy="10" r="1.25" fill="currentColor"/>'
+    +'<rect x="39" y="1.6" width="12.4" height="8.8" rx="2.6" stroke="currentColor" stroke-opacity=".45" stroke-width="1"/>'
+    +'<rect x="40.4" y="3" width="8.6" height="6" rx="1.5" fill="currentColor"/>'
+    +'<path d="M52.8 4.6v2.8" stroke="currentColor" stroke-opacity=".45" stroke-width="1.2" stroke-linecap="round"/>'
+    +'</svg></span></div>';
+}
+
+function footAI(label, act, hint){
+  return '<button class="btn-g" data-act="toast:已生成分享链接，24 小时内有效">'+IC.share+'</button>'
+    +'<button class="btn-p" data-act="'+act+'"><span class="sp">✦</span>'+label
+    +(hint?'<span class="hint">'+hint+'</span>':'')+'</button>';
+}
+
+/* ---------------- 01 今日重点 ---------------- */
+function pTasks(){
+  const ai = aiBlock({
+    lb:'AI 今日编排', time:'10:24 更新',
+    tx:'5 件事里只有 <b>3 件需要你出手</b>，其余 2 件我已代处理（回执 1 · 归档 1），并按截止时间排好了序。',
+    acts:[{t:'采纳这个顺序', a:'toast:已按截止时间重排'},{t:'看我代办了哪些', a:'toast:2 件已代办，回执在「已归档」'}]
+  });
+  const doneN = S.done.length;
+  let body = '<div class="kpis">'
+    +'<div class="kpi bad"><b>'+(3-doneN)+'</b><span>待办</span></div>'
+    +'<div class="kpi ok"><b>'+doneN+'</b><span>已完成</span></div>'
+    +'<div class="kpi grad"><b>21</b><span>预计分钟</span></div>'
+    +'</div>';
+  body += seg(['今天 3','本周 5','已归档 12']);
+  const k = segKey('tasks');
+  if(k===0){
+    body += '<div class="sec"><span class="sec-t">按截止时间</span><span class="sec-m">AI 已排序</span></div><div class="rows">';
+    body += TASKS.map(function(t){
+      const done = S.done.indexOf(t.id)>=0;
+      const col = done?'var(--ok)':(t.tone==='bad'?'var(--bad)':t.tone==='warn'?'var(--warn)':'var(--brand)');
+      return row({
+        ic: done ? '✓' : '●', tone: col,
+        tint: done?'var(--ok-soft)':(t.tone==='bad'?'var(--bad-soft)':t.tone==='warn'?'var(--warn-soft)':'var(--brand-soft)'),
+        t:'<span style="'+(done?'text-decoration:line-through;opacity:.5':'')+'">'+t.t+'</span>',
+        s:t.s, tag: done?tag('已完成','ok'):tag(t.pri, t.tone==='bad'?'bad':'mute'),
+        end: done?num('—'):num(t.m.replace(' 分钟',''),'分'),
+        act:'toggle:'+t.id, tap:true
+      });
+    }).join('')+'</div>';
+    body += '<div class="card"><div class="card-hd"><span class="ct">AI 已代办</span><span class="cm">不用你确认</span></div>'
+      +'<div class="card-p">· 已向 邓一鸣 发送面谈邀约，等对方选时间<br>· 已归档 2 条无关通知，没有打扰你</div></div>';
+  } else if(k===1){
+    body += '<div class="rows">'
+      + row({ic:'三', t:'周三前完成 3 次家长沟通', s:'补齐「家校沟通」维度 · 已排进日历', end:num('2','次')})
+      + row({ic:'五', t:'周五班会 · 讲评成长档案', s:'AI 已生成 6 页讲稿', end:num('6','页')})
+      + row({ic:'月', t:'本月 42 人谈心覆盖', s:'已完成 36 人，剩 6 人', end:num('86','%')})
+      +'</div>';
+  } else {
+    body += '<div class="rows">'
+      + row({ic:'✓', tone:'var(--ok)', tint:'var(--ok-soft)', t:'回复 苏雨欣 家长', s:'昨天 21:10 · AI 起草，你改了 1 句', end:tag('已闭环','ok')})
+      + row({ic:'✓', tone:'var(--ok)', tint:'var(--ok-soft)', t:'提交国庆去向统计', s:'昨天 16:02 · AI 汇总 42 人', end:tag('已闭环','ok')})
+      +'</div>';
+  }
+  return {ai:ai, body:body, foot:footAI('开始第一件 · 12 分钟','toast:已进入面谈准备模式'),
+    tail:'<b>AI</b> 已同步给年级组 · 你的待办变化会实时更新'};
+}
+
+/* ---------------- 02 AI 洞察 ---------------- */
+function pAi(){
+  const ai = aiBlock({
+    lb:'AI 主动发现', time:'基于 7 天数据',
+    tx:'今天有 <b>3 个学生</b>值得你主动联系。理由和开场白都写好了，采纳即变成今日待办。',
+    acts:[{t:'全部采纳（3）', a:'gen:ai'},{t:'说说判断依据', a:'toast:依据：预警等级 + 联系间隔 + 成绩斜率'}]
+  });
+  let body = AI_RECS.map(function(r){
+    const on = S.admitted.indexOf(r.id)>=0;
+    return '<div class="icard'+(on?' done':'')+'">'
+      +'<div class="icard-h"><span class="ava" style="background:var(--ai-grad)">'+r.n.slice(0,1)+'</span>'
+      +'<div class="r-bd"><div class="r-t"><span>'+r.n+'</span>'+tag(on?'已采纳':'AI 建议','ai')+'</div>'
+      +'<div class="r-s" style="margin-top:2px">'+r.why+'</div></div></div>'
+      +'<p class="icard-q">'+r.q+'</p>'
+      +'<div class="icard-a"><button class="ai-a pri" data-act="admit:'+r.id+'">'+(on?'已加入待办':'采纳，加入今天')+'</button>'
+      +'<button class="ai-a" data-act="toast:已换一种开场（更简短）">换一句</button></div>'
+      +'</div>';
+  }).join('');
+  return {ai:ai, body:body, foot:footAI('让 AI 继续分析全班','toast:正在重算 42 人的联系优先级…'),
+    tail:'<b>依据</b>：预警等级 · 联系间隔 · 成绩斜率 · 出勤变化，四项加权'};
+}
+
+/* ---------------- 03 学生档案 ---------------- */
+function pStudents(){
+  const ai = aiBlock({
+    lb:'AI 分诊', time:'今早扫描',
+    tx:'本周 <b>2 人新触发预警</b>，3 人分数下滑超过 10 分。已按「先联系谁」排好，不用你自己比。',
+    acts:[{t:'为什么是他俩', a:'toast:高危 + 失联 ≥7 天，触发今日必联'},{t:'导出待联名单', a:'toast:已导出 5 人 CSV'}]
+  });
+  const k = segKey('students');
+  const list = STU.filter(function(x){
+    if(S.q) return x.n.indexOf(S.q)>=0;
+    if(k===0) return x.cr==='severe';
+    if(k===1) return x.cr==='severe'||x.cr==='moderate';
+    return true;
+  }).slice(0,4);
+  let body = '<label class="search">'+IC.search+'<input placeholder="搜姓名 / 学号" value="'+esc(S.q)+'" data-act="q"></label>'
+    + seg(['必须今天 2','本周 3','全部 42']);
+  body += '<div class="rows">' + (list.length?list.map(function(x){
+      return row({
+        ic:x.n.slice(0,1), tone: x.cr?('var(--'+CR_TONE[x.cr]+')'):'var(--ink2)',
+        tint: x.cr?('var(--'+CR_TONE[x.cr]+'-soft)'):'var(--tint-neutral)',
+        t:x.n, s:'综合 '+x.sc+' · 成果 '+x.g+' · 最近联系 '+x.last,
+        tag:x.cr?tag(CR_TXT[x.cr],CR_TONE[x.cr]):tag('平稳','mute'),
+        end:num(x.sc), act:'toast:打开 '+x.n+' 的档案抽屉', tap:true
+      });
+    }).join('') : '<div class="empty"><b>没有匹配的学生</b>换个关键词试试</div>') + '</div>';
+  if(!S.q && k===0){
+    body += '<div class="card"><div class="card-hd"><span class="ct">✦ 为什么只推 2 人</span><span class="cm">分诊规则</span></div>'
+      +'<div class="card-p">高危直接进「今天」；关注类要同时满足<b>失联 ≥7 天</b>才升级，其余排进本周。</div></div>';
+    body += '<div class="sec"><span class="sec-t">接下来 · 本周</span><span class="sec-m">不用今天联系</span></div><div class="rows">'
+      + STU.filter(function(x){ return x.cr==='moderate'; }).map(function(x){
+          return row({
+            ic:x.n.slice(0,1), tone:'var(--warn)', tint:'var(--warn-soft)',
+            t:x.n, s:'综合 '+x.sc+' · 最近联系 '+x.last,
+            tag:tag('关注','warn'), end:num(x.sc), act:'toast:打开 '+x.n+' 的档案抽屉', tap:true
+          });
+        }).join('') + '</div>';
+  }
+  if(!S.q && k===2){
+    body += '<div class="rows" style="margin-top:7px">'+row({ic:'…', t:'展开全部 42 人', s:'按评分 / 预警 / 成果排序', end:'<span style="font-size:11px;color:var(--ink3)">列表 ›</span>', tap:true, act:'toast:已切到数据表视图'})+'</div>';
+  }
+  return {ai:ai, body:body, foot:footAI('按风险重新排序','toast:已按风险 + 失联时长重排'),
+    tail:'字段对齐 <b>crisis_level / score / growth_count</b>，不新增数据结构'};
+}
+
+/* ---------------- 04 审批 ---------------- */
+function pApproval(){
+  const pend = APPROVALS.filter(function(a){ return S.approved.indexOf(a.id)<0 && S.rejected.indexOf(a.id)<0; });
+  const judge = pend.filter(function(a){ return !a.auto; });
+  const auto = pend.filter(function(a){ return a.auto; });
+  const ai = aiBlock({
+    lb:'AI 材料核验', time:'6 条已过检',
+    tx: pend.length
+      ? '6 条待批：<b>'+auto.length+' 条我已核验完</b>（材料齐全、与课表无冲突），可一键通过；剩下 <b>'+judge.length+' 条需要你判断</b>。'
+      : '6 条全部处理完。其中 <b>'+S.approved.length+' 条 AI 已核验</b>，你只判断了 '+S.rejected.length+' 条。',
+    acts:[{t:'为什么这 2 条要我看', a:'toast:缺诊断证明 + 该生有未闭环预警'}]
+  });
+  const k = segKey('approval');
+  let body = seg(['待处理 '+pend.length,'已通过 '+S.approved.length,'已驳回 '+S.rejected.length]);
+
+  if(k===0){
+    if(auto.length){
+      body += '<div class="card" style="display:flex;align-items:center;gap:10px">'
+        +'<span class="r-ic" style="--tone:var(--ok);color:var(--ok);background:var(--ok-soft)">'+auto.length+'</span>'
+        +'<div class="r-bd"><div class="r-t"><span>'+auto.length+' 条材料齐全</span>'+tag('AI 已核验','ai')+'</div>'
+        +'<div class="r-s" style="margin-top:2px">'+auto.map(function(a){return a.n;}).join(' · ')+'</div></div>'
+        +'<button class="ai-a pri" data-act="batch">通过</button></div>';
+    }
+    if(judge.length){
+      body += '<div class="sec"><span class="sec-t">需要你判断 · '+judge.length+'</span><span class="sec-m">AI 不敢替你决定</span></div><div class="rows">'
+        + judge.map(function(a){
+            const tone = a.tone==='bad'?'bad':'warn';
+            return row({
+              ic:a.n.slice(0,1), tone:'var(--'+tone+')', tint:'var(--'+tone+'-soft)',
+              t:a.n+' · '+a.type, s:'<b>'+a.span+'</b> · '+a.mat, ai:'✦ '+a.ai,
+              end:'<div class="mini"><button class="ok" data-act="approve:'+a.id+'">'+IC.ok+'</button><button class="no" data-act="reject:'+a.id+'">'+IC.no+'</button></div>'
+            });
+          }).join('') + '</div>';
+    }
+    if(!auto.length && !judge.length){
+      body += '<div class="empty"><b>清空了</b>本轮 6 条已全部处理</div>';
+    }
+    body += '<div class="kpis" style="margin-top:9px"><div class="kpi ok"><b>12</b><span>本周通过</span></div>'
+      +'<div class="kpi bad"><b>3</b><span>本周驳回</span></div><div class="kpi grad"><b>3.2</b><span>平均用时/分钟</span></div></div>';
+  } else {
+    const arr = k===1?S.approved:S.rejected;
+    body += '<div class="rows">' + (arr.length?arr.map(function(id){
+      const a = APPROVALS.filter(function(x){return x.id===id;})[0]; if(!a) return '';
+      return row({ic:a.n.slice(0,1), t:a.n+' · '+a.type, s:a.span+' · '+(k===1?'已通知学生':'已附驳回原因'),
+        end:'<button class="ai-a" data-act="undo:'+id+'">撤回</button>'});
+    }).join('') : '<div class="empty"><b>还没有记录</b>处理后会出现在这里</div>') + '</div>';
+  }
+  return {ai:ai, body:body, foot:footAI('一键通过 '+auto.length+' 条','batch'),
+    tail:'通过会以你的名义发出，<b>24 小时内可撤回</b>'};
+}
+
+/* ---------------- 05 预警 ---------------- */
+function pCrisis(){
+  const ai = aiBlock({
+    lb:'AI 风险计时', time:'74 小时',
+    tx:'林晓阳已 <b>74 小时</b>无有效接触，建议今天 16:00 前完成联系。我拟了三步介入路径。',
+    acts:[{t:'看介入方案', a:'gen:plan'},{t:'我已联系，暂停提醒', a:'toast:已暂停 48 小时提醒'}]
+  });
+  let body = '<div class="kpis">'
+    +'<div class="kpi bad"><b>1</b><span>紧急</span></div>'
+    +'<div class="kpi warn"><b>2</b><span>关注</span></div>'
+    +'<div class="kpi"><b>4</b><span>观察</span></div>'
+    +'</div>';
+  body += '<div class="card" style="border-left:2px solid var(--bad)">'
+    +'<div class="card-hd"><span class="ava" style="background:linear-gradient(135deg,#fb7185,#e11d48)">林</span>'
+    +'<div class="r-bd"><div class="r-t"><span>林晓阳</span>'+tag('高危','bad')+'</div>'
+    +'<div class="r-s" style="margin-top:1px">3 天前触发 · 室友反馈连续失眠 · 上次谈心 8/26</div></div>'
+    +'<span class="r-num" style="font-size:19px">52</span></div>'
+    +(S.plan?'<div class="aibox" style="margin-top:8px"><b>✦ 三步介入（AI 起草）</b><ol>'
+      +'<li>今天 15:00 前联系室友，确认作息与情绪</li>'
+      +'<li>16:00 约谈：先谈睡眠，不谈成绩</li>'
+      +'<li>若出现自伤表述，立即上报并联系心理中心</li></ol></div>'
+      :'<div class="card-p" style="margin-top:4px">上次谈心提到「不想上课」。建议<b>今天先找室友</b>，再约他本人。</div>')
+    +'</div>';
+  body += '<div class="rows">'
+    + row({ic:'邓', tone:'var(--bad)', tint:'var(--bad-soft)', t:'邓一鸣', s:'综合 45 · 两周 3 次缺勤', tag:tag('高危','bad'), end:num('45')})
+    + row({ic:'苏', tone:'var(--warn)', tint:'var(--warn-soft)', t:'苏雨欣', s:'综合 61 · 作息紊乱', tag:tag('关注','warn'), end:num('61')})
+    + row({ic:'+4', tone:'var(--ink3)', tint:'var(--tint-neutral)', t:'还有 4 人观察中', s:'mild 等级，7 天自动复查', end:'<span style="font-size:11px;color:var(--ink3)">全部 ›</span>', tap:true, act:'toast:已切到观察名单'})
+    +'</div>';
+  body += insight('邓一鸣的 3 次预警都发生在<b>周日晚</b>，更像作息倒挂而不是情绪问题，介入方式可以不一样。');
+  return {ai:ai, body:body, foot:footAI('生成介入方案并派单','gen:plan'),
+    tail:'危机等级来自 <b>crisis_level</b>；「多久没联系」由服务端计算'};
+}
+
+/* ---------------- 06 关怀中心 ---------------- */
+function pCare(){
+  const ai = aiBlock({
+    lb:'AI 关怀排序', time:'3 人待谈',
+    tx:'3 人超过 7 天没联系。林晓阳上次提到「不想上课」，<b>建议先谈他</b>，提纲我写好了。',
+    acts:[{t:'生成谈心提纲', a:'gen:care'},{t:'批量发提醒', a:'toast:已给 3 人发预约消息'}]
+  });
+  const k = segKey('care');
+  let body = seg(['待谈心 3','已记录 8','重点跟进 2']);
+
+  if(k===0){
+    body += '<div class="rows">' + CARE.map(function(c,i){
+      const tone = c.tone==='bad'?'bad':'warn';
+      return '<div class="row tap" data-act="open:'+i+'" style="--tone:var(--'+tone+');--tint:var(--tint-neutral);flex-wrap:wrap">'
+      +'<span class="r-ic" style="color:var(--'+tone+');background:var(--'+tone+'-soft)">'+c.n.slice(0,1)+'</span>'
+      +'<div class="r-bd"><div class="r-t"><span>'+c.n+'</span>'+tag(c.tag, tone)+'</div>'
+      +'<div class="r-s">'+c.s+'</div></div>'
+      +'<div class="r-e">'+(S.open[i]?'<span style="font-size:10.5px;color:var(--ai-act-ink)">收起</span>':'<span style="font-size:10.5px;color:var(--ink3)">提纲 ›</span>')+'</div>'
+      +(S.open[i]?'<div class="aibox"><b>✦ 谈心提纲</b><ol><li>开场先问睡眠，不问成绩</li><li>让他说一件这周「还行」的事</li><li>收尾只约定一件小事：明天来上第 1 节</li></ol><div style="margin-top:5px;color:var(--ink3)">谈心后 10 分钟内记得写记录</div></div>':'')
+      +'</div>';
+    }).join('') + '</div>';
+    body += insight('林晓阳两次谈心都提到<b>室友</b>，关系问题可能比学业更关键，建议先单独问一次宿舍情况。');
+  } else if(k===1){
+    body += '<div class="rows">'
+      + row({ic:'林', t:'林晓阳 · 个别谈心', s:'8/26 · 40 分钟 · 睡眠问题', end:tag('已记录','ok')})
+      + row({ic:'苏', t:'苏雨欣 · 电话沟通', s:'8/28 · 12 分钟 · 作息', end:tag('已记录','ok')})
+      + row({ic:'郑', t:'郑心怡 · 竞赛压力疏导', s:'8/30 · 25 分钟 · 状态回升', end:tag('已记录','ok')})
+      +'</div>';
+    body += '<div class="card"><div class="card-hd"><span class="ct">本月关怀记录</span><span class="cm">8 条</span></div>'
+      +'<div class="kpis" style="margin:0;border:0;padding:6px 0 0"><div class="kpi"><b>8</b><span>谈心</span></div>'
+      +'<div class="kpi"><b>2</b><span>家访</span></div><div class="kpi ok"><b>4</b><span>已好转</span></div></div></div>';
+  } else {
+    body += '<div class="rows">'
+      + row({ic:'林', tone:'var(--bad)', tint:'var(--bad-soft)', t:'林晓阳', s:'高危 · 每周 1 次，已谈 2 次', end:tag('第 3 次','warn')})
+      + row({ic:'何', tone:'var(--warn)', tint:'var(--warn-soft)', t:'何书宁', s:'学业预警 · 两周 1 次', end:tag('待安排','mute')})
+      +'</div>';
+    body += '<div class="card"><div class="card-hd"><span class="ct">✦ 跟进计划（AI 排）</span><span class="cm">未来 14 天</span></div>'
+      +'<div class="card-p">林晓阳：本周五前第 3 次谈心，重点问宿舍关系<br>何书宁：下周三补课名单确认后约谈</div></div>';
+  }
+  return {ai:ai, body:body, foot:footAI('按提纲开始记录','toast:已进入记录模式，可语音转写'),
+    tail:'谈心记录写入 <b>care_events</b>，家长可见部分自动脱敏'};
+}
+
+/* ---------------- 07 家校沟通 ---------------- */
+function pGuardian(){
+  const ai = aiBlock({
+    lb:'AI 分流', time:'2 未读',
+    tx:'2 条可自动回复；<b>林晓阳妈妈这条必须你亲自说</b>——涉及缺课原因，我不代你表态。',
+    acts:[{t:'起草回复', a:'gen:reply'},{t:'自动回那 2 条', a:'toast:已按你的常用语气发送'}]
+  });
+  const k = segKey('guardian');
+  let body = seg(['未读 2','待回 1','已回 14']);
+  body += '<div class="rows">' + GUARDIANS.slice(0, k===2?3:2).map(function(g,i){
+    return row({ic:g.n.slice(0,1), t:g.n, s:g.q, tag: g.unread?tag('未读','bad'):tag('已回','mute'),
+      end:'<span style="font-size:9.5px;color:var(--ink3)">'+g.t+'</span>',
+      act:'pick:'+i, tap:true});
+  }).join('') + '</div>';
+  if(S.reply){
+    body += '<div class="card"><div class="card-hd"><span class="ct">✦ AI 草稿</span><span class="cm">可直接改</span></div>'
+      +'<textarea class="ta" data-act="reply">'+esc(S.reply)+'</textarea>'
+      +'<div style="display:flex;gap:6px;margin-top:7px">'
+      +'<button class="ai-a" data-act="tone">换一种语气</button>'
+      +'<button class="ai-a" data-act="toast:已发送给林晓阳妈妈">直接发送</button></div></div>';
+  }
+  if(!S.reply) body += insight('林晓阳妈妈过去 3 次都在<b>周日晚</b>发消息，那个时间她最有空，回复打开率也最高。');
+  return {ai:ai, body:body, foot:footAI('AI 起草回复','gen:reply'),
+    tail:'发送后自动写入 <b>contact_logs</b>，家长端同步可见'};
+}
+
+/* ---------------- 08 成长档案 ---------------- */
+function pPortfolio(){
+  const ai = aiBlock({
+    lb:'AI 记录归并', time:'186 条',
+    tx:'42 人共 186 条记录，已归并为 <b>5 类</b>。'+S.stu+' 有 2 条可作评语素材，评语我起了一版。',
+    acts:[{t:'写学期评语', a:'gen:eval'},{t:'看归并规则', a:'toast:竞赛 / 志愿 / 课程 / 项目 / 荣誉'}]
+  });
+  const names = Object.keys(PORT);
+  let body = '<div style="display:flex;gap:6px;padding:0 14px;margin-bottom:9px;overflow-x:auto">'
+    + names.map(function(n){ return '<button class="ai-a'+(S.stu===n?' pri':'')+'" data-act="stu:'+n+'" style="border-radius:99px;flex:0 0 auto">'+n+'</button>'; }).join('')
+    + '</div>';
+  body += '<div class="rows">' + PORT[S.stu].map(function(r){
+    const tone = r.tone==='bad'?'bad':r.tone==='warn'?'warn':'ok';
+    return row({
+      ic:r.ic, tone:'var(--'+tone+')', tint:'var(--'+tone+'-soft)',
+      t:r.t, s:r.s, end:tag(r.tone==='bad'?'需关注':r.tone==='warn'?'持平':'亮点', tone)
+    });
+  }).join('') + '</div>';
+  if(S.evalTxt){
+    body += '<div class="card"><div class="card-hd"><span class="ct">✦ 学期评语（初稿）</span><span class="cm">120 字</span></div>'
+      +'<p class="card-p">'+S.evalTxt+'</p></div>';
+  }
+  body += insight('他的 2 条亮点都和<b>动手</b>有关（竞赛、项目），评语往「愿意解决真实问题」上写，比夸成绩更准。');
+  return {ai:ai, body:body, foot:footAI('AI 写学期评语','gen:eval', S.evalTxt?'已生成':''),
+    tail:'评语可一键套用到评优表，字数按学校模板 120 字'};
+}
+
+/* ---------------- 09 问卷互评 ---------------- */
+function pSurvey(){
+  const ai = aiBlock({
+    lb:'AI 题目体检', time:'上学期数据',
+    tx:'上学期有 <b>3 道题区分度 &lt; 0.2</b>，等于白问。新题已按 5 维能力生成，可一键替换。',
+    acts:[{t:'替换这 3 题', a:'gen:survey'},{t:'看区分度报告', a:'toast:区分度最高的是 Q7（0.61）'}]
+  });
+  let body = '<div class="card" style="border-left:2px solid var(--brand)">'
+    +'<div class="card-hd"><span class="ct">2026 秋季 班级互评</span><span class="cm">还剩 3 天</span></div>'
+    +'<div style="display:flex;align-items:baseline;gap:6px"><span class="r-num" style="font-size:22px">34</span>'
+    +'<span style="font-size:10.5px;color:var(--ink3)">/ 42 人已填 · 81%</span></div>'
+    +'<div class="pbar"><i style="width:81%"></i></div></div>';
+  const qs = S.surveyNew
+    ? [{t:'他会在小组里主动承担最难的部分', v:'新', tone:'ai'},{t:'遇到分歧时，他会先听完再表达', v:'新', tone:'ai'},{t:'这学期他的学习状态在变好', v:'新', tone:'ai'}]
+    : [{t:'他愿意帮助同学解决学习问题', v:'0.58', tone:'ok'},{t:'他上课经常迟到或早退', v:'0.11', tone:'bad'},{t:'他这学期更愿意表达了', v:'0.17', tone:'bad'}];
+  body += '<div class="sec"><span class="sec-t">'+(S.surveyNew?'AI 新题':'题目区分度')+'</span><span class="sec-m">'+(S.surveyNew?'已替换':'&lt; 0.2 视为无效')+'</span></div><div class="rows">'
+    + qs.map(function(q,i){
+      const tone = S.surveyNew ? 'ai' : q.tone;
+      const col = tone==='ok'?'var(--ok)':tone==='bad'?'var(--bad)':'var(--ai-act-ink)';
+      return row({ic:String(i+1), tone:col, tint: tone==='ok'?'var(--ok-soft)':tone==='bad'?'var(--bad-soft)':'var(--ai-btn)',
+        t:q.t, s: S.surveyNew?'AI 生成 · 可编辑 · 5 维能力':(q.tone==='ok'?'有效题，建议保留':'区分度不足，建议替换'),
+        tag:tag(S.surveyNew?'新题':'D '+q.v, tone)});
+    }).join('') + '</div>';
+  body += insight('题目里「是否迟到」这类<b>行为题</b>区分度普遍偏低，换成「愿不愿意」的意愿题会更准。');
+  return {ai:ai, body:body, foot:footAI('AI 生成整套问卷','gen:survey'),
+    tail:'回收率低于 60% 时会自动提醒未填学生'};
+}
+
+/* ---------------- 10 查课表 ---------------- */
+function pSchedule(){
+  const ai = aiBlock({
+    lb:'AI 冲突检测', time:'第 3 周',
+    tx:'周三 3–4 节与教研会冲突，已标出。今天第 6 节后没有课，<b>可以安排一次面谈</b>。',
+    acts:[{t:'找空闲时段', a:'gen:slot'},{t:'看调课建议', a:'toast:建议把教研会挪到周四 10:00'}]
+  });
+  const k = segKey('schedule');
+  let body = seg(['今天','本周','按班级']);
+  if(k===0){
+    body += '<div class="tl">'
+      +'<div class="tl-i'+(S.slot?'':' act')+'"><div class="tl-h"><b>08:00–09:40</b>'+tag('软件 2301','mute')+'</div><div class="tl-s">数据结构 · 实验楼 A305 · 48 人</div></div>'
+      +'<div class="tl-i"><div class="tl-h"><b>10:00–11:40</b>'+tag('软件 2302','mute')+'</div><div class="tl-s">数据结构 · 实验楼 A305 · 46 人</div></div>'
+      +'<div class="tl-i'+(S.slot?' act':'')+'"><div class="tl-h"><b>15:40 之后</b>'+(S.slot?tag('AI 推荐','ai'):tag('空闲','ok'))+'</div>'
+      +'<div class="tl-s">'+(S.slot?'建议 16:00 约谈 林晓阳，空 2 小时':'无课，可安排面谈 / 批材料')+'</div></div>'
+      +'</div>';
+  } else if(k===1){
+    body += '<div class="rows">'
+      + row({ic:'三', tone:'var(--bad)', tint:'var(--bad-soft)', t:'周三 3–4 节 · 教研会', s:'与软件 2302 实验课冲突', tag:tag('冲突','bad'), end:'<button class="ai-a" data-act="toast:已生成调课方案（A/B 两版）">调课</button>'})
+      + row({ic:'四', t:'周四 10:00 · 教研室例会', s:'无课，可参加', tag:tag('正常','ok')})
+      + row({ic:'五', t:'周五 19:00 · 学术讲座', s:'与 3 个班实验课冲突', tag:tag('冲突','bad'), end:'<button class="ai-a" data-act="toast:建议改到周四 19:00">改期</button>'})
+      +'</div>';
+  } else {
+    body += '<div class="rows">'
+      + row({ic:'01', tone:'var(--brand)', tint:'var(--brand-soft)', t:'软件 2301', s:'数据结构 · 每周 4 节 · 48 人', end:num('4','节')})
+      + row({ic:'02', tone:'var(--brand)', tint:'var(--brand-soft)', t:'软件 2302', s:'数据结构 · 每周 4 节 · 46 人', end:num('4','节')})
+      + row({ic:'03', tone:'var(--brand)', tint:'var(--brand-soft)', t:'软件 2303', s:'程序设计基础 · 每周 2 节 · 44 人', end:num('2','节')})
+      +'</div>';
+  }
+  body += '<div class="sec"><span class="sec-t">本周概览</span><span class="sec-m">12 节 · 1 处冲突</span></div>'
+    +'<div class="wk">'
+    +[['一',4],['二',3],['三',4],['四',2],['五',3]].map(function(d,i){
+      return '<div class="wk-i'+(i===3?' today':'')+'"><em>周'+d[0]+'</em><b>'+d[1]+'</b><i class="'+(d[1]>=3?'on':'')+'"></i></div>';
+    }).join('')
+    +'</div>';
+  body += insight('你周三的课连着教研会，是<b>唯一会超时</b>的一天；把教研会挪到周四 10:00 后整周都顺。');
+  return {ai:ai, body:body, foot:footAI('把空闲时段排进日程','gen:slot'),
+    tail:'课表为教务公共数据，冲突检测在服务端完成'};
+}
+
+/* ---------------- 11 我的课堂 ---------------- */
+function pTeaching(){
+  const ai = aiBlock({
+    lb:'AI 课堂分析', time:'近 2 周',
+    tx:'软件 2301 连续 2 周出勤下滑 <b>6%</b>。12 份作业可预批（置信度 94%），你只需复核 2 份。',
+    acts:[{t:'预批这 12 份', a:'gen:pre'},{t:'谁在掉队', a:'toast:5 人连续 2 周缺勤 ≥2 次'}]
+  });
+  const k = segKey('teaching');
+  let body = '<div class="card" style="display:flex;align-items:center;gap:12px">'
+    +'<div class="ring"><svg width="50" height="50" viewBox="0 0 50 50"><circle class="ring-bg" cx="25" cy="25" r="20"/>'
+    +'<circle class="ring-fg" cx="25" cy="25" r="20" stroke-dasharray="110 126"/></svg><b>88%</b></div>'
+    +'<div class="r-bd"><div class="r-t"><span>本周出勤</span>'+tag('↓ 6%','bad')+'</div>'
+    +'<div class="r-s">缺勤 5 人 · 迟到 3 人 · 请假 2 人</div></div>'
+    +'<button class="ai-a" data-act="toast:已生成 5 人跟进名单">名单</button></div>';
+  body += seg(['考勤','作业 12','成绩']);
+  if(k===1){
+    body += '<div class="rows">'
+      + row({ic:'作', t:'实验三 实验报告', s:'已提交 38/46 · 待批 12 份', tag:tag('待批','warn'),
+        end: S.preChecked?tag('AI 已批','ai'):'<button class="ai-a" data-act="gen:pre">预批</button>'})
+      + row({ic:'作', t:'课后习题 第 4 章', s:'已提交 44/46 · 已批完', end:tag('已完成','ok')})
+      +'</div>';
+  } else if(k===2){
+    body += '<div class="kpis"><div class="kpi"><b>78.4</b><span>班级均分</span></div>'
+      +'<div class="kpi bad"><b>6</b><span>不及格</span></div><div class="kpi ok"><b>9</b><span>90 分以上</span></div></div>'
+      +'<div class="rows">'+row({ic:'分', t:'实验三 成绩分布', s:'85–100：9 人 · 60–84：27 人 · &lt;60：6 人', end:num('78.4')})+'</div>';
+  } else {
+    body += '<div class="rows">'
+      + row({ic:'缺', tone:'var(--bad)', tint:'var(--bad-soft)', t:'连续 2 周缺勤 ≥2 次', s:'邓一鸣 · 林晓阳 · 何书宁 等 5 人', end:num('5','人')})
+      + row({ic:'迟', tone:'var(--warn)', tint:'var(--warn-soft)', t:'第 1 节迟到集中', s:'周一 08:00 · 3 人', end:num('3','人')})
+      +'</div>';
+  }
+  if(S.preChecked) body += '<div class="card"><div class="card-hd"><span class="ct">✦ AI 预批结果</span><span class="cm">94% 置信</span></div>'
+    +'<p class="card-p">12 份已按评分细则预批，均分 <b>82.4</b>；2 份（林晓阳 / 邓一鸣）置信度低，已标出等你复核。</p></div>';
+  body += insight('缺勤最集中的是<b>周一第 1 节</b>（3 人），是周五的 4 倍 —— 更像周末作息问题，不是课程难度。');
+  return {ai:ai, body:body, foot:footAI('预批 12 份，我只复核 2 份','gen:pre'),
+    tail:'批改结果不会直接发布，<b>复核后</b>才通知学生'};
+}
+
+/* ---------------- 12 我的成长 ---------------- */
+function pGrowth(){
+  const ai = aiBlock({
+    lb:'AI 能力对标', time:'9 月',
+    tx:'你的「家校沟通」低于同院均值 <b>12 分</b>，是唯一短板。本周做 2 次家长沟通就能补上。',
+    acts:[{t:'制定 30 天计划', a:'gen:growth'},{t:'看同院均值', a:'toast:同院 78 人，你的综合排名前 31%'}]
+  });
+  let body = '<div class="card" style="display:flex;align-items:center;gap:10px">'
+    +'<svg class="radar" viewBox="0 0 120 120">'
+    +'<path class="rg" d="M60 14 L103.7 45.8 L87 97.2 L33 97.2 L16.3 45.8 Z"/>'
+    +'<path class="rg" d="M60 29.3 L89.2 50.5 L76.9 85.9 L43.1 85.9 L30.8 50.5 Z" stroke-dasharray="2 3"/>'
+    +'<path class="rg" d="M60 60 L60 14 M60 60 L103.7 45.8 M60 60 L87 97.2 M60 60 L33 97.2 M60 60 L16.3 45.8"/>'
+    +'<path class="ra" d="M60 22.3 L87.6 51 L80.5 88.3 L39.8 89.8 L27.7 49.5 Z"/>'
+    +'<circle class="rd" cx="60" cy="22.3"/><circle class="rd" cx="87.6" cy="51"/><circle class="rd" cx="80.5" cy="88.3"/>'
+    +'<circle class="rd" cx="39.8" cy="89.8"/><circle class="rd" cx="27.7" cy="49.5"/></svg>'
+    +'<div class="r-bd"><div class="r-t"><span>综合能力分</span>'+tag('+3','ok')+'</div>'
+    +'<div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="r-num" style="font-size:26px">78</span>'
+    +'<span style="font-size:10px;color:var(--ink3)">/ 100 · 前 31%</span></div>'
+    +'<div class="r-s" style="margin-top:3px">教学 82 · 沟通 63 · 研究 76 · 育人 80 · 协作 74</div></div></div>';
+  body += '<div class="sec"><span class="sec-t">AI 建议</span><span class="sec-m">按性价比排序</span></div><div class="rows">'
+    + row({ic:'1', tone:'var(--bad)', tint:'var(--bad-soft)', t:'本周约 2 位家长沟通', s:'直接补「家校沟通」，1 次约 25 分钟', end:tag('+6 分','ok')})
+    + row({ic:'2', tone:'var(--brand)', tint:'var(--brand-soft)', t:'把班会记录留痕', s:'你已开 4 次班会，只有 1 次上传', end:tag('+3 分','ok')})
+    + row({ic:'3', tone:'var(--brand)', tint:'var(--brand-soft)', t:'带 1 个学生项目', s:'与「研究」「育人」双维度相关', end:tag('+4 分','ok')})
+    +'</div>';
+  body += insight('沟通记录 <b>80% 集中在前 10 名学生</b>，覆盖不均才是「家校沟通」分低的真正原因。');
+  if(S.plan){
+    body += '<div class="aibox" style="margin:9px 14px 0"><b>✦ 30 天计划（已排进日历）</b><ol>'
+      +'<li>本周：约 2 位家长，AI 备好话术</li><li>下周：上传 4 次班会记录</li><li>月底：复盘目标 78 → 84</li></ol></div>';
+  }
+  return {ai:ai, body:body, foot:footAI('生成 30 天提升计划','gen:growth'),
+    tail:'分数口径：成果数 × 五维系数均值，全校分布 42–88'};
+}
+
+/* ---------------- 13 公告 ---------------- */
+function pAnnouncement(){
+  const ai = aiBlock({
+    lb:'AI 排期建议', time:'本周',
+    tx:'周五 19:00 的讲座与 3 个班课表冲突，建议改到 <b>周四 19:00</b>。正文我已按模板起草。',
+    acts:[{t:'起草公告', a:'gen:ann'},{t:'为什么不改到周三', a:'toast:周三晚有教研会，冲突更严重'}]
+  });
+  const k = segKey('announcement');
+  let body = seg(['草稿 2','已发布 6','定时 1']);
+  const list = k===1
+    ? [{t:'关于国庆假期安排的通知', s:'已发布 · 128 人已读', tg:tag('已发布','ok')},
+       {t:'本学期评优工作启动', s:'已发布 · 96 人已读', tg:tag('已发布','ok')}]
+    : [{t:'关于调整本周学术讲座时间的通知', s:'草稿 · 未发布', tg:tag('草稿','mute')},
+       {t:'九月主题班会安排', s:'草稿 · 未发布', tg:tag('草稿','mute')}];
+  body += '<div class="rows">' + list.map(function(a){
+    return row({ic:'告', tone:'var(--brand)', tint:'var(--brand-soft)', t:a.t, s:a.s, end:a.tg});
+  }).join('') + '</div>';
+  body += '<div class="kpis" style="margin-top:9px"><div class="kpi"><b>6</b><span>本月发布</span></div>'
+    +'<div class="kpi ok"><b>78%</b><span>平均阅读率</span></div><div class="kpi"><b>42</b><span>覆盖学生</span></div></div>';
+  if(S.draft){
+    body += '<div class="card"><div class="card-hd"><span class="ct">✦ AI 草稿</span><span class="cm">周四 19:00 版</span></div>'
+      +'<p class="card-p"><b>关于调整本周学术讲座时间的通知</b><br>'
+      +'原定 9 月 19 日（周五）19:00 的讲座，因与软件 2301–2303 班实验课冲突，调整至 9 月 18 日（周四）19:00，地点不变（图书馆报告厅）。</p>'
+      +'<div style="display:flex;gap:6px;margin-top:8px"><button class="ai-a" data-act="toast:已选择 3 个班级">收件：3 个班</button>'
+      +'<button class="ai-a" data-act="toast:已保存为定时发布（周四 09:00）">定时发布</button></div></div>';
+  }
+  body += insight('近 3 次公告在 <b>周四 18:00</b> 发布阅读率最高（92%），可设为默认发布时间。');
+  return {ai:ai, body:body, foot:footAI('AI 起草并选好收件人','gen:ann'),
+    tail:'发布后自动同步到学生端「通知」与企业微信'};
+}
+
+const PAGES = {tasks:pTasks, ai:pAi, students:pStudents, approval:pApproval, crisis:pCrisis,
+  care:pCare, guardian:pGuardian, portfolio:pPortfolio, survey:pSurvey, schedule:pSchedule,
+  teaching:pTeaching, growth:pGrowth, announcement:pAnnouncement};
+
+/* ---------------- 组装 ---------------- */
+function screenHTML(skin){
+  const p = S.page, m = META[p];
+  const blk = PAGES[p]();
+  return '<div class="screen" data-skin="'+skin+'" data-page="'+p+'">'
+    + statusbar()
+    + '<div class="bar"><button class="bar-bk" data-act="toast:返回上一页">'+IC.back+'</button>'
+    + '<span class="bar-t">'+m.t+'</span>'
+    + (skin==='c'?'<span class="bar-idx">'+m.idx+'/13</span>':'')
+    + (skin==='c'?'':'<span class="bar-sub">'+m.sub+'</span>')
+    + '<div class="bar-x"><button class="bar-ai" data-act="toast:AI 助手已就绪，可长按语音"><b>✦</b> AI</button></div></div>'
+    + '<div class="content">'+blk.ai+blk.body+(blk.tail?'<div class="tail">'+blk.tail+'</div>':'')+'</div>'
+    + '<div class="foot">'+blk.foot+'</div>'
+    + (S.toast?'<div class="toast">'+esc(S.toast)+'</div>':'')
+    + '</div>';
+}
+
+function render(){
+  const box = $('#phones');
+  box.className = 'phones ' + (S.mode==='compare'?'compare':'single');
+  const skins = S.mode==='compare' ? ['a','b','c'] : [S.skin];
+  box.innerHTML = skins.map(function(id){
+    const sk = SKINS.filter(function(x){return x.id===id;})[0];
+    return '<div class="ph-col"><div class="ph-head"><i style="background:'+sk.dot[2]+'"></i>'+sk.n+'<span>'+sk.d+'</span></div>'
+      +'<div class="ph-wrap"><div class="phone">'+screenHTML(id)+'</div></div></div>';
+  }).join('');
+
+  $('#skins').innerHTML = SKINS.map(function(sk){
+    return '<button class="skin-card'+(S.skin===sk.id?' on':'')+'" data-skin="'+sk.id+'">'
+      +'<span class="sc-dots">'+sk.dot.map(function(c){return '<i style="background:'+c+'"></i>';}).join('')+'</span>'
+      +'<span class="sc-n">'+sk.n+'</span><span class="sc-d">'+sk.d+'</span></button>';
+  }).join('');
+
+  $('#pagelist').innerHTML = NAV.map(function(g,gi){
+    return '<div style="margin:'+(gi?'9px':'0')+' 0 3px 4px;font-size:9.5px;color:#4f5d6c;font-weight:750;letter-spacing:1px">'+g.g+'</div>'
+      + g.items.map(function(it){
+        return '<button class="page-item'+(S.page===it.id?' on':'')+'" data-page="'+it.id+'">'
+          +'<span class="pi-dot"></span><span class="pi-nm">'+it.n+'</span>'
+          +(it.pill?'<span class="pi-pill">'+it.pill+'</span>':'')+'</button>';
+      }).join('');
+  }).join('');
+
+  const nt = NOTES[S.page] || {};
+  $('#note').innerHTML = '<span class="nt">本页设计说明</span>'
+    +'<b>'+META[S.page].t+'</b><br>'+esc(nt.ai||'')
+    +'<div class="kv"><span>收敛</span><em>'+esc(nt.len||'')+'</em></div>'
+    +'<div class="kv"><span>字段</span><em>沿用现有 schema</em></div>'
+    +'<code>'+(nt.api||'')+'</code>';
+}
+
+/* ============================================================
+   交互
+   ============================================================ */
+const REPLY = [
+  '晓阳妈妈您好，我是辅导员王砚秋。晓阳这周缺了 3 次课，我昨天已找他聊过：主要是最近睡眠不好、早上起不来，不是故意逃课。这周我让室友每天叫他一起上课，周五再确认一次。您不用太担心，如果方便，今晚给他打个电话，只聊生活别聊成绩，效果会更好。',
+  '晓阳妈妈您好，我是王老师。晓阳这周有 3 次缺课，原因是他最近睡眠不好，我已经和他聊过，也在安排室友每天叫他。请您今晚抽空给他打个电话，只聊生活、先别问成绩，我这边周五会再跟进一次。'
+];
+const EVAL = {
+  '林晓阳':'林晓阳这学期最大的变化在动手能力：ACM 铜奖和 48 小时志愿服务说明他愿意在真实任务里投入。短板在课程成绩（数据结构 62 分，较上学期 -11），原因更可能是作息而非能力。下学期建议先把作息拉回正轨，再用竞赛项目带动课程学习。',
+  '苏雨欣':'苏雨欣这学期在表达与组织上有明显成长：征文获奖、担任心理协会组织部部长，能把想法落成活动。学业保持稳定（高数 71 分），但作息波动影响了课堂状态。建议下学期给她一个明确的项目负责人角色，用责任感带动规律作息。',
+  '郑心怡':'郑心怡是本学期进步最明显的学生之一：蓝桥杯省一、校园项目前端负责人，绩点 3.7 位列专业前 8%，竞赛与课程形成了正向循环。建议下学期引导她把项目沉淀成作品集，并尝试带一名低年级同学，把个人优势转成团队影响力。'
+};
+
+function handleAct(act){
+  if(!act) return;
+  if(act.indexOf('toast:')===0){ toast(act.slice(6)); return; }
+  if(act.indexOf('seg:')===0){ S.seg[S.page] = +act.slice(4); render(); return; }
+  if(act.indexOf('approve:')===0){ S.approved.push(+act.slice(8)); toast('已通过 · 学生已收到通知'); return; }
+  if(act.indexOf('reject:')===0){ S.rejected.push(+act.slice(7)); toast('已驳回 · 已附上原因'); return; }
+  if(act.indexOf('undo:')===0){
+    const id = +act.slice(5);
+    S.approved = S.approved.filter(function(x){return x!==id;});
+    S.rejected = S.rejected.filter(function(x){return x!==id;});
+    toast('已撤回'); return;
+  }
+  if(act==='batch'){
+    const ids = APPROVALS.filter(function(a){ return a.auto && S.approved.indexOf(a.id)<0 && S.rejected.indexOf(a.id)<0; }).map(function(a){return a.id;});
+    S.approved = S.approved.concat(ids);
+    const left = APPROVALS.filter(function(a){ return !a.auto && S.approved.indexOf(a.id)<0 && S.rejected.indexOf(a.id)<0; }).length;
+    toast('已通过 '+ids.length+' 条，剩 '+left+' 条留给你判断'); return;
+  }
+  if(act.indexOf('toggle:')===0){
+    const id = act.slice(7);
+    S.done = S.done.indexOf(id)>=0 ? S.done.filter(function(x){return x!==id;}) : S.done.concat(id);
+    toast(S.done.indexOf(id)>=0 ? '已完成 · 计入本月履职' : '已恢复待办'); return;
+  }
+  if(act.indexOf('open:')===0){ const i=+act.slice(5); S.open[i]=!S.open[i]; render(); return; }
+  if(act.indexOf('pick:')===0){ S.pick[S.page]=+act.slice(5); if(!S.reply) S.reply = REPLY[0]; render(); return; }
+  if(act.indexOf('stu:')===0){ S.stu=act.slice(4); S.evalTxt=''; render(); return; }
+  if(act.indexOf('admit:')===0){
+    const id = act.slice(6);
+    if(S.admitted.indexOf(id)<0) S.admitted.push(id);
+    toast('已加入今天的待办'); return;
+  }
+  if(act==='gen:ai'){ S.admitted = AI_RECS.map(function(r){return r.id;}); toast('3 条已全部加入待办'); return; }
+  if(act==='gen:plan'){ S.plan=true; toast('介入方案已生成，已派给年级组'); return; }
+  if(act==='gen:care'){ S.open[0]=true; toast('提纲已生成'); return; }
+  if(act==='gen:reply'){ S.reply = S.reply ? REPLY[1] : REPLY[0]; toast('草稿已写入，可直接改'); return; }
+  if(act==='tone'){ S.reply = S.reply===REPLY[0]?REPLY[1]:REPLY[0]; render(); return; }
+  if(act==='gen:eval'){ S.evalTxt = EVAL[S.stu] || EVAL['林晓阳']; toast('评语初稿已生成（120 字）'); return; }
+  if(act==='gen:survey'){ S.surveyNew=true; toast('已替换 3 道低区分度题目'); return; }
+  if(act==='gen:ann'){ S.draft=true; toast('草稿已生成，收件人已选好'); return; }
+  if(act==='gen:slot'){ S.slot=true; toast('已把 16:00 排进日程'); return; }
+  if(act==='gen:pre'){ S.preChecked=true; toast('12 份已预批，2 份待你复核'); return; }
+  if(act==='gen:growth'){ S.plan=!S.plan; toast(S.plan?'30 天计划已生成':'已收起计划'); return; }
+}
+
+$('#modes').addEventListener('click', function(e){
+  const b = e.target.closest('button[data-mode]'); if(!b) return;
+  S.mode = b.dataset.mode;
+  $('#modes').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
+  render();
+});
+$('#skins').addEventListener('click', function(e){
+  const b = e.target.closest('.skin-card'); if(!b) return;
+  S.skin = b.dataset.skin;
+  if(S.mode==='compare'){
+    S.mode='single';
+    $('#modes').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x.dataset.mode==='single'); });
+  }
+  render();
+});
+$('#pagelist').addEventListener('click', function(e){
+  const b = e.target.closest('.page-item'); if(!b) return;
+  S.page = b.dataset.page; S.toast=null; S.seg[S.page]=0; render();
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+$('#phones').addEventListener('click', function(e){
+  if(e.target.tagName==='TEXTAREA') return;
+  const el = e.target.closest('[data-act]');
+  if(!el) return;
+  const act = el.dataset.act;
+  if(act==='q' || act==='reply') return;
+  e.preventDefault();
+  handleAct(act);
+});
+$('#phones').addEventListener('input', function(e){
+  const el = e.target;
+  if(el.dataset && el.dataset.act==='q'){
+    S.q = el.value; render();
+    const inp = $('#phones .search input');
+    if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+  if(el.tagName==='TEXTAREA' && el.dataset.act==='reply'){ S.reply = el.value; }
+});
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape'){ S.toast=null; render(); }
+});
+
+render();
+</script>
+</body>
+</html>

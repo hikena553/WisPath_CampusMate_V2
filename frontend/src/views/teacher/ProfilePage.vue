@@ -19,8 +19,8 @@
               更换背景
             </button>
             <span class="pf-top-icons">
-              <button type="button" class="pf-top-icon" title="校园公告" @click.stop="openPage('announcements')">
-                <el-icon :size="16"><Bell /></el-icon>
+              <button type="button" class="pf-top-icon" title="设置" @click.stop="openPage('settings')">
+                <el-icon :size="16"><Setting /></el-icon>
               </button>
             </span>
           </div>
@@ -115,7 +115,7 @@
                   <span class="pf-quick-icon"><el-icon :size="21"><Warning /></el-icon></span>
                   <span class="pf-quick-label">学生预警</span>
                 </button>
-                <button type="button" class="pf-quick-item" @click="router.push('/teacher/guardian')">
+                <button type="button" class="pf-quick-item" @click="router.push('/teacher/care-center?tab=guardian')">
                   <span class="pf-quick-icon"><el-icon :size="21"><ChatDotRound /></el-icon></span>
                   <span class="pf-quick-label">家校沟通</span>
                 </button>
@@ -127,42 +127,55 @@
                   <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
                   <span class="pf-quick-label">成长档案</span>
                 </button>
-                <button type="button" class="pf-quick-item" @click="openPage('theme')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><Sunny /></el-icon></span>
-                  <span class="pf-quick-label">主题设置</span>
-                </button>
-                <button type="button" class="pf-quick-item" @click="openPage('help')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><QuestionFilled /></el-icon></span>
-                  <span class="pf-quick-label">使用帮助</span>
-                </button>
               </div>
             </nav>
           </div>
 
-          <!-- 设置与隐私 -->
-          <h3 class="pf-section-title">设置与隐私</h3>
-          <section class="pf-section">
-            <div class="pf-list">
-              <button type="button" class="pf-row" @click="openPage('password')">
-                <span class="pf-row-icon is-violet"><el-icon :size="17"><Lock /></el-icon></span>
-                <span class="pf-row-label">修改密码</span>
-                <span class="pf-row-hint">定期更换更安全</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
-              </button>
-              <button type="button" class="pf-row" @click="openPage('about')">
-                <span class="pf-row-icon"><el-icon :size="17"><InfoFilled /></el-icon></span>
-                <span class="pf-row-label">关于{{ agentName }}</span>
-                <span class="pf-row-hint">v1.0.0</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
-              </button>
-              <button type="button" class="pf-row" @click="logout">
-                <span class="pf-row-icon is-danger"><el-icon :size="17"><SwitchButton /></el-icon></span>
-                <span class="pf-row-label">退出登录</span>
-                <span class="pf-row-hint">工号 {{ auth.user?.username || '—' }}</span>
-                <el-icon class="pf-row-arrow" :size="14"><ArrowRight /></el-icon>
-              </button>
-            </div>
-          </section>
+          <!-- 收藏的帖子：参考学生端个人中心的两列封面卡；无内容时直接留白，不铺空状态和边框 -->
+          <template v-if="articleFavs.length">
+            <h3 class="pf-section-title">收藏的帖子</h3>
+            <section class="pf-fav-area">
+              <div class="pf-fav-grid">
+                <button
+                  v-for="fav in articleFavs.slice(0, 4)"
+                  :key="fav.id"
+                  type="button"
+                  class="pf-fav-card"
+                  @click="openArticleDetail(fav)"
+                >
+                  <div class="pf-fav-cover" :class="`tone-${fav.id % 5}`">
+                    <span class="pf-fav-cover-text">{{ fav.title || '校园资讯' }}</span>
+                    <span v-if="fav.source" class="pf-fav-tag">{{ fav.source }}</span>
+                  </div>
+                  <div class="pf-fav-title">{{ fav.title }}</div>
+                  <div class="pf-fav-meta">
+                    <el-icon :size="11"><Star /></el-icon>
+                    <span>{{ fav.created_at ? fav.created_at.slice(0, 10) : '已收藏' }}</span>
+                  </div>
+                </button>
+              </div>
+            </section>
+          </template>
+
+          <!-- 我发布的帖子：交流社区中本人发布的帖子 -->
+          <template v-if="myPosts.length">
+            <h3 class="pf-section-title">我发布的帖子</h3>
+            <section class="pf-fav-area">
+              <div class="pf-fav-grid">
+                <div v-for="post in myPosts.slice(0, 4)" :key="post.id" class="pf-fav-card">
+                  <div class="pf-fav-cover" :class="`tone-${post.id % 5}`">
+                    <span class="pf-fav-cover-text">{{ post.title }}</span>
+                    <span class="pf-fav-tag">{{ post.category }}</span>
+                  </div>
+                  <div class="pf-fav-title">{{ post.title }}</div>
+                  <div class="pf-fav-meta">
+                    <el-icon :size="11"><EditPen /></el-icon>
+                    <span>{{ post.created_at ? post.created_at.slice(0, 10) : '已发布' }}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </template>
 
           <p class="pf-foot-note">{{ agentName }} · 智慧校园服务平台 v1.0.0</p>
         </div>
@@ -317,16 +330,72 @@
           </section>
         </div>
 
+        <!-- 设置（移动端设置集成页）：与学生端同一套抖音设置页范式，灰底 + 白色圆角卡片 + 纯文字行 -->
+        <div v-if="activeTab === 'settings'" class="sub-page-content set-page">
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="openPage('profile')">
+                <span class="set-row-label">账号与安全</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="set-row" @click="openPage('password')">
+                <span class="set-row-label">修改密码</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="set-row" @click="openPage('banner')">
+                <span class="set-row-label">更换背景</span>
+                <span class="set-row-value is-empty">个人主页封面</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="openPage('theme')">
+                <span class="set-row-label">主题设置</span>
+                <span class="set-row-value">浅色</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+              <button type="button" class="set-row" @click="openPage('help')">
+                <span class="set-row-label">使用帮助</span>
+                <span class="set-row-value is-empty">新手引导</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row" @click="openPage('about')">
+                <span class="set-row-label">关于{{ agentName }}</span>
+                <span class="set-row-value">v1.0.0</span>
+                <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="set-group">
+            <div class="set-list">
+              <button type="button" class="set-row set-row-logout" @click="logout">
+                <span class="set-row-label">退出登录</span>
+              </button>
+            </div>
+          </div>
+
+          <p class="set-version">{{ agentName }} v1.0.0</p>
+        </div>
+
         <!-- 账号与安全（抖音设置页范式）：只读展示 + 点按行弹窗编辑，不再铺一屏输入框 -->
         <div v-if="activeTab === 'profile'" class="sub-page-content set-page">
           <!-- 头像：编辑资料页里的头等行——大圆头像 + 相机角标，一眼知道能点 -->
           <div class="set-group">
             <div class="set-list">
-              <button type="button" class="set-row set-row-ava" @click="triggerAvatarInput">
+              <button type="button" class="set-row" @click="triggerAvatarInput">
                 <span class="set-row-label">头像</span>
                 <span class="set-row-value">
                   <span class="pf-ava-wrap">
-                    <el-avatar :size="46" :src="profileForm.avatar" class="pf-ava">
+                    <el-avatar :size="44" :src="profileForm.avatar" class="pf-ava">
                       {{ profileForm.name?.[0] || '?' }}
                     </el-avatar>
                     <span class="pf-ava-cam"><el-icon :size="10"><Camera /></el-icon></span>
@@ -435,7 +504,6 @@
             </button>
             <p v-if="announcements.length === 0 && !loadingAnnouncements" class="ann-empty">暂无校园公告</p>
           </div>
-          <ArticleReader ref="articleReader" />
         </div>
 
         <!-- 使用帮助 -->
@@ -620,11 +688,24 @@
 
     <!-- 勋章放大查看 -->
     <BadgeDetail :badge="badgeDetail" @close="badgeDetail = null" />
+
+    <!-- 站内阅读器 / 资讯详情（收藏卡片点开走校园资讯同款详情页，不跳外部浏览器） -->
+    <ArticleReader ref="articleReader" />
+    <ArticleDetailPage
+      v-if="articleTarget"
+      ref="articleDetailRef"
+      :article-url="articleTarget.url"
+      :title="articleTarget.title"
+      :source="articleTarget.source"
+      @close="closeArticleDetail"
+      @closed="articleTarget = null"
+      @read="onArticleDetailRead"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 // v6.1 弹窗减负：单字段编辑走底部动作面板
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import { useRouter } from 'vue-router'
@@ -633,8 +714,11 @@ import { useAuthStore } from '@/stores/auth'
 import { updateProfile, changePassword } from '@/api/user'
 import { uploadFile } from '@/api/upload'
 import { getAnnouncements } from '@/api/campus'
+import { getArticleFavorites, type CampusArticleFavoriteItem } from '@/api/campus'
+import { getMyPosts, type CommunityPost } from '@/api/community'
 import type { Announcement } from '@/types'
 import ArticleReader from '@/components/campus/ArticleReader.vue'
+import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
 import { getMyBadgeWall, type BadgeItem, type BadgeWall as BadgeWallData } from '@/api/badge'
 import { syncQuickAccount } from '@/utils/quickLogin'
 import { confirmLogout } from '@/utils/logout'
@@ -657,7 +741,8 @@ import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
   QuestionFilled, Bell, Camera, User, Check, Plus, Medal,
-  DataAnalysis, UserFilled, Calendar, Tickets, Warning, ChatDotRound, EditPen, FolderOpened
+  DataAnalysis, UserFilled, Calendar, Tickets, Warning, ChatDotRound, EditPen, FolderOpened,
+  Setting, Star
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -672,6 +757,38 @@ const { siteName, siteLogo, agentName } = useSiteConfig()
 
 // 页面状态
 const currentPage = ref<string | null>(null)
+/** 移动端子页栈：设置 → 使用帮助等二级以下页面返回时回到上一级，而不是直接回主页 */
+const pageStack = ref<string[]>([])
+
+// 帖子：资讯收藏走校园资讯收藏明细（资讯详情「收藏」写入的表），我发布的走交流社区
+const articleFavs = ref<CampusArticleFavoriteItem[]>([])
+const myPosts = ref<CommunityPost[]>([])
+
+async function loadProfilePosts() {
+  const [favs, posts] = await Promise.allSettled([getArticleFavorites(), getMyPosts()])
+  articleFavs.value = favs.status === 'fulfilled' ? favs.value : []
+  myPosts.value = posts.status === 'fulfilled' ? posts.value : []
+}
+
+// 收藏卡片 → 校园资讯同款站内详情页（不直接跳外部浏览器）
+const articleTarget = ref<{ url: string; title: string; source: string } | null>(null)
+const articleDetailRef = ref<InstanceType<typeof ArticleDetailPage> | null>(null)
+
+function openArticleDetail(fav: CampusArticleFavoriteItem) {
+  if (!fav.url) return
+  articleTarget.value = { url: fav.url, title: fav.title || '', source: fav.source || '' }
+}
+
+function closeArticleDetail() {
+  articleDetailRef.value?.close()
+}
+
+/** 详情页点「阅读全文」：先收起详情，再交给站内阅读器，避免两层整页覆盖互抢滚动锁 */
+function onArticleDetailRead(url: string) {
+  const title = articleTarget.value?.title || ''
+  closeArticleDetail()
+  nextTick(() => articleReader.value?.open(url, title))
+}
 
 // 移动端个人中心的各设置子页：打开时让出底部悬浮导航
 useMobileSubPage(computed(() => isMobile.value && !!currentPage.value))
@@ -922,6 +1039,7 @@ const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     overview: '数据概览',
     profile: '账号与安全',
+    settings: '设置',
     badges: '我的勋章',
     password: '修改密码',
     announcements: '校园公告',
@@ -938,6 +1056,7 @@ const pageSubtitle = computed(() => {
   const subs: Record<string, string> = {
     overview: '我的完成度与所带学生综合情况速览',
     profile: '管理账号信息与登录安全，保存后即时生效',
+    settings: '帮助与反馈、账号安全、个性化与关于',
     badges: '按平台使用进度与深度解锁的勋章，附成长等级与解锁进度',
     password: '定期更换密码可提升账号安全性',
     banner: '选择预设渐变或上传图片，作为个人中心顶栏背景',
@@ -1003,13 +1122,18 @@ function fillProfileForm() {
 function openPage(page: string) {
   if (page === 'profile') fillProfileForm()
   slideDirection.value = 'slide-left'
+  if (!currentPage.value) {
+    pageStack.value = []
+  } else if (currentPage.value !== page) {
+    pageStack.value.push(currentPage.value)
+  }
   currentPage.value = page
 }
 
-// 关闭子页面
+// 关闭子页面：有上一级则返回上一级（设置 → 二级页），否则回主页
 function closePage() {
   slideDirection.value = 'slide-right'
-  currentPage.value = null
+  currentPage.value = pageStack.value.pop() || null
 }
 
 function selectPresetBanner(color: string) {
@@ -1277,7 +1401,7 @@ async function loadOverviewData() {
 
 /** 下拉刷新：复用概览统计与勋章墙加载，失败静默 */
 async function refreshAll() {
-  await Promise.all([loadOverviewData(), refreshBadges()])
+  await Promise.all([loadOverviewData(), refreshBadges(), loadProfilePosts()])
 }
 
 onMounted(() => {
@@ -1285,6 +1409,7 @@ onMounted(() => {
   loadAnnouncements()
   refreshBadges()
   loadOverviewData()
+  loadProfilePosts()
   // 身份名片（移动端与桌面端）都要展示「所带班级 / 资料完整度」，故挂载即回填表单
   fillProfileForm()
 })
@@ -1648,36 +1773,54 @@ onMounted(() => {
   z-index: 10;
 }
 
+/* 子页头：与 SubPageHeader 的 .tui-appbar 完全同一套尺寸
+   （52px 高 / 左右 4px / 标题 17.5px·680）。这四处子页（账号与安全、校园公告、
+   主题设置、使用帮助）以前用 12px 16px 内边距 + 16px 居中标题，比其他子页
+   高 8px、左右各宽 12px，切页时抬头会"跳"一下。 */
 .sub-page-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 4px;
   background: #fff;
   border-bottom: 1px solid #f0f0f0;
   flex-shrink: 0;
 }
 
 .back-btn {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: 50%;
+  background: transparent;
   color: #333;
 }
+.back-btn:active { background: rgba(20, 23, 26, 0.06); }
 
 .sub-page-title {
-  font-size: 16px;
-  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  font-size: 17.5px;
+  font-weight: 680;
+  letter-spacing: -0.2px;
   color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* 左对齐后不再需要右侧对称占位；保留节点是为了不改模板结构 */
 .sub-page-placeholder {
-  width: 36px;
+  display: none;
 }
 
 .sub-page-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  /* 与 .tui-content 移动端留白（8px）对齐，否则抬头贴边、内容缩一圈 */
+  padding: 8px 8px 20px;
 }
 
 /* ===== 修改密码：单卡片表单，参考 GitHub / Telegram 安全设置 ===== */
@@ -2276,8 +2419,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 .pf-row-arrow { color: #cbd0d8; flex-shrink: 0; }
-/* 头像行：大圆头像 + 相机角标（组件本身桌面/移动共用） */
-.set-row-ava { padding: 10px 2px; }
+/* 头像：圆头像 + 相机角标（组件本身桌面/移动共用） */
 .pf-ava-wrap { position: relative; display: inline-flex; }
 .pf-ava {
   border: 2px solid #fff;
@@ -2306,56 +2448,91 @@ onMounted(() => {
   color: var(--tui-text-quiet);
 }
 
-/* ===== 设置项列表（抖音设置页范式）：左标签 + 右值 + 箭头 ===== */
-.set-page .set-group { margin-bottom: 10px; }
+/* ===== 设置项列表（与学生端同一套抖音设置页范式）=====
+   灰底画布 + 白色圆角卡片，行内只有「左标签 / 右值 / 箭头」三段；
+   分隔线内缩到文字起点，卡片之间靠灰色间隙分块，不用分组标题与彩色图标。 */
+.set-page { padding: 12px 12px 28px; }
+.set-page .set-group { margin-bottom: 12px; }
 .set-page .set-group-title {
-  margin: 0 0 6px 16px;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: #8b929e;
+  margin: 0 0 8px 4px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  color: var(--tui-text-quiet);
 }
 .set-page .set-list {
   background: var(--tui-surface);
   border: none;
-  border-radius: 0;
+  border-radius: 12px;
   box-shadow: none;
   overflow: hidden;
 }
 .set-page .set-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  padding: 13px 16px;
+  min-height: 54px;
+  padding: 0 16px;
   border: none;
-  border-bottom: 1px solid var(--tui-border);
   background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.set-page .set-row:last-child { border-bottom: none; }
-.set-page .set-row:active { background: var(--tui-surface-muted); }
+/* 分隔线：距左 16px 起（与文字对齐），右端通到卡片边缘 */
+.set-page .set-row + .set-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: var(--tui-border);
+  transform: scaleY(0.5);
+  transform-origin: top;
+}
+.set-page .set-row:active { background: #f5f5f5; }
 .set-page .set-row.is-readonly { cursor: default; }
 .set-page .set-row.is-readonly:active { background: transparent; }
 .set-page .set-row-label {
   flex-shrink: 0;
-  font-size: 13.5px;
+  font-size: 15px;
+  font-weight: 400;
   color: var(--tui-text);
+  line-height: 1.3;
 }
 .set-page .set-row-value {
   flex: 1;
   min-width: 0;
   text-align: right;
   font-size: 13px;
-  color: var(--tui-text-tertiary);
+  color: var(--tui-text-quiet);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .set-page .set-row-value.is-empty { color: var(--tui-text-quiet); }
-.set-page .set-row-arrow { color: #cbd0d8; flex-shrink: 0; }
+.set-page .set-row-arrow { color: #c7ccd4; flex-shrink: 0; }
+/* 退出登录：抖音式独立白卡片，整行居中、无箭头 */
+.set-page .set-row-logout {
+  justify-content: center;
+  min-height: 52px;
+}
+.set-page .set-row-logout .set-row-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--tui-danger);
+}
+.set-page .set-version {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 11.5px;
+  letter-spacing: 0.2px;
+  color: var(--tui-text-quiet);
+}
 
 /* ===== 更换背景（抖音背景选择器范式）：实时预览 + 背景宫格 ===== */
 .set-page .bg-preview {
@@ -2694,6 +2871,88 @@ onMounted(() => {
   padding: 26px 0;
   text-align: center;
   font-size: 12px;
+  color: var(--tui-text-quiet);
+}
+
+/* ===== 收藏的帖子：学生端个人中心同款两列封面卡 ===== */
+.pf-fav-area { padding: 12px 14px 14px; }
+.pf-fav-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 10px;
+}
+.pf-fav-card { min-width: 0; }
+button.pf-fav-card {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-fav-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #eef1f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pf-fav-cover-text {
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #fff;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pf-fav-cover.tone-0 { background: linear-gradient(135deg, #8ea2c6, #5f739c); }
+.pf-fav-cover.tone-1 { background: linear-gradient(135deg, #9ab6a4, #6b8d78); }
+.pf-fav-cover.tone-2 { background: linear-gradient(135deg, #c2a68e, #96795f); }
+.pf-fav-cover.tone-3 { background: linear-gradient(135deg, #a89cc0, #7a6b96); }
+.pf-fav-cover.tone-4 { background: linear-gradient(135deg, #90aab8, #637f8f); }
+.pf-fav-tag {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(10, 12, 16, 0.56);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 10px;
+  line-height: 1.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-fav-title {
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--tui-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pf-fav-meta {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
   color: var(--tui-text-quiet);
 }
 </style>

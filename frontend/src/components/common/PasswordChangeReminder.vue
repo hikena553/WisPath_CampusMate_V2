@@ -125,6 +125,13 @@ onBeforeUnmount(stopAutoDismiss)
 /* 普通提示条：白底浅边、圆角悬浮在顶部居中，样式接近系统/开源项目的轻提示 */
 .pwd-banner {
   position: fixed;
+  /*
+    移动端要让出「系统公告条 + 子页抬头」两层：
+    公告条是文档流里的 33px，抬头的 .tui-appbar 是 sticky 的 48px，
+    浮层若停在 top:12px 会正好压在抬头标题上（z-index 1900 >> 抬头的 30），
+    标题被切掉一半，看起来像「抬头宽度不对」。
+    这里下移到两层之下，浮层才不会盖住任何页面结构。
+  */
   top: calc(env(safe-area-inset-top) + 12px);
   left: 50%;
   transform: translateX(-50%);
@@ -142,6 +149,36 @@ onBeforeUnmount(stopAutoDismiss)
   background: #ffffff;
   color: #111111;
   box-shadow: 0 6px 20px rgba(17, 17, 17, 0.08), 0 1px 3px rgba(17, 17, 17, 0.04);
+}
+
+/*
+  移动端：从「顶部悬浮」改到「底部悬浮页签栏上方」。
+  两个原因：
+  1) 顶部已经有系统公告条(33px) + 子页抬头(48px)两层，
+     浮层无论停在哪个 top 值都会盖住其一或盖住内容首屏。手机上首屏尤其宝贵。
+  2) 底部悬浮胶囊页签（62px 高 + 12px 底距 + 安全区）上方正好有一条天然空隙，
+     提示停在那一带既不遮工具栏，也不遮首屏内容。
+  层级仍高于页签栏（1000），但低于 Element 的弹层（2000+），弹窗打开时不会串层。
+*/
+@media (max-width: 768px) {
+  .pwd-banner {
+    top: auto;
+    bottom: calc(12px + 62px + 10px + env(safe-area-inset-bottom, 0px));
+    width: calc(100vw - 32px);
+    max-width: 420px;
+    height: 40px;
+    padding: 0 6px 0 12px;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(17, 17, 17, 0.1), 0 1px 3px rgba(17, 17, 17, 0.05);
+  }
+  .pwd-banner-text { font-size: 12.5px; }
+  .pwd-banner-action { font-size: 12px; height: 26px; }
+  /* 从下方滑入，与页面底部语义一致 */
+  .pwd-banner-enter-from,
+  .pwd-banner-leave-to {
+    transform: translateX(-50%) translateY(10px);
+    opacity: 0;
+  }
 }
 
 .pwd-banner-text {

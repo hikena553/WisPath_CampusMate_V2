@@ -36,6 +36,11 @@ export function getPost(id: number) {
   return request.get<CommunityPost>(`/community/posts/${id}`)
 }
 
+/** 我发布的帖子（个人中心「我发布的」） */
+export function getMyPosts() {
+  return request.get<CommunityPost[]>('/community/posts/mine')
+}
+
 export function createPost(data: { category: string; title: string; content: string }) {
   return request.post<CommunityPost>('/community/posts', data)
 }

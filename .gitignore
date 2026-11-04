@@ -266,3 +266,12 @@ frontend/dist*-check/
 
 # 一次性前端验证脚本（用完即弃，与 backend/_probe*.py 同类）
 frontend/_*.cjs
+
+# 临时构建验证产物（npx vite build --outDir dist-verify 产生）
+# 注：沙箱 safe-delete 拦截导致无法自动清理，需手动删除，故一律忽略
+dist-verify/
+_dist_check/
+dist-check2/
+
+# 本地语音识别模型（200MB+ 运行时产物，不入库）
+backend/models/

@@ -1,0 +1,2244 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="L6OckhXUeqVvV0V7dT7AJC">
+<head data-page-node-id="VLQfcGimgdBJuJRctmIdoS">
+<meta charset="UTF-8" data-page-node-id="JEDaHLr7D6S8hSpxR9nXgU">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="L0avdoqRBzfWWS1GleDbXL">
+<title>教师端移动端 · 定稿设计（13 页各自成篇）</title>
+<style>
+/* ============================================================
+   0. 演示外壳
+   ============================================================ */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:#07090d;color:#e6ecf5;
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(860px 500px at 14% -10%,rgba(47,109,246,.15),transparent 62%),
+    radial-gradient(700px 420px at 86% -4%,rgba(91,91,214,.13),transparent 62%),
+    radial-gradient(560px 380px at 55% 108%,rgba(15,154,168,.07),transparent 60%);
+}
+.shell{position:relative;z-index:1;max-width:1516px;margin:0 auto;padding:26px 24px 56px}
+
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:26px;flex-wrap:wrap;margin-bottom:20px}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:7px;height:25px;padding:0 11px;border-radius:99px;
+  background:#0e1218;border:1px solid #1b222b;color:#8290a3;
+  font-size:10px;font-weight:750;letter-spacing:1.4px;text-transform:uppercase;
+}
+.eyebrow b{width:5px;height:5px;border-radius:99px;background:#2f6df6;box-shadow:0 0 8px #2f6df6}
+h1{margin:12px 0 8px;font-size:29px;line-height:1.26;letter-spacing:-.9px;font-weight:770}
+h1 em{font-style:normal;background:linear-gradient(94deg,#8ec5ff 0%,#a9a3ff 58%,#c7b3ff 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.top p{margin:0;max-width:760px;font-size:13px;line-height:1.75;color:#8e9bad}
+.top p b{color:#dde6f1;font-weight:650}
+.stats{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
+.stats span{display:inline-flex;align-items:baseline;gap:5px;padding:4px 9px;border-radius:7px;
+  background:#0d1117;border:1px solid #1a2029;color:#7d8b9d;font-size:10.5px}
+.stats span b{color:#c6d3e2;font-size:12.5px;font-weight:750;font-variant-numeric:tabular-nums}
+
+/* 布局 */
+.stage{display:grid;grid-template-columns:250px minmax(0,1fr);gap:26px;align-items:start}
+@media (max-width:1240px){.stage{grid-template-columns:1fr}}
+.rail{position:sticky;top:22px;background:#0b0f14;border:1px solid #171e26;border-radius:14px;padding:11px}
+.rail-hd{display:flex;align-items:center;gap:7px;padding:2px 6px 9px;font-size:9.5px;letter-spacing:1.2px;
+  color:#5b6878;font-weight:750;text-transform:uppercase;border-bottom:1px solid #151b23;margin-bottom:7px}
+.rail-hd i{margin-left:auto;font-style:normal;font-size:8.4px;font-weight:600;color:#3f4a58;
+  letter-spacing:0;text-transform:none}
+.rail-g{margin:8px 0 3px 5px;font-size:9px;color:#4a5766;font-weight:750;letter-spacing:1px}
+.page-item{
+  width:100%;display:flex;align-items:center;gap:8px;border:0;background:transparent;
+  color:#93a1b3;font:inherit;font-size:12.2px;font-weight:600;text-align:left;
+  padding:7px 8px;border-radius:8px;cursor:pointer;transition:.13s;
+}
+.page-item:hover{background:#11161d;color:#c6d2e1}
+.page-item.on{background:#151c26;color:#fff;box-shadow:inset 2px 0 0 #2f6df6}
+.pi-i{width:15px;font-size:9px;color:#4e5b6b;font-variant-numeric:tabular-nums;font-weight:750}
+.page-item.on .pi-i{color:#5e8dfa}
+.pi-n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-t{font-size:8.5px;font-weight:750;padding:1px 5px;border-radius:4px;letter-spacing:.2px;
+  background:rgba(255,255,255,.045);color:#7d8b9d;border:1px solid #1d242d;white-space:nowrap}
+.page-item.on .pi-t{background:rgba(47,109,246,.18);color:#8fb2ff;border-color:rgba(47,109,246,.3)}
+.pi-t.a{background:rgba(47,109,246,.14);color:#7ba6ff}
+.pi-t.b{background:rgba(167,139,250,.14);color:#b9a8ff}
+.pi-t.c{background:rgba(18,148,107,.14);color:#4ecfa6}
+
+.main{display:grid;grid-template-columns:390px minmax(0,1fr);gap:26px;align-items:start}
+@media (max-width:1000px){.main{grid-template-columns:1fr}}
+.stagecol{display:flex;flex-direction:column;gap:9px}
+.stagetop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.stagetop .cur{font-size:11.5px;font-weight:750;color:#d8e2ef}
+.stagetop .cur i{font-style:normal;color:#5f6e80;font-weight:600;margin-left:6px}
+.btn-mini{
+  margin-left:auto;border:1px solid #1e2733;background:#0d1219;color:#93a2b5;font:inherit;
+  font-size:10.5px;font-weight:650;padding:4px 9px;border-radius:6px;cursor:pointer;
+}
+.btn-mini:hover{color:#d6e1ee;border-color:#2a3543}
+
+/* 落地说明 */
+.final{margin:26px 0 0;padding:22px 24px 20px;background:#0b0f14;border:1px solid #171e26;border-radius:16px}
+.final-hd{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.final-hd h2{margin:0;font-size:16px;font-weight:760;color:#e8eef6;letter-spacing:-.2px}
+.final-hd p{margin:0;font-size:12px;color:#7f8c9d;max-width:780px;line-height:1.65}
+.final-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+@media (max-width:1180px){.final-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:720px){.final-grid{grid-template-columns:1fr}}
+.fcard{position:relative;padding:13px 14px 14px;background:#0f141a;border:1px solid #1c232c;border-radius:11px;overflow:hidden}
+.fcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--k)}
+.fc-top{display:flex;align-items:center;gap:8px}
+.fc-top b{font-size:12.6px;font-weight:750;color:#e9eff7}
+.fc-top span{margin-left:auto;font-size:9px;font-weight:700;color:var(--k);background:rgba(255,255,255,.04);
+  border:1px solid #222a35;border-radius:99px;padding:1px 7px;white-space:nowrap}
+.fcard p{margin:8px 0 9px;font-size:11.4px;line-height:1.68;color:#93a1b2}
+.fcard dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 8px;font-size:10.6px}
+.fcard dt{color:#5f6d7e;font-weight:700}
+.fcard dd{margin:0;color:#a9b6c6;line-height:1.55}
+.final-note{margin-top:13px;padding-top:12px;border-top:1px solid #1a2028;font-size:11.2px;line-height:1.85;color:#8b98a8}
+.final-note b{color:#dbe4ee;margin-right:6px}
+
+/* 手机 */
+.phone{
+  width:390px;height:844px;padding:9px;border-radius:52px;position:relative;
+  background:linear-gradient(165deg,#353b45 0%,#0d0f13 52%,#23272e 100%);
+  box-shadow:0 46px 84px -30px rgba(0,0,0,.95),0 0 0 1px rgba(255,255,255,.075),inset 0 0 0 1px rgba(255,255,255,.05);
+  flex:0 0 auto;
+}
+.phone::after{content:'';position:absolute;left:50%;top:17px;transform:translateX(-50%);
+  width:104px;height:26px;border-radius:99px;background:#05070a;z-index:9}
+
+/* 说明面板 */
+.spec{background:#0b0f14;border:1px solid #171e26;border-radius:14px;padding:16px 16px 14px;position:sticky;top:22px}
+.spec-hd{display:flex;align-items:center;gap:8px;padding-bottom:11px;border-bottom:1px solid #161d25;margin-bottom:12px}
+.spec-hd b{font-size:13.5px;font-weight:770;letter-spacing:-.1px;color:#e6edf6}
+.spec-hd .sn{font-size:9.5px;font-weight:780;color:#7ba6ff;background:rgba(47,109,246,.12);
+  border:1px solid rgba(47,109,246,.2);border-radius:5px;padding:1px 6px}
+.spec-hd .sd{margin-left:auto;font-size:9.5px;color:#5c6a7b;font-weight:650}
+.spec-blk{margin-bottom:12px}
+.spec-blk:last-child{margin-bottom:0}
+.spec-k{display:block;font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:#556272;font-weight:780;margin-bottom:5px}
+.spec-v{font-size:11.8px;line-height:1.72;color:#a8b6c7}
+.spec-v b{color:#dfe8f3;font-weight:680}
+.spec-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.spec-list li{position:relative;padding-left:12px;font-size:11.4px;line-height:1.62;color:#9dabbd}
+.spec-list li::before{content:'';position:absolute;left:2px;top:7px;width:4px;height:4px;border-radius:99px;background:#2f6df6}
+.spec-chips{display:flex;flex-wrap:wrap;gap:5px}
+.spec-chips span{font-size:10px;padding:2px 7px;border-radius:5px;background:#11171f;border:1px solid #1b232d;color:#8a99ab}
+.spec-chips span.sub{background:rgba(167,139,250,.09);border-color:rgba(167,139,250,.2);color:#b6a7f7}
+.spec code{display:block;margin-top:2px;font-size:10px;color:#6f8bb0;font-family:ui-monospace,Menlo,Consolas,monospace;
+  background:#0e141b;border:1px solid #1a222c;border-radius:6px;padding:5px 8px;word-break:break-all}
+.spec-foot{margin-top:12px;padding-top:10px;border-top:1px solid #161d25;font-size:10px;line-height:1.65;color:#5c6a7b}
+
+/* ============================================================
+   1. 屏幕骨架
+   ============================================================ */
+.screen{
+  width:100%;height:100%;border-radius:44px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;background:var(--bg);color:var(--ink);
+  font-size:14px;isolation:isolate;
+  /* 冷色调色板 —— 13 页共用 */
+  --bg:#f3f6fb;
+  --surf:#fff;
+  --surf2:#f7f9fd;
+  --line:#e3e9f3;
+  --line2:#d3dcea;
+  --ink:#101725;
+  --ink2:#3d4a5e;
+  --ink3:#78849a;
+  --brand:#2f6df6;
+  --brand-soft:#e7efff;
+  --brand-deep:#1b4fd1;
+  --teal:#0f97a6;
+  --teal-soft:#e2f5f7;
+  --ai:#5b5bd6;
+  --ai-act-ink:#4a48c9;
+  --ai-line:#d5d5f7;
+  --ai-btn:#f0f0ff;
+  --ai-grad:linear-gradient(104deg,#2f6df6 0%,#5b5bd6 58%,#7c5cf0 100%);
+  --ai-shadow:rgba(79,90,220,.55);
+  --bad:#dd4257;
+  --bad-soft:#fdecef;
+  --bad-line:#f6cfd6;
+  --warn:#d98317;
+  --warn-soft:#fdf3e2;
+  --warn-line:#f2ddba;
+  --ok:#0f8e6b;
+  --ok-soft:#e4f6f0;
+  --ok-line:#c4e9de;
+  --tint-neutral:#f1f4f9;
+  --r:13px;
+  --foot-bg:rgba(255,255,255,.9);
+  --foot-line:#e4eaf4;
+  --btn-bg:#101725;
+  --btn-ink:#fff;
+  --seg-bg:#eef2f9;
+  --seg-on:#fff;
+  --seg-sh:0 1px 2px rgba(16,23,37,.09);
+  --toast-bg:#1a2230;
+  --toast-ink:#fff;
+  --serif:"Songti SC","STSong",Georgia,"Noto Serif CJK SC",serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+.sb{height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px 0 27px;font-size:12px;font-weight:680;letter-spacing:.2px;color:var(--ink);position:relative;z-index:4}
+.sb-r{display:flex;align-items:center;opacity:.82}
+
+/* AppBar */
+.bar{
+  flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:2px 16px 9px;position:relative;z-index:4;
+}
+.bar-bk{
+  width:27px;height:27px;flex:0 0 auto;border-radius:9px;border:1px solid var(--line);
+  background:var(--surf);color:var(--ink2);display:grid;place-items:center;cursor:pointer;
+}
+.bar-t{font-size:15.5px;font-weight:760;letter-spacing:-.35px;line-height:1.2}
+.bar-sub{font-size:9.5px;color:var(--ink3);font-weight:650;margin-left:2px;padding-top:2px}
+.bar-x{margin-left:auto;display:flex;align-items:center;gap:6px}
+.bar-ai{
+  display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 9px;border-radius:99px;
+  border:1px solid var(--ai-line);background:var(--ai-btn);color:var(--ai-act-ink);
+  font:inherit;font-size:10.5px;font-weight:750;cursor:pointer;
+}
+.bar-ai b{font-size:10px}
+
+/* 内容区 */
+.content{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;
+  padding-bottom:2px;scrollbar-width:none}
+.content::-webkit-scrollbar{display:none}
+.content > *{flex:0 0 auto}
+
+/* 底部 */
+.foot{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:9px 14px 12px;
+  background:var(--foot-bg);border-top:1px solid var(--foot-line);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:relative;z-index:5;
+}
+.btn-p{
+  flex:1;height:43px;border:0;border-radius:12px;background:var(--btn-bg);color:var(--btn-ink);
+  font:inherit;font-size:13px;font-weight:720;letter-spacing:-.1px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s;
+}
+.btn-p:active{transform:scale(.985)}
+.btn-p .sp{font-size:11px;opacity:.85}
+.btn-p .hint{font-size:9.5px;font-weight:600;opacity:.55;margin-left:1px}
+.btn-g{width:43px;height:43px;flex:0 0 auto;border-radius:12px;border:1px solid var(--line);
+  background:var(--surf);color:var(--ink2);display:grid;place-items:center;cursor:pointer}
+
+/* 尾部说明 */
+.tail{display:flex;align-items:center;gap:5px;margin-top:auto;padding:9px 17px 8px;
+  font-size:9.4px;color:var(--ink3);line-height:1.45}
+.tail b{color:var(--ink2);font-weight:700}
+
+/* toast */
+.toast{
+  position:absolute;left:50%;bottom:74px;transform:translateX(-50%);z-index:30;
+  background:var(--toast-bg);color:var(--toast-ink);font-size:11.2px;font-weight:640;
+  padding:8px 13px;border-radius:10px;box-shadow:0 12px 28px -8px rgba(0,0,0,.55);
+  white-space:nowrap;animation:tin .22s cubic-bezier(.2,.8,.3,1) both;max-width:300px;
+  overflow:hidden;text-overflow:ellipsis;
+}
+@keyframes tin{from{opacity:0;transform:translate(-50%,8px) scale(.96)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+
+/* 通用小件 */
+.tag{display:inline-block;font-size:9.3px;font-weight:780;line-height:1.55;padding:1px 5px;
+  border-radius:4px;letter-spacing:.1px;white-space:nowrap;flex:0 0 auto}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.ai{background:var(--ai-btn);color:var(--ai-act-ink)}
+.tag.mute{background:var(--tint-neutral);color:var(--ink3)}
+.tag.brand{background:var(--brand-soft);color:var(--brand-deep)}
+
+.seg{display:flex;gap:3px;margin:0 14px 10px;padding:3px;border-radius:9px;background:var(--seg-bg)}
+.seg button{flex:1;border:0;background:transparent;font:inherit;font-size:11.2px;font-weight:640;
+  color:var(--ink3);padding:6px 1px;border-radius:7px;cursor:pointer;white-space:nowrap;transition:.15s}
+.seg button.on{background:var(--seg-on);color:var(--ink);box-shadow:var(--seg-sh)}
+
+.sec{display:flex;align-items:baseline;gap:6px;padding:0 15px;margin:3px 0 7px}
+.sec-t{font-size:10.5px;font-weight:790;letter-spacing:.5px;color:var(--ink2);text-transform:uppercase}
+.sec-m{margin-left:auto;font-size:9.6px;color:var(--ink3);font-weight:600}
+
+.card{margin:0 14px 8px;padding:11px 12px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r)}
+.card-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.card-hd .ct{font-size:11.8px;font-weight:720;letter-spacing:-.1px}
+.card-hd .cm{margin-left:auto;font-size:9.6px;color:var(--ink3)}
+.card-p{margin:0;font-size:11.2px;line-height:1.62;color:var(--ink2)}
+.card-p b{color:var(--ink);font-weight:680}
+
+.kpis{display:flex;margin:0 14px 9px;padding:9px 2px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r)}
+.kpi{flex:1;text-align:center;position:relative;padding:0 4px}
+.kpi+.kpi::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:1px;background:var(--line)}
+.kpi b{display:block;font-size:16.5px;font-weight:790;letter-spacing:-.6px;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi span{display:block;font-size:9.3px;color:var(--ink3);font-weight:600;margin-top:1px}
+.kpi.bad b{color:var(--bad)}
+.kpi.warn b{color:var(--warn)}
+.kpi.ok b{color:var(--ok)}
+.kpi.grad b{background:var(--ai-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* 单行列表（学生档案 / 审批 共用） */
+.rows{padding:0 14px;display:flex;flex-direction:column;gap:7px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 10px;position:relative;
+  background:var(--surf);border:1px solid var(--line);border-radius:var(--r)}
+.row.tap{cursor:pointer}
+.row.tap:active{background:var(--surf2)}
+.r-ic{width:32px;height:32px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;
+  background:var(--tint);color:var(--tone);font-size:12px;font-weight:800;letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+.r-bd{flex:1 1 auto;min-width:0}
+.r-t{font-size:12.9px;font-weight:650;letter-spacing:-.15px;display:flex;align-items:center;gap:5px;min-width:0}
+.r-t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-s{margin-top:2px;font-size:10.4px;line-height:1.45;color:var(--ink3);
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.r-s b{color:var(--ink2);font-weight:650}
+.r-ai{margin-top:3px;font-size:9.6px;line-height:1.4;color:var(--ai-act-ink);font-weight:600;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.r-e{flex:0 0 auto;text-align:right;display:flex;align-items:center;gap:6px}
+.r-num{white-space:nowrap;font-size:15px;font-weight:780;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.1}
+.r-num small{font-size:9px;font-weight:600;color:var(--ink3);margin-left:1px;vertical-align:2px}
+
+.mini{display:inline-flex;gap:4px}
+.mini button{width:27px;height:27px;border-radius:8px;border:1px solid var(--line);background:var(--surf);
+  color:var(--ink2);font-size:11px;display:grid;place-items:center;cursor:pointer;line-height:1}
+.mini button.ok{color:var(--ok);border-color:var(--ok-line);background:var(--ok-soft)}
+.mini button.no{color:var(--bad);border-color:var(--bad-line);background:var(--bad-soft)}
+.mini button:disabled{opacity:.35}
+
+.ai-a{border:1px solid var(--ai-line);background:var(--ai-btn);color:var(--ai-act-ink);white-space:nowrap;flex:0 0 auto;
+  font:inherit;font-size:10.3px;font-weight:700;letter-spacing:.1px;padding:5px 9px;border-radius:7px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;transition:.15s}
+.ai-a:active{transform:scale(.97)}
+.ai-a.pri{background:var(--ai-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px -6px var(--ai-shadow)}
+
+.search{display:flex;align-items:center;gap:6px;margin:0 14px 9px;padding:0 10px;height:33px;
+  background:var(--surf);border:1px solid var(--line);border-radius:9px}
+.search svg{opacity:.45;flex:0 0 auto}
+.search input{flex:1;border:0;background:transparent;outline:none;font:inherit;font-size:11.8px;color:var(--ink);min-width:0}
+.search input::placeholder{color:var(--ink3)}
+.empty{margin:6px 14px;padding:18px 12px;text-align:center;border:1px dashed var(--line2);border-radius:var(--r)}
+.empty b{display:block;font-size:11.8px;margin-bottom:2px}
+.empty span{font-size:10.2px;color:var(--ink3)}
+.aibox{margin:0;padding:10px 11px;border-radius:9px;background:var(--ai-btn);border:1px dashed var(--ai-line);
+  font-size:11px;line-height:1.62;color:var(--ink2);animation:exp .22s cubic-bezier(.2,.8,.3,1) both}
+.aibox b{color:var(--ink);font-weight:700}
+.aibox ol{margin:4px 0 0;padding-left:15px}
+.aibox li{margin:1px 0}
+.aibox li::marker{color:var(--ai-act-ink);font-weight:800}
+@keyframes exp{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* AI 结论条（多数页共用，各页可换皮） */
+.ai-strip{
+  margin:0 14px 10px;padding:10px 11px 10px 12px;border-radius:var(--r);position:relative;
+  background:linear-gradient(180deg,#fbfcff 0%,#f5f7ff 100%);
+  border:1px solid var(--line);border-left:2px solid transparent;
+  border-image:linear-gradient(180deg,#3f7bf7,#7c5cf0) 1;border-image-slice:1 1 1 1;
+}
+.ai-strip .ai-hd{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+.ai-mk{width:15px;height:15px;flex:0 0 auto;border-radius:5px;background:var(--ai-grad);color:#fff;
+  display:grid;place-items:center;font-size:8.5px;box-shadow:0 2px 6px -2px var(--ai-shadow)}
+.ai-lb{font-size:9px;font-weight:800;letter-spacing:.85px;color:var(--ai-act-ink);text-transform:uppercase}
+.ai-time{margin-left:auto;font-size:9px;color:var(--ink3);font-weight:600}
+.ai-strip p{margin:0;font-size:11.4px;line-height:1.6;color:var(--ink2)}
+.ai-strip p b{color:var(--ink);font-weight:720}
+.ai-strip.slim{margin:0 14px;padding:8px 10px 10px;border-radius:10px}
+.ai-strip.slim .ai-hd{margin-bottom:2px}
+.ai-strip.slim p{font-size:10.6px;line-height:1.55}
+.ai-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+
+/* 子页 */
+.subhd{display:flex;align-items:center;gap:9px;padding:0 15px 9px}
+.subhd .sh-n{font-size:12.5px;font-weight:730}
+.subhd .sh-s{font-size:9.6px;color:var(--ink3)}
+.backline{display:flex;align-items:center;gap:5px;padding:0 15px 8px;font-size:10px;color:var(--ink3);cursor:pointer}
+.backline b{color:var(--brand);font-weight:700}
+</style>
+<style>
+/* ============================================================
+   2. 逐页专属样式
+   ============================================================ */
+
+/* ---------- 01 今日重点 · 冷调纸卡（B 版骨架 / 冷色） ---------- */
+.screen[data-p="tasks"]{
+  --bg:#eef2f9;
+  --surf:#fff;
+  --r:12px;
+  --paper-line:#dfe6f2;
+}
+.screen[data-p="tasks"] .bar-t{font-family:var(--serif);font-weight:700;letter-spacing:0;font-size:17px}
+.screen[data-p="tasks"] .bar-t::after{content:'';}
+.pp-note{
+  margin:0 14px 7px;padding:10px 11px;border-radius:11px;background:#fff;
+  border:1px dashed #c8d3e6;box-shadow:0 1px 2px rgba(20,35,60,.04);
+  position:relative;
+}
+.pp-note::after{content:'';position:absolute;right:11px;top:-5px;width:26px;height:9px;
+  background:linear-gradient(180deg,rgba(47,109,246,.16),rgba(47,109,246,.08));
+  border-radius:2px;transform:rotate(-2.4deg)}
+.pp-note .pn-h{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.pp-note .pn-h b{font-size:8.8px;letter-spacing:1px;color:var(--ai-act-ink);font-weight:820}
+.pp-note .pn-h em{margin-left:auto;font-style:normal;font-size:8.8px;color:var(--ink3)}
+.pp-note p{margin:0;font-size:11.2px;line-height:1.58;color:var(--ink2)}
+.pp-note p b{color:#16233a;font-weight:700}
+.pp-note .ai-acts{margin-top:6px}
+
+.pp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 14px}
+.pcard{
+  position:relative;background:#fff;border-radius:12px;padding:9px 9px 8px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(20,35,60,.055),0 9px 18px -15px rgba(20,35,60,.5);
+  cursor:pointer;transition:.15s;display:flex;flex-direction:column;min-height:100px;
+}
+.pcard:active{transform:scale(.985)}
+.pcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2.5px;background:var(--pc,#2f6df6)}
+.pcard.wide{grid-column:1 / -1;min-height:84px}
+.pcard .pc-top{display:flex;align-items:flex-start;gap:5px}
+.pcard .pc-no{
+  font-family:var(--serif);font-style:italic;font-size:20px;line-height:1;color:var(--pc);
+  opacity:.28;font-weight:700;flex:0 0 auto;margin-right:1px;
+}
+.pcard .pc-t{font-size:12.2px;font-weight:720;letter-spacing:-.2px;line-height:1.4;color:#152238;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard .pc-s{margin-top:3px;font-size:9.6px;line-height:1.45;color:var(--ink3);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard .pc-ft{margin-top:auto;padding-top:6px;display:flex;align-items:center;gap:4px}
+.pcard .pc-m{font-size:9px;font-weight:700;color:var(--ink3);font-variant-numeric:tabular-nums;
+  display:inline-flex;align-items:center;gap:2px}
+.pcard .pc-m i{font-style:normal;font-size:8px;opacity:.6}
+.pcard .pc-tick{margin-left:auto;width:19px;height:19px;border-radius:6px;border:1px solid var(--line2);
+  background:#fbfcff;display:grid;place-items:center;color:transparent;flex:0 0 auto}
+.pcard .pc-tick.on{background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok)}
+.pcard.done{opacity:.52}
+.pcard.done .pc-t{text-decoration:line-through}
+.pcard.done .pc-no{opacity:.14}
+.pcard.fresh{box-shadow:0 1px 2px rgba(20,35,60,.06),0 0 0 1.4px rgba(47,109,246,.35),0 9px 18px -15px rgba(20,35,60,.5)}
+.pp-line{display:flex;align-items:center;gap:7px;margin:11px 14px 7px}
+.pp-line .pl-t{font-family:var(--serif);font-size:12.5px;font-weight:700;color:#2a3a55;letter-spacing:.2px}
+.pp-line .pl-c{margin-left:auto;font-size:9.4px;color:var(--ink3)}
+.pp-tip{
+  margin:8px 14px 0;padding:7px 10px;border-radius:10px;background:#e9eff9;
+  font-size:9.8px;line-height:1.55;color:#5b6b85;display:flex;gap:6px;align-items:flex-start;
+}
+.pp-tip b{color:#2a3a55}
+
+/* ---------- 02 AI 洞察 · 冷调便签 + 证据 ---------- */
+.screen[data-p="ai"]{--bg:#edf1f8}
+.screen[data-p="ai"] .bar-t{font-family:var(--serif);font-size:17px;font-weight:700;letter-spacing:0}
+.ob-card{
+  margin:0 14px 7px;background:#fff;border-radius:12px;padding:9px 10px 8px;position:relative;
+  box-shadow:0 1px 2px rgba(20,35,60,.055),0 10px 20px -16px rgba(20,35,60,.55);
+  border:1px solid #e6ecf6;
+}
+.ob-card.hit{border-color:#ccd8ee;box-shadow:0 1px 2px rgba(20,35,60,.06),0 0 0 1.3px rgba(91,91,214,.25)}
+.ob-hd{display:flex;align-items:center;gap:7px}
+.ob-hd .ava{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:0 0 auto;
+  font-size:10.5px;font-weight:750;color:#fff;background:linear-gradient(140deg,#3f7bf7,#6a5bef)}
+.ob-nm{font-size:12.4px;font-weight:730;color:#16233a;letter-spacing:-.1px}
+.ob-why{font-size:9.4px;color:var(--ink3);margin-top:1px}
+.ob-hd .tag{margin-left:auto}
+.ob-q{
+  margin:6px 0 0;padding:6px 8px 6px 9px;border-radius:8px;background:#f6f8fd;
+  border-left:2px solid #b9cdf5;font-family:var(--serif);font-size:11.2px;line-height:1.55;color:#33415a;
+}
+.ob-q .qtx{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ob-q em{font-style:normal;color:#8894a8;font-size:8.8px;display:block;margin-top:1px;letter-spacing:.3px}
+.ob-evi{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.evi{display:inline-flex;align-items:center;gap:3px;font-size:8.8px;font-weight:650;color:#5d6b81;
+  background:#f2f5fb;border:1px solid #e5ebf5;border-radius:5px;padding:1.5px 5px}
+.evi b{color:#33415a;font-weight:780;font-variant-numeric:tabular-nums}
+.evi.up b{color:var(--bad)}
+.evi.ok b{color:var(--ok)}
+.ob-ft{display:flex;align-items:center;gap:5px;margin-top:6px}
+.ob-ft .ai-a{font-size:9.8px;padding:4px 8px}
+.ob-ft .ob-x{margin-left:auto;font-size:9px;color:var(--ink3)}
+.ob-sec{display:flex;align-items:center;gap:6px;margin:12px 14px 7px}
+.ob-sec b{font-family:var(--serif);font-size:12px;color:#2a3a55}
+.ob-sec span{margin-left:auto;font-size:9.2px;color:var(--ink3)}
+.ob-mini{margin:0 14px;display:flex;gap:7px}
+.screen[data-p="crisis"] .m-card{background:#fff;border:1px solid #e6ecf6}
+.screen[data-p="crisis"] .m-card b{font-size:14.5px}
+.ob-mini .m-card{flex:1;background:#f7f9fd;border:1px solid #e6ecf6;border-radius:9px;padding:7px 8px}
+.ob-mini .m-card b{display:block;font-size:15px;font-weight:790;letter-spacing:-.5px;color:#2a3a55;
+  font-variant-numeric:tabular-nums}
+.ob-mini .m-card span{font-size:8.8px;color:var(--ink3);line-height:1.4;display:block}
+
+/* ---------- 03 学生档案 · A 版 ---------- */
+.screen[data-p="students"]{--bg:#f6f8fc}
+.screen[data-p="students"] .bar-t{font-size:16px}
+.stu-score{display:flex;align-items:baseline;gap:1px;font-variant-numeric:tabular-nums}
+.stu-score b{font-size:15.5px;font-weight:790;letter-spacing:-.6px}
+.stu-score i{font-style:normal;font-size:8.5px;color:var(--ink3);font-weight:600}
+.stu-num{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.stu-d{font-style:normal;font-size:9.2px;font-weight:750;color:#3f8f6d;letter-spacing:.1px;
+  font-variant-numeric:tabular-nums;line-height:1}
+.stu-d.dn{color:#d1495b}
+.brief{margin:0 14px 9px;padding:9px 10px;border-radius:11px;background:var(--surf);
+  border:1px solid var(--line);display:flex;gap:9px;align-items:flex-start}
+.brief .bm{width:16px;height:16px;border-radius:5px;background:var(--ai-grad);color:#fff;display:grid;
+  place-items:center;font-size:8.5px;flex:0 0 auto;margin-top:1px}
+.brief .bt{font-size:10.6px;line-height:1.6;color:var(--ink2)}
+.brief .bt b{color:var(--ink);font-weight:700}
+
+/* ---------- 04 审批（沿用现格式，精修） ---------- */
+.apx{display:flex;align-items:center;gap:9px;margin:0 14px 8px;padding:8px 10px;border-radius:12px;
+  background:linear-gradient(180deg,#f7fcfa,#eef8f4);border:1px solid #cfe9e0}
+.apx .ax-n{width:26px;height:26px;border-radius:8px;background:#fff;border:1px solid #cfe9e0;
+  display:grid;place-items:center;font-size:12.5px;font-weight:790;color:var(--ok);flex:0 0 auto}
+.apx .ax-b{flex:1;min-width:0}
+.apx .ax-t{font-size:12px;font-weight:730;color:#173c31;display:flex;align-items:center;gap:5px}
+.apx .ax-s{font-size:9.4px;color:#5e8478;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mats{display:inline-flex;gap:3px;margin-left:4px;vertical-align:1px}
+.mats i{width:5px;height:5px;border-radius:99px;background:var(--ok);display:block}
+.mats i.off{background:var(--line2)}
+.ap-num{display:flex;flex-direction:column;align-items:center;gap:1px;margin:0 14px 8px}
+.ap-num b{font-size:10px;color:var(--ink3);font-weight:650}
+
+/* ---------- 05 预警 · 倒计时 + 风险阶梯 ---------- */
+.screen[data-p="crisis"]{--bg:#f4f6fb}
+.tick{
+  margin:0 14px 10px;padding:11px 12px;border-radius:13px;position:relative;overflow:hidden;
+  background:linear-gradient(150deg,#152036 0%,#0f1728 62%,#1a2440 100%);
+  color:#eaf0fb;
+}
+.tick::after{content:'';position:absolute;right:-28px;top:-30px;width:110px;height:110px;border-radius:50%;
+  background:radial-gradient(circle,rgba(224,69,90,.42),transparent 68%)}
+.tick .tk-h{display:flex;align-items:center;gap:5px;font-size:8.8px;letter-spacing:.9px;font-weight:800;
+  color:#8fa5c8;text-transform:uppercase;position:relative;z-index:1}
+.tick .tk-h b{width:5px;height:5px;border-radius:99px;background:#ff6a7d;box-shadow:0 0 8px #ff6a7d;animation:bl 1.6s infinite}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:.25}}
+.tk-row{display:flex;align-items:flex-end;gap:9px;margin-top:5px;position:relative;z-index:1}
+.tk-big{font-size:40px;font-weight:800;letter-spacing:-2.4px;line-height:.92;font-variant-numeric:tabular-nums;
+  background:linear-gradient(94deg,#fff,#c8d8f5);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tk-unit{font-size:11px;color:#9fb2cf;font-weight:650;padding-bottom:4px}
+.tk-desc{margin-left:auto;text-align:right;padding-bottom:2px}
+.tk-desc b{display:block;font-size:10.5px;color:#ffb3bd;font-weight:730}
+.tk-desc span{font-size:8.8px;color:#8fa5c8}
+.tk-line{margin-top:8px;height:3px;border-radius:99px;background:rgba(255,255,255,.12);position:relative;z-index:1;overflow:hidden}
+.tk-line i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ff6a7d,#ff9a6a)}
+.tk-ft{display:flex;align-items:center;gap:5px;margin-top:7px;position:relative;z-index:1}
+.tk-ft .ai-a{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.18);color:#dbe6f8}
+.tk-ft .ai-a.pri{background:linear-gradient(94deg,#4a7bfb,#6f5cf0);border-color:transparent;color:#fff}
+
+.lad{padding:0 14px;display:flex;flex-direction:column;gap:6px}
+.lad-i{
+  display:flex;gap:9px;padding:9px 10px;border-radius:12px;background:#fff;border:1px solid var(--line);
+  position:relative;overflow:hidden;cursor:pointer;
+}
+.lad-i::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--lv)}
+.lad-i .ld-lv{margin-left:1px;display:flex;flex-direction:column;align-items:center;gap:2px;flex:0 0 auto;width:22px}
+.lad-i .ld-lv b{font-size:9px;font-weight:800;color:var(--lv);letter-spacing:.2px}
+.lad-i .ld-lv i{width:1px;flex:1;background:var(--line);display:block;min-height:14px}
+.lad-i:last-child .ld-lv i{display:none}
+.ld-bd{flex:1;min-width:0}
+.ld-t{font-size:12.6px;font-weight:700;color:#16233a;display:flex;align-items:center;gap:5px}
+.ld-s{font-size:9.7px;color:var(--ink3);margin-top:2px;line-height:1.45}
+.ld-x{display:flex;align-items:center;gap:5px;margin-top:5px}
+.ld-x .mini-h{font-size:8.8px;color:var(--ink3);font-weight:650;background:var(--tint-neutral);
+  border-radius:4px;padding:1px 5px}
+.ld-r{flex:0 0 auto;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.ld-h{font-size:13px;font-weight:790;color:var(--lv);letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.ld-h small{font-size:8px;font-weight:650;margin-left:1px;letter-spacing:0}
+
+/* ---------- 06 关怀中心 · 谈心节律 ---------- */
+.screen[data-p="care"]{--bg:#f5f7fc}
+.rhythm{margin:0 14px 9px;padding:8px 11px 7px;border-radius:12px;background:var(--surf);border:1px solid var(--line)}
+.rh-hd{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.rh-hd b{font-size:10.4px;font-weight:730;color:var(--ink2)}
+.rh-lg{margin-left:auto;display:flex;align-items:center;gap:3px;font-size:8.4px;color:var(--ink3);font-weight:600}
+.rh-lg i{width:7px;height:7px;border-radius:2px;display:block}
+.rh-lg u{text-decoration:none;margin-right:3px}
+.rh-lg i.talk{background:var(--brand)}
+.rh-lg i.on{background:#a9c6f7}
+.rh-lg i.miss{background:#f2c9d2}
+.rh-lg i.nul{background:#f6f8fc}
+.rh-wd{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin:0 0 3px 34px}
+.rh-wd i{font-style:normal;font-size:7.4px;color:#b7c0d2;text-align:center;font-weight:700}
+.rh-row{display:flex;align-items:center;margin-bottom:2px}
+.rh-row:last-child{margin-bottom:0}
+.rh-row em{flex:0 0 34px;font-style:normal;font-size:8.2px;color:var(--ink3);font-weight:650;letter-spacing:-.2px}
+.rh-row.now em{color:var(--brand);font-weight:750}
+.rh-dots{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.rh-dots i{height:10px;border-radius:3px;background:#ecf0f8;display:block}
+.rh-dots i.on{background:#a9c6f7}
+.rh-dots i.talk{background:var(--brand)}
+.rh-dots i.miss{background:#f2c9d2;position:relative}
+.rh-dots i.nul{background:#f6f8fc}
+.rh-dots i.tdy{box-shadow:inset 0 0 0 1.5px var(--brand)}
+.rh-dots i.miss::after{content:'';position:absolute;left:50%;top:50%;width:3px;height:3px;border-radius:50%;
+  background:#d98a9b;transform:translate(-50%,-50%)}
+.rh-sum{display:flex;align-items:center;gap:0;margin-top:5px;padding-top:4px;border-top:1px dashed var(--line);
+  font-size:9.2px;color:var(--ink3)}
+.rh-sum span{flex:1;text-align:center;font-weight:600;border-right:1px solid var(--line)}
+.rh-sum span:last-child{border-right:0}
+.rh-sum b{font-size:11px;color:#16233a;font-weight:780;margin-right:2px;font-variant-numeric:tabular-nums}
+.rh-sum span.hi b{color:var(--brand)}
+.screen[data-p="care"] .rows{gap:4px}
+.screen[data-p="care"] .rows .row{padding:5px 9px}
+.screen[data-p="care"] .talk{margin:0 14px 5px}
+.screen[data-p="care"] .sec{margin-top:9px}
+.talk{margin:0 14px 7px;background:var(--surf);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.talk-hd{display:flex;align-items:center;gap:8px;padding:9px 10px;cursor:pointer}
+.talk-hd .tv{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;
+  font-size:11.5px;font-weight:750;color:var(--tv);background:var(--tvs)}
+.talk-bd{flex:1;min-width:0}
+.talk-n{font-size:12.5px;font-weight:720;color:#16233a;display:flex;align-items:center;gap:5px}
+.talk-s{font-size:9.5px;color:var(--ink3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.talk-x{flex:0 0 auto;font-size:9.4px;color:var(--ai-act-ink);font-weight:650}
+.talk-open{padding:0 10px 10px}
+.talk-open .aibox{background:#f5f7ff;border-color:#dcdefa}
+.tk-step{display:flex;gap:6px;margin-top:5px}
+.tk-step i{width:14px;height:14px;border-radius:4px;background:#e2e6fb;color:#5b5bd6;font-style:normal;
+  font-size:8.5px;font-weight:800;display:grid;place-items:center;flex:0 0 auto;margin-top:1px}
+.tk-step p{margin:0;font-size:10.4px;line-height:1.5;color:#3d4763}
+.need{display:flex;gap:6px;margin:0 14px 10px}
+.need .nd{flex:1;background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:7px 8px}
+.need .nd b{display:block;font-size:14.5px;font-weight:790;letter-spacing:-.4px;color:#16233a;font-variant-numeric:tabular-nums}
+.need .nd span{font-size:8.6px;color:var(--ink3);line-height:1.35;display:block}
+
+/* ---------- 07 家校沟通 · 对话流 ---------- */
+.screen[data-p="guardian"]{--bg:#eef2f8}
+.chat{padding:0 14px;display:flex;flex-direction:column;gap:8px}
+.chat-day{text-align:center;font-size:8.8px;color:var(--ink3);font-weight:650;margin:1px 0 2px;letter-spacing:.3px}
+.msg{max-width:80%;display:flex;gap:6px;align-items:flex-end}
+.msg .mv{width:20px;height:20px;border-radius:6px;flex:0 0 auto;display:grid;place-items:center;
+  font-size:8.5px;font-weight:750;color:#fff;margin-bottom:2px}
+.bub{padding:8px 10px;border-radius:12px;font-size:11.4px;line-height:1.6;position:relative}
+.msg.them .mv{background:linear-gradient(140deg,#7f8fa6,#5d6b81)}
+.msg.them .bub{background:#fff;border:1px solid #e2e9f4;border-bottom-left-radius:4px;color:#22314a;
+  box-shadow:0 2px 10px -8px rgba(20,35,60,.5)}
+.msg.me{flex-direction:row-reverse;margin-left:auto}
+.msg.me .mv{background:linear-gradient(140deg,#3f7bf7,#6a5bef)}
+.msg.me .bub{background:linear-gradient(140deg,#2f6df6,#4a63e0);color:#fff;border-bottom-right-radius:4px;
+  box-shadow:0 6px 16px -12px rgba(47,109,246,.9)}
+.bub .bt{font-size:8.4px;opacity:.62;margin-top:3px;text-align:right}
+.msg.unread .bub{box-shadow:0 0 0 1.5px rgba(47,109,246,.28),0 2px 10px -8px rgba(20,35,60,.5)}
+.ai-draft{margin:9px 14px 0;padding:9px 10px;border-radius:11px;background:#fff;border:1px dashed #c9d2ea}
+.ai-draft .ad-h{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.ai-draft .ad-h b{font-size:8.8px;letter-spacing:.9px;color:var(--ai-act-ink);font-weight:820}
+.ai-draft .ad-h em{margin-left:auto;font-style:normal;font-size:8.6px;color:var(--ink3)}
+.ai-draft p{margin:0;font-size:10.6px;line-height:1.62;color:#33415a;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ai-draft .ad-a{display:flex;gap:5px;margin-top:7px}
+.quick{display:flex;gap:5px;padding:9px 14px 0;flex-wrap:wrap}
+.quick button{border:1px solid var(--line);background:#fff;border-radius:99px;font:inherit;font-size:9.8px;
+  color:var(--ink2);padding:4px 9px;cursor:pointer}
+
+/* ---------- 08 成长档案 · 能力条 + 成果轨道 ---------- */
+.abil{margin:0 14px 8px;padding:8px 11px;border-radius:12px;background:var(--surf);border:1px solid var(--line)}
+.ab-hd{display:flex;align-items:center;gap:5px;margin-bottom:8px}
+.ab-hd b{font-size:10.8px;font-weight:730}
+.ab-hd span{margin-left:auto;font-size:9px;color:var(--ink3)}
+.ab-row{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.ab-row:last-child{margin-bottom:0}
+.ab-nm{width:42px;font-size:9.4px;color:var(--ink2);font-weight:650;flex:0 0 auto}
+.ab-tr{flex:1;height:5px;border-radius:99px;background:#eef2f9;overflow:hidden;position:relative}
+.ab-tr i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#4f8bf9,#7c5cf0)}
+.ab-tr em{position:absolute;top:-2px;bottom:-2px;width:1.5px;background:#b9c4d6;opacity:.9}
+.ab-v{width:16px;text-align:right;font-size:9px;color:var(--ink3);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.track{margin:0 14px;position:relative;padding-left:17px}
+.track::before{content:'';position:absolute;left:4.5px;top:4px;bottom:8px;width:1px;background:linear-gradient(180deg,#cfd9e8,#e7ecf5)}
+.tr-i{position:relative;padding:0 0 8px 4px}
+.tr-i::before{content:'';position:absolute;left:-14px;top:4px;width:7px;height:7px;border-radius:99px;
+  background:#fff;border:1.6px solid var(--tc,#2f6df6)}
+.tr-i.hl::before{background:var(--tc,#2f6df6);box-shadow:0 0 0 3px rgba(47,109,246,.13)}
+.tr-y{position:absolute;left:-38px;top:2px;font-size:7.8px;color:#9aa6b8;font-variant-numeric:tabular-nums;
+  transform:translateX(-100%);letter-spacing:-.2px}
+.tr-t{font-size:11.6px;font-weight:690;color:#16233a;line-height:1.45;display:flex;align-items:center;gap:5px}
+.tr-s{font-size:9.4px;color:var(--ink3);margin-top:0}
+.tr-i .tr-act{margin-top:4px}
+.evbox{margin:9px 14px 0;padding:8px 10px;border-radius:10px;background:#f7f9fd;border:1px dashed #d3ddeb;
+  font-size:10.2px;line-height:1.6;color:#51617a;display:flex;gap:6px;align-items:flex-start}
+.evbox b{color:#2a3a55}
+
+/* ---------- 09 问卷互评 · 题卡堆 ---------- */
+.screen[data-p="survey"]{--bg:#f2f5fb}
+.deck{margin:2px 14px 8px;position:relative;padding-bottom:12px}
+.deck::before,.deck::after{content:'';position:absolute;left:8px;right:8px;background:#fff;
+  border:1px solid #e4eaf4;border-radius:11px;box-shadow:0 4px 12px -10px rgba(20,35,60,.5)}
+.deck::before{bottom:6px;top:12px;transform:scale(.965);opacity:.72}
+.deck::after{bottom:1px;top:16px;transform:scale(.93);opacity:.45}
+.qcard{position:relative;z-index:2;background:#fff;border-radius:12px;padding:11px 12px 10px;
+  border:1px solid #e0e7f2;box-shadow:0 10px 22px -18px rgba(20,35,60,.7)}
+.q-no{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.q-no b{font-size:8.8px;font-weight:800;letter-spacing:.9px;color:var(--brand);text-transform:uppercase}
+.q-no span{margin-left:auto;font-size:8.6px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.q-t{font-size:13px;line-height:1.55;font-weight:650;color:#16233a;letter-spacing:-.15px}
+.q-scale{display:flex;gap:4px;margin-top:10px}
+.q-scale button{flex:1;height:32px;border-radius:8px;border:1px solid var(--line);background:#fafcff;
+  font:inherit;font-size:12px;font-weight:750;color:#33425c;cursor:pointer;transition:.13s;padding:0}
+.q-hint{display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:0 2px}
+.q-hint span{font-size:8.4px;color:#9aa6b8;font-weight:600;letter-spacing:.2px}
+.q-scale button.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 4px 10px -6px rgba(47,109,246,.9)}
+.q-scale button:hover{border-color:#b9cdf5}
+.disc{display:flex;gap:6px;margin:0 14px;padding:9px 10px;border-radius:11px;background:var(--surf);
+  border:1px solid var(--line)}
+.disc-i{flex:1;min-width:0;cursor:pointer}
+.disc-i .di-n{font-size:8.8px;color:var(--ink3);font-weight:650;display:flex;align-items:center;gap:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.disc-i .di-b{height:3.5px;border-radius:99px;background:#eef2f9;margin-top:3px;overflow:hidden}
+.disc-i .di-b i{display:block;height:100%;border-radius:99px;background:var(--dc)}
+.disc-i .di-v{font-size:9.6px;font-weight:780;margin-top:3px;font-variant-numeric:tabular-nums;color:var(--dc)}
+.q-nav{margin-top:9px!important;display:flex;align-items:center;gap:6px;margin:0 14px 8px}
+.q-nav .qn-d{display:flex;gap:3px;flex:1}
+.q-nav .qn-d i{height:3px;flex:1;border-radius:99px;background:#e4eaf4}
+.q-nav .qn-d i.on{background:var(--brand)}
+.q-nav .qn-d i.done{background:#b9cdf5}
+.q-nav button{border:1px solid var(--line);background:#fff;border-radius:7px;font:inherit;font-size:10px;
+  font-weight:700;color:var(--ink2);padding:4px 10px;cursor:pointer}
+
+/* ---------- 10 查课表 · 周网格 ---------- */
+.gridwk{margin:0 12px 8px;border-radius:12px;background:var(--surf);border:1px solid var(--line);
+  padding:7px 7px 6px}
+.gw-hd{display:grid;grid-template-columns:26px repeat(5,1fr);gap:2px;margin-bottom:3px}
+.gw-hd b{font-size:8.6px;color:var(--ink3);font-weight:700;text-align:center;padding-bottom:2px}
+.gw-hd b.on{color:var(--brand);font-weight:800}
+.gw-hd b i{font-style:normal;display:block;font-size:8px;font-weight:650;margin-top:1px;opacity:.75}
+.gw-bd{display:grid;grid-template-columns:26px repeat(5,1fr);gap:2px;grid-auto-rows:minmax(30px,auto)}
+.gw-c:empty{background:transparent}
+.gw-t{font-size:7.4px;color:#9aa6b8;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums;letter-spacing:-.2px;font-weight:650}
+.gw-c{
+  border-radius:5px;min-height:30px;padding:3px 3px 2px;font-size:8.4px;line-height:1.25;
+  background:#f4f7fc;border:1px solid transparent;overflow:hidden;position:relative;
+}
+.gw-c b{font-size:8.8px;font-weight:750;display:block;letter-spacing:-.1px}
+.gw-c span{font-size:7.6px;color:#77849a;display:block}
+.gw-c.cls{background:#e9f0ff;border-color:#d5e2fb}
+.gw-c.cls b{color:#1e4fbe}
+.gw-c.conf{background:#fdecef;border-color:#f6cfd6}
+.gw-c.conf b{color:#c02f45}
+.gw-c.conf::after{content:'!';position:absolute;right:3px;top:2px;font-size:8px;font-weight:800;color:#dd4257}
+.gw-c.meet{background:#f0f0ff;border-color:#dcdcf8}
+.gw-c.meet b{color:#4a48c9}
+.gw-c.free{background:#f3f8f6;border-color:#dbeee6}
+.gw-c.free b{color:#0f8e6b}
+.gw-c.cf{box-shadow:inset 0 0 0 1.4px #dd4257}
+.gw-lg{display:flex;gap:8px;padding:5px 2px 0;flex-wrap:wrap}
+.gw-lg i{width:5px;height:5px;border-radius:2px;display:inline-block;margin-right:3px}
+.gw-lg span{font-size:8px;color:var(--ink3);display:inline-flex;align-items:center}
+.wk-les{display:flex;gap:5px;margin:0 14px 7px}
+.wk-les .wl{flex:1;background:var(--surf);border:1px solid var(--line);border-radius:9px;padding:5px 4px;text-align:center}
+.wk-les .wl em{font-style:normal;font-size:8.2px;color:var(--ink3);display:block;font-weight:650}
+.wk-les .wl b{font-size:13px;font-weight:790;letter-spacing:-.4px;display:block;margin-top:1px}
+.wk-les .wl.today{border-color:#b9cdf5;background:#f6f9ff}
+
+/* ---------- 11 我的课堂 · 出勤热力 ---------- */
+.cls-tabs{display:flex;gap:4px;margin:0 14px 9px}
+.cls-tabs button{flex:1;border:1px solid var(--line);background:#fff;border-radius:8px;font:inherit;
+  font-size:10px;font-weight:700;color:var(--ink3);padding:6px 2px;cursor:pointer;line-height:1.25}
+.cls-tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.cls-tabs button i{font-style:normal;display:block;font-size:8px;font-weight:600;opacity:.65;margin-top:1px}
+.heat{margin:0 14px 9px;padding:9px 10px;border-radius:12px;background:var(--surf);border:1px solid var(--line)}
+.heat-hd{display:flex;align-items:center;gap:5px;margin-bottom:6px}
+.heat-hd b{font-size:10.4px;font-weight:730}
+.heat-hd span{margin-left:auto;font-size:8.8px;color:var(--ink3)}
+.heat-g{display:grid;grid-template-columns:22px repeat(5,1fr);gap:3px}
+.heat-g .hl{font-size:7.8px;color:#9aa6b8;display:flex;align-items:center;justify-content:center}
+.heat-g .hc{height:19px;border-radius:4px;background:#f4f7fb;position:relative}
+.heat-g .hc.l1{background:#fbe1e5}
+.heat-g .hc.l2{background:#f6cfd5}
+.heat-g .hc.l3{background:#eda8b2}
+.heat-g .hc.l4{background:#dd4257}
+.heat-g .hc.all{background:#f4f7fb}
+.heat-g .hc.all::after{content:'';position:absolute;inset:0;display:grid;place-items:center;
+  font-size:9px;color:#c02f45;font-weight:800}
+.hw{margin:0 14px 9px;padding:10px;border-radius:12px;background:var(--surf);border:1px solid var(--line);
+  display:flex;gap:10px;align-items:center}
+.hw .ring{position:relative;width:46px;height:46px;flex:0 0 auto}
+.hw .ring svg{transform:rotate(-90deg);display:block}
+.hw .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:11.5px;font-weight:790;letter-spacing:-.4px}
+.hw-bd{flex:1;min-width:0}
+.hw-t{font-size:11.8px;font-weight:720;color:#16233a;display:flex;align-items:center;gap:5px}
+.hw-s{font-size:9.4px;color:var(--ink3);margin-top:2px;line-height:1.45}
+.hw-s b{color:var(--ink2);font-weight:680}
+.hw .ai-a{font-size:9.6px;padding:4px 8px}
+
+/* ---------- 12 我的成长 · 大环 + 徽章 ---------- */
+.screen[data-p="growth"]{--bg:#f4f7fc}
+.gr-head{margin:0 14px 9px;padding:11px 12px;border-radius:13px;background:var(--surf);border:1px solid var(--line);
+  display:flex;gap:11px;align-items:center}
+.bigring{position:relative;width:82px;height:82px;flex:0 0 auto}
+.bigring svg{transform:rotate(-90deg);display:block}
+.bigring .bgc{fill:none;stroke:#e4ebf7;stroke-width:7}
+.bigring .fgc{fill:none;stroke:url(#gg);stroke-width:7;stroke-linecap:round}
+.bigring .gv{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.bigring .gv b{font-size:22px;font-weight:800;letter-spacing:-1.2px;line-height:1;color:#16233a;font-variant-numeric:tabular-nums}
+.bigring .gv span{font-size:8px;color:var(--ink3);font-weight:650;margin-top:2px}
+.gr-bd{flex:1;min-width:0}
+.gr-lv{font-size:12.4px;font-weight:740;color:#16233a;display:flex;align-items:center;gap:5px}
+.gr-lv em{font-style:normal;font-size:8.6px;font-weight:750;color:#fff;background:var(--ai-grad);
+  border-radius:4px;padding:1px 5px}
+.gr-s{font-size:9.6px;color:var(--ink3);margin-top:3px;line-height:1.5}
+.gr-s b{color:var(--brand-deep);font-weight:700}
+.gr-nx{margin-top:5px;font-size:9.2px;color:var(--ink2);background:#f5f8fe;border:1px dashed #d6e1f4;
+  border-radius:6px;padding:3px 6px;display:inline-block}
+.badges{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 14px}
+.bdg{background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:6px 4px 5px;text-align:center}
+.bdg .bi{width:24px;height:24px;margin:0 auto 3px;border-radius:9px;display:grid;place-items:center;
+  font-size:10.5px;font-weight:800;color:#fff;background:var(--bg2,linear-gradient(140deg,#4f8bf9,#7c5cf0))}
+.bdg.lock .bi{background:#eaeef6;color:#a8b3c5}
+.bdg b{display:block;font-size:8.8px;font-weight:700;color:#2a3a55;line-height:1.3}
+.bdg span{display:block;font-size:7.6px;color:#9aa6b8;margin-top:1px}
+.bdg.lock{opacity:.68}
+.plus{margin:0 14px;background:var(--surf);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.plus-i{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid #f0f3f9;cursor:pointer}
+.plus-i:last-child{border-bottom:0}
+.plus-i .pi-n{flex:1;min-width:0}
+.plus-i .pi-t{font-size:11.2px;font-weight:660;color:#22314a;line-height:1.35}
+.plus-i .pi-s{font-size:8.8px;color:var(--ink3);margin-top:1px}
+.plus-i .pi-p{font-size:10.5px;font-weight:790;color:var(--ok);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.plus-i .pi-c{width:17px;height:17px;border-radius:5px;background:var(--ok-soft);color:var(--ok);
+  display:grid;place-items:center;font-size:9px;font-weight:800;flex:0 0 auto}
+
+/* ---------- 13 公告 · feed + 阅读率 ---------- */
+.screen[data-p="announcement"]{--bg:#f6f8fc}
+.an-hd{margin:0 14px 10px;padding:10px 11px;border-radius:12px;background:linear-gradient(160deg,#f7f9ff,#eef3fd);
+  border:1px solid #dde7f7;display:flex;align-items:center;gap:9px}
+.an-hd .ah-i{width:26px;height:26px;border-radius:8px;background:#fff;border:1px solid #dde7f7;display:grid;
+  place-items:center;font-size:11px;color:var(--brand);flex:0 0 auto}
+.an-hd .ah-b{flex:1;min-width:0}
+.an-hd .ah-t{font-size:10.8px;font-weight:730;color:#1c3357}
+.an-hd .ah-s{font-size:9px;color:#6a7d9c;margin-top:1px}
+.an-hd .ai-a{font-size:9.4px;padding:4px 7px}
+.feed{padding:0 14px;display:flex;flex-direction:column;gap:7px}
+.fd{background:var(--surf);border:1px solid var(--line);border-radius:11px;padding:9px 10px}
+.fd-hd{display:flex;align-items:flex-start;gap:6px}
+.fd-t{font-size:11.8px;font-weight:700;color:#16233a;line-height:1.4;flex:1;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.fd-m{display:flex;align-items:center;gap:5px;margin-top:3px;font-size:8.8px;color:var(--ink3)}
+.fd-m i{font-style:normal;opacity:.55}
+.fd-bar{display:flex;align-items:center;gap:6px;margin-top:6px}
+.fd-tr{flex:1;height:3.5px;border-radius:99px;background:#eef2f9;overflow:hidden}
+.fd-tr i{display:block;height:100%;border-radius:99px;background:var(--fc,#2f6df6)}
+.fd-v{font-size:9px;font-weight:750;color:var(--fc,#2f6df6);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.fd.draft{background:#fbfcff;border-style:dashed}
+.fd.draft .fd-t{color:#5b6b85}
+
+/* 纸面小行（今日重点 / 本周） */
+.pp-row{display:flex;align-items:center;gap:8px;margin:0 14px 5px;padding:7px 10px;background:#fff;
+  border-radius:10px;box-shadow:0 1px 2px rgba(20,35,60,.05);cursor:pointer}
+.pp-row .pr-d{width:4px;height:22px;border-radius:99px;background:var(--pc,#2f6df6);flex:0 0 auto}
+.pp-row .pr-b{flex:1;min-width:0}
+.pp-row .pr-t{font-size:11.6px;font-weight:690;color:#16233a;display:flex;align-items:center;gap:5px}
+.pp-row .pr-s{font-size:9.2px;color:var(--ink3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-row .pr-e{font-size:9.6px;color:var(--ink3);font-weight:650;flex:0 0 auto}
+
+/* 柱状（近 7 天 / 趋势） */
+.bars{display:flex;align-items:flex-end;gap:4px;height:42px;margin-top:2px;border-bottom:1px solid #eaf0f9;padding-bottom:1px}
+.bars .bcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;height:100%}
+.bars .bcol i{display:block;width:100%;max-width:12px;border-radius:3px 3px 1px 1px;background:#cddff9;min-height:3px}
+.bars .bcol.lo i{background:#eaf1fc}
+.bars .bcol.hi i{background:linear-gradient(180deg,#4f8bf9,#2f6df6);max-width:14px}
+.bars .bcol em{font-style:normal;font-size:7.4px;color:#9aa6b8;font-weight:650}
+
+/* 未读头像组 */
+.avat{display:flex;align-items:center}
+.avat span{width:21px;height:21px;border-radius:7px;display:grid;place-items:center;font-size:9px;
+  font-weight:750;color:#fff;margin-left:3px;border:0;background:linear-gradient(140deg,#8494ab,#66748a)}
+.avat span:first-child{margin-left:0}
+
+/* 题卡堆：下一题露一角 */
+.qpeek{margin:-4px 22px 0;padding:8px 10px 10px;background:#fbfcff;border:1px solid #e4eaf4;
+  border-radius:0 0 11px 11px;border-top:0;cursor:pointer}
+.qp-h{display:flex;align-items:center;gap:5px;font-size:8.2px;color:#9aa6b8;font-weight:700;letter-spacing:.4px}
+.qp-h span:last-child{margin-left:auto}
+.qp-t{margin-top:2px;font-size:10.6px;color:#7b8aa0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.heat-lg{display:inline-flex;align-items:center;gap:2px;font-size:7.6px;color:#9aa6b8}
+.heat-lg i{width:8px;height:8px;border-radius:2px;display:block}
+.heat-lg .d0{background:#f4f7fb;margin-left:3px}
+.heat-lg .d1{background:#fbe1e5}
+.heat-lg .d2{background:#f0a9b4}
+.heat-lg .d3{background:#dd4257;margin-right:3px}
+
+.submore{margin:12px 14px 0;padding-top:10px;border-top:1px dashed var(--line2)}
+.submore .sm-t{font-size:8.8px;color:var(--ink3);letter-spacing:.6px;font-weight:700}
+.submore .sm-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.submore .sm-chips button{font-size:10px;color:#4a6180;background:#eef3fb;border:1px solid #e0e8f5;
+  border-radius:99px;padding:3px 9px;cursor:pointer;font-weight:600}
+
+/* 单行提示（补白用，高度可控） */
+.oneline{margin:9px 14px 0;padding:7px 10px;border-radius:9px;background:#f5f8fd;
+  border:1px dashed #dce5f4;font-size:10.2px;line-height:1.5;color:#5e6d83;display:flex;gap:6px;align-items:flex-start}
+.oneline b{color:#2c3c55;font-weight:720}
+.oneline .ok-mk{width:13px;height:13px;border-radius:4px;background:#e3f2ea;color:#2f8562;display:grid;
+  place-items:center;font-size:8px;font-weight:800;flex:0 0 auto;margin-top:1px}
+
+/* 处理构成条 */
+.split{height:7px;border-radius:99px;background:#cdd9ea;overflow:hidden;margin:7px 0 5px}
+.split i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#4f8bf9,#7c5cf0)}
+.split-lg{display:flex;gap:10px;flex-wrap:wrap}
+.split-lg span{display:flex;align-items:center;gap:4px;font-size:9.2px;color:var(--ink3);font-weight:600}
+.split-lg i{width:6px;height:6px;border-radius:99px;display:block}
+
+/* ---------- 子页通用 ---------- */
+.subhero{margin:0 14px 10px;padding:11px 12px;border-radius:12px;background:var(--surf);border:1px solid var(--line)}
+.subhero .sh-t{font-size:14.5px;font-weight:760;letter-spacing:-.3px;display:flex;align-items:center;gap:6px}
+.subhero .sh-s{font-size:10px;color:var(--ink3);margin-top:3px;line-height:1.55}
+.kv-rows{margin:0 14px 9px;background:var(--surf);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.kv-i{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f1f4fa;font-size:11px}
+.kv-i:last-child{border-bottom:0}
+.kv-i .k{color:var(--ink3);width:62px;flex:0 0 auto;font-size:9.8px}
+.kv-i .v{color:#22314a;font-weight:650;flex:1}
+.evi-row{display:flex;gap:7px;margin:0 14px 9px}
+.evi-row .er{flex:1;background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:7px 8px;text-align:center}
+.evi-row .er b{display:block;font-size:14px;font-weight:790;letter-spacing:-.4px;color:#16233a;font-variant-numeric:tabular-nums}
+.evi-row .er span{font-size:8.4px;color:var(--ink3);display:block;margin-top:1px}
+.step3{margin:0 14px;display:flex;flex-direction:column;gap:0}
+.st{display:flex;gap:9px;padding-bottom:10px;position:relative}
+.st:last-child{padding-bottom:0}
+.st::before{content:'';position:absolute;left:9px;top:20px;bottom:0;width:1px;background:var(--line)}
+.st:last-child::before{display:none}
+.st .sn{width:19px;height:19px;border-radius:6px;background:var(--brand-soft);color:var(--brand-deep);
+  font-size:9px;font-weight:800;display:grid;place-items:center;flex:0 0 auto;position:relative;z-index:1}
+.st .sb2{flex:1;min-width:0}
+.st .st-t{font-size:11.6px;font-weight:700;color:#16233a;display:flex;align-items:center;gap:5px}
+.st .st-s{font-size:9.8px;color:var(--ink3);margin-top:2px;line-height:1.5}
+.st .st-a{margin-top:5px;display:flex;gap:5px}
+.chat-mini{padding:0 14px;display:flex;flex-direction:column;gap:7px}
+.mtable{margin:0 14px 9px;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--surf)}
+.mt-h{display:grid;grid-template-columns:1fr 54px 46px;gap:4px;padding:6px 9px;background:#f7f9fd;
+  font-size:8.4px;color:var(--ink3);font-weight:750;letter-spacing:.3px}
+.mt-i{display:grid;grid-template-columns:1fr 54px 46px;gap:4px;padding:7px 9px;border-top:1px solid #f1f4fa;
+  font-size:10px;align-items:center}
+.mt-i .n{display:flex;align-items:center;gap:5px;min-width:0}
+.mt-i .n span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-i .s{font-size:9px;font-weight:750;color:var(--ink2);font-variant-numeric:tabular-nums;text-align:right}
+</style>
+</head>
+<body data-page-node-id="bB54L5GrMXdaOmsmgsHrDW">
+<div class="shell" data-page-node-id="jkMhKyPS9TAGKoO9PP3Ui7">
+  <div class="top" data-page-node-id="104Yg4qzN5lUSMa4jGXwt6">
+    <div data-page-node-id="AZb8OSzFZYrU7AH7a4MLtz">
+      <span class="eyebrow" data-page-node-id="og2HDzkcCvqCOfIjzADNnG"><b data-page-node-id="XYNxpT6PgYUv90GozQiDUq"></b>Teacher Mobile · Final</span>
+      <h1 data-page-node-id="cJDzRrjsXCWrcXKKZstTaN">教师端移动端 · <em data-page-node-id="81NBNnIYf0I5AlVXiEjfUf">13 页定稿设计</em></h1>
+      <p data-page-node-id="5swZb6Nbq7xlEQXm9dnvf1">按你的选择落地：今日重点 / AI 洞察用 <b data-page-node-id="ZJAkVy5zxqTnXaS9dWXqQW">卡片版 + 冷色调</b>，学生档案用 <b data-page-node-id="wPvGPZcckil17OhofCNisY">A 版</b>，审批沿用 <b data-page-node-id="FH6EzGzSOMOQqlrWanCUIZ">现行格式优化</b>；其余 9 页逐页单独设计，<b data-page-node-id="eGGGdBLkfQLCyqhrEOkFAF">每页只解决一件事</b>，不再是同一套列表换皮。</p>
+      <div class="stats" data-page-node-id="wdO7cBUQZ4QJEvLzGhbBkU">
+        <span data-page-node-id="4yrFfE1190HpkGqLq2g6HV"><b data-page-node-id="T5DKRV8CQuwMOXJrBQLaxa">13</b> 功能页</span>
+        <span data-page-node-id="5eU78YEASHUiLfUdXIPGTQ"><b id="nSub" data-page-node-id="WhouqbXrihdq9Avknt5Cb0">14</b> 子页</span>
+        <span data-page-node-id="z7NUTWSSS7dpBJs2Vzom0S"><b data-page-node-id="xmfJds3VGSBdBB5LHT6efy">1 屏</b> 内容上限</span>
+        <span data-page-node-id="dlGP8VYCRZKhc3ljuIgciP"><b data-page-node-id="tyGSb0EYrIrn4jO03blWMm">0</b> 页需滚动</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage" data-page-node-id="0cwOQZzN1DH67iVldHnybi">
+    <aside class="rail" data-page-node-id="fO580fUsgSj0aWs2fkLYtM">
+      <div class="rail-hd" data-page-node-id="wWCprKNDXx4esgAG9DaIey">功能页 · 点击切换<i data-page-node-id="gswmo4EDrLu0NJnuhFnYvz">右侧为版式代号</i></div>
+      <div id="pagelist" data-page-node-id="HKFLCpOCgpzdcFPeC9UAAX"></div>
+    </aside>
+
+    <main class="main" data-page-node-id="PcD0zUVvoMr6jjVBfN9mHC">
+      <div class="stagecol" data-page-node-id="km8mdmXjvEH9W88zAWXCfu">
+        <div class="stagetop" data-page-node-id="cABRpqAw1zaKVReDL8dB0X">
+          <span class="cur" id="curTitle" data-page-node-id="naxBekNIJCTDTfuU7AED36">今日重点<i data-page-node-id="gGIaxBpig64WxNX8xrZ8eg">01 / 13</i></span>
+          <button class="btn-mini" id="btnOvf" data-page-node-id="FzStdP2WIKobVaBiuLnLL1">溢出检测</button>
+        </div>
+        <div class="phone" id="phone" data-page-node-id="74fuhwVD13kfBS5avl7GnT"></div>
+      </div>
+      <div class="spec" id="spec" data-page-node-id="LDlXLCXMrWGMN5jce4Glvl"></div>
+    </main>
+  </div>
+
+  <section class="final" data-page-node-id="BNfGdxwgt2mzEWWuWh1yo4">
+    <div class="final-hd" data-page-node-id="Kb3S63gby8VI4HpGDqzGbR">
+      <h2 data-page-node-id="hGKTjsUT0HnhTxoKyyxFb0">这次的落地口径</h2>
+      <p data-page-node-id="EelGNaWhZLooriGPyMbXrI">你选的四件事已按原样落进去，其余 9 页各给一套独立版式；13 页共用同一份数据与同一套交互，选定后只改渲染层。</p>
+    </div>
+    <div class="final-grid" data-page-node-id="TDuRxVgQlXqadBwDZAeZG1">
+      <article class="fcard" style="--k:#6d5cf6" data-page-node-id="NaVThccVnOCbZUWJbkJU5T">
+        <div class="fc-top" data-page-node-id="u4zqhDKj28eh7REJbwPbxv"><b data-page-node-id="LdqPjbGiy5KhRSpL1FLbvu">今日重点 · AI 洞察</b><span data-page-node-id="lwPN7x2hfrejoAcKwIlkye">你的选择</span></div>
+        <p data-page-node-id="EKyA7GXDOS30QIScjMX3oB">卡片版保留，但把暖纸换成<b data-page-node-id="fGXV5VL6m8eBrrAHJOgyZB">冷调纸面</b>：底 #f5f7fb、字 #16233a、AI 用靛紫而非米黄。便签感靠虚线边和衬线标题，不靠暖色。</p>
+        <dl data-page-node-id="kuLzbXjj7bDRyMLxrtNT93"><dt data-page-node-id="RDMNHq6NC30jlP4sS9THUf">为什么</dt><dd data-page-node-id="vH8OELsTR53IRlBBFI7BHk">暖色在教师端长时间盯会显得"软"，冷调更接近工作台，同时保留纸的亲和。</dd></dl>
+      </article>
+      <article class="fcard" style="--k:#2f6df6" data-page-node-id="Co1L5kIalD1wpE3E3BQZiQ">
+        <div class="fc-top" data-page-node-id="WaGPQONrR1j8uqBlTkEYow"><b data-page-node-id="2nmVUjMow9BQ2jCu6jzyTK">学生档案</b><span data-page-node-id="IH40ZXVRkW9F5ROotpvKEC">你的选择</span></div>
+        <p data-page-node-id="b37JsVPAIMgX8Q2Da2AN0W">用 A 版：搜索 + 风险分段 + 单列行，分数在右、理由在顶，一屏 4 条。补了"为什么只推 2 人"的分诊规则和全部 42 人入口。</p>
+        <dl data-page-node-id="YrbLUGXGZlt17XFF6AWcf1"><dt data-page-node-id="FJuMT4lbSfAScd77lee59I">字段</dt><dd data-page-node-id="njaQufEB3GVEBVYr14BNz3">crisis_level / score / growth_count，不新增结构。</dd></dl>
+      </article>
+      <article class="fcard" style="--k:#0f8e6b" data-page-node-id="CzFxdXVckHVrt7H6me5Hsi">
+        <div class="fc-top" data-page-node-id="NbHoBxZIdUhT5zZQHueUrP"><b data-page-node-id="L56bv1mkoEuwKtMH7dv0Wb">审批</b><span data-page-node-id="FClsCdECIGXSpBounNGDDi">你的选择</span></div>
+        <p data-page-node-id="bAaQRik7IQsIvytu6AlbdE">完全沿用现行格式，只做四处精修：汇总卡更清、判断行更短、证据可点开、加一条"近 7 天处理量"。</p>
+        <dl data-page-node-id="GPg61gTe18xPyH1OnlxmEk"><dt data-page-node-id="a9FT8mn7AIx6yDu8s1QzSX">没动</dt><dd data-page-node-id="2J2MR4CbG3sV4u4f7AiZjd">分段、行结构、通过/驳回按钮位置全保留。</dd></dl>
+      </article>
+      <article class="fcard" style="--k:#d98317" data-page-node-id="x5pGKD4U5tm9zO5BhBbtZZ">
+        <div class="fc-top" data-page-node-id="zq8YWbh9VBfCv5rA20djOy"><b data-page-node-id="rOIPNcFCroqqvXhQlEinrH">其余 9 页</b><span data-page-node-id="qdDDE014FcHHgG8ZgR80E2">逐页重设计</span></div>
+        <p data-page-node-id="GvXU9eCdB8WyZneIC6zBAE">预警=计时器、关怀=节律图、家校=对话流、成长档案=能力轨道、问卷=题卡堆、课表=网格、课堂=热力、我的成长=徽章墙、公告=信息流。</p>
+        <dl data-page-node-id="ZT9GD2VrQ3EM6pG63YKbVV"><dt data-page-node-id="CfyGhvO4oHIMZCYDey3QMA">共同点</dt><dd data-page-node-id="1cHBe81pwyAPUSYsuNvH44">骨架统一（AI 结论 → 只留要判断的 → 底部 AI 动作），版式各不相同。</dd></dl>
+      </article>
+    </div>
+    <div class="final-note" data-page-node-id="TEJ1cBwnm1KC3SFFbBTYa2">
+      <b data-page-node-id="AabxqAuOi5sqwEuEZcwpcI">操作</b> 左侧切 13 个功能页；手机里点卡片 / 行进入子页（共 <span id="nSub2" data-page-node-id="HwDGEpgLMsdm7eDkrhbxMQ">14</span> 个），左上「返回」或面包屑回上层；右上「溢出检测」逐页量高度。
+      字段与接口沿用现有后端，演示为纯静态单文件，不依赖构建。
+    </div>
+  </section>
+</div>
+
+<script>
+/* ============================================================
+   数据
+   ============================================================ */
+const T = {name:'王砚秋', cls:'软件工程 2301', n:42};
+
+const STU = [
+  {n:'林晓阳', sc:52, d:-3,  cr:'severe',   g:3,  last:'3 天前', note:'室友反馈连续失眠，已 74 小时无有效接触'},
+  {n:'邓一鸣', sc:45, d:-6,  cr:'severe',   g:0,  last:'5 天前', note:'两周内 3 次缺勤，均在周一第 1 节'},
+  {n:'苏雨欣', sc:61, d:-2,  cr:'moderate', g:2,  last:'6 天前', note:'作息紊乱，社团已退部'},
+  {n:'何书宁', sc:57, d:-12, cr:'moderate', g:1,  last:'9 天前', note:'高数下滑 12 分，挂科风险'},
+  {n:'黄佳琪', sc:74, cr:'mild',     g:5,  last:'2 天前', note:'社团与课表冲突'},
+  {n:'罗嘉言', sc:66, cr:'mild',     g:2,  last:'4 天前', note:'本月请假 3 次'},
+  {n:'吴浩然', sc:68, cr:null,       g:0,  last:'12 天前',note:'状态平稳'},
+  {n:'郑心怡', sc:82, cr:'mild',     g:7,  last:'昨天',   note:'竞赛备赛中'},
+  {n:'周天佑', sc:88, cr:null,       g:9,  last:'今天',   note:'状态良好'},
+  {n:'韩以宁', sc:96, cr:null,       g:11, last:'今天',   note:'状态良好'}
+];
+const CR_TXT = {severe:'高危', moderate:'关注', mild:'观察'};
+const CR_TONE = {severe:'bad', moderate:'warn', mild:'ok'};
+
+const APPROVALS = [
+  {id:1, n:'林晓阳', type:'病假', span:'9/12 – 9/14 · 3 天', mat:3, tot:4, ai:'缺诊断证明，先追问再批', tone:'warn', auto:false},
+  {id:2, n:'邓一鸣', type:'事假', span:'9/13 · 1 天',       mat:4, tot:4, ai:'有未闭环预警，建议面谈后再批', tone:'bad', auto:false},
+  {id:3, n:'苏雨欣', type:'公假', span:'9/15 · 2 天',       mat:4, tot:4, ai:'材料齐全，与课表无冲突', tone:'ok', auto:true},
+  {id:4, n:'黄佳琪', type:'病假', span:'9/16 · 1 天',       mat:4, tot:4, ai:'医院盖章已核验', tone:'ok', auto:true},
+  {id:5, n:'罗嘉言', type:'事假', span:'9/17 · 1 天',       mat:4, tot:4, ai:'本月第 3 次，可附提醒后通过', tone:'warn', auto:true},
+  {id:6, n:'何书宁', type:'公假', span:'9/18 · 2 天',       mat:4, tot:4, ai:'赛事名单已比对一致', tone:'ok', auto:true}
+];
+
+const TASKS = [
+  {id:'t1', t:'找 林晓阳 谈一次', s:'高危 · 74 小时无接触 · AI 已拟提纲', m:'12', tone:'bad',  pri:'现在', wide:true},
+  {id:'t2', t:'批 3 条请假申请',   s:'2 条已核验，1 条要你判断',            m:'6',  tone:'warn', pri:'上午'},
+  {id:'t3', t:'回 林晓阳妈妈',     s:'草稿已就绪，改两句就能发',            m:'3',  tone:'info', pri:'今天'},
+  {id:'t4', t:'确认周五班会',      s:'AI 已生成 6 页讲稿',                  m:'2',  tone:'ok',   pri:'今天'},
+  {id:'t5', t:'交国庆去向表',      s:'42 人已汇总，只差 3 人',              m:'1',  tone:'ok',   pri:'今天'}
+];
+const TASK_TONE = {bad:'#dd4257', warn:'#d98317', info:'#2f6df6', ok:'#0f8e6b'};
+
+const OBS = [
+  {id:'r1', n:'林晓阳', why:'高危 · 74 小时无有效接触', q:'「这周你几乎没来上课，我不想给你压力，只想先知道你还好吗。」',
+   evi:[['失联','74h','up'],['综合分','52','up'],['谈心','2 次','']], tag:'优先'},
+  {id:'r2', n:'苏雨欣', why:'关注 · 分数 3 周连降 · 社团退部', q:'「听说你退了社团，是时间排不开，还是有别的原因？」',
+   evi:[['分数','-9','up'],['出勤','82%',''],['联系','6 天','']], tag:'本周'},
+  {id:'r3', n:'郑心怡', why:'观察 · 竞赛备赛 · 睡眠不足', q:'「备赛强度大不大？要不要帮你和各科老师打个招呼？」',
+   evi:[['成果','7 项','ok'],['作息','23:40','up'],['联系','昨天','ok']], tag:'可选'}
+];
+
+const CRISIS = [
+  {n:'林晓阳', lv:'一级', h:74, t:'连续缺课 5 天 · 室友反馈失眠', touch:'3 天前 · 微信未回', step:'已拟三步介入', tone:'#dd4257', tag:'高危'},
+  {n:'邓一鸣', lv:'一级', h:38, t:'两周 3 次缺勤 · 均在周一第 1 节', touch:'5 天前 · 电话未接', step:'待你确认介入方式', tone:'#dd4257', tag:'高危'},
+  {n:'苏雨欣', lv:'二级', h:12, t:'成绩 3 周连降 · 作息记录异常', touch:'6 天前 · 已回复', step:'建议本周约谈', tone:'#d98317', tag:'关注'}
+];
+
+const CARE = [
+  {n:'林晓阳', s:'7 天未联系 · 上次提到「不想上课」', tone:'#dd4257', bg:'#fdecef', tag:'优先',
+   why:'两次谈心都提到室友，关系问题可能比学业更关键', steps:['开场先问睡眠，不问成绩','让他说一件这周「还行」的事','收尾只约定一件小事：明天来上第 1 节']},
+  {n:'苏雨欣', s:'5 天未联系 · 室友反映作息紊乱', tone:'#d98317', bg:'#fdf3e2', tag:'本周',
+   why:'退部后社交圈收缩，建议先聊「最近和谁一起吃饭」', steps:['先确认作息：几点睡、几点起','问退部原因，不评价','约定一周后反馈一次']},
+  {n:'何书宁', s:'9 天未联系 · 高数挂科风险', tone:'#2f6df6', bg:'#e7efff', tag:'本周',
+   why:'缺的是「方法」不是「态度」，可带补课名单去谈', steps:['先看成绩单，让他自己说哪章最虚','给出补课名单，让他选时间','约定两周后一起看一次小测']}
+];
+
+const CHAT = [
+  {who:'them', t:'王老师，孩子这周怎么没去上课？', time:'昨天 20:41'},
+  {who:'me',   t:'晓阳妈妈您好，他这周有 3 次缺课，我昨天已经找他聊过了。', time:'昨天 21:10', read:'已读'},
+  {who:'them', t:'是不是又玩游戏了？他爸上周还说不管他了……', time:'今天 08:12', unread:true},
+  {who:'them', t:'老师您多费心，我们在外地也管不到', time:'今天 08:13', unread:true}
+];
+
+const PORT = {
+  dims:[['学业',72,68],['研究',58,61],['育人',81,70],['实践',76,64],['协作',69,72]],
+  items:[
+    {y:'2026.05', t:'省级 ACM 程序设计 铜奖', s:'团队第 2 作者 · 3 人', tone:'#0f8e6b', ic:'竞', hl:true},
+    {y:'2026.04', t:'社区志愿服务 48 小时', s:'累计 6 次 · 校级认定', tone:'#2f6df6', ic:'志'},
+    {y:'2026.03', t:'校园二手平台 前端负责人', s:'上线 2 个月 · 1.2k 用户', tone:'#7c5cf0', ic:'项'}
+  ]
+};
+
+const SQ = [
+  {t:'他会在小组里主动承担最难的部分', d:0.58, tag:'保留'},
+  {t:'遇到分歧时，他会先听完再表达', d:0.41, tag:'保留'},
+  {t:'这学期他的学习状态在变好', d:0.22, tag:'替换'},
+  {t:'他上课经常迟到或早退', d:0.11, tag:'替换'},
+  {t:'他愿意帮助同学解决学习问题', d:0.63, tag:'保留'}
+];
+
+const WK = {
+  days:['一','二','三','四','五'],
+  times:['1–2','3–4','5–6','7–8'],
+  cells:[
+    [{t:'数据结构',s:'2301',k:'cls'},{t:'数据结构',s:'2302',k:'cls'},{t:'数据结构',s:'2301',k:'cls'},{t:'',s:'',k:''},{t:'程序设计',s:'2303',k:'cls'}],
+    [{t:'程序设计',s:'2303',k:'cls'},{t:'',s:'',k:''},{t:'教研会',s:'撞实验课',k:'meet conf'},{t:'空闲',s:'2 小时',k:'free'},{t:'数据结构',s:'2301',k:'cls'}],
+    [{t:'数据结构',s:'2301',k:'cls'},{t:'',s:'',k:''},{t:'实验课',s:'2302 · 45 人',k:'cls'},{t:'答疑',s:'办公室',k:'free'},{t:'',s:'',k:''}],
+    [{t:'',s:'',k:''},{t:'',s:'',k:''},{t:'',s:'',k:''},{t:'',s:'',k:''},{t:'班会',s:'2301',k:'meet'}]
+  ]
+};
+
+const TEACH = {
+  classes:[{n:'软件 2301', k:'数据结构', n2:'48 人'},{n:'软件 2302', k:'数据结构', n2:'46 人'},{n:'软件 2303', k:'程序设计', n2:'44 人'}],
+  heat:[[3,0,1,0,0],[2,0,0,1,0],[0,1,0,0,2],[1,0,0,0,0]],
+  hw:{over:94, done:12, total:14, name:'第 3 次作业 · 图与树的遍历'}
+};
+
+const GROW = {
+  score:86, lv:'L3 骨干教师', next:14,
+  badges:[
+    {i:'谈', b:'谈心 100', s:'已达成', on:true},{i:'课', b:'课堂标杆', s:'3 次评优', on:true},
+    {i:'研', b:'论文 1 篇', s:'已见刊', on:true},{i:'家', b:'家校全覆盖', s:'86%', on:false},
+    {i:'赛', b:'指导获奖', s:'2 项', on:true},{i:'班', b:'班会留痕', s:'1/4', on:false},
+    {i:'带', b:'带新教师', s:'未开始', on:false},{i:'学', b:'年读 6 本', s:'4/6', on:false}
+  ],
+  plus:[
+    {t:'把 4 次班会记录补齐', s:'已开 4 次，只上传 1 次', p:'+3'},
+    {t:'带 1 个学生项目', s:'同时加分「研究」「育人」两维', p:'+4'},
+    {t:'给 6 位未覆盖家长发一次沟通', s:'覆盖率达 100% 再加 2 分', p:'+2'}
+  ]
+};
+
+const ANN = [
+  {t:'关于国庆假期去向统计的通知', s:'已发 · 42 人 · 昨天 16:00', r:92, tone:'#0f8e6b', tag:'已发布'},
+  {t:'第 3 周实验课调整说明', s:'已发 · 软件 2302 · 前天', r:78, tone:'#2f6df6', tag:'已发布'},
+  {t:'奖学金评定细则（征求意见稿）', s:'草稿 · 未选收件人', r:0, tone:'#d98317', tag:'草稿', draft:true},
+  {t:'关于补考报名的提醒', s:'草稿 · AI 已起草', r:0, tone:'#d98317', tag:'草稿', draft:true}
+];
+
+/* 页面元信息 */
+const META = {
+  tasks:{t:'今日重点', sub:'周四 10:24', tag:'便签'},
+  ai:{t:'AI 洞察', sub:'每周更新', tag:'证据'},
+  students:{t:'学生档案', sub:'42 人', tag:'分诊'},
+  approval:{t:'审批', sub:'待批 6', tag:'核验'},
+  crisis:{t:'预警', sub:'紧急 2', tag:'计时'},
+  care:{t:'关怀中心', sub:'待谈 3', tag:'节律'},
+  guardian:{t:'家校沟通', sub:'未读 2', tag:'对话'},
+  portfolio:{t:'成长档案', sub:'186 条', tag:'轨道'},
+  survey:{t:'问卷互评', sub:'进行中 1', tag:'题卡'},
+  schedule:{t:'查课表', sub:'第 3 周', tag:'网格'},
+  teaching:{t:'我的课堂', sub:'软件 2301', tag:'热力'},
+  growth:{t:'我的成长', sub:'9 月', tag:'徽章'},
+  announcement:{t:'公告', sub:'草稿 2', tag:'信息流'}
+};
+const NAV = [
+  {g:'工作台', items:['tasks','ai','students']},
+  {g:'学生事务', items:['approval','crisis','care','guardian']},
+  {g:'成长与教学', items:['portfolio','survey','schedule','teaching','growth','announcement']}
+];
+
+const SPEC = {
+  tasks:{cut:'把「今日」当成一张便签墙：一件事一张卡，扫一眼就知道先做哪个。',ai:'排好序、代办了 2 件、给出第一件的切入方式。',sub:['事项详情 · 面谈准备'],fn:['按截止时间排序','勾选完成','今日 / 本周 / 归档','AI 已代办说明'],api:'GET /teacher-tasks/summary'},
+  ai:{cut:'洞察不是列表，是「有证据的判断」：每条都带理由、证据和一句可以直接说的话。',ai:'从 7 天数据里挑出 3 个人，写好开场白。',sub:['判断依据 · 四项权重'],fn:['采纳为任务','换一句开场','依据可追溯'],api:'POST /teacher-tasks'},
+  students:{cut:'A 版骨架：搜索 + 风险分段 + 单列行，分数在右，理由在顶。',ai:'按「先联系谁」分诊，只推 2 人。',sub:['学生详情 · 画像 / 时间线','档案抽屉'],fn:['搜索','风险分段','分诊理由','本周名单'],api:'GET /teacher/students'},
+  approval:{cut:'沿用现行格式，只做三处精修：汇总卡更清、判断行更短、证据可展开。',ai:'核验材料 + 比对课表/预警，只留 2 条要人判断。',sub:['材料证据链'],fn:['批量通过','逐条通过 / 驳回','已通过 / 已驳回','撤回'],api:'POST /approval/{kind}/{id}/review'},
+  crisis:{cut:'预警的核心是「时间」，所以用倒计时 + 三级风险阶梯，而不是又一张列表。',ai:'按 72 小时接触计时排序，并给出三步介入。',sub:['三步介入方案'],fn:['倒计时','分级泳道','联系记录','介入方案'],api:'GET /crisis/students'},
+  care:{cut:'关怀中心要有「节律感」：先看四周谈心节奏，再看今天该谈谁。',ai:'按风险排序，提纲点开才出现，不占版面。',sub:['谈心提纲 / 记录'],fn:['谈心节奏','待谈 3','提纲展开','记录留痕'],api:'POST /care-center/events/generate'},
+  guardian:{cut:'家校沟通就是聊天，别做成工单列表：对话流 + 一条 AI 草稿。',ai:'分出「可自动回」与「必须你说」，先写好草稿。',sub:['完整对话'],fn:['未读消息','AI 草稿','快捷回复','发送'],api:'GET /guardians/overview'},
+  portfolio:{cut:'成长档案用「能力条 + 成果轨道」，横向比同龄、纵向看时间。',ai:'186 条记录归并 5 维，并指出唯一短板。',sub:['成果详情'],fn:['五维能力','对标均值','成果轨道','学期评语'],api:'GET /portfolio/certificates'},
+  survey:{cut:'问卷题一道一道看，做成题卡堆，配合区分度判断哪题该换。',ai:'算出每题区分度，直接给替换建议。',sub:['编辑题目'],fn:['逐题作答','区分度','换题 / 保留','进度'],api:'GET /survey/list'},
+  schedule:{cut:'课表就该是网格，别用列表。冲突用红色块直接砸在格子里。',ai:'检测冲突并找出本周唯一空闲的 2 小时。',sub:['调课建议'],fn:['周网格','冲突高亮','按天 / 按班','空闲时段'],api:'GET /teaching/classes'},
+  teaching:{cut:'我的课堂用「出勤热力 + 批改进度」，一眼看出问题出在周几。',ai:'算出缺勤集中在周一第 1 节，并预批 12 份。',sub:['作业批阅'],fn:['班级切换','出勤热力','作业批改','成绩概览'],api:'GET /teaching/overview'},
+  growth:{cut:'我的成长要有「成就感」：大环给分，徽章墙给反馈，加分项给下一步。',ai:'对标同院均值，指出唯一短板与最快加分路径。',sub:['徽章详情'],fn:['成长分','等级进度','徽章墙','加分建议'],api:'GET /teacher-me/growth'},
+  announcement:{cut:'公告页的价值在「发出去之后」：阅读率当成主指标。',ai:'按课表冲突给发布时间建议 + 起草。',sub:['发布详情'],fn:['已发布 / 草稿','阅读率','定时发布','AI 起草'],api:'GET /announcement/list'}
+};
+
+/* ============================================================
+   状态 & 工具
+   ============================================================ */
+const S = {
+  page:'tasks', sub:null, arg:null, seg:{}, done:[], approved:[], rejected:[],
+  open:{}, admit:[], q:'', stu:'林晓阳', plan:false, qIdx:0, ans:{}, cls:0, replyOn:false,
+  picked:{}, toast:null, why:false, adj:false, badges:[]
+};
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const segKey = id => S.seg[id] ?? 0;
+let __tt = null;
+function toast(t){
+  S.toast = t; paint();
+  clearTimeout(__tt);
+  __tt = setTimeout(()=>{ S.toast = null; paint(); }, 2000);
+}
+function tag(txt, tone){ return '<span class="tag '+(tone||'mute')+'">'+esc(txt)+'</span>'; }
+function num(v, unit){ return '<div class="r-num">'+v+(unit?'<small>'+unit+'</small>':'')+'</div>'; }
+function seg(items){
+  return '<div class="seg">'+items.map((it,i)=>'<button class="'+(segKey(S.page)===i?'on':'')+'" data-act="seg:'+i+'">'+it+'</button>').join('')+'</div>';
+}
+function aistrip(o){
+  return '<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">'+o.lb+'</span>'
+    +'<span class="ai-time">'+(o.time||'刚刚')+'</span></div>'
+    +'<p>'+o.tx+'</p>'
+    +(o.acts?'<div class="ai-acts">'+o.acts.map((a,i)=>'<button class="ai-a'+(i===0?' pri':'')+'" data-act="'+a.a+'">'+a.t+'</button>').join('')+'</div>':'')
+    +'</div>';
+}
+function row(o){
+  return '<div class="row'+(o.tap?' tap':'')+'"'+(o.act?' data-act="'+o.act+'"':'')
+    +' style="--tone:'+(o.tone||'var(--line2)')+';--tint:'+(o.tint||'var(--tint-neutral)')+'">'
+    +(o.ic?'<span class="r-ic">'+o.ic+'</span>':'')
+    +'<div class="r-bd"><div class="r-t"><span>'+o.t+'</span>'+(o.tag||'')+'</div>'
+    +(o.s?'<div class="r-s">'+o.s+'</div>':'')
+    +(o.ai?'<div class="r-ai">'+o.ai+'</div>':'')+'</div>'
+    +(o.end?'<div class="r-e">'+o.end+'</div>':'')+'</div>';
+}
+function footAI(label, act, hint){
+  return '<button class="btn-g" data-act="toast:已生成分享链接，24 小时内有效">'+IC.share+'</button>'
+    +'<button class="btn-p" data-act="'+act+'"><span class="sp">✦</span>'+label
+    +(hint?'<span class="hint">'+hint+'</span>':'')+'</button>';
+}
+const IC = {
+  back:'<svg width="9" height="15" viewBox="0 0 9 15" fill="none"><path d="M7.4 1.2L1.6 7.5l5.8 6.3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  search:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.4" stroke="currentColor" stroke-width="1.5"/><path d="M9.4 9.4L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  share:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.6v8.2M5 4.4L8 1.5l3 2.9M2.6 8.6v4.2c0 .6.5 1 1 1h8.8c.6 0 1-.4 1-1V8.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  ok:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1.4 6.3l3 3 6.2-6.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  no:'<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1.2 1.2l8.6 8.6M9.8 1.2L1.2 9.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  arrow:'<svg width="9" height="13" viewBox="0 0 9 13" fill="none"><path d="M1.6 1.2l5.8 5.3-5.8 5.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+function statusbar(){
+  return '<div class="sb"><span>9:41</span><span class="sb-r">'
+    +'<svg width="54" height="12" viewBox="0 0 54 12" fill="none">'
+    +'<rect x="0" y="6.4" width="2.6" height="5.2" rx="0.8" fill="currentColor"/>'
+    +'<rect x="4.4" y="4.4" width="2.6" height="7.2" rx="0.8" fill="currentColor"/>'
+    +'<rect x="8.8" y="2.4" width="2.6" height="9.2" rx="0.8" fill="currentColor"/>'
+    +'<rect x="13.2" y="0.6" width="2.6" height="11" rx="0.8" fill="currentColor"/>'
+    +'<path d="M22.6 4.6a7.4 7.4 0 0 1 9.4 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+    +'<path d="M24.9 7.2a4.1 4.1 0 0 1 4.8 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+    +'<circle cx="27.3" cy="10" r="1.25" fill="currentColor"/>'
+    +'<rect x="39" y="1.6" width="12.4" height="8.8" rx="2.6" stroke="currentColor" stroke-opacity=".45" stroke-width="1"/>'
+    +'<rect x="40.4" y="3" width="8.6" height="6" rx="1.5" fill="currentColor"/>'
+    +'<path d="M52.8 4.6v2.8" stroke="currentColor" stroke-opacity=".45" stroke-width="1.2" stroke-linecap="round"/>'
+    +'</svg></span></div>';
+}
+
+/* ---------------- 01 今日重点 · 冷调便签墙 ---------------- */
+function pTasks(){
+  const doneN = S.done.length, left = TASKS.length - doneN;
+  let body = '<div class="pp-note">'
+    +'<div class="pn-h"><b>✦ AI 今日编排</b><em>10:24 更新</em></div>'
+    +'<p>5 件事里只有 <b>3 件需要你出手</b>，2 件我已代办，按截止时间排好了。</p>'
+    +'<div class="ai-acts"><button class="ai-a pri" data-act="toast:已按截止时间重排">采纳这个顺序</button>'
+    +'<button class="ai-a" data-act="sub:itemlist">看我代办了哪些</button></div></div>';
+
+  body += '<div class="pp-line"><span class="pl-t">今天</span><span class="pl-c">'+left+' 件待办 · 约 24 分钟</span></div>';
+  body += '<div class="pp-grid">' + TASKS.map(function(t,i){
+    const done = S.done.indexOf(t.id)>=0;
+    const col = done ? 'var(--ok)' : TASK_TONE[t.tone];
+    return '<div class="pcard'+(done?' done':'')+(t.wide?' wide':'')+(i===0&&!done?' fresh':'')+'"'
+      +' style="--pc:'+col+'" data-act="toggle:'+t.id+'">'
+      +'<div class="pc-top"><span class="pc-no">'+String(i+1).padStart(2,'0')+'</span>'
+      +'<div class="pc-t">'+t.t+'</div></div>'
+      +'<div class="pc-s">'+t.s+'</div>'
+      +'<div class="pc-ft"><span class="pc-m"><i>◷</i>'+t.m+' 分</span>'
+      + tag(t.pri, done?'ok':(t.tone==='bad'?'bad':t.tone==='warn'?'warn':'mute'))
+      +'<span class="pc-tick'+(done?' on':'')+'">'+IC.ok+'</span></div></div>';
+  }).join('') + '</div>';
+
+  body += '<div class="pp-tip"><span style="color:#4a7bfb">✦</span><div>'
+    +'<b>已代办：</b>向 邓一鸣 发了面谈邀请（等对方选时间）；归档 2 条无关通知。</div></div>';
+
+  body += '<div class="pp-line" style="margin-top:12px"><span class="pl-t">本周</span><span class="pl-c">谈心覆盖 86% · 还差 6 人</span></div>'
+    + [['周三前补完 3 次家长沟通','「家校沟通」维度还差 3 次','2 次','#2f6df6'],
+       ['周五班会 · 讲评成长档案','AI 已生成 6 页讲稿','6 页','#7c5cf0']].map(function(x){
+        return '<div class="pp-row" style="--pc:'+x[3]+'" data-act="toast:已展开「'+x[0]+'」">'
+          +'<span class="pr-d"></span><div class="pr-b"><div class="pr-t">'+x[0]+'</div>'
+          +'<div class="pr-s">'+x[1]+'</div></div><span class="pr-e">'+x[2]+'</span></div>';
+      }).join('');
+  return {body:body, foot:footAI('开始第一件 · 12 分钟','sub:plan'),
+    tail:'<b>AI</b> 已同步年级组 · 勾选即完成，改动实时回传'};
+}
+
+/* ---------------- 02 AI 洞察 · 冷调便签 + 证据 ---------------- */
+function pAI(){
+  let body = '<div class="ai-strip">'
+    +'<div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">AI 主动发现</span><span class="ai-time">基于 7 天数据</span></div>'
+    +'<p>今天有 <b>3 个学生</b>值得你主动联系，理由、证据、开场白都写好了。</p>'
+    +'<div class="ai-acts"><button class="ai-a pri" data-act="toast:已采纳 3 条，写进今日重点">全部采纳</button>'
+    +'<button class="ai-a" data-act="sub:why">说说判断依据</button></div></div>';
+
+  body += OBS.map(function(r){
+    const on = S.admit.indexOf(r.id)>=0;
+    return '<div class="ob-card'+(on?' hit':'')+'">'
+      +'<div class="ob-hd"><span class="ava">'+r.n.slice(0,1)+'</span>'
+      +'<div><div class="ob-nm">'+r.n+'</div><div class="ob-why">'+r.why+'</div></div>'
+      + tag(on?'已采纳':r.tag, on?'ok':'ai')+'</div>'
+      +'<div class="ob-q"><span class="qtx">'+r.q+'</span><em>AI 写的开场白 · 可直接改用</em></div>'
+      +'<div class="ob-evi">'+r.evi.map(function(e){
+          return '<span class="evi '+(e[2]||'')+'">'+e[0]+' <b>'+e[1]+'</b></span>';
+        }).join('')+'</div>'
+      +'<div class="ob-ft"><button class="ai-a'+(on?'':' pri')+'" data-act="admit:'+r.id+'">'
+      +(on?'已加入待办':'采纳，加入今天')+'</button>'
+      +'<button class="ai-a" data-act="toast:已换一种更简短的开场">换一句</button>'
+      +'<span class="ob-x">'+r.evi.length+' 项依据</span></div></div>';
+  }).join('');
+
+  return {body:body, foot:footAI('让 AI 继续分析全班','toast:正在重算 42 人的联系优先级…'),
+    tail:'<b>依据</b>：预警等级 · 联系间隔 · 成绩斜率 · 出勤变化，四项加权'};
+}
+
+/* ---------------- 03 学生档案 · A 版 ---------------- */
+function pStu(){
+  const k = segKey('students');
+  const list = STU.filter(function(x){
+    if(S.q) return x.n.indexOf(S.q)>=0;
+    if(k===0) return x.cr==='severe';
+    if(k===1) return x.cr==='severe'||x.cr==='moderate';
+    return true;
+  }).slice(0,4);
+
+  let body = '<label class="search">'+IC.search+'<input placeholder="搜姓名 / 学号" value="'+esc(S.q)+'" data-act="q"></label>';
+  body += seg(['必须今天 2','本周 4','全部 42']);
+  body += '<div class="brief"><span class="bm">✦</span><div class="bt">本周 <b>2 人新触发预警</b>，2 人分数下滑超过 10 分。已按「先联系谁」排好，不用你自己比。</div></div>';
+
+  body += '<div class="rows">' + (list.length ? list.map(function(x){
+      const tone = x.cr ? ('var(--'+CR_TONE[x.cr]+')') : 'var(--ink2)';
+      const tint = x.cr ? ('var(--'+CR_TONE[x.cr]+'-soft)') : 'var(--tint-neutral)';
+      return '<div class="row tap" data-act="sub:stu" data-arg="'+x.n+'" style="--tone:'+tone+';--tint:'+tint+'">'
+        +'<span class="r-ic">'+x.n.slice(0,1)+'</span>'
+        +'<div class="r-bd"><div class="r-t"><span>'+x.n+'</span>'
+        +(x.cr?tag(CR_TXT[x.cr],CR_TONE[x.cr]):tag('平稳','mute'))+'</div>'
+        +'<div class="r-s">综合 '+x.sc+' · 成果 '+x.g+' · 联系 '+x.last+'</div></div>'
+        +'<div class="r-e" style="--tone:'+tone+'"><div class="stu-num"><div class="stu-score"><b>'+x.sc+'</b><i>分</i></div>'
+        +'<em class="stu-d'+(x.d<0?' dn':'')+'">'+(x.d<0?'↓'+Math.abs(x.d):(x.d>0?'↑'+x.d:'—'))+'</em></div>'+IC.arrow+'</div></div>';
+    }).join('') : '<div class="empty"><b>没有匹配的学生</b><span>换个关键词试试</span></div>') + '</div>';
+
+  if(!S.q && k===0){
+    body += '<div class="sec"><span class="sec-t">接下来 · 本周</span><span class="sec-m">不用今天联系</span></div>'
+      +'<div class="rows">' + STU.filter(function(x){ return x.cr==='moderate'; }).map(function(x){
+          return row({ic:x.n.slice(0,1), tone:'var(--warn)', tint:'var(--warn-soft)', t:x.n,
+            s:'综合 '+x.sc+' · '+x.note, tag:tag('关注','warn'), end:num(x.sc),
+            act:'sub:stu', tap:true});
+        }).join('') + '</div>';
+  }
+  body += '<div class="card" style="margin-top:10px"><div class="card-hd"><span class="ct">✦ 为什么只推 2 人</span><span class="cm">分诊规则</span></div>'
+    +'<div class="card-p">高危直接进「今天」；关注类要同时满足<b>失联 ≥7 天</b>才升级，其余排进本周，不会漏。</div></div>';
+  body += '<div class="rows"><div class="row tap" data-act="toast:已切到数据表视图（42 人）" style="--tone:var(--ink2);--tint:var(--tint-neutral)">'
+    +'<span class="r-ic">42</span><div class="r-bd"><div class="r-t"><span>查看全部 42 人</span></div>'
+    +'<div class="r-s">按评分 / 预警 / 成果排序</div></div>'
+    +'<div class="r-e"><span style="font-size:10px;color:var(--ink3)">列表 '+IC.arrow+'</span></div></div></div>';
+  body += '<div class="oneline"><span class="ok-mk">✓</span><div>其余 <b>36 人</b>由 AI 每周巡检，异常才推给你 —— 今天不用挨个看。</div></div>';
+  return {body:body, foot:footAI('按风险重新排序','toast:已按风险 + 失联时长重排'),
+    tail:'字段对齐 <b>crisis_level / score / growth_count</b>，不新增结构'};
+}
+
+/* ---------------- 04 审批 · 沿用现格式精修 ---------------- */
+function pAppr(){
+  const pend = APPROVALS.filter(function(a){ return S.approved.indexOf(a.id)<0 && S.rejected.indexOf(a.id)<0; });
+  const judge = pend.filter(function(a){ return !a.auto; });
+  const auto = pend.filter(function(a){ return a.auto; });
+  const k = segKey('approval');
+
+  let body = '<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">AI 材料核验</span><span class="ai-time">6 条已过检</span></div>'
+    +'<p>'+(pend.length
+      ? '<b>'+auto.length+' 条我已核验完</b>（材料齐、与课表无冲突），可一键通过；剩下 <b>'+judge.length+' 条需要你判断</b>。'
+      : '本轮 6 条处理完：<b>'+S.approved.length+' 条 AI 已核验</b>，你只判断了 '+S.rejected.length+' 条。')+'</p>'
+    +'<div class="ai-acts"><button class="ai-a" data-act="toast:缺诊断证明 + 该生有未闭环预警">为什么这 2 条要我看</button></div></div>';
+
+  body += seg(['待处理 '+pend.length,'已通过 '+S.approved.length,'已驳回 '+S.rejected.length]);
+
+  if(k===0){
+    if(auto.length){
+      body += '<div class="apx"><span class="ax-n">'+auto.length+'</span>'
+        +'<div class="ax-b"><div class="ax-t">材料齐全，可一键通过'+tag('AI 已核验','ai')+'</div>'
+        +'<div class="ax-s">'+auto.map(function(a){return a.n;}).join(' · ')+'</div></div>'
+        +'<button class="ai-a pri" data-act="batch">通过</button></div>';
+    }
+    if(judge.length){
+      body += '<div class="sec"><span class="sec-t">需要你判断 · '+judge.length+'</span><span class="sec-m">AI 不敢替你决定</span></div>'
+        +'<div class="rows">' + judge.map(function(a){
+          const tone = a.tone==='bad'?'bad':'warn';
+          return '<div class="row tap" data-act="sub:evi" data-arg="'+a.id+'" style="--tone:var(--'+tone+');--tint:var(--'+tone+'-soft)">'
+            +'<span class="r-ic">'+a.n.slice(0,1)+'</span>'
+            +'<div class="r-bd"><div class="r-t"><span>'+a.n+' · '+a.type+'</span></div>'
+            +'<div class="r-s"><b>'+a.span+'</b> · 材料 '+a.mat+'/'+a.tot
+            +'<span class="mats">'+[0,1,2,3].map(function(i){return '<i class="'+(i<a.mat?'':'off')+'"></i>';}).join('')+'</span></div>'
+            +'<div class="r-ai">✦ '+a.ai+'</div></div>'
+            +'<div class="r-e"><div class="mini">'
+            +'<button class="ok" data-act="approve:'+a.id+'">'+IC.ok+'</button>'
+            +'<button class="no" data-act="reject:'+a.id+'">'+IC.no+'</button></div></div>'
+            +'</div>';
+        }).join('') + '</div>';
+    }
+    if(!auto.length && !judge.length){
+      body += '<div class="empty"><b>清空了</b><span>本轮 6 条已全部处理</span></div>';
+    }
+    body += '<div class="kpis" style="margin-top:9px"><div class="kpi ok"><b>12</b><span>累计通过</span></div>'
+      +'<div class="kpi bad"><b>3</b><span>累计驳回</span></div>'
+      +'<div class="kpi grad"><b>3.2</b><span>均用时/分</span></div></div>';
+    body += '<div class="card"><div class="card-hd"><span class="ct">本周共处理 21 条</span>'
+      +'<span class="cm">AI 代处理 81%</span></div>'
+      +'<div class="split"><i style="width:81%"></i></div>'
+      +'<div class="split-lg"><span><i style="background:linear-gradient(90deg,#4f8bf9,#7c5cf0)"></i>AI 核验后代处理 17 条</span>'
+      +'<span><i style="background:#cdd9ea"></i>你判断 4 条</span></div></div>';
+    body += '<div class="ai-strip slim" style="margin-top:9px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+      +'<span class="ai-lb">AI 还注意到</span></div><p>近 3 天驳回的 3 条里有 <b>2 条是同一原因</b>：缺诊断证明。已把「需附诊断证明」写进病假表单。</p></div>';
+  } else {
+    const arr = k===1 ? S.approved : S.rejected;
+    body += '<div class="rows">' + (arr.length ? arr.map(function(id){
+      const a = APPROVALS.filter(function(x){return x.id===id;})[0];
+      if(!a) return '';
+      return '<div class="row" style="--tone:var(--'+(k===1?'ok':'bad')+');--tint:var(--'+(k===1?'ok':'bad')+'-soft)">'
+        +'<span class="r-ic">'+a.n.slice(0,1)+'</span>'
+        +'<div class="r-bd"><div class="r-t"><span>'+a.n+' · '+a.type+'</span></div>'
+        +'<div class="r-s">'+a.span+' · '+(k===1?'已通知学生':'已附驳回原因')+'</div></div>'
+        +'<div class="r-e"><button class="ai-a" data-act="undo:'+id+'">撤回</button></div></div>';
+    }).join('') : '<div class="empty"><b>还没有记录</b><span>处理后会出现在这里</span></div>') + '</div>';
+  }
+  return {body:body, foot:footAI('一键通过 '+auto.length+' 条','batch'),
+    tail:'通过会以你的名义发出，<b>24 小时内可撤回</b>'};
+}
+
+/* ---------------- 05 预警 · 倒计时 + 风险阶梯 ---------------- */
+function pCrisis(){
+  const top = CRISIS[0];
+  let body = '<div class="tick">'
+    +'<div class="tk-h"><b></b>72 小时接触计时 · 已超时</div>'
+    +'<div class="tk-row"><span class="tk-big">'+top.h+'</span><span class="tk-unit">小时<br>未接触</span>'
+    +'<div class="tk-desc"><b>'+top.n+'</b><span>高危 · 连续缺课 5 天</span></div></div>'
+    +'<div class="tk-line"><i style="width:100%"></i></div>'
+    +'<div class="tk-ft"><button class="ai-a pri" data-act="sub:plan">看三步介入</button>'
+    +'<button class="ai-a" data-act="toast:已同时发短信 / 微信 / 请室友带话">三个渠道催一次</button></div></div>';
+
+  body += '<div class="sec"><span class="sec-t">按超时时长</span><span class="sec-m">2 高危 · 1 关注</span></div>';
+  body += '<div class="lad">' + CRISIS.map(function(c,i){
+    return '<div class="lad-i" style="--lv:'+c.tone+'" data-act="sub:plan" data-arg="'+c.n+'">'
+      +'<div class="ld-lv"><b>'+c.lv+'</b><i></i></div>'
+      +'<div class="ld-bd"><div class="ld-t">'+c.n+tag(c.tag, i===0?'bad':(i===1?'bad':'warn'))+'</div>'
+      +'<div class="ld-s">'+c.t+'</div>'
+      +'<div class="ld-x"><span class="mini-h">'+c.step+'</span><span class="mini-h">'+c.touch+'</span></div></div>'
+      +'<div class="ld-r"><div class="ld-h">'+c.h+'<small>h</small></div>'
+      +'<span style="font-size:9px;color:var(--ink3)">'+IC.arrow+'</span></div></div>';
+  }).join('') + '</div>';
+
+  body += '<div class="ai-strip" style="margin-top:10px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">AI 判断</span><span class="ai-time">刚刚</span></div>'
+    +'<p>邓一鸣的 3 次缺勤都在<b>周一第 1 节</b>，更像周末作息倒挂，不是情绪问题 —— 介入方式可以不一样。</p>'
+    +'<div class="ai-acts"><button class="ai-a pri" data-act="toast:已生成「作息干预」方案，区别对待">换成作息干预方案</button></div></div>';
+  body += '<div class="ob-mini" style="margin-top:9px">'
+    +'<div class="m-card"><b>2</b><span>本周新增</span></div>'
+    +'<div class="m-card"><b>5</b><span>已闭环</span></div>'
+    +'<div class="m-card"><b>6.4h</b><span>平均响应</span></div></div>';
+  return {body:body, foot:footAI('生成今日介入清单','toast:已排好 2 人的介入顺序与话术'),
+    tail:'计时口径：<b>有效接触</b>=面谈 / 通话 / 家长确认，微信未回不计'};
+}
+
+
+/* ---------------- 06 关怀中心 · 谈心节律 ---------------- */
+function pCare(){
+  const weeks = [
+    {w:'第 1 周', d:[1,1,1,1,1,0,0]},
+    {w:'第 2 周', d:[1,1,0,1,1,1,0]},
+    {w:'第 3 周', d:[1,2,1,0,1,0,0]},
+    {w:'本周',   d:[2,0,1,-1,-1,-1,-1]}
+  ];
+  const WD = ['一','二','三','四','五','六','日'];
+  let body = '<div class="rhythm"><div class="rh-hd"><b>四周谈心节律</b>'
+    +'<span class="rh-lg"><i class="talk"></i><u>谈心</u><i class="on"></i><u>联系</u><i class="miss"></i><u>空档</u><i class="nul" style="box-shadow:inset 0 0 0 1px #dfe5f0"></i><u>未到</u></span></div>'
+    +'<div class="rh-wd">'+WD.map(function(d){return '<i>'+d+'</i>';}).join('')+'</div>'
+    + weeks.map(function(x){
+        return '<div class="rh-row'+(x.w==='本周'?' now':'')+'"><em>'+x.w+'</em><div class="rh-dots">'
+          + x.d.map(function(v,i){
+              const c = v===2?'talk':v===1?'on':v===0?'miss':'nul';
+              return '<i class="'+c+(x.w==='本周'&&i===2?' tdy':'')+'"></i>';
+            }).join('')+'</div></div>';
+      }).join('')
+    +'<div class="rh-sum"><span><b>8</b> 次谈心</span><span><b>2</b> 次家访</span>'
+    +'<span><b>4</b> 人好转</span><span class="hi"><b>86%</b> 覆盖</span></div></div>';
+
+  body += '<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">AI 关怀排序</span>'
+    +'<span class="ai-time">3 人待谈</span></div>'
+    +'<p>3 人超过 7 天没联系。<b>建议先谈林晓阳</b>，他上次提到「不想上课」，提纲我写好了。</p>'
+    +'<div class="ai-acts"><button class="ai-a pri" data-act="talk:林晓阳">展开林晓阳提纲</button>'
+    +'<button class="ai-a" data-act="toast:已给 3 人发预约消息，等对方选时间">批量发预约</button></div></div>';
+
+  body += CARE.map(function(c){
+    const open = !!S.open[c.n];
+    return '<div class="talk"><div class="talk-hd" data-act="talk:'+c.n+'">'
+      +'<span class="tv" style="--tv:'+c.tone+';--tvs:'+c.bg+'">'+c.n.slice(0,1)+'</span>'
+      +'<div class="talk-bd"><div class="talk-n">'+c.n+tag(c.tag, c.tag==='优先'?'bad':'warn')+'</div>'
+      +'<div class="talk-s">'+c.s+'</div></div>'
+      +'<span class="talk-x">'+(open?'收起':'提纲')+' '+IC.arrow+'</span></div>'
+      +(open?'<div class="talk-open"><div class="aibox"><b>✦ 谈心提纲 · 12 分钟</b>'
+        +c.steps.map(function(s,i){return '<div class="tk-step"><i>'+i+'</i><p>'+s+'</p></div>';}).join('')
+        +'<div style="margin-top:6px;display:flex;align-items:flex-end;gap:6px"><span style="flex:1;color:var(--ink3);font-size:9.6px">'+c.why+'</span>'
+        +'<button class="ai-a" style="font-size:9.4px;padding:3px 7px" data-act="sub:talk">记录模板</button></div></div></div>':'')
+      +'</div>';
+  }).join('');
+
+  const anyOpen = CARE.some(function(c){ return !!S.open[c.n]; });
+  body += '<div class="sec"><span class="sec-t">最近记录</span>'
+    +'<span class="sec-m" data-act="toast:打开全部 8 条记录">'+(anyOpen?'展开时收起 · 全部 8 条 ›':'全部 8 条 ›')+'</span></div>'
+    +(!anyOpen ? '<div class="rows">'
+    + row({ic:'林', tone:'var(--brand)', tint:'var(--brand-soft)', t:'林晓阳 · 个别谈心', s:'8/26 · 40 分钟 · 睡眠问题', end:tag('已记录','ok'), act:'sub:talk'})
+    + row({ic:'苏', tone:'var(--brand)', tint:'var(--brand-soft)', t:'苏雨欣 · 电话沟通', s:'8/28 · 12 分钟 · 作息', end:tag('已记录','ok')})
+    + row({ic:'何', tone:'#c08a2e', tint:'#fdf4e3', t:'何书宁 · 家长电话', s:'8/29 · 9 分钟 · 返校意愿', end:tag('待补记','warn'), act:'sub:talk'})
+    +'</div>' : '');
+  return {body:body, foot:footAI('按提纲开始记录','toast:已进入记录模式，可语音转写'),
+    tail:'记录写入 <b>care_events</b>，家长可见部分自动脱敏'};
+}
+
+/* ---------------- 07 家校沟通 · 对话流 ---------------- */
+function pGuard(){
+  let body = '<div class="chat">'
+    +'<div class="chat-day">昨天</div>'
+    + CHAT.map(function(m){
+        const me = m.who==='me';
+        return '<div class="msg '+(me?'me':'them')+(m.unread?' unread':'')+'">'
+          +'<span class="mv">'+(me?'王':'林')+'</span>'
+          +'<div class="bub">'+m.t+'<div class="bt">'+(me?'已读 · ':'')+m.time+'</div></div></div>';
+      }).join('') + '</div>';
+
+  body += '<div class="ai-draft"><div class="ad-h"><span class="ai-mk">✦</span>'
+    +'<b>AI 草稿</b><em>按「先安抚、再给事实、最后给行动」写的</em></div>'
+    +'<p>'+(S.replyOn
+      ? '晓阳妈妈您好，他这周有 3 次缺课，主要是因为最近睡眠不好、早上起不来，不是故意逃课。我已经找他聊过，也安排室友每天叫他一起上课。请您今晚抽空给他打个电话，<b>只聊生活、先别问成绩</b>，我这边周五再跟进一次。'
+      : '晓阳妈妈您好，他这周有 3 次缺课，主要是因为最近睡眠不好、早上起不来，不是故意逃课。我已经找他聊过，也安排室友每天叫他一起上课……')+'</p>'
+    +'<div class="ad-a"><button class="ai-a pri" data-act="replyon">'+(S.replyOn?'已填入输入框':'用这份草稿')+'</button>'
+    +'<button class="ai-a" data-act="toast:已换成更短的版本（3 句）">换短一点</button>'
+    +'<button class="ai-a" data-act="toast:已切换「温和 / 明确」两种语气">换语气</button></div></div>';
+
+  body += '<div class="quick"><button data-act="toast:已选中「今晚 8 点后打电话」">今晚 8 点后打电话</button>'
+    +'<button data-act="toast:已选中「周五当面沟通」">周五当面聊</button>'
+    +'<button data-act="sub:chat">看完整对话</button>'
+    +'<button data-act="toast:已导出本周家校沟通记录">导出记录</button></div>';
+
+  body += '<div class="kv-rows" style="margin-top:9px">'
+    +'<div class="kv-i"><span class="k">沟通频次</span><span class="v">本月 4 次 · 平均 2.5 天一次</span></div>'
+    +'<div class="kv-i"><span class="k">家长状态</span><span class="v">焦虑 · 离异分居 · 在外地务工</span></div>'
+    +'<div class="kv-i"><span class="k">关注点</span><span class="v">怕孩子「被他爸放弃」</span></div></div>';
+  body += '<div class="oneline"><span class="ai-mk" style="font-size:10px">✦</span>'
+    +'<div>先别急着解释缺勤规则，<b>先接住她那句「管不到」</b> —— 她需要的是被理解，不是被通知。</div></div>';
+  return {body:body, foot:'<button class="btn-g" data-act="toast:已切换语音回复">'
+    +'<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="6" y="1.6" width="4" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M3.4 7.4a4.6 4.6 0 0 0 9.2 0M8 12v2.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>'
+    +'<button class="btn-p" data-act="sendmsg"><span class="sp">✦</span>发送 AI 草稿<span class="hint">可改</span></button>',
+    tail:'家长可见内容自动脱敏；<b>发送前必过一次你的确认</b>'};
+}
+
+/* ---------------- 08 成长档案 · 能力条 + 成果轨道 ---------------- */
+function pPort(){
+  const names = ['林晓阳','苏雨欣','郑心怡'];
+  const idx = segKey('portfolio');
+  const who = names[idx];
+  const dims = idx===0 ? PORT.dims : (idx===1
+    ? [['学业',64,68],['研究',49,61],['育人',72,70],['实践',68,64],['协作',81,72]]
+    : [['学业',88,68],['研究',74,61],['育人',66,70],['实践',91,64],['协作',77,72]]);
+  const items = idx===0 ? PORT.items : (idx===1
+    ? [{y:'2026.05',t:'校园征文 二等奖',s:'校级 · 个人',tone:'#0f8e6b',ic:'文',hl:true},
+       {y:'2026.03',t:'心理协会 组织部部长',s:'任职中 · 组织 4 场活动',tone:'#2f6df6',ic:'社'},
+       {y:'2026.06',t:'高等数学 71 分',s:'较上学期持平',tone:'#d98317',ic:'课'}]
+    : [{y:'2026.04',t:'蓝桥杯 省一',s:'个人赛 · 晋级国赛',tone:'#0f8e6b',ic:'竞',hl:true},
+       {y:'2026.05',t:'校园二手平台 前端负责人',s:'上线 2 个月 · 1.2k 用户',tone:'#7c5cf0',ic:'项'},
+       {y:'2026.06',t:'平均绩点 3.7',s:'专业前 8%',tone:'#0f8e6b',ic:'课'}]);
+
+  let body = seg(['林晓阳','苏雨欣','郑心怡']);
+  body += '<div class="abil"><div class="ab-hd"><b>五维能力</b><span>竖线=同院均值</span></div>'
+    + dims.map(function(d){
+        return '<div class="ab-row"><span class="ab-nm">'+d[0]+'</span>'
+          +'<div class="ab-tr"><i style="width:'+d[1]+'%"></i><em style="left:'+d[2]+'%"></em></div>'
+          +'<span class="ab-v">'+d[1]+'</span></div>';
+      }).join('') + '</div>';
+
+  body += '<div class="sec"><span class="sec-t">成果轨道</span><span class="sec-m">186 条归并 3 类</span></div>';
+  body += '<div class="track">' + items.map(function(it){
+    return '<div class="tr-i'+(it.hl?' hl':'')+'" style="--tc:'+it.tone+'" data-act="sub:award" data-arg="'+esc(it.t)+'">'
+      +'<div class="tr-t">'+tag(it.ic, 'brand')+it.t+'</div>'
+      +'<div class="tr-s">'+it.y+' · '+it.s+'</div></div>';
+  }).join('')
+    + '<div class="tr-i" style="--tc:#5d6b81" data-act="sub:award" data-arg="2025.11 · 校级三好学生">'
+    + '<div class="tr-t">' + tag('誉', 'brand') + '校级三好学生</div>'
+    + '<div class="tr-s">2025.11 · 学年评定 · 班级 2/48</div></div>'
+    + '</div>';
+
+  body += '<div class="evbox"><span style="color:#4a7bfb">✦</span><div>'
+    +'他的 2 条亮点都和<b>动手</b>有关（竞赛、项目）。评语往「愿意解决真实问题」上写，比夸成绩准。</div></div>';
+  body += '<div class="card" style="margin-top:9px"><div class="card-hd"><span class="ct">✦ 学期评语 · 草稿</span>'
+    +'<span class="cm">AI 已写 180 字</span></div>'
+    +'<div class="card-p" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'
+    +'晓阳这学期最让我意外的是他在 ACM 队里接下了最难的图论模块，赛前一周每天留到十点。他不太爱表达，但愿意解决真实的问题 —— 这种特质比分数更能说明他。</div>'
+    +'<div style="display:flex;gap:5px;margin-top:7px"><button class="ai-a" data-act="toast:已插入评语第 2 段">用这段</button>'
+    +'<button class="ai-a" data-act="toast:已换成更朴素的写法">换个说法</button></div></div>';
+  body += '<div class="oneline" style="margin-top:8px"><span class="ok-mk">✓</span>'
+    +'<div>档案完整度 <b>92%</b>：实践、研究类齐全，缺 1 条「育人」记录 —— 上次志愿服务的时长还没补。</div></div>';
+  return {body:body, foot:footAI('AI 写学期评语','toast:已生成 180 字评语，含 3 个具体事例'),
+    tail:'数据来自 <b>portfolio_certificates</b> + 教务成绩，只读'};
+}
+
+/* ---------------- 09 问卷互评 · 题卡堆 ---------------- */
+function pSurvey(){
+  const q = SQ[S.qIdx];
+  const pick = S.ans[S.qIdx];
+  let body = '<div class="deck"><div class="qcard">'
+    +'<div class="q-no"><b>第 '+(S.qIdx+1)+' / '+SQ.length+' 题</b><span>匿名 · 仅用于成长档案</span></div>'
+    +'<div class="q-t">'+q.t+'</div>'
+    +'<div class="q-scale">'+[1,2,3,4,5].map(function(v){
+        return '<button class="'+(pick===v?'on':'')+'" data-act="ans:'+v+'" data-arg="'+S.qIdx+'">'+v+'</button>';
+      }).join('')+'</div>'
+    +'<div class="q-hint"><span>很不同意</span><span>很同意</span></div>'
+    +'</div></div>'
+    +'<div class="qpeek" data-act="qnext"><div class="qp-h"><span>下一题</span><span>第 '+(S.qIdx<SQ.length-1?S.qIdx+2:1)+' / 5</span></div>'
+    +'<div class="qp-t">'+(SQ[(S.qIdx+1)%SQ.length]).t+'</div></div>';
+
+  body += '<div class="q-nav"><div class="qn-d">'+SQ.map(function(_,i){
+      return '<i class="'+(S.ans[i]?'done':'')+(i===S.qIdx?' on':'')+'"></i>';
+    }).join('')+'</div>'
+    +'<button data-act="qprev">上一题</button><button data-act="qnext">下一题</button></div>';
+
+  body += '<div class="disc">' + SQ.slice(0,3).map(function(x){
+    return '<div class="disc-i" data-act="sub:q" data-arg="'+x.t+'"><div class="di-n">'+(x.tag==='替换'?'⚠ ':'')+'Q'+(SQ.indexOf(x)+1)+'</div>'
+      +'<div class="di-b"><i style="width:'+Math.round(x.d*100)+'%;--dc:'+(x.d<0.3?'#d98317':'#2f6df6')+'"></i></div>'
+      +'<div class="di-v" style="--dc:'+(x.d<0.3?'#d98317':'#2f6df6')+'">'+x.d.toFixed(2)+'</div></div>';
+  }).join('') + '</div>';
+
+  body += '<div class="ai-strip" style="margin-top:9px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">区分度分析</span><span class="ai-time">已答 38 人</span></div>'
+    +'<p>「是否迟到」这类<b>行为题</b>区分度只有 0.11，换掉不影响结果；「愿意帮同学」0.63，建议保留。</p>'
+    +'<div class="ai-acts"><button class="ai-a pri" data-act="sub:q" data-arg="「是否迟到」">换掉 2 道 · 看替换题</button></div></div>';
+
+  body += '<div class="sec" style="margin-top:11px"><span class="sec-t">结果概览</span><span class="sec-m">已答 38 / 42 人</span></div>'
+    +'<div class="kpis" style="margin-bottom:9px"><div class="kpi"><b>3.8</b><span>平均分</span></div>'
+    +'<div class="kpi ok"><b>90%</b><span>完成率</span></div>'
+    +'<div class="kpi warn"><b>2</b><span>无效题</span></div></div>'
+    +'<div class="rows">'
+    + row({ic:'A', tone:'var(--ink2)', tint:'var(--tint-neutral)', t:'匿名 · 3 分钟前提交', s:'5 题全答 · 用时 84 秒', end:tag('有效','ok')})
+    + row({ic:'B', tone:'var(--ink2)', tint:'var(--tint-neutral)', t:'匿名 · 11 分钟前提交', s:'跳过 1 题 · 用时 42 秒', end:tag('偏快','warn')})
+    +'</div>';
+  return {body:body, foot:footAI('提交本页 3 题','toast:已提交，还剩 2 题'),
+    tail:'问卷共 5 题 · 约 90 秒；<b>第 4、5 题</b>由 AI 替换过'};
+}
+
+/* ---------------- 10 查课表 · 周网格 ---------------- */
+function pSched(){
+  let body = '<div class="ai-strip" style="margin-bottom:9px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">AI 冲突检测</span><span class="ai-time">第 3 周</span></div>'
+    +'<p>周三 3–4 节<b>教研会撞了 2302 实验课</b>，本周只这一处。今天第 6 节后没课，可安排面谈。</p>'
+    +'<div class="ai-acts"><button class="ai-a pri" data-act="sub:adj">看调课建议</button>'
+    +'<button class="ai-a" data-act="toast:本周唯一空档：周四 15:40–17:40">找空闲 2 小时</button></div></div>';
+
+  body += '<div class="gridwk"><div class="gw-hd"><b></b>'
+    + WK.days.map(function(d,i){
+        return '<b class="'+(i===2?'on':'')+'">周'+d+(i===2?'<i>今天</i>':'<i>&nbsp;</i>')+'</b>';
+      }).join('') + '</div>'
+    +'<div class="gw-bd">'
+    + WK.times.map(function(t,ri){
+        return '<div class="gw-t">'+t+'</div>' + WK.cells[ri].map(function(c){
+          return '<div class="gw-c '+c.k+'">'+(c.t?'<b>'+c.t+'</b><span>'+c.s+'</span>':'')+'</div>';
+        }).join('');
+      }).join('')
+    +'</div>'
+    +'<div class="gw-lg"><span><i style="background:#e9f0ff;border:1px solid #d5e2fb"></i>上课</span>'
+    +'<span><i style="background:#f0f0ff;border:1px solid #dcdcf8"></i>会议</span>'
+    +'<span><i style="background:#fdecef;border:1px solid #f6cfd6"></i>冲突</span>'
+    +'<span><i style="background:#f3f8f6;border:1px solid #dbeee6"></i>空闲</span></div></div>';
+
+  const cnt = WK.days.map(function(_,di){
+    let n = 0;
+    WK.cells.forEach(function(r){ if(r[di] && r[di].k.indexOf('cls') >= 0) n += 2; });
+    return n;
+  });
+  const sum = cnt.reduce(function(a,b){ return a+b; }, 0);
+  body += '<div class="sec" style="margin-top:11px"><span class="sec-t">本周课时</span><span class="sec-m">共 '+sum+' 节 · 1 处冲突</span></div>'
+    +'<div class="wk-les">'
+    + cnt.map(function(v,i){
+        return '<div class="wl'+(i===2?' today':'')+'"><em>周'+WK.days[i]+'</em><b>'+v+'</b></div>';
+      }).join('') + '</div>';
+  body += '<div class="sec" style="margin-top:11px"><span class="sec-t">今天 · 周三</span><span class="sec-m">2 个待处理</span></div>'
+    +'<div class="rows">'
+    + row({ic:'10', tone:'var(--bad)', tint:'var(--bad-soft)', t:'教研会 × 2302 实验课', s:'3–4 节同时段 · 45 人', tag:tag('冲突','bad'), end:'<button class="ai-a" data-act="sub:adj">调课</button>'})
+    + row({ic:'16', tone:'var(--ok)', tint:'var(--ok-soft)', t:'空闲 2 小时', s:'16:00 之后 · 无课', tag:tag('可用','ok'), end:'<button class="ai-a" data-act="toast:已排成「约谈林晓阳」16:00–17:00">排进去</button>'})
+    +'</div>';
+  body += '<div class="ai-strip slim" style="margin-top:9px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">AI 还注意到</span></div><p>周四 3–4 节整段空着，正好接住这场教研会 —— <b>挪过去整周就没有超时的一天</b>。</p></div>';
+  return {body:body, foot:footAI('把空闲时段排进日程','toast:已把周四 15:40 排成「约谈林晓阳」'),
+    tail:'课表为教务公共数据，<b>冲突检测在服务端</b>完成'};
+}
+
+/* ---------------- 11 我的课堂 · 出勤热力 ---------------- */
+function pTeach(){
+  const c = TEACH.classes[S.cls];
+  let body = '<div class="cls-tabs">' + TEACH.classes.map(function(x,i){
+      return '<button class="'+(i===S.cls?'on':'')+'" data-act="cls:'+i+'">'+x.n+'<i>'+x.k+'</i></button>';
+    }).join('') + '</div>';
+
+  body += '<div class="heat"><div class="heat-hd"><b>出勤热力 · 近 4 周</b>'
+    +'<span class="heat-lg">少<i class="d0"></i><i class="d1"></i><i class="d2"></i><i class="d3"></i>多</span></div>'
+    +'<div class="heat-g"><div class="hl"></div>'
+    +['一','二','三','四','五'].map(function(d){return '<div class="hl">'+d+'</div>';}).join('')
+    + TEACH.heat.map(function(row,r){
+        return '<div class="hl">第'+(r+1)+'周</div>' + row.map(function(v){
+          return '<div class="hc '+(v===0?'all':v===1?'l1':v===2?'l2':(v===3?'l3':'l4'))+'" title="缺勤 '+v+' 人"></div>';
+        }).join('');
+      }).join('')
+    +'</div></div>';
+
+  body += '<div class="hw"><div class="ring"><svg width="46" height="46" viewBox="0 0 46 46">'
+    +'<circle cx="23" cy="23" r="19" fill="none" stroke="#eef2f9" stroke-width="5"/>'
+    +'<circle cx="23" cy="23" r="19" fill="none" stroke="#2f6df6" stroke-width="5" stroke-linecap="round"'
+    +' stroke-dasharray="'+(2*Math.PI*19*TEACH.hw.over/100).toFixed(1)+' 200"/></svg>'
+    +'<b>'+TEACH.hw.over+'%</b></div>'
+    +'<div class="hw-bd"><div class="hw-t">'+TEACH.hw.name+tag('AI 预批','ai')+'</div>'
+    +'<div class="hw-s">已批 <b>'+TEACH.hw.done+'/'+TEACH.hw.total+'</b> 份，2 份低置信度等你复核</div></div>'
+    +'<button class="ai-a" data-act="sub:hw">批阅</button></div>';
+
+  body += '<div class="kpis"><div class="kpi ok"><b>96.2%</b><span>本月出勤</span></div>'
+    +'<div class="kpi warn"><b>3</b><span>连续缺勤</span></div>'
+    +'<div class="kpi grad"><b>4.7</b><span>课堂评分</span></div></div>';
+
+  body += '<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">AI 还注意到</span>'
+    +'<span class="ai-time">4 周数据</span></div>'
+    +'<p>缺勤最集中在<b>周一第 1 节</b>（3 人），是周五的 4 倍 —— 更像周末作息问题，不是课程难度。</p></div>';
+  body += '<div class="sec" style="margin-top:10px"><span class="sec-t">接下来</span><span class="sec-m">AI 排好了</span></div>'
+    +'<div class="rows">'
+    + row({ic:'3', tone:'var(--warn)', tint:'var(--warn-soft)', t:'3 人连续缺勤', s:'周一第 1 节 · 提醒已生成', end:'<button class="ai-a" data-act="toast:已给 3 人发提醒并抄送家长">发提醒</button>'})
+    + row({ic:'2', tone:'var(--ai-act-ink)', tint:'var(--ai-btn)', t:'2 份作业待复核', s:'置信度低 · 疑似雷同', end:'<button class="ai-a" data-act="sub:hw">批阅</button>'})
+    + row({ic:'评', tone:'var(--brand)', tint:'var(--brand-soft)', t:'本周课堂评价 4.7', s:'高于院均 0.4 · 12 条留言', end:'<span style="font-size:10px;color:var(--ink3)">看留言</span>', act:'toast:12 条留言已按「讲到哪卡住」归类', tap:true})
+    +'</div>';
+  return {body:body, foot:footAI('预批 12 份，我只复核 2 份','toast:12 份已批完，2 份待你复核'),
+    tail:'批改结果写入 <b>teaching_homework</b>，学生端即时可见'};
+}
+
+/* ---------------- 12 我的成长 · 大环 + 徽章 ---------------- */
+function pGrow(){
+  const circ = 2*Math.PI*34, dash = circ*GROW.score/100;
+  let body = '<div class="gr-head">'
+    +'<div class="bigring"><svg width="82" height="82" viewBox="0 0 82 82">'
+    +'<defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1">'
+    +'<stop offset="0" stop-color="#2f6df6"/><stop offset=".6" stop-color="#5b5bd6"/><stop offset="1" stop-color="#7c5cf0"/>'
+    +'</linearGradient></defs>'
+    +'<circle class="bgc" cx="41" cy="41" r="34"/>'
+    +'<circle class="fgc" cx="41" cy="41" r="34" stroke-dasharray="'+dash.toFixed(1)+' '+circ.toFixed(1)+'"/></svg>'
+    +'<div class="gv"><b>'+GROW.score+'</b><span>成长分</span></div></div>'
+    +'<div class="gr-bd"><div class="gr-lv">'+GROW.lv+'<em>前 18%</em></div>'
+    +'<div class="gr-s">比上月 <b>+6 分</b>，同院均值 79 · 你高出 7 分</div>'
+    +'<div class="gr-nx">距 L4 还差 '+GROW.next+' 分 · 最快路径：补 3 次班会留痕</div></div></div>';
+
+  body += '<div class="sec"><span class="sec-t">徽章墙</span><span class="sec-m">4 / 8 已点亮</span></div>';
+  body += '<div class="badges">' + GROW.badges.map(function(b){
+    return '<div class="bdg'+(b.on?'':' lock')+'" data-act="'+(b.on?'toast:已获得 '+b.b:'sub:badge')+'">'
+      +'<div class="bi">'+b.i+'</div><b>'+b.b+'</b><span>'+b.s+'</span></div>';
+  }).join('') + '</div>';
+
+  body += '<div class="sec" style="margin-top:11px"><span class="sec-t">最快的三个加分项</span><span class="sec-m">AI 排序</span></div>';
+  body += '<div class="plus">' + GROW.plus.map(function(p){
+    return '<div class="plus-i" data-act="toast:已加入本月计划">'
+      +'<span class="pi-c">+</span><div class="pi-n"><div class="pi-t">'+p.t+'</div>'
+      +'<div class="pi-s">'+p.s+'</div></div><span class="pi-p">'+p.p+'</span></div>';
+  }).join('') + '</div>';
+  body += '<div class="card" style="margin-top:10px"><div class="card-hd"><span class="ct">近 6 个月成长分</span><span class="cm">同院均值 79</span></div>'
+    +'<div class="bars" style="height:40px">'+[62,66,70,74,80,86].map(function(v,i){
+        return '<div class="bcol'+(i===5?' hi':'')+'"><i style="height:'+Math.round((v-58)/30*32+7)+'px"></i><em>'+(i+4)+'月</em></div>';
+      }).join('')+'</div>'
+    +'<div style="display:flex;align-items:center;gap:5px;margin-top:2px;font-size:8.6px;color:#8b98ab">'
+    +'<span>4 个月涨 24 分 · 增速全院前 12%</span></div></div>';
+  body += '<div class="ai-strip slim" style="margin-top:9px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">AI 还注意到</span></div><p>你的「研究」维度只有 1 篇论文 —— 把本学期那个项目整理成 1 篇教改论文，<b>一次能加 6 分</b>。</p></div>';
+  return {body:body, foot:footAI('生成 30 天成长计划','plan30'),
+    tail:'成长分 = 教学 40% + 育人 35% + 研究 25%，每月 1 日更新'};
+}
+
+/* ---------------- 13 公告 · feed + 阅读率 ---------------- */
+function pAnn(){
+  let body = '<div class="an-hd"><span class="ah-i">◔</span>'
+    +'<div class="ah-b"><div class="ah-t">下一条建议周四 18:00 发</div>'
+    +'<div class="ah-s">近 3 次此时段阅读率 92%，比早间高 27%</div></div>'
+    +'<button class="ai-a" data-act="toast:已按建议设定时发布">照此定时</button></div>';
+
+  body += '<div class="feed">' + ANN.map(function(a,i){
+    return '<div class="fd'+(a.draft?' draft':'')+'" data-act="sub:ann">'
+      +'<div class="fd-hd"><div class="fd-t">'+a.t+'</div>'+tag(a.tag, a.draft?'warn':'ok')+'</div>'
+      +'<div class="fd-m">'+a.s+'</div>'
+      +(a.draft ? '<div class="fd-bar"><button class="ai-a" style="font-size:9.4px;padding:3px 7px" data-act="toast:草稿已打开，AI 可继续改写">继续编辑</button>'
+          +'<button class="ai-a" style="font-size:9.4px;padding:3px 7px" data-act="toast:已选好收件人：软件 2301 · 48 人">选收件人</button></div>'
+        : '<div class="fd-bar"><div class="fd-tr"><i style="width:'+a.r+'%;--fc:'+a.tone+'"></i></div>'
+          +'<span class="fd-v" style="--fc:'+a.tone+'">'+a.r+'% 已读</span></div>')
+      +'</div>';
+  }).join('') + '</div>';
+
+  body += '<div class="card" style="display:flex;align-items:center;gap:8px;margin-top:10px">'
+    +'<div class="avat"><span>林</span><span>邓</span><span>罗</span></div>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:10.6px;font-weight:700;color:#22314a">3 人未读上一次通知</div>'
+    +'<div style="font-size:9px;color:var(--ink3);margin-top:1px">也是本周缺勤的 3 人 · 建议单独提醒</div></div>'
+    +'<button class="ai-a" data-act="toast:已通过短信补发，避开上课时间">提醒</button></div>';
+  body += '<div class="ai-strip slim" style="margin-top:9px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+    +'<span class="ai-lb">AI 还注意到</span></div><p>标题里带<b>「本周」</b>的公告打开率高 12%；你过去 6 条里有 4 条没带，改一下就行。</p></div>';
+  body += '<div class="kpis" style="margin-top:10px"><div class="kpi"><b>6</b><span>本月发布</span></div>'
+    +'<div class="kpi ok"><b>78%</b><span>平均阅读</span></div>'
+    +'<div class="kpi warn"><b>2</b><span>待发草稿</span></div></div>';
+  return {body:body, foot:footAI('AI 起草新公告','toast:已生成草稿，按课表自动避开上课时间'),
+    tail:'发布对象由 <b>teaching_classes</b> + 家长绑定关系推导'};
+}
+
+
+/* ============================================================
+   子页（13 个，点卡片 / 行进入）
+   ============================================================ */
+const SUBS = {
+  tasks:{
+    plan:function(){
+      return {title:'面谈准备', crumb:'事项详情',
+        body:'<div class="subhero"><div class="sh-t">找 林晓阳 谈一次'+tag('最高优先','bad')+'</div>'
+          +'<div class="sh-s">高危 · 74 小时无有效接触 · 上次谈心提到失眠<br>AI 已按「先关心、再确认、最后约定」拟好三段话</div></div>'
+          +'<div class="step3">'
+          +'<div class="st"><span class="sn">1</span><div class="sb2"><div class="st-t">开场（2 分钟）</div>'
+          +'<div class="st-s">「这周你几乎没来上课，我不想给你压力，只想先知道你还好吗。」</div></div></div>'
+          +'<div class="st"><span class="sn">2</span><div class="sb2"><div class="st-t">确认事实（5 分钟）</div>'
+          +'<div class="st-s">睡眠几点开始乱？室友说他凌晨还在打游戏，先听他说，不急着判断。</div></div></div>'
+          +'<div class="st"><span class="sn">3</span><div class="sb2"><div class="st-t">约定一件小事（3 分钟）</div>'
+          +'<div class="st-s">只约定「明天来上第 1 节」，别一次提三个要求。</div>'
+          +'<div class="st-a"><button class="ai-a pri" data-act="toast:已开始录音转写，结束自动生成记录">开始记录</button>'
+          +'<button class="ai-a" data-act="toast:已换成更委婉的版本">换个说法</button></div></div></div>'
+          +'</div>'
+          +'<div class="evbox" style="margin-top:10px"><span style="color:#4a7bfb">✦</span><div>'
+          +'<b>提醒：</b>他上一次被叫去办公室是因为补考，这次别在办公室谈，去走廊或操场。</div></div>',
+        foot:footAI('谈完直接写记录','toast:记录模板已准备好'),
+        tail:'记录写入 <b>care_events</b>，同时更新预警计时'};
+    },
+    itemlist:function(){
+      return {title:'AI 代办了哪些', crumb:'今日重点 / 代办记录',
+        body:'<div class="subhero"><div class="sh-t">2 件已代处理</div>'
+          +'<div class="sh-s">都不用你确认，但你随时可以撤回或改口</div></div>'
+          +'<div class="kv-rows">'
+          +'<div class="kv-i"><span class="k">邀约</span><span class="v">向 邓一鸣 发送面谈邀约</span>'+tag('待对方选时间','mute')+'</div>'
+          +'<div class="kv-i"><span class="k">回执</span><span class="v">苏雨欣 家长消息 · 已回执</span>'+tag('已送达','ok')+'</div>'
+          +'<div class="kv-i"><span class="k">归档</span><span class="v">2 条无关通知 · 未打扰你</span>'+tag('可恢复','mute')+'</div>'
+          +'</div>'
+          +'<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">代办边界</span></div>'
+          +'<p>涉及<b>处分、成绩、家长投诉</b>的三类事我从不代办，只会提醒你。</p></div>',
+        foot:footAI('撤回全部代办','toast:已撤回 2 件，回到你的待办'),
+        tail:'代办日志保留 30 天，可审计'};
+    }
+  },
+  ai:{
+    why:function(){
+      return {title:'判断依据', crumb:'AI 洞察 / 权重说明',
+        body:'<div class="subhero"><div class="sh-t">四项加权，缺一项就不推荐</div>'
+          +'<div class="sh-s">模型只做排序，不做结论 —— 最终判断永远在你</div></div>'
+          +'<div class="mtable"><div class="mt-h"><span>维度</span><span>权重</span><span>状态</span></div>'
+          +'<div class="mt-i"><div class="n">预警等级 crisis_level</div><div class="s">40%</div><div class="s" style="color:#0f8e6b">2 高危</div></div>'
+          +'<div class="mt-i"><div class="n">联系间隔 last_contact</div><div class="s">30%</div><div class="s" style="color:#dd4257">均 &gt; 5 天</div></div>'
+          +'<div class="mt-i"><div class="n">成绩斜率 score_slope</div><div class="s">20%</div><div class="s">2 人下滑</div></div>'
+          +'<div class="mt-i"><div class="n">出勤变化 attend_delta</div><div class="s">10%</div><div class="s">1 人转差</div></div>'
+          +'</div>'
+          +'<div class="evbox"><span style="color:#4a7bfb">✦</span><div>'
+          +'没有联系记录的学生<b>不会</b>被推荐 —— 缺数据时我宁可沉默，也不猜。</div></div>',
+        foot:footAI('把阈值调松一点','toast:阈值已调松，建议将增加到 5 人')};
+    }
+  },
+  students:{
+    stu:function(arg){
+      const n = arg || S.stu;
+      const x = STU.filter(function(s){return s.n===n;})[0] || STU[0];
+      const tone = x.cr ? CR_TONE[x.cr] : 'mute';
+      return {title:x.n, crumb:'学生档案 / 详情',
+        body:'<div class="subhero"><div class="sh-t">'+x.n+' '+tag(x.cr?CR_TXT[x.cr]:'平稳', tone)+'</div>'
+          +'<div class="sh-s">'+x.note+'</div></div>'
+          +'<div class="evi-row">'
+          +'<div class="er"><b>'+x.sc+'</b><span>综合分</span></div>'
+          +'<div class="er"><b>'+x.g+'</b><span>成果</span></div>'
+          +'<div class="er"><b>'+x.last+'</b><span>最近联系</span></div></div>'
+          +'<div class="kv-rows">'
+          +'<div class="kv-i"><span class="k">班级</span><span class="v">软件工程 2301 · 3 班</span></div>'
+          +'<div class="kv-i"><span class="k">宿舍</span><span class="v">6 号楼 412 · 室友 3 人</span></div>'
+          +'<div class="kv-i"><span class="k">家长</span><span class="v">母亲 · 已绑定 · 上次沟通 8/26</span></div>'
+          +'</div>'
+          +'<div class="sec"><span class="sec-t">关键事件</span><span class="sec-m">近 30 天</span></div>'
+          +'<div class="track"><div class="tr-i hl" style="--tc:#dd4257"><span class="tr-y">9/09</span>'
+          +'<div class="tr-t">连续缺课第 5 天</div><div class="tr-s">系统判定高危 · 触发 72 小时计时</div></div>'
+          +'<div class="tr-i" style="--tc:#d98317"><span class="tr-y">8/26</span>'
+          +'<div class="tr-t">第 2 次谈心</div><div class="tr-s">提到「不想上课」· 记录已归档</div></div></div>'
+          +'<div class="ai-strip" style="margin-top:9px"><div class="ai-hd"><span class="ai-mk">✦</span>'
+          +'<span class="ai-lb">AI 建议</span></div><p>先约谈，<b>暂不通知家长</b> —— 上次家访后他反而更封闭。</p></div>',
+        foot:footAI('约他谈一次','toast:已发邀约，附了两个可选时间')};
+    }
+  },
+  approval:{
+    evi:function(arg){
+      const a = APPROVALS.filter(function(x){return x.id===+arg;})[0] || APPROVALS[0];
+      return {title:'材料证据', crumb:'审批 / '+a.n,
+        body:'<div class="subhero"><div class="sh-t">'+a.n+' · '+a.type+' '+tag('待你判断','warn')+'</div>'
+          +'<div class="sh-s">'+a.span+' · 已上传 '+a.mat+' / '+a.tot+' 项</div></div>'
+          +'<div class="kv-rows">'
+          +'<div class="kv-i"><span class="k">申请单</span><span class="v">在线提交 · 9/11 22:40</span>'+tag('已核','ok')+'</div>'
+          +'<div class="kv-i"><span class="k">诊断证明</span><span class="v">'+(a.mat<4?'未上传 · 仅病历照片':'医院盖章 · 已核验')+'</span>'
+          +(a.mat<4?tag('缺','bad'):tag('已核','ok'))+'</div>'
+          +'<div class="kv-i"><span class="k">家长确认</span><span class="v">母亲 · 9/11 微信确认</span>'+tag('已核','ok')+'</div>'
+          +'<div class="kv-i"><span class="k">课表比对</span><span class="v">冲突 3 节 · 数据结构实验</span>'+tag('需补','warn')+'</div>'
+          +'</div>'
+          +'<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">AI 核验结论</span></div>'
+          +'<p>'+a.ai+'。'+((a.mat<4)?'建议先向学生追问证明，<b>不直接驳回</b>。':'建议通过与提醒一起发。')+'</p></div>'
+          +'<div class="evbox" style="margin-top:9px"><span style="color:#4a7bfb">✦</span>'
+          +'<div>该生 3 天前触发<b>高危预警</b>，请假通过后仍会保留跟进任务。</div></div>',
+        foot:'<button class="btn-g" data-act="reject:'+a.id+'">'+IC.no+'</button>'
+          +'<button class="btn-p" data-act="toast:已发送追问，等学生补材料"><span class="sp">✦</span>追问后再批</button>'};
+    }
+  },
+  crisis:{
+    plan:function(arg){
+      const n = arg || '林晓阳';
+      return {title:'三步介入', crumb:'预警 / '+n,
+        body:'<div class="subhero"><div class="sh-t">'+n+' · 三步介入方案'+tag('AI 生成','ai')+'</div>'
+          +'<div class="sh-s">顺序很重要：先建立接触，再判断性质，最后才动用资源</div></div>'
+          +'<div class="step3">'
+          +'<div class="st"><span class="sn">1</span><div class="sb2"><div class="st-t">今天：三个渠道同时触达</div>'
+          +'<div class="st-s">短信 + 微信 + 请室友带话。目标不是让他回，是让他知道你注意到了。</div>'
+          +'<div class="st-a"><button class="ai-a pri" data-act="toast:已同时发出三条，18:00 前无回应自动提醒">一键发出</button></div></div></div>'
+          +'<div class="st"><span class="sn">2</span><div class="sb2"><div class="st-t">明天：面谈（12 分钟）</div>'
+          +'<div class="st-s">只问睡眠和「这周还行的一件事」，<b>不问成绩</b>。提纲已备好。</div>'
+          +'<div class="st-a"><button class="ai-a" data-act="sub:plan">看提纲</button></div></div></div>'
+          +'<div class="st"><span class="sn">3</span><div class="sb2"><div class="st-t">三天后：视情况升级</div>'
+          +'<div class="st-s">若仍无改善 → 心理中心初筛 + 家长沟通；若好转 → 转「关注」按周跟进。</div></div></div>'
+          +'</div>'
+          +'<div class="evbox" style="margin-top:10px"><span style="color:#4a7bfb">✦</span><div>'
+          +'同理，邓一鸣的 3 次缺勤都在<b>周一第 1 节</b>，建议换成「作息干预」而不是情绪疏导。</div></div>',
+        foot:footAI('按方案开始执行','toast:方案已生效，今晚 18:00 提醒你检查回应'),
+        tail:'介入记录同步到 <b>crisis_followups</b>，年级组可见'};
+    }
+  },
+  care:{
+    talk:function(){
+      return {title:'谈心记录', crumb:'关怀中心 / 记录',
+        body:'<div class="subhero"><div class="sh-t">林晓阳 · 第 3 次谈心'+tag('草稿','warn')+'</div>'
+          +'<div class="sh-s">今天 15:40 · 走廊 · 12 分钟</div></div>'
+          +'<div class="kv-rows">'
+          +'<div class="kv-i"><span class="k">状态</span><span class="v">愿意说，但回避「上课」这个词</span></div>'
+          +'<div class="kv-i"><span class="k">事实</span><span class="v">凌晨 2 点后入睡 · 室友 3 次提醒</span></div>'
+          +'<div class="kv-i"><span class="k">约定</span><span class="v">明天来上第 1 节</span>'+tag('待验证','warn')+'</div>'
+          +'<div class="kv-i"><span class="k">家长</span><span class="v">暂不告知（上次家访后更封闭）</span></div>'
+          +'</div>'
+          +'<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">AI 整理</span></div>'
+          +'<p>他两次都提到室友，关系问题可能比学业更关键。建议下周单独问一次宿舍情况。</p>'
+          +'<div class="ai-acts"><button class="ai-a pri" data-act="toast:已保存并更新预警计时为 0">保存记录</button>'
+          +'<button class="ai-a" data-act="toast:已生成家长版（脱敏）摘要">生成家长版</button></div></div>',
+        foot:footAI('保存并定下次跟进','toast:下次跟进已排到 9/15')};
+    }
+  },
+  guardian:{
+    chat:function(){
+      return {title:'林晓阳 妈妈', crumb:'家校沟通 / 对话',
+        body:'<div class="chat">'
+          +'<div class="chat-day">9 月 10 日</div>'
+          +'<div class="msg them"><span class="mv">林</span><div class="bub">老师，他最近是不是又不去上课了？<div class="bt">20:41</div></div></div>'
+          +'<div class="msg me"><span class="mv">王</span><div class="bub">这周有 3 次缺课，我昨天已经找他聊过了。<div class="bt">已读 · 21:10</div></div></div>'
+          +'<div class="chat-day">今天</div>'
+          +'<div class="msg them unread"><span class="mv">林</span><div class="bub">他爸说不管他了，我一个人在外地也管不到……<div class="bt">08:12</div></div></div>'
+          +'<div class="msg me"><span class="mv">王</span><div class="bub">您先别急，这事我盯着。今晚给他打个电话，只聊生活就行。<div class="bt">已读 · 08:20</div></div></div>'
+          +'</div>'
+          +'<div class="evbox" style="margin-top:10px"><span style="color:#4a7bfb">✦</span><div>'
+          +'<b>AI 摘要：</b>家长情绪从「质疑」转向「无力」，下一步重点是给她<b>可执行的一件小事</b>，而不是解释。</div></div>'
+          +'<div class="kv-rows" style="margin-top:9px"><div class="kv-i"><span class="k">沟通频次</span><span class="v">本月 4 次 · 平均 2.5 天一次</span></div>'
+          +'<div class="kv-i"><span class="k">家长状态</span><span class="v">焦虑 · 已离异分居 · 在外地务工</span></div></div>',
+        foot:footAI('生成下一次沟通要点','toast:已生成 3 条要点，避开成绩话题')};
+    }
+  },
+  portfolio:{
+    award:function(arg){
+      return {title:'成果详情', crumb:'成长档案 / 成果',
+        body:'<div class="subhero"><div class="sh-t">'+(arg||'省级 ACM 程序设计 铜奖')+tag('已认定','ok')+'</div>'
+          +'<div class="sh-s">2026-05 · 团队第 2 作者 · 3 人 · 省级</div></div>'
+          +'<div class="evi-row"><div class="er"><b>+3</b><span>成长分</span></div>'
+          +'<div class="er"><b>实践</b><span>计入维度</span></div><div class="er"><b>1/1</b><span>证书齐</span></div></div>'
+          +'<div class="kv-rows"><div class="kv-i"><span class="k">证书</span><span class="v">扫描件已上传 · 教务处核验</span>'+tag('已核','ok')+'</div>'
+          +'<div class="kv-i"><span class="k">角色</span><span class="v">第 2 作者 · 负责图论模块</span></div>'
+          +'<div class="kv-i"><span class="k">可用于</span><span class="v">学期评语 · 推免材料</span></div></div>'
+          +'<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">写进评语</span></div>'
+          +'<p>「在团队里承担了最难的图论模块」比「获得铜奖」更能说明他 —— 评语里我建议这么写。</p></div>',
+        foot:footAI('写进学期评语','toast:已插入评语第 2 段')};
+    }
+  },
+  survey:{
+    q:function(){
+      const q = SQ[S.qIdx];
+      return {title:'编辑题目', crumb:'问卷互评 / 第 '+(S.qIdx+1)+' 题',
+        body:'<div class="subhero"><div class="sh-t">'+q.t+'</div>'
+          +'<div class="sh-s">区分度 '+q.d.toFixed(2)+' · '+(q.d<0.3?'低于 0.3，建议替换':'有效题，建议保留')+'</div></div>'
+          +'<div class="kv-rows"><div class="kv-i"><span class="k">题型</span><span class="v">五级量表（1–5）</span></div>'
+          +'<div class="kv-i"><span class="k">维度</span><span class="v">协作 · 同伴互评</span></div>'
+          +'<div class="kv-i"><span class="k">已答</span><span class="v">38 / 42 人</span></div></div>'
+          +'<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">AI 替换建议</span></div>'
+          +'<p>把「是否迟到」换成「他会不会主动补上落下的任务」—— 同样是行为，但<b>区分度能到 0.5 以上</b>。</p>'
+          +'<div class="ai-acts"><button class="ai-a pri" data-act="toast:已替换，历史数据保留映射">用这道替换</button>'
+          +'<button class="ai-a" data-act="toast:已保留原题">保留原题</button></div></div>',
+        foot:footAI('保存并看下一题','qnext')};
+    }
+  },
+  schedule:{
+    adj:function(){
+      return {title:'调课建议', crumb:'查课表 / 冲突',
+        body:'<div class="subhero"><div class="sh-t">1 处冲突，2 套方案'+tag('AI 生成','ai')+'</div>'
+          +'<div class="sh-s">方案 A 改动最小，方案 B 学生不受影响</div></div>'
+          +'<div class="step3">'
+          +'<div class="st"><span class="sn">A</span><div class="sb2"><div class="st-t">教研会 → 周四 3–4 节</div>'
+          +'<div class="st-s">周四整段空着，只动 1 个会、0 节课；48 名学生课表不变。</div>'
+          +'<div class="st-a"><button class="ai-a pri" data-act="toast:方案 A 已提交教务处，等确认">用方案 A</button></div></div></div>'
+          +'<div class="st"><span class="sn">B</span><div class="sb2"><div class="st-t">实验课 → 周四 5–6 节</div>'
+          +'<div class="st-s">保住教研会，但要通知 2302 的 46 人改时间，且与答疑相邻。</div>'
+          +'<div class="st-a"><button class="ai-a" data-act="toast:方案 B 需要通知 46 名学生，已生成通知">用方案 B</button></div></div></div>'
+          +'</div>'
+          +'<div class="evbox" style="margin-top:10px"><span style="color:#4a7bfb">✦</span><div>'
+          +'若选 A，周三 16:00 之后整段空出来，我已经按这个时间准备了林晓阳的约谈。</div></div>',
+        foot:footAI('按方案 A 排进日历','toast:已排进日历，并通知了教研组')};
+    }
+  },
+  teaching:{
+    hw:function(){
+      return {title:'作业批阅', crumb:'我的课堂 / 作业',
+        body:'<div class="subhero"><div class="sh-t">第 3 次作业 · 图与树的遍历'+tag('AI 预批 94%','ai')+'</div>'
+          +'<div class="sh-s">14 份中 12 份已批，2 份置信度低需你复核</div></div>'
+          +'<div class="mtable"><div class="mt-h"><span>学生</span><span>AI 分</span><span>状态</span></div>'
+          +'<div class="mt-i"><div class="n"><span>周天佑</span></div><div class="s">92</div><div class="s" style="color:#0f8e6b">已批</div></div>'
+          +'<div class="mt-i"><div class="n"><span>郑心怡</span></div><div class="s">88</div><div class="s" style="color:#0f8e6b">已批</div></div>'
+          +'<div class="mt-i"><div class="n"><span>林晓阳</span></div><div class="s">41</div><div class="s" style="color:#dd4257">待复核</div></div>'
+          +'<div class="mt-i"><div class="n"><span>邓一鸣</span></div><div class="s">—</div><div class="s" style="color:#d98317">未提交</div></div>'
+          +'</div>'
+          +'<div class="ai-strip"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">为什么要你复核</span></div>'
+          +'<p>林晓阳的代码<b>能跑但对不上题</b>，像是抄了同宿舍的；这类情况我不下结论。</p>'
+          +'<div class="ai-acts"><button class="ai-a pri" data-act="toast:已在他的档案里标了「作业疑似抄袭」">标到档案</button></div></div>',
+        foot:footAI('发给学生（12 份）','toast:12 份已发，2 份留待你复核')};
+    }
+  },
+  growth:{
+    badge:function(){
+      return {title:'徽章详情', crumb:'我的成长 / 徽章',
+        body:'<div class="subhero"><div class="sh-t">家校全覆盖'+tag('86%','warn')+'</div>'
+          +'<div class="sh-s">42 人中已与 36 位家长有过实质沟通</div></div>'
+          +'<div class="kpis"><div class="kpi ok"><b>36</b><span>已沟通</span></div>'
+          +'<div class="kpi bad"><b>6</b><span>未联系</span></div><div class="kpi grad"><b>+2</b><span>达成加分</span></div></div>'
+          +'<div class="sec"><span class="sec-t">还差的 6 人</span><span class="sec-m">AI 已按优先级排</span></div>'
+          +'<div class="rows">'
+          +['吴浩然 · 12 天未联系','韩以宁 · 家长未绑定','黄佳琪 · 仅群发'].map(function(s){
+            return row({ic:s.slice(0,1), t:s.split(' · ')[0], s:s.split(' · ')[1], end:tag('待联系','warn'), act:'toast:已生成该家长的第一条消息'});
+          }).join('') + '</div>'
+          +'<div class="evbox" style="margin-top:9px"><span style="color:#4a7bfb">✦</span><div>'
+          +'这 6 人里 <b>4 位家长在外地</b>，建议统一在周日晚发消息，回复率最高。</div></div>',
+        foot:footAI('生成 6 条家长消息','toast:已生成 6 条，按学生情况分别措辞')};
+    }
+  },
+  announcement:{
+    ann:function(){
+      return {title:'发布详情', crumb:'公告 / 阅读情况',
+        body:'<div class="subhero"><div class="sh-t">关于国庆假期去向统计的通知'+tag('已发布','ok')+'</div>'
+          +'<div class="sh-s">9/9 16:00 发布 · 软件 2301 · 42 人 · 家长同步 38 人</div></div>'
+          +'<div class="evi-row"><div class="er"><b>92%</b><span>学生已读</span></div>'
+          +'<div class="er"><b>71%</b><span>家长已读</span></div><div class="er"><b>3</b><span>未读</span></div></div>'
+          +'<div class="sec"><span class="sec-t">未读名单</span><span class="sec-m">可一键提醒</span></div>'
+          +'<div class="rows">'
+          +['林晓阳','邓一鸣','罗嘉言'].map(function(n){
+            return row({ic:n.slice(0,1), t:n, s:'未读 · 已推送 2 次', end:'<button class="ai-a" data-act="toast:已单独提醒 '+n+'">提醒</button>'});
+          }).join('') + '</div>'
+          +'<div class="ai-strip" style="margin-top:9px"><div class="ai-hd"><span class="ai-mk">✦</span><span class="ai-lb">AI 发现</span></div>'
+          +'<p>未读的 3 人<b>也是本周缺勤的 3 人</b> —— 通知没读，往往不是没看到。</p></div>',
+        foot:footAI('单独提醒 3 人','toast:已通过短信补发，避开上课时间')};
+    }
+  }
+};
+
+
+
+const SUB_FILL = {
+  plan:{h:'本次面谈的目标', k:[['12','预计分钟'],['3','要确认的事'],['1','只约定一件']],
+    r:[['谈','8/26','上次谈心','40 分钟 · 提到失眠','已记录','ok'],['访','8/12','家访','家长说「管不了」','未采纳','mute']]},
+  itemlist:{h:'近 7 天代办', k:[['6','代办次数'],['5','你采纳'],['83%','采纳率']],
+    r:[['归','9/10','归档 2 条无关通知','未打扰你','可恢复','mute'],['回','9/08','代发家长回执','苏雨欣 · 已送达','已送达','ok']]},
+  why:{h:'被排除的 2 人', k:[['3','候选'],['2','排除'],['1','缺数据']],
+    r:[['何','','何书宁','分数下滑但昨天刚沟通过','排除','mute'],['罗','','罗嘉言','无联系记录 · 数据不足','不计分','mute']]},
+  stu:{h:'本学期变化', k:[['-14','分数变化'],['3','缺勤次数'],['2','谈心次数']],
+    r:[['谈','09/03','第 1 次谈心','提到室友关系','已归档','ok'],['社','08/30','社团退部','未说明原因','待确认','warn']]},
+  evi:{h:'本学期请假记录', k:[['4','次'],['9','天'],['1','缺证明']],
+    r:[['事','9/02','事假 2 天','材料齐全','已通过','ok'],['病','8/19','病假 3 天','缺诊断证明','已补','ok']]},
+  talk:{h:'前两次记录', k:[['2','已谈'],['0','告知家长'],['12','分钟/次']],
+    r:[['二','8/26','第 2 次 · 走廊','提到「不想上课」','已归档','ok'],['一','8/12','第 1 次 · 办公室','他几乎不说话','效果差','warn']]},
+  chat:{h:'可用话术', k:[['3','雷区'],['1','可执行小事'],['4','本月沟通']], r:[]},
+  award:{h:'同批成果', k:[['3','同类成果'],['+3','本次加分'],['1/1','材料齐']],
+    r:[['志','06','社区志愿服务 48 小时','省级 · 已认定','+2','ok'],['项','03','校园二手平台','项目负责人','+4','ok']]},
+  q:{h:'另外两题', k:[['0.58','Q1'],['0.41','Q2'],['0.22','Q3']],
+    r:[['Q','','Q1 愿意帮同学解决学习问题','有效题 · 保留','0.58','ok'],['Q','','Q2 遇到分歧先听完再表达','区分度偏低','0.41','warn']]},
+  adj:{h:'改期影响', k:[['1','会议改动'],['0','课节改动'],['2','班级受影响']],
+    r:[['会','周四','教研室例会 10:00','与你无课冲突','可参加','ok'],['讲','周五','学术讲座 19:00','与 3 个班冲突','另议','warn']]},
+  hw:{h:'分数分布', k:[['92','最高'],['41','最低'],['76','平均']],
+    r:[['林','9/12','林晓阳 41 分','代码能跑但对不上题','待复核','warn'],['邓','9/12','邓一鸣 未提交','已发提醒 2 次','未交','bad']]},
+  badge:{h:'其他徽章进度', k:[['1/4','班会留痕'],['0/1','带新教师'],['4/6','年读 6 本']],
+    r:[['班','','班会留痕 1/4','再传 3 次班会记录','+3','warn'],['学','','年读 6 本 4/6','还差 2 本','+2','warn']]},
+  ann:{h:'阅读时段', k:[['16:00','阅读峰值'],['92%','24h 内已读'],['3','仍未读']],
+    r:[['16','16–18','当天读完 31 人','峰值时段 · 建议默认','最佳','ok']]}
+};
+function subFill(key){
+  const f = SUB_FILL[key];
+  if(!f) return '';
+  let h = '<div class="sec" style="margin-top:11px"><span class="sec-t">'+f.h+'</span><span class="sec-m">AI 汇总</span></div>'
+    + '<div class="kpis" style="margin:0 14px">' + f.k.map(function(x){
+        return '<div class="kpi"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>';
+      }).join('') + '</div>';
+  if(f.r.length){
+    h += '<div class="rows">' + f.r.map(function(x){
+      return row({ic:x[0], t:x[2], s:(x[1] ? x[1]+' · ' : '')+x[3], end:tag(x[4], x[5]),
+        tone:'var(--'+(x[5]==='ok'?'ok':x[5]==='bad'?'bad':x[5]==='warn'?'warn':'ink2')+')',
+        tint:'var(--'+(x[5]==='ok'?'ok-soft':x[5]==='bad'?'bad-soft':x[5]==='warn'?'warn-soft':'tint-neutral')+')'});
+    }).join('') + '</div>';
+  }
+  return h;
+}
+
+const SUB_LB = {plan:'面谈准备', itemlist:'代办记录', why:'判断依据', stu:'学生详情', evi:'材料证据',
+  talk:'谈心记录', chat:'对话详情', award:'成果详情', q:'编辑题目', adj:'调课建议', hw:'作业批阅',
+  badge:'徽章详情', ann:'发布详情'};
+function subMore(p, cur){
+  const keys = Object.keys(SUBS[p]).filter(function(k){ return k !== cur; });
+  let h = subFill(cur);
+  if(keys.length){
+    h += '<div class="submore"><span class="sm-t">同页还可下钻</span><div class="sm-chips">'
+      + keys.map(function(k){ return '<button data-act="sub:'+k+'">'+SUB_LB[k]+'</button>'; }).join('')
+      + '</div></div>';
+  }
+  return h;
+}
+
+const PAGES = {tasks:pTasks, ai:pAI, students:pStu, approval:pAppr, crisis:pCrisis, care:pCare,
+  guardian:pGuard, portfolio:pPort, survey:pSurvey, schedule:pSched, teaching:pTeach, growth:pGrow, announcement:pAnn};
+
+function screenHTML(){
+  const p = S.page, m = META[p];
+  let body, foot, tail, back = '';
+  if(S.sub && SUBS[p] && SUBS[p][S.sub]){
+    const sb = SUBS[p][S.sub](S.arg);
+    const parts = String(sb.crumb||'详情').split(' / ').filter(function(x){ return x && x !== m.t; });
+    if(!parts.length) parts.push('详情');
+    body = sb.body + subMore(p, S.sub);
+    foot = sb.foot || footAI('返回列表','back'); tail = sb.tail || '';
+    back = '<div class="backline" data-act="back"><b>'+esc(m.t)+'</b> / '+esc(parts.join(' / '))+'</div>';
+  } else {
+    const blk = PAGES[p]();
+    body = blk.body; foot = blk.foot; tail = blk.tail;
+  }
+  return '<div class="screen" data-p="'+p+'">'
+    + statusbar()
+    + '<div class="bar"><button class="bar-bk" data-act="'+(S.sub?'back':'toast:返回工作台')+'">'+IC.back+'</button>'
+    + '<span class="bar-t">'+ (S.sub && SUBS[p][S.sub] ? (SUBS[p][S.sub](S.arg).title || m.t) : m.t) +'</span>'
+    + '<span class="bar-sub">'+m.sub+'</span>'
+    + '<div class="bar-x"><button class="bar-ai" data-act="toast:AI 助手已就绪，可长按语音"><b>✦</b> AI</button></div></div>'
+    + back
+    + '<div class="content">'+body+(tail?'<div class="tail">'+tail+'</div>':'')+'</div>'
+    + '<div class="foot">'+foot+'</div>'
+    + (S.toast?'<div class="toast">'+esc(S.toast)+'</div>':'')
+    + '</div>';
+}
+
+function paint(){
+  $('#phone').innerHTML = screenHTML();
+  const m = META[S.page];
+  $('#curTitle').innerHTML = m.t + '<i>'+String(Object.keys(META).indexOf(S.page)+1).padStart(2,'0')+' / 13</i>';
+  $('#pagelist').innerHTML = NAV.map(function(g){
+    return '<div class="rail-g">'+g.g+'</div>' + g.items.map(function(id){
+      const mm = META[id];
+      return '<button class="page-item'+(S.page===id?' on':'')+'" data-page="'+id+'">'
+        +'<span class="pi-i">'+String(Object.keys(META).indexOf(id)+1).padStart(2,'0')+'</span>'
+        +'<span class="pi-n">'+mm.t+'</span>'
+        +(mm.tag?'<span class="pi-t '+mm.tag.toLowerCase()+'">'+mm.tag+'</span>':'')
+        +'</button>';
+    }).join('');
+  }).join('');
+  const sp = SPEC[S.page];
+  $('#spec').innerHTML = '<div class="spec-hd"><b>'+META[S.page].t+'</b><span class="sn">'+String(Object.keys(META).indexOf(S.page)+1).padStart(2,'0')+'/13</span>'
+    +'<span class="sd">'+(META[S.page].tag?('版式 '+META[S.page].tag):'独立版式')+'</span></div>'
+    +'<div class="spec-blk"><span class="spec-k">这一页的切口</span><div class="spec-v">'+sp.cut+'</div></div>'
+    +'<div class="spec-blk"><span class="spec-k">AI 在这一页做什么</span><div class="spec-v">'+sp.ai+'</div></div>'
+    +'<div class="spec-blk"><span class="spec-k">子页（可下钻）</span><div class="spec-chips">'
+    +sp.sub.map(function(x){return '<span class="sub">'+x+'</span>';}).join('')+'</div></div>'
+    +'<div class="spec-blk"><span class="spec-k">覆盖功能</span><ul class="spec-list">'
+    +sp.fn.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul></div>'
+    +'<div class="spec-blk"><span class="spec-k">接口 / 数据</span><code>'+sp.api+'</code></div>'
+    +'<div class="spec-blk"><span class="spec-k">全局 5 条约定</span><ul class="spec-list">'
+    +'<li>第一屏第一块必须是 AI 结论，不是数据表</li>'
+    +'<li>能自动处理的合并成一张汇总卡，不逐条列</li>'
+    +'<li>长的东西（提纲 / 草稿 / 评语）收进抽屉或子页</li>'
+    +'<li>底部主按钮永远是 AI 动作，右上是 AI 入口</li>'
+    +'<li>每页一个记忆点：一张图、一条时间轴或一个计时器</li>'
+    +'</ul></div>'
+    +'<div class="spec-foot">页面高度控制在 1 屏内，超出部分一律进子页或收进可展开区。</div>';
+}
+
+/* ============================================================
+   交互
+   ============================================================ */
+document.addEventListener('click', function(e){
+  const pg = e.target.closest('[data-page]');
+  if(pg){ S.page = pg.dataset.page; S.sub = null; S.arg = null; paint(); return; }
+  const el = e.target.closest('[data-act]');
+  if(!el) return;
+  const act = el.dataset.act;
+  if(act.indexOf('toast:')===0){ toast(act.slice(6)); return; }
+  if(act.indexOf('seg:')===0){ S.seg[S.page] = +act.slice(4); paint(); return; }
+  if(act==='back'){ S.sub = null; S.arg = null; paint(); return; }
+  if(act.indexOf('open:')===0){ S.sub = act.slice(5); S.arg = el.dataset.arg || null; paint(); return; }
+  if(act.indexOf('sub:')===0){ S.sub = act.slice(4); S.arg = el.dataset.arg || null; paint(); return; }
+  if(act.indexOf('toggle:')===0){
+    const id = act.slice(7), i = S.done.indexOf(id);
+    if(i>=0) S.done.splice(i,1); else S.done.push(id);
+    const left = TASKS.length - S.done.length;
+    toast(left ? '还剩 '+left+' 件，AI 会继续盯着' : '今天清空了，AI 已把明早的排好');
+    return;
+  }
+  if(act==='batch'){
+    const ids = APPROVALS.filter(function(a){ return a.auto && S.approved.indexOf(a.id)<0 && S.rejected.indexOf(a.id)<0; }).map(function(a){return a.id;});
+    if(!ids.length){ toast('这批已经处理完了'); return; }
+    S.approved = S.approved.concat(ids);
+    const left = APPROVALS.filter(function(a){ return !a.auto && S.approved.indexOf(a.id)<0 && S.rejected.indexOf(a.id)<0; }).length;
+    toast('已通过 '+ids.length+' 条，剩 '+left+' 条留给你判断');
+    return;
+  }
+  if(act.indexOf('approve:')===0){ S.approved.push(+act.slice(8)); toast('已通过，已通知学生'); return; }
+  if(act.indexOf('reject:')===0){ S.rejected.push(+act.slice(7)); toast('已驳回，理由模板已带上'); return; }
+  if(act.indexOf('undo:')===0){
+    const id = +act.slice(5);
+    S.approved = S.approved.filter(function(x){return x!==id;});
+    S.rejected = S.rejected.filter(function(x){return x!==id;});
+    toast('已撤回，回到待处理'); return;
+  }
+  if(act.indexOf('admit:')===0){
+    const id = act.slice(6);
+    if(S.admit.indexOf(id)>=0) S.admit = S.admit.filter(function(x){return x!==id;});
+    else S.admit.push(id);
+    toast(S.admit.indexOf(id)>=0?'已加入待办，AI 会提前 10 分钟提醒':'已移出待办');
+    return;
+  }
+  if(act.indexOf('talk:')===0){ const n = act.slice(5); S.open[n] = !S.open[n]; paint(); return; }
+  if(act.indexOf('ans:')===0){
+    S.ans[el.dataset.arg] = +act.slice(4);
+    const last = S.qIdx >= SQ.length - 1;
+    if(last){ paint(); toast('5 题答完了，已提交 · 感谢'); }
+    else { S.qIdx++; paint(); }
+    return;
+  }
+  if(act==='qprev'){ S.qIdx = Math.max(0, S.qIdx-1); paint(); return; }
+  if(act==='qnext'){ S.qIdx = Math.min(SQ.length-1, S.qIdx+1); paint(); return; }
+  if(act.indexOf('cls:')===0){ S.cls = +act.slice(4); paint(); return; }
+  if(act==='plan'){ S.plan = !S.plan; paint(); return; }
+  if(act==='why'){ S.why = !S.why; paint(); return; }
+  if(act==='adj'){ S.adj = !S.adj; paint(); return; }
+  if(act==='sendmsg'){
+    if(!S.replyOn){ toast('先在草稿上点「用这份草稿」'); return; }
+    toast('已发送 · 家长侧显示「已读」后 AI 会提醒你');
+    return;
+  }
+  if(act==='replyon'){ S.replyOn = true; paint(); toast('草稿已填入输入框，可继续改'); return; }
+  if(act==='pickstu'){ S.stu = el.dataset.arg; paint(); return; }
+  if(act==='ovf'){ checkOvf(); return; }
+  if(act==='plan30'){ S.plan30 = true; paint(); toast('已生成 30 天计划，排进日历'); return; }
+  paint();
+});
+document.addEventListener('input', function(e){
+  if(e.target.dataset.act === 'q'){ S.q = e.target.value; paint(); const i = $('.search input'); if(i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+});
+
+function checkOvf(){
+  const c = document.querySelector('.screen .content');
+  if(!c) return;
+  const over = c.scrollHeight - c.clientHeight;
+  const name = META[S.page].t;
+  const rest = c.clientHeight - c.scrollHeight;
+  toast(over > 0 ? name+' 溢出 '+over+'px' : name+' 一屏内，余 '+rest+'px');
+  document.querySelector('.btn-mini').textContent = over>0 ? '溢出 '+over+'px' : '无溢出 ✓';
+}
+
+$('#btnOvf').addEventListener('click', checkOvf);
+(function(){
+  let n = 0; Object.keys(SUBS).forEach(function(k){ n += Object.keys(SUBS[k]).length; });
+  const el = document.querySelector('#nSub'); if(el) el.textContent = n;
+  const el2 = document.querySelector('#nSub2'); if(el2) el2.textContent = n;
+})();
+paint();
+</script>
+</body>
+</html>

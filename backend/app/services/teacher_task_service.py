@@ -103,10 +103,20 @@ def create_task(
     priority: str | TaskPriority = TaskPriority.MID,
     remind_at: date | None = None,
 ) -> TeacherTask:
-    """建任务（幂等）：同一 (source_type, source_id, teacher_id) 已存在时直接返回旧任务。"""
+    """建任务（幂等）：同一 (source_type, source_id, teacher_id) 已存在时直接返回旧任务。
+
+    幂等有两级键，必须都查：
+    1. ``(source_type, source_id, teacher_id)`` —— 主键级，对应表上的唯一约束；
+    2. ``(teacher_id, rule_code)`` —— 业务级，用于 ``source_id`` 为空但需要按"规则+学生"
+       细粒度去重的场景（如成绩预警 ``grade_low_{course}_s{student}``、作业催交
+       ``hw_{id}_s{student}``）。若只查第 1 级，``source_id=None`` 时同一学生每保存一次
+       成绩就会重复建一条预警待办。
+    """
     stype = _source_type(source_type)
     prio = _priority(priority)
+    rule_code = (rule_code or "").strip() or None
 
+    existing = None
     if source_id is not None:
         existing = (
             db.query(TeacherTask)
@@ -117,18 +127,33 @@ def create_task(
             )
             .first()
         )
-        if existing:
-            # 已办结的任务不再被重复触发覆盖
-            if existing.status in _OPEN_STATUSES:
-                existing.title = title
-                existing.detail = detail
-                if rule_code is not None:
-                    existing.rule_code = rule_code
-                if due_at is not None:
-                    existing.due_at = due_at
-                db.commit()
-                db.refresh(existing)
-            return existing
+    if existing is None and rule_code is not None:
+        # 业务级去重：用于 source_id 为空、但需要按"规则 + 学生"细粒度防重复的场景。
+        # 必须带上 student_id 一起匹配 —— rule_code 的粒度并不统一
+        # （成绩预警 ``grade_low_{course}_s{student}`` 自带学生维度，而预警 pipeline 只有
+        #  ``rule["code"]``），若只按 rule_code 匹配，同一规则下的不同学生会互相顶替：
+        # B 学生的预警会被改写成 A 学生的标题，B 学生自己反而没有任务。
+        q = db.query(TeacherTask).filter(
+            TeacherTask.teacher_id == teacher_id,
+            TeacherTask.rule_code == rule_code,
+        )
+        if student_id is not None:
+            q = q.filter(TeacherTask.student_id == student_id)
+        else:
+            q = q.filter(TeacherTask.student_id.is_(None))
+        existing = q.first()
+    if existing is not None:
+        # 已办结的任务不再被重复触发覆盖
+        if existing.status in _OPEN_STATUSES:
+            existing.title = title
+            existing.detail = detail
+            if rule_code is not None:
+                existing.rule_code = rule_code
+            if due_at is not None:
+                existing.due_at = due_at
+            db.commit()
+            db.refresh(existing)
+        return existing
 
     task = TeacherTask(
         teacher_id=teacher_id,

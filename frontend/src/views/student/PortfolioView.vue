@@ -9,7 +9,7 @@
       <!-- 移动端：AI 建议压成 Head 右侧图标按钮，避免正文顶部再顶一个蓝色大按钮 -->
       <template #right>
         <button class="pf-ai-btn" type="button" aria-label="AI 优化建议" :disabled="aiLoading" @click="openAISuggest">
-          <el-icon :size="17"><MagicStick /></el-icon>
+          <AiMascotMark :size="18" />
         </button>
       </template>
     </SubPageHeader>
@@ -22,7 +22,7 @@
         <p class="portfolio-sub">项目经历 · 证书荣誉 · 个人简历</p>
       </div>
       <el-button type="primary" round :loading="aiLoading" @click="openAISuggest">
-        <el-icon style="margin-right:4px"><MagicStick /></el-icon>AI 优化建议
+        <AiMascotMark :size="14" style="margin-right:4px" />AI 优化建议
       </el-button>
     </div>
 
@@ -270,7 +270,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Link, Paperclip, MagicStick } from '@element-plus/icons-vue'
+import { Document, Link, Paperclip } from '@element-plus/icons-vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'

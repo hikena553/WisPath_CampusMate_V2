@@ -35,6 +35,15 @@ export interface PortfolioItemPayload {
   visibility?: PortfolioVisibility
 }
 
+/** AI 帮写结果：老师口述情况后自动填充的档案草稿 */
+export interface PortfolioAIDraft {
+  item_type: PortfolioItemType
+  title: string
+  occurred_on: string | null
+  reflection: string
+  source: 'ai' | 'rule'
+}
+
 export interface PortfolioTypeStat {
   type: PortfolioItemType
   label: string
@@ -84,4 +93,9 @@ export function deletePortfolioItem(id: number) {
 
 export function getPortfolioReport() {
   return request.get<PortfolioReport>('/teacher-portfolio/report')
+}
+
+/** AI 帮写：用一段口述生成类型 / 标题 / 日期 / 反思草稿，由老师确认后再保存 */
+export function aiDraftPortfolio(description: string, item_type?: PortfolioItemType) {
+  return request.post<PortfolioAIDraft>('/teacher-portfolio/ai-draft', { description, item_type })
 }

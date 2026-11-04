@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>教师端功能审查与改进建议 · WisPath CampusMate</title>
+<style>
+  :root {
+    --bg: #f6f8fc;
+    --surface: #ffffff;
+    --ink: #101828;
+    --ink-2: #344054;
+    --muted: #667085;
+    --line: #e4e7ec;
+    --brand: #2563eb;
+    --brand-soft: #eff4ff;
+    --danger: #d92d20;
+    --danger-soft: #fef3f2;
+    --warn: #b54708;
+    --warn-soft: #fffaeb;
+    --ok: #067647;
+    --ok-soft: #ecfdf3;
+    --purple: #6941c6;
+    --purple-soft: #f4f3ff;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px -12px rgba(16,24,40,.18);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+    line-height: 1.75;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 22px 90px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    background: linear-gradient(140deg, #101828 0%, #1d3a8a 55%, #2563eb 100%);
+    color: #fff;
+    padding: 54px 22px 46px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: ""; position: absolute; right: -120px; top: -120px;
+    width: 380px; height: 380px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.16), transparent 68%);
+  }
+  .hero-inner { max-width: 1080px; margin: 0 auto; position: relative; z-index: 1; }
+  .eyebrow {
+    display: inline-block; font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22);
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 18px;
+  }
+  .hero h1 { font-size: 32px; line-height: 1.3; margin: 0 0 12px; font-weight: 700; letter-spacing: -.01em; }
+  .hero p { margin: 0; color: rgba(255,255,255,.82); max-width: 720px; font-size: 15px; }
+  .hero-meta { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    font-size: 12.5px; padding: 6px 13px; border-radius: 999px;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); color: #fff;
+  }
+
+  /* ---------- Sections ---------- */
+  section { margin-top: 44px; }
+  h2 {
+    font-size: 22px; margin: 0 0 6px; font-weight: 700; letter-spacing: -.01em;
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2 .num {
+    flex: none; width: 30px; height: 30px; border-radius: 9px;
+    background: var(--brand); color: #fff; font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+  }
+  h3 { font-size: 16.5px; margin: 30px 0 10px; font-weight: 700; color: var(--ink); }
+  h4 { font-size: 14.5px; margin: 20px 0 8px; font-weight: 700; color: var(--ink-2); }
+  .lead { color: var(--muted); margin: 0 0 20px; font-size: 14.5px; }
+  p { margin: 0 0 14px; }
+  strong { color: var(--ink); font-weight: 650; }
+
+  /* ---------- Cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 22px 24px; box-shadow: var(--shadow);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* ---------- Verdict ---------- */
+  .verdict {
+    background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--brand);
+    border-radius: var(--radius); padding: 24px 26px; box-shadow: var(--shadow);
+  }
+  .verdict .kicker { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--brand); font-weight: 700; }
+  .verdict h3 { margin: 8px 0 10px; font-size: 19px; line-height: 1.5; }
+  .verdict p:last-child { margin-bottom: 0; }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  .mini {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+  }
+  .mini .tag {
+    display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+    padding: 3px 9px; border-radius: 6px; margin-bottom: 10px;
+  }
+  .t-red { background: var(--danger-soft); color: var(--danger); }
+  .t-amber { background: var(--warn-soft); color: var(--warn); }
+  .t-blue { background: var(--brand-soft); color: var(--brand); }
+  .t-green { background: var(--ok-soft); color: var(--ok); }
+  .t-purple { background: var(--purple-soft); color: var(--purple); }
+  .mini h4 { margin: 0 0 6px; font-size: 15px; }
+  .mini p { margin: 0; font-size: 13.5px; color: var(--muted); }
+
+  /* ---------- Tables ---------- */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 620px; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    background: #f9fafb; font-weight: 700; color: var(--ink-2);
+    font-size: 12.5px; letter-spacing: .02em; white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fcfdff; }
+  td code, th code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px; background: #f2f4f7; padding: 1px 6px; border-radius: 5px; color: #3538cd; }
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .p-ok { background: var(--ok-soft); color: var(--ok); }
+  .p-part { background: var(--warn-soft); color: var(--warn); }
+  .p-no { background: var(--danger-soft); color: var(--danger); }
+  .stars { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); white-space: nowrap; }
+
+  /* ---------- Loop diagram ---------- */
+  .loop { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 18px 0 6px; }
+  .loop-step {
+    flex: 1 1 150px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; position: relative;
+  }
+  .loop-step .s-no { font-size: 11px; font-weight: 700; color: var(--brand); letter-spacing: .1em; }
+  .loop-step .s-name { font-weight: 700; margin: 2px 0 4px; font-size: 14.5px; }
+  .loop-step .s-desc { font-size: 12.5px; color: var(--muted); }
+  .loop-step.broken { border-color: #fda29b; background: var(--danger-soft); }
+  .loop-step.broken .s-no { color: var(--danger); }
+  .loop-step.broken .s-desc { color: #912018; }
+  .loop-step.planned { border-color: #b2ccff; background: var(--brand-soft); }
+  .loop-step.planned .s-no { color: var(--brand); }
+  .loop-step.planned .s-desc { color: #194185; }
+
+  /* ---------- Two column ---------- */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .col-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow); }
+  .col-box h4 { margin-top: 0; }
+  .col-box .hd { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+  .col-box .hd .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .d-blue { background: var(--brand); }
+  .d-purple { background: var(--purple); }
+  .d-amber { background: var(--warn); }
+
+  /* ---------- Decision list ---------- */
+  .decide { list-style: none; padding: 0; margin: 16px 0 0; }
+  .decide li {
+    display: grid; grid-template-columns: 92px 1fr; gap: 14px; align-items: start;
+    padding: 12px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; margin: 0;
+  }
+  .decide li:last-child { border-bottom: none; }
+  .decide .k { font-weight: 700; color: var(--purple); }
+  .decide .v { color: var(--ink-2); }
+
+  /* ---------- Layer stack ---------- */
+  .layer { display: grid; grid-template-columns: 62px 1fr; gap: 14px; align-items: stretch; margin-top: 12px; }
+  .layer .lv {
+    background: linear-gradient(160deg, #1d3a8a, #2563eb); color: #fff; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;
+  }
+  .layer .lv.p2 { background: linear-gradient(160deg, #5925dc, #6941c6); }
+  .layer .lv.p3 { background: linear-gradient(160deg, #93370d, #b54708); }
+  .layer .body { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 15px 18px; box-shadow: var(--shadow); }
+  .layer .body .t { font-weight: 700; font-size: 14.5px; margin-bottom: 3px; }
+  .layer .body .d { font-size: 13px; color: var(--muted); margin: 0; }
+
+  @media (max-width: 760px) {
+    .two-col { grid-template-columns: 1fr; }
+    .layer { grid-template-columns: 48px 1fr; }
+    .decide li { grid-template-columns: 1fr; gap: 4px; }
+  }
+
+  /* ---------- Coverage matrix ---------- */
+  .mx td:first-child { font-weight: 700; white-space: nowrap; }
+  .bar { display: flex; gap: 3px; margin-top: 4px; }
+  .bar i { height: 7px; width: 22px; border-radius: 3px; background: #e4e7ec; display: block; }
+  .bar i.on { background: var(--brand); }
+
+  /* ---------- Roadmap ---------- */
+  .phase { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-top: 16px; }
+  .phase-head { display: flex; align-items: center; gap: 14px; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+  .phase-badge { flex: none; font-weight: 800; font-size: 13px; color: #fff; padding: 5px 13px; border-radius: 8px; letter-spacing: .04em; }
+  .ph0 { background: var(--danger); }
+  .ph1 { background: var(--brand); }
+  .ph2 { background: var(--purple); }
+  .phase-head .ph-title { font-weight: 700; font-size: 15.5px; }
+  .phase-head .ph-sub { color: var(--muted); font-size: 13px; margin-left: auto; white-space: nowrap; }
+  .phase-body { padding: 6px 22px 18px; }
+  .item { padding: 14px 0; border-bottom: 1px dashed var(--line); display: grid; grid-template-columns: 26px 1fr; gap: 12px; }
+  .item:last-child { border-bottom: none; }
+  .item .idx { font-weight: 800; color: var(--brand); font-size: 13px; padding-top: 2px; }
+  .item h4 { margin: 0 0 4px; font-size: 14.5px; }
+  .item .why { font-size: 13.5px; color: var(--ink-2); margin: 0 0 6px; }
+  .item .ref { font-size: 12.5px; color: var(--muted); }
+  .item .ref b { color: var(--purple); font-weight: 700; }
+  .item .tech { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+
+  /* ---------- Callout ---------- */
+  .callout { border-radius: 12px; padding: 15px 18px; font-size: 13.5px; margin: 16px 0; border: 1px solid; }
+  .co-info { background: var(--brand-soft); border-color: #b2ccff; color: #194185; }
+  .co-warn { background: var(--warn-soft); border-color: #fedf89; color: #7a2e0e; }
+  .co-ok { background: var(--ok-soft); border-color: #abefc6; color: #054f31; }
+  .callout b { font-weight: 750; }
+
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+
+  /* ---------- Sources ---------- */
+  .src-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 26px; font-size: 13px; }
+  .src-list a { color: var(--brand); text-decoration: none; word-break: break-all; }
+  .src-list a:hover { text-decoration: underline; }
+  .src-list li { margin-bottom: 6px; }
+
+  footer { margin-top: 50px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+
+  @media (max-width: 760px) {
+    .hero h1 { font-size: 24px; }
+    .grid-3 { grid-template-columns: 1fr; }
+    .src-list { grid-template-columns: 1fr; }
+    .phase-head { flex-wrap: wrap; }
+    .phase-head .ph-sub { margin-left: 0; width: 100%; }
+    .wrap { padding: 0 16px 70px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <span class="eyebrow">功能审查报告 · v2 · Teacher-Side Review</span>
+    <h1>教师端功能审查与改进建议</h1>
+    <p>闭环问题已通过规划解决。本版记录「家校沟通（家长观察者）」专项方案，并把「数字教育」与「辅导员个人成长」提升为下一步重点。19 项详细设计已逐项确认，本文档已按确认结果更新；同时依据「面向高校辅导员」的实际定位，剔除了备课 / 试题 / 批改等教学类功能。</p>
+    <div class="hero-meta">
+      <span class="chip">定位：高校辅导员（导员）工作台</span>
+      <span class="chip">对标项目：20+ 个开源仓库</span>
+      <span class="chip">本期重点：数字教育 · 辅导员个人成长</span>
+      <span class="chip">19 项设计已逐项确认</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ============ 0. 结论 ============ -->
+  <section id="verdict">
+    <div class="verdict">
+      <div class="kicker">核心结论（v2 更新）</div>
+      <h3>闭环问题已基本解决；教师端的下一道关卡，是「数字教育」与「辅导员个人成长」两个维度不够突出。</h3>
+      <p>初版诊断的两大问题——「结构单一」与「闭环断裂」——已通过 P0 规划 + 家校沟通专项方案得到解决：AI 建议将落为跟进任务、随访将有到期提醒、学生档案将开放教师写入口、审批将补上销假与统计，家校沟通也补齐了"学校—家庭"这一环。</p>
+      <p>但解决"闭环"只意味着<strong>流程能转起来</strong>，不代表<strong>特色立得住</strong>。当前仍有两个短板：<strong>数字教育</strong>停留在"几个分散的 AI 按钮"，没有形成统一的数字化育人闭环；<strong>辅导员个人成长</strong>则几乎是空白，教师端没有任何"我"的数据。这两点恰恰是最能体现产品差异化的地方，本版报告将其列为重点。</p>
+    </div>
+
+    <div class="grid-3">
+      <div class="mini">
+        <span class="tag t-green">已解决 · 闭环</span>
+        <h4>流程已经能转起来</h4>
+        <p>P0 六项 + 家校沟通专项，补齐了"执行—反馈—沉淀"三环，教师端不再是"点一下就走"的事务台。</p>
+      </div>
+      <div class="mini">
+        <span class="tag t-amber">仍不足 · 数字教育</span>
+        <h4>AI 是"散点"，不是"底座"</h4>
+        <p>四个 AI 能力各自为战，没有统一入口、没有学情数据底座、没有教学分析闭环，教师感受不到"数字化"。</p>
+      </div>
+      <div class="mini">
+        <span class="tag t-red">仍不足 · 辅导员成长</span>
+        <h4>教师端没有"我"</h4>
+        <p>无成长档案、无工作案例沉淀、无能力评估与激励。辅导员的工作与成长无法沉淀、无法被看见。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 1. 现状盘点 ============ -->
+  <section id="audit">
+    <h2><span class="num">1</span>现状盘点（基于代码实测）</h2>
+    <p class="lead">教师端由 <code>TeacherLayout.vue</code> 承载，桌面端 6 个侧边导航 + 1 个个人中心，移动端 5 个底部 Tab。后端教师专属接口集中在 <code>api/teacher.py</code>，另有 <code>leave</code> / <code>crisis</code> / <code>announcement</code> / <code>messages</code> / <code>material</code> / <code>service</code> 等共用模块。</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>模块</th><th>路由</th><th>核心能力</th><th>闭环程度</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>班级首页</strong></td>
+            <td><code>/teacher</code></td>
+            <td>KPI 卡片、班级图表（性别/成绩/政治面貌/生源/预警趋势）、教师日历与日程任务、AI 班级分析、AI 推荐联系、公告发布、逾期提醒</td>
+            <td><span class="pill p-part">半闭环</span></td>
+          </tr>
+          <tr>
+            <td><strong>智能助手</strong></td>
+            <td><code>/teacher/agent</code></td>
+            <td>绵小城 SSE 流式对话；后端工具集含请假审批、学生查询、危机查询、成长统计、请假分析</td>
+            <td><span class="pill p-part">半闭环</span></td>
+          </tr>
+          <tr>
+            <td><strong>学生档案</strong></td>
+            <td><code>/teacher/students</code></td>
+            <td>学生列表 + 多维筛选；详情 5 个 Tab：技能画像 / 成长记录 / 危机预警 / 项目展示 / 请假记录</td>
+            <td><span class="pill p-no">只读，无闭环</span></td>
+          </tr>
+          <tr>
+            <td><strong>审批管理</strong></td>
+            <td><code>/teacher/approval</code></td>
+            <td>请假 / 办事申请 / 材料档案三类审批，待批—已通过—已拒绝分页；请假带 AI 分析建议</td>
+            <td><span class="pill p-part">半闭环</span></td>
+          </tr>
+          <tr>
+            <td><strong>预警工作台</strong></td>
+            <td><code>/teacher/crisis</code></td>
+            <td>发现 → 干预（方式/备注）→ 随访（日期）→ 闭环（resolved）四级状态</td>
+            <td><span class="pill p-ok">真闭环</span></td>
+          </tr>
+          <tr>
+            <td><strong>消息</strong></td>
+            <td><code>/teacher/messages</code></td>
+            <td>单聊 / 群聊、置顶、未读角标、WebSocket 实时通信</td>
+            <td><span class="pill p-no">与业务割裂</span></td>
+          </tr>
+          <tr>
+            <td><strong>个人中心</strong></td>
+            <td><code>/teacher/profile</code></td>
+            <td>个人资料、改密、主题、校园公告、使用帮助、关于</td>
+            <td><span class="pill p-no">无业务闭环</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-info">
+      <b>值得肯定的既有资产：</b>请假审批已通过 <code>notification_service</code> + 短信模板回写学生（<code>leave.py:135-148</code>），这条"审批 → 通知学生"的回路是教师端做得最完整的一环；危机工作台的 <code>intervention_type / intervention_note / follow_up_date / resolved</code> 字段设计，已经具备闭环的骨架。
+    </div>
+  </section>
+
+  <!-- ============ 2. 问题诊断 ============ -->
+  <section id="diagnosis">
+    <h2><span class="num">2</span>闭环诊断：从断裂到闭合</h2>
+    <p class="lead">把"闭环"定义为五个环节：<strong>感知 → 决策 → 执行 → 反馈 → 沉淀</strong>。初版盘点发现流程普遍断在后三环；经 P0 规划与家校沟通专项补齐后，后三环已全部有了落点。</p>
+
+    <div class="callout co-ok">
+      <b>状态更新（v2）：</b>初版报告指出的 8 处断点，现已全部纳入规划——执行环由「统一待办层 + AI 建议转任务」补齐，反馈环由「随访到期提醒 + 请假销假确认」补齐，沉淀环由「学生档案教师写入口 + 审批统计归档 + 家校沟通台账」补齐。
+    </div>
+
+    <div class="loop">
+      <div class="loop-step"><div class="s-no">STEP 1</div><div class="s-name">感知</div><div class="s-desc">数据进来：预警、申请、学情、异常</div></div>
+      <div class="loop-step"><div class="s-no">STEP 2</div><div class="s-name">决策</div><div class="s-desc">AI 分析 / 教师判断，给出建议</div></div>
+      <div class="loop-step planned"><div class="s-no">STEP 3</div><div class="s-name">执行</div><div class="s-desc">建议 → 待办 → 动作落库（已规划）</div></div>
+      <div class="loop-step planned"><div class="s-no">STEP 4</div><div class="s-name">反馈</div><div class="s-desc">销假确认、随访提醒、家长触达留痕（已规划）</div></div>
+      <div class="loop-step planned"><div class="s-no">STEP 5</div><div class="s-name">沉淀</div><div class="s-desc">记录、统计、归档、复盘（已规划）</div></div>
+    </div>
+
+    <h3>2.1 覆盖矩阵：五个维度的当前状态</h3>
+    <p>深色格代表"已覆盖"。家校沟通补齐后，"学校工作事宜"已接近完整；而"在工作中成长"与"数字教育"两行仍是最大缺口——它们也正是本版报告的重点。</p>
+
+    <div class="tbl-wrap">
+      <table class="mx">
+        <thead>
+          <tr><th>维度</th><th>现有覆盖</th><th>覆盖度</th><th>明显缺失</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>教师个人需求</td>
+            <td>个人资料、改密、主题、日程任务</td>
+            <td><div class="bar"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div></td>
+            <td>工作量统计、职业发展档案、培训研修、工作案例与研究成果</td>
+          </tr>
+          <tr>
+            <td>学校工作事宜</td>
+            <td>请假/办事/材料审批、公告发布、消息、<strong>家校沟通（已规划）</strong></td>
+            <td><div class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div></td>
+            <td>会议与通知管理、值班巡课、督导检查、公文流转、跨部门协作、可配置工作流</td>
+          </tr>
+          <tr>
+            <td>在工作中成长 <span class="pill p-no">本期重点</span></td>
+            <td>—</td>
+            <td><div class="bar"><i></i><i></i><i></i><i></i><i></i></div></td>
+            <td>辅导员成长档案、工作案例沉淀、匿名工作问卷互评、能力框架与激励、成长看板</td>
+          </tr>
+          <tr>
+            <td>人文关怀</td>
+            <td>心理预警工作台（干预/随访/闭环）</td>
+            <td><div class="bar"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div></td>
+            <td>日常关怀、谈心谈话、家访、资助与困难帮扶、正向激励、关怀日历、家长通道</td>
+          </tr>
+          <tr>
+            <td>数字教育 <span class="pill p-no">本期重点</span></td>
+            <td>AI 助手、AI 请假分析、AI 班级分析、AI 推荐联系</td>
+            <td><div class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div></td>
+            <td>统一学情数据底座（xAPI/Caliper）、学情分析闭环、学生画像、学习预警 pipeline</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2.2 断点清单（初版基线）：逐模块的代码级证据</h3>
+    <p>下表是初版盘点时的断点记录，保留作为改造基线。每一行对应的修复动作已落入第 6 节路线图的 P0 阶段。</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>模块</th><th>感知</th><th>决策</th><th>执行</th><th>反馈</th><th>沉淀</th><th>断点说明（代码级）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>AI 班级分析</td>
+            <td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td>
+            <td><code>buildAnalysisPrompt()</code> 生成 600 字分析后即结束，不产出任何待办或跟进项，分析结果不落库</td>
+          </tr>
+          <tr>
+            <td>AI 推荐联系</td>
+            <td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td>
+            <td><code>/suggest-contacts</code> 每次实时调 LLM 返回 3 人，<strong>无落库、无"已联系"状态</strong>，次日重复推荐同一批人</td>
+          </tr>
+          <tr>
+            <td>学生档案</td>
+            <td>✅</td><td>—</td><td>❌</td><td>❌</td><td>❌</td>
+            <td><code>StudentsPage.vue</code> 详情 5 个 Tab 全为只读，教师无任何写入口（评语/关怀记录/重点关注标记）</td>
+          </tr>
+          <tr>
+            <td>请假审批</td>
+            <td>✅</td><td>✅</td><td>✅</td><td>⚠️</td><td>❌</td>
+            <td>已通知学生（好）；但无"销假/返校确认"，<code>/all</code> 仅列表无统计报表、无异常请假模式识别、无导出</td>
+          </tr>
+          <tr>
+            <td>办事 / 材料审批</td>
+            <td>✅</td><td>—</td><td>✅</td><td>❌</td><td>⚠️</td>
+            <td>材料归档后无后续；无审批时效统计、无超时提醒</td>
+          </tr>
+          <tr>
+            <td>危机预警</td>
+            <td>✅</td><td>✅</td><td>✅</td><td>⚠️</td><td>⚠️</td>
+            <td>有 <code>follow_up_date</code> 却<strong>无到期提醒、无"待随访"视图</strong>，随访全靠教师自己记；无复盘报表</td>
+          </tr>
+          <tr>
+            <td>消息</td>
+            <td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td>
+            <td>聊天记录与档案/任务完全割裂，不能一键跳学生档案、不能把谈话沉淀为关怀记录</td>
+          </tr>
+          <tr>
+            <td>日程任务</td>
+            <td>✅</td><td>—</td><td>✅</td><td>❌</td><td>❌</td>
+            <td>纯个人待办，与审批/随访/工作事项不联动，完成情况无统计</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-warn">
+      <b>一个容易被忽略的一致性缺陷：</b>首页每 30 秒轮询刷新业务数据（<code>silentRefresh</code>），但 AI 决策数据 <code>loadAiDecisions()</code> 只在 <code>onMounted</code> 时拉取一次。这导致同一个页面上，"待批请假"是实时的，"AI 推荐联系"却可能是几小时前的——决策依据与业务事实不同步，进一步削弱了建议的可执行性。
+    </div>
+
+    <h3>2.3 根因归纳</h3>
+    <ol>
+      <li><strong>定位偏差：</strong>教师端被设计成"学生管理的延伸"，而非"教师自己的工作台"。所有信息组织方式都以"学生"为主语。</li>
+      <li><strong>缺少任务层：</strong>系统有"数据层"（档案/预警）和"建议层"（AI 分析），但中间缺少"任务层"——没有 <code>TeacherTask</code> 这类统一待办模型把两者串起来。</li>
+      <li><strong>缺少记录层：</strong>教师的工作过程（谈心、家访、评语、互评）没有任何落点，导致工作无法沉淀、无法复盘、无法计入工作量。</li>
+      <li><strong>闭环靠人而非靠系统：</strong>随访、销假、跟进这些环节，系统只提供字段，不提供提醒与驱动。</li>
+    </ol>
+
+    <div class="callout co-warn">
+      <b>v2 视角：</b>上述四条根因中，任务层与记录层正在补建，闭环问题已基本解决；但<strong>第一条"定位偏差"仍未根治</strong>——教师端的主语依然以"学生"为主，指向"教师自己"的两块内容（数字化的教学生产力、教师个人成长）依然缺席。这正是第 5 节要专门处理的问题。
+    </div>
+  </section>
+
+  <!-- ============ 3. 开源对标 ============ -->
+  <section id="benchmark">
+    <h2><span class="num">3</span>开源对标：可借鉴什么</h2>
+    <p class="lead">下表项目均来自实际检索（GitHub / shields.io / 官方站点），star 数为检索时点量级。<strong>注意：不同数据源（GitHub API 与 shields.io）对同一仓库的计数存在口径差异，表中标注为区间。</strong></p>
+
+    <h3>3.1 学校工作事宜 · SIS / 教务管理</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>项目</th><th>Star（量级）</th><th>License</th><th>技术栈</th><th>教师端可借鉴点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>openSIS</strong><br><span style="color:var(--muted);font-size:12px">OS4ED/openSIS-Classic</span></td>
+            <td class="stars">≈ 0.3k</td><td>GPL</td><td>PHP + MySQL</td>
+            <td>教师成绩册（Gradebook）+ 进度报告 + 成绩单<strong>三层输出结构</strong>；内置家校沟通</td>
+          </tr>
+          <tr>
+            <td><strong>Gibbon</strong><br><span style="color:var(--muted);font-size:12px">GibbonEdu/core</span></td>
+            <td class="stars">≈ 0.5k–0.6k</td><td>GPL-3.0</td><td>PHP + MySQL</td>
+            <td>教师仪表盘 + Feed 聚合动态；<strong>Trip Planner 审批流</strong>；ATL 量规评估；Committees / Clinics / Meet The Teacher（家长预约）</td>
+          </tr>
+          <tr>
+            <td><strong>RosarioSIS</strong><br><span style="color:var(--muted);font-size:12px">francoisjacquet/rosariosis</span></td>
+            <td class="stars">≈ 0.5k–0.6k</td><td>GPL-2.0</td><td>PHP + MySQL/PG</td>
+            <td>成绩 + 考勤 + 排课 + 纪律 + 消息邮件一体化；家长门户</td>
+          </tr>
+          <tr>
+            <td><strong>Chamilo LMS</strong><br><span style="color:var(--muted);font-size:12px">chamilo/chamilo-lms</span></td>
+            <td class="stars">≈ 1k</td><td>GPL-3.0</td><td>PHP + Symfony</td>
+            <td>多层级考勤（含签字与合规报告）；<strong>技能管理 Skills management</strong>；学习分析仪表盘；带二维码/有效期的证书</td>
+          </tr>
+          <tr>
+            <td><strong>GegoK12</strong><br><span style="color:var(--muted);font-size:12px">Gego-K12/gegok12</span></td>
+            <td class="stars">≈ 0.05k</td><td>MIT</td><td>PHP + Laravel</td>
+            <td>K12 家校沟通（通知/公告）、考勤/作业/考试，轻量易读</td>
+          </tr>
+          <tr>
+            <td><strong>campus-k12</strong><br><span style="color:var(--muted);font-size:12px">gitee.com/51tech/campus-k12</span></td>
+            <td class="stars">未获取</td><td>—</td><td>RuoYi + Vue</td>
+            <td>教师模块含<strong>教工档案 / 教师请假 / 教师荣誉</strong>；家校互动含家访；查询统计</td>
+          </tr>
+          <tr>
+            <td><strong>ruoyi_campus</strong><br><span style="color:var(--muted);font-size:12px">gitee.com/tomgang/ruoyi_campus</span></td>
+            <td class="stars">未获取</td><td>—</td><td>SpringBoot + Vue</td>
+            <td>学生工作 / 教学工作 / 办公管理 + <strong>工作流引擎</strong>（审批流可配置化）</td>
+          </tr>
+          <tr>
+            <td><strong>Academico</strong><br><span style="color:var(--muted);font-size:12px">academico-sis.github.io</span></td>
+            <td class="stars">未获取</td><td>开源</td><td>Web</td>
+            <td>课程/选课/考勤/成绩/账单统一生命周期管理，模块划分清晰</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>3.2 在工作中成长 · 辅导员专业发展与互评</h3>
+    <div class="callout co-warn">
+      <b>一个重要发现：</b>调研的所有成熟开源校园系统中，<strong>普遍缺少专门的"教师个人成长 / 互评"独立模块</strong>。这是行业空白，也正是你的教师端可以做出差异化的地方——参考对象需要从"教师档案"和"同伴互评"两个方向拼接。
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>项目</th><th>Star（量级）</th><th>License</th><th>技术栈</th><th>教师端可借鉴点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Mahara</strong> e-Portfolio<br><span style="color:var(--muted);font-size:12px">GitHub 镜像（官方 2023-04 后转订阅）</span></td>
+            <td class="stars">≈ 0.1k</td><td>GPL</td><td>PHP</td>
+            <td><strong>电子档案（e-Portfolio）范式</strong>：证据收集 → 反思 → 展示 → 评价的完整成长回路，可直接迁移为"教师成长档案"</td>
+          </tr>
+          <tr>
+            <td><strong>Moodle</strong><br><span style="color:var(--muted);font-size:12px">moodle/moodle</span></td>
+            <td class="stars">≈ 5k–7.5k</td><td>GPL-3.0</td><td>PHP + MySQL</td>
+            <td><strong>Workshop 同伴互评</strong>（可迁移为匿名问卷互评机制）；Feedback 匿名问卷；Badges 徽章激励；Competency 能力框架</td>
+          </tr>
+          <tr>
+            <td><strong>Open edX</strong><br><span style="color:var(--muted);font-size:12px">openedx/edx-platform</span></td>
+            <td class="stars">≈ 8.2k</td><td>AGPL-3.0</td><td>Python + React</td>
+            <td>"创作端 Studio / 交付端 LMS"分离架构，对教师工作台与内容管理解耦有参考价值</td>
+          </tr>
+          <tr>
+            <td><strong>Canvas LMS</strong><br><span style="color:var(--muted);font-size:12px">instructure/canvas-lms</span></td>
+            <td class="stars">≈ 6.9k</td><td>AGPL-3.0</td><td>Ruby on Rails</td>
+            <td><strong>SpeedGrader</strong>：一站式批改 + 评语 + 量规评分，是"教师写评语"的最佳交互参考</td>
+          </tr>
+          <tr>
+            <td><strong>BNU 智慧教研</strong><br><span style="color:var(--muted);font-size:12px">aic-fe.bnu.edu.cn</span></td>
+            <td class="stars">—（非 GitHub）</td><td>—</td><td>Web + APP</td>
+            <td>课前协同备课 → 课中<strong>听课本 APP 量表评价</strong> → 课后大数据分析薄弱点并智能推荐教学案例，是"在工作中成长"的完整闭环范例</td>
+          </tr>
+          <tr>
+            <td><strong>蜂云共研共享系统</strong><br><span style="color:var(--muted);font-size:12px">xuexindev.com</span></td>
+            <td class="stars">—（非 GitHub）</td><td>—</td><td>Web</td>
+            <td>专题教研活动组织与管理、教学观察反馈评价标准、开放式讨论评价</td>
+          </tr>
+          <tr>
+            <td><strong>LearnHouse</strong><br><span style="color:var(--muted);font-size:12px">learnhouse.app</span></td>
+            <td class="stars">—</td><td>开源</td><td>Web + CLI</td>
+            <td>自托管 + 完整 REST API 的可扩展教学平台，适合作二次开发基座参考</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>3.3 人文关怀 · 学生关怀 / 心理健康 / 家校</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>项目</th><th>Star（量级）</th><th>License</th><th>技术栈</th><th>教师端可借鉴点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>MindWell</strong><br><span style="color:var(--muted);font-size:12px">rudra496/mindwell</span></td>
+            <td class="stars">个位数</td><td>MIT</td><td>Next.js</td>
+            <td><strong>内置 20 个自评量表</strong>（PHQ-9、GAD-7 等）+ 隐私优先情绪追踪（数据仅存本地）+ 危机资源分国家 + WCAG AA 无障碍</td>
+          </tr>
+          <tr>
+            <td><strong>Open-Response</strong><br><span style="color:var(--muted);font-size:12px">OSU-MC/Open-Response</span></td>
+            <td class="stars">个位数</td><td>—</td><td>Web</td>
+            <td><strong>匿名实时提问</strong>：显著降低学生求助门槛，可迁移为"匿名心事/求助入口"</td>
+          </tr>
+          <tr>
+            <td><strong>OnTask</strong><br><span style="color:var(--muted);font-size:12px">cic.uts.edu.au/tools/ontask</span></td>
+            <td class="stars">—（非 GitHub）</td><td>—</td><td>Web</td>
+            <td><strong>规则驱动个性化批量关怀</strong>：按 "if-this-then-that" 规则对风险学生批量发送个性化支持信息</td>
+          </tr>
+          <tr>
+            <td><strong>EmoLLM</strong><br><span style="color:var(--muted);font-size:12px">SmartFlowAI/EmoLLM</span></td>
+            <td class="stars">≈ 1.8k</td><td>MIT</td><td>Python</td>
+            <td>心理健康大模型：数据集 / 训练 / 评测 / RAG 全链路，可作关怀对话底座（须配套合规与免责）</td>
+          </tr>
+          <tr>
+            <td><strong>MindChat 漫谈</strong><br><span style="color:var(--muted);font-size:12px">X-D-Lab/MindChat</span></td>
+            <td class="stars">≈ 0.7k</td><td>GPL-3.0</td><td>Python</td>
+            <td>心理疏导对话模型，倾诉式陪伴的对话风格参考</td>
+          </tr>
+          <tr>
+            <td><strong>Gibbon</strong>（关怀面）<br><span style="color:var(--muted);font-size:12px">GibbonEdu/core</span></td>
+            <td class="stars">≈ 0.5k–0.6k</td><td>GPL-3.0</td><td>PHP + MySQL</td>
+            <td><strong>Individual Needs（个体需求/关怀记录）</strong> + 家长门户 + 内部消息，是"关怀落到记录"的成熟做法</td>
+          </tr>
+          <tr>
+            <td><strong>Canvas</strong>（观察者）<br><span style="color:var(--muted);font-size:12px">instructure/canvas-lms</span></td>
+            <td class="stars">≈ 6.9k</td><td>AGPL-3.0</td><td>Ruby on Rails</td>
+            <td><strong>Observer 家长观察者视角</strong>：家校共育的权限模型参考</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>3.4 数字教育 · AI 教育助手与学情数据</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>项目</th><th>Star（量级）</th><th>License</th><th>技术栈</th><th>教师端可借鉴点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>DeepTutor</strong><br><span style="color:var(--muted);font-size:12px">HKUDS/DeepTutor</span></td>
+            <td class="stars">≈ 40k</td><td>Apache-2.0</td><td>Python + Next.js</td>
+            <td>Agent 原生工作台：<strong>三层记忆（L1/L2/L3）</strong>、Mastery Path 掌握路径、多引擎 RAG 知识库、学习任务板、家长账号</td>
+          </tr>
+          <tr>
+            <td><strong>OpenMAIC</strong>（清华）<br><span style="color:var(--muted);font-size:12px">THU-MAIC/OpenMAIC</span></td>
+            <td class="stars">≈ 40k</td><td>MIT</td><td>Next.js + LangGraph</td>
+            <td>多智能体互动课堂（AI 教师 + 助教 + 同学）、白板/语音、一键把文档生成 slides + 测验</td>
+          </tr>
+          <tr>
+            <td><strong>Learning Locker</strong><br><span style="color:var(--muted);font-size:12px">LearningLocker/learninglocker</span></td>
+            <td class="stars">≈ 0.6k</td><td>GPL-3.0</td><td>Node.js</td>
+            <td><strong>xAPI 学习记录仓库（LRS）</strong>：学情采集 + 报表仪表盘，是"数字教育数据底座"的标准实现</td>
+          </tr>
+          <tr>
+            <td><strong>OpenLRW</strong><br><span style="color:var(--muted);font-size:12px">Apereo-Learning-Analytics-Initiative</span></td>
+            <td class="stars">≈ 0.06k</td><td>—</td><td>Java</td>
+            <td>标准化学习记录仓库（xAPI / Caliper），采集学习行为供分析</td>
+          </tr>
+          <tr>
+            <td><strong>Apereo LAP</strong><br><span style="color:var(--muted);font-size:12px">LearningAnalyticsProcessor</span></td>
+            <td class="stars">≈ 0.02k</td><td>—</td><td>Java</td>
+            <td><strong>早预警 pipeline</strong>：分析工作流编排 + 自动触发 early alert 并接入个案流程（已停更，仅架构参考）</td>
+          </tr>
+          <tr>
+            <td><strong>EduChat</strong>（华东师大）<br><span style="color:var(--muted);font-size:12px">ECNU-ICALK/EduChat</span></td>
+            <td class="stars">≈ 1k</td><td>未声明</td><td>Python</td>
+            <td>开源中英教育对话大模型，教育问答底座参考</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 4. 家校沟通专项 ============ -->
+  <section id="contact">
+    <h2><span class="num">4</span>专项方案：家校沟通（家长观察者）</h2>
+    <p class="lead">补齐"学校—家庭"这一环。约束是<strong>零家长端、零家长账号、无双向联动</strong>——家长在系统中是学生档案上的联系人实体，沟通由教师在教师端发起与记录。</p>
+
+    <div class="callout co-info">
+      <b>定位：</b>"观察者"体现为<strong>被同步信息的对象</strong>，而不是"能登录系统的人"。因此不存在家长登录、家长自助查询与家长回执；沟通是单向的，教师端负责发起、记录与留痕。
+    </div>
+
+    <h3>4.1 已锁定的设计决策</h3>
+    <div class="callout co-ok">
+      <b>决策状态：</b>本节 10 项设计（A1–A10）已逐项确认，以下为定稿结果。
+    </div>
+
+    <ul class="decide">
+      <li><span class="k">A1 家长身份</span><span class="v">纯联系人档案（<code>guardians</code>），6 个字段：<code>student_id / name / relation / phone / is_primary / remark</code>；无账号、无登录、无家长端</span></li>
+      <li><span class="k">A2 台账字段</span><span class="v">场景固定五类（学业反馈 / 行为表现 / 请假告知 / 关怀约谈 / 日常沟通）；渠道 <code>sms / report / link / note</code>；状态 <code>sent / pending / failed / draft</code></span></li>
+      <li><span class="k">A3 分享链接表</span><span class="v">6 个字段：<code>log_id / token / expires_at / revoked / view_count / last_viewed_at</code>（二期）</span></li>
+      <li><span class="k">A4 短信尺度</span><span class="v">只发"提示 + 引导"，如"【学校】X 老师就 XX 同学的情况与您沟通，请回电"——<strong>不含具体细节</strong></span></li>
+      <li><span class="k">A5 报告内容</span><span class="v">基本信息 + 沟通事项、请假记录；预警 / 关怀摘要<strong>逐次手动勾选、默认不含</strong></span></li>
+      <li><span class="k">A6 链接策略</span><span class="v">7 天有效、可撤销、只读、限流</span></li>
+      <li><span class="k">A7 记录权限</span><span class="v">班主任与管理员可增删改，<strong>删除为软删除</strong>，保留审计痕迹</span></li>
+      <li><span class="k">A8 请假告知</span><span class="v">提示时机 = 学生<strong>提交申请时</strong>；内容随发送时机变（审批前"已收到申请，正在审批"，审批后"结果 + 返校时间"）</span></li>
+      <li><span class="k">A9 危机约谈</span><span class="v">干预记录新增"约谈家长"类型，<strong>并同步生成一条沟通台账</strong></span></li>
+      <li><span class="k">A10 安全策略</span><span class="v">三条全做：手机号脱敏 + 危机类禁分享 + 每条记录强制留痕</span></li>
+    </ul>
+
+    <h3>4.2 数据模型（3 张新表，不改现有表）</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>表</th><th>字段</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>guardians</code><br><span style="color:var(--muted);font-size:12px">家长联系人</span></td>
+            <td><code>student_id / name / relation / phone / is_primary / remark</code></td>
+            <td>一个学生可挂多个联系人；<code>phone</code> 是短信通道的落点</td>
+          </tr>
+          <tr>
+            <td><code>contact_logs</code><br><span style="color:var(--muted);font-size:12px">沟通台账</span></td>
+            <td><code>student_id / guardian_id / teacher_id / channel / scene / title / content / related_type / related_id / status</code></td>
+            <td>沟通的唯一记录源；用 <code>related_type + related_id</code> 弱关联请假/预警，<strong>不侵入那两张表</strong></td>
+          </tr>
+          <tr>
+            <td><code>contact_shares</code><br><span style="color:var(--muted);font-size:12px">分享链接（二期）</span></td>
+            <td><code>log_id / token / expires_at / revoked / view_count / last_viewed_at</code></td>
+            <td>免登录只读链接的生命周期管理</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>4.3 三条通道怎么落地</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>通道</th><th>实现</th><th>注意</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>短信</strong></td>
+            <td>复用 <code>send_sms(db, phone=guardian.phone, ...)</code>，<strong>无需 user_id</strong>，天然适配无账号家长</td>
+            <td>当前 <code>sms.enabled</code> 未配置，会落 <code>not_configured</code>——功能与留痕完整，<strong>真实下发取决于接入服务商</strong></td>
+          </tr>
+          <tr>
+            <td><strong>报告转发</strong></td>
+            <td>前端渲染带打印样式的报告页，教师用浏览器"打印为 PDF"</td>
+            <td>零新增后端依赖（现有依赖里没有 PDF 生成库）</td>
+          </tr>
+          <tr>
+            <td><strong>分享链接</strong></td>
+            <td><code>GET /api/public/contact/{token}</code> 无鉴权 + 前端 <code>/share/contact/:token</code> 加入 <code>publicPaths</code></td>
+            <td>token 用 <code>secrets.token_urlsafe(32)</code>，默认 7 天有效、可撤销、只读、限流、<code>noindex</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>4.4 三个挂接点（全部手动触发）</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>挂接点</th><th>交互</th><th>产生的记录</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>学生档案</td>
+            <td><code>StudentsPage</code> 详情新增「家长联系人」与「沟通记录」两个 Tab；权限沿用 <code>tutor_id</code>（仅该生班主任与 admin 可写）</td>
+            <td>联系人增删改 + 沟通时间线</td>
+          </tr>
+          <tr>
+            <td>请假审批</td>
+            <td>学生<strong>提交申请时</strong>即提示教师「可告知家长」；教师在 <code>ApprovalPage</code> 选联系人 + 场景模板发送，内容随审批状态变化</td>
+            <td><code>contact_log(related_type=leave)</code></td>
+          </tr>
+          <tr>
+            <td>危机预警</td>
+            <td><code>CrisisWorkbench</code> 干预区加「约谈家长」——在干预记录中新增该类型，<strong>同时写一条沟通台账</strong>；不做自动推送</td>
+            <td>干预记录 + <code>contact_log(related_type=crisis)</code>，且禁用分享链接</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-warn">
+      <b>安全与合规（默认策略）：</b>家长手机号列表脱敏显示（<code>138****1234</code>），仅编辑态明文；危机类沟通禁止生成分享链接；每条记录强制留痕 <code>teacher_id + created_at</code>，天然可审计。免登录分享接口是系统唯一公开数据出口，必须严格只返回该条沟通记录与必要信息。
+    </div>
+
+    <div class="two-col">
+      <div class="col-box">
+        <div class="hd"><span class="dot d-blue"></span><h4>一期</h4></div>
+        <p>家长联系人 + 沟通台账 + 短信留痕 + 报告转发；学生档案两个 Tab、请假/危机两个入口。</p>
+        <p style="margin-bottom:0;color:var(--muted);font-size:13px">后端 2 表 + 约 6 个接口；前端 2 个 Tab + 2 个弹窗 + 1 个打印页。</p>
+      </div>
+      <div class="col-box">
+        <div class="hd"><span class="dot d-purple"></span><h4>二期</h4></div>
+        <p>免登录分享链接：<code>contact_shares</code> 表 + 公开接口 + 公开页面 + token 生命周期。</p>
+        <p style="margin-bottom:0;color:var(--muted);font-size:13px">含有效期、撤销、限流与危机类禁用校验。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. 本期重点 ============ -->
+  <section id="focus">
+    <h2><span class="num">5</span>本期重点：数字教育与教师个人成长</h2>
+    <p class="lead">这两个维度是初版报告里覆盖度最低、也最难被同类产品复制的地方。它们的共同问题是：<strong>教师端没有把"教师"当作第一人称主语</strong>——数字教育停在"给教师几个 AI 工具"，教师成长则完全没有承载。</p>
+
+    <div class="callout co-warn">
+      <b>为什么"不突出"？</b>数字教育不突出，是因为 AI 能力<strong>散落在四处、没有统一身份、没有数据底座</strong>，教师感受到的是"几个按钮"，而不是"我的教学被数字化了"；教师成长不突出，是因为它<strong>根本不存在</strong>——教师端没有一个页面属于教师自己。
+    </div>
+
+    <h3>5.1 数字教育：从"AI 散点"到"数字化育人闭环"</h3>
+    <p>现在的 AI 是"外挂工具"：绵小城在独立页面、请假分析在审批页、班级分析在首页，彼此不通、结果不落库。要让它成为"数字教育"，需要补三个层次。</p>
+
+    <div class="layer">
+      <div class="lv">L1</div>
+      <div class="body">
+        <div class="t">统一副驾入口 —— AI 从"一个页面"变成"贯穿工作流的副驾"</div>
+        <p class="d">把 AI 能力组件化为可嵌入的副驾，在审批页、档案页、预警页、成长页就地可调用；输出结果可直接"采纳为记录 / 转为任务"，而不是停留在对话框里。</p>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lv p2">L2</div>
+      <div class="body">
+        <div class="t">学情数据底座 —— 让画像、预警、教学分析有统一数据源</div>
+        <p class="d">当前各类数据散落在业务表中，AI 每次现拼 prompt。引入标准化学情事件记录，为画像、预警、教学分析提供统一数据层。</p>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lv p3">L3</div>
+      <div class="body">
+        <div class="t">学情分析闭环 —— 从"统计图表"到"风险点 + 建议 + 效果回流"</div>
+        <p class="d">学业 / 行为 / 心理数据 → 风险与薄弱点识别 → 辅导策略建议 → 效果回流验证。这是"数字教育"真正区别于"几个 AI 按钮"的地方。</p>
+      </div>
+    </div>
+
+    <h4>落地清单</h4>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>能力</th><th>做什么</th><th>对标</th></tr></thead>
+        <tbody>
+          <tr><td><strong>AI 副驾组件</strong></td><td>通用 <code>AiAssist</code> 组件：接收上下文、返回建议、支持"采纳为记录 / 任务"</td><td>DeepTutor 学习工作台、OpenMAIC 一键生成 slides + 测验</td></tr>
+          <tr><td><strong>学情数据底座</strong></td><td><code>learning_events</code> 表（xAPI 精简版：actor / verb / object / result / context）</td><td>Learning Locker、OpenLRW（xAPI / Caliper）</td></tr>
+          <tr><td><strong>班级学情看板升级</strong></td><td>从统计图表升级为"学情风险点 + 辅导建议 + 一键转跟进任务"</td><td>BNU 智慧教研的课后薄弱点分析</td></tr>
+          <tr><td><strong>AI 学生工作助理</strong></td><td>谈心谈话提纲、班会/活动策划、工作案例复盘辅助</td><td>EduChat、DeepTutor 学习工作台</td></tr>
+          <tr><td><strong>学习预警 pipeline</strong></td><td>定时扫描学情 → 规则命中 → 自动生成待办 → 分配教师</td><td>Apereo LAP 早预警 pipeline</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>5.2 教师个人成长：从"空白"到"成长可见"</h3>
+    <p>这是初版覆盖矩阵里唯一全空的一行，也是调研中<strong>所有成熟开源校园系统都没有专门模块</strong>的行业空白——做出来就是差异化。它需要三块内容。</p>
+
+    <div class="two-col">
+      <div class="col-box">
+        <div class="hd"><span class="dot d-purple"></span><h4>成长档案（e-Portfolio）</h4></div>
+        <p>把 Mahara 的 e-Portfolio 范式移植到辅导员场景：工作案例、荣誉、培训研修、工作研究成果，按"证据 → 反思 → 展示 → 评价"组织，并可导出成长报告。</p>
+      </div>
+      <div class="col-box">
+        <div class="hd"><span class="dot d-blue"></span><h4>匿名工作问卷互评</h4></div>
+        <p>辅导员之间匿名互评 + 学生对辅导员的匿名评价：按学期 / 主题发起问卷，结果只呈现聚合分布与匿名建议，不回溯到个人，形成"被听见、可改进"的成长反馈环。</p>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="col-box">
+        <div class="hd"><span class="dot d-amber"></span><h4>能力与激励</h4></div>
+        <p>能力框架 / 量规评估 + 成长积分与徽章墙，让成长可衡量、可激励；工作量统计（审批数 / 关怀数 / 任务数）让付出被看见。</p>
+      </div>
+      <div class="col-box">
+        <div class="hd"><span class="dot d-blue"></span><h4>成长看板</h4></div>
+        <p>四个区块：成长轨迹时间线（档案事件自动成线）、能力雷达（对标辅导员九项能力）、工作量统计（审批 / 关怀 / 任务数趋势）、徽章墙与成长积分——教师端第一个真正"属于教师自己"的页面。</p>
+      </div>
+    </div>
+
+    <h4>落地清单</h4>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>能力</th><th>做什么</th><th>对标</th></tr></thead>
+        <tbody>
+          <tr><td><strong>教师成长档案</strong></td><td><code>teacher_portfolio</code> 表：条目（类型=工作案例 / 荣誉 / 培训研修 / 工作研究成果，含标题 / 证据 / 时间 / 反思）</td><td>Mahara e-Portfolio、campus-k12 教师荣誉</td></tr>
+          <tr><td><strong>匿名工作问卷互评</strong></td><td><code>peer_survey</code> 表：问卷（主题 / 对象 / 周期）+ 匿名答卷（评分 / 建议），只输出聚合分布</td><td>Moodle Feedback 匿名问卷、Open-Response 匿名提问</td></tr>
+          <tr><td><strong>能力框架与徽章</strong></td><td>能力量规（对标《高等学校辅导员职业能力标准（暂行）》九项能力）+ 徽章激励 + 成长积分</td><td>Moodle Competency + Badges、Chamilo Skills management</td></tr>
+          <tr><td><strong>成长看板与报告</strong></td><td>成长轨迹、能力雷达、工作量趋势；成长报告导出（复用打印方案）</td><td>Canvas SpeedGrader 评价交互</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>5.3 两个维度的交汇点</h3>
+    <div class="callout co-ok">
+      <b>关键洞察：</b>数字教育是<strong>手段</strong>，教师个人成长是<strong>目的</strong>——用数字化把教师成长变得可见、可衡量、可激励。两者一旦打通，就不再是"两张皮"：AI 学情分析的结果会自动沉淀为成长档案里的"工作案例"；问卷互评的聚合得分会自动更新能力雷达；教师的工作量会自动累计成成长积分。这样，"在工作中成长"才真正成立，而不是又加一个孤立的模块。
+    </div>
+  </section>
+
+  <!-- ============ 6. 改进建议 ============ -->
+  <section id="roadmap">
+    <h2><span class="num">6</span>改进建议：分阶段路线图</h2>
+    <p class="lead">原则：<strong>先用最低成本把现有流程的闭环补齐（P0），再补维度（P1），最后建底座（P2）</strong>；<strong>所有功能均以模块化方式实现</strong>——独立数据模型 + 独立 API + 独立组件，保持关注点分离，避免功能交叉。P0 已全部纳入规划，P1 对应第 5 节的两个重点维度。配套的工程拆解见 <a href="teacher-end-plan.html">教师端改进 · 模块化实现规划</a>。</p>
+
+    <div class="phase">
+      <div class="phase-head">
+        <span class="phase-badge ph0">P0</span>
+        <span class="ph-title">补闭环 —— 让现有功能"转起来"</span>
+        <span class="ph-sub">已全部纳入规划 · 1–2 周</span>
+      </div>
+      <div class="phase-body">
+        <div class="item">
+          <div class="idx">1</div>
+          <div>
+            <h4>建立统一的「教师待办 / 跟进任务」层</h4>
+            <p class="why">这是所有闭环的公共基座。新增 <code>TeacherTask</code> 模型（来源类型、关联对象、状态、截止时间），把 AI 建议、预警随访、审批待办、关怀计划统一挂到这张表上。</p>
+            <p class="ref"><b>对标：</b>DeepTutor 的"学习任务板"、Gibbon Feed 聚合</p>
+            <p class="tech">落地：<code>models/teacher_task.py</code> + <code>api/teacher.py</code> 增 <code>/tasks</code>；首页 KPI 增加"今日待跟进"</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">2</div>
+          <div>
+            <h4>AI 建议 → 可执行任务（打通决策到执行）</h4>
+            <p class="why"><code>suggest_contacts</code> 与 AI 班级分析的结果落库为跟进任务，带"待跟进 / 已联系 / 已关怀"状态，避免重复推荐、形成记录。</p>
+            <p class="ref"><b>对标：</b>OnTask 规则驱动个性化关怀、Apereo LAP 的 early alert 触发机制</p>
+            <p class="tech">落地：<code>/suggest-contacts</code> 增 <code>persist</code> 参数；<code>HomeAiPanel</code> 增加"转为跟进"按钮</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">3</div>
+          <div>
+            <h4>预警随访到期提醒（补"反馈"环）</h4>
+            <p class="why">危机工作台已有 <code>follow_up_date</code>，只差一个"待随访"视图 + 首页提醒。这是最小改动、最大价值的闭环补丁。</p>
+            <p class="ref"><b>对标：</b>Gibbon Individual Needs 的关怀跟进</p>
+            <p class="tech">落地：<code>CrisisWorkbench.vue</code> 增"待随访"筛选；<code>crisis</code> 接口增 <code>follow_up_due</code> 查询</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">4</div>
+          <div>
+            <h4>学生档案增加教师侧写入口（补"沉淀"环）</h4>
+            <p class="why">当前 5 个 Tab 全只读。增加"关怀记录 / 谈心谈话 / 评语"可写 Tab，让教师的工作过程第一次有落点，同时为工作量统计提供数据源。</p>
+            <p class="ref"><b>对标：</b>Canvas SpeedGrader 评语交互、Gibbon Individual Needs 记录</p>
+            <p class="tech">落地：新增 <code>models/care_record.py</code>；<code>StudentsPage.vue</code> 增写入 Tab</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">5</div>
+          <div>
+            <h4>审批闭环补齐：销假确认 + 统计报表</h4>
+            <p class="why">请假已有"审批→通知学生"回路，补上"销假/返校确认"即可闭合；再加异常请假模式识别（如某生频繁请假联动预警）与导出。</p>
+            <p class="ref"><b>对标：</b>openSIS 进度报告/成绩单三层输出、RosarioSIS 考勤一体化</p>
+            <p class="tech">落地：<code>leave.py</code> 增 <code>/confirm-return</code>；<code>ApprovalPage.vue</code> 增统计 Tab</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">6</div>
+          <div>
+            <h4>消息与档案/任务打通</h4>
+            <p class="why">聊天页增加"查看档案 / 记录关怀"快捷入口，把沟通沉淀为记录，避免"聊完即散"。</p>
+            <p class="ref"><b>对标：</b>Gibbon Stream + 内部消息</p>
+            <p class="tech">落地：<code>MessagesPage.vue</code> 聊天头部增操作菜单，复用第 4 项记录接口</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head">
+        <span class="phase-badge ph1">P1</span>
+        <span class="ph-title">补维度 —— 数字教育与教师个人成长（第 5 节重点）</span>
+        <span class="ph-sub">约 1 个月 · 中成本</span>
+      </div>
+      <div class="phase-body">
+        <div class="item">
+          <div class="idx">7</div>
+          <div>
+            <h4>教师个人工作台（个人需求维度）</h4>
+            <p class="why">以"教师"为主语重构首页第二屏：今日待办聚合、周计划、工作量统计（审批数/关怀数/任务完成率），让首页从"看班级"变为"看我今天该做什么"。</p>
+            <p class="ref"><b>对标：</b>Gibbon Staff Dashboard、Chamilo 学习分析仪表盘</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">8</div>
+          <div>
+            <h4>教师成长档案（在工作中成长维度）</h4>
+            <p class="why">把 Mahara 的 e-Portfolio 范式移植到辅导员场景：工作案例、荣誉、培训研修、工作研究成果，按"证据 → 反思 → 展示 → 评价"组织，并生成可导出的成长报告。</p>
+            <p class="ref"><b>对标：</b>Mahara e-Portfolio（核心）、campus-k12 教师荣誉、Chamilo Skills management</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">9</div>
+          <div>
+            <h4>匿名工作问卷互评模块</h4>
+            <p class="why">辅导员之间匿名互评 + 学生对辅导员的匿名评价，支持按学期 / 主题发起问卷，结果只呈现聚合分布与匿名建议。这是"在工作中成长"里成本最低、行业最空白的一条真实反馈通道。</p>
+            <p class="ref"><b>对标：</b>Moodle Feedback 匿名问卷、Open-Response 匿名提问、Moodle Workshop 同伴互评机制</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">10</div>
+          <div>
+            <h4>人文关怀中心（关怀维度扩展）</h4>
+            <p class="why">关怀不应止于危机。增加关怀日历（生日、困难学生、学业预警）、家访记录、正向激励（表扬/徽章）、匿名求助入口，让关怀从"救火"变成"日常"。</p>
+            <p class="ref"><b>对标：</b>MindWell 量表与隐私优先、Open-Response 匿名提问、OnTask 批量关怀、Moodle Badges 激励</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">11</div>
+          <div>
+            <h4>家校沟通通道（家长观察者）</h4>
+            <p class="why">向家长同步关怀反馈与学业进展，闭合"学校—家庭"这一环。方案已定稿，见第 4 节专项方案。</p>
+            <p class="ref"><b>对标：</b>Canvas Observer 家长视角、Gibbon 家长门户、openSIS 内置 Communication</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head">
+        <span class="phase-badge ph2">P2</span>
+        <span class="ph-title">建底座 —— 让数字教育"立得住"</span>
+        <span class="ph-sub">对应 5.1 的三层 · 长期投入</span>
+      </div>
+      <div class="phase-body">
+        <div class="item">
+          <div class="idx">12</div>
+          <div>
+            <h4>统一学情数据底座（xAPI / Caliper）</h4>
+            <p class="why">当前各类数据（成长/请假/危机/成绩）散落在业务表中，AI 分析每次现拼 prompt。引入标准化学情记录，为画像、预警、教学分析提供统一数据层。</p>
+            <p class="ref"><b>对标：</b>Learning Locker（LRS）、OpenLRW（xAPI/Caliper 标准）</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">13</div>
+          <div>
+            <h4>AI 学情助手：班级学情分析与工作反思</h4>
+            <p class="why">把现有 AI 能力从"班级分析"升级为"学情诊断"：学业 + 行为 + 心理数据 → 风险与薄弱点识别 → 辅导案例推荐 → 工作反思记录，直接支撑辅导员专业发展。</p>
+            <p class="ref"><b>对标：</b>陕西师大"AI 教研员"小溪智研、DeepTutor 的记忆与 Mastery Path、OpenMAIC 多智能体课堂</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">14</div>
+          <div>
+            <h4>审批流程引擎化</h4>
+            <p class="why">当前审批逻辑硬编码在 <code>leave.py</code> / <code>service.py</code> / <code>material.py</code>。升级为可配置工作流后，学校新增任何审批类型（调课、报销、外出）都无需改代码。</p>
+            <p class="ref"><b>对标：</b>RuoYi + Flowable 工作流、Gibbon Trip Planner</p>
+          </div>
+        </div>
+        <div class="item">
+          <div class="idx">15</div>
+          <div>
+            <h4>学习预警 pipeline 自动化</h4>
+            <p class="why">把"AI 预警"从被动分析升级为自动触发的流水线：定时扫描学情 → 命中规则 → 自动生成待办 → 分配教师 → 跟踪闭环。</p>
+            <p class="ref"><b>对标：</b>Apereo LAP 早预警 pipeline（架构参考）、OpenLRW 数据接入</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 7. 结语 ============ -->
+  <section id="closing">
+    <h2><span class="num">7</span>结语</h2>
+    <div class="card">
+      <p>初版报告的两个判断——「结构单一」与「闭环断裂」——都已经落到实处：闭环有了规划，家校沟通有了方案。但这一版要提醒的是，<strong>闭环只解决"能用"，解决不了"突出"</strong>。</p>
+      <p>数字教育与教师个人成长之所以"不突出"，根子在同一个地方：<strong>教师端仍然没有把"教师"当作第一人称主语</strong>。数字教育目前是"给教师几个 AI 工具"，而不是"把教师的教学数字化"；教师成长则完全没有承载，教师端没有一个页面属于教师自己。</p>
+      <p>这两件事其实是同一件事：<strong>数字教育是手段，教师成长是目的</strong>。当 AI 学情分析的结果能自动沉淀为成长档案的工作案例、问卷互评的聚合得分能自动更新能力雷达、工作量能自动累计为成长积分时，"在工作中成长"才真正成立。到那时，教师端才从一个"管学生的事务台"，变成一个"教师愿意每天打开的成长平台"。</p>
+      <p style="margin-bottom:0">而调研显示，<strong>成熟的开源校园系统普遍没有独立的"教师成长 / 互评"模块</strong>——这意味着这条路没有现成答案可抄，但正因如此，它也是这个项目最有辨识度的机会。</p>
+    </div>
+  </section>
+
+  <!-- ============ Sources ============ -->
+  <section id="sources">
+    <h2><span class="num">8</span>参考来源</h2>
+    <p class="lead">以下为本次审查与对标中实际检索、引用的来源。star 数为检索时点（2026-10-05）量级，不同数据源存在口径差异。</p>
+    <div class="card">
+      <h4>开源项目仓库</h4>
+      <ul class="src-list">
+        <li><a href="https://github.com/OS4ED/openSIS-Classic" target="_blank" rel="noopener">openSIS-Classic</a></li>
+        <li><a href="https://github.com/GibbonEdu/core" target="_blank" rel="noopener">GibbonEdu/core</a></li>
+        <li><a href="https://github.com/francoisjacquet/rosariosis" target="_blank" rel="noopener">francoisjacquet/rosariosis</a></li>
+        <li><a href="https://github.com/chamilo/chamilo-lms" target="_blank" rel="noopener">chamilo/chamilo-lms</a></li>
+        <li><a href="https://github.com/moodle/moodle" target="_blank" rel="noopener">moodle/moodle</a></li>
+        <li><a href="https://github.com/openedx/edx-platform" target="_blank" rel="noopener">openedx/edx-platform</a></li>
+        <li><a href="https://github.com/instructure/canvas-lms" target="_blank" rel="noopener">instructure/canvas-lms</a></li>
+        <li><a href="https://github.com/Gego-K12/gegok12" target="_blank" rel="noopener">Gego-K12/gegok12</a></li>
+        <li><a href="https://github.com/HKUDS/DeepTutor" target="_blank" rel="noopener">HKUDS/DeepTutor</a></li>
+        <li><a href="https://github.com/THU-MAIC/OpenMAIC" target="_blank" rel="noopener">THU-MAIC/OpenMAIC</a></li>
+        <li><a href="https://github.com/LearningLocker/learninglocker" target="_blank" rel="noopener">LearningLocker/learninglocker</a></li>
+        <li><a href="https://github.com/SmartFlowAI/EmoLLM" target="_blank" rel="noopener">SmartFlowAI/EmoLLM</a></li>
+        <li><a href="https://github.com/X-D-Lab/MindChat" target="_blank" rel="noopener">X-D-Lab/MindChat</a></li>
+        <li><a href="https://github.com/rudra496/mindwell" target="_blank" rel="noopener">rudra496/mindwell</a></li>
+        <li><a href="https://github.com/OSU-MC/Open-Response" target="_blank" rel="noopener">OSU-MC/Open-Response</a></li>
+        <li><a href="https://github.com/ECNU-ICALK/EduChat" target="_blank" rel="noopener">ECNU-ICALK/EduChat</a></li>
+        <li><a href="https://github.com/openeducat/openeducat_erp" target="_blank" rel="noopener">openeducat/openeducat_erp</a></li>
+        <li><a href="https://github.com/Apereo-Learning-Analytics-Initiative/LearningAnalyticsProcessor" target="_blank" rel="noopener">Apereo LearningAnalyticsProcessor</a></li>
+        <li><a href="https://github.com/Apereo-Learning-Analytics-Initiative/OpenLRW" target="_blank" rel="noopener">Apereo OpenLRW</a></li>
+        <li><a href="https://github.com/projectfedena/fedena" target="_blank" rel="noopener">projectfedena/fedena（已停更）</a></li>
+      </ul>
+
+      <h4 style="margin-top:22px">官方站点 / 文档 / 国内平台</h4>
+      <ul class="src-list">
+        <li><a href="https://gibbonedu.org/extend/" target="_blank" rel="noopener">Gibbon 扩展模块清单</a></li>
+        <li><a href="https://mahara.org/" target="_blank" rel="noopener">Mahara e-Portfolio 官网</a></li>
+        <li><a href="https://aic-fe.bnu.edu.cn/gnhz/gnhzzhjy/index.html" target="_blank" rel="noopener">北京师范大学 · 智慧教研</a></li>
+        <li><a href="http://www.xuexindev.com/product/teacher/share" target="_blank" rel="noopener">蜂云共研共享系统</a></li>
+        <li><a href="https://cic.uts.edu.au/tools/ontask/" target="_blank" rel="noopener">OnTask（UTS）</a></li>
+        <li><a href="https://academico-sis.github.io/www/" target="_blank" rel="noopener">Academico 开源学校管理</a></li>
+        <li><a href="https://www.learnhouse.app/" target="_blank" rel="noopener">LearnHouse</a></li>
+        <li><a href="http://doc.ruoyi.vip/ruoyi-vue/document/xmkz.html" target="_blank" rel="noopener">RuoYi 项目扩展文档</a></li>
+        <li><a href="https://gitee.com/51tech/campus-k12" target="_blank" rel="noopener">campus-k12（Gitee）</a></li>
+        <li><a href="https://gitee.com/tomgang/ruoyi_campus" target="_blank" rel="noopener">ruoyi_campus（Gitee）</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <p>本报告 v2 基于 WisPath CampusMate 仓库（教师端 <code>frontend/src/views/teacher/*</code>、<code>frontend/src/components/layout/TeacherLayout.vue</code>、<code>backend/app/api/teacher.py</code>、<code>backend/app/models/*</code>、<code>backend/app/services/notification_service.py</code> 等）的代码实测，以及公开开源项目的网络检索整理。v2 新增第 4 节「家校沟通专项方案」与第 5 节「数字教育与教师个人成长」，并更新了闭环状态。</p>
+    <p>说明：star 数量级来自检索时点（2026-10-05）；部分项目在 GitHub API 与 shields.io 之间的计数存在差异，报告已按区间标注。非 GitHub 项目（BNU 智慧教研、蜂云共研、OnTask）未获取 star 数，已如实标注。第 4 节中"短信通道未配置服务商"的判断来自 <code>notification_service.py</code> 与 <code>models/sms.py</code> 的代码实现。</p>
+    <p style="margin-bottom:0">更新日期：2026-10-05 · 仅供项目改进参考</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -65,8 +65,9 @@
     </div>
   </section>
 
-  <!-- ② 处置时限（SLA）：24 小时内应办结，超时高亮 -->
-  <section class="tui-section">
+  <!-- ② 处置时限（SLA）：24 小时内应办结，超时高亮。
+       移动端已有独立的「处置时限」二级页，这里隐藏避免同一内容出现两遍。 -->
+  <section v-if="!hideSla" class="tui-section">
     <div class="tui-section-head">
       <h3><el-icon><AlarmClock /></el-icon>处置时限</h3>
       <div class="tui-section-extra"><span class="cxa-total">未闭环按发现时间计</span></div>
@@ -130,7 +131,9 @@ use([CanvasRenderer, PieChart, BarChart, LineChart, TooltipComponent, LegendComp
 const props = withDefaults(defineProps<{
   analytics: CrisisAnalytics | null
   days?: number
-}>(), { days: 30 })
+  /** 移动端独立「处置时限」页：隐藏本组件内的 SLA 区块，避免内容重复 */
+  hideSla?: boolean
+}>(), { days: 30, hideSla: false })
 
 /** 空数据兜底：未加载 / 后端返回空时统一走零值，避免 NaN 与空白 */
 const EMPTY: CrisisAnalytics = {

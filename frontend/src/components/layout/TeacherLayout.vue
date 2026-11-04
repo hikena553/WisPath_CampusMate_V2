@@ -178,7 +178,8 @@ import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
 import { confirmLogout } from '@/utils/logout'
 import {
   HomeFilled, User, Message, Notebook,
-  List, Stamp, WarningFilled, Bell, ChatDotRound, Sunny,
+  List, Stamp, WarningFilled, Bell, Sunny,
+  TrendCharts, Trophy,
   SwitchButton, Close, School
 } from '@element-plus/icons-vue'
 // 桌面端折叠按钮图标：与管理端（AdminLayout）保持同一套线性图标
@@ -246,41 +247,47 @@ const SUB_ROUTE_PARENT: Record<string, string> = {
 }
 
 /**
- * 桌面端侧边栏导航：按「工作 / 班级 / 我的」三组共 10 项。
+ * 桌面端侧边栏导航：教师端定位「育人 + 辅导员工作台 + 个人工作台」三合一。
  *
- * 顺序按教师的日常动线重排：先「工作」组（首页 → 今日要办 → 待批 → 预警 → 消息），
- * 这一组是每天必走的处理流；再把与学生/班级相关的四页收进「班级」组
- * （学生档案 → 班级公告 → 家校沟通 → 人文关怀），它是查阅与留痕类；
- * 最后「我的」组只放个人中心（绵小城已由桌面悬浮窗承载，不再单列）。
- *
- * 「个人中心」是普通整页路由（/teacher/profile），与其它导航项一致；
- * 低频设置不再使用弹窗形态，避免「同一个个人中心既有弹窗又有整页」两套入口。
+ * 分组逻辑（按"我为谁做"切分，而不是按"系统里有什么"切分）：
+ * 1. 我的成长 —— 个人工作台。先看见自己：能力雷达 / 成长档案 / 影响力曲线。
+ *    放在最上面是刻意的：教师先自我成长，才有能量辅导学生成长。
+ * 2. 我的教学 —— 课表查询（我的授课 / 按教师 / 按班级），教务排课只读展示。
+ * 3. 班级育人 —— 辅导员主战场。从待办/审批/预警到学生档案、家校、关怀留痕。
+ * 4. 个人事物 —— 低频但有必要的收口（消息、个人中心）。
  */
 const navGroups: { title: string; items: NavItem[] }[] = [
   {
-    title: '教学工作',
+    title: '我的成长',
     items: [
       { path: '/teacher', label: '首页', icon: HomeFilled },
-      { path: '/teacher/tasks', label: '任务清单', icon: List },
-      { path: '/teacher/approval', label: '审批管理', icon: Stamp },
-      { path: '/teacher/crisis', label: '心理预警', icon: WarningFilled },
-      { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
+      { path: '/teacher/growth', label: '我的成长', icon: TrendCharts },
+      { path: '/teacher/portfolio', label: '成长档案', icon: Trophy },
+    ],
+  },
+  {
+    title: '我的教学',
+    items: [
+      { path: '/teacher/schedule', label: '我的课表', icon: School },
     ],
   },
   {
     title: '班级育人',
     items: [
-      { path: '/teacher/students', label: '学生档案', icon: Notebook },
+      { path: '/teacher/tasks', label: '今日重点', icon: List },
+      { path: '/teacher/approval', label: '审批管理', icon: Stamp },
+      { path: '/teacher/crisis', label: '心理预警', icon: WarningFilled },
+      { path: '/teacher/students', label: '工作台', icon: Notebook },
       { path: '/teacher/announcement', label: '班级公告', icon: Bell },
-      { path: '/teacher/guardian', label: '家校沟通', icon: ChatDotRound },
-      { path: '/teacher/care-center', label: '人文关怀', icon: Sunny },
+      { path: '/teacher/care-center', label: '关怀与家校', icon: Sunny },
     ],
   },
   {
-    title: '我的工作台',
+    title: '个人事务',
     items: [
       // 绵小城（智能体）不再占用侧边栏项：桌面端已有悬浮窗（DesktopPet）承载同一能力，
       // 侧边栏保留会与之重复；移动端底部页签仍保留该入口。
+      { path: '/teacher/messages', label: '消息', icon: Message, badge: true },
       { path: '/teacher/profile', label: '个人中心', icon: User },
     ],
   },
@@ -294,7 +301,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
  */
 const mobileNavItems = computed(() => [
   { key: 'home', label: '首页', icon: HomeFilled, route: '/teacher' },
-  { key: 'students', label: '学生', icon: Notebook, route: '/teacher/students' },
+  { key: 'students', label: '学生档案', icon: Notebook, route: '/teacher/students' },
   { key: 'agent', label: siteName.value, iconImg: siteLogo.value, center: true, route: '/teacher/agent' },
   { key: 'messages', label: '消息', icon: Message, route: '/teacher/messages', badge: true },
   { key: 'profile', label: '个人中心', icon: User, route: '/teacher/profile' },
@@ -476,12 +483,25 @@ body { overflow: hidden; margin: 0; background-color: #0f172a; }
   --tab-center-glow-strong: rgba(20, 23, 26, 0.10);
 }
 
-/* 移动(App)模式：宽屏下模拟手机容器，居中限宽，交互限制在窄屏内 */
+/* 移动(App)模式：保持纵向布局 */
 .app-mobile {
   flex-direction: column;
-  max-width: 440px;
-  margin: 0 auto;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
+}
+
+/* 宽屏预览才模拟手机容器（居中限宽 + 描边投影）。
+   视口 <600px 时容器铺满全屏，否则 440px 限宽会在两侧露出外壳底色与一圈投影，
+   看上去就是页面四周多了一圈外边框。 */
+@media (min-width: 600px) {
+  .app-mobile {
+    max-width: 440px;
+    margin: 0 auto;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.4);
+  }
+}
+
+/* 真机全屏时不要露出外壳的灰底：页面与屏边之间保持白色 */
+@media (max-width: 599px) {
+  .app-shell { background: #fff; }
 }
 
 /* 底部导航是悬浮胶囊（见 MobileTabBar）：左右内缩、居中由组件自身的

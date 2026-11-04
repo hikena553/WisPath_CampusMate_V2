@@ -1,6 +1,7 @@
 """教师端工具 handlers：名下学生请假审批、学生查询、危机预警、成长统计、请假分析、待办任务与侧写记录。"""
 
-from datetime import date
+import logging
+from datetime import date, datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_
@@ -12,6 +13,8 @@ from app.models.leave import LeaveRequest, LeaveStatus
 from app.models.teacher_task import TaskSourceType
 from app.models.user import User, UserRole
 from app.utils.enum_helpers import safe_enum_str, safe_enum_val
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -113,6 +116,74 @@ def _query_crisis_alerts(db: Session, args: dict, user: User) -> dict:
             "created_at": a.created_at.strftime("%m-%d %H:%M") if a.created_at else "",
         })
     return {"message": f"共{len(result)}条预警", "alerts": result}
+
+
+def _resolve_crisis_alert(db: Session, args: dict, user: User) -> dict:
+    """处置心理危机预警：只允许操作名下学生，与预警中心同一套字段口径。"""
+    try:
+        alert_id = int(args.get("alert_id"))
+    except (TypeError, ValueError):
+        return {"success": False, "message": "缺少有效的预警ID"}
+    alert = db.query(AIDialogSummary).filter(AIDialogSummary.id == alert_id).first()
+    if not alert:
+        return {"success": False, "message": "预警不存在"}
+    student = db.query(User).filter(User.id == alert.student_id).first()
+    if not student or student.tutor_id != user.id:
+        return {"success": False, "message": "无权操作该预警（该学生不在你名下）"}
+
+    resolved = bool(args.get("resolved", True))
+    alert.resolved = resolved
+    if resolved:
+        alert.resolved_by = user.id
+        alert.resolved_at = datetime.now(timezone.utc)
+    else:
+        alert.resolved_by = None
+        alert.resolved_at = None
+    note = (args.get("note") or "").strip()
+    if note:
+        alert.intervention_note = note
+    db.commit()
+    return {
+        "success": True,
+        "alert_id": alert.id,
+        "student_name": student.name,
+        "message": f"已将{student.name}的预警标记为{'已处置' if resolved else '待跟进'}",
+    }
+
+
+async def _send_message_to_student(db: Session, args: dict, user: User) -> dict:
+    """给名下学生发一对一消息：写入会话，并尽力实时推送（离线不影响落库）。"""
+    from app.models.message import Message
+
+    content = (args.get("content") or "").strip()
+    if not content:
+        return {"success": False, "message": "缺少消息内容"}
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+
+    msg = Message(sender_id=user.id, receiver_id=student.id, content=content)
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    try:
+        from app.api.messages import manager
+        await manager.send_json(student.id, {
+            "type": "new_message",
+            "id": msg.id,
+            "sender_id": user.id,
+            "sender_name": user.name,
+            "content": content,
+            "created_at": msg.created_at.isoformat() if msg.created_at else "",
+        })
+    except Exception:
+        # 学生不在线 / 推送通道异常时消息已入库，打开消息页即可看到
+        logger.exception("发送消息后实时推送失败 message_id=%s", msg.id)
+    return {
+        "success": True,
+        "message_id": msg.id,
+        "message": f"已给{student.name}发送消息",
+    }
 
 
 def _approve_leave(db: Session, args: dict, user: User) -> dict:
@@ -311,6 +382,122 @@ def _create_teacher_task(db: Session, args: dict, user: User) -> dict:
         "success": True,
         "task_id": task.id,
         "message": f"已创建跟进任务：{title}" + (f"（{student.name}）" if student else ""),
+    }
+
+
+_URGENCY_TEXT = {"normal": "普通", "important": "重要", "urgent": "紧急"}
+
+
+def _query_teacher_schedules(db: Session, args: dict, user: User) -> dict:
+    """按月份查询教师日历计划（今日重点/本周计划的数据源）。"""
+    from app.models.announcement import TeacherSchedule
+
+    today = date.today()
+    try:
+        year = int(args.get("year") or today.year)
+        month = int(args.get("month") or today.month)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "年份/月份格式不正确"}
+    if not 1 <= month <= 12:
+        return {"success": False, "message": "月份应为 1-12"}
+
+    items = db.query(TeacherSchedule).filter(
+        TeacherSchedule.teacher_id == user.id,
+        func.extract("year", TeacherSchedule.date) == year,
+        func.extract("month", TeacherSchedule.date) == month,
+    ).order_by(TeacherSchedule.date.asc()).all()
+    if not items:
+        return {"message": f"{year}年{month}月暂无日程安排", "schedules": []}
+    return {
+        "message": f"{year}年{month}月共{len(items)}条日程",
+        "schedules": [
+            {
+                "schedule_id": i.id,
+                "date": str(i.date),
+                "content": i.content,
+                "urgency": _URGENCY_TEXT.get(safe_enum_val(i.urgency), safe_enum_val(i.urgency)),
+                "completed": bool(i.completed),
+                "overdue": (not i.completed) and i.date < today,
+            }
+            for i in items
+        ],
+    }
+
+
+def _create_teacher_schedule(db: Session, args: dict, user: User) -> dict:
+    """新增教师日程（与 /api/teacher/schedules 同一张表、同一口径）。"""
+    from app.models.announcement import TeacherSchedule, UrgencyLevel
+
+    content = (args.get("content") or "").strip()
+    if not content:
+        return {"success": False, "message": "缺少日程内容"}
+    raw_date = args.get("date")
+    if raw_date:
+        try:
+            day = date.fromisoformat(str(raw_date))
+        except ValueError:
+            return {"success": False, "message": "日期格式应为 YYYY-MM-DD"}
+    else:
+        day = date.today()
+    urgency = args.get("urgency") if args.get("urgency") in _URGENCY_TEXT else "normal"
+
+    item = TeacherSchedule(
+        teacher_id=user.id, date=day, content=content, urgency=UrgencyLevel(urgency),
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return {
+        "success": True,
+        "schedule_id": item.id,
+        "message": f"已加入日程：{day} {content}（{_URGENCY_TEXT[urgency]}）",
+    }
+
+
+def _publish_class_announcement(db: Session, args: dict, user: User) -> dict:
+    """发布班级公告并即时推送站内通知（与公告页发布链路一致）。"""
+    from app.models.announcement import TeacherAnnouncement, UrgencyLevel
+    from app.models.notification import NotificationType
+    from app.services.notification_service import send_batch_notifications
+
+    title = (args.get("title") or "").strip()
+    content = (args.get("content") or "").strip()
+    if not title or not content:
+        return {"success": False, "message": "公告标题和正文都不能为空"}
+    urgency = args.get("urgency") if args.get("urgency") in _URGENCY_TEXT else "normal"
+
+    item = TeacherAnnouncement(
+        teacher_id=user.id, title=title, content=content, urgency=UrgencyLevel(urgency),
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+
+    student_ids = _get_student_ids_for_teacher(db, user)
+    notified = 0
+    if student_ids:
+        try:
+            send_batch_notifications(
+                db,
+                student_ids,
+                title=f"[{_URGENCY_TEXT[urgency]}公告] {title}",
+                content=content[:200],
+                notification_type=NotificationType.ANNOUNCEMENT,
+                link="/student/workbench",
+                related_id=item.id,
+                sender_id=user.id,
+                level=UrgencyLevel(urgency),
+            )
+            notified = len(student_ids)
+        except Exception:
+            # 公告已发布成功，通知失败不应让整个工具调用报错
+            logger.exception("发布班级公告后推送通知失败 announcement_id=%s", item.id)
+    return {
+        "success": True,
+        "announcement_id": item.id,
+        "message": f"已发布公告「{title}」" + (
+            f"，并通知{notified}名学生" if notified else "（未推送通知：暂无名下学生或推送失败）"
+        ),
     }
 
 
@@ -590,4 +777,316 @@ def _reply_help_request(db: Session, args: dict, user: User) -> dict:
         "request_id": record.id,
         "status": status_text,
         "message": f"✅ 已回复该求助（状态：{status_text}）",
+    }
+
+
+# ============================================================
+# 教学域工具（PH3）：课表/任课教师、出勤、作业、成绩
+# 与 teaching_service 共用同一套数据口径，保证 AI 看到的数字与页面一致
+# ============================================================
+
+def _my_teaching_courses(db: Session, user: User, semester: str | None = None):
+    """我教的课（严格按 Course.teacher_id，不含历史字符串兜底以外的猜测）。"""
+    from app.services.teaching_scope import default_semester, my_courses
+    sem = semester or default_semester(db)
+    return sem, my_courses(db, user, sem)
+
+
+def _query_my_courses(db: Session, args: dict, user: User) -> dict:
+    """我的课表 + 任课教师视图：既回答"我这周有什么课"，也回答"某位老师的课表"。"""
+    from app.models.academic import Course
+    from app.services.teaching_scope import default_semester
+
+    semester = args.get("semester") or default_semester(db)
+    teacher_name = (args.get("teacher_name") or "").strip()
+    weekday = args.get("weekday")
+    try:
+        weekday = int(weekday) if weekday is not None else None
+    except (TypeError, ValueError):
+        weekday = None
+
+    q = db.query(Course).filter(Course.semester == semester)
+    if teacher_name:
+        # 按任课教师看课表：姓名匹配（含模糊），不限本人
+        from app.services.knowledge_service import _escape_like
+        safe = _escape_like(teacher_name)
+        q = q.filter(Course.teacher.like(f"%{safe}%", escape="\\"))
+    else:
+        q = q.filter(Course.teacher_id == user.id)
+    if weekday is not None:
+        q = q.filter(Course.day_of_week == weekday)
+
+    courses = q.order_by(Course.day_of_week, Course.start_period).all()
+    if not courses:
+        scope = f"{teacher_name} 老师" if teacher_name else "你"
+        return {"message": f"{semester} 学期 {scope} 在该条件下暂无可查课程", "courses": []}
+
+    # 班级名称映射（Course 只存 class_group_id）
+    from app.models.academic import ClassGroup
+    cls_ids = {c.class_group_id for c in courses if c.class_group_id}
+    cls_names = {}
+    if cls_ids:
+        for g in db.query(ClassGroup).filter(ClassGroup.id.in_(cls_ids)).all():
+            cls_names[g.id] = g.name
+
+    week_map = {1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日"}
+    return {
+        "message": f"{semester} 学期共 {len(courses)} 门/次课程",
+        "semester": semester,
+        "courses": [
+            {
+                "course_id": c.id,
+                "course_name": c.name,
+                "teacher": c.teacher,
+                "class_name": cls_names.get(c.class_group_id, ""),
+                "weekday": week_map.get(c.day_of_week, f"周{c.day_of_week}"),
+                "period": f"第{c.start_period}-{c.end_period}节",
+                "location": c.location,
+                "credit": float(c.credit) if c.credit is not None else None,
+            }
+            for c in courses
+        ],
+    }
+
+
+def _resolve_my_course(db: Session, user: User, course_id=None, course_name=None):
+    """把 AI 传入的课程名/ID 解析成"我教的课"，避免越权。"""
+    from app.models.academic import Course
+    from app.services.knowledge_service import _escape_like
+    from app.services.teaching_scope import teacher_course_filter
+
+    base = db.query(Course).filter(teacher_course_filter(user))
+    if course_id:
+        try:
+            cid = int(course_id)
+        except (TypeError, ValueError):
+            return None
+        return base.filter(Course.id == cid).first()
+    if course_name:
+        exact = base.filter(Course.name == course_name).first()
+        if exact:
+            return exact
+        return base.filter(
+            Course.name.like(f"%{_escape_like(course_name)}%", escape="\\")
+        ).first()
+    return None
+
+
+def _query_class_attendance(db: Session, args: dict, user: User) -> dict:
+    """班级出勤概况：某门课近几次点名的到课率与缺勤名单。"""
+    from app.models.academic import ClassGroup
+    from app.models.teaching import Attendance, AttendanceStatus
+
+    course = _resolve_my_course(db, user, args.get("course_id"), args.get("course_name"))
+    if not course:
+        return {"success": False, "message": "未找到该课程，或该课程不在你名下"}
+
+    recs = db.query(Attendance).filter(Attendance.course_id == course.id).order_by(
+        Attendance.attend_date.desc(), Attendance.period_start
+    ).limit(400).all()
+    if not recs:
+        # 提前返回也要带全字段，避免 AI 拿到 class_name=None 后误判
+        cls0 = db.query(ClassGroup).filter_by(id=course.class_group_id).first() if course.class_group_id else None
+        return {
+            "success": True,
+            "course_name": course.name,
+            "class_name": cls0.name if cls0 else "",
+            "sessions": 0,
+            "records": 0,
+            "attendance_rate": None,
+            "absent_count": 0,
+            "absent_top": [],
+            "message": f"《{course.name}》还没有点名记录",
+        }
+
+    sessions = {}
+    for r in recs:
+        key = (r.attend_date, r.period_start)
+        sessions.setdefault(key, []).append(r)
+    total = len(recs)
+    present_like = sum(1 for r in recs if r.status in (AttendanceStatus.PRESENT, AttendanceStatus.LATE, AttendanceStatus.LEAVE))
+    absent_like = sum(1 for r in recs if r.status == AttendanceStatus.ABSENT)
+    rate = round(present_like / total * 100, 1) if total else 0.0
+
+    # 缺勤最多的学生（按次数倒序，取前 5）
+    absent_count: dict[int, int] = {}
+    for r in recs:
+        if r.status == AttendanceStatus.ABSENT:
+            absent_count[r.student_id] = absent_count.get(r.student_id, 0) + 1
+    top_ids = sorted(absent_count, key=lambda k: absent_count[k], reverse=True)[:5]
+    names = {}
+    if top_ids:
+        for s in db.query(User).filter(User.id.in_(top_ids)).all():
+            names[s.id] = s.name
+
+    cls = db.query(ClassGroup).filter_by(id=course.class_group_id).first() if course.class_group_id else None
+    cls_name = cls.name if cls else ""
+    return {
+        "success": True,
+        "course_name": course.name,
+        "class_name": cls_name,
+        "sessions": len(sessions),
+        "records": total,
+        "attendance_rate": rate,
+        "absent_count": absent_like,
+        "absent_top": [
+            {"student_name": names.get(sid, "未知"), "absent_times": absent_count[sid]}
+            for sid in top_ids
+        ],
+        "message": f"《{course.name}》累计 {len(sessions)} 次点名，到课率 {rate}%，旷课 {absent_like} 人次",
+    }
+
+
+def _query_homework_status(db: Session, args: dict, user: User) -> dict:
+    """作业提交概况：谁交了、谁没交、谁已批改。"""
+    from app.models.academic import Course
+    from app.models.teaching import Homework, HomeworkSubmission, SubmissionStatus
+    from app.services.teaching_scope import teacher_course_filter
+
+    title_kw = (args.get("homework_title") or "").strip()
+    course = _resolve_my_course(db, user, args.get("course_id"), args.get("course_name"))
+
+    q = db.query(Homework)
+    if course:
+        q = q.filter(Homework.course_id == course.id)
+    else:
+        course_ids = [c.id for c in db.query(Course).filter(teacher_course_filter(user)).all()]
+        if not course_ids:
+            return {"success": False, "message": "你暂无名下课程"}
+        q = q.filter(Homework.course_id.in_(course_ids))
+    if title_kw:
+        from app.services.knowledge_service import _escape_like
+        q = q.filter(Homework.title.like(f"%{_escape_like(title_kw)}%", escape="\\"))
+
+    hw = q.order_by(Homework.created_at.desc()).first()
+    if not hw:
+        return {"success": False, "message": "未找到符合条件的作业"}
+
+    all_subs = db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == hw.id).all()
+    submitted = [s for s in all_subs if s.status in (SubmissionStatus.SUBMITTED, SubmissionStatus.GRADED, SubmissionStatus.LATE)]
+    graded = [s for s in all_subs if s.status == SubmissionStatus.GRADED]
+    not_submitted = [s for s in all_subs if s.status == SubmissionStatus.PENDING]
+    names = {}
+    wait_ids = [s.student_id for s in not_submitted[:10]]
+    if wait_ids:
+        for s in db.query(User).filter(User.id.in_(wait_ids)).all():
+            names[s.id] = s.name
+
+    return {
+        "success": True,
+        "homework_id": hw.id,
+        "title": hw.title,
+        "due_at": str(hw.due_at) if hw.due_at else None,
+        "total": len(all_subs),
+        "submitted": len(submitted),
+        "graded": len(graded),
+        "not_submitted": len(not_submitted),
+        "not_submitted_names": [names.get(s.student_id, "未知") for s in not_submitted[:10]],
+        "message": f"《{hw.title}》应交 {len(all_subs)} 人，已交 {len(submitted)} 人，已批改 {len(graded)} 人，未交 {len(not_submitted)} 人",
+    }
+
+
+def _query_class_grade(db: Session, args: dict, user: User) -> dict:
+    """班级成绩概况：均分、及格率、不及格名单与分数段分布。"""
+    from app.models.academic import Grade
+
+    course = _resolve_my_course(db, user, args.get("course_id"), args.get("course_name"))
+    if not course:
+        return {"success": False, "message": "未找到该课程，或该课程不在你名下"}
+
+    # Grade 通过「课程名 + 学期」关联课程（无 course_id 外键），必须与 teaching.py 同口径
+    grades = db.query(Grade).filter(
+        Grade.course_name == course.name,
+        Grade.semester == course.semester,
+    ).all()
+    scores = [float(g.score) for g in grades if g.score is not None]
+    if not scores:
+        return {"success": True, "message": f"《{course.name}》还没有成绩记录", "course_name": course.name}
+
+    line = float(args.get("pass_line") or 60.0)
+    passed = [s for s in scores if s >= line]
+    fail_rows = sorted(
+        [g for g in grades if g.score is not None and float(g.score) < line],
+        key=lambda g: float(g.score),
+    )[:10]
+    names = {}
+    if fail_rows:
+        for s in db.query(User).filter(User.id.in_([g.student_id for g in fail_rows])).all():
+            names[s.id] = s.name
+
+    buckets = {"0-59": 0, "60-69": 0, "70-79": 0, "80-89": 0, "90-100": 0}
+    for sc in scores:
+        if sc < 60:
+            buckets["0-59"] += 1
+        elif sc < 70:
+            buckets["60-69"] += 1
+        elif sc < 80:
+            buckets["70-79"] += 1
+        elif sc < 90:
+            buckets["80-89"] += 1
+        else:
+            buckets["90-100"] += 1
+
+    avg = round(sum(scores) / len(scores), 1)
+    return {
+        "success": True,
+        "course_name": course.name,
+        "graded_count": len(scores),
+        "avg": avg,
+        "max": max(scores),
+        "min": min(scores),
+        "pass_rate": round(len(passed) / len(scores) * 100, 1),
+        "distribution": buckets,
+        "fail_names": [{"student_name": names.get(g.student_id, "未知"), "score": float(g.score)} for g in fail_rows],
+        "message": f"《{course.name}》已录 {len(scores)} 人，均分 {avg}，及格率 {round(len(passed)/len(scores)*100, 1)}%",
+    }
+
+
+def _query_attendance_roster(db: Session, args: dict, user: User) -> dict:
+    """某门课某次课的应到名单（供 AI 一键点名前预览）。"""
+    from app.models.leave import LeaveRequest, LeaveStatus
+
+    course = _resolve_my_course(db, user, args.get("course_id"), args.get("course_name"))
+    if not course:
+        return {"success": False, "message": "未找到该课程，或该课程不在你名下"}
+
+    try:
+        attend_date = date.fromisoformat(args["attend_date"]) if args.get("attend_date") else date.today()
+    except ValueError:
+        return {"success": False, "message": "日期格式应为 YYYY-MM-DD"}
+
+    # 课程所属班级学生（与 teaching.py 的 _class_students 同口径：按 class_group_id 精确匹配）
+    students = []
+    if course.class_group_id:
+        students = (
+            db.query(User)
+            .filter(User.role == UserRole.STUDENT, User.class_group_id == course.class_group_id)
+            .order_by(User.name)
+            .all()
+        )
+    if not students:
+        return {"success": True, "message": f"《{course.name}》未关联到班级学生", "students": []}
+
+    approved = {
+        l.student_id
+        for l in db.query(LeaveRequest).filter(
+            LeaveRequest.status == LeaveStatus.APPROVED,
+            LeaveRequest.start_date <= attend_date,
+            LeaveRequest.end_date >= attend_date,
+        ).all()
+    }
+    return {
+        "success": True,
+        "course_name": course.name,
+        "attend_date": str(attend_date),
+        "count": len(students),
+        "students": [
+            {
+                "student_id": s.id,
+                "student_name": s.name,
+                "on_approved_leave": s.id in approved,
+            }
+            for s in students
+        ],
+        "message": f"《{course.name}》{attend_date} 应到 {len(students)} 人，其中 {len(approved & {s.id for s in students})} 人已批假（点名时将自动记为请假而非旷课）",
     }

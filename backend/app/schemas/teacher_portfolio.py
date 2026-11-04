@@ -46,6 +46,21 @@ class PortfolioItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PortfolioAIDraftIn(BaseModel):
+    """AI 帮写：老师口述大体情况，AI 自动整理成档案草稿。"""
+
+    description: str = Field(min_length=2, max_length=500)
+    item_type: str | None = None
+
+
+class PortfolioAIDraftOut(BaseModel):
+    item_type: str
+    title: str
+    occurred_on: date | None = None
+    reflection: str
+    source: str = "ai"
+
+
 class PortfolioTypeStat(BaseModel):
     type: str
     label: str

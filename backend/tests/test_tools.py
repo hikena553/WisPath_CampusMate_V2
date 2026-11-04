@@ -142,6 +142,68 @@ async def test_teacher_tools_reject_foreign_student(make_user, db, _tool_counter
 
 
 @pytest.mark.asyncio
+async def test_teacher_schedule_and_announcement_tools(make_user, db, _tool_counters_clean):
+    """新增工具闭环：建日程 → 查日程；发班级公告 → 名下学生收到站内通知。"""
+    from app.models.announcement import TeacherAnnouncement, TeacherSchedule
+    from app.models.notification import Notification
+
+    teacher = make_user(role=UserRole.TEACHER)
+    student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id, name="公告学生")
+
+    today = date.today()
+    created = await execute_tool(
+        "create_teacher_schedule",
+        {"content": "班会：学业预警沟通", "date": today.isoformat(), "urgency": "important"},
+        teacher,
+    )
+    assert created["success"] is True
+    assert db.query(TeacherSchedule).filter(TeacherSchedule.id == created["schedule_id"]).count() == 1
+
+    listing = await execute_tool(
+        "query_teacher_schedules", {"year": today.year, "month": today.month}, teacher,
+    )
+    assert any(s["schedule_id"] == created["schedule_id"] for s in listing["schedules"])
+
+    ann = await execute_tool(
+        "publish_class_announcement",
+        {"title": "本周班会通知", "content": "周五下午三点，教学楼A101。", "urgency": "important"},
+        teacher,
+    )
+    assert ann["success"] is True
+    assert db.query(TeacherAnnouncement).filter(
+        TeacherAnnouncement.id == ann["announcement_id"]
+    ).count() == 1
+    assert db.query(Notification).filter(
+        Notification.user_id == student.id,
+        Notification.related_id == ann["announcement_id"],
+    ).count() == 1
+
+    from app.models.crisis import AIDialogSummary
+    alert = AIDialogSummary(student_id=student.id, summary="近期情绪波动较大", level="severe")
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    resolved = await execute_tool(
+        "resolve_crisis_alert", {"alert_id": alert.id, "note": "已约谈并联系家长"}, teacher,
+    )
+    assert resolved["success"] is True
+    db.refresh(alert)
+    assert alert.resolved is True
+    assert alert.intervention_note == "已约谈并联系家长"
+
+    from app.models.message import Message
+    sent = await execute_tool(
+        "send_message_to_student", {"student_name": "公告学生", "content": "周五下午来办公室聊一下"},
+        teacher,
+    )
+    assert sent["success"] is True
+    assert db.query(Message).filter(
+        Message.sender_id == teacher.id,
+        Message.receiver_id == student.id,
+    ).count() == 1
+
+
+@pytest.mark.asyncio
 async def test_p1_module_tools_flow(make_user, db, _tool_counters_clean):
     """P1 工具：成长档案增查 / 关怀日历 / 家校沟通台账 / 我的互评结果。"""
     teacher = make_user(role=UserRole.TEACHER)

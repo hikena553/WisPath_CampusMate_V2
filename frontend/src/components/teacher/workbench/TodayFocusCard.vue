@@ -209,6 +209,9 @@ defineExpose({ reload: load })
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  /* 卡头与正文之间用发丝分割线区分，避免标题、主体、口径说明糊成一整块 */
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tui-border);
 }
 .tf-title {
   display: flex;
@@ -330,6 +333,7 @@ defineExpose({ reload: load })
 .tf-breakdown {
   font-size: 11.5px;
   color: var(--tui-text-quiet);
-  padding-left: 1px;
+  padding: 10px 1px 0;
+  border-top: 1px solid var(--tui-border);
 }
 </style>

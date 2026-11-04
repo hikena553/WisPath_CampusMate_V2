@@ -112,7 +112,11 @@ const router = createRouter({
         { path: 'portfolio', name: 'teacher-portfolio', component: () => import('@/views/teacher/PortfolioPage.vue'), meta: { keepAlive: false } },
         { path: 'survey', name: 'teacher-survey', component: () => import('@/views/teacher/SurveyPage.vue'), meta: { keepAlive: false } },
         { path: 'care-center', name: 'teacher-care-center', component: () => import('@/views/teacher/CareCenterPage.vue'), meta: { keepAlive: false } },
-        { path: 'guardian', name: 'teacher-guardian', component: () => import('@/views/teacher/GuardianPage.vue'), meta: { keepAlive: false } },
+        // 家校沟通已并入关怀中心：旧链接统一带上 tab=guardian 重定向，保留 student_id / content / scene
+        {
+          path: 'guardian',
+          redirect: (to) => ({ path: '/teacher/care-center', query: { ...to.query, tab: 'guardian' } }),
+        },
         { path: 'tasks', name: 'teacher-tasks', component: () => import('@/views/teacher/TasksPage.vue'), meta: { keepAlive: false } },
         { path: 'ai', name: 'teacher-ai-insights', component: () => import('@/views/teacher/AiInsightsPage.vue'), meta: { keepAlive: false } },
         // 功能总览：首页「常用功能」右上角「全部功能」入口下钻至此
@@ -122,6 +126,9 @@ const router = createRouter({
         { path: 'announcement', name: 'teacher-announcement', component: () => import('@/views/teacher/AnnouncementPage.vue'), meta: { keepAlive: false } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
         { path: 'profile', name: 'teacher-profile', component: () => import('@/views/teacher/ProfilePage.vue'), meta: { keepAlive: false } },
+        // ===== 教师端三合一新增：个人工作台（我的成长）+ 我的课表 =====
+        { path: 'growth', name: 'teacher-growth', component: () => import('@/views/teacher/MyGrowthPage.vue'), meta: { keepAlive: false } },
+        { path: 'schedule', name: 'teacher-schedule', component: () => import('@/views/teacher/SchedulePage.vue'), meta: { keepAlive: false } },
       ],
     },
     {

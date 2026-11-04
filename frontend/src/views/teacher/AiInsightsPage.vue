@@ -10,7 +10,132 @@
     <SubPageHeader title="AI 主动洞察" fallback="/teacher" />
     <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
-    <div class="tui-content">
+    <!-- ============================================================
+         移动端 · 顺序阅读版（冷色调）
+         一次性读取全部数据 → 结论条 → 四项指标 → 主动发现 → 推荐联系
+         两个分区同屏顺序铺开，无分段切换，内容全部加载后统一呈现
+         ============================================================ -->
+    <div v-if="isMobile" class="tm-page tm-m">
+      <div class="tm-ai-strip">
+        <div class="tm-ai-hd">
+          <span class="tm-ai-mk"><AiMascotMark :size="16" /></span>
+          <span class="tm-ai-lb">AI 主动发现</span>
+          <span class="tm-ai-time">基于 7 天数据</span>
+        </div>
+        <p>
+          今天有 <b>{{ shownSuggestions.length }} 个学生</b>值得你主动联系，理由和证据都写好了；
+          另有 <b>{{ shownActions.length }} 条</b>主动发现，其中 <b>{{ highCount }} 条</b>是高危。
+        </p>
+      </div>
+
+      <div class="tm-kpis">
+        <div class="tm-kpi" :class="{ 'tm-bad': highCount > 0 }">
+          <b>{{ shownActions.length }}</b><span>主动发现</span>
+        </div>
+        <div class="tm-kpi tm-bad"><b>{{ highCount }}</b><span>高危信号</span></div>
+        <div class="tm-kpi"><b>{{ shownSuggestions.length }}</b><span>建议联系</span></div>
+        <div class="tm-kpi"><b>{{ studentCoverage }}</b><span>涉及学生</span></div>
+      </div>
+
+      <div v-if="studentFocus" class="tm-focus">
+        <span class="tm-focus-t">已聚焦「{{ studentFocus.name || '该生' }}」，只显示与其相关的发现</span>
+        <button type="button" @click="clearStudentFocus">清除</button>
+      </div>
+
+      <!-- 全部数据到位后一次性渲染两个分区，避免「只加载一部分」的观感 -->
+      <AgentLoading v-if="loading" block :tips="AI_TIPS" />
+
+      <template v-else>
+        <div class="tm-blk-sec">
+          <b>主动发现</b>
+          <span class="tm-blk-n">{{ shownActions.length }} 条</span>
+        </div>
+
+        <div v-if="!shownActions.length" class="tm-empty">
+          <b>暂无新发现</b>
+          <span>班级状态平稳，出现异常信号时这里会自动生成建议</span>
+        </div>
+        <div
+          v-for="act in shownActions"
+          :key="`${act.trigger}-${act.student_id}`"
+          class="tm-ob-card"
+          @click="gotoCrisis(act)"
+        >
+          <div class="tm-ob-hd">
+            <span class="tm-ava">{{ triggerMark(act) }}</span>
+            <div style="min-width: 0">
+              <div class="tm-ob-nm">{{ act.title }}</div>
+              <div class="tm-ob-why">{{ triggerLabel(act.trigger) }} · 学生 #{{ act.student_id }}</div>
+            </div>
+            <span class="tm-tag" :class="priorityTagCls(act.priority)">{{ priorityText(act.priority) }}</span>
+          </div>
+          <div class="tm-ob-q">
+            <span class="tm-qtx">{{ act.content }}</span>
+            <em>AI 依据 · 置信度 {{ act.priority }}%</em>
+          </div>
+          <div class="tm-ob-evi">
+            <span class="tm-evi">置信度 <b>{{ act.priority }}%</b></span>
+            <span class="tm-evi">{{ triggerLabel(act.trigger) }}</span>
+          </div>
+          <div class="tm-ob-ft">
+            <button class="tm-ai-a tm-pri" type="button" @click.stop="gotoCrisis(act)">去预警中心处理</button>
+            <button class="tm-ai-a" type="button" @click.stop="gotoStudent(act.student_id)">看他档案</button>
+            <span class="tm-ob-x">点卡片进入处置</span>
+          </div>
+        </div>
+
+        <div class="tm-blk-sec">
+          <b>推荐联系</b>
+          <span class="tm-blk-n">{{ shownSuggestions.length }} 位</span>
+          <button
+            class="tm-ai-a"
+            type="button"
+            :disabled="!shownSuggestions.length || batchLoading"
+            @click="convertAll"
+          >{{ batchLoading ? '正在写入…' : '全部转为跟进' }}</button>
+        </div>
+
+        <div v-if="!shownSuggestions.length" class="tm-empty">
+          <b>暂无推荐联系对象</b>
+          <span>有需要关注的学生时，这里会给出推荐对象与理由</span>
+        </div>
+        <div v-for="c in shownSuggestions" :key="c.student_id" class="tm-ob-card">
+          <div class="tm-ob-hd">
+            <span class="tm-ava">{{ c.student_name.slice(0, 1) }}</span>
+            <div style="min-width: 0">
+              <div class="tm-ob-nm">{{ c.student_name }}</div>
+              <div class="tm-ob-why">{{ c.reason }}</div>
+            </div>
+            <span class="tm-tag" :class="priorityTagCls(contactConfidence(c.priority))">
+              {{ contactText(c.priority) }}
+            </span>
+          </div>
+          <div class="tm-ob-evi">
+            <span class="tm-evi">建议强度 <b>{{ contactConfidence(c.priority) }}%</b></span>
+            <span class="tm-evi">理由 <b>{{ c.reason.slice(0, 8) }}</b></span>
+          </div>
+          <div class="tm-ob-ft">
+            <button
+              class="tm-ai-a"
+              :class="{ 'tm-pri': !convertedIds.has(c.student_id) }"
+              type="button"
+              :disabled="convertedIds.has(c.student_id) || loadingIds.has(c.student_id)"
+              @click="convert(c)"
+            >
+              {{ convertedIds.has(c.student_id) ? '已加入今日待办' : loadingIds.has(c.student_id) ? '处理中…' : '采纳，加入今天' }}
+            </button>
+            <button class="tm-ai-a" type="button" @click="gotoStudent(c.student_id)">看他档案</button>
+            <span class="tm-ob-x">{{ contactText(c.priority) }}</span>
+          </div>
+        </div>
+      </template>
+
+      <div class="tm-tail">
+        <span>依据：预警等级 · 联系间隔 · 成绩斜率 · 出勤变化，四项加权；两部分内容已一次性全部加载</span>
+      </div>
+    </div>
+
+    <div v-else class="tui-content">
       <!-- 桌面端特色头部：洞察语义色 + 数据分析图标。
            本页下方「洞察指标」网格已承载四项指标，头部不重复挂数字。 -->
       <TuiPageHero
@@ -75,11 +200,14 @@
 
       <TuiSegmented v-model="tab" class="ai-seg" :options="segOptions" />
 
-      <div v-loading="loading" class="ai-body">
+      <!-- 载入态沿用智能体那套反馈：打点 + 轮换文案，取数期间不留空白也不套遮罩 -->
+      <div class="ai-body">
+        <AgentLoading v-if="loading" block :tips="AI_TIPS" />
+        <template v-else>
         <!-- 主动发现：AI 建议卡（置信度进度条） -->
         <section v-if="tab === 'proactive'" class="tui-section">
           <div class="tui-section-head">
-            <h3><el-icon><MagicStick /></el-icon>AI 建议</h3>
+            <h3><AiMascotMark :size="16" />AI 建议</h3>
             <div class="tui-section-extra"><span class="ai-count">{{ shownActions.length }} 条</span></div>
           </div>
           <div class="tui-section-hint">
@@ -87,7 +215,7 @@
             <span>置信度由后端信号强度换算，越高越应优先处置；点击卡片直达预警中心处理该生。</span>
           </div>
           <div v-if="!loading && !shownActions.length" class="tui-empty">
-            <span class="tui-empty-icon"><el-icon :size="24"><MagicStick /></el-icon></span>
+            <span class="tui-empty-icon"><AiMascotMark :size="26" /></span>
             <span class="tui-empty-title">暂无新发现</span>
             <span class="tui-empty-desc">班级状态平稳，出现异常信号时这里会自动生成建议</span>
           </div>
@@ -171,6 +299,7 @@
             </div>
           </div>
         </section>
+        </template>
       </div>
     </div>
   </div>
@@ -180,9 +309,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Calendar, DataAnalysis, InfoFilled, MagicStick, User } from '@element-plus/icons-vue'
+import { ArrowRight, Calendar, DataAnalysis, InfoFilled, User } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import AgentLoading from '@/components/common/AgentLoading.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
@@ -200,6 +331,13 @@ const { isMobile } = useResponsive()
 const pull = usePullRefresh(load, { enabled: () => isMobile.value })
 
 const loading = ref(false)
+
+/** 加载文案：说清「在读什么」，比一句「加载中」有用 */
+const AI_TIPS = [
+  '正在读取最近的预警与成长记录',
+  '正在筛出值得先聊的学生',
+  '正在整理建议与理由',
+]
 const proactiveActions = ref<ProactiveAction[]>([])
 const contactSuggestions = ref<ContactSuggestion[]>([])
 
@@ -316,6 +454,30 @@ function priorityKey(p: number) {
   if (p >= 60) return 'mid'
   return 'low'
 }
+/** 移动端：中文标签色（对应 tm-tag 的语义类） */
+function priorityTagCls(p: number) {
+  if (p >= 80) return 'tm-bad'
+  if (p >= 60) return 'tm-warn'
+  return 'tm-ai'
+}
+/** 移动端：主动发现卡左侧的图标字 */
+function triggerMark(act: ProactiveAction) {
+  const t = triggerLabel(act.trigger)
+  return t.slice(0, 1)
+}
+/** 移动端：触发器 → 人话 */
+function triggerLabel(trigger: string) {
+  const map: Record<string, string> = {
+    crisis: '危机预警',
+    absence: '缺勤',
+    grade: '成绩下滑',
+    leave: '请假异常',
+    care: '关怀超期',
+    task: '任务逾期',
+    score: '综合评分',
+  }
+  return map[trigger] || trigger || '综合信号'
+}
 function priorityText(p: number) {
   if (p >= 80) return '高危'
   if (p >= 60) return '关注'
@@ -354,6 +516,77 @@ onMounted(() => {
 
 <style scoped>
 .tui-page.pull-enabled { overscroll-behavior-y: contain; }
+
+/* ---------- 移动端（定稿版）：只补几处本页私有件 ---------- */
+.tm-m { min-height: calc(100vh - 60px); }
+.tm-focus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 14px 9px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px dashed var(--tm-ai-line);
+  background: var(--tm-ai-btn);
+  font-size: 10.5px;
+  color: var(--tm-ai-act-ink);
+  font-weight: 650;
+}
+.tm-focus .tm-focus-t { flex: 1; min-width: 0; }
+.tm-focus button {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 750;
+  color: var(--tm-ai-act-ink);
+  text-decoration: underline;
+}
+/* 分区标题：主动发现 / 推荐联系 顺序铺开，右侧挂数量与批量操作 */
+.tm-blk-sec {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 15px 14px 8px;
+}
+.tm-blk-sec b {
+  font-family: var(--tm-serif);
+  font-size: 13.4px;
+  font-weight: 700;
+  letter-spacing: -.1px;
+  color: #2a3a55;
+}
+.tm-blk-sec .tm-blk-n {
+  font-size: 10.4px;
+  font-weight: 650;
+  color: var(--tm-ink3);
+  background: var(--tm-tint-neutral);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+.tm-blk-sec .tm-ai-a { margin-left: auto; }
+.tm-empty {
+  margin: 0 14px;
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border-radius: var(--tm-r);
+  border: 1px dashed var(--tm-line2);
+  background: var(--tm-surf);
+  text-align: center;
+}
+.tm-empty b { font-size: 12px; color: var(--tm-ink2); font-weight: 700; }
+.tm-empty span { font-size: 10px; color: var(--tm-ink3); line-height: 1.5; }
+.tm-tail {
+  padding: 9px 16px 14px;
+  font-size: 9.4px;
+  line-height: 1.5;
+  color: var(--tm-ink3);
+}
 .ai-seg { margin-bottom: 12px; }
 .ai-count { font-size: 11.5px; color: var(--tui-text-quiet); }
 

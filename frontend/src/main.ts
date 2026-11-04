@@ -15,6 +15,7 @@ import './styles/dingtalk.css'
 import './styles/dialog-minimal.css'
 import './styles/scrollbar-hide.css'
 import './styles/subpage-transition.css'
+import './styles/teacher-mobile-kit.css'
 import { permissionDirective, roleDirective } from './directives/permission'
 import { startSiteConfigSync } from './composables/useSiteConfig'
 

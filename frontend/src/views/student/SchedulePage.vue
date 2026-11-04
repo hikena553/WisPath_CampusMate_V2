@@ -369,7 +369,7 @@
                   <span class="head-title">AI 学情分析</span>
                   <span class="head-sub">个性化学习建议</span>
                   <el-button type="primary" size="small" class="head-save" :loading="gradeLoading && !gradeRaw" @click="startAiAnalysis({ stream: true })">
-                    <el-icon v-if="!gradeLoading"><MagicStick /></el-icon>
+                    <AiMascotMark v-if="!gradeLoading" :size="14" style="margin-right:4px" />
                     {{ gradeLoading && !gradeRaw ? '分析中...' : '重新分析' }}
                   </el-button>
                 </div>
@@ -393,7 +393,7 @@
                     </div>
                   </div>
                   <div v-else class="ai-placeholder">
-                    <el-icon :size="40" color="#ddd"><MagicStick /></el-icon>
+                    <AiMascotMark :size="40" />
                     <p>点击"重新分析"按钮，AI 将为您分析学情数据</p>
                   </div>
                 </div>
@@ -513,7 +513,7 @@
                 <div class="mascot-ai-sub">个性化学习建议</div>
               </div>
               <el-button type="primary" size="small" :loading="gradeLoading && !gradeRaw" @click="startAiAnalysis({ stream: true })">
-                <el-icon v-if="!gradeLoading"><MagicStick /></el-icon>
+                <AiMascotMark v-if="!gradeLoading" :size="14" style="margin-right:4px" />
                 {{ gradeRaw ? '重新分析' : '开始分析' }}
               </el-button>
             </div>
@@ -537,7 +537,7 @@
                 </div>
               </div>
               <div v-else class="ai-placeholder ai-placeholder-small">
-                <el-icon :size="32" color="#ddd"><MagicStick /></el-icon>
+                <AiMascotMark :size="32" />
                 <p>点击"开始分析"按钮，AI 将为您分析学情数据</p>
               </div>
             </div>
@@ -1200,7 +1200,7 @@
                   <template v-else>今天 · {{ dailyReport.mood.label }}</template>
                 </span>
                 <button type="button" class="rp-chip rp-chip-btn" @click="aiRefresh">
-                  <el-icon :size="11"><MagicStick /></el-icon>重新生成
+                  <AiMascotMark :size="12" />重新生成
                 </button>
               </div>
             </section>
@@ -1295,7 +1295,7 @@
         <el-icon><Timer /></el-icon> 自习室
       </div>
       <div :class="['page-tab', { active: activeTab === 'ai' }]" @click="openSubPage('ai')">
-        <el-icon><MagicStick /></el-icon> 今日报告
+        <AiMascotMark :size="14" /> 今日报告
       </div>
       <div class="page-tab" @click="goPortfolio">
         <el-icon><FolderOpened /></el-icon> 我的作品集
@@ -1312,7 +1312,8 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
-import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, MagicStick, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, Plus, Tickets, Download, Timer, Aim } from '@element-plus/icons-vue'
+import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, Plus, Tickets, Download, Timer, Aim } from '@element-plus/icons-vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import { ElMessage, ElCollapseTransition } from 'element-plus'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'

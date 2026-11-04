@@ -24,6 +24,9 @@
         <h1>校园资讯</h1>
       </div>
       <div class="appbar-actions">
+        <!-- 教师端扩展位：教师端复用本页（UI 与内容不变）时，由外层注入本端专属入口
+             （如「发布」）。学生端不传插槽，这里什么都不渲染。 -->
+        <slot name="appbar-actions" />
         <button
           v-if="isGuestMode()"
           type="button"
@@ -40,7 +43,10 @@
         >
           <el-icon><Search /></el-icon>
         </button>
+        <!-- 互动消息：学生社区（论坛）互动回执，学生端专属；
+             教师端复用本页时不渲染（教师不走学生社区互动，两端读同一份资讯、写入口按角色分开） -->
         <button
+          v-if="role === 'student'"
           type="button"
           class="appbar-btn appbar-btn--dot"
           aria-label="互动消息"
@@ -635,6 +641,15 @@
 </template>
 
 <script setup lang="ts">
+// 组件名：两端共用（学生端「校园资讯」Tab 与教师端首页），keep-alive include 按名匹配
+defineOptions({ name: 'campus-page' })
+
+/**
+ * 角色：本页被学生端与教师端复用，UI 与内容完全一致（同一份资讯流、同一套交互），
+ * 差异只在「按角色开放的写入口」：学生端有社区互动回执，教师端由外层插槽补发布入口。
+ */
+withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
+
 import { ref, computed, reactive, nextTick, onMounted, watch } from 'vue'
 import { ElCarousel } from 'element-plus'
 // v6.1 弹窗减负：搜索改用底部动作面板承接

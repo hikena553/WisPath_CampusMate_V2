@@ -21,7 +21,7 @@
           {{ TASK_SOURCE_LABEL[task.source_type] }}
         </span>
         <span v-if="task.rule_code" class="tt-rule">
-          <el-icon :size="11"><MagicStick /></el-icon>{{ taskRuleLabel(task.rule_code) }}
+          <AiMascotMark :size="12" />{{ taskRuleLabel(task.rule_code) }}
         </span>
         <span v-if="task.overdue" class="tt-overdue-tag">
           <el-icon :size="11"><WarningFilled /></el-icon>已逾期
@@ -82,7 +82,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bell, Calendar, Check, CircleCheckFilled, MagicStick, User, WarningFilled } from '@element-plus/icons-vue'
+import { Bell, Calendar, Check, CircleCheckFilled, User, WarningFilled } from '@element-plus/icons-vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import {
   TASK_PRIORITY_LABEL,
   TASK_SOURCE_LABEL,

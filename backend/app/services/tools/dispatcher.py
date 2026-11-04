@@ -44,14 +44,21 @@ from .teacher import (
     _approve_leave,
     _create_care_record,
     _create_portfolio_item,
+    _create_teacher_schedule,
     _create_teacher_task,
+    _publish_class_announcement,
     _query_care_calendar,
     _query_care_records,
+    _query_class_attendance,
+    _query_class_grade,
     _query_crisis_alerts,
     _query_guardian_logs,
     _query_growth_stats,
+    _query_attendance_roster,
+    _query_homework_status,
     _query_help_requests,
     _query_learning_events,
+    _query_my_courses,
     _query_my_portfolio,
     _query_my_survey_results,
     _query_my_workflows,
@@ -59,8 +66,11 @@ from .teacher import (
     _query_student_detail,
     _query_student_insight,
     _query_students,
+    _query_teacher_schedules,
     _query_teacher_tasks,
     _reply_help_request,
+    _resolve_crisis_alert,
+    _send_message_to_student,
 )
 
 
@@ -125,12 +135,18 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "analyze_leave": _analyze_leave,
             "query_students": _query_students,
             "query_crisis_alerts": _query_crisis_alerts,
+            "resolve_crisis_alert": _resolve_crisis_alert,
+            "send_message_to_student": _send_message_to_student,
             "approve_leave": _approve_leave,
             "query_student_detail": _query_student_detail,
             "query_growth_stats": _query_growth_stats,
             # 待办任务 / 侧写记录
             "query_teacher_tasks": _query_teacher_tasks,
             "create_teacher_task": _create_teacher_task,
+            # 日程计划 / 班级公告
+            "query_teacher_schedules": _query_teacher_schedules,
+            "create_teacher_schedule": _create_teacher_schedule,
+            "publish_class_announcement": _publish_class_announcement,
             "create_care_record": _create_care_record,
             "query_care_records": _query_care_records,
             # 成长档案 / 问卷互评 / 关怀中心 / 家校沟通
@@ -146,6 +162,12 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             # 求助受理（学生求助 → 辅导员帮扶闭环）
             "query_help_requests": _query_help_requests,
             "reply_help_request": _reply_help_request,
+            # 教学域（课表/任课教师 · 考勤 · 作业 · 成绩）
+            "query_my_courses": _query_my_courses,
+            "query_class_attendance": _query_class_attendance,
+            "query_attendance_roster": _query_attendance_roster,
+            "query_homework_status": _query_homework_status,
+            "query_class_grade": _query_class_grade,
             # 开源参考复用（检索可复用开源项目 / 生成页面骨架）
             "search_reference_library": _search_reference_library,
             "generate_page_scaffold": _generate_page_scaffold,

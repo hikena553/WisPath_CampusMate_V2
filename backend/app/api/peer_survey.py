@@ -9,6 +9,8 @@ from app.core.deps import get_current_user, require_role
 from app.models.peer_survey import PeerSurveyResponse, PeerSurveyStatus
 from app.models.user import User, UserRole
 from app.schemas.peer_survey import (
+    PeerSurveyAIDraftIn,
+    PeerSurveyAIDraftOut,
     PeerSurveyCreate,
     PeerSurveyMineItem,
     PeerSurveyOut,
@@ -47,6 +49,15 @@ def list_surveys(
         submitted = peer_survey_service.has_submitted(db, it["id"], token)
         enriched.append({**it, "my_submitted": submitted})
     return enriched
+
+
+@router.post("/ai-draft", response_model=PeerSurveyAIDraftOut)
+async def ai_draft(
+    payload: PeerSurveyAIDraftIn,
+    user: User = Depends(_teacher_only),
+):
+    """AI 辅助发起：一句场景描述 → 推荐标题与评价维度（模型不可用时本地兜底）。"""
+    return await peer_survey_service.ai_draft(payload.scene, payload.target_type)
 
 
 @router.post("", response_model=PeerSurveyOut)

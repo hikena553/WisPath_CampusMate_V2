@@ -9,6 +9,7 @@ from app.core.deps import require_role
 from app.models.user import User, UserRole
 from app.models.academic import Course, ClassGroup, Major, College, Semester
 from app.schemas.academic import CourseOut, CourseCreate, CourseImportResult
+from app.services.teaching_scope import resolve_teacher_id
 
 router = APIRouter(tags=["admin"])
 
@@ -180,7 +181,10 @@ def admin_create_course(
     ).first()
     if conflict:
         raise HTTPException(400, f"时间冲突：与课程「{conflict.name}」(第{conflict.start_period}-{conflict.end_period}节)重叠")
-    obj = Course(**data.model_dump())
+    data_dict = data.model_dump()
+    # 授课教师账号：显式给了就用给的，没给就按姓名反查（反查不到留空，不阻断创建）
+    data_dict["teacher_id"] = data_dict.get("teacher_id") or resolve_teacher_id(db, data_dict.get("teacher"))
+    obj = Course(**data_dict)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -198,7 +202,11 @@ def admin_update_course(
     obj = db.query(Course).get(course_id)
     if not obj:
         raise HTTPException(404, "课程不存在")
-    for k, v in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    # 改了教师姓名必须同步重新反查 teacher_id，否则课会挂在旧教师名下
+    if "teacher" in payload and "teacher_id" not in payload:
+        payload["teacher_id"] = resolve_teacher_id(db, payload["teacher"])
+    for k, v in payload.items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
@@ -546,6 +554,7 @@ async def admin_import_courses(
                     semester=semester,
                     name=course_name,
                     teacher=teacher,
+                    teacher_id=resolve_teacher_id(db, teacher),
                     location=location,
                     day_of_week=day_of_week,
                     start_period=start_period,

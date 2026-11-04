@@ -55,6 +55,9 @@ from app.api.study_room import router as study_room_router
 # 社交关系（关注 / 取关 / 通讯录 / 推荐 / 论坛互动消息）——
 # 上一次改登记表时被顺手删掉，导致 /api/social/* 整片 404、关注按钮点了没反应
 from app.api.social import router as social_router
+from app.api.teaching import router as teaching_router
+from app.api.teacher_me import router as teacher_me_router
+from app.api.teacher_ai import router as teacher_ai_router
 
 # 业务模块路由：按领域聚合登记，新增模块在此追加一行即可
 ROUTERS = [
@@ -110,6 +113,9 @@ ROUTERS = [
     cron_task_router,
     study_room_router,
     social_router,
+    teaching_router,
+    teacher_me_router,
+    teacher_ai_router,
 ]
 
 

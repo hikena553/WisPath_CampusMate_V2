@@ -341,8 +341,10 @@ def overview(db: Session, teacher_id: int, *, days: int = 30, student_id: int | 
     数据来源与台账完全同源（_filtered_query），避免「图表与列表对不上」。
     """
     since = date.today() - timedelta(days=days - 1)
+    since_dt = datetime.combine(since, datetime.min.time())
     scoped = _filtered_query(db, teacher_id, student_id=student_id)
-    logs = scoped.all()
+    # 指标、分布、趋势、Top5 统一按「近 N 天」口径，避免图表与列表/标题对不上
+    logs = [l for l in scoped.all() if l.created_at and l.created_at >= since_dt]
 
     contact_count = db.query(Guardian).filter(
         Guardian.is_deleted.is_(False),
@@ -384,6 +386,8 @@ def overview(db: Session, teacher_id: int, *, days: int = 30, student_id: int | 
         GuardianContactLog.teacher_id == teacher_id,
         GuardianContactLog.is_deleted.is_(False),
         GuardianContactLog.channel == GuardianChannel.SMS,
+        GuardianContactLog.created_at >= since_dt,
+        *([GuardianContactLog.student_id == student_id] if student_id is not None else []),
     ).count()
 
     return {

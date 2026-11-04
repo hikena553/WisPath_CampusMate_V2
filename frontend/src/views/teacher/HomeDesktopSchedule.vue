@@ -50,7 +50,9 @@
       <el-tabs v-model="activeAnnouncementTab" class="announcement-tabs">
         <el-tab-pane label="校园公告" name="campus">
           <div class="announcement-list">
-            <div v-if="campusLoading && campusAnnouncements.length === 0" class="empty-tip-small">加载中…</div>
+            <div v-if="campusLoading && campusAnnouncements.length === 0" class="empty-tip-small">
+              <AgentLoading text="正在读取校园公告" />
+            </div>
             <div v-else-if="campusAnnouncements.length === 0" class="empty-tip-small">暂无校园公告</div>
             <a
               v-for="(n, idx) in campusAnnouncements"
@@ -86,7 +88,14 @@
               <el-button text type="danger" size="small" @click="emit('delete', a.id)">删除</el-button>
             </div>
           </div>
-          <el-button v-if="myAnnouncements.length > 5" text type="primary" size="small" class="view-all-btn">
+          <el-button
+            v-if="myAnnouncements.length > 5"
+            text
+            type="primary"
+            size="small"
+            class="view-all-btn"
+            @click="router.push('/teacher/announcement')"
+          >
             查看全部 <el-icon><DArrowRight /></el-icon>
           </el-button>
         </el-tab-pane>
@@ -97,7 +106,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Calendar, DArrowRight, TopRight } from '@element-plus/icons-vue'
+import AgentLoading from '@/components/common/AgentLoading.vue'
 import { getAnnouncements } from '@/api/campus'
 import type { ScheduleItem } from '@/api/teacher'
 import type { AnnouncementItem } from '@/api/announcement'
@@ -132,6 +143,7 @@ const emit = defineEmits<{
 }>()
 
 const now = new Date()
+const router = useRouter()
 
 const calWeeks = computed(() => {
   const y = props.calYear

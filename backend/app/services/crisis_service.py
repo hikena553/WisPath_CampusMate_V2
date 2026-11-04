@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import sys
 from collections import Counter
@@ -19,6 +20,7 @@ from app.models.crisis import AIDialogSummary, CrisisLevel
 from app.models.user import User
 from app.schemas.crisis import (
     CrisisAnalyticsOut,
+    CrisisInsightOut,
     CrisisKeywordOut,
     CrisisLevelDistOut,
     CrisisSlaItemOut,
@@ -26,9 +28,11 @@ from app.schemas.crisis import (
     CrisisStageOut,
     CrisisTrendPointOut,
 )
-from app.services.llm_service import _get_llm_config
+from app.services.llm_service import _get_llm_config, complete
 from app.services.prompts import build_crisis_summary_prompt, build_semantic_risk_prompt
 from app.utils.enum_helpers import safe_enum_val
+
+logger = logging.getLogger(__name__)
 
 CRISIS_KEYWORDS = [
     "失眠", "睡不着", "焦虑", "抑郁", "压力大", "不想活", "自杀",
@@ -301,3 +305,131 @@ def analytics(db: Session, teacher_id: int | None, days: int = 30, top_n: int = 
         unresolved=unresolved,
         high_risk=high_risk,
     )
+
+
+# ============================ 智能分析（态势研判） ============================
+
+
+def _insight_facts(data: CrisisAnalyticsOut, days: int) -> str:
+    """把聚合指标压成一份事实清单，模型只在此范围内做研判，避免编造。"""
+    recent7 = sum(p.count for p in data.trend[-7:])
+    close_rate = round(data.stage.closed / data.total * 100) if data.total else 0
+    top_kw = "、".join(f"{k.word}({k.count})" for k in data.keywords[:6]) or "无"
+    return (
+        f"趋势区间：近 {days} 天\n"
+        f"预警总数（全量口径，不是近 {days} 天）{data.total}，未闭环 {data.unresolved}，其中高危未闭环 {data.high_risk}\n"
+        f"等级分布：高危 {data.level_dist.severe}，中度 {data.level_dist.moderate}，"
+        f"轻度 {data.level_dist.mild}，正常 {data.level_dist.normal}\n"
+        f"处置阶段：发现 {data.stage.found}，已干预 {data.stage.intervened}，"
+        f"随访中 {data.stage.following}，已闭环 {data.stage.closed}（闭环率 {close_rate}%）\n"
+        f"处置时限：超过 24 小时未办结 {data.sla.overdue} 条，12~24 小时临期 {data.sla.due_soon} 条\n"
+        f"近 7 天新增预警 {recent7} 条\n"
+        f"高频敏感词：{top_kw}"
+    )
+
+
+def _insight_prompt(data: CrisisAnalyticsOut, days: int) -> str:
+    return (
+        "你是高校辅导员心理预警工作台的研判助手。请只依据下面的统计结果，"
+        "输出一段态势研判和今天就能执行的处置建议。\n\n"
+        f"{_insight_facts(data, days)}\n\n"
+        "要求：\n"
+        "1. 只能使用上面的数字与词条，不得编造学生姓名、事件或数据；"
+        f"描述预警总数时用全量口径，只有趋势可以写「近 {days} 天」；\n"
+        "2. summary 为 60~100 字的态势判断，点出风险集中点与当前处置压力"
+        "（如高危未闭环、超时积压、近期趋势），并给出总体判断；\n"
+        "3. advice 给 2~3 条当日可执行的处置建议，每条不超过 30 字，按优先级排序；\n"
+        "4. 语气专业克制，不做医学诊断，不夸大风险；\n"
+        "5. 只输出 JSON，不要代码块与解释："
+        '{"summary": "…", "advice": ["…", "…"]}'
+    )
+
+
+def _parse_insight(text: str) -> tuple[str, list[str]] | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    left, right = raw.find("{"), raw.rfind("}")
+    if left != -1 and right > left:
+        raw = raw[left:right + 1]
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        return None
+    summary = str(obj.get("summary") or "").strip()
+    advice = [str(item).strip() for item in (obj.get("advice") or []) if str(item).strip()]
+    if len(summary) < 8 or not advice:
+        return None
+    return summary[:240], advice[:3]
+
+
+def _rule_insight(data: CrisisAnalyticsOut, days: int) -> CrisisInsightOut:
+    """模型不可用时的规则化研判：保证「智能分析」始终有可读结论。"""
+    now = datetime.now(timezone.utc).isoformat()
+    if data.total <= 0:
+        return CrisisInsightOut(
+            summary="暂未发现预警记录，整体风险平稳，保持日常观察即可。",
+            advice=[
+                "留意近期情绪波动较大的学生，发现异常及时登记预警。",
+                "对已闭环学生保持每周一次的回访，确认状态稳定。",
+            ],
+            source="rule",
+            generated_at=now,
+        )
+
+    parts = [f"当前共 {data.total} 条预警，未闭环 {data.unresolved} 条"]
+    if data.high_risk:
+        parts.append(f"高危未闭环 {data.high_risk} 条")
+    if data.sla.overdue:
+        parts.append(f"超 24 小时未办结 {data.sla.overdue} 条")
+    if data.sla.due_soon:
+        parts.append(f"临期 {data.sla.due_soon} 条")
+    summary = "，".join(parts) + "。"
+    top_kw = data.keywords[:3]
+    if top_kw:
+        summary += f"高频信号集中在「{'、'.join(k.word for k in top_kw)}」。"
+
+    advice: list[str] = []
+    if data.high_risk:
+        advice.append(f"优先面谈 {data.high_risk} 名高危学生，今日完成干预登记。")
+    if data.sla.overdue:
+        advice.append(f"{data.sla.overdue} 条预警已超 24 小时，今日补齐处置记录。")
+    if data.sla.due_soon:
+        advice.append(f"{data.sla.due_soon} 条预警将在 12~24 小时到期，提前安排跟进。")
+    if len(advice) < 2 and data.unresolved:
+        rest = max(data.unresolved - data.high_risk, 0)
+        if rest:
+            advice.append(f"其余 {rest} 条未闭环预警分批安排谈话，避免积压。")
+    if len(advice) < 2:
+        advice.append("保持与班级心理委员的联系，持续收集新的情绪信号。")
+
+    return CrisisInsightOut(
+        summary=summary[:240],
+        advice=advice[:3],
+        source="rule",
+        generated_at=now,
+    )
+
+
+async def insight(db: Session, teacher_id: int | None, days: int = 30) -> CrisisInsightOut:
+    """处置态势智能分析：聚合指标 → 模型研判；失败或未配置时回退规则化结论。"""
+    days = max(1, min(int(days or 30), 365))
+    data = analytics(db, teacher_id=teacher_id, days=days)
+    fallback = _rule_insight(data, days)
+    if data.total <= 0:
+        return fallback
+    try:
+        text = await complete(_insight_prompt(data, days), temperature=0.3, max_tokens=700)
+        parsed = _parse_insight(text)
+        if not parsed:
+            return fallback
+        summary, advice = parsed
+        return CrisisInsightOut(
+            summary=summary,
+            advice=advice,
+            source="ai",
+            generated_at=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception:
+        logger.warning("危机智能分析生成失败，使用规则化研判", exc_info=True)
+        return fallback

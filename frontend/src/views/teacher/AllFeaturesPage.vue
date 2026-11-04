@@ -31,11 +31,6 @@
         />
       </div>
 
-      <div v-if="!keyword.trim()" class="tui-notice feat-tip">
-        <el-icon :size="15"><InfoFilled /></el-icon>
-        <span>会话、通讯录与通知在底部「消息」页签内，此处为其余功能入口</span>
-      </div>
-
       <template v-for="g in visibleGroups" :key="g.title">
         <div class="tui-group-title">
           {{ g.title }}
@@ -90,8 +85,8 @@ import { getDashboardStats, type DashboardStats } from '@/api/teacher'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
-  ArrowRight, Bell, ChatDotRound, Collection, Connection, EditPen, Grid, InfoFilled,
-  Notebook, Search, Stamp, Sunny, WarningFilled,
+  ArrowRight, Bell, ChatDotRound, Collection, EditPen, Grid,
+  Notebook, Search, Stamp, Sunny, TrendCharts, WarningFilled,
 } from '@element-plus/icons-vue'
 
 defineOptions({ name: 'teacher-features' })
@@ -122,31 +117,39 @@ interface FeatureGroup {
 }
 
 /**
- * 功能总览：底部页签已承载 首页 / 学生 / 绵小城 / 消息 / 个人中心，
- * 此处只列其余模块，保证同一功能不重复出现。色值取自设计令牌同源色板。
+ * 功能边界：按「什么时候用」归并，而不是按零散入口堆列。
+ * 底部页签已承载 首页 / 学生 / 绵小城 / 消息 / 个人中心，此处只列其余模块。
+ * 今日工作 = 每天要清的事项；我的教学 = 上课相关；学生成长与关怀 = 面向学生长期跟进；
+ * 我的成长 = 教师自身发展。同一功能只出现在一个分区，避免入口重复。
  */
 const groups: FeatureGroup[] = [
   {
-    title: '学生事务',
+    title: '今日工作',
     items: [
+      { path: '/teacher/tasks', label: '今日重点', desc: '昨天复盘、今天要做什么、哪些学生要关注', icon: Notebook, color: '#079455', tint: '#ecfdf3' },
       { path: '/teacher/approval', label: '审批', desc: '请假、证明等事项的受理与审批', icon: Stamp, color: '#b54708', tint: '#fffaeb', badgeKey: 'approval', tone: 'warn' },
       { path: '/teacher/crisis', label: '预警', desc: '学生风险与危机事件的预警跟进', icon: WarningFilled, color: '#d92d20', tint: '#fef3f2', badgeKey: 'crisis' },
       { path: '/teacher/announcement', label: '公告', desc: '面向班级发布通知与公告', icon: Bell, color: '#2563eb', tint: '#eff4ff' },
     ],
   },
   {
-    title: '成长与关怀',
+    title: '我的教学',
     items: [
-      { path: '/teacher/portfolio', label: '成长档案', desc: '学生成长记录与作品集管理', icon: Collection, color: '#6941c6', tint: '#f4f3ff' },
-      { path: '/teacher/survey', label: '问卷互评', desc: '匿名问卷发放与学生互评', icon: EditPen, color: '#2563eb', tint: '#eff4ff' },
-      { path: '/teacher/care-center', label: '关怀中心', desc: '谈心记录与心理关怀跟进', icon: Sunny, color: '#f79009', tint: '#fffaeb' },
-      { path: '/teacher/guardian', label: '家校沟通', desc: '家长联系人沟通与记录留痕', icon: Connection, color: '#0891b2', tint: '#ecfeff' },
+      { path: '/teacher/schedule', label: '我的课表', desc: '查看我的授课安排，也可按任课教师或班级查课', icon: Notebook, color: '#0891b2', tint: '#ecfeff' },
     ],
   },
   {
-    title: '效率工具',
+    title: '学生成长与关怀',
     items: [
-      { path: '/teacher/tasks', label: '今日任务', desc: '待办、逾期与日程的统一入口', icon: Notebook, color: '#079455', tint: '#ecfdf3' },
+      { path: '/teacher/portfolio', label: '学生档案', desc: '学生成长记录、徽章与育人档案管理', icon: Collection, color: '#6941c6', tint: '#f4f3ff' },
+      { path: '/teacher/care-center', label: '关怀与家校', desc: '谈心、家访、激励与家长沟通台账，同一处留痕', icon: Sunny, color: '#f79009', tint: '#fffaeb' },
+    ],
+  },
+  {
+    title: '我的成长',
+    items: [
+      { path: '/teacher/growth', label: '我的成长', desc: '九项职业能力雷达、AI 成长建议与教学成果', icon: TrendCharts, color: '#6941c6', tint: '#f4f3ff' },
+      { path: '/teacher/survey', label: '问卷互评', desc: '匿名问卷发放、AI 辅助设计与互评结果', icon: EditPen, color: '#2563eb', tint: '#eff4ff' },
       { path: '/teacher/ai', label: 'AI 洞察', desc: '主动发现与推荐联系建议', icon: ChatDotRound, color: '#0891b2', tint: '#ecfeff' },
     ],
   },
@@ -229,8 +232,6 @@ const visibleGroups = computed(() => {
   background: var(--tui-surface);
   box-shadow: 0 0 0 1px var(--tui-brand) inset;
 }
-
-.feat-tip { margin-bottom: 4px; }
 
 .feat-foot {
   margin: 22px 0 0;

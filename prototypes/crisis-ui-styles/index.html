@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>心理预警 · UI 风格方案（三选一）</title>
+<style>
+:root{
+  --page:#eef0f3; --surface:#fff; --ink:#14161a; --sub:#565c66; --quiet:#8a909b;
+  --line:#e5e7ec; --line2:#f0f1f4; --brand:#2563eb;
+  --risk:#a63a2b; --risk-soft:#f8ecea;
+  --warn:#a8720f; --warn-soft:#faf2e2;
+  --mild:#4f6b8a; --ok:#3d7a5e;
+  --r:12px; --r-sm:9px;
+  font-synthesis:none;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  background:var(--page); color:var(--ink);
+  -webkit-font-smoothing:antialiased; padding-bottom:70px;
+}
+button{font-family:inherit}
+
+/* ================= 方案页骨架 ================= */
+.hero{background:#12161d;color:#fff;padding:38px 40px 34px}
+.hero h1{font-size:23px;letter-spacing:.4px}
+.hero h1 span{font-size:12.5px;font-weight:400;color:#8d95a2;margin-left:12px;letter-spacing:0}
+.hero p{margin-top:12px;max-width:940px;font-size:13px;line-height:1.72;color:#aab2bf}
+.hero .fact{display:flex;gap:26px;flex-wrap:wrap;margin-top:18px;font-size:12px;color:#8d95a2}
+.hero .fact b{display:block;font-size:14px;color:#e8ebf0;margin-bottom:2px;font-weight:600}
+
+.nav{position:sticky;top:0;z-index:20;display:flex;gap:8px;align-items:center;
+  padding:11px 40px;background:rgba(255,255,255,.93);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);font-size:12.5px}
+.nav a{text-decoration:none;color:var(--sub);padding:5px 12px;border-radius:999px;border:1px solid var(--line)}
+.nav a:hover{color:var(--ink);border-color:#cfd4dc}
+.nav em{font-style:normal;margin-left:auto;color:var(--quiet);font-size:11.5px}
+
+.sec{max-width:1400px;margin:30px auto 0;padding:0 40px}
+.opt-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.opt-no{width:30px;height:30px;border-radius:8px;background:#12161d;color:#fff;
+  display:grid;place-items:center;font-size:14px;font-weight:700;flex:none;margin-top:1px}
+.opt-title{font-size:19px;font-weight:700;letter-spacing:.2px}
+.opt-title small{font-size:12px;font-weight:400;color:var(--quiet);margin-left:10px;letter-spacing:0}
+.opt-desc{margin:7px 0 0;max-width:820px;font-size:13px;line-height:1.68;color:var(--sub)}
+.opt-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.opt-tags span{font-size:11px;padding:3px 9px;border-radius:999px;background:#fff;border:1px solid var(--line);color:#606874}
+
+.screens{display:flex;gap:26px;align-items:flex-start;margin-top:20px;flex-wrap:wrap}
+.frame{background:#d9dce1;border-radius:16px;padding:10px;box-shadow:0 10px 30px rgba(15,18,24,.10)}
+.frame-bar{display:flex;align-items:center;gap:6px;padding:2px 4px 8px;font-size:10.5px;color:#5e6672}
+.frame-bar i{width:7px;height:7px;border-radius:50%;background:#b9bec7}
+.frame-bar b{margin-left:6px;font-weight:600;color:#3c424c}
+.frame-bar span{margin-left:auto;font-variant-numeric:tabular-nums}
+.desk{width:1180px;border-radius:9px;overflow:hidden;background:#fff}
+.desk-scroll{max-width:100%;overflow-x:auto}
+.phone{width:390px;flex:none;background:#fff;border-radius:26px;overflow:hidden;
+  box-shadow:0 10px 26px rgba(15,18,24,.12);border:1px solid #cfd4dc}
+.phone-scroll{max-width:100%;overflow-x:auto}
+
+.coverage{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--sub)}
+.coverage b{font-size:11.5px;color:var(--ink);margin-right:2px}
+.coverage span{padding:3px 9px;border-radius:6px;background:#fff;border:1px solid var(--line)}
+
+/* ================= 方案 A：处置队列 ================= */
+.pa{--pa-bg:#f5f6f8;--pa-line:#e6e8ed;--pa-ink:#14161a;--pa-sub:#5b626d;--pa-quiet:#8a919c;
+  --pa-risk:#a63a2b;--pa-warn:#a8720f;--pa-mild:#4f6b8a;--pa-ok:#3d7a5e;
+  background:var(--pa-bg);color:var(--pa-ink);padding:18px 22px 22px;font-size:12px}
+.pa-top{display:flex;align-items:flex-start;gap:14px;padding-bottom:14px}
+.pa-h1{font-size:16.5px;font-weight:700;letter-spacing:-.2px}
+.pa-h1 em{font-style:normal;font-size:11px;font-weight:400;color:var(--pa-quiet);margin-left:9px;letter-spacing:0}
+.pa-sub{margin-top:5px;font-size:11px;color:var(--pa-quiet)}
+.pa-top-r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.pa-select{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--pa-line);
+  background:#fff;border-radius:7px;font-size:11.5px;color:var(--pa-sub)}
+.pa-select i{width:6px;height:6px;border-radius:50%;background:var(--pa-ok)}
+.pa-btn{height:28px;padding:0 12px;border-radius:7px;border:1px solid var(--pa-line);background:#fff;
+  color:var(--pa-sub);font-size:11.5px;cursor:pointer}
+.pa-btn.primary{background:#1b2028;border-color:#1b2028;color:#fff}
+.pa-btn.ghost{background:transparent}
+
+.pa-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#fff;border:1px solid var(--pa-line);border-radius:10px}
+.pa-kpi{padding:12px 14px;display:flex;gap:10px;align-items:flex-start;position:relative}
+.pa-kpi+.pa-kpi::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:1px;background:var(--pa-line2,#f0f1f4)}
+.pa-kpi-x{flex:1;min-width:0}
+.pa-kpi-l{font-size:10.5px;color:var(--pa-quiet);letter-spacing:.3px}
+.pa-kpi-n{margin-top:3px;font-size:23px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.6px}
+.pa-kpi-d{margin-top:3px;font-size:10px;color:var(--pa-quiet)}
+.pa-kpi-svg{width:74px;height:26px;flex:none;opacity:.75}
+.pa-kpi.tone-risk .pa-kpi-n{color:var(--pa-risk)}
+.pa-kpi.tone-warn .pa-kpi-n{color:var(--pa-warn)}
+.pa-kpi.tone-ok .pa-kpi-n{color:var(--pa-ok)}
+
+.pa-main{display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:14px;margin-top:14px;align-items:start}
+.pa-left{background:#fff;border:1px solid var(--pa-line);border-radius:10px;overflow:hidden}
+.pa-qhead{display:flex;align-items:center;gap:10px;padding:12px 14px 9px}
+.pa-qhead h3{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+.pa-qhead h3 i{width:3px;height:12px;border-radius:2px;background:#1b2028;display:inline-block}
+.pa-qhead .pa-sort{font-size:10.5px;color:var(--pa-quiet)}
+.pa-qhead .pa-fresh{margin-left:auto;font-size:10.5px;color:var(--pa-quiet);display:flex;align-items:center;gap:4px}
+.pa-qhead .pa-fresh i{width:5px;height:5px;border-radius:50%;background:var(--pa-ok)}
+.pa-tools{display:flex;align-items:center;gap:8px;padding:0 14px 10px;border-bottom:1px solid var(--pa-line2)}
+.pa-seg{display:flex;background:#f1f2f5;border-radius:7px;padding:2px}
+.pa-seg b{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:500;color:var(--pa-quiet);cursor:default}
+.pa-seg b.on{background:#fff;color:var(--pa-ink);font-weight:600;box-shadow:0 1px 2px rgba(16,20,28,.12)}
+.pa-search{margin-left:auto;display:flex;align-items:center;gap:5px;height:26px;padding:0 9px;border:1px solid var(--pa-line);
+  border-radius:7px;font-size:10.5px;color:var(--pa-quiet);width:132px}
+
+.pa-row{display:grid;grid-template-columns:26px 4px minmax(0,1fr) 118px 128px;gap:10px;align-items:center;
+  padding:11px 14px;border-bottom:1px solid var(--pa-line2);position:relative}
+.pa-row:last-child{border-bottom:0}
+.pa-row:hover{background:#fbfbfc}
+.pa-rank{grid-row:1 / span 2;align-self:center;font-size:11px;color:var(--pa-quiet);font-variant-numeric:tabular-nums;text-align:center}
+.pa-rank.top{color:var(--pa-risk);font-weight:700}
+.pa-lv{grid-row:1 / span 2;align-self:center;width:4px;height:36px;border-radius:2px;background:var(--pa-mild)}
+.pa-lv.risk{background:var(--pa-risk)}
+.pa-lv.warn{background:var(--pa-warn)}
+.pa-lv.ok{background:#cfd4dc}
+.pa-who b{font-size:12.5px;font-weight:650}
+.pa-who span{display:block;margin-top:2px;font-size:10px;color:var(--pa-quiet)}
+.pa-who{grid-column:3;grid-row:1}
+.pa-body{grid-column:3;grid-row:2;padding-left:0}
+.pa-tags{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.pa-tag{font-size:9.5px;padding:1px 5px;border-radius:4px;background:#f2f3f5;color:#5b626d;font-weight:600}
+.pa-tag.risk{background:var(--risk-soft);color:var(--pa-risk)}
+.pa-tag.warn{background:var(--warn-soft);color:var(--pa-warn)}
+.pa-tag.ok{background:#e9f3ee;color:var(--pa-ok)}
+.pa-sum{margin-top:5px;font-size:10.5px;line-height:1.5;color:var(--pa-sub);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%}
+.pa-sla{display:flex;flex-direction:column;gap:4px}
+.pa-sla b{font-size:11px;font-weight:650}
+.pa-sla span{font-size:9.5px;color:var(--pa-quiet);font-variant-numeric:tabular-nums}
+.pa-sla b.risk{color:var(--pa-risk)}
+.pa-sla b.warn{color:var(--pa-warn)}
+.pa-meter{height:3px;border-radius:2px;background:#eceef1;overflow:hidden}
+.pa-meter i{display:block;height:100%;background:#b9bfc8}
+.pa-meter i.risk{background:var(--pa-risk)}
+.pa-meter i.warn{background:var(--pa-warn)}
+.pa-ops{display:flex;gap:5px;justify-content:flex-end;align-items:center}
+.pa-ops button{height:25px;padding:0 9px;border-radius:6px;font-size:10.5px;border:1px solid var(--pa-line);
+  background:#fff;color:var(--pa-sub);cursor:pointer;white-space:nowrap}
+.pa-ops button.main{background:#1b2028;border-color:#1b2028;color:#fff;font-weight:600}
+.pa-ops button.link{border:0;background:transparent;color:var(--pa-quiet);padding:0 2px}
+.pa-pager{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--pa-line2);font-size:10.5px;color:var(--pa-quiet)}
+.pa-pager .pg{margin-left:auto;display:flex;gap:4px}
+.pa-pager .pg b{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;border:1px solid var(--pa-line);font-weight:500;color:var(--pa-sub)}
+.pa-pager .pg b.on{background:#1b2028;border-color:#1b2028;color:#fff}
+.pa-pager .pg b.dis{opacity:.35}
+
+.pa-rail{display:flex;flex-direction:column;gap:12px}
+.pa-card{background:#fff;border:1px solid var(--pa-line);border-radius:10px;padding:12px 13px}
+.pa-card-h{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;margin-bottom:9px}
+.pa-card-h span{margin-left:auto;font-size:10px;font-weight:400;color:var(--pa-quiet)}
+.pa-stage{display:flex;flex-direction:column;gap:8px}
+.pa-st{display:grid;grid-template-columns:30px minmax(0,1fr) 24px;gap:7px;align-items:center;font-size:10.5px;color:var(--pa-sub)}
+.pa-st em{font-style:normal;color:var(--pa-quiet)}
+.pa-st .track{height:5px;border-radius:3px;background:#f0f1f4;overflow:hidden}
+.pa-st .track i{display:block;height:100%;border-radius:3px;background:#8a919c}
+.pa-st b{text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums}
+.pa-st.s1 .track i{background:#8fa5bb}
+.pa-st.s2 .track i{background:#9b8f7c}
+.pa-st.s3 .track i{background:#7f9488}
+.pa-trend{height:64px;border-radius:8px;background:#fafbfc;border:1px solid var(--line2);padding:4px;position:relative}
+.pa-trend svg{width:100%;height:100%;display:block}
+.pa-axis{display:flex;justify-content:space-between;margin-top:5px;font-size:9px;color:var(--pa-quiet)}
+.pa-kws{display:flex;flex-wrap:wrap;gap:5px}
+.pa-kw{font-size:10px;padding:3px 7px;border-radius:5px;background:#f2f3f5;color:#5b626d}
+.pa-kw.big{font-size:11.5px;font-weight:600;background:#e9ebef;color:#2f353f}
+.pa-kw.mid{font-size:10.5px;font-weight:600;background:#f0f1f4;color:#3f4652}
+.pa-fu{display:flex;flex-direction:column;gap:7px}
+.pa-fu-i{display:flex;align-items:center;gap:7px;font-size:10.5px}
+.pa-fu-i i{width:6px;height:6px;border-radius:50%;background:var(--pa-warn);flex:none}
+.pa-fu-i b{font-weight:600}
+.pa-fu-i span{margin-left:auto;color:var(--pa-risk);font-variant-numeric:tabular-nums;font-weight:600}
+.pa-tip{font-size:10px;line-height:1.6;color:var(--pa-quiet);border-top:1px dashed var(--pa-line);padding-top:8px;margin-top:2px}
+
+/* ================= 移动端：统一 iOS 设计系统 ================= */
+.iosm{display:flex;flex-direction:column;min-height:760px;background:#F2F2F7;color:#000;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.iosm-dark{background:#000;color:#fff}
+.ios-status{height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px 0 22px;font-size:11.5px;font-weight:600;letter-spacing:-.1px}
+.ios-status .s-right{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:500}
+.ios-batt{width:15px;height:8px;border:1px solid currentColor;border-radius:2px;position:relative;opacity:.85}
+.ios-batt::before{content:"";position:absolute;inset:1px;background:currentColor;border-radius:1px}
+.ios-nav{height:44px;flex:none;display:flex;align-items:center;padding:0 12px;
+  background:rgba(249,249,249,.94);border-bottom:.5px solid rgba(60,60,67,.29);position:relative}
+.iosm-dark .ios-nav{background:rgba(29,29,31,.94);border-bottom-color:#38383A}
+.ios-back{display:flex;align-items:center;gap:1px;color:#007AFF;font-size:15px;white-space:nowrap}
+.iosm-dark .ios-back{color:#0A84FF}
+.ios-back .chev{font-size:19px;line-height:1;margin-top:-2px}
+.ios-title{position:absolute;left:64px;right:64px;text-align:center;font-size:17px;font-weight:600;letter-spacing:-.2px}
+.ios-nav-act{margin-left:auto;color:#007AFF;font-size:15px}
+.iosm-dark .ios-nav-act{color:#0A84FF}
+.ios-body{flex:1;padding-bottom:6px}
+.ios-hero{padding:14px 20px 0}
+.ios-lt{font-size:27px;line-height:1.18;font-weight:700;letter-spacing:-.5px}
+.ios-sub{margin-top:4px;font-size:13px;color:#8E8E93}
+.iosm-dark .ios-sub{color:#98989D}
+.ios-group{margin:14px 16px 0;background:#fff;border-radius:10px;overflow:hidden}
+.iosm-dark .ios-group{background:#1C1C1E}
+.ios-gh{display:flex;align-items:center;padding:18px 16px 7px;font-size:12.5px;color:#8E8E93}
+.iosm-dark .ios-gh{color:#98989D}
+.ios-gh span{margin-left:auto;font-size:12px}
+.ios-row{display:flex;align-items:center;gap:12px;padding:10px 16px;min-height:44px;
+  border-top:.5px solid rgba(60,60,67,.16)}
+.ios-row:first-child{border-top:0}
+.iosm-dark .ios-row{border-top-color:#38383A}
+.ios-ava{width:34px;height:34px;border-radius:50%;background:#E9E9ED;color:#6C6C70;display:grid;
+  place-items:center;font-size:14px;font-weight:600;flex:none}
+.iosm-dark .ios-ava{background:#2C2C2E;color:#AEAEB2}
+.ios-main{flex:1;min-width:0}
+.ios-name{display:flex;align-items:center;gap:7px;font-size:16.5px;font-weight:500;line-height:1.3;letter-spacing:-.1px}
+.ios-desc{margin-top:1px;font-size:13.5px;color:#8E8E93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ios-trail{flex:none;display:flex;align-items:center;gap:3px;font-size:13px;color:#8E8E93}
+.ios-trail b{font-weight:500;color:#FF3B30}
+.ios-trail b.warn{color:#FF9500}
+.ios-trail b.ok{color:#34C759}
+.ios-chev{color:#C7C7CC;font-size:16px;line-height:1}
+.iosm-dark .ios-chev{color:#48484A}
+.ios-dot{width:7px;height:7px;border-radius:50%;background:#FF3B30;flex:none}
+.ios-dot.warn{background:#FF9500}
+.ios-dot.ok{background:#34C759}
+.ios-stats{display:grid;grid-template-columns:repeat(4,1fr);padding:11px 0 12px}
+.ios-sep{border-top:.5px solid rgba(60,60,67,.16)}
+.iosm-dark .ios-sep{border-top-color:#38383A}
+.ios-link{color:#007AFF}
+.iosm-dark .ios-link{color:#0A84FF}
+.ios-stat{position:relative;text-align:center;padding:0 3px}
+.ios-stat+.ios-stat::before{content:"";position:absolute;left:0;top:5px;bottom:5px;width:.5px;background:rgba(60,60,67,.2)}
+.ios-stat b{display:block;font-size:21px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+.ios-stat span{display:block;margin-top:2px;font-size:11px;color:#8E8E93}
+.ios-stat.risk b{color:#FF3B30}
+.ios-stat.warn b{color:#FF9500}
+.ios-stat.ok b{color:#34C759}
+.ios-plain{display:flex;align-items:center;min-height:46px;padding:11px 16px;font-size:16px;
+  border-top:.5px solid rgba(60,60,67,.16)}
+.ios-plain:first-child{border-top:0}
+.iosm-dark .ios-plain{border-top-color:#38383A}
+.ios-plain .v{margin-left:auto;color:#8E8E93;font-size:15px;margin-right:3px}
+.ios-plain .ios-chev{margin-left:auto}
+.ios-plain .v + .ios-chev{margin-left:3px}
+.ios-person{display:flex;align-items:center;gap:11px;padding:16px 20px 12px}
+.ios-person .ios-ava{width:44px;height:44px;font-size:17px}
+.ios-person .n{font-size:20px;font-weight:600;letter-spacing:-.2px}
+.ios-person .m{margin-top:2px;font-size:12.5px;color:#8E8E93}
+.ios-person .lv{margin-left:auto;font-size:13px;font-weight:500;color:#FF3B30;background:rgba(255,59,48,.1);
+  padding:3px 8px;border-radius:6px}
+.ios-quote{padding:2px 16px 0;font-size:16px;line-height:1.58;letter-spacing:-.1px}
+.ios-src{padding:8px 16px 12px;font-size:12px;color:#8E8E93;line-height:1.5}
+.ios-tl .ios-row{align-items:flex-start;gap:11px;padding-top:11px;padding-bottom:11px}
+.ios-tl .ios-dot{margin-top:4px;width:8px;height:8px}
+.ios-tl .t{font-size:15px;font-weight:500;line-height:1.35}
+.ios-tl .p{margin-top:2px;font-size:12.5px;color:#8E8E93;line-height:1.5}
+.ios-tl .time{margin-left:auto;flex:none;font-size:12px;color:#8E8E93;padding-top:2px}
+.ios-adv .ios-row{min-height:44px;font-size:15px}
+.ios-adv .lead{width:18px;flex:none;color:#8E8E93;font-size:13px}
+.ios-adv .ios-row.on{color:#007AFF}
+.iosm-dark .ios-adv .ios-row.on{color:#0A84FF}
+.ios-footnote{padding:10px 20px 0;font-size:12px;line-height:1.55;color:#8E8E93}
+.ios-footerbar{flex:none;margin-top:12px;padding:10px 16px 6px;background:rgba(242,242,247,.94);
+  border-top:.5px solid rgba(60,60,67,.2)}
+.iosm-dark .ios-footerbar{background:rgba(0,0,0,.94);border-top-color:#38383A}
+.ios-btn{display:block;width:100%;height:48px;border:0;border-radius:11px;background:#000;color:#fff;
+  font-size:17px;font-weight:600;letter-spacing:-.1px;cursor:pointer;font-family:inherit}
+.iosm-dark .ios-btn{background:#0A84FF;color:#fff}
+.ios-btn.secondary{background:rgba(120,120,128,.16);color:#007AFF;margin-top:8px}
+.iosm-dark .ios-btn.secondary{background:#1C1C1E;color:#0A84FF}
+.ios-home{flex:none;height:24px;display:flex;align-items:center;justify-content:center}
+.ios-home i{width:134px;height:5px;border-radius:3px;background:rgba(0,0,0,.85)}
+.iosm-dark .ios-home i{background:rgba(255,255,255,.9)}
+.ios-gauge{display:flex;align-items:center;gap:14px;padding:12px 16px 6px}
+.ios-gauge svg{width:136px;height:80px;flex:none}
+.ios-gauge-v b{font-size:26px;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+.ios-gauge-v b small{font-size:11px;color:#8E8E93;font-weight:400;margin-left:2px}
+.ios-gauge-v span{display:block;margin-top:3px;font-size:12px;color:#8E8E93;line-height:1.5}
+.ios-legend{display:flex;gap:10px;margin-top:7px;flex-wrap:wrap}
+.ios-legend span{font-size:10.5px;color:#8E8E93;display:flex;align-items:center;gap:4px}
+.ios-legend i{width:7px;height:7px;border-radius:2px;display:inline-block}
+
+/* ================= 方案 B：个案叙事 ================= */
+.pb{--pb-bg:#f7f4ee;--pb-paper:#fffdf9;--pb-ink:#1f1d19;--pb-sub:#625c52;--pb-quiet:#989084;
+  --pb-line:#e8e1d5;--pb-sage:#4f6b5b;--pb-clay:#a9502f;--pb-gold:#a8823f;
+  background:var(--pb-bg);color:var(--pb-ink);padding:20px 24px;font-size:12px;
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif}
+.pb-top{display:flex;align-items:flex-end;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--pb-line)}
+.pb-h1{font-size:19px;font-weight:600;letter-spacing:1px}
+.pb-h1 em{font-style:normal;font-size:11px;color:var(--pb-quiet);margin-left:10px;letter-spacing:1px;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-top-r{margin-left:auto;display:flex;gap:8px;align-items:center;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-chip{font-size:10.5px;padding:3px 9px;border:1px solid var(--pb-line);border-radius:999px;color:var(--pb-sub);background:var(--pb-paper)}
+.pb-chip b{color:var(--pb-clay);font-weight:600}
+.pb-grid{display:grid;grid-template-columns:232px minmax(0,1fr) 272px;gap:16px;margin-top:14px;align-items:start}
+.pb-col-h{display:flex;align-items:center;gap:6px;margin-bottom:8px;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-col-h b{font-size:11.5px;font-weight:650;letter-spacing:.3px}
+.pb-col-h span{margin-left:auto;font-size:10px;color:var(--pb-quiet)}
+.pb-list{display:flex;flex-direction:column;gap:6px}
+.pb-li{padding:9px 10px;border-radius:9px;border:1px solid var(--pb-line);background:var(--pb-paper);cursor:default}
+.pb-li.on{border-color:#d8cbb6;box-shadow:0 2px 10px rgba(70,58,40,.07)}
+.pb-li-t{display:flex;align-items:center;gap:6px}
+.pb-li-t b{font-size:12.5px;font-weight:600}
+.pb-dot{width:6px;height:6px;border-radius:50%;background:var(--pb-clay);flex:none}
+.pb-dot.warn{background:var(--pb-gold)}
+.pb-dot.ok{background:var(--pb-sage);opacity:.55}
+.pb-li-t span{margin-left:auto;font-size:9.5px;color:var(--pb-quiet);
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-li-s{margin-top:4px;font-size:10.5px;line-height:1.5;color:var(--pb-sub);
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pb-li.on .pb-li-s{color:#3f3a32}
+.pb-more{margin-top:8px;text-align:center;font-size:10px;color:var(--pb-quiet);
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+
+.pb-case{background:var(--pb-paper);border:1px solid var(--pb-line);border-radius:12px;padding:16px 18px;
+  box-shadow:0 1px 2px rgba(70,58,40,.04)}
+.pb-case-h{display:flex;align-items:center;gap:10px}
+.pb-avatar{width:40px;height:40px;border-radius:50%;background:#efe7d9;color:#6b5940;display:grid;place-items:center;
+  font-size:15px;font-weight:600;flex:none;font-family:"Songti SC",serif}
+.pb-name{font-size:19px;font-weight:600;letter-spacing:.5px}
+.pb-meta{margin-top:3px;font-size:10.5px;color:var(--pb-quiet);font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-lv{margin-left:auto;text-align:right;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-lv b{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:4px;background:#f6e6e0;color:var(--pb-clay);font-weight:650}
+.pb-lv span{display:block;margin-top:5px;font-size:10px;color:var(--pb-quiet)}
+.pb-rule{height:1px;background:var(--pb-line);margin:14px 0}
+.pb-quote{position:relative;padding:12px 14px 12px 16px;background:#faf6ee;border-left:2px solid #cdb999;border-radius:0 8px 8px 0}
+.pb-quote p{font-size:12.5px;line-height:1.75;color:#3b352c}
+.pb-quote .src{margin-top:7px;font-size:10px;color:var(--pb-quiet);display:flex;align-items:center;gap:6px;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-kws{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-kw{font-size:9.5px;padding:2px 6px;border-radius:4px;background:#f1ece2;color:#7a6b52;border:1px solid #e6dece}
+.pb-kw.b{background:#f6e6e0;color:#a9502f;border-color:#eed4c9}
+
+.pb-tl{margin-top:16px;position:relative;padding-left:14px;display:flex;flex-direction:column;gap:12px}
+.pb-tl::before{content:"";position:absolute;left:3px;top:4px;bottom:4px;width:1px;background:#e3dbcd}
+.pb-tl-i{position:relative}
+.pb-tl-i::before{content:"";position:absolute;left:-14px;top:3px;width:7px;height:7px;border-radius:50%;background:#cfc4b1;border:1px solid #fdfaf4}
+.pb-tl-i.key::before{background:var(--pb-clay)}
+.pb-tl-i.ok::before{background:var(--pb-sage)}
+.pb-tl-h{display:flex;align-items:center;gap:8px;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-tl-h b{font-size:11.5px;font-weight:650}
+.pb-tl-h span{margin-left:auto;font-size:9.5px;color:var(--pb-quiet);font-variant-numeric:tabular-nums}
+.pb-tl-p{margin-top:4px;font-size:10.5px;line-height:1.6;color:var(--pb-sub);font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-tl-p b{color:var(--pb-sage);font-weight:600}
+
+.pb-side{display:flex;flex-direction:column;gap:12px}
+.pb-side-card{background:var(--pb-paper);border:1px solid var(--pb-line);border-radius:11px;padding:13px 14px}
+.pb-side-h{font-size:11px;letter-spacing:.6px;color:var(--pb-sub);font-weight:650;margin-bottom:9px;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-advice{display:flex;flex-direction:column;gap:7px}
+.pb-adv{display:flex;gap:8px;padding:9px 10px;border:1px solid #eae3d6;border-radius:8px;background:#fcfaf5;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-adv .n{width:17px;height:17px;border-radius:50%;background:#efe7d9;color:#7a6b52;font-size:9.5px;
+  display:grid;place-items:center;flex:none;font-weight:650}
+.pb-adv b{display:block;font-size:11.5px;font-weight:650}
+.pb-adv span{display:block;margin-top:2px;font-size:9.5px;color:var(--pb-quiet)}
+.pb-adv.now .n{background:#f0d9cf;color:#a9502f}
+.pb-note{font-size:9.5px;color:var(--pb-quiet);line-height:1.6;margin-top:7px;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-field{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;padding:6px 0;border-bottom:1px dashed #eee7db;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-field:last-child{border-bottom:0}
+.pb-field span{color:var(--pb-quiet)}
+.pb-field b{font-weight:600}
+.pb-field b.hot{color:var(--pb-clay)}
+.pb-actions{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.pb-actions button{height:32px;border-radius:8px;font-size:12px;border:1px solid #ddd5c6;background:#fffdf8;
+  color:#4a443a;font-family:"PingFang SC","Microsoft YaHei",sans-serif;cursor:pointer}
+.pb-actions button.main{background:#2b2a26;border-color:#2b2a26;color:#f7f2e8;font-weight:600}
+
+.pb-global{margin-top:14px;background:var(--pb-paper);border:1px solid var(--pb-line);border-radius:11px;
+  padding:11px 14px;display:flex;align-items:center;gap:14px;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+.pb-global b{font-size:11px;letter-spacing:.4px;color:var(--pb-sub)}
+.pb-global .g{display:flex;align-items:baseline;gap:4px;font-size:10px;color:var(--pb-quiet)}
+.pb-global .g em{font-style:normal;font-size:15px;font-weight:700;color:#2c2a25;font-variant-numeric:tabular-nums}
+.pb-global .bar{margin-left:auto;display:flex;gap:3px;align-items:flex-end;height:26px}
+.pb-global .bar i{width:4px;background:#d9cdb9;border-radius:2px}
+
+/* 方案 B 移动端：复用统一 iOS 组件（浅色分组列表） */
+
+/* ================= 方案 C：指挥舱 ================= */
+.pc{--pc-bg:#0b111c;--pc-panel:#121a28;--pc-panel2:#0f1724;--pc-line:#1e2a3c;--pc-ink:#e7edf6;
+  --pc-sub:#8b98ac;--pc-quiet:#5c6a7e;--pc-green:#2fbf8f;--pc-amber:#e0a23c;--pc-red:#d9544d;--pc-cyan:#4bb6d6;
+  background:var(--pc-bg);color:var(--pc-ink);padding:18px 22px 20px;font-size:12px;
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+.pc-top{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--pc-line)}
+.pc-live{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--pc-green);letter-spacing:1px}
+.pc-live i{width:6px;height:6px;border-radius:50%;background:var(--pc-green);box-shadow:0 0 8px rgba(47,191,143,.6)}
+.pc-h1{font-size:13.5px;font-weight:700;letter-spacing:2.5px}
+.pc-h1 small{font-size:9.5px;color:var(--pc-quiet);letter-spacing:1px;margin-left:9px;font-weight:400}
+.pc-top-r{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:10px;color:var(--pc-quiet);font-variant-numeric:tabular-nums}
+.pc-mode{display:flex;border:1px solid var(--pc-line);border-radius:5px;overflow:hidden}
+.pc-mode b{padding:3px 8px;font-size:9.5px;font-weight:500;color:var(--pc-quiet)}
+.pc-mode b.on{background:#1a2536;color:var(--pc-cyan)}
+.pc-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.pc-kpi{background:var(--pc-panel);border:1px solid var(--pc-line);border-radius:8px;padding:10px 12px}
+.pc-kpi span{font-size:9.5px;letter-spacing:.6px;color:var(--pc-quiet)}
+.pc-kpi b{display:block;margin-top:4px;font-size:22px;line-height:1;font-weight:700;font-family:ui-monospace,"SF Mono",Consolas,monospace}
+.pc-kpi em{font-style:normal;font-size:9px;color:var(--pc-quiet);margin-left:5px;font-family:inherit}
+.pc-kpi.red b{color:var(--pc-red)}
+.pc-kpi.amber b{color:var(--pc-amber)}
+.pc-kpi.green b{color:var(--pc-green)}
+.pc-main{display:grid;grid-template-columns:minmax(0,1fr) 322px;gap:12px;margin-top:12px;align-items:start}
+.pc-left{display:flex;flex-direction:column;gap:12px}
+.pc-card{background:var(--pc-panel);border:1px solid var(--pc-line);border-radius:9px;padding:12px 14px}
+.pc-card-h{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.8px;color:var(--pc-sub);margin-bottom:8px}
+.pc-card-h span{margin-left:auto;color:var(--pc-quiet);font-size:9.5px;letter-spacing:0}
+.pc-gauge-row{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:center}
+.pc-gauge{position:relative;display:flex;flex-direction:column;align-items:center}
+.pc-gauge svg{width:210px;height:120px;display:block}
+.pc-gauge .val{position:absolute;left:0;right:0;bottom:16px;text-align:center}
+.pc-gauge .val b{font-size:26px;font-weight:700;font-family:ui-monospace,Consolas,monospace;letter-spacing:-1px}
+.pc-gauge .val span{font-size:9px;color:var(--pc-quiet);letter-spacing:1px;margin-left:3px}
+.pc-gauge .ends{position:absolute;left:6px;right:6px;bottom:0;display:flex;justify-content:space-between;font-size:8.5px;color:var(--pc-quiet)}
+.pc-legend{display:flex;flex-direction:column;gap:8px}
+.pc-lg{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--pc-sub)}
+.pc-lg i{width:8px;height:8px;border-radius:2px;flex:none}
+.pc-lg b{margin-left:auto;font-size:10px;color:var(--pc-ink);font-variant-numeric:tabular-nums}
+.pc-lg em{font-style:normal;color:var(--pc-quiet);font-size:9px}
+.pc-note{font-size:9.5px;color:var(--pc-quiet);line-height:1.6;border-top:1px dashed var(--pc-line);padding-top:8px;margin-top:10px}
+.pc-matrix{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-top:2px}
+.pc-cell{height:17px;border-radius:3px;background:#182233}
+.pc-cell.l1{background:#1d3b37}
+.pc-cell.l2{background:#3c4630}
+.pc-cell.l3{background:#5c3f25}
+.pc-cell.l4{background:#6d2e2a}
+.pc-mx-foot{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:9px;color:var(--pc-quiet)}
+.pc-mx-foot .scale{display:flex;gap:2px}
+.pc-mx-foot .scale i{width:12px;height:6px;border-radius:1px}
+.pc-right{display:flex;flex-direction:column;gap:12px}
+.pc-sla{display:flex;flex-direction:column;gap:7px}
+.pc-sla-i{display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--pc-panel2);border:1px solid var(--pc-line);border-radius:6px}
+.pc-sla-i .who{min-width:0;flex:1}
+.pc-sla-i .who b{display:block;font-size:10.5px;font-weight:600;color:var(--pc-ink)}
+.pc-sla-i .who span{display:block;font-size:9px;color:var(--pc-quiet);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-clock{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:11px;font-weight:600;color:var(--pc-red);letter-spacing:-.3px}
+.pc-clock.safe{color:var(--pc-green)}
+.pc-clock.warn{color:var(--pc-amber)}
+.pc-ops{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:2px}
+.pc-ops button{height:28px;border-radius:6px;border:1px solid var(--pc-line);background:#182233;color:var(--pc-sub);font-size:10px}
+.pc-ops button.main{background:#25405a;border-color:#33566f;color:#dbeaf7}
+.pc-bottom{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:12px;margin-top:12px}
+.pc-chart{height:88px;position:relative}
+.pc-chart svg{width:100%;height:100%;display:block}
+.pc-axis{display:flex;justify-content:space-between;font-size:8.5px;color:var(--pc-quiet);margin-top:4px;font-family:ui-monospace,Consolas,monospace}
+.pc-kws{display:flex;flex-wrap:wrap;gap:5px}
+.pc-kw{font-size:9.5px;padding:2px 6px;border-radius:4px;border:1px solid var(--pc-line);color:var(--pc-sub);background:#182233}
+.pc-kw.hot{color:#f0b9ae;border-color:#4a2a26;background:#2a1a1a}
+.pc-foot{margin-top:10px;display:flex;align-items:center;gap:10px;font-size:9px;color:var(--pc-quiet)}
+.pc-foot .dotline{flex:1;height:1px;background:var(--pc-line)}
+
+/* 方案 C 移动端：复用统一 iOS 组件（深色模式） */
+
+/* ================= 对比表 ================= */
+.compare{margin:36px auto 0;max-width:1400px;padding:0 40px}
+.compare h2{font-size:17px}
+.compare p{margin-top:6px;font-size:12.5px;color:var(--sub);line-height:1.7}
+table{width:100%;border-collapse:collapse;margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{padding:10px 13px;text-align:left;font-size:12px;border-bottom:1px solid var(--line2);vertical-align:top}
+th{background:#f6f7f9;font-weight:650;color:#3c424c;font-size:11.5px}
+tr:last-child td{border-bottom:0}
+td b{font-weight:650}
+td em{font-style:normal;color:var(--quiet);font-size:11px}
+.reco{margin:22px 0 0;padding:14px 16px;border:1px solid var(--line);border-left:3px solid #12161d;border-radius:0 10px 10px 0;background:#fff;font-size:12.5px;line-height:1.75;color:var(--sub)}
+.reco b{color:var(--ink)}
+.foot{max-width:1400px;margin:22px auto 0;padding:0 40px;font-size:11.5px;color:var(--quiet);line-height:1.8}
+.foot a{color:#5a6472}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>心理预警 · UI 风格方案<span>三选一 · 2026-11-03</span></h1>
+  <p>先看三种完全不同的设计语言，再决定最终落地哪一套。三套方案都基于现有的预警数据（等级分布 / 处置阶段 / 趋势 / 敏感词 / 处置时限 / 干预闭环），功能一项不少，只改变信息的组织方式与视觉气质。移动端已统一按 iOS 规范重做：大标题、分组列表、发丝分隔、44pt 行高，每屏只留一个主任务。</p>
+  <div class="fact">
+    <div><b>3 套</b>风格方向</div>
+    <div><b>桌面 + 移动</b>同构设计</div>
+    <div><b>100%</b>功能覆盖</div>
+    <div><b>黑白灰</b>为主，红仅作风险语义</div>
+  </div>
+</header>
+
+<nav class="nav">
+  <a href="#a">A · 处置队列</a>
+  <a href="#b">B · 个案叙事</a>
+  <a href="#c">C · 风险指挥舱</a>
+  <em>向下滚动查看桌面端与移动端完整界面</em>
+</nav>
+
+<!-- ============================================================ A -->
+<section class="sec" id="a">
+  <div class="opt-head">
+    <span class="opt-no">A</span>
+    <div>
+      <div class="opt-title">处置队列 <small>Triage Queue · 运营处置台</small></div>
+      <p class="opt-desc">把「谁最该先处理」做成一条带解释的排名队列：每条记录都写明为什么排在这里（逾期 / 今日到期 / 未排期），右侧只留一个主动作。参考告警台与远程监护系统的红黄绿分级与「今日最可能需要干预的人置顶」思路，信息密度高、判断成本低。</p>
+      <div class="opt-tags"><span>效率优先</span><span>排名 + 理由</span><span>黑白灰极简</span><span>移动端 iOS</span></div>
+    </div>
+  </div>
+
+  <div class="screens">
+    <div class="frame desk-scroll">
+      <div class="frame-bar"><i></i><i></i><i></i><b>桌面端 · 心理预警工作台</b><span>1440 × 900</span></div>
+      <div class="desk">
+        <div class="pa">
+          <div class="pa-top">
+            <div>
+              <div class="pa-h1">心理预警工作台<em>风险处置 · 发现 → 干预 → 随访 → 闭环</em></div>
+              <div class="pa-sub">数据更新于 11-03 09:42 · 仅统计名下学生</div>
+            </div>
+            <div class="pa-top-r">
+              <span class="pa-select"><i></i>我的学生 42 人</span>
+              <button class="pa-btn">处置态势</button>
+              <button class="pa-btn primary">刷新</button>
+            </div>
+          </div>
+
+          <div class="pa-kpis">
+            <div class="pa-kpi tone-risk">
+              <div class="pa-kpi-x"><div class="pa-kpi-l">待处置</div><div class="pa-kpi-n">12</div><div class="pa-kpi-d">较上周 +3</div></div>
+              <svg class="pa-kpi-svg" viewBox="0 0 74 26" fill="none"><polyline points="0,18 9,14 18,16 27,11 36,12 45,8 54,10 63,6 74,4" stroke="#a63a2b" stroke-width="1.3"/></svg>
+            </div>
+            <div class="pa-kpi tone-risk">
+              <div class="pa-kpi-x"><div class="pa-kpi-l">高危未闭环</div><div class="pa-kpi-n">3</div><div class="pa-kpi-d">2 条将在 24h 内到期</div></div>
+              <svg class="pa-kpi-svg" viewBox="0 0 74 26" fill="none"><polyline points="0,17 9,17 18,15 27,13 36,14 45,10 54,7 63,8 74,5" stroke="#a63a2b" stroke-width="1.3" opacity=".55"/></svg>
+            </div>
+            <div class="pa-kpi tone-warn">
+              <div class="pa-kpi-x"><div class="pa-kpi-l">随访逾期</div><div class="pa-kpi-n">2</div><div class="pa-kpi-d">最久已逾期 2 天</div></div>
+              <svg class="pa-kpi-svg" viewBox="0 0 74 26" fill="none"><polyline points="0,20 9,19 18,12 27,15 36,9 45,11 54,7 63,9 74,6" stroke="#a8720f" stroke-width="1.3"/></svg>
+            </div>
+            <div class="pa-kpi tone-ok">
+              <div class="pa-kpi-x"><div class="pa-kpi-l">已闭环</div><div class="pa-kpi-n">28</div><div class="pa-kpi-d">闭环率 70%</div></div>
+              <svg class="pa-kpi-svg" viewBox="0 0 74 26" fill="none"><polyline points="0,22 9,20 18,18 27,15 36,13 45,11 54,9 63,6 74,8" stroke="#3d7a5e" stroke-width="1.3"/></svg>
+            </div>
+          </div>
+
+          <div class="pa-main">
+            <div class="pa-left">
+              <div class="pa-qhead">
+                <h3><i></i>处置队列</h3>
+                <span class="pa-sort">按紧急度排序</span>
+                <span class="pa-fresh"><i></i>已同步</span>
+              </div>
+              <div class="pa-tools">
+                <div class="pa-seg"><b class="on">全部 42</b><b>待处置 12</b><b>待随访 9</b><b>已闭环 28</b></div>
+                <div class="pa-search">搜索学生 / 关键词</div>
+              </div>
+
+              <div class="pa-row">
+                <div class="pa-rank top">01</div>
+                <div class="pa-lv risk"></div>
+                <div class="pa-who"><b>陈雨桐</b><span>2024 级 · 软件工程</span></div>
+                <div class="pa-sla"><b class="risk">已超时 48h</b><span>随访日 11-01</span><div class="pa-meter"><i class="risk" style="width:100%"></i></div></div>
+                <div class="pa-ops"><button class="main">登记干预</button><button>档案</button></div>
+                <div class="pa-body">
+                  <div class="pa-tags"><span class="pa-tag risk">高危</span><span class="pa-tag">随访逾期</span><span class="pa-tag">未闭环</span></div>
+                  <p class="pa-sum">连续三晚提到失眠、说“撑不下去了”，开始回避上课与集体活动，情绪持续低落。</p>
+                </div>
+              </div>
+
+              <div class="pa-row">
+                <div class="pa-rank top">02</div>
+                <div class="pa-lv risk"></div>
+                <div class="pa-who"><b>张一鸣</b><span>2023 级 · 数据科学</span></div>
+                <div class="pa-sla"><b class="warn">今日到期</b><span>随访日 11-03</span><div class="pa-meter"><i class="warn" style="width:86%"></i></div></div>
+                <div class="pa-ops"><button class="main">登记干预</button><button>档案</button></div>
+                <div class="pa-body">
+                  <div class="pa-tags"><span class="pa-tag risk">高危</span><span class="pa-tag">今日随访</span><span class="pa-tag">未闭环</span></div>
+                  <p class="pa-sum">反复表达“没有意义”，两周未参加晚自习，与室友交流明显减少。</p>
+                </div>
+              </div>
+
+              <div class="pa-row">
+                <div class="pa-rank">03</div>
+                <div class="pa-lv warn"></div>
+                <div class="pa-who"><b>李思彤</b><span>2024 级 · 数字媒体</span></div>
+                <div class="pa-sla"><b>3 天后</b><span>随访日 11-06</span><div class="pa-meter"><i style="width:52%"></i></div></div>
+                <div class="pa-ops"><button class="main">登记干预</button><button>档案</button></div>
+                <div class="pa-body">
+                  <div class="pa-tags"><span class="pa-tag warn">中度</span><span class="pa-tag">已谈话</span><span class="pa-tag">待随访</span></div>
+                  <p class="pa-sum">考试周焦虑明显，自述心慌、入睡困难，担心成绩下滑。</p>
+                </div>
+              </div>
+
+              <div class="pa-row">
+                <div class="pa-rank">04</div>
+                <div class="pa-lv"></div>
+                <div class="pa-who"><b>王浩然</b><span>2022 级 · 土木工程</span></div>
+                <div class="pa-sla"><b>未排随访</b><span>已等待 2 天</span><div class="pa-meter"><i style="width:22%"></i></div></div>
+                <div class="pa-ops"><button class="main">排随访</button><button>档案</button></div>
+                <div class="pa-body">
+                  <div class="pa-tags"><span class="pa-tag">轻度</span><span class="pa-tag">未排期</span><span class="pa-tag">未闭环</span></div>
+                  <p class="pa-sum">与室友冲突后情绪低落，出现社交回避，暂未发现持续低落。</p>
+                </div>
+              </div>
+
+              <div class="pa-row">
+                <div class="pa-rank">05</div>
+                <div class="pa-lv ok"></div>
+                <div class="pa-who"><b>赵梓涵</b><span>2023 级 · 汉语言文学</span></div>
+                <div class="pa-sla"><b>已闭环</b><span>闭环日 11-02</span><div class="pa-meter"><i class="ok" style="width:0%"></i></div></div>
+                <div class="pa-ops"><button class="link">查看记录</button><button>档案</button></div>
+                <div class="pa-body">
+                  <div class="pa-tags"><span class="pa-tag warn">中度</span><span class="pa-tag ok">已闭环</span><span class="pa-tag">约谈家长</span></div>
+                  <p class="pa-sum">近期与家人沟通紧张，情绪波动；已完成家长沟通并约定两周后回访。</p>
+                </div>
+              </div>
+
+              <div class="pa-pager"><span>共 42 条 · 每页 10 条</span><div class="pg"><b class="dis">‹</b><b class="on">1</b><b>2</b><b>3</b><b>4</b><b>5</b><b>›</b></div></div>
+            </div>
+
+            <aside class="pa-rail">
+              <div class="pa-card">
+                <div class="pa-card-h">处置阶段<span>当前状态</span></div>
+                <div class="pa-stage">
+                  <div class="pa-st s1"><span>发现</span><div class="track"><i style="width:100%"></i></div><b>24</b></div>
+                  <div class="pa-st s2"><span>干预</span><div class="track"><i style="width:62%"></i></div><b>15</b></div>
+                  <div class="pa-st s3"><span>随访</span><div class="track"><i style="width:38%"></i></div><b>9</b></div>
+                  <div class="pa-st"><span>闭环</span><div class="track"><i style="width:67%"></i></div><b>28</b></div>
+                </div>
+              </div>
+
+              <div class="pa-card">
+                <div class="pa-card-h">近 30 天趋势<span>条 / 日</span></div>
+                <div class="pa-trend">
+                  <svg viewBox="0 0 258 56" preserveAspectRatio="none">
+                    <polyline points="0,44 26,40 52,45 78,34 104,38 130,26 156,30 182,18 208,24 234,12 258,16"
+                      fill="none" stroke="#a63a2b" stroke-width="1.4" opacity=".9"/>
+                    <polyline points="0,44 26,40 52,45 78,34 104,38 130,26 156,30 182,18 208,24 234,12 258,16 258,56 0,56"
+                      fill="#a63a2b" opacity=".06" stroke="none"/>
+                  </svg>
+                </div>
+                <div class="pa-axis"><span>10-05</span><span>10-19</span><span>11-02</span></div>
+              </div>
+
+              <div class="pa-card">
+                <div class="pa-card-h">敏感词<span>词频</span></div>
+                <div class="pa-kws">
+                  <span class="pa-kw big">失眠 12</span><span class="pa-kw mid">焦虑 9</span>
+                  <span class="pa-kw mid">撑不下去 7</span><span class="pa-kw">回避社交 5</span>
+                  <span class="pa-kw">没意义 4</span><span class="pa-kw">心慌 3</span>
+                </div>
+              </div>
+
+              <div class="pa-card">
+                <div class="pa-card-h">待随访<span>已到期优先</span></div>
+                <div class="pa-fu">
+                  <div class="pa-fu-i"><i></i><b>陈雨桐</b><span>-2 天</span></div>
+                  <div class="pa-fu-i"><i></i><b>张一鸣</b><span>今日</span></div>
+                </div>
+                <div class="pa-tip">随访日期到期且未闭环的预警会进入此清单，并在队列中置顶。</div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-scroll">
+      <div class="frame">
+        <div class="frame-bar"><i></i><i></i><i></i><b>移动端 · iOS 列表</b><span>390 × 844</span></div>
+        <div class="phone">
+          <div class="iosm">
+            <div class="ios-status"><span>9:41</span><span class="s-right"><span>5G</span><span class="ios-batt"></span></span></div>
+            <div class="ios-nav">
+              <span class="ios-back"><span class="chev">‹</span>首页</span>
+              <span class="ios-title">心理预警</span>
+              <span class="ios-nav-act">筛选</span>
+            </div>
+            <div class="ios-body">
+              <div class="ios-hero">
+                <div class="ios-lt">12 条待处理</div>
+                <div class="ios-sub">其中 3 条高危，2 条随访已逾期</div>
+              </div>
+
+              <div class="ios-group">
+                <div class="ios-stats">
+                  <div class="ios-stat"><b>12</b><span>待处置</span></div>
+                  <div class="ios-stat risk"><b>3</b><span>高危</span></div>
+                  <div class="ios-stat warn"><b>2</b><span>逾期</span></div>
+                  <div class="ios-stat ok"><b>28</b><span>已闭环</span></div>
+                </div>
+              </div>
+
+              <div class="ios-gh">最紧急<span>按随访时间</span></div>
+              <div class="ios-group">
+                <div class="ios-row">
+                  <span class="ios-ava">陈</span>
+                  <div class="ios-main">
+                    <div class="ios-name"><i class="ios-dot"></i>陈雨桐</div>
+                    <div class="ios-desc">连续三晚失眠，回避上课与集体活动</div>
+                  </div>
+                  <div class="ios-trail"><b>逾期 2 天</b><span class="ios-chev">›</span></div>
+                </div>
+                <div class="ios-row">
+                  <span class="ios-ava">张</span>
+                  <div class="ios-main">
+                    <div class="ios-name"><i class="ios-dot"></i>张一鸣</div>
+                    <div class="ios-desc">反复表达“没有意义”，两周未参加晚自习</div>
+                  </div>
+                  <div class="ios-trail"><b>今日到期</b><span class="ios-chev">›</span></div>
+                </div>
+                <div class="ios-row">
+                  <span class="ios-ava">李</span>
+                  <div class="ios-main">
+                    <div class="ios-name"><i class="ios-dot warn"></i>李思彤</div>
+                    <div class="ios-desc">考试周焦虑明显，心慌、入睡困难</div>
+                  </div>
+                  <div class="ios-trail"><b class="warn">3 天后</b><span class="ios-chev">›</span></div>
+                </div>
+              </div>
+
+              <div class="ios-gh">全部预警</div>
+              <div class="ios-group">
+                <div class="ios-plain">预警清单<span class="v">42 条</span><span class="ios-chev">›</span></div>
+                <div class="ios-plain">处置时限<span class="v">逾期 2</span><span class="ios-chev">›</span></div>
+                <div class="ios-plain">处置态势<span class="ios-chev">›</span></div>
+              </div>
+
+              <div class="ios-footnote">按随访日期与风险等级排序；向左轻扫可快速记录处置。</div>
+            </div>
+            <div class="ios-home"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="coverage"><b>功能落点：</b><span>指标带</span><span>队列排序</span><span>状态筛选</span><span>SLA 进度</span><span>干预登记</span><span>标记闭环</span><span>跳转档案</span><span>态势 / 时限 / 清单二级页</span><span>下拉刷新</span></div>
+</section>
+
+<!-- ============================================================ B -->
+<section class="sec" id="b">
+  <div class="opt-head">
+    <span class="opt-no">B</span>
+    <div>
+      <div class="opt-title">个案叙事 <small>Case Narrative · 临床个案卷宗</small></div>
+      <p class="opt-desc">以「一个学生」为中心，而不是一张数据表：左边选人，中间读这一条预警的摘要、原话证据与处置时间线，右边给出下一步动作。参考临床决策仪表盘把摘要、证据来源与时间线放在同一屏、以及风险评估用色带 + 白话说下一步的做法。信息密度适中，情绪负荷低，适合谈心与跟进。</p>
+      <div class="opt-tags"><span>温和克制</span><span>证据链</span><span>低警报疲劳</span><span>桌面纸感 / 移动 iOS</span></div>
+    </div>
+  </div>
+
+  <div class="screens">
+    <div class="frame desk-scroll">
+      <div class="frame-bar"><i></i><i></i><i></i><b>桌面端 · 个案跟进</b><span>1440 × 900</span></div>
+      <div class="desk">
+        <div class="pb">
+          <div class="pb-top">
+            <div class="pb-h1">心理预警 · 个案跟进<em>发现 → 干预 → 随访 → 闭环</em></div>
+            <div class="pb-top-r">
+              <span class="pb-chip">待处置 <b>12</b></span>
+              <span class="pb-chip">高危 <b>3</b></span>
+              <span class="pb-chip">随访逾期 2</span>
+              <span class="pb-chip">全局态势 ⌄</span>
+            </div>
+          </div>
+
+          <div class="pb-grid">
+            <div>
+              <div class="pb-col-h"><b>待处置学生</b><span>12 人</span></div>
+              <div class="pb-list">
+                <div class="pb-li on">
+                  <div class="pb-li-t"><i class="pb-dot"></i><b>陈雨桐</b><span>11-01</span></div>
+                  <div class="pb-li-s">连续三晚失眠，表达“撑不下去了”，回避上课。</div>
+                </div>
+                <div class="pb-li">
+                  <div class="pb-li-t"><i class="pb-dot"></i><b>张一鸣</b><span>11-01</span></div>
+                  <div class="pb-li-s">反复表达“没有意义”，两周未参加晚自习。</div>
+                </div>
+                <div class="pb-li">
+                  <div class="pb-li-t"><i class="pb-dot warn"></i><b>李思彤</b><span>10-30</span></div>
+                  <div class="pb-li-s">考试周焦虑明显，自述心慌、入睡困难。</div>
+                </div>
+                <div class="pb-li">
+                  <div class="pb-li-t"><i class="pb-dot warn"></i><b>王浩然</b><span>10-30</span></div>
+                  <div class="pb-li-s">与室友冲突后情绪低落，社交回避。</div>
+                </div>
+                <div class="pb-li">
+                  <div class="pb-li-t"><i class="pb-dot ok"></i><b>赵梓涵</b><span>10-28</span></div>
+                  <div class="pb-li-s">与家人沟通紧张，已完成家长约谈。</div>
+                </div>
+              </div>
+              <div class="pb-more">查看全部 42 条预警 ›</div>
+            </div>
+
+            <div class="pb-case">
+              <div class="pb-case-h">
+                <span class="pb-avatar">陈</span>
+                <div>
+                  <div class="pb-name">陈雨桐</div>
+                  <div class="pb-meta">2024 级 · 软件工程 · 学号 2024120341</div>
+                </div>
+                <div class="pb-lv"><b>高危 · 随访逾期</b><span>随访已超时 48 小时</span></div>
+              </div>
+
+              <div class="pb-rule"></div>
+
+              <div class="pb-quote">
+                <p>“最近三晚都没怎么睡，白天也提不起劲。感觉自己撑不下去了，不太想去上课，也不想跟人说话。”</p>
+                <div class="src"><span>AI 识别摘要 · 来源：绵小城对话 11-01 22:40</span><span>已脱敏</span></div>
+              </div>
+              <div class="pb-kws">
+                <span class="pb-kw b">失眠 3 次</span><span class="pb-kw b">撑不下去</span>
+                <span class="pb-kw">回避社交</span><span class="pb-kw">持续低落</span><span class="pb-kw">缺课 2 次</span>
+              </div>
+
+              <div class="pb-tl">
+                <div class="pb-tl-i key">
+                  <div class="pb-tl-h"><b>AI 识别 · 高危预警</b><span>11-01 22:40</span></div>
+                  <p class="pb-tl-p">命中 3 个敏感词，语义分级为高危；摘要已脱敏并同步至辅导员工作台。</p>
+                </div>
+                <div class="pb-tl-i">
+                  <div class="pb-tl-h"><b>辅导员谈话 · 30 分钟</b><span>11-02 09:20</span></div>
+                  <p class="pb-tl-p">了解近期睡眠与课程情况，学生愿意继续沟通；约定 11-03 再次跟进。</p>
+                </div>
+                <div class="pb-tl-i">
+                  <div class="pb-tl-h"><b>随访计划 · 今日到期</b><span>应完成 11-03</span></div>
+                  <p class="pb-tl-p">需确认睡眠与出勤变化；若持续回避，转介学校心理咨询中心。</p>
+                </div>
+                <div class="pb-tl-i ok">
+                  <div class="pb-tl-h"><b>待登记本次处置</b><span>未闭环</span></div>
+                  <p class="pb-tl-p">保存后将写入处置记录，并更新下一次随访日期。</p>
+                </div>
+              </div>
+            </div>
+
+            <aside class="pb-side">
+              <div class="pb-side-card">
+                <div class="pb-side-h">建议下一步</div>
+                <div class="pb-advice">
+                  <div class="pb-adv now"><span class="n">1</span><div><b>今日完成面对面谈话</b><span>建议 15 分钟内响应 · 高危未闭环</span></div></div>
+                  <div class="pb-adv"><span class="n">2</span><div><b>评估是否需要约谈家长</b><span>连续失眠与回避上课已持续 3 天</span></div></div>
+                  <div class="pb-adv"><span class="n">3</span><div><b>准备心理咨询转介材料</b><span>若谈话后仍表达“撑不下去”</span></div></div>
+                </div>
+                <div class="pb-note">建议由本地规则按预警等级与随访状态生成，不替代专业判断。</div>
+              </div>
+
+              <div class="pb-side-card">
+                <div class="pb-side-h">个案信息</div>
+                <div class="pb-field"><span>预警等级</span><b class="hot">高危</b></div>
+                <div class="pb-field"><span>发现时间</span><b>11-01 22:40</b></div>
+                <div class="pb-field"><span>处置时限</span><b class="hot">已超时 48h</b></div>
+                <div class="pb-field"><span>当前阶段</span><b>随访中</b></div>
+                <div class="pb-field"><span>历史预警</span><b>2 次（近 90 天）</b></div>
+                <div class="pb-actions">
+                  <button class="main">登记本次干预</button>
+                  <button>标记闭环</button>
+                  <button>查看成长档案</button>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="pb-global">
+            <b>全局态势</b>
+            <div class="g"><em>24</em>发现</div>
+            <div class="g"><em>15</em>干预</div>
+            <div class="g"><em>9</em>随访</div>
+            <div class="g"><em>28</em>闭环</div>
+            <div class="g"><em>70%</em>闭环率</div>
+            <div class="bar">
+              <i style="height:8px"></i><i style="height:11px"></i><i style="height:9px"></i><i style="height:14px"></i>
+              <i style="height:12px"></i><i style="height:18px"></i><i style="height:15px"></i><i style="height:22px"></i>
+              <i style="height:19px"></i><i style="height:26px"></i><i style="height:21px"></i>
+            </div>
+            <span style="font-size:10px;color:#989084">近 30 天</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-scroll">
+      <div class="frame">
+        <div class="frame-bar"><i></i><i></i><i></i><b>移动端 · iOS 个案</b><span>390 × 844</span></div>
+        <div class="phone">
+          <div class="iosm">
+            <div class="ios-status"><span>9:41</span><span class="s-right"><span>5G</span><span class="ios-batt"></span></span></div>
+            <div class="ios-nav">
+              <span class="ios-back"><span class="chev">‹</span>预警</span>
+              <span class="ios-title">个案跟进</span>
+              <span class="ios-nav-act">档案</span>
+            </div>
+            <div class="ios-body">
+              <div class="ios-person">
+                <span class="ios-ava">陈</span>
+                <div>
+                  <div class="n">陈雨桐</div>
+                  <div class="m">2024 级 · 软件工程 · 随访逾期 48h</div>
+                </div>
+                <span class="lv">高危</span>
+              </div>
+
+              <div class="ios-group">
+                <div class="ios-quote">“最近三晚都没怎么睡……感觉自己撑不下去了，不太想去上课，也不想跟人说话。”</div>
+                <div class="ios-src">AI 识别摘要 · 绵小城对话 11-01 22:40 · 已脱敏</div>
+              </div>
+
+              <div class="ios-gh">命中信号<span>3 个</span></div>
+              <div class="ios-group">
+                <div class="ios-plain">失眠<span class="v">3 次</span></div>
+                <div class="ios-plain">撑不下去<span class="v">高危词</span></div>
+                <div class="ios-plain">回避社交<span class="v">近 3 天</span></div>
+              </div>
+
+              <div class="ios-gh">处置时间线<span>未闭环</span></div>
+              <div class="ios-group ios-tl">
+                <div class="ios-row">
+                  <i class="ios-dot"></i>
+                  <div class="ios-main"><div class="t">AI 识别 · 高危</div><div class="p">命中 3 个敏感词，自动生成脱敏摘要</div></div>
+                  <span class="time">11-01</span>
+                </div>
+                <div class="ios-row">
+                  <i class="ios-dot ok" style="background:#8E8E93"></i>
+                  <div class="ios-main"><div class="t">辅导员谈话</div><div class="p">学生愿意继续沟通，约定今日跟进</div></div>
+                  <span class="time">11-02</span>
+                </div>
+                <div class="ios-row">
+                  <i class="ios-dot warn"></i>
+                  <div class="ios-main"><div class="t">随访 · 今日到期</div><div class="p">确认睡眠与出勤变化</div></div>
+                  <span class="time">11-03</span>
+                </div>
+              </div>
+
+              <div class="ios-gh">建议下一步<span>本地规则</span></div>
+              <div class="ios-group ios-adv">
+                <div class="ios-row on"><span class="lead">1</span>今日完成面对面谈话<span class="ios-chev">›</span></div>
+                <div class="ios-row"><span class="lead">2</span>评估是否约谈家长<span class="ios-chev">›</span></div>
+                <div class="ios-row"><span class="lead">3</span>准备心理咨询转介<span class="ios-chev">›</span></div>
+                <div class="ios-plain ios-link">标记已闭环<span class="ios-chev">›</span></div>
+              </div>
+
+              <div class="ios-footnote">建议由本地规则按等级与随访状态生成，不替代专业判断。</div>
+            </div>
+            <div class="ios-footerbar"><button class="ios-btn">登记干预</button></div>
+            <div class="ios-home"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="coverage"><b>功能落点：</b><span>学生筛选列表</span><span>原话证据 + 敏感词</span><span>处置时间线</span><span>建议下一步</span><span>干预登记</span><span>闭环</span><span>档案跳转</span><span>全局态势折叠带</span><span>学生 / 预警深链</span></div>
+</section>
+
+<!-- ============================================================ C -->
+<section class="sec" id="c">
+  <div class="opt-head">
+    <span class="opt-no">C</span>
+    <div>
+      <div class="opt-title">风险指挥舱 <small>Risk Console · 全局监控视角</small></div>
+      <p class="opt-desc">深色高对比的监控台：一个大号风险指数仪表 + 风险矩阵 + 倒计时墙，强调「现在整体有多危险、哪一格在恶化」。参考安全运营中心与临床风险仪表中「色带 gauge + 白话下一步」的表达方式。视觉冲击强、监控感强，适合大屏或管理员视角，教师日常使用可能偏重。</p>
+      <div class="opt-tags"><span>强监控感</span><span>全局风险指数</span><span>倒计时墙</span><span>桌面深色 / 移动 iOS 深色</span></div>
+    </div>
+  </div>
+
+  <div class="screens">
+    <div class="frame desk-scroll">
+      <div class="frame-bar"><i></i><i></i><i></i><b>桌面端 · 风险指挥舱</b><span>1440 × 900</span></div>
+      <div class="desk">
+        <div class="pc">
+          <div class="pc-top">
+            <span class="pc-live"><i></i>LIVE</span>
+            <div class="pc-h1">PSYCH ALERT CONSOLE<small>心理预警 · 风险处置总台</small></div>
+            <div class="pc-top-r">
+              <span>SYNC 09:42:18</span>
+              <span class="pc-mode"><b class="on">我的学生</b><b>全校</b></span>
+            </div>
+          </div>
+
+          <div class="pc-kpis">
+            <div class="pc-kpi red"><span>待处置 UNRESOLVED</span><b>12<em>条</em></b></div>
+            <div class="pc-kpi red"><span>高危未闭环 HIGH RISK</span><b>3<em>人</em></b></div>
+            <div class="pc-kpi amber"><span>随访逾期 SLA BREACH</span><b>2<em>条</em></b></div>
+            <div class="pc-kpi green"><span>已闭环 CLOSED</span><b>28<em>条</em></b></div>
+          </div>
+
+          <div class="pc-main">
+            <div class="pc-left">
+              <div class="pc-card">
+                <div class="pc-card-h">风险指数<span>RISK INDEX · 近 30 天</span></div>
+                <div class="pc-gauge-row">
+                  <div class="pc-gauge">
+                    <svg viewBox="0 0 240 130">
+                      <path d="M24 120 A96 96 0 0 1 72 36.9" fill="none" stroke="#2fbf8f" stroke-width="9" opacity=".65"/>
+                      <path d="M72 36.9 A96 96 0 0 1 168 36.9" fill="none" stroke="#e0a23c" stroke-width="9" opacity=".8"/>
+                      <path d="M168 36.9 A96 96 0 0 1 216 120" fill="none" stroke="#d9544d" stroke-width="9" opacity=".9"/>
+                      <line x1="120" y1="120" x2="146.5" y2="53" stroke="#e7edf6" stroke-width="2"/>
+                      <circle cx="120" cy="120" r="4" fill="#e7edf6"/>
+                    </svg>
+                    <div class="val"><b>62</b><span>/100</span></div>
+                    <div class="ends"><span>0 低</span><span>100 危</span></div>
+                  </div>
+                  <div class="pc-legend">
+                    <div class="pc-lg"><i style="background:#2fbf8f"></i>正常 / 稳定<b>28</b><em>70%</em></div>
+                    <div class="pc-lg"><i style="background:#e0a23c"></i>轻度 · 中度<b>9</b><em>22%</em></div>
+                    <div class="pc-lg"><i style="background:#d9544d"></i>高危未闭环<b>3</b><em>8%</em></div>
+                    <div class="pc-note">指数由「高危占比 × 0.5 + 逾期占比 × 0.3 + 未闭环时长 × 0.2」合成，用于横向看趋势，不作为个体风险判断。</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pc-card">
+                <div class="pc-card-h">风险矩阵<span>学生 × 处置阶段 · 一格一人</span></div>
+                <div class="pc-matrix">
+                  <div class="pc-cell l4"></div><div class="pc-cell l3"></div><div class="pc-cell l2"></div><div class="pc-cell l4"></div>
+                  <div class="pc-cell l3"></div><div class="pc-cell l2"></div><div class="pc-cell l3"></div><div class="pc-cell l1"></div>
+                  <div class="pc-cell l2"></div><div class="pc-cell l1"></div><div class="pc-cell l3"></div><div class="pc-cell l2"></div>
+                  <div class="pc-cell l3"></div><div class="pc-cell l4"></div><div class="pc-cell l2"></div><div class="pc-cell l1"></div>
+                  <div class="pc-cell l1"></div><div class="pc-cell l2"></div><div class="pc-cell l3"></div><div class="pc-cell l2"></div>
+                  <div class="pc-cell l2"></div><div class="pc-cell l1"></div><div class="pc-cell l1"></div><div class="pc-cell l3"></div>
+                  <div class="pc-cell l1"></div><div class="pc-cell l1"></div><div class="pc-cell l2"></div><div class="pc-cell l1"></div>
+                  <div class="pc-cell l1"></div><div class="pc-cell l3"></div><div class="pc-cell l1"></div><div class="pc-cell l2"></div>
+                  <div class="pc-cell l1"></div><div class="pc-cell l1"></div><div class="pc-cell l2"></div><div class="pc-cell l1"></div>
+                </div>
+                <div class="pc-mx-foot">
+                  <span>低</span>
+                  <span class="scale"><i style="background:#1d3b37"></i><i style="background:#3c4630"></i><i style="background:#5c3f25"></i><i style="background:#6d2e2a"></i></span>
+                  <span>危</span>
+                  <span style="margin-left:auto">点击格子进入该学生个案 →</span>
+                </div>
+              </div>
+            </div>
+
+            <aside class="pc-right">
+              <div class="pc-card">
+                <div class="pc-card-h">处置时限<span>SLA WALL</span></div>
+                <div class="pc-sla">
+                  <div class="pc-sla-i"><div class="who"><b>陈雨桐</b><span>高危 · 随访 11-01</span></div><span class="pc-clock">-48:00</span></div>
+                  <div class="pc-sla-i"><div class="who"><b>张一鸣</b><span>高危 · 随访 11-03</span></div><span class="pc-clock warn">-06:18</span></div>
+                  <div class="pc-sla-i"><div class="who"><b>李思彤</b><span>中度 · 随访 11-06</span></div><span class="pc-clock safe">+72:00</span></div>
+                </div>
+                <div class="pc-ops">
+                  <button class="main">登记干预</button><button>查看清单</button>
+                </div>
+              </div>
+
+              <div class="pc-card">
+                <div class="pc-card-h">处置通道<span>阶段流转</span></div>
+                <div class="pc-sla">
+                  <div class="pc-sla-i"><div class="who"><b>待处置</b><span>未闭环 · 未排随访</span></div><span class="pc-clock">12</span></div>
+                  <div class="pc-sla-i"><div class="who"><b>随访中</b><span>已排随访 · 未闭环</span></div><span class="pc-clock safe">9</span></div>
+                  <div class="pc-sla-i"><div class="who"><b>已闭环</b><span>近 30 天</span></div><span class="pc-clock safe">28</span></div>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="pc-bottom">
+            <div class="pc-card">
+              <div class="pc-card-h">预警趋势<span>DAILY · 30D</span></div>
+              <div class="pc-chart">
+                <svg viewBox="0 0 700 80" preserveAspectRatio="none">
+                  <polyline points="0,62 70,55 140,66 210,44 280,52 350,30 420,38 490,20 560,28 630,12 700,18"
+                    fill="none" stroke="#d9544d" stroke-width="1.5" opacity=".9"/>
+                  <polyline points="0,62 70,55 140,66 210,44 280,52 350,30 420,38 490,20 560,28 630,12 700,18 700,80 0,80"
+                    fill="#d9544d" opacity=".08" stroke="none"/>
+                </svg>
+              </div>
+              <div class="pc-axis"><span>10-05</span><span>10-12</span><span>10-19</span><span>10-26</span><span>11-02</span></div>
+            </div>
+            <div class="pc-card">
+              <div class="pc-card-h">敏感词<span>TOP 6</span></div>
+              <div class="pc-kws">
+                <span class="pc-kw hot">失眠 12</span><span class="pc-kw hot">撑不下去 7</span>
+                <span class="pc-kw">焦虑 9</span><span class="pc-kw">回避社交 5</span>
+                <span class="pc-kw">没意义 4</span><span class="pc-kw">心慌 3</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pc-foot"><span class="dotline"></span><span>数据源：AI 对话预警 · 与教师端同源 · 每 60 秒同步</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-scroll">
+      <div class="frame">
+        <div class="frame-bar"><i></i><i></i><i></i><b>移动端 · iOS 深色</b><span>390 × 844</span></div>
+        <div class="phone">
+          <div class="iosm iosm-dark">
+            <div class="ios-status"><span>9:41</span><span class="s-right"><span>5G</span><span class="ios-batt"></span></span></div>
+            <div class="ios-nav">
+              <span class="ios-back"><span class="chev">‹</span>首页</span>
+              <span class="ios-title">风险指挥舱</span>
+              <span class="ios-nav-act">实时</span>
+            </div>
+            <div class="ios-body">
+              <div class="ios-hero">
+                <div class="ios-lt">风险总览</div>
+                <div class="ios-sub">近 30 天 · 较上周 +6</div>
+              </div>
+
+              <div class="ios-group">
+                <div class="ios-gauge">
+                  <svg viewBox="0 0 140 82">
+                    <path d="M16 70 A54 54 0 0 1 42 22" fill="none" stroke="#30D158" stroke-width="6" opacity=".7"/>
+                    <path d="M42 22 A54 54 0 0 1 98 22" fill="none" stroke="#FF9F0A" stroke-width="6" opacity=".85"/>
+                    <path d="M98 22 A54 54 0 0 1 124 70" fill="none" stroke="#FF453A" stroke-width="6" opacity=".95"/>
+                    <line x1="70" y1="70" x2="84" y2="29" stroke="#fff" stroke-width="1.8"/>
+                    <circle cx="70" cy="70" r="3" fill="#fff"/>
+                  </svg>
+                  <div class="ios-gauge-v">
+                    <b>62<small>/100</small></b>
+                    <span>风险指数</span>
+                    <div class="ios-legend">
+                      <span><i style="background:#30D158"></i>稳定 28</span>
+                      <span><i style="background:#FF9F0A"></i>关注 9</span>
+                      <span><i style="background:#FF453A"></i>高危 3</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ios-stats ios-sep">
+                  <div class="ios-stat"><b>12</b><span>待处置</span></div>
+                  <div class="ios-stat risk"><b>3</b><span>高危</span></div>
+                  <div class="ios-stat warn"><b>2</b><span>逾期</span></div>
+                  <div class="ios-stat ok"><b>70%</b><span>闭环率</span></div>
+                </div>
+              </div>
+
+              <div class="ios-gh">最紧急<span>剩余时间</span></div>
+              <div class="ios-group">
+                <div class="ios-row">
+                  <span class="ios-ava">陈</span>
+                  <div class="ios-main">
+                    <div class="ios-name"><i class="ios-dot"></i>陈雨桐</div>
+                    <div class="ios-desc">连续三晚失眠，回避上课与集体活动</div>
+                  </div>
+                  <div class="ios-trail"><b>-48h</b><span class="ios-chev">›</span></div>
+                </div>
+                <div class="ios-row">
+                  <span class="ios-ava">张</span>
+                  <div class="ios-main">
+                    <div class="ios-name"><i class="ios-dot"></i>张一鸣</div>
+                    <div class="ios-desc">反复表达“没有意义”，两周未参加晚自习</div>
+                  </div>
+                  <div class="ios-trail"><b>-6h</b><span class="ios-chev">›</span></div>
+                </div>
+                <div class="ios-row">
+                  <span class="ios-ava">李</span>
+                  <div class="ios-main">
+                    <div class="ios-name"><i class="ios-dot warn"></i>李思彤</div>
+                    <div class="ios-desc">考试周焦虑明显，心慌、入睡困难</div>
+                  </div>
+                  <div class="ios-trail"><b class="warn">+72h</b><span class="ios-chev">›</span></div>
+                </div>
+              </div>
+
+              <div class="ios-gh">更多</div>
+              <div class="ios-group">
+                <div class="ios-plain">预警清单<span class="v">42 条</span><span class="ios-chev">›</span></div>
+                <div class="ios-plain">处置态势<span class="v">趋势 · 词云</span><span class="ios-chev">›</span></div>
+              </div>
+
+              <div class="ios-footnote">数据与教师端同源 · 每 60 秒同步。</div>
+            </div>
+            <div class="ios-footerbar"><button class="ios-btn">登记干预</button></div>
+            <div class="ios-home"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="coverage"><b>功能落点：</b><span>风险指数仪表</span><span>风险矩阵</span><span>SLA 倒计时墙</span><span>阶段通道</span><span>干预登记</span><span>清单 / 态势子页</span><span>学生个案跳转</span><span>趋势与敏感词</span></div>
+</section>
+
+<!-- ============================================================ 对比 -->
+<section class="compare">
+  <h2>怎么选：三个维度对比</h2>
+  <p>三套方案共用同一份数据与同一套业务流程（接口、权限、闭环逻辑均不改动），差别在于「第一眼先看到什么」与「每天打开时的情绪感受」。</p>
+  <table>
+    <thead>
+      <tr><th style="width:14%">维度</th><th style="width:28%">A · 处置队列</th><th style="width:28%">B · 个案叙事</th><th style="width:30%">C · 风险指挥舱</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><b>第一眼焦点</b></td><td>今天先处理哪 1 个人，以及为什么</td><td>这个学生发生了什么、下一步做什么</td><td>整体风险有多高、哪一格在恶化</td></tr>
+      <tr><td><b>信息密度</b></td><td>高，一屏可读完 4-5 条 + 全局</td><td>中，一屏专注 1 个案</td><td>高，但阅读成本最高</td></tr>
+      <tr><td><b>情绪负荷</b></td><td>克制，偏事务感</td><td>最低，适合谈心场景</td><td>最高，强监控与压迫感</td></tr>
+      <tr><td><b>日常效率</b></td><td>最高，批量轮转处置</td><td>高，深度跟进单一个案</td><td>中，更适合总览巡场</td></tr>
+      <tr><td><b>与现有产品气质</b></td><td>最贴合（黑白灰、小字号、教务工具感）</td><td>需要引入纸感与宋体，气质变化明显</td><td>需要新增深色主题，改动面最大</td></tr>
+      <tr><td><b>移动端适配</b></td><td>iOS 分组列表，一条队列滚动</td><td>iOS 个案页，一屏一人</td><td>iOS 深色模式，需维护双主题</td></tr>
+      <tr><td><b>适用角色</b></td><td>辅导员日常 / 桌面为主</td><td>辅导员谈话前后 / 两端皆宜</td><td>管理员监控 / 大屏</td></tr>
+    </tbody>
+  </table>
+
+  <div class="reco">
+    <b>我的建议：</b>以 <b>A</b> 作为教师端主界面骨架（列表与处置效率最高），把 <b>B</b> 的「原话证据 + 时间线 + 建议下一步」吸收为点击某条预警后展开的个案详情——两者组合，既保留队列的可扫读性，又让每一次干预都有上下文。<b>C</b> 更适合单独做管理员的大屏监控，不建议替换教师端日常页面。<br>
+    三套方案均已覆盖现有全部能力：指标总览、等级/阶段/趋势/敏感词分析、处置时限与逾期提醒、清单筛选与分页、干预登记（方式 / AI 草稿 / 随访日期 / 闭环）、标记闭环、跳转学生成长档案、学生 / 预警深链参数、移动端二级页与下拉刷新。
+  </div>
+</section>
+
+<div class="foot">
+  研究参考：Beacon on-call triage（排名队列 + 理由）· RPM Dashboard 2026（红黄绿分级、今日最需干预者置顶）· MIND Dashboard（CHI 2026，摘要 / 证据 / 时间线同屏）· SimClinician（风险色带 gauge + 白话说下一步）· Opal Risk Center（指标 + sparkline + 就地处置）。
+</div>
+
+<script>
+document.querySelectorAll('.nav a').forEach(function (a) {
+  a.addEventListener('click', function (e) {
+    var target = document.querySelector(a.getAttribute('href'));
+    if (!target) return;
+    e.preventDefault();
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+</body>
+</html>

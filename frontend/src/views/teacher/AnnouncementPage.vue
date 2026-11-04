@@ -77,7 +77,7 @@
           </div>
 
           <div v-if="loading" class="tui-empty">
-            <span class="tui-empty-title">加载中…</span>
+            <AgentLoading block :tips="['正在读取公告列表', '正在统计触达情况']" />
           </div>
 
           <div v-else-if="!items.length" class="tui-empty">
@@ -133,99 +133,87 @@
         </section>
       </template>
 
-      <!-- ===================== 移动端：完全保留原有纵向结构（类名 / 顺序不变） ===================== -->
+      <!-- ===================== 移动端：定稿版「信息流 + 阅读率」 =====================
+           一屏内：AI 发布建议 → 三个数 → 公告流（每条带真实触达条）→ 未读提醒 → AI 观察 -->
       <template v-if="isMobile">
-
-      <!-- ① 触达概览：触达率环形进度 + 等级分布 -->
-      <section class="tui-section">
-        <div class="tui-section-head">
-          <h3><el-icon><Promotion /></el-icon>触达概览</h3>
-          <div class="tui-section-extra"><span class="an-total">共 {{ items.length }} 条</span></div>
-        </div>
-        <div class="tui-section-hint">
-          <el-icon><InfoFilled /></el-icon>
-          <span>触达率 = 已读学生数 ÷ 应读学生数（真实回执）。紧急公告会置顶高亮，且在学生端触发更强的提醒。</span>
-        </div>
-        <div class="an-reach">
-          <span class="ring" :style="reachRingStyle"><span class="ring-mid">{{ reachRate }}%</span></span>
-          <div class="an-reach-info">
-            <div class="an-reach-cap">整体触达率</div>
-            <ul class="an-legend">
-              <li><i class="dot dot-danger"></i>紧急 {{ dist.urgent }}</li>
-              <li><i class="dot dot-warn"></i>重要 {{ dist.important }}</li>
-              <li><i class="dot dot-quiet"></i>普通 {{ dist.normal }}</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <!-- ② 公告流：置顶 / 紧急角标 + 触达进度条 -->
-      <section class="tui-section">
-        <div class="tui-section-head">
-          <h3><el-icon><Bell /></el-icon>公告流</h3>
-          <div class="tui-section-extra">
-            <span class="an-total">{{ items.length }} 条</span>
-            <el-button class="an-publish" size="small" :icon="Plus" @click="dialogVisible = true">发布公告</el-button>
-          </div>
-        </div>
-        <div class="tui-section-hint">
-          <el-icon><InfoFilled /></el-icon>
-          <span>紧急公告会置顶显示并高亮角标；进度条为真实触达率（已读 ÷ 应读）。</span>
-        </div>
-
-        <div v-if="loading" class="tui-empty">
-          <span class="tui-empty-title">加载中…</span>
-        </div>
-
-        <div v-else-if="!items.length" class="tui-empty">
-          <span class="tui-empty-icon"><el-icon :size="26"><Bell /></el-icon></span>
-          <span class="tui-empty-title">还没有发布过公告</span>
-          <span class="tui-empty-desc">发布第一条通知，让学生第一时间知晓</span>
-          <el-button class="an-publish" size="small" @click="dialogVisible = true">发布第一条</el-button>
-        </div>
-
-        <div v-else class="tui-stack">
-          <article v-for="a in paged" :key="a.id" class="tui-card an-card" :class="{ 'is-urgent': a.urgency === 'urgent' }">
-            <div class="tui-card-body">
-              <div class="an-head">
-                <span v-if="a.urgency === 'urgent'" class="an-pin"><el-icon :size="11"><Top /></el-icon>置顶</span>
-                <span class="tui-chip" :class="urgencyClass(a.urgency)">{{ urgencyLabel(a.urgency) }}</span>
-                <span class="an-date">{{ (a.created_at || '').slice(0, 10) }}</span>
-              </div>
-              <h3 class="an-title">{{ a.title }}</h3>
-              <p class="an-content">{{ a.content }}</p>
-              <div class="an-reachbar">
-                <div class="an-reachbar-head">
-                  <span>触达率<em v-if="reachDetail(a)" class="an-reach-detail">{{ reachDetail(a) }}</em></span>
-                  <span>{{ reachOf(a) }}%</span>
-                </div>
-                <div class="an-reachbar-track">
-                  <i :class="urgencyBarClass(a.urgency)" :style="{ width: reachOf(a) + '%' }"></i>
-                </div>
-              </div>
-              <div class="an-ops">
-                <a v-if="a.attachment_url" class="an-link" :href="a.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
-                <button class="an-link an-link-danger" @click="remove(a)">删除</button>
-              </div>
+        <div class="tm-page tm-m">
+          <!-- ① AI 发布建议 -->
+          <div class="tm-an-hd">
+            <span class="tm-ah-i"><el-icon :size="16"><Bell /></el-icon></span>
+            <div class="tm-ah-b">
+              <div class="tm-ah-t">{{ publishTip.title }}</div>
+              <div class="tm-ah-s">{{ publishTip.sub }}</div>
             </div>
-          </article>
-        </div>
+            <button class="tm-ai-a tm-pri" type="button" @click="dialogVisible = true">发布</button>
+          </div>
 
-        <div v-if="items.length" class="pagination-wrapper">
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :page-sizes="[10, 20, 50]"
-            :total="items.length"
-            :pager-count="5"
-            small
-            background
-            layout="total, prev, pager, next"
-            @size-change="handleSizeChange"
-            @current-change="handlePageChange"
-          />
+          <!-- ② 三个数 -->
+          <div class="tm-kpis">
+            <div class="tm-kpi"><b>{{ items.length }}</b><span>已发布</span></div>
+            <div class="tm-kpi tm-ok"><b>{{ reachRate }}%</b><span>整体触达</span></div>
+            <div class="tm-kpi" :class="unreadTotal > 0 ? 'tm-bad' : ''"><b>{{ unreadTotal }}</b><span>未读人次</span></div>
+          </div>
+
+          <div class="tm-sec">
+            <span class="tm-sec-t">公告流</span>
+            <span class="tm-sec-m">共 {{ items.length }} 条</span>
+          </div>
+
+          <div v-if="loading" class="tm-m-load">
+            <AgentLoading block :tips="['正在读取公告列表', '正在统计触达情况']" />
+          </div>
+
+          <div v-else-if="!items.length" class="tm-empty">
+            <b>还没有发布过公告</b>
+            <span>发布第一条通知，让学生第一时间知晓</span>
+            <button class="tm-ai-a tm-pri" type="button" style="margin-top: 6px" @click="dialogVisible = true">
+              发布第一条
+            </button>
+          </div>
+
+          <div v-else class="tm-feed">
+            <article v-for="a in paged" :key="a.id" class="tm-fd">
+              <div class="tm-fd-hd">
+                <div class="tm-fd-t">{{ a.title }}</div>
+                <span class="tm-tag" :class="urgencyTagCls(a.urgency)">{{ urgencyLabel(a.urgency) }}</span>
+              </div>
+              <div class="tm-fd-m">
+                <span>{{ (a.created_at || '').slice(0, 10) }}</span>
+                <i>·</i>
+                <span>{{ reachDetail(a) ? `已读 ${reachDetail(a)}` : '暂无回执' }}</span>
+                <span v-if="a.urgency === 'urgent'" class="tm-fd-pin">置顶</span>
+              </div>
+              <div class="tm-fd-bar">
+                <div class="tm-fd-tr">
+                  <i :style="{ width: reachOf(a) + '%', '--fc': urgencyColor(a.urgency) }"></i>
+                </div>
+                <span class="tm-fd-v" :style="{ '--fc': urgencyColor(a.urgency) }">{{ reachOf(a) }}% 已读</span>
+              </div>
+              <div class="tm-fd-ops">
+                <a v-if="a.attachment_url" :href="a.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
+                <span v-else class="tm-fd-muted">无附件</span>
+                <button type="button" class="tm-fd-del" @click="remove(a)">删除</button>
+              </div>
+            </article>
+          </div>
+
+          <div v-if="items.length > paged.length" class="tm-more">
+            <button type="button" @click="showMore">再看 {{ Math.min(pageSize, items.length - paged.length) }} 条</button>
+          </div>
+
+          <!-- ③ 未读提醒：最近一条的未读人次 -->
+          <div v-if="unreadTotal > 0" class="tm-unread">
+            <div class="tm-un-b">
+              <div class="tm-un-t">{{ unreadTotal }} 人次未读</div>
+              <div class="tm-un-s">紧急公告会置顶并强提醒，普通公告建议二次推送</div>
+            </div>
+            <button class="tm-ai-a" type="button" :disabled="reminding" @click="remindUnread">
+              {{ reminding ? '补发中…' : '补发提醒' }}
+            </button>
+          </div>
+
+          <div class="tm-tail">触达率为真实回执（已读 ÷ 应读），发布对象由班级与学生绑定关系推导</div>
         </div>
-      </section>
       </template>
 
       <!-- 发布公告（表单+AI：移动端=全屏子页） -->
@@ -291,11 +279,13 @@ import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
+import AgentLoading from '@/components/common/AgentLoading.vue'
 import {
   createAnnouncement,
   deleteAnnouncement,
   getAnnouncementReach,
   getTeacherAnnouncements,
+  remindAnnouncementUnread,
   type AnnouncementItem,
   type AnnouncementReachItem,
 } from '@/api/announcement'
@@ -312,6 +302,7 @@ const items = ref<AnnouncementItem[]>([])
 const reachMap = ref<Record<number, AnnouncementReachItem>>({})
 const loading = ref(false)
 const saving = ref(false)
+const reminding = ref(false)
 const dialogVisible = ref(false)
 const form = reactive({ title: '', content: '', urgency: 'normal' as AnnouncementItem['urgency'] })
 
@@ -384,9 +375,71 @@ const reachRate = computed(() => {
   const sumRead = rows.reduce((s, r) => s + r.read, 0)
   return Math.round((sumRead / sumTotal) * 100)
 })
-const reachRingStyle = computed(() => ({
-  background: `conic-gradient(var(--tui-brand) 0 ${reachRate.value}%, var(--tui-surface-sunken) ${reachRate.value}% 100%)`,
-}))
+
+/* ---------- 移动端（定稿版·信息流）私有计算 ---------- */
+/** 未读人次：Σ(应读 - 已读)，真实回执 */
+const unreadTotal = computed(() =>
+  (items.value.map(a => reachMap.value[a.id]).filter(Boolean) as AnnouncementReachItem[]).reduce(
+    (s, r) => s + Math.max(0, r.total - r.read),
+    0
+  )
+)
+/** 按紧急程度算平均触达（只在有回执的公告里算） */
+function avgReachByUrgency(u: AnnouncementItem['urgency']) {
+  const rates = items.value
+    .filter(a => a.urgency === u)
+    .map(a => reachMap.value[a.id]?.rate)
+    .filter((r): r is number => typeof r === 'number')
+  if (!rates.length) return 0
+  return Math.round(rates.reduce((s, r) => s + r, 0) / rates.length)
+}
+const urgentReach = computed(() => avgReachByUrgency('urgent'))
+const normalReach = computed(() => avgReachByUrgency('normal'))
+
+/** 移动端顶部 AI 建议：完全由真实回执推导，不编造发送时段 */
+const publishTip = computed(() => {
+  if (!items.value.length) {
+    return { title: '还没有发布过公告', sub: '第一次发布后，这里会给触达建议' }
+  }
+  const best = items.value
+    .map(a => ({ a, r: reachMap.value[a.id] }))
+    .filter(x => x.r)
+    .sort((x, y) => (y.r!.rate || 0) - (x.r!.rate || 0))[0]
+  if (!best) return { title: '回执统计中', sub: '稍后刷新即可看到真实触达率' }
+  return {
+    title: `紧急 ${urgentReach.value}% · 普通 ${normalReach.value}% 触达`,
+    sub: `最高一条「${best.a.title.slice(0, 10)}」${best.r!.rate}% · 未读 ${unreadTotal.value} 人次`,
+  }
+})
+
+/** 移动端：语义色（tm-tag / 触达条） */
+function urgencyTagCls(u: AnnouncementItem['urgency']) {
+  return u === 'urgent' ? 'tm-bad' : u === 'important' ? 'tm-warn' : 'tm-mute'
+}
+function urgencyColor(u: AnnouncementItem['urgency']) {
+  return u === 'urgent' ? '#dd4257' : u === 'important' ? '#d98317' : '#2f6df6'
+}
+/** 移动端：分页改成「再看 N 条」，不占一屏分页器 */
+function showMore() {
+  pageSize.value += 10
+}
+async function remindUnread() {
+  if (reminding.value) return
+  reminding.value = true
+  try {
+    const res = await remindAnnouncementUnread()
+    if (res.reminded > 0) {
+      ElMessage.success(`已向 ${res.reminded} 人次补发站内提醒`)
+      await loadReach()
+    } else {
+      ElMessage.info('最近公告已全部读完，无需补发提醒')
+    }
+  } catch {
+    ElMessage.error('补发提醒失败，请稍后重试')
+  } finally {
+    reminding.value = false
+  }
+}
 
 /* 分页（契约第 2 节统一） */
 const currentPage = ref(1)
@@ -403,18 +456,19 @@ function handlePageChange() {
 }
 watch(() => items.value.length, () => { currentPage.value = 1 })
 
+async function loadReach() {
+  const reach = await getAnnouncementReach().catch(() => null)
+  const map: Record<number, AnnouncementReachItem> = {}
+  for (const r of reach?.items || []) map[r.announcement_id] = r
+  reachMap.value = map
+}
+
 async function load(silent = false) {
   loading.value = true
   try {
     // 公告列表与触达回执并发拉取；触达接口失败不影响列表展示
-    const [list, reach] = await Promise.all([
-      getTeacherAnnouncements(),
-      getAnnouncementReach().catch(() => null),
-    ])
+    const [list] = await Promise.all([getTeacherAnnouncements(), loadReach()])
     items.value = list
-    const map: Record<number, AnnouncementReachItem> = {}
-    for (const r of reach?.items || []) map[r.announcement_id] = r
-    reachMap.value = map
   } catch {
     if (!silent) ElMessage.error('公告加载失败')
   } finally {
@@ -468,6 +522,68 @@ onMounted(load)
 </script>
 
 <style scoped>
+/* ---------- 移动端（定稿版·信息流）只补本页私有件 ---------- */
+.tm-m { min-height: calc(100vh - 60px); }
+.tm-fd-pin {
+  margin-left: auto;
+  font-size: 8.4px;
+  font-weight: 780;
+  color: var(--tm-bad);
+  background: var(--tm-bad-soft);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.tm-fd-ops {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--tm-line);
+  font-size: 9.6px;
+  font-weight: 650;
+}
+.tm-fd-ops a,
+.tm-fd-del {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 9.6px;
+  font-weight: 650;
+  color: var(--tm-brand-deep);
+  cursor: pointer;
+  text-decoration: none;
+}
+.tm-fd-del { margin-left: auto; color: var(--tm-bad); }
+.tm-fd-muted { margin-right: auto; color: var(--tm-ink3); font-weight: 600; }
+.tm-more { padding: 8px 14px 0; }
+.tm-more button {
+  width: 100%;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px dashed var(--tm-line2);
+  background: var(--tm-surf);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--tm-ink2);
+  cursor: pointer;
+}
+.tm-unread {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 9px 14px 0;
+  padding: 9px 10px;
+  border-radius: 11px;
+  background: var(--tm-surf);
+  border: 1px solid var(--tm-line);
+}
+.tm-un-b { flex: 1; min-width: 0; }
+.tm-un-t { font-size: 11px; font-weight: 720; color: #16233a; }
+.tm-un-s { margin-top: 1px; font-size: 9px; color: var(--tm-ink3); line-height: 1.4; }
+.tm-m-load { padding: 8px 14px; }
 .tui-page.pull-enabled { overscroll-behavior-y: contain; }
 
 .an-total { font-size: 11.5px; color: var(--tui-text-quiet); }
@@ -696,10 +812,46 @@ onMounted(load)
 /* ===== 发布弹窗表单 ===== */
 .an-form { display: flex; flex-direction: column; gap: 14px; }
 .an-label {
-  display: block;
-  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--tui-text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 7px;
+}
+/* 标签前的小竖线，替代纯文字标签的单调感 */
+.an-label::before {
+  content: '';
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: #c9ced8;
+}
+
+/* 输入控件统一：浅底 + 圆角 + 聚焦描边 */
+.an-form :deep(.el-input__wrapper),
+.an-form :deep(.el-select__wrapper) {
+  min-height: 40px;
+  padding: 2px 12px;
+  border-radius: 12px;
+  background: #fbfcfe;
+  box-shadow: 0 0 0 1px #e4e8ef inset;
+  transition: box-shadow 0.18s ease, background 0.18s ease;
+}
+.an-form :deep(.el-input__wrapper:hover),
+.an-form :deep(.el-select__wrapper:hover) {
+  background: #fff;
+  box-shadow: 0 0 0 1px #d7dce4 inset;
+}
+.an-form :deep(.el-input__wrapper.is-focus),
+.an-form :deep(.el-select__wrapper.is-focused) {
+  background: #fff;
+  box-shadow: 0 0 0 1px #1f2430 inset, 0 0 0 3px rgba(31, 36, 48, 0.05);
+}
+.an-form :deep(.el-input__inner),
+.an-form :deep(.el-select__placeholder) {
+  font-size: 13px;
+  color: #1f2430;
 }
 </style>

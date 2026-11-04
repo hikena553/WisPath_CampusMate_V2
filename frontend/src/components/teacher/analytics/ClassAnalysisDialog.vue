@@ -29,7 +29,7 @@
       </div>
       <div v-else-if="analysisResult" class="analysis-report markdown-body" v-html="renderedAnalysisHtml"></div>
       <div v-else class="tui-empty">
-        <span class="tui-empty-icon"><el-icon :size="22"><MagicStick /></el-icon></span>
+        <span class="tui-empty-icon"><AiMascotMark :size="24" /></span>
         <span class="tui-empty-title">尚未生成分析</span>
         <span class="tui-empty-desc">点击下方「重新分析」，{{ siteName }}将为您生成班级分析报告</span>
       </div>
@@ -49,7 +49,8 @@
 import { ref, computed, watch } from 'vue'
 // v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
-import { InfoFilled, MagicStick, Refresh } from '@element-plus/icons-vue'
+import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
+import { InfoFilled, Refresh } from '@element-plus/icons-vue'
 import { renderMarkdown } from '@/utils/markdown'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useResponsive } from '@/composables/useResponsive'

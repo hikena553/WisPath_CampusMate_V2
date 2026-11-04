@@ -24,6 +24,7 @@ from app.services.prompts import build_recommend_questions_prompt
 from app.services.proactive_engine import evaluate_student
 from app.services.proactive_insight import generate_insight, get_cached_insight
 from app.services.daily_report import build_daily_report
+from app.services.teacher_daily_report import build_teacher_daily_report
 from app.utils.rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -481,3 +482,16 @@ async def get_daily_report(user: User = Depends(get_current_user), db: Session =
     if user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="今日报告仅学生可用")
     return await build_daily_report(db, user)
+
+
+@router.get("/teacher-daily-report")
+async def get_teacher_daily_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """教师 AI 日报：昨日复盘 + 今日梳理 + 学生成长关注 + 明日规划 + 今日运势。
+
+    事实全部由服务端按教师名下数据计算，LLM 仅负责措辞与重点标注；
+    LLM 不可用时自动降级为规则文案，接口始终返回可渲染的内容。
+    刷新会带 ``?refresh=1`` 绕过前端缓存，服务端 10 分钟内的事实相同即复用。
+    """
+    if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="教师日报仅教师可用")
+    return await build_teacher_daily_report(db, user)

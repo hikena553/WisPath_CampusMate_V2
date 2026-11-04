@@ -9,8 +9,10 @@
       <el-button size="small" round :icon="Plus" class="cr-add-btn" @click="openCreate">新增记录</el-button>
     </div>
 
-    <!-- 加载态 -->
-    <div v-if="loading" class="cr-empty">加载中…</div>
+    <!-- 加载态：与全端统一的智能体式反馈 -->
+    <div v-if="loading" class="cr-empty">
+      <AgentLoading text="正在读取关怀记录" />
+    </div>
 
     <!-- 空态 -->
     <div v-else-if="!records.length" class="cr-empty">
@@ -62,6 +64,7 @@ import {
   type CareRecord,
 } from '@/api/careRecord'
 import CareRecordDialog from './CareRecordDialog.vue'
+import AgentLoading from '@/components/common/AgentLoading.vue'
 
 const props = defineProps<{
   studentId: number

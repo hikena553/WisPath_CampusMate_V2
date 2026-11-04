@@ -7,6 +7,7 @@ class CourseOut(BaseModel):
     id: int
     name: str
     teacher: str
+    teacher_id: Optional[int] = None
     location: str
     day_of_week: int
     start_period: int
@@ -32,6 +33,8 @@ class CourseCreate(BaseModel):
     week_end: int
     semester: str
     credit: Optional[float] = None
+    #: 可选：显式指定授课教师账号。不填则按 teacher 姓名自动反查并回填
+    teacher_id: Optional[int] = None
 
 
 class CourseBatchCreate(BaseModel):

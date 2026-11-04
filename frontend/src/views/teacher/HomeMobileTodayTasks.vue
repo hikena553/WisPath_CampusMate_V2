@@ -128,7 +128,7 @@
         <div class="task-section-head">
           <span class="task-section-dot" style="background:#f59e0b"></span>
           <span class="task-section-title">待批请假</span>
-          <span class="task-section-badge">{{ props.todayLeaves.length }}</span>
+          <span class="task-section-badge is-warn">{{ props.todayLeaves.length }}</span>
         </div>
         <div
           v-for="l in props.todayLeaves"
@@ -148,7 +148,7 @@
         <div class="task-section-head">
           <span class="task-section-dot" style="background:#ef4444"></span>
           <span class="task-section-title">逾期未完成</span>
-          <span class="task-section-badge orange">{{ props.overdueSchedules.length }}</span>
+          <span class="task-section-badge is-danger">{{ props.overdueSchedules.length }}</span>
         </div>
         <div
           v-for="s in props.overdueSchedules"
@@ -180,7 +180,7 @@
         <div class="task-section-head">
           <span class="task-section-dot" style="background:#3b82f6"></span>
           <span class="task-section-title">日程安排</span>
-          <span class="task-section-badge">{{ props.todaySchedules.length }}</span>
+          <span class="task-section-badge is-info">{{ props.todaySchedules.length }}</span>
         </div>
         <div
           v-for="s in props.todaySchedules"
@@ -442,19 +442,20 @@ async function addTaskFromPopup() {
     padding: 10px 12px;
   }
   .task-hero-back {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
     border: none;
-    background: rgba(255,255,255,0.2);
+    background: transparent;
     color: #fff;
+    font-size: 20px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    backdrop-filter: blur(4px);
   }
+  .task-hero-back:active { background: rgba(255, 255, 255, 0.18); }
   .task-hero-title {
     font-size: 15px;
     font-weight: 600;
@@ -884,11 +885,15 @@ async function addTaskFromPopup() {
   .task-section-badge {
     margin-left: auto;
     font-size: 10px;
-    color: #9ca3af;
+    color: #4b5563;
     background: #f3f4f6;
     padding: 1px 8px;
     border-radius: 10px;
   }
+  /* 分组计数按轻重着色：待批=琥珀、逾期=红、日程=蓝 */
+  .task-section-badge.is-warn { color: #b45309; background: #fef3c7; }
+  .task-section-badge.is-danger { color: #dc2626; background: #fee2e2; }
+  .task-section-badge.is-info { color: #1d4ed8; background: #dbeafe; }
 
   /* 任务卡片（飞书风格） */
   .task-card {

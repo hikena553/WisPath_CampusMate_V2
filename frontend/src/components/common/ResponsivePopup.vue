@@ -94,9 +94,10 @@ onUnmounted(() => {
           </header>
           <div class="rp-body">
             <slot />
-          </div>
-          <div v-if="$slots.footer" class="rp-foot">
-            <slot name="footer" />
+            <!-- 操作按钮跟在表单内容末尾（页面结束的下面），不再悬浮吸底 -->
+            <div v-if="$slots.footer" class="rp-foot">
+              <slot name="footer" />
+            </div>
           </div>
         </div>
       </div>
@@ -126,7 +127,7 @@ onUnmounted(() => {
 .rp-wrap {
   position: fixed;
   inset: 0;
-  z-index: 2500;
+  z-index: 2700;
   display: flex;
   justify-content: center;
   background: #fff;
@@ -157,11 +158,12 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  margin-left: -4px;
+  width: 34px;
+  height: 34px;
+  margin-left: 0;
+  flex-shrink: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 50%;
   background: transparent;
   color: #1f2430;
   cursor: pointer;
@@ -194,25 +196,41 @@ onUnmounted(() => {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 16px 16px 24px;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
 }
 
-/* ===== 底部操作条：吸底 + 安全区 ===== */
+/* ===== 操作区：随内容滚到页面末尾，与表单保持同一节奏 ===== */
 .rp-foot {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  background: #fff;
+  margin-top: 18px;
+  padding-top: 14px;
+  padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  background: transparent;
   border-top: 1px solid #eef0f4;
 }
-.rp-foot > :deep(.el-button) { border-radius: 10px; }
+/* 两个操作按钮一行铺满：取消 / 确定各占一半 */
+.rp-foot > :deep(.el-button) {
+  flex: 1 1 0;
+  width: 100%;
+  margin-left: 0;
+  border-radius: 10px;
+}
 
-/* ===== 过渡：整页自底部推入（原生 App 子页手感） ===== */
-.rp-sheet-enter-active { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0.32, 1); }
-.rp-sheet-leave-active { transition: transform 0.24s cubic-bezier(0.4, 0, 1, 1); }
-.rp-sheet-enter-from,
-.rp-sheet-leave-to { transform: translateY(100%); }
+/* ===== 过渡：复用全站唯一实现 .subpage（styles/animations.css，右侧滑入/滑出） =====
+   不再使用自底部推入的抽屉动画，保证与学生端多级页面切换手感完全一致。 */
+</style>
+
+<!-- 非 scoped：下拉浮层被 teleport 到 body，scoped 样式无法命中。
+     移动端全屏子页层级为 2700，而 el-popper 默认约 2000，会把选项盖在子页下面。 -->
+<style>
+@media (max-width: 767px) {
+  .el-select__popper,
+  .el-dropdown__popper,
+  .el-picker__popper {
+    z-index: 3000 !important;
+  }
+}
 </style>

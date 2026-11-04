@@ -99,3 +99,21 @@ export interface CrisisAnalytics {
 export function getCrisisAnalytics(days = 30, topN = 40) {
   return request.get<CrisisAnalytics>('/crisis/analytics', { params: { days, top_n: topN } })
 }
+
+/* ============================ 处置态势智能分析 ============================ */
+
+export interface CrisisInsight {
+  /** 一段态势研判（60~100 字） */
+  summary: string
+  /** 今日可执行的处置建议（2~3 条） */
+  advice: string[]
+  /** ai：模型生成；rule：模型不可用时的指标规则兜底 */
+  source: 'ai' | 'rule'
+  /** ISO 时间 */
+  generated_at: string
+}
+
+/** 基于聚合指标生成态势研判与处置建议；后端保证始终返回结论 */
+export function getCrisisInsight(days = 30) {
+  return request.get<CrisisInsight>('/crisis/analytics/insight', { params: { days } })
+}
