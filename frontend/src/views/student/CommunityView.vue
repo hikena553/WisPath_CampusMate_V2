@@ -62,7 +62,7 @@
       <div v-for="p in posts" :key="p.id" class="post-card" @click="openDetail(p.id)">
         <div class="post-head">
           <el-avatar
-            :size="28"
+            :size="34"
             :src="p.author_avatar || undefined"
             class="post-avatar author-avatar-clickable"
             title="查看个人主页"
@@ -70,11 +70,26 @@
           >
             {{ (p.author_name || '学').slice(0, 1) }}
           </el-avatar>
-          <span class="post-author author-name-clickable" @click.stop="openUserHomepage(p.student_id)">
-            {{ p.author_name || '同学' }}
-          </span>
-          <el-tag size="small" effect="plain" round class="post-cat">{{ p.category }}</el-tag>
-          <span class="post-time">{{ formatTime(p.created_at) }}</span>
+          <div class="post-author-block">
+            <div class="post-author-row">
+              <span class="post-author author-name-clickable" @click.stop="openUserHomepage(p.student_id)">
+                {{ p.author_name || '同学' }}
+              </span>
+              <el-tag size="small" effect="plain" round class="post-cat">{{ p.category }}</el-tag>
+            </div>
+            <span class="post-time">{{ formatTime(p.created_at) }}</span>
+          </div>
+          <el-button
+            v-if="p.student_id !== myId"
+            class="follow-btn"
+            size="small" round
+            :type="p.author_is_following ? 'info' : 'primary'"
+            :plain="p.author_is_following"
+            :loading="followLoadingId === p.student_id"
+            @click.stop="toggleFollow(p)"
+          >
+            {{ p.author_is_following ? '已关注' : '+ 关注' }}
+          </el-button>
         </div>
         <div class="post-title">{{ p.title }}</div>
         <div v-if="p.content" class="post-content">{{ p.content }}</div>
@@ -141,6 +156,16 @@
               >{{ detailPost?.author_name || '同学' }}</div>
               <div class="author-time">{{ formatTime(detailPost?.created_at) }} · {{ detailPost?.category }}</div>
             </div>
+            <el-button
+              v-if="detailPost && detailPost.student_id !== myId"
+              size="small" round
+              :type="detailPost.author_is_following ? 'info' : 'primary'"
+              :plain="detailPost.author_is_following"
+              :loading="followLoadingId === detailPost.student_id"
+              @click.stop="toggleFollow(detailPost)"
+            >
+              {{ detailPost.author_is_following ? '已关注' : '+ 关注' }}
+            </el-button>
             <el-button size="small" text type="danger" v-if="detailPost?.student_id === myId" @click="removeDetailPost">删除</el-button>
           </div>
           <div class="detail-title">{{ detailPost?.title }}</div>
@@ -218,6 +243,7 @@ import {
   toggleLike, getComments, createComment, deleteComment, getHotPosts,
   COMMUNITY_CATEGORIES, type CommunityPost, type CommunityComment,
 } from '@/api/community'
+import { followUser, unfollowUser } from '@/api/social'
 import { useAuthStore } from '@/stores/auth'
 
 // ---------- 状态 ----------
@@ -334,6 +360,24 @@ async function handleLike() {
   loadHot()
 }
 
+// ---------- 关注作者（帖子卡片 / 详情页头，资讯账号与普通作者通用） ----------
+const followLoadingId = ref<number | null>(null)
+
+async function toggleFollow(p: CommunityPost) {
+  if (followLoadingId.value) return
+  followLoadingId.value = p.student_id
+  try {
+    const res = p.author_is_following ? await unfollowUser(p.student_id) : await followUser(p.student_id)
+    p.author_is_following = res.is_following
+    if (detailPost.value?.student_id === p.student_id) detailPost.value.author_is_following = res.is_following
+    ElMessage.success(res.is_following ? `已关注 ${p.author_name || '该作者'}` : '已取消关注')
+  } catch {
+    ElMessage.error('操作失败，请稍后再试')
+  } finally {
+    followLoadingId.value = null
+  }
+}
+
 async function submitComment() {
   const content = commentDraft.value.trim()
   if (!content) return
@@ -439,14 +483,18 @@ async function removeDetailPost() {
 .post-card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); }
 .post-head { display: flex; align-items: center; gap: 8px; }
 .post-avatar { flex-shrink: 0; }
-.post-author { font-size: 12px; color: #666; font-weight: 600; }
+/* 作者块：昵称 + 分类在上，时间在下（资讯阅读器的账号卡片式排版） */
+.post-author-block { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.post-author-row { display: flex; align-items: center; gap: 6px; }
+.post-author { font-size: 13px; color: #444; font-weight: 600; }
+.follow-btn { flex-shrink: 0; margin-left: auto; padding: 5px 12px; }
 /* 作者头像 / 昵称 → 个人主页入口（点卡片其余区域仍是打开帖子详情） */
 .author-avatar-clickable { cursor: pointer; }
 .author-avatar-clickable:active { transform: scale(0.94); }
 .author-name-clickable { cursor: pointer; }
 .author-name-clickable:hover { color: #409eff; }
 .post-cat { flex-shrink: 0; color: #409eff; }
-.post-time { margin-left: auto; font-size: 11px; color: #bbb; }
+.post-time { font-size: 11px; color: #bbb; }
 .post-title { margin-top: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; }
 .post-content {
   margin-top: 4px; font-size: 13px; color: #666; line-height: 1.6;

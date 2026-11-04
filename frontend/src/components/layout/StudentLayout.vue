@@ -69,8 +69,19 @@
       </router-view>
     </main>
 
-    <!-- 移动端底部导航栏：只在「一级页面」显示（见 showTabBar） -->
-    <MobileTabBar v-if="showTabBar" :items="mobileNavItems" :active-key="activeNavKey" :unread-count="unreadCount" @select="handleNavSelect" />
+    <!-- 移动端底部导航栏：只在「一级页面」显示（见 showTabBar）。
+         显隐走 .dock-fade（animations.css）：淡出下沉 / 淡入上浮，
+         不再「啪」一下消失 —— 那一下与 0.3s 的子页滑动语速对不上，观感割裂。 -->
+    <Transition name="dock-fade">
+      <MobileTabBar
+        v-if="showTabBar"
+        :class="{ 'is-pushed': isSubpagePushed }"
+        :items="mobileNavItems"
+        :active-key="activeNavKey"
+        :unread-count="unreadCount"
+        @select="handleNavSelect"
+      />
+    </Transition>
 
     <!-- 个人主页浮层：消息中心 / 社区等入口调用 openUserHomepage() 即拉起，全端共用一份 -->
     <UserHomepage />
@@ -81,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
@@ -96,7 +107,8 @@ import type { Course } from '@/types'
 import { ChatDotRound, Memo, Message, User, SwitchButton, Odometer } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useDockInset } from '@/composables/useDockInset'
-import { hasOpenSubPage } from '@/composables/useMobileSubPage'
+import { hasOpenSubPage, isSubpagePushed } from '@/composables/useMobileSubPage'
+import { pageTransition, setPageTransition, resolvePageTransition } from '@/utils/routeTransition'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import UserHomepage from '@/components/profile/UserHomepage.vue'
 import BadgeAwardOverlay from '@/components/profile/BadgeAwardOverlay.vue'
@@ -109,40 +121,39 @@ const route = useRoute()
 const auth = useAuthStore()
 const { isMobile } = useResponsive()
 
-// 路由过渡分方向（2026-10 起，与页内子页的覆盖式观感对齐）：
-// 1) 推入（主页 → 快捷子页、子页 ↔ 子页）：.route-subpage —— 新页从右滑入盖住旧页，
-//    旧页原地不动。**不能用 .subpage** —— 那个类给页内场景设计（主页面在
-//    Transition 之外、没有 leave 元素）。桌面端路由页是流内布局，离场页不脱流就会
-//    与进场页分摊高度（各约 50%）→ 高度塌陷抽搐；移动端快捷页自身是 fixed 整屏
-//    覆盖层（见各页根元素样式），离场主页留在流内也不会被分摊高度，
-//    几何规则见 animations.css 路由段的断点拆分。
-// 2) 返回（子页 → 主页）：.route-subpage-back —— 离场的子页**原路向右滑出**，
-//    进入的主页面原地不动地露出来。此前路由级不分方向，返回也播「新页滑入」，
-//    观感是「又前进了一页」，与搜索/详情页「子页滑出」的返回不一致。
-//    旧页不能跟新页一起动：两页同时位移是「传送带」穿帮（此前用户反馈过「退出动画不对」），
-//    所以滑动的只有离场页自己。
-// 3) 其余同级页面切换（底部导航/顶栏之间，如校园资讯↔驾驶舱）：卡片式切换（新页浮起放大到位，旧页缩小退后）
-const quickPagePaths = ['/student/plan', '/student/portfolio', '/student/growth', '/student/emotion']
-const pageTransition = ref('')
-watch(
-  () => route.path,
-  (to, from) => {
-    const toQuick = quickPagePaths.includes(to)
-    const fromQuick = quickPagePaths.includes(from)
-    if (toQuick || fromQuick) {
-      pageTransition.value = fromQuick && !toQuick ? 'route-subpage-back' : 'route-subpage'
-    } else {
-      pageTransition.value = 'page-card'
-    }
-  },
-  { flush: 'pre' }
-)
+// 路由过渡分方向（2026-10 起，与页内子页的覆盖式观感对齐）：三种过渡、一张层级表，
+// 配置在 utils/routeTransition.ts 的 ROUTE_NAV_DEPTH —— 校园资讯 / 消息 及其子页
+// （messages/search、messages/add、portfolio）都在那张表里标了层级，这里只按
+// 「下钻 = route-subpage、返回 = route-subpage-back、平级 = page-card」取名字，
+// 不再维护一份 if 路径列表（此前 quickPagePaths 里 plan/growth/emotion 早就变成
+// 重定向、永远匹配不到，只剩 portfolio 一条真正生效）。
+// 1) 推入：.route-subpage —— 新页从右滑入盖住旧页，旧页原地不动。
+//    **不能用 .subpage** —— 那个类给页内场景设计（主页面在 Transition 之外、没有
+//    leave 元素）。桌面端路由页是流内布局，离场页不脱流就会与进场页分摊高度
+//    （各约 50%）→ 高度塌陷抽搐；移动端子页自身是 fixed 整屏覆盖层，离场页留在流内
+//    也不会被分摊高度，几何规则见 animations.css 路由段的断点拆分。
+// 2) 返回：.route-subpage-back —— 离场的子页**原路向右滑出**，一级页原地露出来。
+//    两页同时位移是「传送带」穿帮（此前用户反馈过「退出动画不对」），所以滑动的
+//    只有该动的那一页。
+// 3) 平级（底部导航 / 顶栏之间，如校园资讯 ↔ 消息 ↔ 驾驶舱）：卡片式切换。
+//
+// 为什么用 router.beforeEach 而不是 watch(route.path)：**返回（router.back()）会输**。
+// popstate 那条路径上，路由提交与 <router-view> 的 patch 挨得太近 —— 实测（390×844，
+// 消息搜索页点返回）离开元素拿到的是上一次的过渡名（route-subpage-leave-*），
+// 而 animations.css 只定义了 .route-subpage-back-leave-active，于是「没有动画、
+// 干等 320ms 再消失」。守卫在路由提交之前跑，name 一定是这一趟的。
+const stopTransitionGuard = router.beforeEach((to, from) => {
+  setPageTransition(resolvePageTransition(to.path, from.path))
+})
+onUnmounted(stopTransitionGuard)
 
-/** 只有覆盖式滑动需要显式时长兜底移除（离场页脱流，见 animations.css）；
+/** 只有覆盖式过渡需要显式时长兜底移除（离场页脱流，见 animations.css）；
     卡片切换交给 Vue 自动检测，与 CSS 时长精确对齐 */
-const transitionDuration = computed(() =>
-  pageTransition.value === 'route-subpage' || pageTransition.value === 'route-subpage-back' ? 320 : undefined
-)
+const transitionDuration = computed(() => {
+  // 子页横滑的位移是一屏宽（320ms，与 animations.css 同步）；卡片切换交给 Vue 自动检测
+  if (pageTransition.value === 'route-subpage' || pageTransition.value === 'route-subpage-back') return 320
+  return undefined
+})
 
 // 移动端底部导航
 // 「工作台」页签位已改为「消息」：会话 / 通讯录 / 论坛互动集中在这里，
@@ -179,16 +190,31 @@ const TAB_BAR_ROUTES = new Set([
   '/student/campus',
   '/student/schedule',
   '/student/messages',
+  // 消息页「好友」视图是它自己的地址（同一页面、另一个视图），仍属一级页面
+  '/student/messages/friends',
   '/student/profile',
   // 工作台（办事服务）虽已不占页签，但仍是模块落地页（入群等流程会直达此处），
   // 页面本身没有返回键，保留导航避免「进得来出不去」；它的办事子页仍按二级处理。
   '/student/workbench',
 ])
 
-const showTabBar = computed(() => isMobile.value && TAB_BAR_ROUTES.has(route.path) && !hasOpenSubPage.value)
+/**
+ * 搜索页退场期间的「导航让位」：底部导航属于底下那页（消息列表），
+ * 它 z-index 1000，会浮在正在下滑的搜索页上面 —— 看起来像导航提前跳出来压着页面。
+ * 先按住 360ms（与下滑动画同长），等搜索页滑走再挂载，导航跟着列表一起露出来。
+ */
+const showTabBar = computed(() =>
+  isMobile.value && TAB_BAR_ROUTES.has(route.path) && !hasOpenSubPage.value
+)
 
-// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）
-useDockInset(showTabBar)
+// 悬浮胶囊的底部让位（加到页面根元素上，而不是 .main-area 的外层内边距）。
+// 注意这里**不跟 showTabBar 走**：showTabBar 在打开子页的那一刻就变 false，
+// 若留白一起撤掉，页面根元素的 padding-bottom:82px 会瞬间消失 —— 此时子页
+// 正向左推开这一页（-30%），观感是内容突然往上跳一截，比导航消失更割裂。
+// 子页是整屏不透明覆盖层，这点留白看不见，所以按「路由是否页签页」来算：
+// 页签页一直留白（含子页打开期间），非页签路由（消息搜索 / 添加朋友）为 0。
+const dockInsetOn = computed(() => isMobile.value && TAB_BAR_ROUTES.has(route.path))
+useDockInset(dockInsetOn)
 
 function handleNavSelect(item: { route: string; label?: string }) {
   if (item.route.startsWith('/student/campus')) {

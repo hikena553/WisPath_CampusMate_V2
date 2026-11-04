@@ -53,8 +53,12 @@ export interface HomepageMutual {
   common_groups: number
   is_my_tutor: boolean
   is_my_student: boolean
-  /** 是否已建立单聊关系：决定主页显示「加为好友」还是「删除好友」 */
+  /** 是否已建立单聊关系（聊过天） */
   has_conversation: boolean
+  /** 我有没有关注对方：本站「好友 = 我关注的」，主页的联系人菜单据此显示 */
+  is_following: boolean
+  /** 对方有没有关注我 */
+  is_follower: boolean
 }
 
 export interface UserHomepage {

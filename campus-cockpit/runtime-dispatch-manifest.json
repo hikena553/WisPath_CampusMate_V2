@@ -1,0 +1,274 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-10-03T19:24:40.254Z",
+  "source": "build-page-dispatch-manifest.mjs",
+  "mode": "existing-edit",
+  "summary_path": "runtime-orchestration-summary.json",
+  "skillProvenance": {
+    "name": "solo-design",
+    "version": "2026.08.06.19.15.08",
+    "version_source": "skill-release-manifest.json"
+  },
+  "dispatchPreflightManifest": [
+    {
+      "recorded_at": "2026-10-03T19:24:40.248Z",
+      "generatedBy": "build-page-dispatch-manifest.mjs",
+      "packetType": "ExistingEditPagePacket",
+      "laneContract": {
+        "resolvedLane": "existing_edit_add_comparison",
+        "packetType": "ExistingEditPagePacket",
+        "pageRuntimeGuide": "intent-workflows/intent-project-mutation/existing-edit-page-runtime.md",
+        "dispatchContract": "intent-workflows/intent-project-mutation/existing-edit-dispatch-contract.md"
+      },
+      "taskLinePresent": true,
+      "outputPathPresent": true,
+      "sharedTemplate": "intent-workflows/intent-project-mutation/existing-edit-page-runtime.md",
+      "nodeId": "page-cockpit",
+      "htmlSrc": "pages/cockpit.html",
+      "supplementaryReads": [
+        {
+          "path": "shared-runtime/html-rendering-primitives/shared-html-rendering-primitives.md",
+          "reason": "通用 HTML 技术约束与溢出防护",
+          "ownerLane": "free_exploration"
+        },
+        {
+          "path": "shared-runtime/html-rendering-primitives/mobile-html-rendering-primitives.md",
+          "reason": "deviceType=mobile 布局与首屏约束",
+          "ownerLane": "free_exploration"
+        },
+        {
+          "path": "delivery-quality/page-rendering-quality-gate.md",
+          "reason": "完成前强制质量门禁",
+          "ownerLane": "free_exploration"
+        }
+      ],
+      "allowedWritePaths": [
+        "pages/cockpit.html",
+        "assets/"
+      ],
+      "forbiddenWriteRoots": [
+        "*.design",
+        "runtime-orchestration-summary.json",
+        "validation-report.json",
+        "finish-readiness-report.json",
+        "restore-contract-report.json",
+        "page-generation-summary.json"
+      ],
+      "toolPolicy": {
+        "todoWriteAllowed": false,
+        "validationScriptsAllowed": false,
+        "previewAllowed": false,
+        "helperScriptsAllowed": false,
+        "designFileWriteAllowed": false,
+        "allowedWritePaths": [
+          "pages/cockpit.html",
+          "assets/"
+        ]
+      },
+      "skillRuntime": {
+        "skillDir": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design",
+        "deterministicToolDir": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+        "toolPaths": {
+          "applyHtmlHeadContract": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+          "recordDispatchCompletion": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+          "buildPageDispatchManifest": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+          "validateDesignWorkspace": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+          "validateFinishReadiness": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+          "validateRestoreContract": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+        },
+        "requiredForPageSubAgent": [
+          "applyHtmlHeadContract",
+          "recordDispatchCompletion"
+        ],
+        "pathInjection": "absolute",
+        "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+        "commandTemplates": {
+          "recordDispatchCompletion": "node \"c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\" --node-id=\"page-cockpit\" --html-src=\"pages/cockpit.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+        }
+      },
+      "cssFilePath": "e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\colors_and_type.css",
+      "htmlFilePath": "e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\pages\\cockpit.html",
+      "brandPrefix": "mc",
+      "aestheticsMode": "free-explore",
+      "toolDisciplineBlockPresent": true,
+      "fillHtmlHeadCommand": "node \"c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\colors_and_type.css\" \"e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\pages\\cockpit.html\" --title=\"移动驾驶舱\" --lang=\"zh-CN\" --prefix=\"mc\" --replace-head",
+      "headFillMode": "replace-head-after-body",
+      "viewportMode": "document-scroll",
+      "completionSchemaExpected": "full",
+      "restoreFields": null,
+      "restoreContractStatus": null,
+      "restoreCompactPacket": null,
+      "deterministicCommands": null,
+      "sourceAuthorityLock": null,
+      "preDispatchFileHashes": {
+        "campus-cockpit.design": "d3cb8d7e27c9f9dd345ab348f9e1604ef5079984b5ca9c93ace0354716a5078b"
+      },
+      "contextPreflight": {
+        "workflowPath": "intent-workflows/intent-project-mutation/INTENT_WORKFLOW.md",
+        "requiredContextFiles": [
+          "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+          "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+          "shared-runtime/agent-dispatch-runtime/shared-page-rendering-kernel.md",
+          "delivery-quality/page-rendering-quality-gate.md",
+          "delivery-quality/design-artifact-validation.md",
+          "delivery-quality/delivery-evidence-contract.md"
+        ],
+        "optionalContextFiles": [
+          "visual-experience/visual-experience-guidelines.md"
+        ],
+        "passed": true
+      },
+      "pageSliceOnly": true,
+      "requiredFieldsPresent": true,
+      "missingFields": [],
+      "fillHtmlHeadCommandValid": true,
+      "mobileNavigation": {
+        "required": true,
+        "appliesToThisPage": true,
+        "activeKey": "schedule",
+        "contractPresent": true,
+        "structurePresent": true,
+        "canonicalHtmlIncluded": true,
+        "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.schedule",
+        "structureHash": "93162ba090c99b10c51f17b5638f1ef3b1557a6af63a91d675510da798c29ed8",
+        "missingFields": []
+      },
+      "persistedToSummary": true,
+      "taskQueryAudited": false,
+      "proofSource": "summary-only",
+      "largeWorkflowFilesInTaskQuery": null
+    },
+    {
+      "recorded_at": "2026-10-03T19:24:40.248Z",
+      "generatedBy": "build-page-dispatch-manifest.mjs",
+      "packetType": "ExistingEditPagePacket",
+      "laneContract": {
+        "resolvedLane": "existing_edit_add_comparison",
+        "packetType": "ExistingEditPagePacket",
+        "pageRuntimeGuide": "intent-workflows/intent-project-mutation/existing-edit-page-runtime.md",
+        "dispatchContract": "intent-workflows/intent-project-mutation/existing-edit-dispatch-contract.md"
+      },
+      "taskLinePresent": true,
+      "outputPathPresent": true,
+      "sharedTemplate": "intent-workflows/intent-project-mutation/existing-edit-page-runtime.md",
+      "nodeId": "page-cockpit-compact",
+      "htmlSrc": "pages/cockpit-compact.html",
+      "supplementaryReads": [
+        {
+          "path": "shared-runtime/html-rendering-primitives/shared-html-rendering-primitives.md",
+          "reason": "通用 HTML 技术约束与溢出防护",
+          "ownerLane": "existing_edit_add_comparison"
+        },
+        {
+          "path": "shared-runtime/html-rendering-primitives/mobile-html-rendering-primitives.md",
+          "reason": "deviceType=mobile 布局与首屏约束",
+          "ownerLane": "existing_edit_add_comparison"
+        },
+        {
+          "path": "delivery-quality/page-rendering-quality-gate.md",
+          "reason": "完成前强制质量门禁",
+          "ownerLane": "existing_edit_add_comparison"
+        }
+      ],
+      "allowedWritePaths": [
+        "pages/cockpit-compact.html",
+        "assets/"
+      ],
+      "forbiddenWriteRoots": [
+        "*.design",
+        "runtime-orchestration-summary.json",
+        "validation-report.json",
+        "finish-readiness-report.json",
+        "restore-contract-report.json",
+        "page-generation-summary.json"
+      ],
+      "toolPolicy": {
+        "todoWriteAllowed": false,
+        "validationScriptsAllowed": false,
+        "previewAllowed": false,
+        "helperScriptsAllowed": false,
+        "designFileWriteAllowed": false,
+        "allowedWritePaths": [
+          "pages/cockpit-compact.html",
+          "assets/"
+        ]
+      },
+      "skillRuntime": {
+        "skillDir": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design",
+        "deterministicToolDir": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+        "toolPaths": {
+          "applyHtmlHeadContract": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+          "recordDispatchCompletion": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+          "buildPageDispatchManifest": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+          "validateDesignWorkspace": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+          "validateFinishReadiness": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+          "validateRestoreContract": "c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+        },
+        "requiredForPageSubAgent": [
+          "applyHtmlHeadContract",
+          "recordDispatchCompletion"
+        ],
+        "pathInjection": "absolute",
+        "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+        "commandTemplates": {
+          "recordDispatchCompletion": "node \"c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\" --node-id=\"page-cockpit-compact\" --html-src=\"pages/cockpit-compact.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+        }
+      },
+      "cssFilePath": "e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\colors_and_type.css",
+      "htmlFilePath": "e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\pages\\cockpit-compact.html",
+      "brandPrefix": "mc",
+      "aestheticsMode": "free-explore",
+      "toolDisciplineBlockPresent": true,
+      "fillHtmlHeadCommand": "node \"c:\\Users\\Avalon\\.trae-cn\\builtin\\design\\default\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\colors_and_type.css\" \"e:\\studyScore\\创意集市\\WisPath_CampusMate_V2\\campus-cockpit\\pages\\cockpit-compact.html\" --title=\"移动驾驶舱 · 正式版\" --lang=\"zh-CN\" --prefix=\"mc\" --replace-head",
+      "headFillMode": "replace-head-after-body",
+      "viewportMode": "document-scroll",
+      "completionSchemaExpected": "full",
+      "restoreFields": null,
+      "restoreContractStatus": null,
+      "restoreCompactPacket": null,
+      "deterministicCommands": null,
+      "sourceAuthorityLock": null,
+      "preDispatchFileHashes": {
+        "campus-cockpit.design": "d3cb8d7e27c9f9dd345ab348f9e1604ef5079984b5ca9c93ace0354716a5078b"
+      },
+      "contextPreflight": {
+        "workflowPath": "intent-workflows/intent-project-mutation/INTENT_WORKFLOW.md",
+        "requiredContextFiles": [
+          "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+          "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+          "shared-runtime/agent-dispatch-runtime/shared-page-rendering-kernel.md",
+          "delivery-quality/page-rendering-quality-gate.md",
+          "delivery-quality/design-artifact-validation.md",
+          "delivery-quality/delivery-evidence-contract.md"
+        ],
+        "optionalContextFiles": [
+          "visual-experience/visual-experience-guidelines.md"
+        ],
+        "passed": true
+      },
+      "pageSliceOnly": true,
+      "requiredFieldsPresent": true,
+      "missingFields": [],
+      "fillHtmlHeadCommandValid": true,
+      "mobileNavigation": {
+        "required": true,
+        "appliesToThisPage": true,
+        "activeKey": "schedule",
+        "contractPresent": true,
+        "structurePresent": true,
+        "canonicalHtmlIncluded": true,
+        "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.schedule",
+        "structureHash": "93162ba090c99b10c51f17b5638f1ef3b1557a6af63a91d675510da798c29ed8",
+        "missingFields": []
+      },
+      "persistedToSummary": true,
+      "taskQueryAudited": false,
+      "proofSource": "summary-only",
+      "largeWorkflowFilesInTaskQuery": null
+    }
+  ],
+  "deterministicCommandsByPage": {
+    "pages/cockpit.html": {},
+    "pages/cockpit-compact.html": {}
+  }
+}

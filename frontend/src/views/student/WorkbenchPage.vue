@@ -7,8 +7,17 @@
     @touchcancel="pull.onCancel"
   >
     <!-- 主页面内容：messagesOnly（消息中心直达覆盖层）下不渲染——
-         覆盖层背后不画一版隐藏的工作台，动画过程中露出的应是宿主页 -->
-    <template v-if="!messagesOnly">
+         覆盖层背后不画一版隐藏的工作台，动画过程中露出的应是宿主页。
+
+         外层这层 div 是「让位层」：子页打开时整块往左退 30%（.subpage-underlay，
+         即个人中心 → 编辑资料那套）。它必须**是子页的兄弟**而不是子页的祖先 ——
+         .sub-page 自己是 position:fixed，祖先一旦有 transform 就会改以它为包含块，
+         子页会跟着偏 30% 且叠上自己的位移，滑不到位。 -->
+    <div
+      v-if="!messagesOnly"
+      class="workbench-main subpage-underlay"
+      :class="{ 'is-subpushed': subPushed }"
+    >
     <!-- 头部欢迎区（不参与下拉位移） -->
     <div class="workbench-header">
       <div class="header-bg-deco"></div>
@@ -147,11 +156,12 @@
     </div>
 
     <div style="height: 80px;"></div>
-    </template>
+    </div>
 
     <!-- 子页面：办事服务表单
-         动画统一走 styles/animations.css 的 .subpage（覆盖式：子页从右滑入盖住列表，
-         主页面不动；返回时原路滑出），不再在本文件自带一份 slide-left 定义。 -->
+         动画统一走 styles/animations.css 的 .subpage（子页从右滑入，同时上面的
+         主内容块退 -30% —— 个人中心「编辑资料」那套），不再在本文件自带一份
+         slide-left 定义。 -->
     <transition name="subpage" :duration="320" @after-leave="onSubpageAfterLeave">
       <div v-if="currentPage" :class="['sub-page', { 'chat-mode': isChatMode }]">
         <!-- 非聊天页面显示标准头部（移动端消息中心/搜索子页自带页签头，不套用标准头部） -->
@@ -983,7 +993,7 @@ import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useButlerPreview } from '@/composables/useButlerPreview'
 // 下拉刷新（移动端）：手势逻辑与吉祥物指示器与教师端首页 / 消息页共用同一模块
 import { useResponsive } from '@/composables/useResponsive'
-import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { useMobileSubPage, useSubpagePush } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import {
@@ -1015,6 +1025,13 @@ const subpageStack = ref<string[]>([])
 
 // 工作台内的办事/消息等页内子页属于二级页，打开时让出移动端底部悬浮导航
 useMobileSubPage(computed(() => isMobile.value && !!currentPage.value))
+
+/** 子页打开时主内容块让位 -30%（animations.css 的 .subpage-underlay）：
+ *  与子页滑入同一条 0.3s 曲线，即个人中心「编辑资料」那套；仅移动端
+ *  （桌面端办事子页是整屏覆盖层，没有底部导航要躲，位移只会显得廉价）。 */
+const subPushed = computed(() => isMobile.value && !!currentPage.value)
+// 布局层的底部胶囊跟着一起走（它不在本页里，只能靠全局登记）
+useSubpagePush(subPushed)
 
 /** 子页跳转：已打开某子页时再进新子页，把当前页压入返回栈 */
 function gotoPage(page: string) {

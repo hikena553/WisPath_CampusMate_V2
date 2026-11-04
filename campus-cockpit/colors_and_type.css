@@ -1,0 +1,118 @@
+/* =============================================================
+   绵小城 · 移动驾驶舱 — 品牌 Token（清爽升级版）
+   Prefix: mc   |   Single brand hue: blue
+   ============================================================= */
+
+:root,
+html.light {
+  /* --- Surfaces --- */
+  --mc-background: #f2f5fb;
+  --mc-foreground: #16203a;
+  --mc-card: #ffffff;
+  --mc-card-foreground: #16203a;
+  --mc-popover: #ffffff;
+  --mc-popover-foreground: #16203a;
+  --mc-muted: #eef1f8;
+  --mc-muted-foreground: #6b7690;
+  --mc-border: #e3e8f3;
+  --mc-input: #e3e8f3;
+  --mc-ring: #2f6fed;
+
+  /* --- Brand (single hue) --- */
+  --mc-primary: #2f6fed;
+  --mc-primary-foreground: #ffffff;
+  --mc-primary-soft: #e8f0ff;
+  --mc-primary-softer: #f3f7ff;
+  --mc-primary-strong: #1f57cc;
+  --mc-primary-track: #e0e7f6;
+
+  /* --- Text steps --- */
+  --mc-ink-2: #5a647e;
+  --mc-ink-3: #97a0b6;
+
+  /* --- Status (semantic only) --- */
+  --mc-state-success: #16a34a;
+  --mc-state-success-soft: #e7f6ec;
+  --mc-state-warning: #d97706;
+  --mc-state-warning-soft: #fdf3e3;
+  --mc-state-error: #dc2626;
+  --mc-state-info: #2f6fed;
+
+  /* --- Radius --- */
+  --mc-radius-sm: 8px;
+  --mc-radius-md: 12px;
+  --mc-radius-lg: 16px;
+  --mc-radius-pill: 999px;
+
+  /* --- Shadow (subtle, alpha <= 0.05 for static surfaces) --- */
+  --mc-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --mc-shadow-md: 0 10px 26px -14px rgba(15, 23, 42, 0.18);
+
+  /* --- Type --- */
+  --mc-font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "HarmonyOS Sans SC",
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mc-font-num: "Inter", "PingFang SC", system-ui, sans-serif;
+
+  /* --- Spacing rhythm --- */
+  --mc-gap-block: 14px;
+  --mc-pad-card: 16px;
+  --mc-safe-bottom: 72px;
+}
+
+html.dark {
+  --mc-background: #10131c;
+  --mc-foreground: #e9edf6;
+  --mc-card: #191e2b;
+  --mc-card-foreground: #e9edf6;
+  --mc-popover: #191e2b;
+  --mc-popover-foreground: #e9edf6;
+  --mc-muted: #222838;
+  --mc-muted-foreground: #9aa3ba;
+  --mc-border: #2a3244;
+  --mc-input: #2a3244;
+  --mc-ring: #5b8dff;
+  --mc-primary: #5b8dff;
+  --mc-primary-foreground: #0d1220;
+  --mc-primary-soft: #1d2740;
+  --mc-primary-softer: #181f30;
+  --mc-primary-strong: #82a8ff;
+  --mc-primary-track: #26304a;
+  --mc-ink-2: #b3bcd2;
+  --mc-ink-3: #7c86a0;
+  --mc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --mc-shadow-md: 0 12px 28px -16px rgba(0, 0, 0, 0.6);
+}
+
+html,
+body {
+  font-family: var(--mc-font-sans);
+  background: var(--mc-background);
+  color: var(--mc-foreground);
+}
+
+/* Typographic helper classes (optional, token-sourced) */
+.mc-num {
+  font-family: var(--mc-font-num);
+  font-variant-numeric: tabular-nums;
+}
+.mc-display {
+  font-size: 34px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.mc-h2 {
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.mc-body {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.mc-caption {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mc-ink-3);
+}

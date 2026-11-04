@@ -123,6 +123,11 @@ import { ArrowLeft, ArrowRight, Document, DocumentDelete, Refresh } from '@eleme
 import { readCampusArticle, type CampusArticle } from '@/api/campus'
 
 const visible = ref(false)
+
+/** 对外通报开关：父页（校园资讯）据此让下层页面退 -30%（.subpage-underlay），
+    与子页滑入同一拍。阅读器自身是 Teleport 到 body 的覆盖层，父页拿不到它的状态。 */
+const emit = defineEmits<{ (e: 'visible-change', open: boolean): void }>()
+watch(visible, (v) => emit('visible-change', v))
 const loading = ref(false)
 const error = ref('')
 const data = ref<CampusArticle | null>(null)
@@ -134,8 +139,9 @@ const isDesktop = ref(window.innerWidth > 767)
 function onResize() { isDesktop.value = window.innerWidth > 767 }
 
 /* ===== 动画：复用全局 .subpage（styles/animations.css，全站唯一实现） =====
-   覆盖式语义：不透明的子页从右滑入盖住主页面，主页面全程不动，返回时原路滑出。
-   同一套类名现由三处共用：工作台子页、本阅读器、驾驶舱主页 ↔ 学业子页。
+   让位式语义：不透明的子页从右滑入，下层页面同时退 30%（由父页挂 .subpage-underlay
+   实现，本组件只负责通报开关），返回时子页原路滑出、下层归位。
+   同一套类名由三处共用：工作台子页、本阅读器、校园搜索/详情子页。
 
    本组件只需负责两件事（动画本身不在本文件定义）：
    1) 滑动的必须是**不透明的 .reader-panel**，不是半透明遮罩 —— 若平移 mask，

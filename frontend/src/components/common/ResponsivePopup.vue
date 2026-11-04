@@ -20,7 +20,7 @@ import { useResponsive } from '@/composables/useResponsive'
  */
 defineOptions({ name: 'ResponsivePopup', inheritAttrs: false })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** 显隐（v-model） */
   modelValue: boolean
   /** 标题：移动端子页栏 / 桌面端弹窗标题 */
@@ -29,7 +29,19 @@ const props = defineProps<{
   width?: string
   /** 桌面端弹窗距顶距离 */
   top?: string
-}>()
+  /**
+   * 移动端的进场方式，两选一：
+   * - 'sheet'（默认）：整页自**底部**推入（0.3s 阻尼曲线）。适合「办一件事就关」的
+   *   表单弹层（教师端关怀记录、巡视登记、发起任务等存量 20+ 个弹窗都是这个性质）。
+   * - 'subpage'：走全站统一的整屏子页动画（styles/animations.css 的 .subpage ——
+   *   从右滑入，配合打开方页面挂 .subpage-underlay 做「下层退 30%」的让位）。
+   *   适合「进一层去挑东西」的页面，如发起群聊的选人页：它和消息搜索、添加朋友
+   *   是同一层级的子页，从底部弹上来会显得比同层页面「矮一辈」。
+   */
+  transition?: 'sheet' | 'subpage'
+}>(), {
+  transition: 'sheet',
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
@@ -59,9 +71,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- 移动端：全屏子页承接（无遮罩弹窗） -->
+  <!-- 移动端：全屏子页承接（无遮罩弹窗）。
+       transition='subpage' 时复用全站 .subpage 类（0.3s、从右滑入、进出同向），
+       与消息搜索 / 添加朋友 / 办事子页同一套；默认 'sheet' 仍是底部推入。 -->
   <Teleport to="body">
-    <Transition name="rp-sheet">
+    <Transition
+      :name="transition === 'subpage' ? 'subpage' : 'rp-sheet'"
+      :duration="transition === 'subpage' ? 320 : undefined"
+    >
       <div v-if="isMobile && modelValue" class="rp-wrap" role="dialog" :aria-label="title">
         <div class="rp-sheet">
           <header class="rp-appbar">

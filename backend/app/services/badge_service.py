@@ -31,6 +31,7 @@ from app.models.teacher_portfolio import TeacherPortfolioItem
 from app.models.teacher_task import TaskStatus, TeacherTask
 from app.models.user import User, UserRole
 from app.services.plan_streak import compute_streak
+from app.services.social_service import is_following as social_is_following
 
 # ══════════════════════════════════════════════════════════
 # 勋章目录
@@ -436,23 +437,31 @@ def _highlights(db: Session, user: User) -> list[dict]:
 def _mutual(db: Session, viewer: User, target: User) -> dict:
     common_groups = 0
     has_conversation = False
+    following = False
+    follower = False
     if viewer.id != target.id:
         mine = {gid for (gid,) in db.query(GroupMember.group_id).filter(GroupMember.user_id == viewer.id)}
         theirs = {gid for (gid,) in db.query(GroupMember.group_id).filter(GroupMember.user_id == target.id)}
         common_groups = len(mine & theirs)
-        # 是否已建立单聊关系：主页据此在「加为好友 / 删除好友」之间切换按钮语义
+        # 是否已建立单聊关系（聊过天）
         has_conversation = db.query(Message.id).filter(
             or_(
                 and_(Message.sender_id == viewer.id, Message.receiver_id == target.id),
                 and_(Message.sender_id == target.id, Message.receiver_id == viewer.id),
             )
         ).first() is not None
+        # 关注关系走 social_service：与通讯录、关注按钮同一份口径，
+        # 别在主页这里另写一套（否则同一个人在不同页面会显示成不同关系）
+        following = social_is_following(db, viewer.id, target.id)
+        follower = social_is_following(db, target.id, viewer.id)
     return {
         "same_college": bool(viewer.college and viewer.college == target.college),
         "common_groups": common_groups,
         "is_my_tutor": target.id == viewer.tutor_id,
         "is_my_student": target.tutor_id == viewer.id,
         "has_conversation": has_conversation,
+        "is_following": following,
+        "is_follower": follower,
     }
 
 

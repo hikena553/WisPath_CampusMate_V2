@@ -73,6 +73,17 @@ defineEmits<{
   /* 手机容器宽 440px 时的内缩上限，宽屏预览下与手机容器左右留白对齐 */
   max-width: 412px;
   z-index: 1000;
+  /* 跟随页面让位时要有过渡（见下方 .is-pushed）；别加 will-change，
+     它会创建包含块，把胶囊里的绝对定位徽标一起绑住 */
+  transition: transform 0.3s ease;
+}
+
+/* 页面把内容推开 -30%（.subpage-underlay，子页打开）时，胶囊跟着一起走。
+   不跟的话就是「内容左移、导航钉在原地」，一层被拆成两半。
+   驱动方：useSubpagePush()（页面登记）→ 布局层绑 is-pushed。
+   位移量与子页那套一致：-30% 视口宽。 */
+.dock-wrap.is-pushed {
+  transform: translate(calc(-50% - 30vw), 0);
 }
 
 /* 白色底托：从胶囊的**一半高度**（top: 50%）一直铺到屏幕底部（含安全区），
@@ -251,5 +262,28 @@ defineEmits<{
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+
+/* ===== 显隐过渡（调用方用 <Transition name="dock-fade"> 包住本组件） =====
+   之前是 v-if 直接消失：打开会话、进子页、切到非页签路由时，胶囊「啪」一下没掉，
+   与 0.3s 的子页滑动不是同一语速，观感割裂。现在淡出下沉 / 淡入上浮，
+   比子页略短（0.18s / 0.22s）—— 导航是配角，收得干脆一点。
+   写在组件内而不是 animations.css：.dock-wrap 自己用 translateX(-50%) 居中，
+   全局的 .dock-fade-* 特异性压不过这条 scoped 规则，位移会失效（只剩淡入淡出）。
+   所以这里必须写完整的 translate(-50%, …)，只写 translateY 胶囊会横向跳。 */
+.dock-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+.dock-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 16px);
+}
+.dock-fade-enter-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.dock-fade-enter-from {
+  opacity: 0;
+  transform: translate(-50%, 16px);
 }
 </style>

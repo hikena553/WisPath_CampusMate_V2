@@ -356,6 +356,9 @@ import { promptLogin } from '@/utils/loginGate'
 const props = defineProps<{ items: SearchPoolItem[] }>()
 const emit = defineEmits<{
   (e: 'closed'): void
+  /** 开始退场（visible 刚翻假、动画还没播）：父页据此把下层同步归位，
+   *  不要等 closed —— 那时子页已经滑出屏幕 300ms，下层才动就是「返回卡一下」。 */
+  (e: 'close-start'): void
   (e: 'open', url: string, title: string, source: string): void
 }>()
 
@@ -366,7 +369,9 @@ const emit = defineEmits<{
 const visible = ref(false)
 
 function close() {
+  if (!visible.value) return
   visible.value = false
+  emit('close-start')
 }
 
 /* ==================== 搜索框 ==================== */

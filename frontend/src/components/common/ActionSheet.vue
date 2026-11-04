@@ -95,7 +95,12 @@ onUnmounted(() => {
 .as-mask {
   position: fixed;
   inset: 0;
-  z-index: 2700;
+  /* 4300：确认面板是「最后一步」，必须压在任何页面级浮层之上 ——
+     个人主页是 3100、勋章动画 3200、子页覆盖层 2600，原来这里的 2700
+     会让「取消关注」的确认框开在主页背后（主页关掉才看见）。
+     theme.css 里 .el-message-box 抬到 4100 是同一个道理，桌面端走那边；
+     移动端走这套自定义面板，层级就得自己抬高。 */
+  z-index: 4300;
   display: flex;
   justify-content: center;
   background: rgba(17, 20, 26, 0.5);

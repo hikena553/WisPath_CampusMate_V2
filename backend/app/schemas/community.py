@@ -26,6 +26,7 @@ class CommunityPostOut(BaseModel):
     created_at: datetime | None = None
     author_name: str | None = None
     author_avatar: str | None = None
+    author_is_following: bool = False
     liked: bool = False
 
     model_config = ConfigDict(from_attributes=True)

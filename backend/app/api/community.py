@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
+from app.models.social import Follow
 from app.models.community import CommunityPost, CommunityComment, CommunityLike
 from app.models.plan import GrowthGoal
 from app.schemas.community import (
@@ -21,7 +22,7 @@ from app.schemas.community import (
 
 router = APIRouter(prefix="/api/community", tags=["交流社区"])
 
-CATEGORIES = ["技术", "提问", "分享", "求助"]
+CATEGORIES = ["技术", "提问", "分享", "求助", "资讯"]
 
 
 def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: bool = True) -> CommunityPostOut:
@@ -29,6 +30,11 @@ def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: b
     liked = db.query(CommunityLike).filter(
         CommunityLike.post_id == p.id,
         CommunityLike.student_id == current_user.id,
+    ).first() is not None
+    # 作者关注状态：帖子卡片/详情上的「关注」按钮按它回显
+    author_is_following = db.query(Follow.id).filter(
+        Follow.follower_id == current_user.id,
+        Follow.following_id == p.student_id,
     ).first() is not None
     return CommunityPostOut(
         id=p.id,
@@ -42,6 +48,7 @@ def _post_out(db: Session, p: CommunityPost, current_user: User, with_content: b
         created_at=p.created_at,
         author_name=author.name if author else "匿名同学",
         author_avatar=author.avatar if author else None,
+        author_is_following=author_is_following,
         liked=liked,
     )
 

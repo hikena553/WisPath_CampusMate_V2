@@ -127,13 +127,18 @@
           </keep-alive>
         </router-view>
       </main>
-      <MobileTabBar
-        v-if="showTabBar"
-        :items="mobileNavItems"
-        :active-key="activeNavKey"
-        :unread-count="unreadCount"
-        @select="handleNavSelect"
-      />
+      <!-- 显隐走 .dock-fade（animations.css）：淡出下沉 / 淡入上浮，
+           与学生端同一个语速，不再瞬间消失 -->
+      <Transition name="dock-fade">
+        <MobileTabBar
+          v-if="showTabBar"
+          :class="{ 'is-pushed': isSubpagePushed }"
+          :items="mobileNavItems"
+          :active-key="activeNavKey"
+          :unread-count="unreadCount"
+          @select="handleNavSelect"
+        />
+      </Transition>
     </template>
 
     <!-- 桌面桌宠：不跳转智能体页即可对话并驱动智能体执行功能。
@@ -165,7 +170,7 @@ import { useBadgeAward } from '@/composables/useBadgeAward'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useResponsive } from '@/composables/useResponsive'
 import { useDockInset } from '@/composables/useDockInset'
-import { hasOpenSubPage } from '@/composables/useMobileSubPage'
+import { hasOpenSubPage, isSubpagePushed } from '@/composables/useMobileSubPage'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import DesktopPet from '@/components/teacher/DesktopPet.vue'
 import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
