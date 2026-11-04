@@ -1,5 +1,8 @@
 # Smart Campus 部署手册（Docker Compose）
 
+> **马上要上线？直接看 [上线检查清单.md](./上线检查清单.md)** —— 按阶段可勾选的执行清单，
+> 含上线后必做的安全项（改初始密码、配备份）与验证动作。
+>
 > 首次把服务搬到云服务器、并需要把本地 SQLite 数据一起迁过去时，
 > 请先看 **[上云部署与数据迁移.md](./上云部署与数据迁移.md)**（含服务器初始化、
 > 生产 `.env` 配置、`scripts/db_migrate.py` 数据搬运与核对流程）。
@@ -56,11 +59,14 @@ docker compose ps
 | MYSQL_DATABASE | 否 | 库名，默认 `smart_campus` |
 | MYSQL_USER / MYSQL_PASSWORD | 是 | 应用专用账号（勿用 root 直连） |
 | SECRET_KEY | 是 | JWT 签名密钥，≥32 位随机串；生成：`python -c "import secrets; print(secrets.token_hex(32))"` |
+| TZ | 否 | 默认 `Asia/Shanghai`，三服务与 MySQL 统一注入；不设会让课表/日程差 8 小时 |
 | LLM_API_KEY / DASHSCOPE_API_KEY | 否 | LLM 密钥；不配置则 AI 对话/分析类功能不可用，平台其余功能正常 |
-| LLM_BASE_URL / LLM_MODEL / LLM_AGENT_MODEL | 否 | 模型端点与型号（有默认值） |
+| LLM_BASE_URL / LLM_MODEL / LLM_AGENT_MODEL / LLM_VISION_MODEL | 否 | 模型端点与型号。**默认值须与 `backend/app/core/config.py` 保持一致**，漏写即静默换模型 |
 | GITHUB_TOKEN / GITEE_TOKEN | 否 | 外部资讯抓取令牌（可选） |
 | NGINX_PORT | 否 | 对外端口，默认 80 |
 | UVICORN_WORKERS | 否 | 默认 **1**，勿随意调大：周期任务由应用进程内调度，多 worker 会重复执行 |
+| AUTO_MIGRATE | 否 | 默认 `true`（容器启动时自动迁移）；多副本部署须改 `false` |
+| LOG_LEVEL / SENTRY_DSN | 否 | 日志级别与可观测性（可选） |
 
 ## 5. 数据持久化与备份
 
@@ -106,7 +112,10 @@ nginx 仅监听 80。生产环境推荐二选一：
 
 ## 8. 注意事项
 
-- **数据库密码含特殊字符**：`DATABASE_URL` 由 compose 拼装，`@ : / ?` 等字符需 URL 编码（如 `p%40ss`），否则连接失败；
+- **数据库密码含特殊字符**：`DATABASE_URL` 由 compose 拼装，`@ : / ?` 等字符需 URL 编码（如 `p%40ss`），否则连接失败；建议直接用纯字母数字密码；
 - **迁移失败排查**：backend 启动即退出时先 `docker compose logs backend`，确认 `alembic upgrade head` 报错信息（连接串、权限、字符集）；chmod 无碍：入口脚本以 `sh` 显式执行，不依赖可执行位；
-- **时区**：容器默认 UTC，需要国内时区可在 compose 中为各服务加 `TZ: Asia/Shanghai` 环境变量；
+- **时区**：compose 已为三服务注入 `TZ=Asia/Shanghai`，MySQL 侧为 `--default-time-zone=+08:00`，开箱即为国内时区；
+- **客户端真实 IP**：入口脚本已带 `--proxy-headers --forwarded-allow-ips "*"`，后端能拿到 nginx 透传的真实 IP。若登录防爆破计数出现「一个人输错、全校被锁」，说明该参数丢失；
+- **构建上下文**：`backend/.dockerignore` 排除 `.venv`、`frontend/.dockerignore` 排除 `node_modules`。删掉会导致镜像把本机 Windows 依赖带进 Linux 容器，构建失败；
+- **换行符**：`.gitattributes` 已对 `.sh`/`.dockerignore`/`Dockerfile`/`*.conf` 锁定 LF。缺了它，Windows 上 `core.autocrlf=true` 会让入口脚本变 CRLF，容器内 `sh` 报 `: not found`；
 - **后端直连调试**：`docker compose exec backend sh` 进入容器。
