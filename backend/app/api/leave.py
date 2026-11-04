@@ -190,7 +190,8 @@ def review_leave(leave_id: int, req: LeaveApprove, user: User = Depends(require_
                 + (f"，原因：{leave.reject_reason}" if leave.status.value == "rejected" else "")
             ),
             notification_type=NotificationType.LEAVE,
-            link="/student/workbench",
+            # 原指旧「工作台」，该页已下线；请假结果落到学业中心 · 请假服务子页（含全部申请记录）
+            link="/student/schedule?tab=service",
             related_id=leave.id,
             sender_id=user.id,
             sms_template="请假审批结果通知",
@@ -316,7 +317,7 @@ def confirm_return(leave_id: int, user: User = Depends(require_role(UserRole.TEA
             title="销假确认",
             content=f"你的请假（{leave.start_date}~{leave.end_date}）已完成销假确认，欢迎返校。",
             notification_type=NotificationType.LEAVE,
-            link="/student/workbench",
+            link="/student/schedule?tab=service",
             related_id=leave.id,
             sender_id=user.id,
         )

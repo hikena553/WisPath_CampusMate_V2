@@ -69,7 +69,21 @@ const router = createRouter({
         { path: 'grade-analysis', name: 'student-grade-analysis', redirect: { path: '/student/schedule', query: { tab: 'grades' } } },
         // v5：请假服务并入学业中心「请假服务」子页（我的申请记录一并合并），旧路由重定向
         { path: 'service', name: 'student-service', redirect: { path: '/student/schedule', query: { tab: 'service' } } },
-        { path: 'workbench', component: () => import('@/views/student/WorkbenchPage.vue') },
+        // v5：「工作台」页签已被「消息」取代，整页下线（旧 WorkbenchPage 不再渲染）。
+        // 旧地址仍可能出现在书签 / 历史通知里：唯一还有业务含义的是消息页旧版
+        // 「我的文件」直达（?page=files），转去独立的文件汇总页，其余一律回消息页。
+        {
+          path: 'workbench',
+          redirect: (to) =>
+            to.query.page === 'files'
+              // 显式清空 query：否则 page=files 会被带到新地址上（页面不读它，但地址会脏）
+              ? { path: '/student/files', query: {} }
+              : { path: '/student/messages' },
+        },
+        // 我的文件：聊天里发过的文件 / 图片 / 语音汇总（原工作台的 files 子页）
+        { path: 'files', name: 'student-files', component: () => import('@/views/student/MyFilesPage.vue'), meta: { keepAlive: false } },
+        // 失物招领：原工作台宫格里的业务，工作台下线后独立成页（入口在学业中心 · 请假服务）
+        { path: 'lost-found', name: 'student-lost-found', component: () => import('@/views/student/LostFoundPage.vue'), meta: { keepAlive: false } },
         // 消息：原「工作台」页签位，统筹会话（私聊 / 群聊）、通讯录（关注·粉丝·互关好友）与论坛互动消息
         { path: 'messages', name: 'student-messages', component: () => import('@/views/student/MessagesPage.vue'), meta: { keepAlive: false } },
         // 消息页的两个主视图各有地址：/student/messages = 会话，/student/messages/friends = 好友。

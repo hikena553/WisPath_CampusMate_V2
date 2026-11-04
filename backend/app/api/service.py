@@ -121,7 +121,8 @@ def approve_ticket(ticket_id: int, req: TicketApprove, user: User = Depends(get_
         title="工单审批结果",
         content=f"你的工单「{ticket.title}」审批结果：{'已通过' if ticket.status.value == 'approved' else '未通过'}",
         notification_type=NotificationType.APPROVAL,
-        link="/student/workbench",
+        # 原指旧「工作台」（已下线）：工单进度回到学业中心 · 请假服务的申请记录里看
+        link="/student/schedule?tab=service",
         related_id=ticket.id,
         sender_id=user.id,
         sms_template="工单审批结果通知",

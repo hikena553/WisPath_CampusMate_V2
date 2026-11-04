@@ -160,7 +160,7 @@
                 :aria-selected="cardTab === 'favorites'"
                 @click="cardTab = 'favorites'"
               >
-                收藏的帖子
+                收藏
               </button>
               <!-- 卡片只铺 4 张：再多就把个人主页挤成第二个资讯列表，
                    全量收进「我的收藏」子页。入口跟着 Tab 走，只在收藏页签下出现。 -->
@@ -186,7 +186,7 @@
             >
               <template v-if="cardTab === 'favorites'">
                 <div v-if="favLoading" class="pf-cards-loading">加载中…</div>
-                <div v-else-if="!articleFavs.length" class="pf-cards-empty">还没有收藏任何帖子</div>
+                <div v-else-if="!articleFavs.length" class="pf-cards-empty">还没有收藏</div>
                 <div v-else class="pf-media-grid">
                   <div
                     v-for="fav in articleFavs.slice(0, 4)"
@@ -402,7 +402,7 @@
              所以列表就落在这里，点开走校园资讯同款站内详情（不跳外部浏览器）。 -->
         <div v-if="currentPage === 'favorites'" class="sub-page-content">
           <p v-if="favLoading" class="pf-fav-empty">加载中…</p>
-          <p v-else-if="!articleFavs.length" class="pf-fav-empty">还没有收藏的帖子</p>
+          <p v-else-if="!articleFavs.length" class="pf-fav-empty">还没有收藏</p>
           <div v-else class="pf-fav-list">
             <button
               v-for="fav in articleFavs"
@@ -2253,7 +2253,7 @@ onMounted(async () => {
   text-align: center;
 }
 
-/* 收藏超过 4 条时的出口：贴在页签行右端，跟「项目经历 / 收藏的帖子」同一水平线。
+/* 收藏超过 4 条时的出口：贴在页签行右端，跟「项目经历 / 收藏」同一水平线。
    不放卡片下方 —— 那里正好压在底部悬浮胶囊上，点不到（且页面不一定滚得动）。 */
 .pf-cards-all {
   display: inline-flex;

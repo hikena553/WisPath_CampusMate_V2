@@ -27,9 +27,10 @@
         <!-- 舞台：智能体形象 -->
         <main class="vc-stage">
           <VoiceMascot :state="charState" :level="smoothedLevel" :size="mascotSize" />
-          <div class="vc-status" :class="{ pulse: callState === 'processing' }">{{ statusText }}</div>
+          <div class="vc-status" :class="{ pulse: callState === 'processing', err: callState === 'error' }">{{ statusText }}</div>
           <div v-if="callState === 'speaking'" class="vc-hint">你可以随时开口打断我</div>
           <div v-else-if="callState === 'listening'" class="vc-hint">我正在听，说完停顿一下就好</div>
+          <div v-else-if="callState === 'error'" class="vc-hint">按提示处理后，点下方麦克风重试</div>
         </main>
 
         <!-- 通话字幕：仅展示智能体回答（无气泡/无头像/无时间戳），
@@ -316,7 +317,11 @@ async function beginCall(conversationId?: number | null) {
   try {
     await startCall()
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '接通失败，请点击麦克风重试')
+    // 同时写进浮层状态文案：只弹一条 toast 时，浮层仍停在「连接失败」，
+    // 用户看不出是 HTTPS、浏览器还是权限问题（移动端最常见的三种）
+    const msg = e instanceof Error ? e.message : '接通失败，请点击麦克风重试'
+    errorMsg.value = msg
+    ElMessage.error(msg)
   }
   const emotionOk = await emotionTask
   primingEmotion.value = false
@@ -422,6 +427,18 @@ onUnmounted(() => {
   gap: 6px;
 }
 .vc-status { font-size: 15px; font-weight: 600; color: #4a6ea8; letter-spacing: .4px; }
+/* 错误文案可能较长（如「语音通话需要 HTTPS：…」）：手机上必须换行，不能撑出屏幕 */
+.vc-status.err {
+  max-width: 84vw;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.65;
+  color: #c45656;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
 .vc-status.pulse { animation: vc-textpulse 1.6s ease-in-out infinite; }
 @keyframes vc-textpulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 .vc-hint { font-size: 12px; color: #96a4bc; }

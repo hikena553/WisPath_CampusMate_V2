@@ -1,0 +1,58 @@
+schema_version: 1
+request_id: 5a00a9cb-cf41-4032-b271-5bbec9c8926a
+created_at: 2026-11-04T16:45:38
+updated_at: 2026-11-04T16:49:56
+
+entry_type: full_pipeline
+stage_chain: [1, 2, 3]
+
+output_docx_path: "E:/studyScore/创意集市/WisPath_CampusMate_V2/output/5a00a9cb-cf41-4032-b271-5bbec9c8926a/stage3/WisPath CampusMate 功能介绍.docx"
+output_docx_user_specified: false
+
+current_stage: completed
+
+stages:
+  stage_0:
+    status: completed
+    completed_at: 2026-11-04T16:45:38
+    decision: full_pipeline
+
+  stage_1:
+    status: completed
+    started_at: 2026-11-04T16:45:38
+    completed_at: 2026-11-04T16:46:20
+    output_path: "stage1/final_draft.md"
+    genre: general
+    expert_used: general-writer
+    route_tag: general_writing
+
+  stage_2:
+    status: completed
+    started_at: 2026-11-04T16:49:56
+    completed_at: 2026-11-04T16:49:56
+    route: html
+    html_sub: template
+    output_path: "stage2/formatted-功能介绍.html"
+    output_format: html
+    skills_invoked: [design-token, doc-typeset, html-review]
+    design_tokens_path: "skills/design-token/tokens/compiled/business-report.json"
+    fallback: false
+    fallback_reason: null
+
+  stage_3:
+    status: completed
+    started_at: 2026-11-04T16:49:56
+    completed_at: 2026-11-04T16:49:56
+    executor: doc-converter
+    input_format: html
+    output_path: "E:/studyScore/创意集市/WisPath_CampusMate_V2/output/5a00a9cb-cf41-4032-b271-5bbec9c8926a/stage3/WisPath CampusMate 功能介绍.docx"
+    skill_used: ["html-to-doc"]
+    present_files_opened: true
+    fallback: false
+    fallback_reason: null
+
+consistency_check:
+  output_files_exist: pass
+  stage_chain_complete: pass
+  last_checked_at: 2026-11-04T16:49:56
+  errors: []

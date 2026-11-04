@@ -166,8 +166,9 @@ const transitionDuration = computed(() => {
 })
 
 // 移动端底部导航
-// 「工作台」页签位已改为「消息」：会话 / 通讯录 / 论坛互动集中在这里，
-// 办事入口（请假 / 证明 / 失物招领等）暂时保留 /student/workbench 路由但不再占页签。
+// 「工作台」页签已改为「消息」：会话 / 通讯录 / 论坛互动集中在这里。
+// 办事入口（请假 / 证明 / 项目）已并入学业中心 · 请假服务子页，旧工作台整页下线，
+// /student/workbench 只保留重定向，不再渲染任何页面。
 const mobileNavItems = [
   { key: 'campus', label: '校园资讯', icon: Memo, route: '/student/campus' },
   { key: 'schedule', label: '学业中心', icon: Odometer, route: '/student/schedule' },
@@ -188,7 +189,7 @@ const activeNavKey = computed(() => {
 
 /**
  * 底部悬浮导航只属于「一级页面」：即底部五个页签自身对应的路由。
- * 二级及更深层的页面（作品集 / 资源空间 / 我的关怀 / 材料归档 / 工作台 / 反馈等）
+ * 二级及更深层的页面（作品集 / 资源空间 / 我的关怀 / 材料归档 / 我的文件 / 反馈等）
  * 一律不挂全局导航 —— 它们的返回由上页或子页自己的返回链路承担，
  * 否则子页里会出现与当前上下文无关的页签，还会压住子页底部内容。
  * 页内下钻的子页（学生详情、个人中心设置等）通过 useMobileSubPage 登记，
@@ -203,9 +204,6 @@ const TAB_BAR_ROUTES = new Set([
   // 消息页「好友」视图是它自己的地址（同一页面、另一个视图），仍属一级页面
   '/student/messages/friends',
   '/student/profile',
-  // 工作台（办事服务）虽已不占页签，但仍是模块落地页（入群等流程会直达此处），
-  // 页面本身没有返回键，保留导航避免「进得来出不去」；它的办事子页仍按二级处理。
-  '/student/workbench',
 ])
 
 /**

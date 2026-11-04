@@ -43,6 +43,14 @@ export function getMyPosts() {
   return request.get<CommunityPost[]>('/community/posts/mine')
 }
 
+/**
+ * 关注流：我关注的人发的帖子（校园资讯「关注」页签）。
+ * 与 getPosts 的区别只有作者集合：只收我关注的人，不收自己，也不做推荐加权。
+ */
+export function getFollowingPosts(params?: { page?: number; page_size?: number }) {
+  return request.get<CommunityPost[]>('/community/following', { params })
+}
+
 export function createPost(data: { category: string; title: string; content: string; images?: string[] }) {
   return request.post<CommunityPost>('/community/posts', data)
 }
@@ -73,4 +81,12 @@ export function deleteComment(commentId: number) {
 
 export function getHotPosts(limit = 5) {
   return request.get<CommunityPost[]>('/community/hot', { params: { limit } })
+}
+
+/**
+ * 推荐流候选：后端按「新鲜度 × 热度 × 兴趣画像」排好序的帖子，供校园资讯「推荐」页穿插。
+ * 与 /posts 的区别是不含自己发的、剔除与资讯重名的、且限制资讯站账号的占比。
+ */
+export function getRecommendedPosts(limit = 12) {
+  return request.get<CommunityPost[]>('/community/recommend', { params: { limit } })
 }

@@ -23,6 +23,8 @@ CATEGORY_DIRS = {
     "announcements": "announcements",
     "branding": "branding",
     "documents": "documents",
+    # 聊天文件：5GB 上限，服务器只保留 7 天（到期由周期任务清理）
+    "chat": "chat_files",
 }
 
 # 语音消息音频：显式声明 media type，避免系统 mimetypes 缺失（如 .m4a）导致浏览器无法播放
@@ -75,6 +77,9 @@ def download_file(
     path = resolve_safe(filename, CATEGORY_DIRS[category])
     if not path:
         raise HTTPException(404, "文件不存在")
+    # 聊天文件一律按附件下载，避免浏览器把用户上传的页面类内容当作同源页面渲染
+    if category == "chat":
+        return FileResponse(path, filename=filename, content_disposition_type="attachment")
     media_type = AUDIO_MEDIA_TYPES.get(path.suffix.lower())
     return FileResponse(path, media_type=media_type) if media_type else FileResponse(path)
 

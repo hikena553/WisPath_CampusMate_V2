@@ -133,7 +133,7 @@
 
           <!-- 收藏的帖子：参考学生端个人中心的两列封面卡；无内容时直接留白，不铺空状态和边框 -->
           <template v-if="articleFavs.length">
-            <h3 class="pf-section-title">收藏的帖子</h3>
+            <h3 class="pf-section-title">收藏</h3>
             <section class="pf-fav-area">
               <div class="pf-fav-grid">
                 <button

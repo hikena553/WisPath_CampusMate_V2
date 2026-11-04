@@ -155,7 +155,7 @@
          再加数字只会把后面的 Tab 推得更远，却没有滑动暗示。
          分类口径：移动端不展示「高教信息」（见 MOBILE_HIDDEN_SOURCES），
          所以这里比桌面端卡片少一栏 —— 桌面端「高教信息」卡片保留不变。
-         「推荐」= 原「全部」合并流；「关注」为新增 Tab，数据源待接（见 itemsOfTab）。 -->
+         「推荐」= 原「全部」合并流；「关注」= 我关注的人发的帖子（见 FollowingFeed）。 -->
     <!-- 移动端分类 Tab：横向滑动、选中项深色 + 短下划线（不改字重）。
          动画本体（下划线滑条 + 文字随条染色）已抽到 components/common/SlidingTabs.vue，
          分页位移的口径在 components/common/SwipePager.vue，
@@ -286,21 +286,39 @@
           @open="openPostDetail"
         />
 
-        <section v-else-if="!isCustomTab(entry.key)" class="campus-feed">
+        <!-- 关注：我关注的人发的帖子（头像条 + 大卡片流），数据与分页都在 FollowingFeed 内部。
+             点卡片进帖子详情、点头像进个人主页、空态引导切到交流社区 —— 三件事都回到本页已有的链路，
+             不新开独立页面（关注是资讯页的一个分类，跳走会丢浏览位置）。 -->
+        <FollowingFeed
+          v-else-if="entry.key === 'following'"
+          :ref="el => { if (el) followingFeedRef = el as any }"
+          @open="openPostDetail"
+          @open-user="openUserHomepage"
+          @browse="onTabClick('community')"
+        />
+
+        <section v-else class="campus-feed">
           <div
             v-for="item in entry.items"
             :key="item.url + item.title"
             class="feed-item"
+            :data-kind="item.kind === 'post' ? 'post' : 'article'"
+            :data-post-id="item.post_id || null"
             role="link"
             tabindex="0"
-            @click="openDetail(item.url, item.title)"
-            @keydown.enter.prevent="openDetail(item.url, item.title)"
+            @click="openFeedItem(item)"
+            @keydown.enter.prevent="openFeedItem(item)"
           >
             <div class="feed-body">
               <h3 class="feed-title">{{ item.title }}</h3>
               <div class="feed-meta">
                 <span class="feed-time">{{ item.timeLabel }}</span>
                 <span class="feed-dot">·</span>
+                <!-- 社区帖与资讯同款行，只多一个「社区」词：不加底色，跟旁边的来源文字同一套样式 -->
+                <template v-if="item.kind === 'post'">
+                  <span class="feed-source">社区</span>
+                  <span class="feed-dot">·</span>
+                </template>
                 <span class="feed-source">{{ item.sourceLabel }}</span>
                 <!-- 互动数跟时间 / 标签同一行：信息流一行的「元信息」一次读完，
                      标题下方不再单独占一条图标行，行高更紧凑。
@@ -314,7 +332,7 @@
                     type="button"
                     class="feed-act"
                     :aria-label="`评论 ${item.comment_count} 条`"
-                    @click.stop="openDetail(item.url, item.title, 'comment')"
+                    @click.stop="item.kind === 'post' ? openFeedItem(item) : openDetail(item.url, item.title, 'comment')"
                   >
                     <el-icon><ChatDotRound /></el-icon>
                     <span>{{ item.comment_count }}</span>
@@ -335,48 +353,9 @@
         </section>
 
         <!-- 收藏不在这里：资讯详情的「收藏」是给学生「以后还要找回来」用的，
-             回来找的时候人已经不在资讯页了 —— 入口统一放在个人中心的「收藏的帖子」，
+             回来找的时候人已经不在资讯页了 —— 入口统一放在个人中心的「收藏」，
              两边各挂一份只会变成两个不同步的单子。 -->
 
-        <!-- AI 资源：内容与 AI 资源空间同源（爬取的论文 / 开源榜 / 智能体榜 …），
-             版式沿用校园资讯行（标题 + 元信息行），点整行打开原文。 -->
-        <section v-else-if="entry.key === 'ai_resources'" class="campus-feed ai-feed">
-          <!-- 子频道：论文 / 开源 / 智能体 …，与 AI 资源空间同一套分类口径 -->
-          <div class="ai-channels">
-            <button
-              v-for="c in AI_CHANNELS"
-              :key="c.key"
-              type="button"
-              class="ai-channel"
-              :class="{ 'is-active': aiChannel === c.key }"
-              @click="switchAiChannel(c.key)"
-            >{{ c.label }}</button>
-          </div>
-          <p v-if="aiLoading" class="feed-empty">加载中…</p>
-          <p v-else-if="!aiFeeds.length" class="feed-empty">暂无 AI 资源</p>
-          <template v-else>
-            <div
-              v-for="f in aiFeeds"
-              :key="'res-' + f.source_type + '-' + f.id"
-              class="feed-item"
-              role="link"
-              tabindex="0"
-              @click="openFeed(f)"
-              @keydown.enter.prevent="openFeed(f)"
-            >
-              <div class="feed-body">
-                <h3 class="feed-title">{{ f.title }}</h3>
-                <div class="feed-meta">
-                  <span class="feed-time">{{ feedDateLabel(f.published_at) }}</span>
-                  <span class="feed-dot">·</span>
-                  <span class="feed-source">{{ f.source_name || AI_DEFAULT_SOURCE[f.source_type] }}</span>
-                  <span class="feed-dot">·</span>
-                  <span class="feed-source">{{ aiChannelLabel(f.source_type) }}</span>
-                </div>
-              </div>
-            </div>
-          </template>
-        </section>
       </div>
     </SwipePager>
 
@@ -431,35 +410,6 @@
           compact
           @open="openPostDetail"
         />
-      </div>
-    </section>
-
-    <!-- ③ AI 资源（与移动端 Tab 同一份数据，桌面版式保留入口） -->
-    <section class="campus-section">
-      <div class="section-title">AI 资源</div>
-      <div class="campus-card">
-        <p v-if="aiLoading" class="feed-empty">加载中…</p>
-        <p v-else-if="!aiFeeds.length" class="feed-empty">暂无 AI 资源</p>
-        <template v-else>
-        <div
-          v-for="f in aiFeeds.slice(0, 6)"
-          :key="'d-res-' + f.source_type + '-' + f.id"
-          class="feed-item"
-          role="link"
-          tabindex="0"
-          @click="openFeed(f)"
-          @keydown.enter.prevent="openFeed(f)"
-        >
-          <div class="feed-body">
-            <h3 class="feed-title">{{ f.title }}</h3>
-            <div class="feed-meta">
-              <span class="feed-time">{{ feedDateLabel(f.published_at) }}</span>
-              <span class="feed-dot">·</span>
-              <span class="feed-source">{{ f.source_name || AI_DEFAULT_SOURCE[f.source_type] }}</span>
-            </div>
-          </div>
-        </div>
-        </template>
       </div>
     </section>
 
@@ -658,7 +608,7 @@ defineOptions({ name: 'campus-page' })
  */
 withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
 
-import { ref, computed, reactive, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { ElCarousel } from 'element-plus'
 // v6.1 弹窗减负：搜索改用底部动作面板承接
 import ActionSheet from '@/components/common/ActionSheet.vue'
@@ -673,7 +623,10 @@ import ForumInboxSheet from '@/components/community/ForumInboxSheet.vue'
 import PostComposePage from '@/components/community/PostComposePage.vue'
 import PostDetailPage from '@/components/community/PostDetailPage.vue'
 import CommunityFeed from '@/components/community/CommunityFeed.vue'
+import FollowingFeed from '@/components/community/FollowingFeed.vue'
+import { openUserHomepage } from '@/composables/useUserHomepage'
 import type { CommunityPost } from '@/api/community'
+import { getRecommendedPosts } from '@/api/community'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { useMobileSubPage, useSubpagePush } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
@@ -691,7 +644,6 @@ import {
   ChatDotRound, View, Plus
 } from '@element-plus/icons-vue'
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
-import { getFeeds, type FeedItem as FeedEntry, type FeedSourceType } from '@/api/resources'
 import { isGuestMode } from '@/utils/guest'
 import { promptLogin } from '@/utils/loginGate'
 import { useRouter, useRoute } from 'vue-router'
@@ -739,6 +691,7 @@ function onPostPublished() {
   // 不再跳独立社区页 —— 社区已经是这里的一个分类，跳走反而丢了当前浏览位置。
   void communityFeedRef.value?.refresh()
   void desktopCommunityFeedRef.value?.refresh()
+  void followingFeedRef.value?.refresh()
   if (activeTab.value !== 'community') onTabClick('community')
 }
 
@@ -769,73 +722,6 @@ interface GalleryImage {
 
 /** 初始值直接取模块级缓存：二次进入命中时首帧就是真实内容，不会闪空态 */
 const impressionData = ref<ImpressionItem[]>(getCampusImpressionCache() ?? [])
-
-/** 「AI资源」Tab：外部资讯中心抓取条目（论文 / 开源榜 / 智能体榜 …），与 AI 资源空间同一份数据 */
-const aiFeedCache = reactive<Partial<Record<FeedSourceType, FeedEntry[]>>>({})
-/** AI资源子频道：默认「论文」，与 AI 资源空间默认频道一致 */
-const aiChannel = ref<FeedSourceType>('papers')
-/** AI资源子频道定义（顺序与 AI 资源空间一致） */
-const AI_CHANNELS: { key: FeedSourceType; label: string }[] = [
-  { key: 'papers', label: '论文' },
-  { key: 'opensource', label: '开源' },
-  { key: 'agents', label: '智能体' },
-  { key: 'news', label: '要闻' },
-  { key: 'ai_news', label: '行业' },
-  { key: 'rankings', label: '权威' },
-  { key: 'cn_ai', label: '国产' },
-]
-/** 每个频道兜底来源名（接口没给 source_name 时用） */
-const AI_DEFAULT_SOURCE: Record<FeedSourceType, string> = {
-  papers: 'arXiv',
-  opensource: '开源项目榜',
-  agents: '智能体榜',
-  news: '权威要闻',
-  ai_news: 'AI 行业',
-  rankings: '权威排行榜',
-  cn_ai: '国产模型',
-}
-const aiFeeds = computed(() => aiFeedCache[aiChannel.value] ?? [])
-/** AI资源子频道加载态 */
-const aiLoading = ref(false)
-
-async function loadAiChannel(type: FeedSourceType, force = false) {
-  if (!force && aiFeedCache[type]?.length) return
-  aiLoading.value = true
-  try {
-    const rows = await getFeeds({ source_type: type, limit: 20 })
-    aiFeedCache[type] = Array.isArray(rows) ? rows : []
-  } catch {
-    aiFeedCache[type] = aiFeedCache[type] ?? []
-  } finally {
-    aiLoading.value = false
-  }
-}
-
-function switchAiChannel(type: FeedSourceType) {
-  if (aiChannel.value === type) return
-  aiChannel.value = type
-  void loadAiChannel(type)
-}
-
-/** 频道的分类标签（元信息行里的小标签） */
-function aiChannelLabel(type: FeedSourceType) {
-  return AI_CHANNELS.find(c => c.key === type)?.label || 'AI'
-}
-/** 条目日期：只显示到天，抓取时间对读者没意义 */
-function feedDateLabel(iso: string | null) {
-  if (!iso) return '最近'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '最近'
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-/** 站内路径直接跳；站外链接新开页签 */
-function openSavedLink(link: string | null) {
-  if (!link) return
-  if (link.startsWith('/')) router.push(link)
-  else window.open(link, '_blank', 'noopener')
-}
-function openFeed(f: FeedEntry) { openSavedLink(f.link) }
 
 /** 刷新在途态：桌面端「点标题刷新」用，防重复点击（连点会重复打后端） */
 const refreshing = ref(false)
@@ -1273,9 +1159,9 @@ const carouselImages = computed(() => galleryImages)
  * 分类定义。key 直接复用后端的 source 取值，这样切 Tab 只是换一个 filter，
  * 不产生任何网络请求。
  * 'recommend' 是合并流（原「全部」）：所有栏目混排 + 顶部大图轮播，即首屏的推荐位；
- * 'following' 是「关注」：只放用户关注的栏目 / 来源的资讯 ——
- *   关注关系与数据源尚未接入，当前 itemsOfTab 固定返回空数组、页面走空态，
- *   后续接后端时只改 itemsOfTab 一处即可（轮播仍只属于推荐页，见 heroSlidesOf）。
+ * 'following' 是「关注」：我关注的人发的帖子，数据源是 /community/following（人 → 帖子），
+ *   和上面几个「栏目 → 资讯」的分类不是同一套数据，所以整块交给 FollowingFeed 渲染，
+ *   这里返回空数组只是为了不参与资讯过滤（轮播同样只属于推荐页，见 heroSlidesOf）。
  * 其余 4 个与桌面端卡片一一对应：教学动态 / 通知公告 / 教学建设 / 学院动态。
  * 「高教信息」不设 Tab：移动端信息流不展示该栏目的内容（见 itemsOfTab），
  * 与桌面端「高教信息」卡片并列的只剩「教学建设」，那条桌面布局保持不变。
@@ -1288,7 +1174,6 @@ type FeedTabKey =
   | 'jwc_tzgg'
   | 'jwc_jxjs'
   | 'college_news'
-  | 'ai_resources'
 
 const FEED_TABS: { key: FeedTabKey; label: string }[] = [
   { key: 'recommend', label: '推荐' },
@@ -1299,13 +1184,7 @@ const FEED_TABS: { key: FeedTabKey; label: string }[] = [
   { key: 'jwc_tzgg', label: '通知公告' },
   { key: 'jwc_jxjs', label: '教学建设' },
   { key: 'college_news', label: '学院动态' },
-  { key: 'ai_resources', label: 'AI资源' },
 ]
-
-/** 这个 Tab 不是资讯流：数据源是外部资讯库，模板里单独渲染 */
-function isCustomTab(key: FeedTabKey): boolean {
-  return key === 'ai_resources'
-}
 
 const activeTab = ref<FeedTabKey>('recommend')
 
@@ -1320,8 +1199,8 @@ const MOBILE_HIDDEN_SOURCES: string[] = ['jwc_gjxx']
 
 /** 某个分类下的条目（已去重 + 按日期倒序） */
 function itemsOfTab(key: FeedTabKey): ImpressionItem[] {
-  // 关注流：关注关系（用户 → 栏目 / 来源）尚未落地，先返回空数组走空态。
-  // 后续接入时在这里按「我关注的来源」过滤即可，口径与推荐流保持一致（同样剔除系统入口）。
+  // 关注流的数据源是「人 → 帖子」（/community/following），不在这份资讯数据里，
+  // 整块由 FollowingFeed 渲染；这里返回空数组，避免它被当成一个永远匹配不到的空栏目。
   if (key === 'following') return []
 
   // 交流社区不是资讯栏目：帖子来自 /api/community/posts，整块由 CommunityFeed 渲染，
@@ -1473,12 +1352,18 @@ interface FeedItem {
   source: string
   comment_count: number
   view_count: number
+  /** 推荐流混排用：article = 资讯（默认），post = 交流社区帖子 */
+  kind?: 'article' | 'post'
+  /** 帖子才有：点行时用它打开 PostDetailPage */
+  post_id?: number
 }
 
 /* ---------- 交流社区：帖子流 / 详情由 CommunityFeed、PostDetailPage 承担 ----------
    本页只留三件事：点开详情、发布后刷新列表、深链（?post=）落地。 */
 const communityFeedRef = ref<InstanceType<typeof CommunityFeed> | null>(null)
 const desktopCommunityFeedRef = ref<InstanceType<typeof CommunityFeed> | null>(null)
+/** 关注流：「关注」页签那一页（头像条 + 动态卡片），发帖 / 点赞 / 关注变化后刷新 */
+const followingFeedRef = ref<InstanceType<typeof FollowingFeed> | null>(null)
 const communityDetailId = ref(0)
 /** 帖子详情是否在退场中：与资讯详情同义，用来决定下层什么时候归位 */
 const postDetailLeaving = ref(false)
@@ -1486,6 +1371,76 @@ const postDetailLeaving = ref(false)
 function openPostDetail(post: CommunityPost) {
   postDetailLeaving.value = false
   communityDetailId.value = post.id
+}
+
+/** 推荐流里点一条帖子：与社区页签里点开同一条走同一个详情子页 */
+function openPostDetailById(id: number) {
+  postDetailLeaving.value = false
+  communityDetailId.value = id
+}
+
+/** 推荐流里的一行：帖子进社区详情子页，资讯仍进资讯详情子页 */
+function openFeedItem(item: FeedItem) {
+  if (item.kind === 'post' && item.post_id) {
+    openPostDetailById(item.post_id)
+    return
+  }
+  openDetail(item.url, item.title)
+}
+
+/* ---------- 推荐流混排：资讯之间插入社区帖子 ----------
+   为什么是「插位」而不是统一打分：资讯没有点赞 / 评论这类可比热度，
+   塞进同一套分数里会被帖子整体挤到后面；而帖子有自己的打分（后端 /community/recommend），
+   这里只负责按密度把它们摆进固定的位置 —— 也是贴吧、小红书那类信息流的做法。 */
+const recommendedPosts = ref<CommunityPost[]>([])
+/** 每 3 条资讯插 1 条帖子（约 25%），社区内容能被看见，又不至于盖过校内资讯 */
+const POST_MIX_EVERY = 3
+/** 开头 2 条先给资讯：权威信息不该被社区内容挤出首屏 */
+const POST_MIX_LEAD = 2
+
+async function loadRecommendedPosts() {
+  if (isGuestMode()) { recommendedPosts.value = []; return }
+  try {
+    recommendedPosts.value = await getRecommendedPosts(12)
+  } catch {
+    // 静默：推荐位是增强功能，取不到就退回纯资讯流，不留空位也不报错
+    recommendedPosts.value = []
+  }
+}
+
+function postToFeedItem(p: CommunityPost): FeedItem {
+  return {
+    title: p.title,
+    // community:<id> 只作唯一的行 key，不会被当成资讯链接去开阅读器
+    url: `community:${p.id}`,
+    image_url: p.images?.[0] ?? null,
+    timeLabel: relativeTime(p.created_at),
+    sourceLabel: `${p.author_name || '同学'} · ${p.category}`,
+    source: 'community_post',
+    comment_count: p.comment_count,
+    view_count: p.view_count,
+    kind: 'post',
+    post_id: p.id,
+  }
+}
+
+function mixCommunityPosts(articles: FeedItem[]): FeedItem[] {
+  const posts = recommendedPosts.value
+  if (!posts.length) return articles
+  const out: FeedItem[] = []
+  let pi = 0
+  let sincePost = 0
+  articles.forEach((a, i) => {
+    out.push(a)
+    sincePost++
+    if (i < POST_MIX_LEAD) return
+    if (sincePost >= POST_MIX_EVERY && pi < posts.length) {
+      out.push(postToFeedItem(posts[pi]))
+      pi++
+      sincePost = 0
+    }
+  })
+  return out
 }
 
 /** 开始退场：下层立刻从 -30% 归位，与子页 0.3s 右滑同拍（等 after-leave 就晚了 300ms） */
@@ -1503,6 +1458,10 @@ function onPostDetailClosed() {
 function onPostUpdated() {
   void communityFeedRef.value?.refresh()
   void desktopCommunityFeedRef.value?.refresh()
+  // 关注流也要重拉：在详情里点了赞 / 关注了作者，回到列表计数与「关注了谁」都得对得上
+  void followingFeedRef.value?.refresh()
+  // 推荐流里的帖子行也重拉：刚评论/点赞完返回，计数得对得上（顺序微调可接受）
+  void loadRecommendedPosts()
 }
 
 function onPostDeleted() {
@@ -1518,7 +1477,7 @@ function onPostDeleted() {
  * 卡片分页里每一页都走这里取数，口径与当前页完全一致。
  */
 function feedItemsOf(key: FeedTabKey): FeedItem[] {
-  return itemsOfTab(key).map(i => {
+  const items = itemsOfTab(key).map(i => {
     const s = interactionMap.value[i.url]
     return {
       title: removeCommonPrefix(i.title),
@@ -1531,6 +1490,8 @@ function feedItemsOf(key: FeedTabKey): FeedItem[] {
       view_count: s?.view_count ?? 0,
     }
   })
+  // 只有「推荐」页混入社区帖子；其余分类是纯栏目流，插进去只会让人找不到规律
+  return key === 'recommend' ? mixCommunityPosts(items) : items
 }
 
 /** 当前分类的信息流（详情页取来源、页面渲染都读这一份） */
@@ -1538,8 +1499,8 @@ const mobileFeed = computed<FeedItem[]>(() => feedItemsOf(activeTab.value))
 
 /**
  * 信息流空态文案。
- * 「关注」是空态的常客（关注关系还没接，itemsOfTab 固定返回空数组），
- * 单独给一句中性说明；等关注功能落地后，这里换成「还没有关注的栏目」之类的引导文案。
+ * 「关注」页签由 FollowingFeed 自己渲染（空态文案更细：没关注人 / 关注的人没发帖），
+ * 走不到这里；留着这句是为了模板里 else 分支的兜底不出现空白。
  * 其余分类沿用原文案；「推荐」几乎不会为空，也按普通分类处理，不额外造一句。
  */
 function emptyTextOf(key: FeedTabKey): string {
@@ -2021,8 +1982,8 @@ watch(
 )
 
 onMounted(() => {
-  // AI资源 Tab 的数据与资讯流缓存无关，单独拉取（失败静默走空态）
-  void loadAiChannel(aiChannel.value)
+  // 推荐流要混入社区帖子：与资讯并行拉，失败时自动退回纯资讯流
+  void loadRecommendedPosts()
   const tabParam = route.query.tab
   // 旧链接兜底：收藏 Tab 已下沉到个人中心，历史地址带 ?tab=favorites 的改送个人中心收藏页
   if (tabParam === 'favorites') {
@@ -3144,40 +3105,6 @@ watch(() => route.query.post, (v) => { if (v) openDeepLinkedPost() })
      分割线因此从内容左缘延伸到卡片右缘内 20px 处，与参考稿一致。 */
   .campus-feed { display: flex; flex-direction: column; }
 
-  /* ---------- AI资源子频道 ----------
-     横向可滑的胶囊标签行，压在信息流上方。
-     与页面 Tab 区分：Tab 是文字 + 下划线，这里用浅灰胶囊，一眼看出是「二级筛选」。 */
-  .ai-channels {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 4px 0 12px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .ai-channels::-webkit-scrollbar { display: none; }
-  .ai-channel {
-    flex-shrink: 0;
-    padding: 5px 12px;
-    border-radius: 999px;
-    border: 1px solid #ebedf0;
-    background: #f7f8fa;
-    font-family: inherit;
-    font-size: 12px;
-    line-height: 1.5;
-    color: #86909c;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: background .16s ease, color .16s ease, border-color .16s ease;
-  }
-  .ai-channel:active { opacity: .72; }
-  .ai-channel.is-active {
-    background: #1d2129;
-    border-color: #1d2129;
-    color: #fff;
-    font-weight: 600;
-  }
   .feed-item {
     display: flex;
     align-items: flex-start;

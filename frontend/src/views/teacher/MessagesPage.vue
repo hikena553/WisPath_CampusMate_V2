@@ -782,7 +782,7 @@
           </div>
 
           <input type="file" multiple hidden ref="fileInputRef" @change="onFileSelect"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt" />
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.csv,.md,.json,.xml,.mp4,.mov,.avi,.mkv" />
           <input type="file" multiple hidden ref="imageInputRef" @change="onFileSelect"
             accept=".jpg,.jpeg,.png,.gif,.bmp" />
 
@@ -1370,7 +1370,7 @@
       <div class="gsp-body">
         <input type="file" multiple hidden ref="groupFileInputRef"
           @change="onGroupFileSelect"
-          accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt" />
+          accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.csv,.md,.json,.xml,.mp4,.mov,.avi,.mkv" />
         <div v-if="groupFiles.length === 0" class="gsp-empty-box">
           <DtIcon name="empty" :size="40" style="color: var(--dt-text-quiet);" />
           <span>暂无群文件</span>
@@ -1444,7 +1444,7 @@ import {
   setGroupMuted, getGroupInvite, resetGroupInvite, markGroupRead,
   type GroupOut, type GroupMemberOut, type UserSearchResult
 } from '@/api/groups'
-import { uploadFile } from '@/api/upload'
+import { MAX_CHAT_FILE_SIZE, uploadChatFile, uploadFile } from '@/api/upload'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 import {
   getNotifications, markNotificationsRead, markAllNotificationsRead,
@@ -2950,16 +2950,19 @@ function downloadFile(url: string, name: string) {
 function previewImage(url: string) { previewUrl.value = url }
 
 async function uploadAndSend(file: File) {
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)
   uploadProgress.value = 10
   try {
-    const result = await uploadFile(file)
+    // 图片走普通上传（50MB 内）；其余文件走聊天文件通道（最大 5GB，服务器保留 7 天）
+    const result = isImage
+      ? await uploadFile(file)
+      : await uploadChatFile(file, (p) => { uploadProgress.value = Math.max(10, p) })
     uploadProgress.value = 100
-    const ext = file.name.split('.').pop()?.toLowerCase() || ''
-    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)
     const content = makeFileContent(isImage ? 'image' : 'file', file.name, result.url)
     await sendTextMsg(content)
-  } catch {
-    ElMessage.error(`上传 ${file.name} 失败`)
+  } catch (e: any) {
+    ElMessage.error(e?.message || `上传 ${file.name} 失败`)
   } finally {
     uploadProgress.value = 0
   }
@@ -2967,8 +2970,14 @@ async function uploadAndSend(file: File) {
 
 async function uploadFiles(files: FileList | File[]) {
   for (const f of files) {
-    if (f.size > 50 * 1024 * 1024) {
+    const ext = f.name.split('.').pop()?.toLowerCase() || ''
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)
+    if (isImage && f.size > 50 * 1024 * 1024) {
       ElMessage.warning(`${f.name} 超过 50MB 限制`)
+      continue
+    }
+    if (f.size > MAX_CHAT_FILE_SIZE) {
+      ElMessage.warning(`${f.name} 超过 5GB 限制`)
       continue
     }
     await uploadAndSend(f)

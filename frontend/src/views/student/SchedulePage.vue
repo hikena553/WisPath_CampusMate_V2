@@ -1134,6 +1134,17 @@
             </div>
             <p v-if="!svRecords.length && !svRecordsLoading" class="ai-empty">还没有申请记录</p>
           </div>
+
+          <!-- 失物招领：原工作台宫格里的业务。工作台整页下线后独立成 /student/lost-found，
+               三类申请（请假 / 证明 / 项目）之外只剩它没地方落脚，入口挂回服务子页。 -->
+          <button type="button" class="sv-entry" @click="router.push('/student/lost-found')">
+            <span class="sv-entry-ico"><el-icon :size="17"><Search /></el-icon></span>
+            <span class="sv-entry-main">
+              <b>失物招领</b>
+              <small>丢了东西 / 捡到东西，在这里登记与查找</small>
+            </span>
+            <el-icon :size="13" class="sv-entry-arrow"><ArrowRight /></el-icon>
+          </button>
         </div>
 
         <!-- ===== 学习计划子页（v4：原 /student/plan 独立路由收编为第 5 个 tab） =====
@@ -1312,7 +1323,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourses as fetchCourses, getGrades, getExams } from '@/api/academic'
 import { getGradeAnalysis, type GradeAnalysis } from '@/api/gradeAnalysis'
-import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, Plus, Tickets, Download, Timer, Aim } from '@element-plus/icons-vue'
+import { WarningFilled, Location, TrendCharts, CircleCheckFilled, Lock, Calendar, Loading, Star, Trophy, DataAnalysis, Histogram, DataLine, Collection, FolderOpened, Link, User, UserFilled, InfoFilled, ArrowRight, ArrowDown, ArrowLeft, Grid, Plus, Tickets, Download, Timer, Aim, Search } from '@element-plus/icons-vue'
 import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import { ElMessage, ElCollapseTransition } from 'element-plus'
 import VChart from 'vue-echarts'
@@ -4381,6 +4392,28 @@ watch(() => route.query.tab, (val) => {
   font-family: inherit; font-size: 14.5px; font-weight: 600;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ===== 失物招领入口（服务子页底部，工作台下线后的落点） ===== */
+.sv-entry {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  margin-top: 12px; padding: 13px 14px;
+  border: none; border-radius: 14px; cursor: pointer;
+  background: var(--sp-surface, #fff);
+  box-shadow: 0 1px 2px rgba(20, 23, 26, .04);
+  font-family: inherit; text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.sv-entry:active { background: #f7f8f9; }
+.sv-entry:focus-visible { outline: 2px solid #3d4a57; outline-offset: 2px; }
+.sv-entry-ico {
+  width: 34px; height: 34px; flex: none; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(61, 74, 87, .08); color: #3d4a57;
+}
+.sv-entry-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sv-entry-main b { font-size: 13.5px; font-weight: 600; color: var(--sp-ink, #14171a); }
+.sv-entry-main small { font-size: 11.5px; color: var(--sp-ink-3, #9aa0a8); line-height: 1.35; }
+.sv-entry-arrow { flex: none; color: var(--sp-ink-3, #9aa0a8); }
 .sv-cta:active { transform: scale(0.99); }
 .svr-row {
   display: flex; align-items: center; gap: 10px;

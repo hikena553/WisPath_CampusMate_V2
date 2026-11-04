@@ -446,7 +446,8 @@ def execute_action(db: Session, action: ProactiveAction) -> bool:
             title=action.title,
             content=action.content,
             type=NotificationType.SYSTEM,
-            link="/student/workbench",
+            # 主动触达是「提醒你回站内看看」：落到学生首页（旧工作台已下线）
+            link="/student",
         )
         db.add(notif)
         return True

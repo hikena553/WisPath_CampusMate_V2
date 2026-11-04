@@ -483,7 +483,7 @@ def _publish_class_announcement(db: Session, args: dict, user: User) -> dict:
                 title=f"[{_URGENCY_TEXT[urgency]}公告] {title}",
                 content=content[:200],
                 notification_type=NotificationType.ANNOUNCEMENT,
-                link="/student/workbench",
+                link="/student",
                 related_id=item.id,
                 sender_id=user.id,
                 level=UrgencyLevel(urgency),
