@@ -14,19 +14,14 @@
         @select="onAppbarSelect"
       />
       <div class="msg-appbar-acts">
-        <!-- 通知：从原「通知」视图抽成独立子页（审批 / 预警 / 公告，按时间倒序），
-             页头只留一枚铃铛 + 未读角标，与「消息 / 通讯录」两个主视图并列 -->
+        <!-- 与学生端完全一致：搜索 + ＋ 两枚图标（通知改为会话列表首行的「消息通知」入口） -->
         <button
           type="button"
-          class="msg-appbar-icon msg-bell"
-          :class="{ 'has-unread': unreadNotifCount > 0 }"
-          aria-label="通知"
-          @click="goNotifications"
+          class="msg-appbar-icon"
+          aria-label="搜索"
+          @click="openMobileSearch"
         >
-          <el-icon :size="21"><Bell /></el-icon>
-          <i v-if="unreadNotifCount > 0" class="msg-bell-badge">
-            {{ unreadNotifCount > 99 ? '99+' : unreadNotifCount }}
-          </i>
+          <el-icon :size="21"><Search /></el-icon>
         </button>
         <button
           type="button"
@@ -51,7 +46,7 @@
           </button>
           <button type="button" class="msg-plus-item" role="menuitem" @click="addFriendFromMenu">
             <el-icon :size="18"><User /></el-icon>
-            <span>发起会话</span>
+            <span>加好友 / 群</span>
           </button>
           <!-- 我的文件：与学生端同构的独立子页（/teacher/files），只收聊天文档 -->
           <button type="button" class="msg-plus-item" role="menuitem" @click="goMyFiles">
@@ -85,7 +80,7 @@
           :placeholder="headerSearchPlaceholder"
           @input="onHeaderSearch"
         />
-        <button type="button" class="msg-search-bell" aria-label="通知" @click="goNotifications">
+        <button type="button" class="msg-search-bell" aria-label="通知" @click="openNotice">
           <el-icon :size="16"><Bell /></el-icon>
           <i v-if="unreadNotifCount > 0" class="msg-search-badge">
             {{ unreadNotifCount > 99 ? '99+' : unreadNotifCount }}
@@ -116,12 +111,25 @@
         <PullRefreshIndicator :indicator-style="sidebarPull.indicatorStyle" :active="sidebarPull.active" />
         <!-- ============ 视图一：消息（会话列表） ============ -->
         <template v-if="mobileView === 'messages'">
-        <!-- 移动端专用：桌面端搜索已上移至钉钉式头部（整宽搜索框） -->
-        <div v-if="isMobile" class="sidebar-search">
-          <el-input v-model="search" placeholder="搜索已有会话" size="small" clearable
-            @input="filterConversations">
-            <template #prefix><DtIcon name="search" :size="15" /></template>
-          </el-input>
+        <!-- 消息通知：与学生端同款的常驻首行（审批 / 预警 / 公告聚合，未读角标贴头像） -->
+        <div class="conv-item notice-entry" :class="{ active: activeType === 'notice' }" @click="openNotice">
+          <div class="conv-avatar-wrapper">
+            <span class="notice-entry-avatar">
+              <el-icon :size="20"><Bell /></el-icon>
+            </span>
+            <i v-if="unreadNotifCount > 0" class="conv-notice-badge">
+              {{ unreadNotifCount > 99 ? '99+' : unreadNotifCount }}
+            </i>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top">
+              <span class="conv-name">消息通知</span>
+              <span class="conv-time">{{ latestNotifTime }}</span>
+            </div>
+            <div class="conv-bottom">
+              <span class="conv-preview">{{ latestNotifTitle }}</span>
+            </div>
+          </div>
         </div>
 
         <!-- 小绵管家：置顶常驻会话（自动推送最新资讯 / 总结对话内容） -->
@@ -275,19 +283,7 @@
 
         <!-- ============ 视图二：通讯录 ============ -->
         <template v-else-if="mobileView === 'contacts'">
-          <!-- 全校师生检索：命中即可直接发起会话（移动端内嵌；桌面端用头部搜索） -->
-          <div v-if="isMobile" class="sidebar-search">
-            <el-input
-              v-model="contactKeyword"
-              placeholder="搜索姓名 / 学号 / 工号"
-              size="small"
-              clearable
-              @input="onContactSearch"
-            >
-              <template #prefix><DtIcon name="search" :size="15" /></template>
-            </el-input>
-          </div>
-
+          <!-- 全校师生检索：桌面端用头部搜索；移动端统一走页头搜索浮层 -->
           <div v-if="contactKeyword.trim()" class="addr-search-results">
             <div v-if="contactSearching" class="addr-loading">
               <AgentLoading text="正在搜索师生" />
@@ -458,104 +454,106 @@
         <div class="chat-body">
         <div class="chat-main">
         <div class="chat-header">
-          <div class="chat-header-left">
-            <el-button text circle @click="goBack" class="back-btn" v-show="isMobile">
-              <DtIcon name="back" :size="20" />
-            </el-button>
-            <el-avatar v-if="isMobile && activeType === 'group'" :size="34"
-              :src="currentGroup?.avatar || undefined" class="chat-header-group-avatar">
-              <DtIcon name="users" :size="16" />
-            </el-avatar>
-            <!-- 移动端单聊：显示对方头像，仅作身份标识（进主页的入口固定在右上角，与 QQ 一致） -->
-            <el-avatar
-              v-else-if="isMobile && activeType === 'single' && activeId"
-              :size="34"
-              :src="singlePeerAvatar || undefined"
-              class="chat-header-peer-avatar"
-            >{{ activeName?.[0] }}</el-avatar>
-            <div class="chat-header-info">
-              <div class="chat-name">{{ activeName }}</div>
-              <div v-if="chatSubtitle" class="chat-sub">{{ chatSubtitle }}</div>
-            </div>
+          <!-- 移动端：返回圆形按钮 + 居中标题（与学生端完全一致，不再显示头像） -->
+          <el-button v-show="isMobile" text circle @click="goBack" class="back-btn">
+            <DtIcon name="back" :size="20" />
+          </el-button>
+          <div class="chat-header-info">
+            <div class="chat-name">{{ activeName }}</div>
+            <div v-if="chatSubtitle && (!isMobile || activeType !== 'single')" class="chat-sub">{{ chatSubtitle }}</div>
           </div>
           <div class="chat-header-right">
-            <!-- 单聊：右上角固定入口，进对方个人主页（QQ 资料卡逻辑） -->
-            <el-button
-              v-if="activeType === 'single' && activeId"
-              text
-              circle
-              class="chat-head-homepage"
-              title="查看个人主页"
-              @click="openUserHomepage(activeId)"
-            >
-              <DtIcon name="user" :size="isMobile ? 20 : 18" />
-            </el-button>
-            <!-- 群聊：消息免打扰一键开关（复用群设置同一条逻辑） -->
-            <button
-              v-if="activeType === 'group'"
-              type="button"
-              class="chat-head-btn"
-              :class="{ on: groupMuted }"
-              :title="groupMuted ? '关闭消息免打扰' : '开启消息免打扰'"
-              @click="onMuteChange(!groupMuted)"
-            >
-              <DtIcon name="bellOff" :size="18" />
-            </button>
-            <!-- 移动端群聊：更多（群设置 / 加入任务） -->
-            <el-dropdown v-if="isMobile && activeType === 'group'" trigger="click">
-              <el-button text circle class="header-more">
-                <DtIcon name="menu" :size="20" />
+            <!-- 移动端：单枚三横线菜单，承载全部会话操作（与学生端同款）
+                 小绵管家是智能体会话，没有群/学生档案操作，因此不显示该菜单 -->
+            <el-dropdown v-if="isMobile && activeType !== 'butler' && activeType !== 'notice'" trigger="click" @command="onMobileChatMenuCommand">
+              <button type="button" class="chat-head-ghost" aria-label="更多操作">
+                <svg width="17" height="14" viewBox="0 0 17 14" aria-hidden="true">
+                  <rect x="0" y="0" width="17" height="1.6" rx="0.8" fill="currentColor" />
+                  <rect x="0" y="6.2" width="17" height="1.6" rx="0.8" fill="currentColor" />
+                  <rect x="0" y="12.4" width="12" height="1.6" rx="0.8" fill="currentColor" />
+                </svg>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <template v-if="activeType === 'single'">
+                    <el-dropdown-item command="home">查看主页</el-dropdown-item>
+                    <el-dropdown-item v-if="isMyStudent" command="profile">查看档案</el-dropdown-item>
+                    <el-dropdown-item v-if="isMyStudent" command="care">记录关怀</el-dropdown-item>
+                    <el-dropdown-item divided command="task">加入任务</el-dropdown-item>
+                  </template>
+                  <template v-else>
+                    <el-dropdown-item command="settings">群设置</el-dropdown-item>
+                    <el-dropdown-item command="mute">
+                      {{ groupMuted ? '关闭消息免打扰' : '开启消息免打扰' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item divided command="task">加入任务</el-dropdown-item>
+                  </template>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <template v-else>
+              <!-- 单聊：右上角固定入口，进对方个人主页（QQ 资料卡逻辑） -->
+              <el-button
+                v-if="activeType === 'single' && activeId"
+                text
+                circle
+                class="chat-head-homepage"
+                title="查看个人主页"
+                @click="openUserHomepage(activeId)"
+              >
+                <DtIcon name="user" :size="18" />
               </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="openGroupSettings">
-                    <DtIcon name="settings" :size="15" /> 群设置
-                  </el-dropdown-item>
-                  <el-dropdown-item divided @click="addToTask">
-                    <DtIcon name="calendar" :size="15" /> 加入任务
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <!-- 桌面端群聊：更多（群管理 / 成员 / 加入任务） -->
-            <el-dropdown v-if="!isMobile && activeType === 'group'" trigger="click">
-              <el-button text circle><DtIcon name="more" :size="18" /></el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="showManageGroup = true">
-                    <DtIcon name="settings" :size="15" /> 群管理
-                  </el-dropdown-item>
-                  <el-dropdown-item @click="showAddMember = true">
-                    <DtIcon name="plus" :size="15" /> 添加成员
-                  </el-dropdown-item>
-                  <el-dropdown-item @click="openMemberList">
-                    <DtIcon name="users" :size="15" /> 查看成员
-                  </el-dropdown-item>
-                  <el-dropdown-item divided @click="addToTask">
-                    <DtIcon name="calendar" :size="15" /> 加入任务
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <!-- 单聊：更多（对方为学生时含档案 / 关怀；任何单聊都可加入任务） -->
-            <el-dropdown v-if="activeType === 'single' && activeId" trigger="click" @command="onStudentMenuCommand">
-              <el-button text circle class="header-more">
-                <DtIcon :name="isMobile ? 'menu' : 'more'" :size="isMobile ? 20 : 18" />
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item v-if="isMyStudent" command="profile">
-                    <DtIcon name="document" :size="15" /> 查看档案
-                  </el-dropdown-item>
-                  <el-dropdown-item v-if="isMyStudent" command="care">
-                    <DtIcon name="heart" :size="15" /> 记录关怀
-                  </el-dropdown-item>
-                  <el-dropdown-item :divided="isMyStudent" @click="addToTask">
-                    <DtIcon name="calendar" :size="15" /> 加入任务
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+              <!-- 群聊：消息免打扰一键开关（复用群设置同一条逻辑） -->
+              <button
+                v-if="activeType === 'group'"
+                type="button"
+                class="chat-head-btn"
+                :class="{ on: groupMuted }"
+                :title="groupMuted ? '关闭消息免打扰' : '开启消息免打扰'"
+                @click="onMuteChange(!groupMuted)"
+              >
+                <DtIcon name="bellOff" :size="18" />
+              </button>
+              <!-- 桌面端群聊：更多（群管理 / 成员 / 加入任务） -->
+              <el-dropdown v-if="activeType === 'group'" trigger="click">
+                <el-button text circle><DtIcon name="more" :size="18" /></el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="showManageGroup = true">
+                      <DtIcon name="settings" :size="15" /> 群管理
+                    </el-dropdown-item>
+                    <el-dropdown-item @click="showAddMember = true">
+                      <DtIcon name="plus" :size="15" /> 添加成员
+                    </el-dropdown-item>
+                    <el-dropdown-item @click="openMemberList">
+                      <DtIcon name="users" :size="15" /> 查看成员
+                    </el-dropdown-item>
+                    <el-dropdown-item divided @click="addToTask">
+                      <DtIcon name="calendar" :size="15" /> 加入任务
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <!-- 单聊：更多（对方为学生时含档案 / 关怀；任何单聊都可加入任务） -->
+              <el-dropdown v-if="activeType === 'single' && activeId" trigger="click" @command="onStudentMenuCommand">
+                <el-button text circle class="header-more">
+                  <DtIcon name="more" :size="18" />
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="isMyStudent" command="profile">
+                      <DtIcon name="document" :size="15" /> 查看档案
+                    </el-dropdown-item>
+                    <el-dropdown-item v-if="isMyStudent" command="care">
+                      <DtIcon name="heart" :size="15" /> 记录关怀
+                    </el-dropdown-item>
+                    <el-dropdown-item :divided="isMyStudent" @click="addToTask">
+                      <DtIcon name="calendar" :size="15" /> 加入任务
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </template>
           </div>
         </div>
 
@@ -585,6 +583,20 @@
           @paste="onPaste">
           <!-- 移动端下拉刷新：吉祥物指示器（公共模块，与首页共用同一套动画） -->
           <PullRefreshIndicator :indicator-style="chatPull.indicatorStyle" :active="chatPull.active" />
+          <!-- 系统通知：与学生端同款「微信服务通知」卡片流 -->
+          <div v-if="activeType === 'notice'" class="msg-notice-list">
+            <div v-if="!noticeItems.length" class="chat-empty">
+              <DtIcon name="empty" :size="48" style="color: var(--dt-text-quiet);" />
+              <span>还没有通知</span>
+            </div>
+            <div v-for="n in noticeItems" :key="n.id" class="msg-notice-item">
+              <div class="msg-time-sep">{{ formatNoticeDate(n.created_at) }}</div>
+              <div class="msg-notice-card" :class="{ clickable: !!n.link }" @click="openNoticeItem(n)">
+                <SystemNoticeCard :card="noticeCardOf(n)" />
+              </div>
+            </div>
+          </div>
+          <template v-else>
           <!-- 拖拽遮罩 -->
           <Transition name="fade">
             <div v-if="dragOver" class="drag-overlay">
@@ -637,6 +649,8 @@
                   <!-- 文本消息 -->
                   <div v-else class="bubble-text">{{ item.msg.content }}</div>
                 </div>
+                <!-- 移动端：与学生端同款，在气泡下方显示消息时间 -->
+                <span v-if="isMobile" class="msg-bubble-time">{{ formatConvTime(item.msg.created_at) }}</span>
               </div>
             </div>
           </template>
@@ -644,68 +658,115 @@
             <DtIcon name="empty" :size="48" style="color: var(--dt-text-quiet);" />
             <span>暂无聊天记录</span>
           </div>
+          </template>
         </div>
 
-        <div class="msg-composer">
-          <div class="msg-input-bar">
-            <!-- 左侧：语音输入 / 键盘切换 -->
-            <button class="tool-btn" type="button"
-              :title="voiceMode ? '切换到键盘' : '语音输入'" aria-label="语音输入" @click="toggleVoiceMode">
-              <el-icon :size="20"><EditPen v-if="voiceMode" /><Microphone v-else /></el-icon>
-            </button>
-
-            <div class="input-main composer-input">
-              <!-- 语音模式：QQ 风格「按住说话」 -->
-              <button v-if="voiceMode" class="hold-talk" type="button"
-                :class="{ recording: isRecording, cancel: recordCancelled }"
-                @pointerdown.prevent="onTalkStart"
-                @pointermove="onTalkMove"
-                @pointerup="onTalkEnd"
-                @pointercancel="onTalkCancel"
-                @contextmenu.prevent>
-                {{ isRecording ? (recordCancelled ? '松开取消' : '松开发送') : '按住 说话' }}
-              </button>
-              <el-input v-else v-model="newMsg" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
-                placeholder="输入消息..."
-                @keydown.enter.exact.prevent="sendMsg" />
+        <!-- 系统通知是单向的：没有输入框，换成一条说明（与学生端同款） -->
+        <div v-if="activeType === 'notice'" class="msg-notice-tip">系统通知不支持回复</div>
+        <div v-else class="msg-composer">
+          <!-- 移动端：与学生端同款输入区（上排输入 + 发送，下排工具条） -->
+          <template v-if="isMobile">
+            <div class="msg-input-bar mobile">
+              <div class="input-main composer-input">
+                <button v-if="voiceMode" class="hold-talk" type="button"
+                  :class="{ recording: isRecording, cancel: recordCancelled }"
+                  @pointerdown.prevent="onTalkStart"
+                  @pointermove="onTalkMove"
+                  @pointerup="onTalkEnd"
+                  @pointercancel="onTalkCancel"
+                  @contextmenu.prevent>
+                  {{ isRecording ? (recordCancelled ? '松开取消' : '松开发送') : '按住 说话' }}
+                </button>
+                <el-input v-else v-model="newMsg" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
+                  class="composer-textarea" placeholder="发消息…"
+                  @keydown.enter.exact.prevent="sendMsg" />
+              </div>
+              <button class="msg-send-btn" type="button" :disabled="!hasText" @click="sendMsg">发送</button>
             </div>
-
-            <!-- 右侧：表情 -->
-            <button class="tool-btn" :class="{ active: showEmoji }" type="button" title="表情"
-              aria-label="表情" @click="toggleEmoji">
-              <DtIcon name="smile" :size="21" />
-            </button>
-
-            <!-- 右侧动作槽：无内容 → 加号；有内容 → 发送（同尺寸叠放，切换不重排） -->
-            <div class="action-slot">
-              <button class="send-btn" :class="hasText ? 'visible' : 'hidden'" type="button" @click="sendMsg">发送</button>
-              <button class="tool-btn plus-action" :class="[!hasText ? 'visible' : 'hidden', { active: showAttachPanel }]"
-                type="button" title="更多" aria-label="更多" @click="toggleAttachPanel">
-                <DtIcon name="plus" :size="21" />
+            <div class="msg-composer-tools">
+              <button class="msg-tool" :class="{ active: voiceMode }" type="button"
+                :aria-label="voiceMode ? '切换到键盘' : '语音输入'" @click="toggleVoiceMode">
+                <el-icon :size="21"><EditPen v-if="voiceMode" /><Microphone v-else /></el-icon>
               </button>
-            </div>
-          </div>
-
-          <!-- 底部展开面板（表情 / 更多）：单容器统一定高，内容切换不改变高度，自下而上滑出 -->
-          <div class="composer-panel" :class="{ open: !!activePanel }">
-            <div class="composer-panel-head">{{ activePanel === 'plus' ? '更多' : '表情' }}</div>
-            <!-- 更多：图片 / 文件 -->
-            <div v-if="activePanel === 'plus'" class="plus-grid">
-              <button class="plus-fn" type="button" @click="pickImage">
-                <span class="plus-fn-icon"><DtIcon name="image" :size="24" /></span>
-                <span class="plus-fn-label">图片</span>
+              <button class="msg-tool" type="button" aria-label="图片" @click="pickImage">
+                <DtIcon name="image" :size="21" />
               </button>
-              <button class="plus-fn" type="button" @click="pickFile">
-                <span class="plus-fn-icon"><DtIcon name="document" :size="24" /></span>
-                <span class="plus-fn-label">文件</span>
+              <button class="msg-tool" type="button" aria-label="文件" @click="pickFile">
+                <DtIcon name="document" :size="21" />
+              </button>
+              <button class="msg-tool" :class="{ active: showEmoji }" type="button"
+                aria-label="表情" @click="toggleEmoji">
+                <DtIcon name="smile" :size="21" />
               </button>
             </div>
-            <!-- 表情 -->
-            <div v-else-if="activePanel === 'emoji'" class="emoji-grid">
-              <button v-for="e in EMOJIS" :key="e" type="button" class="emoji-cell"
+            <div v-if="showEmoji" class="msg-emoji-sheet">
+              <button v-for="e in EMOJIS" :key="e" type="button" class="msg-emoji-cell"
                 :title="e" @click="insertEmoji(e)">{{ e }}</button>
             </div>
-          </div>
+          </template>
+
+          <!-- 桌面端：保持原有输入区 -->
+          <template v-else>
+            <div class="msg-input-bar">
+              <!-- 左侧：语音输入 / 键盘切换 -->
+              <button class="tool-btn" type="button"
+                :title="voiceMode ? '切换到键盘' : '语音输入'" aria-label="语音输入" @click="toggleVoiceMode">
+                <el-icon :size="20"><EditPen v-if="voiceMode" /><Microphone v-else /></el-icon>
+              </button>
+
+              <div class="input-main composer-input">
+                <!-- 语音模式：QQ 风格「按住说话」 -->
+                <button v-if="voiceMode" class="hold-talk" type="button"
+                  :class="{ recording: isRecording, cancel: recordCancelled }"
+                  @pointerdown.prevent="onTalkStart"
+                  @pointermove="onTalkMove"
+                  @pointerup="onTalkEnd"
+                  @pointercancel="onTalkCancel"
+                  @contextmenu.prevent>
+                  {{ isRecording ? (recordCancelled ? '松开取消' : '松开发送') : '按住 说话' }}
+                </button>
+                <el-input v-else v-model="newMsg" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
+                  placeholder="输入消息..."
+                  @keydown.enter.exact.prevent="sendMsg" />
+              </div>
+
+              <!-- 右侧：表情 -->
+              <button class="tool-btn" :class="{ active: showEmoji }" type="button" title="表情"
+                aria-label="表情" @click="toggleEmoji">
+                <DtIcon name="smile" :size="21" />
+              </button>
+
+              <!-- 右侧动作槽：无内容 → 加号；有内容 → 发送（同尺寸叠放，切换不重排） -->
+              <div class="action-slot">
+                <button class="send-btn" :class="hasText ? 'visible' : 'hidden'" type="button" @click="sendMsg">发送</button>
+                <button class="tool-btn plus-action" :class="[!hasText ? 'visible' : 'hidden', { active: showAttachPanel }]"
+                  type="button" title="更多" aria-label="更多" @click="toggleAttachPanel">
+                  <DtIcon name="plus" :size="21" />
+                </button>
+              </div>
+            </div>
+
+            <!-- 底部展开面板（表情 / 更多）：单容器统一定高，内容切换不改变高度，自下而上滑出 -->
+            <div class="composer-panel" :class="{ open: !!activePanel }">
+              <div class="composer-panel-head">{{ activePanel === 'plus' ? '更多' : '表情' }}</div>
+              <!-- 更多：图片 / 文件 -->
+              <div v-if="activePanel === 'plus'" class="plus-grid">
+                <button class="plus-fn" type="button" @click="pickImage">
+                  <span class="plus-fn-icon"><DtIcon name="image" :size="24" /></span>
+                  <span class="plus-fn-label">图片</span>
+                </button>
+                <button class="plus-fn" type="button" @click="pickFile">
+                  <span class="plus-fn-icon"><DtIcon name="document" :size="24" /></span>
+                  <span class="plus-fn-label">文件</span>
+                </button>
+              </div>
+              <!-- 表情 -->
+              <div v-else-if="activePanel === 'emoji'" class="emoji-grid">
+                <button v-for="e in EMOJIS" :key="e" type="button" class="emoji-cell"
+                  :title="e" @click="insertEmoji(e)">{{ e }}</button>
+              </div>
+            </div>
+          </template>
 
           <input type="file" multiple hidden ref="fileInputRef" @change="onFileSelect"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.csv,.md,.json,.xml,.mp4,.mov,.avi,.mkv" />
@@ -725,7 +786,7 @@
         </div>
 
         <!-- 桌面端常驻「会话信息」面板（≥1200px 显示；窄屏由 CSS 隐藏，成员/档案入口回退到弹窗与移动子页） -->
-        <aside v-if="activeType !== 'butler'" class="chat-info-panel">
+        <aside v-if="activeType !== 'butler' && activeType !== 'notice'" class="chat-info-panel">
           <!-- 群聊：群成员列表（复用现有群成员数据与弹窗逻辑） -->
           <template v-if="activeType === 'group'">
             <div class="info-profile">
@@ -1340,6 +1401,68 @@
       </div>
     </Transition>
 
+    <!-- ============= 移动端搜索浮层（与学生端同款：点页头放大镜进入） ============= -->
+    <div v-if="isMobile && mobileSearchOpen" class="msg-mobile-search">
+      <div class="mms-head">
+        <button type="button" class="mms-back" aria-label="返回" @click="closeMobileSearch">
+          <DtIcon name="back" :size="20" />
+        </button>
+        <div class="mms-input-wrap">
+          <el-icon :size="16"><Search /></el-icon>
+          <input
+            ref="mobileSearchInputRef"
+            v-model="mobileSearchKw"
+            type="search"
+            class="mms-input"
+            placeholder="搜索消息、通讯录"
+            @input="onMobileSearchInput"
+          />
+        </div>
+        <button type="button" class="mms-cancel" @click="closeMobileSearch">取消</button>
+      </div>
+      <div class="mms-body">
+        <template v-if="mobileSearchKw.trim()">
+          <div v-if="filteredList.length" class="mms-section">
+            <div class="mms-section-title">会话</div>
+            <button
+              v-for="item in filteredList.slice(0, 6)"
+              :key="item._key"
+              type="button"
+              class="mms-row"
+              @click="openSearchSession(item)"
+            >
+              <el-avatar :size="38" :src="item._type === 'group' ? item.avatar : item.user_avatar">
+                {{ (item.name || ' ').slice(0, 1) }}
+              </el-avatar>
+              <div class="mms-row-main">
+                <div class="mms-row-name">{{ item.name }}</div>
+                <div class="mms-row-sub">{{ item.last_message || '暂无消息' }}</div>
+              </div>
+            </button>
+          </div>
+          <div class="mms-section">
+            <div class="mms-section-title">师生</div>
+            <div v-if="contactSearching" class="mms-empty">检索中…</div>
+            <div v-else-if="!contactResults.length" class="mms-empty">未找到匹配的师生</div>
+            <button
+              v-for="u in contactResults.slice(0, 8)"
+              :key="u.id"
+              type="button"
+              class="mms-row"
+              @click="openSearchPerson(u)"
+            >
+              <el-avatar :size="38" :src="u.avatar">{{ (u.name || ' ').slice(0, 1) }}</el-avatar>
+              <div class="mms-row-main">
+                <div class="mms-row-name">{{ u.name }}</div>
+                <div class="mms-row-sub">{{ u.role === 'teacher' ? '教师' : '学生' }} · {{ u.username }}</div>
+              </div>
+            </button>
+          </div>
+        </template>
+        <div v-else class="mms-empty">搜索已有会话或全校师生</div>
+      </div>
+    </div>
+
     <!-- ============= 记录关怀（单聊学生） ============= -->
     <CareRecordDialog
       v-model="showCareDialog"
@@ -1374,8 +1497,13 @@ import { MAX_CHAT_FILE_SIZE, uploadChatFile, uploadFile } from '@/api/upload'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 import {
   getNotifications,
+  markAllNotificationsRead,
+  markNotificationsRead,
   type Notification as NotificationItem,
 } from '@/api/notification'
+// 系统通知卡片：与学生端「消息通知」共用同一套卡片版式
+import SystemNoticeCard from '@/components/chat/SystemNoticeCard.vue'
+import { formatNoticeTime, type SystemNoticeCard as NoticeCard } from '@/utils/systemNotice'
 import { getColleges, getMajors, getClassGroups, getOrgScope, type OrgScope } from '@/api/organization'
 import type { College, Major, ClassGroup } from '@/types'
 import { useSiteConfig } from '@/composables/useSiteConfig'
@@ -1413,8 +1541,8 @@ const { siteMascot, agentName } = useSiteConfig()
 const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
 // ===== 消息中心视图（消息 / 通讯录）=====
-// 与学生端同构：两个主视图 + 各自的入口。「文件」「通知」不再是视图 ——
-// 前者进「＋」面板的独立子页（/teacher/files），后者进页头铃铛子页（/teacher/notifications）。
+// 与学生端同构：两个主视图 + 各自的入口。「文件」进「＋」面板的独立子页（/teacher/files），
+// 「通知」则和学生端一样，是会话列表首行的「消息通知」会话，点开在聊天区按卡片流展示。
 type MsgView = 'messages' | 'contacts'
 const mobileView = ref<MsgView>('messages')
 /** 移动端「＋」面板：新建会话 / 群聊、我的文件与一键已读 */
@@ -1444,12 +1572,6 @@ function goMyFiles() {
   void router.push({ name: 'teacher-files' })
 }
 
-/** 通知（审批 / 预警 / 公告）：从原第四个视图抽成的独立子页 */
-function goNotifications() {
-  plusOpen.value = false
-  void router.push({ name: 'teacher-notifications' })
-}
-
 const conversations = ref<any[]>([])
 const groups = ref<GroupOut[]>([])
 
@@ -1458,7 +1580,7 @@ const activeId = ref<number | null>(null)
 // 移动端聊天详情是页内二级页面：打开时让出底部悬浮导航，把整屏留给会话
 useMobileSubPage(computed(() => isMobile.value && activeId.value !== null))
 const activeName = ref('')
-const activeType = ref<'single' | 'group' | 'butler'>('single')
+const activeType = ref<'single' | 'group' | 'butler' | 'notice'>('single')
 const messages = ref<any[]>([])
 const newMsg = ref('')
 const msgListRef = ref<HTMLDivElement>()
@@ -1508,6 +1630,22 @@ function onStudentMenuCommand(command: string) {
     careStudentId.value = activeId.value
     careStudentName.value = activeName.value
     showCareDialog.value = true
+  }
+}
+
+/** 移动端聊天页头三横线菜单：把桌面端分散的入口收敛到一枚图标 */
+function onMobileChatMenuCommand(command: string) {
+  if (!activeId.value) return
+  if (command === 'home') {
+    openUserHomepage(activeId.value)
+  } else if (command === 'settings') {
+    openGroupSettings()
+  } else if (command === 'mute') {
+    onMuteChange(!groupMuted.value)
+  } else if (command === 'task') {
+    addToTask()
+  } else {
+    onStudentMenuCommand(command)
   }
 }
 
@@ -2424,6 +2562,45 @@ async function startChatWith(u: { id: number; name: string }) {
   await openChat(u.id, u.name, 'single')
 }
 
+// ===== 移动端页头搜索浮层：与学生端同款（页头只留一枚放大镜）=====
+const mobileSearchOpen = ref(false)
+const mobileSearchKw = ref('')
+const mobileSearchInputRef = ref<HTMLInputElement | null>(null)
+let mobileUserSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+function openMobileSearch() {
+  mobileSearchOpen.value = true
+  nextTick(() => mobileSearchInputRef.value?.focus())
+}
+function closeMobileSearch() {
+  mobileSearchOpen.value = false
+  mobileSearchKw.value = ''
+  contactResults.value = []
+  contactSearching.value = false
+  if (mobileUserSearchTimer) { clearTimeout(mobileUserSearchTimer); mobileUserSearchTimer = null }
+}
+/** 输入即过滤本地会话，并 debounce 检索全校师生 */
+function onMobileSearchInput() {
+  search.value = mobileSearchKw.value
+  if (mobileUserSearchTimer) clearTimeout(mobileUserSearchTimer)
+  const kw = mobileSearchKw.value.trim()
+  if (!kw) { contactResults.value = []; contactSearching.value = false; return }
+  contactSearching.value = true
+  mobileUserSearchTimer = setTimeout(async () => {
+    try { contactResults.value = await searchUsers(kw) }
+    catch { contactResults.value = [] }
+    finally { contactSearching.value = false }
+  }, 300)
+}
+function openSearchSession(item: any) {
+  closeMobileSearch()
+  openChat(item.id, item.name, item._type === 'group' ? 'group' : 'single')
+}
+function openSearchPerson(u: UserSearchResult) {
+  closeMobileSearch()
+  startChatWith(u)
+}
+
 async function toggleOrgCollege(id: number) {
   const next = new Set(expandedColleges.value)
   if (next.has(id)) { next.delete(id) } else { next.add(id) }
@@ -2487,7 +2664,8 @@ function roleTagClass(role: string) {
 }
 
 /* ==================== 通知 ==================== */
-// 通知不设分类筛选：按时间倒序直出，点击直达对应子页面
+// 与学生端「消息通知」同构：会话列表首行进入，聊天区按卡片流展示，
+// 卡片按时间正序排（旧 → 新），打开后滚到最底部，最新一条落在最下面。
 const notifications = ref<NotificationItem[]>([])
 const notifLoading = ref(false)
 const unreadNotifCount = computed(() => notifications.value.filter((n) => !n.is_read).length)
@@ -2499,6 +2677,124 @@ async function loadNotifications() {
     notifications.value = await getNotifications({ page_size: 50 })
   } catch { /* 通知拉取失败不影响会话与通讯录 */ }
   finally { notifLoading.value = false }
+}
+
+// 「消息通知」首行的摘要：取最新一条通知的标题与时间，无通知时给出兜底文案
+const latestNotification = computed(() => notifications.value[0] || null)
+const latestNotifTitle = computed(() => latestNotification.value?.title || '审批 / 预警 / 公告消息')
+const latestNotifTime = computed(() =>
+  latestNotification.value ? formatConvTime(latestNotification.value.created_at) : ''
+)
+
+/** 打开「消息通知」会话：与学生端一致，点开即进聊天区，不再跳独立通知页 */
+async function openNotice() {
+  plusOpen.value = false
+  activeType.value = 'notice'
+  activeId.value = -1
+  activeName.value = '消息通知'
+  messages.value = []
+  currentGroup.value = null
+  groupSubPage.value = null
+  await loadNotifications()
+  if (unreadNotifCount.value) {
+    try {
+      await markAllNotificationsRead()
+      notifications.value.forEach((n) => { n.is_read = true })
+    } catch { /* 标记失败不阻断阅读 */ }
+  }
+  nextTick(() => scrollToBottom())
+}
+
+/** 后端时间串是无时区的 UTC：补 T / Z 后再交给与学生端共用的时间格式化 */
+function noticeIso(t: string): string {
+  if (!t) return ''
+  if (t.includes('T')) return t.includes('Z') || t.includes('+') ? t : `${t}Z`
+  return `${t.replace(' ', 'T')}Z`
+}
+
+function noticeTime(t: string): number {
+  const d = new Date(noticeIso(t))
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime()
+}
+
+/** 卡片顶部那行居中的时间，与学生端 formatNoticeTime 同一口径（日期 + 12 小时制） */
+function formatNoticeDate(t: string): string {
+  return formatNoticeTime(noticeIso(t))
+}
+
+const NOTICE_TYPE_LABEL: Record<string, string> = {
+  approval: '审批',
+  leave: '请假审批',
+  crisis: '心理预警',
+  announcement: '班级公告',
+  feedback: '意见反馈',
+  message: '消息',
+  system: '系统',
+}
+
+const NOTICE_LEVEL_LABEL: Record<string, string> = {
+  important: '重要',
+  urgent: '紧急',
+}
+
+/** 通知类型 → 卡片来源的小圆标（名称 / 字形 / 底色），与学生端卡片的来源行同构 */
+function noticeApp(type: string): NoticeCard['app'] {
+  switch (type) {
+    case 'approval':
+    case 'leave':
+      return { name: '审批中心', glyph: '审', color: '#e8833a' }
+    case 'crisis':
+      return { name: '预警中心', glyph: '警', color: '#d93026' }
+    case 'announcement':
+      return { name: '班级公告', glyph: '公', color: '#2f6fed' }
+    case 'feedback':
+      return { name: '意见反馈', glyph: '馈', color: '#0f9d8f' }
+    case 'message':
+      return { name: '消息中心', glyph: '信', color: '#0891b2' }
+    default:
+      return { name: '系统通知', glyph: '系', color: '#6b7280' }
+  }
+}
+
+/** 一条后端通知 → 一张「微信服务通知」卡片：来源 / 标题 / 字段表 */
+function noticeCardOf(n: NotificationItem): NoticeCard {
+  const fields = [{ label: '类型', value: NOTICE_TYPE_LABEL[n.type] || '系统' }]
+  if (n.content) fields.push({ label: '内容', value: n.content })
+  if (n.sender_name) fields.push({ label: '发送人', value: n.sender_name })
+  if (n.level && n.level !== 'normal' && NOTICE_LEVEL_LABEL[n.level]) {
+    fields.push({ label: '级别', value: NOTICE_LEVEL_LABEL[n.level] })
+  }
+  return {
+    id: n.id,
+    app: noticeApp(n.type),
+    title: n.title,
+    fields,
+    created_at: noticeIso(n.created_at),
+  }
+}
+
+/** 聊天区里展示的通知：按时间正序（旧 → 新） */
+const noticeItems = computed(() =>
+  [...notifications.value].sort((a, b) => noticeTime(a.created_at) - noticeTime(b.created_at))
+)
+
+/** 点开某条通知：标记已读并跳转到关联页面（与学生端通知只读卡片的差异在这里） */
+async function openNoticeItem(n: NotificationItem) {
+  if (!n.is_read) {
+    try {
+      await markNotificationsRead([n.id])
+      n.is_read = true
+    } catch { /* 标记失败不阻断跳转 */ }
+  }
+  let link = n.link || ''
+  if (link.startsWith('/teacher/students') && n.related_id && !link.includes('student=')) {
+    link += `${link.includes('?') ? '&' : '?'}student=${n.related_id}`
+  }
+  if (link) {
+    void router.push(link)
+  } else {
+    ElMessage.info(n.title || '该通知暂无关联页面')
+  }
 }
 
 // 打开聊天
@@ -2886,7 +3182,7 @@ onMounted(async () => {
   loadPins()
   connectWs()
   void refreshButlerPreview()
-  // 通知不再是页内视图，但页头铃铛的未读角标要靠它：进页面就拉一次
+  // 通知在会话列表首行：未读角标与摘要都依赖这份数据，进页面就拉一次
   void loadNotifications()
   await Promise.all([loadConversations(), loadGroups(), loadMyStudents()])
   if (route.query.groupId) {
@@ -2997,6 +3293,20 @@ function onGlobalClick(e: MouseEvent) {
 .conv-item { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 14px; cursor: pointer; transition: background .15s var(--dt-ease); }
 .conv-item:hover { background: var(--dt-hover); }
 .conv-item.active { background: #f2f3f5; }
+/* 消息通知首行：铃铛头像与未读角标（移动端 46px 由媒体查询放大） */
+.notice-entry-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #1f2329; color: #fff;
+}
+.conv-notice-badge {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: #111827; color: #fff;
+  font-size: 10px; font-style: normal; line-height: 1;
+  box-shadow: 0 0 0 2px #fff;
+}
 .conv-avatar-wrapper { position: relative; flex-shrink: 0; line-height: 0; }
 /* 圆形头像（钉钉式） */
 .conv-avatar-wrapper :deep(.el-avatar) { border-radius: 50%; }
@@ -3127,6 +3437,23 @@ function onGlobalClick(e: MouseEvent) {
 .mine .bubble-text { background: var(--dt-primary); color: var(--dt-text-inverse); border-top-right-radius: var(--dt-radius-xs); }
 .theirs .bubble-text { background: var(--dt-surface); color: var(--dt-text); border-top-left-radius: var(--dt-radius-xs); border: 1px solid var(--dt-divider); }
 .chat-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 60px 0; color: var(--dt-text-quiet); font-size: 13px; }
+
+/* ==================== 系统通知（卡片流） ====================
+   与学生端消息页完全同款：时间居中浮在卡片上方、卡片整宽铺开。 */
+.msg-notice-list { display: flex; flex-direction: column; gap: 20px; }
+.msg-notice-item { display: flex; flex-direction: column; gap: 9px; }
+.msg-time-sep { text-align: center; font-size: 11.5px; color: #9aa0a6; }
+.msg-notice-card { width: 100%; }
+.msg-notice-card.clickable { cursor: pointer; }
+.msg-notice-tip {
+  flex-shrink: 0;
+  padding: 18px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #f0f1f3;
+  background: #fafbfc;
+  color: #9aa0a6;
+  font-size: 12px;
+  text-align: center;
+}
 
 /* ===== 桌面端常驻「会话信息」面板（≥1200px 显示，窄屏隐藏） ===== */
 .chat-info-panel {
@@ -3644,13 +3971,19 @@ function onGlobalClick(e: MouseEvent) {
   box-shadow: 0 14px 36px rgba(17, 24, 39, 0.16), 0 2px 8px rgba(17, 24, 39, 0.06);
   transform-origin: top right;
 }
+/* 指向「＋」按钮的小尖角：与学生端面板保持一致 */
+.msg-plus-panel::before {
+  content: ''; position: absolute; top: -5px; right: 20px;
+  width: 11px; height: 11px; border-radius: 2px;
+  background: #fff; transform: rotate(45deg);
+}
 .msg-plus-panel-enter-active { transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1); }
 .msg-plus-panel-leave-active { transition: opacity 0.14s ease, transform 0.14s ease; }
 .msg-plus-panel-enter-from, .msg-plus-panel-leave-to { opacity: 0; transform: translateY(-6px) scale(0.94); }
 .msg-plus-item {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 11px 12px; border: none; border-radius: 10px; background: transparent;
-  color: #1d2129; font-size: 14px; font-family: inherit; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 12px; width: 100%; height: 46px;
+  padding: 0 12px; border: none; border-radius: 10px; background: transparent;
+  color: #1d2129; font-size: 15px; font-family: inherit; text-align: left; cursor: pointer;
 }
 .msg-plus-item:active { background: #f2f3f5; }
 .msg-plus-item:disabled { color: #c9ccd1; cursor: default; }
@@ -4153,5 +4486,160 @@ function onGlobalClick(e: MouseEvent) {
   .notif-main { gap: 4px; }
   .notif-title { font-size: 15px; }
   .notif-content { font-size: 12.5px; }
+}
+
+/* ==================== 移动端与学生端消息中心视觉对齐 ====================
+   学生端的消息页已完成一轮改版（白底无分割线列表 / 居中页头 / 浅底输入区）。
+   教师端保留自己的业务（组织架构通讯录、通知、群设置），仅把视觉参数对齐，
+   保证两端在移动端看起来是同一个产品。 */
+@media (max-width: 767px) {
+  /* ----- 会话列表：白底、无分割线、46px 头像、17px 名字 ----- */
+  .msg-sidebar,
+  .sidebar-scroll { background: #fff; }
+  .sidebar-scroll { padding: 0 0 calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .conv-swipe-wrap { margin: 0; }
+  .conv-item {
+    gap: 12px; min-height: 0; padding: 12px 16px;
+    background: #fff; border-bottom: none; border-radius: 0;
+  }
+  .conv-item:hover,
+  .conv-item.active,
+  .conv-item.pinned { background: #f2f3f5; }
+  .conv-swipe-wrap.swiped .conv-item { background: #f3f4f6; }
+  .conv-item :deep(.el-avatar) {
+    width: 46px !important; height: 46px !important; font-size: 15px;
+  }
+  .conv-info { display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+  .conv-top { align-items: baseline; }
+  .conv-name { font-size: 15px; font-weight: 400; line-height: 1.3; color: #16181d; }
+  .conv-time { font-size: 11.5px; color: #b6b9be; font-family: inherit; }
+  .conv-bottom { margin-top: 1px; }
+  .conv-preview { font-size: 12.5px; color: #8b8f97; line-height: 1.4; }
+  .group-badge { margin-right: 5px; padding: 0 5px; font-size: 10px; vertical-align: 2px; border-color: #fff; }
+  .butler-entry { background: #fff !important; }
+  .butler-entry .conv-name { font-weight: 400; }
+  .butler-entry-avatar { width: 46px; height: 46px; }
+
+  /* 消息通知首行：与学生端「消息通知」会话同款（仅移动端放大头像） */
+  .notice-entry-avatar { width: 46px; height: 46px; }
+
+  /* ----- 聊天页头：圆形返回 + 居中标题 + 单枚三横线 ----- */
+  .chat-header {
+    display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px;
+    align-items: center; gap: 8px;
+    padding: 12px 18px; min-height: 0;
+    background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none;
+    border-bottom: 1px solid #f0f1f3;
+  }
+  .back-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; margin: 0; padding: 0;
+    border-radius: 50%; background: #f4f5f7; color: #4b5563;
+  }
+  .back-btn:active { background: #eceef1; }
+  .chat-header-info { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; text-align: center; }
+  .chat-name { max-width: 100%; font-size: 14.5px; font-weight: 600; color: #1f2329; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-sub { margin-top: 0; font-size: 10.5px; color: #9aa0a6; }
+  .chat-header-right { justify-content: flex-end; }
+  .chat-head-ghost {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0; border: none; border-radius: 8px;
+    background: transparent; color: #4b5563; cursor: pointer;
+  }
+  .chat-head-ghost:active { background: #f2f3f5; }
+
+  /* ----- 消息气泡：与学生端同款（浅灰底、白色气泡、深色己方气泡） ----- */
+  .msg-list { padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px)); background: #f7f8fa; }
+  /* 与学生端一致：不再插入日期分割线，时间直接挂在每条气泡下方 */
+  .date-separator { display: none; }
+  .msg-bubble-time { margin-top: 3px; font-size: 10px; color: #9aa0a6; }
+  .msg-row { gap: 8px; margin-bottom: 12px; }
+  .msg-avatar {
+    width: 30px !important; height: 30px !important; font-size: 13px;
+    background: #e9ebee; color: #6b7280;
+  }
+  .msg-col { max-width: 76%; }
+  .sender-name { margin: 0 0 3px; font-size: 10.5px; color: #9aa0a6; }
+  .bubble-text { padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.55; }
+  .mine .bubble-text { background: #111827; color: #fff; border: none; border-radius: 10px; }
+  .theirs .bubble-text { background: #fff; color: #1f2329; border: none; border-radius: 10px; }
+  .mine .bubble-file,
+  .mine .bubble-voice { background: #111827; color: #fff; border: none; border-radius: 10px; }
+  .theirs .bubble-file,
+  .theirs .bubble-voice { background: #fff; color: #1f2329; border: none; border-radius: 10px; }
+  .bubble-image { border-radius: 10px; }
+
+  /* ----- 输入区：白底、浅灰输入框、常驻蓝色发送键、下排工具条 ----- */
+  .msg-composer { background: #fff; padding: 10px 14px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .msg-input-bar.mobile { display: flex; align-items: stretch; gap: 10px; padding: 0; border-top: none; background: #fff; }
+  .msg-input-bar.mobile .input-main { display: flex; flex: 1; min-width: 0; }
+  .msg-input-bar.mobile .composer-textarea { flex: 1; min-width: 0; }
+  .msg-input-bar.mobile .input-main .el-textarea__inner {
+    min-height: 52px !important; max-height: 120px; padding: 15px 14px;
+    border-radius: 14px; background: #f5f6f8; border: none; box-shadow: none;
+    font-size: 14px; line-height: 1.45;
+  }
+  .msg-input-bar.mobile .input-main .el-textarea__inner:focus { background: #f5f6f8; box-shadow: none; }
+  .msg-input-bar.mobile .composer-textarea :deep(.el-textarea__inner)::placeholder { color: #b9bcc2; }
+  .msg-send-btn {
+    flex-shrink: 0; align-self: flex-end;
+    width: 76px; height: 52px; padding: 0;
+    border: none; border-radius: 14px;
+    background: #7cb6ea; color: #fff;
+    font-size: 14.5px; font-family: inherit; cursor: pointer;
+    transition: background .16s;
+  }
+  .msg-send-btn:disabled { background: #b7d5f2; cursor: default; }
+  .msg-send-btn:active:not(:disabled) { background: #6aa9e2; }
+  .msg-input-bar.mobile .hold-talk { min-height: 52px; border-radius: 14px; background: #f5f6f8; font-size: 14px; }
+  .hold-talk.recording { background: #e9f0f9; color: #2f86d6; }
+  .hold-talk.cancel { background: #fdecec; color: #b42318; }
+
+  .msg-composer-tools { display: flex; align-items: center; justify-content: space-between; padding: 9px 0 2px; }
+  .msg-tool {
+    width: 46px; height: 34px; padding: 0;
+    display: grid; place-items: center;
+    border: none; border-radius: 8px; background: transparent;
+    color: #14161a; cursor: pointer;
+  }
+  .msg-tool:active { opacity: .45; }
+  .msg-tool.active { background: transparent; color: #2f86d6; }
+  .msg-composer-tools .msg-tool:first-child { margin-left: -6px; }
+  .msg-composer-tools .msg-tool:last-child { margin-right: -6px; }
+
+  .msg-emoji-sheet {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+    padding: 10px 0 2px; background: #fff;
+  }
+  .msg-emoji-cell {
+    padding: 5px 0; border: none; border-radius: 8px;
+    background: transparent; font-size: 22px; line-height: 1.2; cursor: pointer;
+  }
+  .msg-emoji-cell:active { background: #f2f3f5; }
+
+  /* 搜索浮层 */
+  .msg-mobile-search { position: fixed; inset: 0; z-index: 2600; display: flex; flex-direction: column; background: #fff; padding-top: env(safe-area-inset-top, 0px); }
+  .mms-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; height: 52px; padding: 0 12px; border-bottom: 1px solid #f0f1f3; }
+  .mms-back { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: transparent; color: #4b5563; }
+  .mms-back:active { background: #f2f3f5; }
+  .mms-input-wrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border-radius: 10px; background: #f5f6f8; color: #9aa0a6; }
+  .mms-input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 13.5px; color: #1f2329; font-family: inherit; }
+  .mms-input::placeholder { color: #b9bcc2; }
+  .mms-cancel { flex-shrink: 0; border: none; background: transparent; font-size: 14px; color: #4b5563; padding: 4px; }
+  .mms-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 0 calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .mms-section-title { padding: 8px 16px 6px; font-size: 12px; color: #9aa0a6; }
+  .mms-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 16px; border: none; background: transparent; text-align: left; font-family: inherit; cursor: pointer; }
+  .mms-row:active { background: #f3f4f6; }
+  .mms-row :deep(.el-avatar) { flex-shrink: 0; background: #e9ebee; color: #6b7280; }
+  .mms-row-main { flex: 1; min-width: 0; }
+  .mms-row-name { font-size: 14.5px; color: #16181d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mms-row-sub { margin-top: 2px; font-size: 12px; color: #9aa0a6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mms-empty { padding: 40px 16px; text-align: center; font-size: 13px; color: #9aa0a6; }
+}
+
+/* 搜索浮层只可能出现在移动端，桌面端兜底隐藏 */
+.msg-mobile-search { display: none; }
+@media (max-width: 767px) {
+  .msg-mobile-search { display: flex; }
 }
 </style>

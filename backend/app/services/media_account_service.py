@@ -121,6 +121,82 @@ def get_account(db: Session, account_id: int) -> tuple[MediaAccount, User] | Non
     return (pair[0], pair[1]) if pair else None
 
 
+# ==================== 移动端资讯分类（按画布二级账号） ====================
+
+def _station_is_on(db: Session) -> bool:
+    """资讯站总开关是否开启；尚未初始化配置行时视为开启。"""
+    station = db.query(MediaStationConfig).filter(MediaStationConfig.id == STATION_ID).first()
+    return True if station is None else bool(station.is_enabled)
+
+
+def visible_account(db: Session, account_id: int) -> tuple[MediaAccount, User] | None:
+    """移动端可见的资讯账号：账号启用 + 已接入资讯站 + 资讯站未停用。"""
+    if not _station_is_on(db):
+        return None
+    pair = get_account(db, account_id)
+    if not pair:
+        return None
+    account = pair[0]
+    if not account.is_enabled or not account.station_connected:
+        return None
+    return pair
+
+
+def account_feed_keys(db: Session, account: MediaAccount) -> set[str] | None:
+    """账号可见资讯源（连接线 + 源启用）的 feed_key 集合，口径与自动发帖一致。"""
+    return _linked_feed_keys(db, account)
+
+
+def _account_item_count(db: Session, account: MediaAccount, feed_keys: set[str] | None) -> int:
+    if feed_keys == set():
+        return 0
+    query = db.query(func.count(ExternalFeedItem.id))
+    if feed_keys:
+        query = query.filter(ExternalFeedItem.feed_key.in_(feed_keys))
+    if account.content_scope:
+        query = query.filter(ExternalFeedItem.source_type.in_(account.content_scope))
+    return int(query.scalar() or 0)
+
+
+def list_visible_accounts(db: Session) -> list[dict]:
+    """移动端资讯分类：按管理员画布上的资讯账号自动分 Tab。
+
+    仅返回「启用 + 已接入资讯站」的账号，并带上当前可见的资讯源数量与条目数，
+    条数口径与 /api/feeds?account_id= 完全一致（连接线 → 资讯源 feed_key）。
+    """
+    if not _station_is_on(db):
+        return []
+    pairs = (
+        _media_query(db)
+        .filter(MediaAccount.is_enabled.is_(True), MediaAccount.station_connected.is_(True))
+        .order_by(MediaAccount.id.asc())
+        .all()
+    )
+    result = []
+    for account, user in pairs:
+        feed_keys = _linked_feed_keys(db, account)
+        source_count = (
+            db.query(func.count(MediaSourceLink.id))
+            .join(FeedSource, FeedSource.id == MediaSourceLink.feed_source_id)
+            .filter(
+                MediaSourceLink.account_id == account.id,
+                MediaSourceLink.enabled.is_(True),
+                FeedSource.enabled.is_(True),
+            )
+            .scalar()
+        )
+        result.append({
+            "id": account.id,
+            "name": user.name,
+            "avatar": user.avatar,
+            "signature": user.signature,
+            "content_scope": account.content_scope or [],
+            "source_count": int(source_count or 0),
+            "item_count": _account_item_count(db, account, feed_keys),
+        })
+    return result
+
+
 def create_account(db: Session, data) -> dict:
     """创建资讯账号：users 记录（随机密码不外发，禁止登录）+ 配置行。"""
     # username 自动生成 media_0001 风格，撞名时顺延

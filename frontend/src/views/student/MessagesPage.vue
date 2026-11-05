@@ -2721,10 +2721,16 @@ onBeforeUnmount(() => {
   /* 名字与时间按基线对齐：两者字号差 4.5px，居中对齐会让时间看着偏高或偏低 */
   .msg-session-row { align-items: baseline; }
   .msg-session-row:last-child { align-items: center; margin-top: 1px; }
-  .msg-session-name { flex: 1; min-width: 0; font-size: 17px; font-weight: 400; line-height: 1.3; color: #16181d; }
-  .msg-group-mark { margin-right: 5px; padding: 0 5px; font-size: 10.5px; vertical-align: 2px; }
-  .msg-session-time { font-size: 12.5px; color: #b6b9be; padding: 0; }
-  .msg-session-last { flex: 1; min-width: 0; font-size: 13.5px; color: #8b8f97; line-height: 1.4; }
+  .msg-session-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 400; line-height: 1.3; color: #16181d; }
+  .msg-group-mark { margin-right: 5px; padding: 0 5px; font-size: 10px; vertical-align: 2px; }
+  .msg-session-time { font-size: 11.5px; color: #b6b9be; padding: 0; }
+  .msg-session-last { flex: 1; min-width: 0; font-size: 12.5px; color: #8b8f97; line-height: 1.4; }
+  /* 内容区字号整体收一档，列表与聊天两处同步收紧 */
+  .msg-pane-name { font-size: 14.5px; }
+  .msg-pane-meta { font-size: 10.5px; }
+  .msg-bubble { font-size: 13px; }
+  .msg-bubble-sender { font-size: 10.5px; }
+  .msg-bubble-time { font-size: 10px; }
   /* 摘要行不再挂未读徽标：移动端已挪到头像上，留着会显示两遍 */
   .msg-unread { display: none; }
 
@@ -2748,7 +2754,7 @@ onBeforeUnmount(() => {
     padding: 15px 14px;
     border-radius: 14px;
     background: #f5f6f8;
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.45;
   }
   .msg-composer textarea::placeholder { color: #b9bcc2; }
@@ -2757,7 +2763,7 @@ onBeforeUnmount(() => {
     min-height: 52px;
     border-radius: 14px;
     background: #f5f6f8;
-    font-size: 15px;
+    font-size: 14px;
   }
   .msg-hold-talk.recording { background: #e9f0f9; }
   .msg-hold-talk.cancel { background: #fdecec; color: #b42318; }
@@ -2771,7 +2777,7 @@ onBeforeUnmount(() => {
     justify-content: center;
     border-radius: 14px;
     background: #7cb6ea;
-    font-size: 15.5px;
+    font-size: 14.5px;
   }
   /* 参考图的发送键只有两个字：图标挤进去会让这枚键在 88px 里显得局促 */
   .msg-send .el-icon { display: none; }
