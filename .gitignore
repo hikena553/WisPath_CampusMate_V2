@@ -225,6 +225,7 @@ backend/tmp[0-9a-z]*
 # 那条通配会吞掉 backend/fixtures、backend/settings 这类正常目录且 git status 完全看不见
 backend/p9r2qmnc
 backend/xhafxrox
+backend/51hc051b
 # jieba runtime cache (9 MB, regenerated on demand)
 backend/jieba.cache
 # pytest cache dirs that appear when the default cache dir is unwritable
