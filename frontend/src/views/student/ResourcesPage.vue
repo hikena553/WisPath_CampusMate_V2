@@ -28,10 +28,10 @@
       </div>
       <div class="channel-bar">
         <div
-          v-for="t in feedTabs" :key="t.key"
-          class="channel-item" :class="{ active: activeFeedTab === t.key }"
-          @click="switchFeed(t.key)"
-        >{{ t.label }}</div>
+          v-for="t in feedTabs" :key="t.id"
+          class="channel-item" :class="{ active: activeFeedId === t.id }"
+          @click="switchFeed(t.id)"
+        >{{ t.name }}</div>
       </div>
     </div>
 
@@ -45,16 +45,16 @@
         <span class="head-title">📰 最新资讯聚合</span>
         <span v-if="feedFetchedAt" class="head-sub">更新于 {{ feedFetchedAt }}</span>
       </div>
-      <p class="feed-tip">{{ currentTab?.sub }}</p>
-      <div v-loading="feedLoading[activeFeedTab]" class="feed-body">
-        <div v-if="!feedLoading[activeFeedTab] && !feedByType[activeFeedTab].length" class="empty-tip">
-          暂无内容，点击右上角“刷新”获取最新信息
+      <p class="feed-tip">{{ feedTip }}</p>
+      <div v-loading="feedLoading[activeFeedId ?? -1]" class="feed-body">
+        <div v-if="!feedLoading[activeFeedId ?? -1] && !activeItems.length" class="empty-tip">
+          {{ feedEmptyText }}
         </div>
 
         <!-- 权威排行榜：排名 + 分数条 -->
-        <template v-if="activeFeedTab === 'rankings'">
+        <template v-if="isRankingTab">
           <div class="rank-list">
-            <div v-for="(f, idx) in feedByType.rankings" :key="f.id" class="rank-item">
+            <div v-for="(f, idx) in activeItems" :key="f.id" class="rank-item">
               <span class="rank-no" :class="rankClass(idx)">{{ idx + 1 }}</span>
               <div class="rank-main">
                 <div class="rank-title" @click="openLink(f.link)">{{ f.title }}</div>
@@ -70,16 +70,16 @@
 
         <!-- 普通资讯列表 -->
         <template v-else>
-          <div v-for="f in feedByType[activeFeedTab]" :key="f.id" class="feed-item">
+          <div v-for="f in activeItems" :key="f.id" class="feed-item">
             <div class="feed-item-title" @click="openLink(f.link)">{{ f.title }}</div>
             <div v-if="f.summary" class="res-item-summary">{{ f.summary }}</div>
-            <div v-if="activeFeedTab !== 'news' && (f.meta?.stars != null)" class="feed-meta-badges">
+            <div v-if="f.source_type !== 'news' && (f.meta?.stars != null)" class="feed-meta-badges">
               <span v-if="f.meta.stars != null"><el-icon><StarFilled /></el-icon>{{ formatNum(f.meta.stars) }}</span>
               <span v-if="f.meta.forks != null"><el-icon><Share /></el-icon>{{ formatNum(f.meta.forks) }}</span>
               <span v-if="f.meta.language" class="feed-lang">{{ f.meta.language }}</span>
             </div>
             <div class="feed-item-foot">
-              <span class="feed-badge" :class="activeFeedTab">{{ badgeLabel(f) }}</span>
+              <span class="feed-badge" :class="f.source_type">{{ badgeLabel(f) }}</span>
               <span class="feed-source">{{ f.source_name || defaultSource(f) }}</span>
               <span v-if="f.published_at" class="feed-time">{{ formatDate(f.published_at) }}</span>
               <span class="foot-spacer"></span>
@@ -146,7 +146,7 @@
             <el-option label="网页" value="html" />
           </el-select>
           <el-select v-model="addForm.source_type" style="width:120px" size="small">
-            <el-option v-for="t in feedTabs" :key="t.key" :label="t.label" :value="t.key" />
+            <el-option v-for="t in SOURCE_TYPE_OPTIONS" :key="t.key" :label="t.label" :value="t.key" />
           </el-select>
           <el-input v-model="addForm.url" placeholder="https:// 订阅或网页地址" style="flex:1" size="small" @keyup.enter="addSource" />
           <el-button size="small" type="primary" @click="addSource">添加</el-button>
@@ -329,57 +329,101 @@ import { ElMessage } from 'element-plus'
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
 import {
   getResourceItems, getRecommend, getFavorites, addFavorite, removeFavorite,
-  getFeeds, refreshFeeds, type ResourceItem, type RecommendItem, type Favorite,
+  getFeeds, getFeedAccounts, refreshFeeds, type ResourceItem, type RecommendItem, type Favorite,
   type FeedItem, type FeedSourceType,
 } from '@/api/resources'
 import {
   getFeedSources, createFeedSource, updateFeedSource, deleteFeedSource, type FeedSource,
 } from '@/api/resources'
 
-// ---------- 外部资讯聚合 ----------
-const feedTabs: { key: FeedSourceType; label: string; sub?: string }[] = [
-  { key: 'papers', label: 'AI 论文', sub: '订阅 arXiv 最新人工智能/机器学习/自然语言研究' },
-  { key: 'opensource', label: '开源项目榜', sub: 'GitHub / Gitee 最热门与最活跃的 AI 优质项目' },
-  { key: 'agents', label: '智能体榜', sub: '当前热门的 AI 智能体（Agent）开源项目排行' },
-  { key: 'news', label: '时政要闻', sub: '新华网 · 中国政府网 · 央视网 权威要闻' },
-  { key: 'ai_news', label: 'AI 行业', sub: 'OpenAI · Google · DeepMind · MIT Technology Review 官方技术资讯' },
-  { key: 'rankings', label: '权威排行榜', sub: 'LMArena Chatbot Arena 模型能力竞技榜，随社区对战动态更新' },
-  { key: 'cn_ai', label: '国产模型', sub: 'DeepSeek · 豆包(火山) · 通义 · Kimi · MiniMax 官方动态与新品发布' },
+// ---------- 外部资讯聚合：分类由管理端画布的二级资讯账号自动生成 ----------
+/** 资讯源分类（仅用于「添加订阅源」时选择归属，不作为移动端 Tab） */
+const SOURCE_TYPE_OPTIONS: { key: FeedSourceType; label: string }[] = [
+  { key: 'papers', label: 'AI 论文' },
+  { key: 'opensource', label: '开源项目榜' },
+  { key: 'agents', label: '智能体榜' },
+  { key: 'news', label: '时政要闻' },
+  { key: 'ai_news', label: 'AI 行业' },
+  { key: 'rankings', label: '权威排行榜' },
+  { key: 'cn_ai', label: '国产模型' },
 ]
-const activeFeedTab = ref<FeedSourceType>('papers')
-const currentTab = computed(() => feedTabs.find(t => t.key === activeFeedTab.value))
-const feedByType = reactive<Record<string, FeedItem[]>>({
-  papers: [], opensource: [], agents: [], news: [], ai_news: [], rankings: [], cn_ai: [],
-})
-const feedLoading = reactive<Record<string, boolean>>({
-  papers: false, opensource: false, agents: false, news: false, ai_news: false, rankings: false, cn_ai: false,
-})
+
+interface FeedTab {
+  id: number
+  name: string
+  signature: string
+  content_scope: FeedSourceType[]
+}
+
+const feedTabs = ref<FeedTab[]>([])
+const activeFeedId = ref<number | null>(null)
+const activeAccount = computed(() => feedTabs.value.find(t => t.id === activeFeedId.value))
+const feedByType = reactive<Record<number, FeedItem[]>>({})
+const feedLoading = reactive<Record<number, boolean>>({})
 const refreshLoading = ref(false)
 const feedFetchedAt = ref('')
 
-async function loadFeed(type: FeedSourceType) {
-  feedLoading[type] = true
+/** 当前账号下的资讯（Tab 切换时按账号 id 取缓存） */
+const activeItems = computed<FeedItem[]>(() =>
+  activeFeedId.value == null ? [] : feedByType[activeFeedId.value] || [],
+)
+/** 账号只订阅「权威排行榜」时沿用排名 + 分数条版式 */
+const isRankingTab = computed(() => {
+  const scope = activeAccount.value?.content_scope || []
+  return scope.length === 1 && scope[0] === 'rankings'
+})
+const feedTip = computed(() => activeAccount.value?.signature || '由管理端资讯管理画布中的资讯账号实时聚合')
+const feedEmptyText = computed(() =>
+  feedTabs.value.length ? '该账号暂无可展示的资讯，点击右上角“刷新”获取最新信息' : '管理员尚未配置资讯账号',
+)
+
+/** 读取管理端画布上的二级账号（启用且已接入资讯站的才会返回） */
+async function loadAccounts() {
   try {
-    feedByType[type] = await getFeeds({ source_type: type, limit: 20 })
-    feedFetchedAt.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  } catch { feedByType[type] = [] }
-  finally { feedLoading[type] = false }
+    const rows = await getFeedAccounts()
+    feedTabs.value = rows.map(r => ({
+      id: r.id,
+      name: r.name,
+      signature: r.signature || '',
+      content_scope: r.content_scope || [],
+    }))
+    // 管理端删号 / 断开账号后当前 Tab 可能已不存在，退回第一个
+    if (activeFeedId.value == null || !feedTabs.value.some(t => t.id === activeFeedId.value)) {
+      activeFeedId.value = feedTabs.value[0]?.id ?? null
+    }
+  } catch {
+    feedTabs.value = []
+    activeFeedId.value = null
+  }
 }
 
-function switchFeed(key: FeedSourceType) {
-  if (activeFeedTab.value === key) return
-  activeFeedTab.value = key
-  if (!feedByType[key].length) loadFeed(key)
+async function loadFeed(id: number) {
+  feedLoading[id] = true
+  try {
+    feedByType[id] = await getFeeds({ account_id: id, limit: 20 })
+    feedFetchedAt.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  } catch { feedByType[id] = [] }
+  finally { feedLoading[id] = false }
+}
+
+function switchFeed(id: number) {
+  if (activeFeedId.value === id) return
+  activeFeedId.value = id
+  if (!feedByType[id]?.length) void loadFeed(id)
   nextTick(() => {
     document.querySelector('.channel-item.active')?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
   })
 }
 
 async function refreshFeedsNow() {
+  if (activeFeedId.value == null) {
+    ElMessage.warning('管理员尚未配置资讯账号')
+    return
+  }
   refreshLoading.value = true
   try {
-    await refreshFeeds(activeFeedTab.value)
-    await loadFeed(activeFeedTab.value)
+    await refreshFeeds('all')
+    await loadFeed(activeFeedId.value)
     ElMessage.success('已更新最新资讯')
   } catch (e: any) {
     ElMessage.warning(e?.response?.data?.detail || '刷新失败，请稍后再试')
@@ -421,7 +465,7 @@ function maxRankScore(items: FeedItem[]) {
 function rankWidth(f: FeedItem) {
   const s = Number(f.meta?.score)
   if (!s) return { width: '0%' }
-  return { width: Math.max(4, Math.round((s / maxRankScore(feedByType.rankings)) * 100)) + '%' }
+  return { width: Math.max(4, Math.round((s / maxRankScore(activeItems.value)) * 100)) + '%' }
 }
 
 // 外部资讯收藏：复用现有收藏机制（item_type = source_type, item_id = feed.id）
@@ -547,7 +591,7 @@ const editForm = ref({ name: '', url: '' })
 const addForm = ref({ name: '', kind: 'rss', source_type: 'papers', url: '', filter_kw: '' })
 
 const kindLabel = (k: string) => ({ rss: 'RSS', html: '网页', arxiv: 'arXiv', github: 'GitHub', gitee: 'Gitee', lmarena: '权威榜' }[k] || k)
-const sourceTypeLabel = (t: string) => feedTabs.find(x => x.key === t)?.label || t
+const sourceTypeLabel = (t: string) => SOURCE_TYPE_OPTIONS.find(x => x.key === t)?.label || t
 
 async function openSourceDialog() {
   sourceDialogVisible.value = true
@@ -602,17 +646,19 @@ function openLink(link?: string | null) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadFavorites(), loadRecommend(), browsePage(1), loadFeed(activeFeedTab.value)])
+  await Promise.all([loadFavorites(), loadRecommend(), browsePage(1), loadAccounts()])
+  if (activeFeedId.value != null) await loadFeed(activeFeedId.value)
 })
 
 /** 下拉刷新：仅重新拉取列表数据，不触发后端抓取接口（refreshFeeds） */
 async function refreshAll() {
   await Promise.all([
-    loadFeed(activeFeedTab.value),
+    loadAccounts(),
     loadFavorites(),
     loadRecommend(),
     browsePage(1),
   ]).catch(() => {})
+  if (activeFeedId.value != null) await loadFeed(activeFeedId.value).catch(() => {})
 }
 
 // 下拉刷新（移动端）：桌面端不响应手势

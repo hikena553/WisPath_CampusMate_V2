@@ -82,13 +82,30 @@ def _item_to_dict(it: ExternalFeedItem) -> dict:
 @router.get("")
 def list_feeds(
     source_type: str = Query("all", description="papers/agents/opensource/news/ai_news/rankings/cn_ai 或 all"),
+    account_id: int | None = Query(None, description="按资讯账号（管理端画布二级节点）过滤，缺省不过滤"),
     limit: int = Query(20, ge=1, le=50),
     q: str = Query("", max_length=60),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """按分类返回最新外部资讯（新→旧）。"""
+    """按分类 / 资讯账号返回最新外部资讯（新→旧）。"""
     query = db.query(ExternalFeedItem)
+    if account_id is not None:
+        # 账号口径：仅保留「账号已接入资讯站 + 连接线启用 + 资讯源启用」的内容，
+        # 与后端自动发帖 / 抓取使用的同一套连接关系保持一致
+        from app.services import media_account_service
+
+        pair = media_account_service.visible_account(db, account_id)
+        if not pair:
+            return []
+        account = pair[0]
+        feed_keys = media_account_service.account_feed_keys(db, account)
+        if feed_keys == set():
+            return []
+        if feed_keys:
+            query = query.filter(ExternalFeedItem.feed_key.in_(feed_keys))
+        if account.content_scope:
+            query = query.filter(ExternalFeedItem.source_type.in_(account.content_scope))
     if source_type in ALLOWED_TYPES:
         query = query.filter(ExternalFeedItem.source_type == source_type)
     elif source_type != "all":
@@ -102,6 +119,17 @@ def list_feeds(
         ExternalFeedItem.id.desc(),
     ).limit(limit).all()
     return [_item_to_dict(r) for r in rows]
+
+
+@router.get("/accounts")
+def list_feed_accounts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """移动端资讯分类：由管理端画布上的二级资讯账号自动生成（启用 + 已接入资讯站）。"""
+    from app.services import media_account_service
+
+    return media_account_service.list_visible_accounts(db)
 
 
 @router.post("/refresh")

@@ -64,8 +64,23 @@ export interface FeedItem {
   published_at: string | null
 }
 
-export function getFeeds(params: { source_type: FeedSourceType | 'all'; limit?: number; q?: string }) {
+export function getFeeds(params: { account_id?: number; source_type?: FeedSourceType | 'all'; limit?: number; q?: string }) {
   return request.get<FeedItem[]>('/feeds', { params })
+}
+
+/** 移动端资讯分类：管理端画布上的二级资讯账号（启用且已接入资讯站） */
+export interface FeedAccount {
+  id: number
+  name: string
+  avatar: string | null
+  signature: string | null
+  content_scope: FeedSourceType[]
+  source_count: number
+  item_count: number
+}
+
+export function getFeedAccounts() {
+  return request.get<FeedAccount[]>('/feeds/accounts')
 }
 
 export function refreshFeeds(sourceType: FeedSourceType | 'all' = 'all') {

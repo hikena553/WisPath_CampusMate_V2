@@ -443,12 +443,14 @@ def upsert_feeds(db: Session, items: list[dict]) -> int:
         seen.add(link)
         row = existing.get(link)
         if row:
-            # 轻量更新标题/摘要/指标变化
+            # 轻量更新标题/摘要/指标变化；同步来源归属，避免历史 feed_key 与资讯源漂移
             row.title = it["title"][:500]
             if it.get("summary"):
                 row.summary = it["summary"][:2000]
             row.meta = it.get("meta") or {}
             row.source_name = it.get("source_name") or row.source_name
+            row.feed_key = it["feed_key"]
+            row.source_type = it["source_type"]
             continue
         db.add(ExternalFeedItem(
             source_type=it["source_type"],
