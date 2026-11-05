@@ -43,10 +43,9 @@
         >
           <el-icon><Search /></el-icon>
         </button>
-        <!-- 互动消息：学生社区（论坛）互动回执，学生端专属；
-             教师端复用本页时不渲染（教师不走学生社区互动，两端读同一份资讯、写入口按角色分开） -->
+        <!-- 互动消息：学生社区（论坛）互动回执。教师端复用本页时同样展示，
+             保证两端的移动端页头完全一致（教师本人帖子收到的互动同样从这里查看） -->
         <button
-          v-if="role === 'student'"
           type="button"
           class="appbar-btn appbar-btn--dot"
           aria-label="互动消息"
@@ -574,7 +573,7 @@
          同一个「+」在社区的两个视图里含义不同：帖子视图发帖子，失物招领视图发登记，
          由 CommunityFeed.openCreate() 判断，这里不做分支。游客点击先走登录引导，不发请求。 -->
     <button
-      v-if="isMobile && role === 'student' && activeTab === 'community'"
+      v-if="isMobile && activeTab === 'community'"
       type="button"
       class="community-fab"
       aria-label="发布"
@@ -610,7 +609,7 @@ defineOptions({ name: 'campus-page' })
 
 /**
  * 角色：本页被学生端与教师端复用，UI 与内容完全一致（同一份资讯流、同一套交互），
- * 差异只在「按角色开放的写入口」：学生端有社区互动回执，教师端由外层插槽补发布入口。
+ * 移动端页头（搜索 / 互动消息）与社区发布入口两端同样渲染，保证两端页面看起来是同一个产品。
  */
 withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
 
