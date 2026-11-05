@@ -1775,6 +1775,15 @@ onMounted(async () => {
 
   await loadAll()
 
+  // 首屏默认聚焦第一位学生：关系地图直接有内容，避免「选一位学生」空态被误读成未实现
+  if (!focusId.value && !focusName.value && allStudents.value.length) {
+    const first = allStudents.value[0]
+    focusStudent.value = first
+    focusId.value = first.id
+    focusName.value = first.name
+    void loadFocusExtras()
+  }
+
   // 合并后闭环：旧「家校沟通」入口重定向到本页并带 tab=guardian，
   // 从学生档案带来的 content / scene 直接在家校子页预填一条沟通记录
   const wantGuardian = String(route.query.tab || '') === 'guardian' || !!route.query.content

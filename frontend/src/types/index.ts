@@ -16,6 +16,9 @@ export interface UserInfo {
   hometown?: string | null
   phone?: string | null
   qq?: string | null
+  /** QQ 互联 OAuth 是否已授权绑定（真实 QQ 登录凭据） */
+  qq_bound?: boolean
+  qq_nickname?: string | null
   department?: string | null
   class_name?: string | null
   password_changed?: boolean

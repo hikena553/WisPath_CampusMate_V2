@@ -273,6 +273,8 @@ frontend/dist*-check/
 
 # 本地 .git 损坏后的备份目录（仅本机保留）
 .git-corrupted-backup-*/
+# .git 对象库损坏时的抢修备份目录（仅本机保留）
+_git_repair_backup_*/
 
 # 一次性前端验证脚本（用完即弃，与 backend/_probe*.py 同类）
 frontend/_*.cjs
@@ -282,6 +284,8 @@ frontend/_*.cjs
 dist-verify/
 _dist_check/
 dist-check2/
+# 同上：frontend/.verify* 是本机 vite build --outDir 的校验输出目录
+frontend/.verify*/
 
 # 本地语音识别模型（200MB+ 运行时产物，不入库）
 backend/models/

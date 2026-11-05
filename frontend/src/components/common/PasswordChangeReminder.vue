@@ -152,31 +152,41 @@ onBeforeUnmount(stopAutoDismiss)
 }
 
 /*
-  移动端：从「顶部悬浮」改到「底部悬浮页签栏上方」。
-  两个原因：
-  1) 顶部已经有系统公告条(33px) + 子页抬头(48px)两层，
-     浮层无论停在哪个 top 值都会盖住其一或盖住内容首屏。手机上首屏尤其宝贵。
-  2) 底部悬浮胶囊页签（62px 高 + 12px 底距 + 安全区）上方正好有一条天然空隙，
-     提示停在那一带既不遮工具栏，也不遮首屏内容。
-  层级仍高于页签栏（1000），但低于 Element 的弹层（2000+），弹窗打开时不会串层。
+  移动端：顶部单行固定通栏（与系统公告条同层，整条压在最上面）。
+  固定在其他 top 值都会盖住首屏内容或底部可交互区域；停靠最顶部是唯一不影响点击的位置：
+  公告条是只读的滚动信息，提示显示期间暂时让位，提示自动消失后恢复。
+  单行 + 省略号，不折行、不撑高，避免挤压首屏。
+  层级高于页签栏（1000），但低于 Element 的弹层（2000+），弹窗打开时不会串层。
 */
 @media (max-width: 768px) {
   .pwd-banner {
-    top: auto;
-    bottom: calc(12px + 62px + 10px + env(safe-area-inset-bottom, 0px));
-    width: calc(100vw - 32px);
-    max-width: 420px;
-    height: 40px;
-    padding: 0 6px 0 12px;
-    border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(17, 17, 17, 0.1), 0 1px 3px rgba(17, 17, 17, 0.05);
+    top: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    height: calc(36px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 6px 0 12px;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: 0 2px 10px rgba(17, 17, 17, 0.08);
+    pointer-events: auto;
   }
-  .pwd-banner-text { font-size: 12.5px; }
-  .pwd-banner-action { font-size: 12px; height: 26px; }
-  /* 从下方滑入，与页面底部语义一致 */
+  .pwd-banner-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+  }
+  .pwd-banner-action { flex: 0 0 auto; font-size: 12px; height: 26px; }
+  /* 从顶部滑入，与位置语义一致 */
   .pwd-banner-enter-from,
   .pwd-banner-leave-to {
-    transform: translateX(-50%) translateY(10px);
+    transform: translateY(-100%);
     opacity: 0;
   }
 }

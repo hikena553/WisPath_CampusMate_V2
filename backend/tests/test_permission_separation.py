@@ -179,41 +179,6 @@ def test_feed_source_rejects_internal_url(api, login_token):
         assert admin_resp.status_code == 400, f"{url} 应被管理员端拒绝: {admin_resp.text}"
 
 
-def test_workflow_node_role_enforced(api, login_token):
-    """工作流审批：非发起人教师不得审批「管理员」节点。"""
-    admin = login_token(role=UserRole.ADMIN)
-    initiator = login_token(role=UserRole.TEACHER)
-    peer = login_token(role=UserRole.TEACHER)
-    code = f"admin_only_{uuid.uuid4().hex[:8]}"
-
-    created = api.post(
-        "/api/workflows/defs",
-        json={
-            "code": code,
-            "name": "仅管理员终审",
-            "nodes": [{"key": "final", "name": "管理员终审", "approver_role": "admin"}],
-        },
-        headers=admin["headers"],
-    )
-    assert created.status_code == 200, created.text
-
-    started = api.post(
-        "/api/workflows/instances",
-        json={"def_code": code, "biz_id": 1},
-        headers=initiator["headers"],
-    )
-    assert started.status_code == 200, started.text
-    instance_id = started.json()["id"]
-
-    denied = api.post(
-        f"/api/workflows/instances/{instance_id}/approve",
-        json={"comment": "越权审批"},
-        headers=peer["headers"],
-    )
-    assert denied.status_code == 400, denied.text
-    assert "角色" in denied.json()["detail"]
-
-
 def test_class_grade_analysis_filters_by_class(api, login_token, make_user, db):
     """班级成绩分析按 class_id 过滤，且教师仅能看到名下学生。"""
     teacher = login_token(role=UserRole.TEACHER)

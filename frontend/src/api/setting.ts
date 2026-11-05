@@ -14,13 +14,16 @@ export function getSettings() {
 
 // ===== 公开展示类设置（免登录）：登录页与各端同步品牌/公告 =====
 
-/** 公开展示类设置键：站点名称 / Logo / 吉祥物 / 系统公告 / 助手称谓 */
+/** 公开展示类设置键：站点名称 / Logo / 吉祥物 / 系统公告 / 助手称谓 / 域名与备案号 */
 export type PublicSettingKey =
   | 'site_name'
   | 'site_logo'
   | 'site_mascot'
   | 'site_announcement'
   | 'agent_name'
+  | 'site_domain'
+  | 'icp_number'
+  | 'police_number'
 
 export type PublicSettings = Record<PublicSettingKey, string>
 

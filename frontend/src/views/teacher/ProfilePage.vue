@@ -427,6 +427,9 @@
             </div>
           </div>
 
+          <!-- 快捷登录：手机号短信验证绑定 / QQ 互联授权绑定 -->
+          <QuickLoginBind @phone-bound="onPhoneBound" />
+
           <div class="sub-page-footer">
             <el-button type="primary" class="footer-btn" @click="handleSaveProfile" :loading="saving">保存</el-button>
           </div>
@@ -474,8 +477,16 @@
             <div class="sp-field">
               <span class="sp-label">图形验证码</span>
               <span class="sp-captcha">
-                <el-input v-model="passwordForm.captcha" placeholder="输入右侧 4 位字符" maxlength="4" />
-                <button type="button" class="sp-captcha-code" @click="refreshCaptcha">{{ captchaCode }}</button>
+                <el-input v-model="passwordForm.captcha" placeholder="输入图中字符" maxlength="4" />
+                <button
+                  type="button"
+                  class="sp-captcha-code"
+                  :disabled="captchaLoading"
+                  @click="loadCaptcha"
+                >
+                  <img v-if="captcha?.image" :src="captcha.image" alt="验证码" />
+                  <span v-else>{{ captchaLoading ? '加载中' : '点击获取' }}</span>
+                </button>
               </span>
             </div>
           </div>
@@ -708,10 +719,13 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 // v6.1 弹窗减负：单字段编辑走底部动作面板
 import ActionSheet from '@/components/common/ActionSheet.vue'
+import QuickLoginBind from '@/components/profile/QuickLoginBind.vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { updateProfile, changePassword } from '@/api/user'
+import { getCaptcha } from '@/api/auth'
+import type { CaptchaChallenge } from '@/api/auth'
 import { uploadFile } from '@/api/upload'
 import { getAnnouncements } from '@/api/campus'
 import { getArticleFavorites, type CampusArticleFavoriteItem } from '@/api/campus'
@@ -845,19 +859,19 @@ const savedGradient = localStorage.getItem('profileBannerColor') || ''
 const bannerGradient = ref(presetColors.includes(savedGradient) ? savedGradient : DEFAULT_GRADIENT)
 
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '', captcha: '' })
-const captchaCode = ref('')
+const captcha = ref<CaptchaChallenge | null>(null)
+const captchaLoading = ref(false)
 
-function generateCaptcha() {
-  const chars = '0123456789'
-  let result = ''
-  for (let i = 0; i < 4; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+async function loadCaptcha() {
+  captchaLoading.value = true
+  try {
+    captcha.value = await getCaptcha()
+    passwordForm.captcha = ''
+  } catch {
+    captcha.value = null
+  } finally {
+    captchaLoading.value = false
   }
-  return result
-}
-
-function refreshCaptcha() {
-  captchaCode.value = generateCaptcha()
 }
 
 /** 新密码强度：长度、字母数字组合、符号各计一档，最多 3 档 */
@@ -880,6 +894,11 @@ const profileForm = reactive({
   hometown: '', phone: '', qq: '', className: '', political_status: '',
   title: '', department: '', avatar: '', signature: ''
 })
+
+/** 快捷登录绑定手机号成功后同步表单，避免保存资料时用旧号码覆盖已验证号码 */
+function onPhoneBound(updated: { phone?: string | null }) {
+  profileForm.phone = updated.phone || ''
+}
 
 /** 头像行：点按触发文件选择，选好后上传并暂存，点击保存后正式生效 */
 const avatarInputRef = ref<HTMLInputElement>()
@@ -1201,16 +1220,23 @@ async function handleChangePassword() {
   if (passwordForm.new_password.length < 6) {
     ElMessage.error('新密码至少6位'); return
   }
-  if (!passwordForm.captcha || passwordForm.captcha !== captchaCode.value) {
-    ElMessage.error('验证码错误'); refreshCaptcha(); return
+  if (!passwordForm.captcha) {
+    ElMessage.warning('请输入验证码'); return
+  }
+  if (!captcha.value) {
+    ElMessage.warning('验证码未加载，请点击图片重试'); return
   }
   changingPassword.value = true
   try {
-    await changePassword(passwordForm.old_password, passwordForm.new_password)
+    await changePassword(passwordForm.old_password, passwordForm.new_password, captcha.value.captcha_id, passwordForm.captcha)
     ElMessage.success('密码修改成功')
-    passwordForm.old_password = ''; passwordForm.new_password = ''; passwordForm.confirm_password = ''
+    passwordForm.old_password = ''; passwordForm.new_password = ''; passwordForm.confirm_password = ''; passwordForm.captcha = ''
     closePage()
-  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '修改失败') }
+  } catch (e: any) {
+    const detail = e?.response?.data?.detail || '修改失败'
+    ElMessage.error(detail)
+    if (detail.includes('验证码')) loadCaptcha()
+  }
   finally { changingPassword.value = false }
 }
 
@@ -1405,7 +1431,7 @@ async function refreshAll() {
 }
 
 onMounted(() => {
-  refreshCaptcha()
+  loadCaptcha()
   loadAnnouncements()
   refreshBadges()
   loadOverviewData()
@@ -1891,16 +1917,21 @@ onMounted(() => {
   flex-shrink: 0;
   width: 96px;
   height: 40px;
+  padding: 0;
   border: 1px solid var(--tui-border);
   border-radius: 10px;
   background: var(--tui-surface-sunken);
-  color: var(--tui-text);
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 4px;
   cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
 }
+.sp-captcha-code:hover:not(:disabled) { opacity: 0.85; }
+.sp-captcha-code:disabled { cursor: not-allowed; opacity: 0.6; }
+.sp-captcha-code img { width: 100%; height: 100%; object-fit: fill; display: block; }
+.sp-captcha-code span { font-size: 12px; color: var(--tui-text-secondary, #909399); }
 .sp-captcha-code:active { opacity: 0.7; }
 .sp-submit {
   width: 100%;

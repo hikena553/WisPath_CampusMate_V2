@@ -34,7 +34,7 @@
         <span class="reset-action">查进度</span>
       </button>
 
-      <form class="form" @submit.prevent="handleLogin">
+      <form v-if="loginMode === 'password'" class="form" @submit.prevent="handleLogin">
         <div class="field">
           <input
             ref="usernameRef"
@@ -86,42 +86,108 @@
         </button>
       </form>
 
-      <button type="button" class="guest-link" @click="handleGuest">
+      <form v-else-if="thirdPartyAuthEnabled" class="form" @submit.prevent="handlePhoneLogin">
+        <button type="button" class="mode-back" @click="backToPassword">
+          <span class="mode-back-arrow">‹</span> 返回账号密码登录
+        </button>
+
+        <div class="field">
+          <input
+            ref="phoneRef"
+            v-model.trim="phoneForm.phone"
+            type="tel"
+            inputmode="numeric"
+            maxlength="11"
+            autocomplete="tel"
+            placeholder="已绑定的手机号"
+            :class="{ invalid: phoneErrorField === 'phone' }"
+            @input="phoneErrorField = ''"
+          />
+        </div>
+
+        <div class="field code-field">
+          <input
+            v-model.trim="phoneForm.code"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            autocomplete="one-time-code"
+            placeholder="6 位短信验证码"
+            :class="{ invalid: phoneErrorField === 'code' }"
+            @input="phoneErrorField = ''"
+          />
+          <button
+            type="button"
+            class="code-btn"
+            :disabled="smsCooldown > 0 || smsSending"
+            @click="handleSendSms"
+          >
+            {{ smsSending ? '发送中…' : smsCooldown > 0 ? `${smsCooldown}s 后重发` : '获取验证码' }}
+          </button>
+        </div>
+
+        <div class="form-meta">
+          <span class="error-text">{{ phoneError }}</span>
+          <span v-if="smsHint" class="sms-hint">{{ smsHint }}</span>
+        </div>
+
+        <button type="submit" class="btn-primary" :disabled="phoneLoading">
+          {{ phoneLoading ? '登录中…' : '登录' }}
+        </button>
+
+        <button
+          v-if="hasQuickAccount"
+          type="button"
+          class="guest-link"
+          @click="handleQuickLogin('phone')"
+        >
+          使用本机快捷登录
+        </button>
+      </form>
+
+      <button v-if="loginMode === 'password'" type="button" class="guest-link" @click="handleGuest">
         免费使用，仅开放部分功能
       </button>
 
-      <div class="other">
-        <span class="other-line"></span>
-        <span class="other-text">其他登录方式</span>
-        <span class="other-line"></span>
-      </div>
+      <router-link v-if="loginMode === 'password'" class="register-link" to="/register">
+        还没有账号？注册账号
+      </router-link>
 
-      <div class="quick-row">
-        <button
-          type="button"
-          class="quick-item"
-          :disabled="quickLoading === 'phone'"
-          @click="handleQuickLogin('phone')"
-        >
-          <span class="quick-circle">
-            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="6.5" y="2.8" width="11" height="18.4" rx="2.6" />
-              <path d="M10.4 18.3h3.2" />
-            </svg>
-          </span>
-          <span class="quick-name">{{ quickLoading === 'phone' ? '认证中…' : '手机号' }}</span>
-        </button>
+      <!-- 短信与 QQ 互联资质申请中，第三方登录入口暂不开放 -->
+      <template v-if="thirdPartyAuthEnabled">
+        <div class="other">
+          <span class="other-line"></span>
+          <span class="other-text">其他登录方式</span>
+          <span class="other-line"></span>
+        </div>
 
-        <button
-          type="button"
-          class="quick-item"
-          :disabled="quickLoading === 'qq'"
-          @click="handleQuickLogin('qq')"
-        >
-          <span class="quick-circle qq">QQ</span>
-          <span class="quick-name">{{ quickLoading === 'qq' ? '认证中…' : 'QQ' }}</span>
-        </button>
-      </div>
+        <div class="quick-row">
+          <button
+            type="button"
+            class="quick-item"
+            :disabled="quickLoading === 'phone'"
+            @click="openPhoneLogin"
+          >
+            <span class="quick-circle">
+              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6.5" y="2.8" width="11" height="18.4" rx="2.6" />
+                <path d="M10.4 18.3h3.2" />
+              </svg>
+            </span>
+            <span class="quick-name">{{ quickLoading === 'phone' ? '认证中…' : '手机号' }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="quick-item"
+            :disabled="quickLoading === 'qq'"
+            @click="handleQqLogin"
+          >
+            <span class="quick-circle qq">QQ</span>
+            <span class="quick-name">{{ quickLoading === 'qq' ? '认证中…' : 'QQ' }}</span>
+          </button>
+        </div>
+      </template>
 
       <label class="agree">
         <input v-model="agreed" type="checkbox" />
@@ -142,7 +208,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { loginApi, quickLoginApi } from '@/api/auth'
+import { getQqAuthorizeUrl, loginApi, phoneLoginApi, quickLoginApi, sendSmsCode } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import LegalDoc from './LegalDoc.vue'
@@ -159,11 +225,14 @@ import {
   type PendingPasswordReset,
 } from '@/utils/passwordReset'
 import { getLastAccount } from '@/utils/lastAccount'
+import { THIRD_PARTY_AUTH_ENABLED } from '@/utils/features'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const { siteName, siteMascot } = useSiteConfig()
+/** 第三方登录开关（短信 / QQ 互联申请期间关闭） */
+const thirdPartyAuthEnabled = THIRD_PARTY_AUTH_ENABLED
 
 watch(
   siteName,
@@ -186,6 +255,21 @@ const pendingReset = ref<PendingPasswordReset | null>(loadPendingPasswordReset()
 const legalType = ref<'' | 'agreement' | 'privacy'>('')
 const loginReason = ref('')
 const reasonDismissed = ref(false)
+
+/** 登录方式：账号密码 / 手机号验证码 */
+const loginMode = ref<'password' | 'phone'>('password')
+const phoneRef = ref<HTMLInputElement>()
+const phoneForm = reactive({ phone: '', code: '' })
+const phoneError = ref('')
+const phoneErrorField = ref<'phone' | 'code' | ''>('')
+const phoneLoading = ref(false)
+const smsSending = ref(false)
+const smsCooldown = ref(0)
+const smsHint = ref('')
+let smsTimer: number | undefined
+
+/** 本机是否已有设备凭证（用于手机号表单里的兜底入口） */
+const hasQuickAccount = computed(() => !!getQuickAccount()?.token)
 
 /** 上次登录账号：退出登录不清除，回到登录页把学号/工号填回输入框，用户只需再输密码 */
 const lastUsername = getLastAccount()?.username || ''
@@ -304,6 +388,114 @@ async function handleQuickLogin(channel: QuickChannel) {
   }
 }
 
+/** 打开手机号验证码登录（独立表单，非弹窗） */
+function openPhoneLogin() {
+  if (!ensureAgreed()) return
+  loginMode.value = 'phone'
+  phoneError.value = ''
+  phoneErrorField.value = ''
+  smsHint.value = ''
+  nextTick(() => phoneRef.value?.focus())
+}
+
+function backToPassword() {
+  loginMode.value = 'password'
+  phoneError.value = ''
+  phoneForm.code = ''
+}
+
+function validPhone(phone: string): boolean {
+  return /^1[3-9]\d{9}$/.test(phone)
+}
+
+async function handleSendSms() {
+  if (smsSending.value || smsCooldown.value > 0) return
+  phoneError.value = ''
+  phoneErrorField.value = ''
+  if (!validPhone(phoneForm.phone)) {
+    phoneErrorField.value = 'phone'
+    phoneError.value = '请输入正确的 11 位手机号'
+    return
+  }
+  smsSending.value = true
+  try {
+    const res: any = await sendSmsCode(phoneForm.phone, 'login')
+    if (res?.debug_code) {
+      // 未接入短信服务商时的开发环境回显，便于本地联调
+      phoneForm.code = res.debug_code
+      smsHint.value = `演示环境验证码：${res.debug_code}`
+    } else {
+      smsHint.value = '验证码已发送'
+    }
+    ElMessage.success(res?.debug_code ? '演示环境验证码已填入' : '验证码已发送')
+    startCooldown(Number(res?.cooldown) || 60)
+  } catch (e: any) {
+    const detail = e?.response?.data?.detail
+    phoneError.value = detail || '验证码发送失败，请稍后重试'
+  } finally {
+    smsSending.value = false
+  }
+}
+
+function startCooldown(seconds: number) {
+  smsCooldown.value = Math.max(1, seconds)
+  window.clearInterval(smsTimer)
+  smsTimer = window.setInterval(() => {
+    smsCooldown.value -= 1
+    if (smsCooldown.value <= 0) window.clearInterval(smsTimer)
+  }, 1000)
+}
+
+async function handlePhoneLogin() {
+  if (phoneLoading.value) return
+  if (!ensureAgreed()) return
+  phoneError.value = ''
+  phoneErrorField.value = ''
+  if (!validPhone(phoneForm.phone)) {
+    phoneErrorField.value = 'phone'
+    phoneError.value = '请输入正确的 11 位手机号'
+    return
+  }
+  if (!/^\d{6}$/.test(phoneForm.code)) {
+    phoneErrorField.value = 'code'
+    phoneError.value = '请输入 6 位短信验证码'
+    return
+  }
+  phoneLoading.value = true
+  try {
+    const res: any = await phoneLoginApi(phoneForm.phone, phoneForm.code)
+    if (!res?.access_token) throw new Error('响应异常')
+    afterLogin(res)
+  } catch (e: any) {
+    phoneError.value = e?.response?.data?.detail || '手机号登录失败，请重试'
+  } finally {
+    phoneLoading.value = false
+  }
+}
+
+/** QQ 登录：未配置 QQ 互联时回退到本机快捷登录 */
+async function handleQqLogin() {
+  if (!ensureAgreed()) return
+  quickLoading.value = 'qq'
+  try {
+    const res: any = await getQqAuthorizeUrl('login')
+    if (!res?.url) throw new Error('响应异常')
+    window.location.href = res.url
+  } catch (e: any) {
+    const status = e?.response?.status
+    const detail = e?.response?.data?.detail
+    if (status === 503 && hasQuickAccount.value) {
+      quickLoading.value = ''
+      ElMessage.info(detail || 'QQ 互联未配置，已切换为本机快捷登录')
+      await handleQuickLogin('qq')
+      return
+    }
+    ElMessage.info(detail || 'QQ 登录暂不可用，请使用账号密码登录')
+  } finally {
+    quickLoading.value = ''
+  }
+}
+
 function handleGuest() {
   if (!ensureAgreed()) return
   auth.enterGuest()
@@ -326,6 +518,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (bannerTimer) window.clearInterval(bannerTimer)
+  if (smsTimer) window.clearInterval(smsTimer)
 })
 </script>
 
@@ -495,6 +688,68 @@ onBeforeUnmount(() => {
   background: #f7f7f8;
 }
 
+/* ===== 手机号验证码登录 ===== */
+.mode-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: #76767f;
+  font-size: 12.5px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mode-back:active {
+  color: #111111;
+}
+.mode-back-arrow {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.code-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.code-field input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.code-btn {
+  flex-shrink: 0;
+  height: 54px;
+  padding: 0 14px;
+  border: 1px solid #e3e3e8;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #111111;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.code-btn:disabled {
+  color: #a4a4ac;
+  cursor: default;
+}
+
+.sms-hint {
+  margin-left: auto;
+  max-width: 62%;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #76767f;
+  text-align: right;
+}
+
 .eye-btn {
   position: absolute;
   right: 7px;
@@ -579,6 +834,19 @@ onBeforeUnmount(() => {
 }
 .guest-link:active {
   color: #16161a;
+}
+
+.register-link {
+  align-self: center;
+  margin-top: 2px;
+  padding: 4px 10px;
+  color: #16161a;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.register-link:active {
+  opacity: 0.7;
 }
 
 /* ===== 其他登录方式 ===== */

@@ -11,6 +11,8 @@ class LoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
+    captcha_id: str
+    captcha_code: str
 
 
 class UserInfo(BaseModel):
@@ -27,6 +29,9 @@ class UserInfo(BaseModel):
     hometown: str | None = None
     phone: str | None = None
     qq: str | None = None
+    # QQ 互联授权绑定状态（openid 不对外暴露，仅返回是否已绑定与昵称）
+    qq_bound: bool = False
+    qq_nickname: str | None = None
     department: str | None = None
     class_name: str | None = None
     age: int | None = None
@@ -55,6 +60,66 @@ class QuickLoginRequest(BaseModel):
 class QuickCredentialOut(BaseModel):
     quick_token: str | None = None
     quick_channels: list[str] = []
+
+
+class SmsCodeRequest(BaseModel):
+    """发送短信验证码：purpose=login（未登录登录用） / bind（已登录换绑用）。"""
+
+    phone: str
+    purpose: str = "login"
+
+
+class PhoneLoginRequest(BaseModel):
+    phone: str
+    code: str
+
+
+class PhoneBindRequest(BaseModel):
+    phone: str
+    code: str
+
+
+class QqExchangeRequest(BaseModel):
+    ticket: str
+
+
+class RegisterSmsRequest(BaseModel):
+    """注册场景发送短信：先过图形验证码，再下发短信验证码。"""
+
+    phone: str
+    captcha_id: str
+    captcha_code: str
+
+
+class RegisterPhoneVerifyRequest(BaseModel):
+    phone: str
+    code: str
+
+
+class RegisterRequest(BaseModel):
+    """自助注册：先选身份（学生 / 教师），账号以学号或工号为唯一标识。
+
+    学生需补全学院、专业、导师；教师仅需学院，专业与导师可为空。
+    """
+
+    role: str = "student"
+    student_no: str
+    password: str
+    name: str
+    college_id: int = 0
+    major_id: int = 0
+    tutor_id: int = 0
+    phone: str | None = None
+    qq: str | None = None
+    phone_ticket: str | None = None
+    qq_ticket: str | None = None
+    # 未走短信/QQ 验证通道时（资质申请期间），提交注册需图形验证码防刷
+    captcha_id: str = ""
+    captcha_code: str = ""
+
+
+class QqAuthorizeOut(BaseModel):
+    url: str
 
 
 class ProfileUpdate(BaseModel):

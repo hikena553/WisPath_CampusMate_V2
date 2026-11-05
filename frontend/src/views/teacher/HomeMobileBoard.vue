@@ -216,7 +216,7 @@ const featureEntries = computed(() => [
   { path: '/teacher/approval', label: '审批', icon: Stamp, color: '#b54708', tint: '#fffaeb', count: stats.value.pending_leave_count || 0, tone: 'warn' },
   { path: '/teacher/crisis', label: '预警', icon: WarnIcon, color: '#d92d20', tint: '#fef3f2', count: stats.value.severe_alert_count || 0, tone: 'danger' },
   { path: '/teacher/announcement', label: '公告', icon: Bell, color: '#2563eb', tint: '#eff4ff', count: 0, tone: 'brand' },
-  { path: '/teacher/portfolio', label: '学生档案', icon: Collection, color: '#6941c6', tint: '#f4f3ff', count: 0, tone: 'violet' },
+  { path: '/teacher/portfolio', label: '成长档案', icon: Collection, color: '#6941c6', tint: '#f4f3ff', count: 0, tone: 'violet' },
   { path: '/teacher/survey', label: '问卷互评', icon: EditPen, color: '#2563eb', tint: '#eff4ff', count: 0, tone: 'brand' },
   { path: '/teacher/care-center', label: '关怀与家校', icon: Sunny, color: '#f79009', tint: '#fffaeb', count: 0, tone: 'warn' },
   { path: '/teacher/growth', label: '我的成长', icon: TrendCharts, color: '#6941c6', tint: '#f4f3ff', count: 0, tone: 'violet' },

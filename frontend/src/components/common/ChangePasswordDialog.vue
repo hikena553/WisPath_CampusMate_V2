@@ -1,12 +1,11 @@
 <template>
-  <!-- 修改密码（3 字段：移动端=底部动作面板 / 桌面端=弹窗） -->
+  <!-- 修改密码（旧密码 / 新密码 / 确认新密码 / 图形验证码） -->
   <ActionSheet
     :model-value="modelValue"
     title="修改密码"
     width="420px"
     :close-on-click-modal="false"
     @update:model-value="onVisibleChange"
-    
   >
     <el-form :model="form" label-width="96px" @submit.prevent>
       <el-form-item label="旧密码" required>
@@ -21,8 +20,28 @@
           type="password"
           show-password
           placeholder="再次输入新密码"
-          @keyup.enter="submit"
         />
+      </el-form-item>
+      <el-form-item label="验证码" required>
+        <div class="captcha-row">
+          <el-input
+            v-model="form.captcha_code"
+            maxlength="4"
+            placeholder="输入图中字符"
+            @keyup.enter="submit"
+          />
+          <button
+            type="button"
+            class="captcha-img-btn"
+            :class="{ loading: captchaLoading }"
+            aria-label="刷新验证码"
+            :disabled="captchaLoading"
+            @click="loadCaptcha"
+          >
+            <img v-if="captcha?.image" :src="captcha.image" alt="验证码" />
+            <span v-else>{{ captchaLoading ? '加载中' : '点击获取' }}</span>
+          </button>
+        </div>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -34,10 +53,11 @@
 
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
-// v6.1 弹窗减负：小表单走底部动作面板（移动端）
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import { ElMessage } from 'element-plus'
 import { changePassword } from '@/api/user'
+import { getCaptcha } from '@/api/auth'
+import type { CaptchaChallenge } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ modelValue: boolean }>()
@@ -48,24 +68,44 @@ const emit = defineEmits<{
 
 const auth = useAuthStore()
 const submitting = ref(false)
-const form = reactive({ old_password: '', new_password: '', confirm_password: '' })
+const form = reactive({ old_password: '', new_password: '', confirm_password: '', captcha_code: '' })
+const captcha = ref<CaptchaChallenge | null>(null)
+const captchaLoading = ref(false)
 
-// 移动端子页无 closed 事件：显隐变化时同样重置
-watch(() => props.modelValue, (v) => { if (!v) reset() })
+// 打开弹窗时加载验证码，关闭时清空
+watch(() => props.modelValue, (v) => {
+  if (v) { loadCaptcha() } else { reset() }
+})
 
 function reset() {
   form.old_password = ''
   form.new_password = ''
   form.confirm_password = ''
+  form.captcha_code = ''
+  captcha.value = null
 }
 
 function onVisibleChange(visible: boolean) {
   emit('update:modelValue', visible)
 }
 
-/** 与后端 /api/auth/change-password 的校验规则保持一致，避免提交后才报错 */
+async function loadCaptcha() {
+  captchaLoading.value = true
+  try {
+    captcha.value = await getCaptcha()
+    form.captcha_code = ''
+  } catch {
+    captcha.value = null
+  } finally {
+    captchaLoading.value = false
+  }
+}
+
+/** 与后端校验规则保持一致，避免提交后才报错 */
 function validate(): string | null {
-  if (!form.old_password || !form.new_password || !form.confirm_password) return '请填写所有字段'
+  if (!form.old_password || !form.new_password || !form.confirm_password || !form.captcha_code) {
+    return '请填写所有字段'
+  }
   if (form.new_password !== form.confirm_password) return '两次输入的新密码不一致'
   if (form.new_password.length < 8) return '新密码至少 8 位'
   if (!/[A-Za-z]/.test(form.new_password) || !/\d/.test(form.new_password)) return '新密码必须同时包含字母和数字'
@@ -79,18 +119,63 @@ async function submit() {
     ElMessage.warning(invalid)
     return
   }
+  if (!captcha.value) {
+    ElMessage.warning('验证码未加载，请点击图片重试')
+    return
+  }
   submitting.value = true
   try {
-    await changePassword(form.old_password, form.new_password)
-    // 同步缓存里的 password_changed：强改密中间件与路由守卫都以它为准
+    await changePassword(form.old_password, form.new_password, captcha.value.captcha_id, form.captcha_code)
     if (auth.user) auth.updateUser({ ...auth.user, password_changed: true })
     ElMessage.success('密码修改成功')
     onVisibleChange(false)
     emit('success')
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '修改失败，请重试')
+    const detail = e?.response?.data?.detail || '修改失败，请重试'
+    ElMessage.error(detail)
+    // 验证码错误或过期时刷新图片
+    if (detail.includes('验证码')) loadCaptcha()
   } finally {
     submitting.value = false
   }
 }
 </script>
+
+<style scoped>
+.captcha-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.captcha-row .el-input {
+  flex: 1;
+}
+.captcha-img-btn {
+  flex-shrink: 0;
+  width: 108px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #f6f6f7;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+}
+.captcha-img-btn:hover:not(:disabled) { opacity: 0.85; }
+.captcha-img-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+.captcha-img-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+}
+.captcha-img-btn span {
+  font-size: 13px;
+  color: #909399;
+}
+</style>

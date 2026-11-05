@@ -6,6 +6,8 @@
 }
 
 body {
+  /* 浏览器默认 8px 外边距会在页面四周留出白边，与官网顶部的极光背景形成明显色差 */
+  margin: 0;
   -webkit-text-size-adjust: 100%;
 }
 

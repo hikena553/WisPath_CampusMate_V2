@@ -398,6 +398,9 @@
             </div>
           </div>
 
+          <!-- 快捷登录：手机号短信验证绑定 / QQ 互联授权绑定 -->
+          <QuickLoginBind @phone-bound="onPhoneBound" />
+
           <!-- 我的简历（仅移动端）：上传条 + 文件卡列表 + 底部「导出简历」向导入口 -->
           <div class="set-group pf-resume-group">
             <div class="set-group-title">我的简历</div>
@@ -529,8 +532,16 @@
             <div class="sp-field">
               <span class="sp-label">图形验证码</span>
               <span class="sp-captcha">
-                <el-input v-model="passwordForm.captcha" placeholder="输入右侧 4 位字符" maxlength="4" />
-                <button type="button" class="sp-captcha-code" @click="refreshCaptcha">{{ captchaCode }}</button>
+                <el-input v-model="passwordForm.captcha" placeholder="输入图中字符" maxlength="4" />
+                <button
+                  type="button"
+                  class="sp-captcha-code"
+                  :disabled="captchaLoading"
+                  @click="loadCaptcha"
+                >
+                  <img v-if="captcha?.image" :src="captcha.image" alt="验证码" />
+                  <span v-else>{{ captchaLoading ? '加载中' : '点击获取' }}</span>
+                </button>
               </span>
             </div>
           </div>
@@ -822,6 +833,8 @@ import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
 import { useAuthStore } from '@/stores/auth'
 import { updateProfile, getTeachers, changePassword } from '@/api/user'
+import { getCaptcha } from '@/api/auth'
+import type { CaptchaChallenge } from '@/api/auth'
 import { createFeedback, getFeedbacks } from '@/api/feedback'
 import { uploadFile } from '@/api/upload'
 import { getGrowthProfile, getProjects, type GrowthProfile, type StudentProject } from '@/api/growth'
@@ -847,6 +860,7 @@ import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 // v6.1 弹窗减负：单字段编辑/裁剪等轻交互走底部动作面板（简历向导与简历删除确认保持原样）
 import ActionSheet from '@/components/common/ActionSheet.vue'
+import QuickLoginBind from '@/components/profile/QuickLoginBind.vue'
 import {
   ArrowRight, ArrowLeft,
   ChatLineSquare, Camera, Check, Plus, Setting, Document,
@@ -1103,7 +1117,8 @@ async function refreshBadges() {
 }
 
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '', captcha: '' })
-const captchaCode = ref('')
+const captcha = ref<CaptchaChallenge | null>(null)
+const captchaLoading = ref(false)
 
 /** 新密码强度：0~3 格（长度 6+、字母数字混排、长度 10+ 各计一格） */
 const passwordStrength = computed(() => {
@@ -1120,23 +1135,27 @@ const passwordMismatch = computed(
   () => !!passwordForm.confirm_password && passwordForm.new_password !== passwordForm.confirm_password,
 )
 
-function generateCaptcha() {
-  const chars = '0123456789'
-  let result = ''
-  for (let i = 0; i < 4; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+async function loadCaptcha() {
+  captchaLoading.value = true
+  try {
+    captcha.value = await getCaptcha()
+    passwordForm.captcha = ''
+  } catch {
+    captcha.value = null
+  } finally {
+    captchaLoading.value = false
   }
-  return result
-}
-
-function refreshCaptcha() {
-  captchaCode.value = generateCaptcha()
 }
 const profileForm = reactive({
   username: '', name: '', college: '', gender: '', age: 18,
   hometown: '', phone: '', qq: '', tutor_id: null as number | null,
   className: '', political_status: '', avatar: '', signature: ''
 })
+
+/** 快捷登录绑定手机号成功后同步表单，避免保存资料时用旧号码覆盖已验证号码 */
+function onPhoneBound(updated: { phone?: string | null }) {
+  profileForm.phone = updated.phone || ''
+}
 
 /** 身份背景（移动端 .pf-hero / .bg-preview 共用）：优先用已上传图片，否则用预设渐变 */
 const heroBannerStyle = computed(() =>
@@ -1514,16 +1533,23 @@ async function handleChangePassword() {
   if (passwordForm.new_password.length < 6) {
     ElMessage.error('新密码至少6位'); return
   }
-  if (!passwordForm.captcha || passwordForm.captcha !== captchaCode.value) {
-    ElMessage.error('验证码错误'); refreshCaptcha(); return
+  if (!passwordForm.captcha) {
+    ElMessage.warning('请输入验证码'); return
+  }
+  if (!captcha.value) {
+    ElMessage.warning('验证码未加载，请点击图片重试'); return
   }
   changingPassword.value = true
   try {
-    await changePassword(passwordForm.old_password, passwordForm.new_password)
+    await changePassword(passwordForm.old_password, passwordForm.new_password, captcha.value.captcha_id, passwordForm.captcha)
     ElMessage.success('密码修改成功')
-    passwordForm.old_password = ''; passwordForm.new_password = ''; passwordForm.confirm_password = ''
+    passwordForm.old_password = ''; passwordForm.new_password = ''; passwordForm.confirm_password = ''; passwordForm.captcha = ''
     closePage()
-  } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '修改失败') }
+  } catch (e: any) {
+    const detail = e?.response?.data?.detail || '修改失败'
+    ElMessage.error(detail)
+    if (detail.includes('验证码')) loadCaptcha()
+  }
   finally { changingPassword.value = false }
 }
 
@@ -1603,7 +1629,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 onMounted(async () => {
   try { teachers.value = await getTeachers() } catch {}
-  refreshCaptcha()
+  loadCaptcha()
   loadFeedbacks()
   loadGrowth()
   loadMyPosts()
@@ -1789,16 +1815,21 @@ onMounted(async () => {
   flex-shrink: 0;
   width: 96px;
   height: 40px;
+  padding: 0;
   border: 1px solid var(--tui-border);
   border-radius: 10px;
   background: var(--tui-surface-sunken);
-  color: var(--tui-text);
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 4px;
   cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
 }
+.sp-captcha-code:hover:not(:disabled) { opacity: 0.85; }
+.sp-captcha-code:disabled { cursor: not-allowed; opacity: 0.6; }
+.sp-captcha-code img { width: 100%; height: 100%; object-fit: fill; display: block; }
+.sp-captcha-code span { font-size: 12px; color: var(--tui-text-secondary, #909399); }
 .sp-captcha-code:active { opacity: 0.7; }
 .sp-submit {
   width: 100%;

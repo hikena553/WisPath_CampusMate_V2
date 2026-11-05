@@ -361,11 +361,60 @@ export interface MediaAccount {
   avatar: string | null
   signature: string | null
   is_enabled: boolean
+  station_connected: boolean
   content_scope: FeedSourceType[] | null
   relay_interval_minutes: number
   post_count: number
   last_posted_at: string | null
   created_at: string | null
+}
+
+export interface MediaSourceLink {
+  id: number
+  account_id: number
+  feed_source_id: number
+  name: string
+  enabled: boolean
+  source_name: string
+  source_type: FeedSourceType
+  source_kind: string
+  source_enabled: boolean
+  feed_key: string | null
+  url: string
+}
+
+export interface MediaAccountGraph extends MediaAccount {
+  links: MediaSourceLink[]
+}
+
+export interface MediaStationConfig {
+  id: number
+  name: string
+  is_enabled: boolean
+  ingest_interval_minutes: number
+  digest_hour: number
+  publish_mode: 'auto' | 'digest' | 'manual'
+  description: string | null
+  updated_at: string | null
+}
+
+export interface MediaGraphSource {
+  id: number
+  name: string
+  kind: string
+  source_type: FeedSourceType
+  feed_key: string | null
+  url: string
+  enabled: boolean
+  is_builtin: boolean
+  item_count: number
+  last_ingested_at: string | null
+}
+
+export interface MediaGraph {
+  station: MediaStationConfig
+  accounts: MediaAccountGraph[]
+  sources: MediaGraphSource[]
 }
 
 export interface MediaAccountPayload {
@@ -397,6 +446,35 @@ export function publishMediaDigest(id: number, force = false) {
   return request.post<{ posted: boolean; message: string; post_id: number | null; title: string | null }>(
     `/admin/media/accounts/${id}/publish?force=${force}`,
   )
+}
+
+// ==================== 绵小城 AI 资讯站图谱（管理端画布） ====================
+
+export function getMediaGraph() {
+  return request.get<MediaGraph>('/admin/media/graph')
+}
+
+export function updateMediaStation(body: Partial<MediaStationConfig>) {
+  return request.patch<MediaStationConfig>('/admin/media/station', body)
+}
+
+export function setMediaAccountStationLink(id: number, connected: boolean) {
+  return request.patch<MediaAccount>(`/admin/media/accounts/${id}/station-link`, { connected })
+}
+
+export function createMediaSourceLink(
+  accountId: number,
+  body: { feed_source_id: number; name?: string | null },
+) {
+  return request.post<MediaSourceLink>(`/admin/media/accounts/${accountId}/source-links`, body)
+}
+
+export function updateMediaSourceLink(id: number, body: { name?: string; enabled?: boolean }) {
+  return request.patch<MediaSourceLink>(`/admin/media/source-links/${id}`, body)
+}
+
+export function deleteMediaSourceLink(id: number) {
+  return request.delete<{ message: string }>(`/admin/media/source-links/${id}`)
 }
 
 // ==================== 系统监控与运维 ====================

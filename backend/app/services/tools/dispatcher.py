@@ -19,7 +19,6 @@ from .plan import (
     _query_study_room,
     _submit_plan_stage,
 )
-from .reference import _generate_page_scaffold, _search_reference_library
 from .sanitize import _check_tool_rate_limit, _sanitize_tool_result
 from .student import (
     _analyze_grades,
@@ -49,19 +48,14 @@ from .teacher import (
     _publish_class_announcement,
     _query_care_calendar,
     _query_care_records,
-    _query_class_attendance,
-    _query_class_grade,
     _query_crisis_alerts,
     _query_guardian_logs,
     _query_growth_stats,
-    _query_attendance_roster,
-    _query_homework_status,
     _query_help_requests,
     _query_learning_events,
     _query_my_courses,
     _query_my_portfolio,
     _query_my_survey_results,
-    _query_my_workflows,
     _query_pending_leaves,
     _query_student_detail,
     _query_student_insight,
@@ -155,22 +149,14 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "query_my_survey_results": _query_my_survey_results,
             "query_care_calendar": _query_care_calendar,
             "query_guardian_logs": _query_guardian_logs,
-            # P2 底座：学情事件 / AI 学情诊断 / 审批流程
+            # P2 底座：学情事件 / AI 学情诊断
             "query_learning_events": _query_learning_events,
             "query_student_insight": _query_student_insight,
-            "query_my_workflows": _query_my_workflows,
             # 求助受理（学生求助 → 辅导员帮扶闭环）
             "query_help_requests": _query_help_requests,
             "reply_help_request": _reply_help_request,
-            # 教学域（课表/任课教师 · 考勤 · 作业 · 成绩）
+            # 教学域（只读课表 / 任课教师）
             "query_my_courses": _query_my_courses,
-            "query_class_attendance": _query_class_attendance,
-            "query_attendance_roster": _query_attendance_roster,
-            "query_homework_status": _query_homework_status,
-            "query_class_grade": _query_class_grade,
-            # 开源参考复用（检索可复用开源项目 / 生成页面骨架）
-            "search_reference_library": _search_reference_library,
-            "generate_page_scaffold": _generate_page_scaffold,
         }
         fn = handler.get(name)
         if not fn:

@@ -69,11 +69,12 @@ def test_me_flag_false_after_password_changed(client, login_token):
 
 # ── 改密规则全量校验（S2 强改密配套） ────────────────────────────────────
 
-def test_change_password_validation_rules(client, login_token, api):
+def test_change_password_validation_rules(client, login_token, api, captcha_challenge):
     """旧密码错误/过短/缺字母/缺数字/新旧相同 均 400。
 
-    契约顺序（auth.py 源码）：旧密码 → 至少 8 位 → 字母数字 → 新旧相同。
+    契约顺序（auth.py 源码）：验证码 → 旧密码 → 至少 8 位 → 字母数字 → 新旧相同。
     旧密码需 ≥8 位且含字母数字，故用 login_token 自建用户（TestPass123）。
+    验证码一次性使用，每个 case 取新的。
     """
     auth = login_token()  # 测试用户：旧密码 TestPass123
     cases = [
@@ -84,12 +85,13 @@ def test_change_password_validation_rules(client, login_token, api):
         ({"old_password": "TestPass123", "new_password": "TestPass123"}, "新密码不能与旧密码相同"),
     ]
     for payload, expect in cases:
+        payload = {**payload, **captcha_challenge()}
         resp = api.put("/api/auth/change-password", json=payload, headers=auth["headers"])
         assert resp.status_code == 400, f"payload={payload}"
         assert resp.json()["detail"] == expect
 
 
-def test_change_password_success_invalidates_old_token(client, make_user, api):
+def test_change_password_success_invalidates_old_token(client, make_user, api, captcha_challenge):
     """改密成功后：旧 token 立即失效（ph 失配），新密码可登录、旧密码被拒。"""
     user = make_user(password_changed=False)
     # 真实 HTTP 登录（初始密码 TestPass123）
@@ -101,7 +103,8 @@ def test_change_password_success_invalidates_old_token(client, make_user, api):
     headers = {"Authorization": f"Bearer {old_token}"}
 
     resp = api.put("/api/auth/change-password",
-                   json={"old_password": "TestPass123", "new_password": "BrandNew123"},
+                   json={"old_password": "TestPass123", "new_password": "BrandNew123",
+                         **captcha_challenge()},
                    headers=headers)
     assert resp.status_code == 200
     assert resp.json()["message"] == "密码修改成功"
@@ -124,7 +127,7 @@ def test_change_password_success_invalidates_old_token(client, make_user, api):
 
 # ── 首登改密：只提醒不阻断（S2 调整） ─────────────────────────────────
 
-def test_initial_password_only_reminds_without_blocking(client, seed_login, api):
+def test_initial_password_only_reminds_without_blocking(client, seed_login, api, captcha_challenge):
     """未修改初始密码不再拦截业务接口，仅由 /me 返回提醒标记。"""
     auth = seed_login("2024004")
 
@@ -140,7 +143,8 @@ def test_initial_password_only_reminds_without_blocking(client, seed_login, api)
 
     # 改密后标记消失
     r = api.put("/api/auth/change-password",
-                json={"old_password": "123456", "new_password": "Renewed123"},
+                json={"old_password": "123456", "new_password": "Renewed123",
+                      **captcha_challenge()},
                 headers=auth["headers"])
     assert r.status_code == 200
     auth2 = seed_login("2024004", "Renewed123")

@@ -9,6 +9,11 @@ export function getTeachers() {
   return request.get<UserInfo[]>('/auth/teachers')
 }
 
-export function changePassword(old_password: string, new_password: string) {
-  return request.put('/auth/change-password', { old_password, new_password })
+export function changePassword(
+  old_password: string,
+  new_password: string,
+  captcha_id: string,
+  captcha_code: string,
+) {
+  return request.put('/auth/change-password', { old_password, new_password, captcha_id, captcha_code })
 }

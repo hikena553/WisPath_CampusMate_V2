@@ -33,6 +33,7 @@ class FeedSourceCreate(BaseModel):
     filter_kw: list[str] | None = None
     date_only: bool = False
     per_page: int = Field(10, ge=1, le=50)
+    enabled: bool = True
 
 
 class FeedSourceUpdate(BaseModel):
@@ -156,7 +157,7 @@ def create_feed_source(
         name=body.name, kind=body.kind, source_type=body.source_type,
         url=body.url, query=body.query, base_url=body.base_url,
         filter_kw=body.filter_kw or [], date_only=body.date_only,
-        per_page=body.per_page, is_builtin=False, enabled=True,
+        per_page=body.per_page, is_builtin=False, enabled=body.enabled,
     )
     db.add(src)
     db.commit()

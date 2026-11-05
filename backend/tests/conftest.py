@@ -73,7 +73,6 @@ from app.models.guardian import (  # noqa: E402
     GuardianShareLink,
 )
 from app.models.learning_event import LearningEvent  # noqa: E402
-from app.models.workflow import WorkflowDef, WorkflowInstance  # noqa: E402
 from app.models.help_request import HelpRequest  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
 from app.utils.rate_limiter import reset_rate_limiter  # noqa: E402
@@ -189,8 +188,6 @@ def make_user(db):
             db.query(LearningEvent).filter(LearningEvent.actor_id == u.id).delete()
             db.query(HelpRequest).filter(HelpRequest.student_id == u.id).delete()
             db.query(HelpRequest).filter(HelpRequest.teacher_id == u.id).delete()
-            db.query(WorkflowInstance).filter(WorkflowInstance.initiator_id == u.id).delete()
-            db.query(WorkflowDef).filter(WorkflowDef.created_by == u.id).delete()
             db.query(LeaveRequest).filter(LeaveRequest.student_id == u.id).delete()
             db.delete(u)
     db.commit()
@@ -233,6 +230,24 @@ def seed_login(client):
         return {"token": token, "headers": {"Authorization": f"Bearer {token}"}}
 
     return _make
+
+
+@pytest.fixture()
+def captcha_challenge(client):
+    """获取一个有效的图形验证码（id + 明文 code），供需要验证码的接口测试使用。
+
+    验证码一次性使用（_verify_captcha 会从内存移除），故每次请求前都要重新取。
+    """
+    from app.api.auth import _captcha_store
+
+    def _get() -> dict:
+        resp = client.get("/api/auth/captcha")
+        assert resp.status_code == 200, f"获取验证码失败: {resp.text}"
+        cid = resp.json()["captcha_id"]
+        code = _captcha_store.get(cid)[0]
+        return {"captcha_id": cid, "captcha_code": code}
+
+    return _get
 
 
 @pytest.fixture()

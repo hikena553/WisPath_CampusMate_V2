@@ -24,12 +24,19 @@ const guestAllowedPaths = ['/student/campus']
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/login' },
+    // 对外官网：网页端访问根路径时先展示项目官网（免登录）
+    { path: '/', name: 'Landing', component: () => import('@/views/portal/LandingPage.vue'), meta: { title: '绵小城 · 智慧校园' } },
+    // 移动端下载页：官网二维码与下载链接的落地页（免登录）
+    { path: '/download', name: 'Download', component: () => import('@/views/portal/DownloadPage.vue'), meta: { title: '下载移动端' } },
     { path: '/login', name: 'Login', component: () => import('@/views/login/LoginPage.vue') },
     // 首次打开的产品介绍页（参考抖音 / 微信引导页），无需登录
     { path: '/welcome', name: 'Welcome', component: () => import('@/views/login/WelcomePage.vue'), meta: { title: '认识绵小城' } },
     // 忘记密码：身份核验后自动通知管理员重置
     { path: '/forgot-password', name: 'ForgotPassword', component: () => import('@/views/login/ForgotPasswordPage.vue'), meta: { title: '找回密码' } },
+    // QQ 互联回跳落地页：用一次性票据换取登录态，无需登录即可访问
+    { path: '/qq-callback', name: 'QqCallback', component: () => import('@/views/login/QqCallbackPage.vue'), meta: { title: 'QQ 登录' } },
+    // 学生自助注册：学号 + 学院/专业/导师 + 手机号或 QQ 验证
+    { path: '/register', name: 'Register', component: () => import('@/views/register/RegisterPage.vue'), meta: { title: '注册账号' } },
     // 改密页：可独立访问的改密入口（站内提醒横幅走弹窗，本页供直接跳转/分享链接使用）
     {
       path: '/change-password',
@@ -167,7 +174,6 @@ const router = createRouter({
         { path: '', meta: { title: '首页' }, component: () => import('@/views/admin/HomePage.vue') },
         { path: 'knowledge', meta: { title: '知识库' }, component: () => import('@/views/admin/KnowledgePage.vue') },
         { path: 'feeds', name: 'admin-feeds', meta: { title: '资讯管理' }, component: () => import('@/views/admin/FeedSourcesPage.vue') },
-        { path: 'references', name: 'admin-references', meta: { title: '开源参考复用' }, component: () => import('@/views/admin/ReferenceLibraryPage.vue') },
         { path: 'teachers', meta: { title: '教师管理' }, component: () => import('@/views/admin/TeachersPage.vue') },
         { path: 'students', meta: { title: '学生管理' }, component: () => import('@/views/admin/StudentsPage.vue') },
         // 密码重置申请已并入顶栏消息中心，处理入口在学生 / 教师管理，旧链接重定向
@@ -240,6 +246,21 @@ router.beforeEach(async (to) => {
 
   // 家长只读分享页：公开访问，无需登录（凭 token 校验）
   if (to.path.startsWith('/share/')) {
+    return true
+  }
+
+  // QQ 授权回跳页：登录/绑定两种模式都要能进入（已登录用户也可能在此完成绑定）
+  if (to.path === '/qq-callback') {
+    return true
+  }
+
+  // 学生注册页：未登录可访问
+  if (to.path === '/register') {
+    return true
+  }
+
+  // 官网首页与下载页：完全公开，无论是否登录、是否为游客都直接展示，不做角色重定向
+  if (to.path === '/' || to.path === '/download') {
     return true
   }
 
