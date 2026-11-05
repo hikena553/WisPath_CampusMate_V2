@@ -76,26 +76,31 @@ def upgrade() -> None:
             return
 
         # 1. 建立（或复用）7 个二级账号：首个分类复用原账号，其余新建
-        targets: dict[str, tuple[MediaAccount, User]] = {}
+        targets: dict[str, tuple[MediaAccount, int]] = {}
         for idx, (scope, name, signature) in enumerate(CATEGORY_ACCOUNTS):
             if idx == 0:
                 legacy_user.name = name
                 legacy_user.signature = signature
                 legacy.content_scope = [scope]
-                targets[scope] = (legacy, legacy_user)
+                targets[scope] = (legacy, legacy_user.id)
                 continue
-            new_user = User(
-                username=_next_media_username(db),
-                password_hash=hash_password(generate_random_password()),
-                name=name,
-                role=UserRole.MEDIA,
-                signature=signature,
-                password_changed=True,
+            # 必须用 Core INSERT 精确指定列：本迁移早于 z4b5c6d7e8f9（新增
+            # qq_openid / qq_nickname），若走 ORM 的 User(...)，SQLAlchemy 会按
+            # 当前模型生成全字段 INSERT，引用尚未建出的列而报
+            # "table users has no column named qq_openid"。
+            result = db.execute(
+                User.__table__.insert().values(
+                    username=_next_media_username(db),
+                    password_hash=hash_password(generate_random_password()),
+                    name=name,
+                    role=UserRole.MEDIA,
+                    signature=signature,
+                    password_changed=True,
+                )
             )
-            db.add(new_user)
-            db.flush()
+            new_user_id = result.inserted_primary_key[0]
             new_account = MediaAccount(
-                user_id=new_user.id,
+                user_id=new_user_id,
                 is_enabled=True,
                 station_connected=True,
                 content_scope=[scope],
@@ -103,7 +108,7 @@ def upgrade() -> None:
             )
             db.add(new_account)
             db.flush()
-            targets[scope] = (new_account, new_user)
+            targets[scope] = (new_account, new_user_id)
 
         # 2. 连接线按分类重新归属：原账号只保留本分类的源
         existing = {

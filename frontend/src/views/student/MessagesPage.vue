@@ -184,6 +184,11 @@
                     <div class="msg-session-row">
                       <span class="msg-session-name">
                         <i v-if="s.type === 'group'" class="msg-group-mark">群</i>{{ s.name }}
+                        <i
+                          v-if="s.type === 'private' && isCared(s.rawId)"
+                          class="msg-care-mark"
+                          title="主页设置里设为特别关心"
+                        >特别</i>
                       </span>
                       <span class="msg-session-time">{{ formatTime(s.time) }}</span>
                     </div>
@@ -689,10 +694,13 @@ import SwipePager from '@/components/common/SwipePager.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSubpagePush } from '@/composables/useMobileSubPage'
+import { useBackLayer } from '@/composables/useBackLayer'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { openUserHomepage } from '@/composables/useUserHomepage'
+// 好友设置（特别关心）：与主页「设置」页共用同一份缓存
+import { useFriendSettings } from '@/composables/useFriendSettings'
 // 通讯录的 A-Z 分节：按姓名首字母分组（汉字用 ICU 的中文排序推首字母，不引拼音词典）
 import { INDEX_KEYS, indexOrder, initialOf } from '@/utils/pinyinInitial'
 // 陌生人发消息时用主页接口补名字，避免开出一个没有标题的空会话
@@ -745,6 +753,8 @@ const router = useRouter()
 const route = useRoute()
 const { isMobile } = useResponsive()
 const auth = useAuthStore()
+// 特别关心名单：主页「设置」里打开开关后，会话行上挂一枚「特别」标
+const { isCared, loadFriendSettings } = useFriendSettings()
 const { refresh: refreshUnread, forum: forumUnread, isOnline, syncPresence } = useUnreadSummary()
 
 type TabValue = 'sessions' | 'contacts' | 'forum'
@@ -1209,6 +1219,9 @@ function openSession(s: SessionItem) {
 function closeChat() {
   chatOpen.value = false
 }
+
+/** 移动端：会话窗口是一层页内浮层，系统返回一次只收这一层（见 useBackLayer） */
+useBackLayer(computed(() => isMobile.value && chatOpen.value), closeChat)
 
 /** 离场动画播完再丢弃会话上下文；若动画期间又点开了别的会话，则不清 */
 function onChatClosed() {
@@ -2104,6 +2117,8 @@ watch(
 )
 
 onMounted(async () => {
+  // 特别关心的「特别」标：一次拉全量，主页改完会写回同一份缓存
+  void loadFriendSettings()
   // 页头收起要按实测高度位移：字体缩放 / 边框算不算进盒高，都会让「收干净」差一两个像素
   void nextTick(measureAppbar)
   window.addEventListener('resize', measureAppbar)
@@ -2366,6 +2381,8 @@ onBeforeUnmount(() => {
 .msg-session-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .msg-session-name { font-size: 14px; color: #1f2329; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-group-mark { display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 4px; background: #eef0f3; color: #6b7280; font-size: 10px; font-style: normal; vertical-align: 1px; }
+/* 特别关心：名字后面一枚琥珀小标（主页「设置」里打开开关后出现） */
+.msg-care-mark { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 4px; background: rgba(245, 158, 11, 0.14); color: #d97706; font-size: 10px; font-style: normal; vertical-align: 1px; }
 .msg-session-time { font-size: 11px; color: #9aa0a6; flex-shrink: 0; }
 .msg-session-last { font-size: 12px; color: #9aa0a6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-unread { flex-shrink: 0; min-width: 16px; padding: 1px 5px; border-radius: 8px; background: #111827; color: #fff; font-size: 10px; text-align: center; }
@@ -2530,7 +2547,9 @@ onBeforeUnmount(() => {
 .msg-pane-title { grid-column: 2; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
 .msg-pane-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; color: #1f2329; }
 .msg-pane-meta { font-size: 11px; color: #9aa0a6; }
-.msg-back { border: none; background: #f4f5f7; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #4b5563; cursor: pointer; }
+.msg-back { border: none; background: transparent; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #4b5563; cursor: pointer; outline: none; }
+.msg-back:focus, .msg-back:focus-visible { outline: none; }
+.msg-back:active { opacity: .55; }
 .msg-chat-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; background: #f7f8fa; }
 .msg-bubble-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: flex-start; }
 .msg-bubble-row.mine { flex-direction: row-reverse; }

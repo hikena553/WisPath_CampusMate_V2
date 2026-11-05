@@ -36,6 +36,15 @@
                     <span class="uh-role">{{ roleLabel }}</span>
                     <span class="uh-lv-chip">Lv.{{ data.level.level }}</span>
                   </div>
+                  <!-- 关系标识挂在名字后面：特别关心（我设的）/ 亲密关系（双方任一设的） -->
+                  <div v-if="careOn || intimacyInfo" class="uh-mark-row">
+                    <span v-if="careOn" class="uh-care-chip">特别关心</span>
+                    <span
+                      v-if="intimacyInfo"
+                      class="uh-intimacy-chip"
+                      :style="{ borderColor: intimacyInfo.color, color: intimacyInfo.color }"
+                    >{{ intimacyInfo.icon }} {{ intimacyInfo.label }}</span>
+                  </div>
                   <p class="uh-signature">
                     {{ data.signature || '这个人很低调，还没写个性签名' }}
                   </p>
@@ -70,8 +79,34 @@
                 <span v-for="p in mutualPills" :key="p">{{ p }}</span>
               </div>
 
-              <!-- 动态：TA 发过的帖子。放在勋章之前 ——「看过 TA 说过什么」比「拿了几枚勋章」
-                   更接近用户点开主页的目的；行版式与下方「资料」白组同构，不另起卡片流。 -->
+              <!-- 勋章：主页第一块。整排铺在灰底上（没有卡片外框），
+                   一排排开、超宽横向滑动，点任意一枚进「勋章墙」看详情。
+                   排序按 QQ 资料卡的读法：先看这个人拿到了什么，再看说过什么。 -->
+              <div class="uh-strip-head">
+                <h3 class="uh-strip-title">{{ isSelf ? '我的勋章' : 'TA 的勋章' }}</h3>
+                <button type="button" class="uh-strip-more" @click="showWall = true">
+                  已点亮 {{ data.earned_count }}/{{ data.total_count }}
+                  <el-icon :size="11"><ArrowRight /></el-icon>
+                </button>
+              </div>
+              <div class="uh-badges">
+                <button
+                  v-for="b in allBadges"
+                  :key="b.code"
+                  type="button"
+                  class="uh-badge"
+                  :class="{ 'is-locked': !b.earned }"
+                  :title="b.earned
+                    ? `${b.name} · ${b.desc}`
+                    : `${b.name} · ${b.target_label}（${b.progress}%）`"
+                  @click="showWall = true"
+                >
+                  <BadgeMedal :icon="b.icon" :tier="b.tier" :earned="b.earned" :size="38" />
+                  <span class="uh-badge-name">{{ b.name }}</span>
+                </button>
+              </div>
+
+              <!-- 动态：TA 发过的帖子。行版式与设置页白组同构，不另起卡片流 -->
               <h3 class="uh-group-label">{{ isSelf ? '我的动态' : 'TA 的动态' }}</h3>
 
               <div v-if="postsLoading" class="uh-posts-state">正在加载动态…</div>
@@ -118,41 +153,7 @@
                 {{ isSelf ? '你还没有发过帖子' : 'TA 还没有发过帖子' }}
               </div>
 
-              <!-- 我的勋章：整排勋章直接铺在灰底上（没有卡片外框），
-                   一排排开、超宽横向滑动，点任意一枚进「勋章墙」看详情 -->
-              <div class="uh-strip-head">
-                <h3 class="uh-strip-title">{{ isSelf ? '我的勋章' : 'TA 的勋章' }}</h3>
-                <button type="button" class="uh-strip-more" @click="showWall = true">
-                  已点亮 {{ data.earned_count }}/{{ data.total_count }}
-                  <el-icon :size="11"><ArrowRight /></el-icon>
-                </button>
-              </div>
-              <div class="uh-badges">
-                <button
-                  v-for="b in allBadges"
-                  :key="b.code"
-                  type="button"
-                  class="uh-badge"
-                  :class="{ 'is-locked': !b.earned }"
-                  :title="b.earned
-                    ? `${b.name} · ${b.desc}`
-                    : `${b.name} · ${b.target_label}（${b.progress}%）`"
-                  @click="showWall = true"
-                >
-                  <BadgeMedal :icon="b.icon" :tier="b.tier" :earned="b.earned" :size="38" />
-                  <span class="uh-badge-name">{{ b.name }}</span>
-                </button>
-              </div>
-
-              <!-- 资料：白组行；近期亮点单独成卡片网格，与学生端个人主页的成果卡一致 -->
-              <h3 class="uh-group-label">资料</h3>
-              <div class="uh-group">
-                <div v-for="f in aboutFields" :key="f.label" class="uh-cell">
-                  <span class="uh-cell-label">{{ f.label }}</span>
-                  <span class="uh-cell-value">{{ f.value }}</span>
-                </div>
-              </div>
-
+              <!-- 近期亮点：与学生端个人主页成果卡一致的双列卡片 -->
               <h3 v-if="topHighlights.length" class="uh-group-label">近期亮点</h3>
               <div v-if="topHighlights.length" class="uh-hl-grid">
                 <div v-for="(h, i) in topHighlights" :key="i" class="uh-hl-card">
@@ -193,7 +194,8 @@
           </div>
         </Transition>
 
-        <!-- ===== 二级：设置（图二内容：备注 / 分组 / 权限 / 免打扰 / 黑名单 / 删除好友） ===== -->
+        <!-- ===== 二级：设置（QQ 好友设置那一页：备注 / 分组 / 推荐 / 权限 / 关心 / 亲密关系 / 免打扰 / 黑名单 / 删除） =====
+             字段全部存在服务端（user_friend_settings），换设备也跟着走。 -->
         <Transition name="uh-sub">
           <div v-if="showSettings && data" class="uh-subpage uh-settings">
             <div class="uh-subhead">
@@ -207,7 +209,7 @@
               <div class="uh-set-group">
                 <button type="button" class="uh-cell" @click="editRemark">
                   <span class="uh-cell-label">备注</span>
-                  <span class="uh-cell-value">{{ pref.remark || '未设置' }}</span>
+                  <span class="uh-cell-value">{{ setting.remark || '未设置' }}</span>
                   <el-icon class="uh-chev" :size="13"><ArrowRight /></el-icon>
                 </button>
                 <div class="uh-cell">
@@ -218,32 +220,32 @@
               </div>
 
               <div class="uh-set-group">
-                <button type="button" class="uh-cell" @click="comingSoon('推荐该联系人')">
+                <button type="button" class="uh-cell" @click="subPage = 'recommend'">
                   <span class="uh-cell-label">推荐该联系人</span>
                   <span class="uh-cell-value"></span>
                   <el-icon class="uh-chev" :size="13"><ArrowRight /></el-icon>
                 </button>
-                <button type="button" class="uh-cell" @click="comingSoon('权限设置')">
+                <button type="button" class="uh-cell" @click="subPage = 'permission'">
                   <span class="uh-cell-label">权限设置</span>
-                  <span class="uh-cell-value"></span>
+                  <span class="uh-cell-value">{{ permissionSummary }}</span>
                   <el-icon class="uh-chev" :size="13"><ArrowRight /></el-icon>
                 </button>
               </div>
 
               <div class="uh-set-group">
-                <button type="button" class="uh-cell" @click="pref.care = !pref.care">
+                <div class="uh-cell">
                   <span class="uh-cell-label">特别关心</span>
-                  <span class="uh-cell-value">{{ pref.care ? '已开启' : '未开启' }}</span>
-                  <el-icon class="uh-chev" :size="13"><ArrowRight /></el-icon>
-                </button>
-                <button type="button" class="uh-cell" @click="comingSoon('亲密关系')">
+                  <span class="uh-cell-value">{{ setting.care ? '已开启' : '未开启' }}</span>
+                  <el-switch
+                    :model-value="setting.care"
+                    size="small"
+                    class="uh-switch"
+                    @change="(v: any) => toggleCare(!!v)"
+                  />
+                </div>
+                <button type="button" class="uh-cell" @click="subPage = 'intimacy'">
                   <span class="uh-cell-label">亲密关系</span>
-                  <span class="uh-cell-value"></span>
-                  <el-icon class="uh-chev" :size="13"><ArrowRight /></el-icon>
-                </button>
-                <button type="button" class="uh-cell" @click="comingSoon('关于他的线索')">
-                  <span class="uh-cell-label">关于他的线索</span>
-                  <span class="uh-cell-value"></span>
+                  <span class="uh-cell-value">{{ intimacyLabel || '未设置' }}</span>
                   <el-icon class="uh-chev" :size="13"><ArrowRight /></el-icon>
                 </button>
               </div>
@@ -252,12 +254,22 @@
                 <div class="uh-cell">
                   <span class="uh-cell-label">好友消息免打扰</span>
                   <span class="uh-cell-value"></span>
-                  <el-switch v-model="pref.mute" size="small" class="uh-switch" />
+                  <el-switch
+                    :model-value="setting.mute"
+                    size="small"
+                    class="uh-switch"
+                    @change="(v: any) => saveSetting({ mute: !!v })"
+                  />
                 </div>
                 <div class="uh-cell">
                   <span class="uh-cell-label">加入黑名单</span>
                   <span class="uh-cell-value"></span>
-                  <el-switch v-model="pref.blocked" size="small" class="uh-switch" />
+                  <el-switch
+                    :model-value="setting.blocked"
+                    size="small"
+                    class="uh-switch"
+                    @change="(v: any) => saveSetting({ blocked: !!v })"
+                  />
                 </div>
               </div>
 
@@ -267,6 +279,135 @@
                   {{ data.mutual.has_conversation ? '删除好友' : '取消关注' }}
                 </button>
               </div>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- ===== 三级：权限设置（QQ「动态权限」那一页：不看 TA 的动态 / 不让 TA 看我的动态） =====
+             两个开关都会真的生效：前者过滤我的信息流，后者让对方的信息流过滤掉我的帖子。 -->
+        <Transition name="uh-sub">
+          <div v-if="subPage === 'permission' && data" class="uh-subpage uh-nested">
+            <div class="uh-subhead">
+              <button type="button" class="uh-back-dark" @click="subPage = ''">
+                <el-icon :size="18"><ArrowLeft /></el-icon>
+              </button>
+              <span class="uh-subhead-title">权限设置</span>
+              <span class="uh-subhead-holder"></span>
+            </div>
+            <div class="uh-set-body">
+              <div class="uh-set-group">
+                <div class="uh-cell">
+                  <span class="uh-cell-label">不看 TA 的动态</span>
+                  <span class="uh-cell-value"></span>
+                  <el-switch
+                    :model-value="setting.hide_peer_posts"
+                    size="small"
+                    class="uh-switch"
+                    @change="(v: any) => saveSetting({ hide_peer_posts: !!v })"
+                  />
+                </div>
+                <p class="uh-cell-hint">开启后，{{ data.name }}的帖子不再出现在你的信息流里（主动进 TA 主页仍可查看）。</p>
+              </div>
+              <div class="uh-set-group">
+                <div class="uh-cell">
+                  <span class="uh-cell-label">不让 TA 看我的动态</span>
+                  <span class="uh-cell-value"></span>
+                  <el-switch
+                    :model-value="setting.hide_my_posts"
+                    size="small"
+                    class="uh-switch"
+                    @change="(v: any) => saveSetting({ hide_my_posts: !!v })"
+                  />
+                </div>
+                <p class="uh-cell-hint">开启后，{{ data.name }}的信息流和你的主页都不会再出现你发的帖子。</p>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- ===== 三级：亲密关系（QQ 亲密关系那套标识，选中即双方主页可见） ===== -->
+        <Transition name="uh-sub">
+          <div v-if="subPage === 'intimacy' && data" class="uh-subpage uh-nested">
+            <div class="uh-subhead">
+              <button type="button" class="uh-back-dark" @click="subPage = ''">
+                <el-icon :size="18"><ArrowLeft /></el-icon>
+              </button>
+              <span class="uh-subhead-title">亲密关系</span>
+              <span class="uh-subhead-holder"></span>
+            </div>
+            <div class="uh-set-body">
+              <div class="uh-intimacy-grid">
+                <button
+                  v-for="o in INTIMACY_OPTIONS"
+                  :key="o.code"
+                  type="button"
+                  class="uh-intimacy-card"
+                  :class="{ on: setting.intimacy === o.code }"
+                  :style="{ '--tone': o.color }"
+                  @click="saveSetting({ intimacy: setting.intimacy === o.code ? '' : o.code })"
+                >
+                  <span class="uh-intimacy-icon">{{ o.icon }}</span>
+                  <span class="uh-intimacy-name">{{ o.label }}</span>
+                  <span v-if="setting.intimacy === o.code" class="uh-intimacy-on">已设置</span>
+                </button>
+              </div>
+              <p class="uh-cell-hint uh-intimacy-hint">
+                设置后，你们双方的主页都会挂上这枚关系标识；再点一次可取消。对方也可以在自己的设置里改。
+              </p>
+              <div v-if="peerIntimacyLabel" class="uh-set-group">
+                <div class="uh-cell">
+                  <span class="uh-cell-label">TA 把你设为</span>
+                  <span class="uh-cell-value">{{ peerIntimacyLabel }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- ===== 三级：推荐该联系人（挑一个好友，把 TA 推荐过去；走站内消息，真正发得出去） ===== -->
+        <Transition name="uh-sub">
+          <div v-if="subPage === 'recommend' && data" class="uh-subpage uh-nested">
+            <div class="uh-subhead">
+              <button type="button" class="uh-back-dark" @click="subPage = ''">
+                <el-icon :size="18"><ArrowLeft /></el-icon>
+              </button>
+              <span class="uh-subhead-title">推荐给好友</span>
+              <span class="uh-subhead-holder"></span>
+            </div>
+            <div class="uh-rec-body">
+              <div class="uh-rec-card">
+                <el-avatar :size="40" :src="data.avatar || undefined">{{ data.name?.[0] }}</el-avatar>
+                <div class="uh-rec-card-main">
+                  <span class="uh-rec-name">{{ data.name }}</span>
+                  <span class="uh-rec-sub">{{ recommendCardLine }}</span>
+                </div>
+              </div>
+              <el-input
+                v-model="recommendKeyword"
+                class="uh-rec-search"
+                placeholder="搜索好友姓名 / 学号"
+                clearable
+              >
+                <template #prefix><el-icon><Search /></el-icon></template>
+              </el-input>
+              <div v-if="recommendLoading" class="uh-rec-state">正在加载好友…</div>
+              <div v-else-if="!recommendFiltered.length" class="uh-rec-state">
+                {{ recommendKeyword.trim() ? '没有匹配的好友' : '还没有可推荐的人，先去关注几位同学' }}
+              </div>
+              <template v-else>
+                <button
+                  v-for="f in recommendFiltered"
+                  :key="f.id"
+                  type="button"
+                  class="uh-cell uh-rec-row"
+                  :disabled="recommending === f.id"
+                  @click="sendRecommend(f)"
+                >
+                  <el-avatar :size="34" :src="f.avatar || undefined">{{ f.name.slice(0, 1) }}</el-avatar>
+                  <span class="uh-rec-row-name">{{ f.name }}<i>{{ f.username }}</i></span>
+                  <span class="uh-rec-send">{{ recommending === f.id ? '发送中…' : '推荐' }}</span>
+                </button>
+              </template>
             </div>
           </div>
         </Transition>
@@ -294,19 +435,34 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 // v6.1 弹窗减负：备注/删除好友等轻交互走底部动作面板
 import { actionPrompt, actionConfirm } from '@/composables/useActionSheet'
+import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
 
 import BadgeWall from '@/components/profile/BadgeWall.vue'
 import BadgeMedal from '@/components/profile/BadgeMedal.vue'
 import PostDetailPage from '@/components/community/PostDetailPage.vue'
-import { deleteSession } from '@/api/messages'
-import { unfollowUser } from '@/api/social'
+import { deleteSession, sendMessage } from '@/api/messages'
+import {
+  getContacts,
+  unfollowUser,
+  type ContactUser,
+  type FriendSetting,
+  type FriendSettingPatch,
+} from '@/api/social'
 import { getUserPosts, type CommunityPost } from '@/api/community'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useUserHomepage } from '@/composables/useUserHomepage'
+import {
+  emptyFriendSetting,
+  fetchFriendSettingState,
+  saveFriendSetting,
+  intimacyMeta,
+  INTIMACY_OPTIONS,
+} from '@/composables/useFriendSettings'
 import { parseServerTime } from '@/utils/datetime'
 import {
-  ArrowLeft, ArrowRight, MoreFilled, User,
+  ArrowLeft, ArrowRight, MoreFilled, Search, User,
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -364,47 +520,152 @@ const isFriend = computed(() => {
 })
 const isSelf = computed(() => !!data.value && data.value.id === auth.user?.id)
 
-/** 好友设置项（备注 / 特别关心 / 免打扰 / 黑名单）：本地保存，仅自己可见 */
-interface FriendPref {
-  remark: string
-  care: boolean
-  mute: boolean
-  blocked: boolean
-}
-const emptyPref = (): FriendPref => ({ remark: '', care: false, mute: false, blocked: false })
-const pref = ref<FriendPref>(emptyPref())
-const prefKey = (userId: number) => `uh-friend-pref-${userId}`
+/* ================= 好友设置（服务端持久化） =================
+   备注 / 特别关心 / 免打扰 / 黑名单 / 动态权限 / 亲密关系 都存在
+   user_friend_settings（见后端 models.social.FriendSetting）：
+   关掉浏览器再回来还在，换手机登录也跟着走。缓存由 useFriendSettings 统一维护，
+   消息列表的「特别」标读的是同一份数据。 */
+const setting = ref<FriendSetting>(emptyFriendSetting(0))
+const peerSetting = ref<FriendSetting | null>(null)
+/** 三级页：权限设置 / 亲密关系 / 推荐给好友（在设置页之上再叠一层） */
+const subPage = ref<'' | 'permission' | 'intimacy' | 'recommend'>('')
 
-watch(() => data.value?.id, (id) => {
-  if (!id) {
-    pref.value = emptyPref()
-    return
+watch(visible, (v) => {
+  if (!v) subPage.value = ''
+})
+// 关掉设置页时，它的三级子页要一起收：否则下次打开设置会直接落在上一次的子页上
+watch(showSettings, (v) => {
+  if (!v) subPage.value = ''
+})
+
+/** 移动端：主页 / 勋章墙 / 设置 / 三级页各算一层，系统返回一次只收一层（见 useBackLayer） */
+const { isMobile: homepageIsMobile } = useResponsive()
+useBackLayer(computed(() => homepageIsMobile.value && visible.value), close)
+useBackLayer(computed(() => homepageIsMobile.value && showWall.value), () => { showWall.value = false })
+useBackLayer(computed(() => homepageIsMobile.value && showSettings.value), () => { showSettings.value = false })
+useBackLayer(computed(() => homepageIsMobile.value && !!subPage.value), () => { subPage.value = '' })
+
+watch(() => data.value?.id, async (id) => {
+  setting.value = emptyFriendSetting(0)
+  peerSetting.value = null
+  if (!id || id === auth.user?.id) return
+  try {
+    const state = await fetchFriendSettingState(id)
+    // 换人竞态：请求回来时主页已经翻到别人了，这份结果必须丢掉
+    if (data.value?.id !== id) return
+    setting.value = state.mine
+    peerSetting.value = state.peer
+  } catch {
+    // 拉不到就按「全默认」渲染：设置页是多步操作，不该为一次失败把整页拦成错误态
   }
-  const raw = localStorage.getItem(prefKey(id))
-  pref.value = raw ? { ...emptyPref(), ...JSON.parse(raw) } : emptyPref()
 }, { immediate: true })
 
-watch(pref, (value) => {
+/** 局部保存：先乐观翻开关，失败再回滚 —— 开关点下去要有立刻的反馈 */
+async function saveSetting(patch: FriendSettingPatch) {
   const id = data.value?.id
-  if (id) localStorage.setItem(prefKey(id), JSON.stringify(value))
-}, { deep: true })
-
-/** 尚未开发的入口：给出明确提示，不做无声无响应的死按钮 */
-function comingSoon(name: string) {
-  ElMessage.info(`${name}暂未开放，可以先用「发消息」联系 TA`)
+  if (!id) return
+  const prev = { ...setting.value }
+  setting.value = { ...setting.value, ...patch } as FriendSetting
+  try {
+    const state = await saveFriendSetting(id, patch)
+    setting.value = state.mine
+    peerSetting.value = state.peer
+  } catch (e: any) {
+    setting.value = prev
+    ElMessage.error(e?.response?.data?.detail || '设置保存失败，请稍后重试')
+  }
 }
 
-/** 备注：仅自己可见的本地备注名，协议账号本身不改名 */
+const careOn = computed(() => setting.value.care)
+const intimacyLabel = computed(() => intimacyMeta(setting.value.intimacy)?.label || '')
+const peerIntimacyLabel = computed(() => intimacyMeta(peerSetting.value?.intimacy || '')?.label || '')
+/** 关系标识：谁都行设一次，双方主页都能看到 —— 先看自己设的，再看对方设的 */
+const intimacyInfo = computed(
+  () => intimacyMeta(setting.value.intimacy) || intimacyMeta(peerSetting.value?.intimacy || '') || null,
+)
+/** 设置页那一行的摘要：不动开关也能看出「动过权限」 */
+const permissionSummary = computed(() => {
+  const n = (setting.value.hide_peer_posts ? 1 : 0) + (setting.value.hide_my_posts ? 1 : 0)
+  return n === 0 ? '' : n === 2 ? '两项已设置' : '1 项已设置'
+})
+
+function toggleCare(next: boolean) {
+  void saveSetting({ care: next })
+  ElMessage.success(next ? '已设为特别关心' : '已取消特别关心')
+}
+
+/** 备注：仅自己可见的称呼，账号本身不改名 */
 async function editRemark() {
   const d = data.value
   if (!d) return
-  const value = await actionPrompt('设置一个仅自己可见的备注名', '备注', pref.value.remark, {
+  const value = await actionPrompt('设置一个仅自己可见的备注名', '备注', setting.value.remark, {
     placeholder: `例如：同班 ${d.name}`,
     confirmButtonText: '保存',
   })
   if (value === null) return
-  pref.value.remark = (value || '').trim()
-  ElMessage.success(pref.value.remark ? '备注已保存' : '备注已清除')
+  const remark = (value || '').trim()
+  await saveSetting({ remark })
+  ElMessage.success(remark ? '备注已保存' : '备注已清除')
+}
+
+/* ================= 推荐该联系人 =================
+   QQ 的做法是把这张资料卡推给另一个好友：这里走站内消息，
+   选一个好友 → 发一条带账号信息的推荐消息过去，对方点开就能找到这个人。 */
+const recommendKeyword = ref('')
+const recommendFriends = ref<ContactUser[]>([])
+const recommendLoading = ref(false)
+const recommending = ref(0)
+
+const recommendCardLine = computed(() => {
+  const d = data.value
+  if (!d) return ''
+  const parts = [d.username, d.college, d.role === 'student' ? d.class_name : d.title]
+  return parts.filter(Boolean).join(' · ')
+})
+const recommendFiltered = computed(() => {
+  const kw = recommendKeyword.value.trim().toLowerCase()
+  if (!kw) return recommendFriends.value
+  return recommendFriends.value.filter(
+    (f) => f.name.toLowerCase().includes(kw) || f.username.toLowerCase().includes(kw),
+  )
+})
+
+watch(subPage, async (v) => {
+  if (v !== 'recommend' || recommendFriends.value.length) return
+  recommendLoading.value = true
+  try {
+    const friends = await getContacts({ tab: 'friends', limit: 200 })
+    // 师生之间未必互关，好友名单经常是空的：退到「我关注的」兜底，
+    // 否则这一页对大多数老师直接是一张死空态
+    recommendFriends.value = friends.length
+      ? friends
+      : await getContacts({ tab: 'following', limit: 200 })
+  } catch {
+    ElMessage.error('好友列表加载失败')
+  } finally {
+    recommendLoading.value = false
+  }
+})
+
+async function sendRecommend(friend: ContactUser) {
+  const d = data.value
+  if (!d || recommending.value) return
+  recommending.value = friend.id
+  try {
+    const from = auth.userName || '我'
+    const content = [
+      `【推荐联系人】${d.name}（${d.username}）`,
+      recommendCardLine.value,
+      `${from} 觉得你们可能认识，去主页打个招呼吧～`,
+    ].filter(Boolean).join('\n')
+    await sendMessage(friend.id, content)
+    ElMessage.success(`已推荐给 ${friend.name}`)
+    subPage.value = ''
+  } catch {
+    ElMessage.error('推荐失败，请稍后再试')
+  } finally {
+    recommending.value = 0
+  }
 }
 
 /* ================= TA 的动态 =================
@@ -506,21 +767,8 @@ const allBadges = computed(() => [
   ...earnedBadges.value,
   ...[...lockedBadges.value].sort((a, b) => b.progress - a.progress),
 ])
-/** 主页只留 3 条亮点，其余留给勋章墙与资料，保证一屏多一点读完 */
+/** 主页只留 3 条亮点，其余留给勋章墙，保证一屏多一点读完 */
 const topHighlights = computed(() => (data.value?.highlights || []).slice(0, 3))
-
-const aboutFields = computed(() => {
-  const d = data.value
-  if (!d) return []
-  return [
-    { label: d.role === 'student' ? '学号' : '工号', value: d.username },
-    { label: '学院', value: d.college || '' },
-    d.role === 'student'
-      ? { label: '班级', value: d.class_name || '' }
-      : { label: '职称', value: d.title || '' },
-    { label: '所属单位', value: d.department || '' },
-  ].filter((f) => f.value)
-})
 
 /** 「我们之间」：只在存在真实关联时展示，自己看自己时不显示 */
 const mutualPills = computed(() => {
@@ -1187,6 +1435,145 @@ async function removeFriend() {
 }
 .uh-del:active { background: #fdf0f0; }
 .uh-del:disabled { opacity: 0.6; }
+
+/* ===== 封面上的关系标识（特别关心 / 亲密关系） ===== */
+.uh-mark-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.uh-care-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(253, 230, 138, 0.6);
+  background: rgba(245, 158, 11, 0.24);
+  color: #fde68a;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.uh-intimacy-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 10.5px;
+  font-weight: 700;
+  backdrop-filter: blur(4px);
+}
+
+/* 设置页行的补充说明：一句灰字，贴着白组下沿 */
+.uh-cell-hint {
+  margin: 0;
+  padding: 10px 16px 12px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #98a2b3;
+}
+
+/* ===== 三级：亲密关系（四宫格，QQ 关系标识那一套） ===== */
+.uh-intimacy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 12px 6px;
+}
+.uh-intimacy-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 86px;
+  border: 1.5px solid #eef0f3;
+  border-radius: 12px;
+  background: var(--tui-surface, #fff);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.uh-intimacy-card.on {
+  border-color: var(--tone, #2563eb);
+  background: color-mix(in srgb, var(--tone, #2563eb) 8%, #fff);
+}
+.uh-intimacy-icon { font-size: 22px; line-height: 1; }
+.uh-intimacy-name { font-size: 13px; font-weight: 600; color: #344054; }
+.uh-intimacy-on {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 10px;
+  color: var(--tone, #2563eb);
+}
+.uh-intimacy-hint { padding: 4px 16px 14px; }
+
+/* ===== 三级：推荐给好友 ===== */
+.uh-nested { z-index: 10; }
+.uh-rec-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0 16px;
+  scrollbar-width: none;
+}
+.uh-rec-body::-webkit-scrollbar { display: none; width: 0; }
+.uh-rec-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 12px;
+  padding: 12px;
+  border: 1px solid #eef0f3;
+  border-radius: 12px;
+  background: var(--tui-surface, #fff);
+}
+.uh-rec-card-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.uh-rec-name { font-size: 14px; font-weight: 700; color: #101828; }
+.uh-rec-sub {
+  font-size: 11.5px;
+  color: #98a2b3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uh-rec-search { padding: 0 12px 10px; }
+.uh-rec-search :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  background: #f5f6f8;
+  box-shadow: none;
+}
+.uh-rec-state {
+  padding: 22px 16px;
+  font-size: 12.5px;
+  color: #98a2b3;
+  text-align: center;
+}
+.uh-rec-row { gap: 10px; }
+.uh-rec-row:disabled { opacity: 0.6; }
+.uh-rec-row-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--tui-text, #344054);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uh-rec-row-name i { font-style: normal; font-size: 11px; color: #98a2b3; }
+.uh-rec-send {
+  flex-shrink: 0;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(0, 153, 255, 0.1);
+  color: #0099ff;
+  font-size: 11.5px;
+  font-weight: 600;
+}
 
 /* ===== 动效 =====
    主页本体的进出场交给全局 .subpage（styles/animations.css），这里只保留内层子页

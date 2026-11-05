@@ -222,8 +222,11 @@ import {
 } from '@/api/community'
 import { followUser, unfollowUser } from '@/api/social'
 import { actionConfirm } from '@/composables/useActionSheet'
+import { useBackLayer } from '@/composables/useBackLayer'
+import { useResponsive } from '@/composables/useResponsive'
 import { useAuthStore } from '@/stores/auth'
 import { parseServerTime } from '@/utils/datetime'
+import { lockBodyScroll, unlockBodyScroll } from '@/utils/bodyScrollLock'
 
 const props = withDefaults(defineProps<{
   postId: number
@@ -349,13 +352,21 @@ function close() {
   emit('close')
 }
 
+/** 移动端：帖子详情是一层页内浮层，系统返回一次只收这一层（见 useBackLayer） */
+const { isMobile: postDetailIsMobile } = useResponsive()
+useBackLayer(computed(() => postDetailIsMobile.value && visible.value), close)
+
+let bodyLocked = false
 watch(visible, async (v) => {
   await nextTick()
-  document.body.style.overflow = v ? 'hidden' : ''
-  if (v) {
+  if (v && !bodyLocked) {
+    bodyLocked = true
+    lockBodyScroll()
     scrolled.value = false
     syncKeyboard()
-  } else {
+  } else if (!v && bodyLocked) {
+    bodyLocked = false
+    unlockBodyScroll()
     kbOffset.value = 0
   }
 })
@@ -405,7 +416,10 @@ onBeforeUnmount(() => {
     vv.removeEventListener('scroll', syncKeyboard)
     vv = null
   }
-  document.body.style.overflow = ''
+  if (bodyLocked) {
+    bodyLocked = false
+    unlockBodyScroll()
+  }
 })
 
 /* ================= 互动：点赞 =================

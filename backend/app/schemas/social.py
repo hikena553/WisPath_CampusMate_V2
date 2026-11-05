@@ -1,7 +1,7 @@
-"""社交（关注 / 通讯录 / 论坛互动消息）数据模型"""
+"""社交（关注 / 通讯录 / 论坛互动消息 / 好友设置）数据模型"""
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RelationOut(BaseModel):
@@ -57,3 +57,40 @@ class ForumMessageOut(BaseModel):
 
 class ForumReadIn(BaseModel):
     ids: list[int] | None = None
+
+
+class FriendSettingOut(BaseModel):
+    """我 → 某个人的那一份好友设置（字段含义见 models.social.FriendSetting）"""
+
+    peer_id: int
+    remark: str = ""
+    care: bool = False
+    mute: bool = False
+    blocked: bool = False
+    hide_peer_posts: bool = False
+    hide_my_posts: bool = False
+    intimacy: str = ""
+
+
+class FriendSettingState(BaseModel):
+    """主页设置页一次要的两份：我设的（mine）+ 对方设的（peer）。
+
+    「亲密关系」这类双方共享的标识，前端只用 mine 那份写，展示时两份取其一；
+    返回 peer 那份是为了让对方主页也能看到「TA 把你设为闺蜜」。
+    """
+
+    mine: FriendSettingOut
+    peer: FriendSettingOut
+
+
+class FriendSettingIn(BaseModel):
+    """局部更新：只传要改的字段，其余保持原值（None = 不改）"""
+
+    remark: str | None = Field(default=None, max_length=32)
+    care: bool | None = None
+    mute: bool | None = None
+    blocked: bool | None = None
+    hide_peer_posts: bool | None = None
+    hide_my_posts: bool | None = None
+    # 空串 = 取消亲密关系；非空必须在 INTIMACIES 之内（服务层校验）
+    intimacy: str | None = Field(default=None, max_length=16)

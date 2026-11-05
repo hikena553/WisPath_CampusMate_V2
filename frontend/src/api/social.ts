@@ -89,3 +89,45 @@ export function markForumRead(ids?: number[]) {
 export function getForumUnreadCount() {
   return request.get<{ count: number }>('/social/forum-messages/unread-count')
 }
+
+/* ==================== 好友设置（个人主页「设置」页） ====================
+   备注 / 特别关心 / 免打扰 / 黑名单 / 动态权限 / 亲密关系 都存在服务端，
+   换设备也跟着走；字段含义与后端 models.social.FriendSetting 一一对应。 */
+
+export interface FriendSetting {
+  peer_id: number
+  /** 备注：只有自己看得见的称呼 */
+  remark: string
+  /** 特别关心：消息列表挂「特别」标、主页封面挂金标 */
+  care: boolean
+  mute: boolean
+  blocked: boolean
+  /** 动态权限·不看 TA 的动态 */
+  hide_peer_posts: boolean
+  /** 动态权限·不让 TA 看我的动态 */
+  hide_my_posts: boolean
+  /** 亲密关系标识：'' = 未设置，其余见 INTIMACY_OPTIONS */
+  intimacy: string
+}
+
+/** 一次拿到两份：我设的（mine）+ 对方设的（peer），亲密关系展示两份取其一 */
+export interface FriendSettingState {
+  mine: FriendSetting
+  peer: FriendSetting
+}
+
+export type FriendSettingPatch = Partial<Omit<FriendSetting, 'peer_id'>>
+
+/** 我设过的全部联系人（消息列表按 care 挂标） */
+export function getFriendSettings() {
+  return request.get<FriendSetting[]>('/social/friend-settings')
+}
+
+export function getFriendSetting(peerId: number) {
+  return request.get<FriendSettingState>(`/social/friend-settings/${peerId}`)
+}
+
+export function updateFriendSetting(peerId: number, patch: FriendSettingPatch) {
+  return request.put<FriendSettingState>(`/social/friend-settings/${peerId}`, patch)
+}
+

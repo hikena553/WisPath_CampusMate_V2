@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # 千问 MaaS 兼容模式端点（对话/视觉/向量共用）；语音走同域名的原生接口
     LLM_BASE_URL: str = "https://maas.qianwenaiapi.com/compatible-mode/v1"
     DASHSCOPE_API_KEY: str = ""
+    # 语音（ASR/TTS）专用凭据：语音网关与对话网关常为不同账号/域名，
+    # 留空时回退到 DASHSCOPE_API_KEY / LLM_API_KEY
+    VOICE_API_KEY: str = ""
+    VOICE_BASE_URL: str = ""
     LLM_MODEL: str = "qwen3.7-flash-2026-07-15"
     LLM_AGENT_MODEL: str = "qwen3.7-flash-2026-07-15"
     LLM_VISION_MODEL: str = "qwen3.8-max"
@@ -34,7 +38,7 @@ class Settings(BaseSettings):
     # AI 助手自我称谓（可在系统设置中覆盖）
     AGENT_NAME: str = "绵小城"
     # 语音合成音色（可在系统设置中覆盖）
-    LLM_TTS_VOICE: str = "longanhuan_v3.6"
+    LLM_TTS_VOICE: str = ""
     # 语音播报风格提示词（可在系统设置中覆盖，作用于语音通话中大模型的回复风格）
     LLM_TTS_PROMPT: str = ""
     # ===== 手机号短信验证码登录（阿里云 / 腾讯云）=====

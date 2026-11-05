@@ -207,10 +207,11 @@
               aria-label="点赞"
               @click="onLike"
             >
-              <el-icon :size="19" :class="['adp-like-icon', { 'is-pop': likePop }]">
-                <StarFilled v-if="liked" />
-                <Star v-else />
-              </el-icon>
+              <ThumbsUp
+                :size="19"
+                :fill="liked ? 'currentColor' : 'none'"
+                :class="['adp-like-icon', { 'is-pop': likePop }]"
+              />
               <span class="adp-bar-num">{{ likeCount }}</span>
             </button>
             <button
@@ -221,7 +222,10 @@
               aria-label="收藏"
               @click="onFavorite"
             >
-              <el-icon :size="19"><CollectionTag /></el-icon>
+              <el-icon :size="19">
+                <StarFilled v-if="favorited" />
+                <Star v-else />
+              </el-icon>
               <span class="adp-bar-num">{{ favoriteCount }}</span>
             </button>
             <button type="button" class="adp-bar-act" aria-label="评论" @click="focusComposer">
@@ -282,8 +286,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowLeft, ArrowRight, ChatDotRound, Close, CollectionTag, DocumentDelete, Download, Link, Refresh, Share, Star, StarFilled,
+  ArrowLeft, ArrowRight, ChatDotRound, Close, DocumentDelete, Download, Link, Refresh, Share, Star, StarFilled,
 } from '@element-plus/icons-vue'
+import { ThumbsUp } from 'lucide-vue-next'
 import type { CampusArticle } from '@/api/campus'
 import {
   createArticleComment,
@@ -296,6 +301,9 @@ import {
   type CampusArticleComment,
   type CampusArticleDetail,
 } from '@/api/campus'
+import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
+import { lockBodyScroll, unlockBodyScroll } from '@/utils/bodyScrollLock'
 
 /* 注意：getArticleDetail / getArticleComments / toggleArticleLike / createArticleComment /
    deleteArticleComment / repostArticle 及它们的类型由 Lead 并行在 @/api/campus 补齐；
@@ -549,6 +557,10 @@ function close() {
   repostVisible.value = false
   emit('close')
 }
+
+/** 移动端：详情是一层页内浮层，系统返回一次只收这一层（见 useBackLayer） */
+const { isMobile: detailIsMobile } = useResponsive()
+useBackLayer(computed(() => detailIsMobile.value && visible.value), close)
 
 /* ================= 打开原文 ================= */
 
@@ -861,13 +873,17 @@ watch(
 )
 
 // 打开时锁定背景滚动（关闭 / 卸载时恢复），保证 iOS 上不会滚到列表层
+let bodyLocked = false
 watch(visible, async (v) => {
   await nextTick()
-  document.body.style.overflow = v ? 'hidden' : ''
-  if (v) {
+  if (v && !bodyLocked) {
+    bodyLocked = true
+    lockBodyScroll()
     scrolled.value = false
     syncKeyboard()
-  } else {
+  } else if (!v && bodyLocked) {
+    bodyLocked = false
+    unlockBodyScroll()
     kbOffset.value = 0
   }
 })
@@ -890,7 +906,10 @@ onBeforeUnmount(() => {
     vv.removeEventListener('scroll', syncKeyboard)
     vv = null
   }
-  document.body.style.overflow = ''
+  if (bodyLocked) {
+    bodyLocked = false
+    unlockBodyScroll()
+  }
 })
 
 /**

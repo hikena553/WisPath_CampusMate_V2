@@ -156,6 +156,8 @@ const router = createRouter({
         { path: 'more', redirect: '/teacher' },
         { path: 'announcement', name: 'teacher-announcement', component: () => import('@/views/teacher/AnnouncementPage.vue'), meta: { keepAlive: false } },
         { path: 'messages', name: 'teacher-messages', component: () => import('@/views/teacher/MessagesPage.vue'), meta: { keepAlive: false } },
+        // 添加朋友子页：消息页「＋」面板与空态「发起会话」进入，与学生端同构（搜索找人 / 建群 / 通讯录 / 我的名片）
+        { path: 'messages/add', name: 'teacher-message-add', component: () => import('@/views/teacher/AddFriendPage.vue'), meta: { keepAlive: false, title: '添加朋友' } },
         // 消息页的两个子页（与学生端同构）：我的文件（聊天文档汇总，复用学生端同一组件）
         // 与通知（审批/预警/公告，从消息页第四个视图抽出，入口是页头铃铛）。
         { path: 'files', name: 'teacher-files', component: () => import('@/views/student/MyFilesPage.vue'), meta: { keepAlive: false } },

@@ -124,6 +124,7 @@ import HomeTopBanner from './HomeTopBanner.vue'
 import HomeMobileTodayTasks from './HomeMobileTodayTasks.vue'
 import HomeQuickAddTask from './HomeQuickAddTask.vue'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { useBackLayer } from '@/composables/useBackLayer'
 import HomeAddScheduleDialog from './HomeAddScheduleDialog.vue'
 import HomeLeaveDetailDialog from './HomeLeaveDetailDialog.vue'
 import TodayFocusCard from '@/components/teacher/workbench/TodayFocusCard.vue'
@@ -167,6 +168,8 @@ const taskSummary = ref<TeacherTaskSummary>({ pending: 0, overdue: 0, today: 0, 
 const showTodaySubPage = ref(false)
 // 移动端「今日任务」子页：打开时让出底部悬浮导航
 useMobileSubPage(computed(() => showTodaySubPage.value))
+// 系统返回一次只收这一层（见 useBackLayer）
+useBackLayer(showTodaySubPage, () => { showTodaySubPage.value = false })
 // 任务子页选中日期（默认今天）
 const selectedTaskDate = ref(new Date().toISOString().slice(0, 10))
 // 快捷添加任务弹窗开关（表单状态在 HomeQuickAddTask 内部维护）

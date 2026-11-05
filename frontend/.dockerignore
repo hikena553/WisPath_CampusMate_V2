@@ -6,6 +6,12 @@ node_modules/
 dist/
 dist-ssr/
 
+# Android 壳工程与打包脚本：只在本机出包，不进前端镜像（体积大且与镜像构建无关）
+# 注意不能忽略 public/download/*.apk —— nginx 要靠它提供安装包下载
+android/
+capacitor.config.ts
+scripts/
+
 # 开发期 HTTPS 自签证书：仅本地调试用，不进生产镜像
 certs/
 

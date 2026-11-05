@@ -29,6 +29,7 @@ from app.core.database import SessionLocal
 from app.core.config import settings
 from app.core.crypto import decrypt_value
 from app.services.crisis_service import detect_crisis_keywords
+from app.utils.llm_guard import SafetyTagFilter
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,13 @@ EMOTION_LABELS = {
     "fearful": "害怕", "disgusted": "厌恶", "surprised": "惊讶",
 }
 
-TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com"
+# 语音（ASR/TTS）网关：优先专用 VOICE_BASE_URL；未配置时跟随 LLM_BASE_URL 推导，
+# 最后回退 Token Plan 官方域名。语音与对话可能部署在不同网关，不能写死单一路由。
+TOKEN_PLAN_BASE = (
+    (settings.VOICE_BASE_URL or "").strip().rstrip("/")
+    or (settings.llm_native_base or "").strip().rstrip("/")
+    or "https://token-plan.cn-beijing.maas.aliyuncs.com"
+)
 VOICE_STT_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/aigc/multimodal-generation/generation"
 VOICE_STT_MODEL = "qwen-audio-3.0-asr-flash"
 VOICE_TTS_URL = f"{TOKEN_PLAN_BASE}/api/v1/services/audio/tts/SpeechSynthesizer"
@@ -278,20 +285,47 @@ async def get_edge_voices(force_refresh: bool = False) -> list[dict]:
     return list(EDGE_TTS_ZH_VOICES)
 
 
+def _is_usable_voice(voice: str) -> bool:
+    """音色是否可用：Edge（Neural 结尾）或 Token Plan 白名单内。"""
+    return is_edge_voice(voice) or is_valid_voice(voice)
+
+
 def _get_tts_voice() -> str:
     """获取语音合成音色：优先系统设置 llm_tts_voice，其次 .env LLM_TTS_VOICE，
-    最后默认 Edge 音色晓晓（免费多音色引擎，无需 API Key）"""
+    最后默认 Edge 音色晓晓（免费多音色引擎，无需 API Key）。
+
+    历史配置里存在 longanhuan_v3.6 这类已下架音色：直接使用会让每次合成都以
+    InvalidVoiceError 失败（症状是「只有文字、完全没有声音」）。这里对读数做
+    可用性校验，不可用时回退默认音色，而不是把错误留到合成阶段。
+    """
+    configured = ""
     try:
         db = SessionLocal()
         try:
             row = db.query(SystemSetting).filter(SystemSetting.key == "llm_tts_voice").first()
             if row and row.value and row.value.strip():
-                return row.value.strip()
+                configured = row.value.strip()
         finally:
             db.close()
     except Exception:
         logger.exception("读取语音音色设置失败")
-    return settings.LLM_TTS_VOICE or VOICE_TTS_VOICE
+
+    for voice in (configured, (settings.LLM_TTS_VOICE or "").strip(), VOICE_TTS_VOICE):
+        if voice and _is_usable_voice(voice):
+            return voice
+    if configured:
+        logger.warning("配置的音色 %r 不可用，已回退默认音色 %s", configured, EDGE_TTS_DEFAULT_VOICE)
+    return EDGE_TTS_DEFAULT_VOICE
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    """是否为额度/配额类失败（Free quota exhausted / 429 等）。
+
+    这类失败是账号级问题，重试无意义，需要给用户一句可执行的提示，
+    而不是反复回 "语音识别失败，请重试"。
+    """
+    text = str(exc).lower()
+    return any(k in text for k in ("quota", "free tier", "allocation", "429"))
 
 
 def _get_tts_prompt() -> str:
@@ -314,11 +348,15 @@ def _get_tts_prompt() -> str:
 
 
 def _get_voice_api_key() -> str:
-    """获取语音 API Key：优先数据库 llm_api_key（Token Plan，加密存储），
-    兼容旧键 dashscope_api_key，最后回退到 .env"""
+    """获取语音 API Key。
+
+    优先级与项目约定一致：数据库设置优先（管理员可在「系统设置」中更新
+    dashscope_api_key / llm_api_key），其次专用环境变量 VOICE_API_KEY，
+    最后 .env DASHSCOPE_API_KEY / LLM_API_KEY。
+    """
     db = SessionLocal()
     try:
-        for key_name in ("llm_api_key", "dashscope_api_key"):
+        for key_name in ("dashscope_api_key", "llm_api_key"):
             row = db.query(SystemSetting).filter(SystemSetting.key == key_name).first()
             if row and row.value:
                 try:
@@ -331,7 +369,11 @@ def _get_voice_api_key() -> str:
         logger.exception("读取语音 API Key 失败")
     finally:
         db.close()
-    return settings.LLM_API_KEY or settings.DASHSCOPE_API_KEY
+
+    dedicated = (settings.VOICE_API_KEY or "").strip()
+    if dedicated:
+        return dedicated
+    return settings.DASHSCOPE_API_KEY or settings.LLM_API_KEY
 
 
 def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1, sample_width: int = 2) -> bytes:
@@ -727,6 +769,75 @@ async def synthesize_speech(text: str, voice: str | None = None):
             yield chunk
 
 
+# ===================== 播报 PCM 规整（块边界伪影 / 句间硬切） =====================
+# 前端把每个 ai_audio 消息各自解码成一个独立 AudioBuffer。只要播放上下文不是
+# 16kHz（移动端 WebView、iOS 旧版、部分 Windows 音频驱动都会静默回落到 48k），
+# 浏览器就必须对每个 buffer 单独重采样，而重采样把 buffer 边界当作"信号到此为止"，
+# 每块边界都会留下瞬态。实测 256ms 一块时边界伪影约 -54dBFS、每秒出现 4 次，
+# 连起来就是持续的"沙沙 / 电流底噪"（上下文为 16k 时同一音频拼接误差为 0）。
+#
+# 这里做三件事：
+#   1. 跨网络分块做 2 字节对齐，PCM16 采样点不会被劈成两半；
+#   2. 首块 256ms 保证首音延迟不变，后续按 1s 聚合，把边界数降到 1/4；
+#   3. 句首 8ms 淡入、句尾 24ms 淡出 + 24ms 静音，句与句拼接不再硬切（会被听成"咔"）。
+_PCM_FIRST_BLOCK = 8192    # 256ms @16k/16bit：首音优先，保持现状
+_PCM_BLOCK = 32768         # 1s：减少 AudioBuffer 边界数量
+_PCM_FADE_IN = 128         # 8ms
+_PCM_FADE_OUT = 384        # 24ms
+_PCM_TAIL_SILENCE = 384    # 24ms
+
+
+def _apply_edge_fade(pcm: bytes, fade_in: bool, fade_out: bool) -> bytes:
+    """对一段 PCM16 做首/尾线性淡变，返回新的 bytes。极短片段不处理，避免整段被压掉。"""
+    import numpy as np
+
+    data = np.frombuffer(pcm, dtype="<i2").astype(np.float32)
+    n = int(data.size)
+    if n == 0:
+        return pcm
+    if fade_in and fade_out and n < 2 * (_PCM_FADE_IN + _PCM_FADE_OUT):
+        fade_in = fade_out = False
+    if fade_in:
+        k = min(_PCM_FADE_IN, n)
+        data[:k] *= np.linspace(0.0, 1.0, k, dtype=np.float32)
+    if fade_out:
+        k = min(_PCM_FADE_OUT, n)
+        data[n - k:] *= np.linspace(1.0, 0.0, k, dtype=np.float32)
+    return np.clip(np.rint(data), -32768, 32767).astype("<i2").tobytes()
+
+
+async def _normalize_pcm_stream(
+    source,
+    first_block: int = _PCM_FIRST_BLOCK,
+    block: int = _PCM_BLOCK,
+):
+    """把任意 PCM 分块流规整成"偶数字节对齐 + 首块小后续大 + 首尾淡变"的输出。"""
+    carry = bytearray()
+    emitted = 0
+    async for chunk in source:
+        carry.extend(chunk)
+        target = first_block if emitted == 0 else block
+        while len(carry) >= target:
+            piece = bytes(carry[:target])
+            del carry[:target]
+            if emitted == 0:
+                piece = _apply_edge_fade(piece, fade_in=True, fade_out=False)
+            emitted += 1
+            yield piece
+            # 首块发完即切到标准块长
+            target = block
+    # 奇数尾字节（半个采样点）丢弃，避免前端 Int16Array 直接抛 RangeError
+    if len(carry) % 2:
+        del carry[-1:]
+    if carry:
+        tail = _apply_edge_fade(bytes(carry), fade_in=emitted == 0, fade_out=True)
+        tail += b"\x00\x00" * _PCM_TAIL_SILENCE
+        yield tail
+    elif emitted:
+        # 长度恰好整除块长：没有余量可做淡出，仍补上句间静音，避免与下一句硬接
+        yield b"\x00\x00" * _PCM_TAIL_SILENCE
+
+
 async def safe_send_json(websocket: WebSocket, data: dict) -> bool:
     """安全地发送JSON消息，如果连接已关闭则返回False"""
     try:
@@ -835,6 +946,8 @@ async def handle_voice_connection(
 
     # 对话轮次处理任务：串行保证 history/DB 写入顺序
     round_task: asyncio.Task | None = None
+    # STT 失败提示只推一次：噪声误触发会连续发起多轮，逐轮弹错会把提示刷屏
+    stt_error_notified = False
 
     # 单一数据库会话，贯穿整个连接生命周期
     db = SessionLocal()
@@ -919,7 +1032,9 @@ async def handle_voice_connection(
                 t0 = time.monotonic()
                 nbytes = 0
                 try:
-                    async for chunk in synthesize_speech(phrase):
+                    # 经 _normalize_pcm_stream 规整：对齐采样点、聚合成大块、
+                    # 句首尾淡变，消除块边界与句间拼接的瞬态噪声
+                    async for chunk in _normalize_pcm_stream(synthesize_speech(phrase)):
                         if cancel_event.is_set():
                             break
                         nbytes += len(chunk)
@@ -939,10 +1054,12 @@ async def handle_voice_connection(
                     # 告知前端"这段没声音"，但错误文案保持友好（原始细节只进日志）
                     if not tts_error_notified:
                         tts_error_notified = True
-                        await safe_send_json(websocket, {
-                            "type": "error",
-                            "message": "语音合成暂时不可用，已继续显示文字",
-                        })
+                        message = (
+                            "语音合成服务额度已用尽，已继续显示文字"
+                            if _is_quota_error(exc)
+                            else "语音合成暂时不可用，已继续显示文字"
+                        )
+                        await safe_send_json(websocket, {"type": "error", "message": message})
                 finally:
                     await q.put(None)
 
@@ -993,7 +1110,14 @@ async def handle_voice_connection(
                     stream=True,
                     temperature=0.7,
                     max_tokens=1024,
+                    # 语音场景不要「思考」：推理模型默认思考时首字要 8~12 秒，
+                    # 表现为「一直思考中、迟迟不说话」。与 llm_service.complete 同口径关闭。
+                    extra_body={"thinking": {"type": "disabled"}},
                 )
+                # 上游会把安全审核标注（<ds_safety>…</ds_safety>Safe）当正文吐出来。
+                # 这段文字会进气泡，还会被 _take_tts_phrases 切碎后逐句朗读，
+                # 必须在 delta 层面就掐掉；过滤器带状态，能处理被 token 切碎的标签。
+                guard = SafetyTagFilter()
                 async for chunk in stream:
                     delta = chunk.choices[0].delta if chunk.choices else None
                     if not (delta and delta.content):
@@ -1002,18 +1126,22 @@ async def handle_voice_connection(
                         # 用户开口打断：终止本轮生成，不保留半截回复
                         interrupted = True
                         break
-                    delta_count += 1
-                    if first_delta_ms is None:
-                        first_delta_ms = int((time.monotonic() - llm_t0) * 1000)
                     # 编码异常探测：出现替换字符 U+FFFD 说明上游流式解码有问题（文字乱码根源）
                     if "\ufffd" in delta.content:
                         logger.warning(
                             "[LLM] 分片含替换字符 U+FFFD（疑似上游编码问题）delta#%d=%r",
-                            delta_count, delta.content,
+                            delta_count + 1, delta.content,
                         )
-                    full_response += delta.content
-                    sentence_buf += delta.content
-                    if not await safe_send_json(websocket, {"type": "ai_text", "text": delta.content}):
+                    piece = guard.feed(delta.content)
+                    if not piece:
+                        # 整块都是审核标注，既不发气泡也不合成
+                        continue
+                    delta_count += 1
+                    if first_delta_ms is None:
+                        first_delta_ms = int((time.monotonic() - llm_t0) * 1000)
+                    full_response += piece
+                    sentence_buf += piece
+                    if not await safe_send_json(websocket, {"type": "ai_text", "text": piece}):
                         break
                     # 语句级切分：产出即合成，实现"早开场"（不等完整回答）；
                     # 整句归段、首段早出音，杜绝碎块化造成的随机停顿
@@ -1026,6 +1154,13 @@ async def handle_voice_connection(
                             continue
                         logger.debug("[PHRASE] enqueue %r", p)
                         enqueue_tts(p)
+
+                # 流结束：吐出过滤器里被扣住的残留（扣住的是"半个标签"则丢弃）
+                tail = guard.flush()
+                if tail and not interrupted:
+                    full_response += tail
+                    sentence_buf += tail
+                    await safe_send_json(websocket, {"type": "ai_text", "text": tail})
 
             except asyncio.CancelledError:
                 raise
@@ -1097,18 +1232,24 @@ async def handle_voice_connection(
         # ============================================================
         async def process_round(audio_bytes: bytes) -> None:
             """处理一轮 语音->识别->对话->合成；全程监听打断信号 cancel_event"""
+            nonlocal stt_error_notified
             text = ""
             full_response = ""
             try:
-                if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
-                    return
-
-                # 1. STT（本地 SenseVoice 优先，云端兜底）
+                # 先识别、确认有有效内容后再切「思考中」：噪声/静音触发的空识别
+                # 不再闪一下 processing 又回到 listening（聆听/思考来回跳的根源）。
                 try:
                     text = await transcribe_audio(audio_bytes)
-                except Exception:
+                except Exception as exc:
                     logger.exception("STT 失败")
-                    await safe_send_json(websocket, {"type": "error", "message": "语音识别失败，请重试"})
+                    if not stt_error_notified:
+                        stt_error_notified = True
+                        reason = (
+                            "语音识别服务额度已用尽，请联系管理员"
+                            if _is_quota_error(exc)
+                            else "语音识别暂时不可用，请稍后重试"
+                        )
+                        await safe_send_json(websocket, {"type": "error", "message": reason})
                     await safe_send_json(websocket, {"type": "state", "state": "listening"})
                     return
 
@@ -1122,6 +1263,8 @@ async def handle_voice_connection(
                     await safe_send_json(websocket, {"type": "state", "state": "listening"})
                     return
 
+                if not await safe_send_json(websocket, {"type": "state", "state": "processing"}):
+                    return
                 await safe_send_json(websocket, {"type": "transcript", "text": text, "final": True})
 
                 # 2. 情绪 + 心理关注上报

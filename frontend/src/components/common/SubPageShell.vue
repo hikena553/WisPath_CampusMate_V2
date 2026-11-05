@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { lockBodyScroll, unlockBodyScroll } from '@/utils/bodyScrollLock'
 
 /**
  * 覆盖式子页外壳
@@ -60,26 +61,15 @@ const emit = defineEmits<{
 
 const rootEl = ref<HTMLElement | null>(null)
 
-// ---------- body 滚动锁（引用计数） ----------
-let lockCount = 0
-let savedOverflow = ''
-
+// ---------- body 滚动锁（全站共用的引用计数） ----------
 function lockBody() {
   if (!props.lockScroll) return
-  lockCount += 1
-  if (lockCount === 1) {
-    savedOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-  }
+  lockBodyScroll()
 }
 
 function unlockBody() {
   if (!props.lockScroll) return
-  lockCount = Math.max(0, lockCount - 1)
-  if (lockCount === 0) {
-    document.body.style.overflow = savedOverflow
-    savedOverflow = ''
-  }
+  unlockBodyScroll()
 }
 
 // ---------- Esc ----------

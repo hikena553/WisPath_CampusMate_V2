@@ -89,6 +89,17 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   // 预滚样本与"因 AI 正在播报而暂存"标记
   let prerollSamples: number[] = []
   let prerollArmed = false
+  // 长句的延迟提交定时器（见 END_OF_SPEECH_CONFIRM_MS）
+  let endOfSpeechTimer: ReturnType<typeof setTimeout> | null = null
+  // 撤回延迟提交时要恢复的本轮开口时刻：让"已说多久"跨换气继续累计，
+  // 否则撤回后阈值又退回 500ms，长段落还是会被切碎
+  let pendingSpeechOnsetAt = 0
+  // 「说完 → AI 吐出首字」之间锁麦：这段 AI 还没开口，环境噪声（椅子、键盘、
+  // 呼吸、自己尾音）在低阈值下会被判成"用户打断"，直接把正在生成的整轮
+  // 回答 cancel 掉，表现为"我说完了它却不吭声"。锁定期间不接受任何麦克风输入。
+  let awaitingFirstAiAudio = false
+  let firstAiAudioTimer: ReturnType<typeof setTimeout> | null = null
+  const FIRST_AI_AUDIO_TIMEOUT_MS = 6000
   // 采集上下午的实际采样率（浏览器可能忽略请求的 16000，Windows 上多为 48000）
   let captureSampleRate = 16000
 
@@ -96,7 +107,19 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   // 时间制 VAD：调低开口/收口时延，缩短"开口 -> 打断"与"说完 -> 识别"的响应时间，
   // 直接压缩端到端延迟（豆包等实时方案的共同取向）
   const VOICE_START_MS = 30   // 连续发音超过该时长视为开始说话（防单帧毛刺）
-  const VOICE_STOP_MS = 420   // 静音持续该时长视为说话结束（说完尽快识别）
+  // 收口阈值自适应：短问答要灵敏，长段落要留足换气时间。
+  // 固定 500ms 时，讲长句子中途正常换气就会被判"说完"，AI 立刻抢答半句话。
+  const VOICE_STOP_MS_ANSWER = 500      // 本轮真实发音 <1.5s：一问一答，保持灵敏
+  const VOICE_STOP_MS_PARAGRAPH = 900   // 1.5~5s：中等长度
+  const VOICE_STOP_MS_LONG = 1300       // >5s：长段落，容纳换气与思考停顿
+  const LONG_SPEECH_SPAN_MS = 1500      // 超过该发音跨度视为"长句"
+  const PARAGRAPH_SPAN_MS = 5000
+  // 长句判定"说完"后不立即提交，先等一小段确认：期内重新开口说明只是停顿，
+  // 撤回本轮提交（音频在服务端一直累积，两段自然合并成一段识别）
+  const END_OF_SPEECH_CONFIRM_MS = 350
+  // 一轮真实发言的最短时长：短于此值的"开口"是噪声毛刺（风扇、键盘、呼吸），
+  // 不发 end_of_speech。否则每段噪声都会触发一轮"思考中→聆听"，状态频繁闪烁。
+  const MIN_VOICED_MS = 300
   // 二段式打断：开口判定很快（30ms），但"打断 AI"要求持续说话达到该时长，
   // 避免环境噪声/单帧毛刺误触发，把接通问候或正在播报的回答打断掉
   const BARGE_IN_MS = 150
@@ -107,6 +130,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   // 预滚缓冲：AI 播报期间不上传麦克风音频（防回声污染识别），只留最近 300ms，
   // 待开始说话/打断时补发，避免吃掉第一个字
   const PREROLL_SAMPLES = 4800  // 300ms @16kHz
+  // 用户已经在发声时保留更长的预滚：AI 播报期间不上传麦克风（防回声），
+  // 一旦判为打断只有预滚里的音频能补发，300ms 会把开口那几个字吃掉。
+  const PREROLL_SAMPLES_VOICED = 9600  // 600ms @16kHz
   const MAX_RECONNECT = 3
   const PING_INTERVAL = 15000
   // 手机侧最容易踩的两处「既不成功也不报错」：WebSocket 握手悬在 CONNECTING、
@@ -189,9 +215,17 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     if (!Ctor) throw new Error('当前浏览器不支持音频处理')
     if (preferRate) {
       try {
-        return new Ctor({ sampleRate: preferRate })
+        const ctx = new Ctor({ sampleRate: preferRate })
+        // 浏览器可能"接受"参数却实际不给（移动端 WebView / 部分 Windows 驱动）：
+        // 此时每个 AudioBuffer 都会被单独重采样，块边界留下瞬态噪声。
+        // 记录实际采样率，排查"持续沙沙底噪"时先看这一行。
+        if (ctx.sampleRate !== preferRate) {
+          console.warn(`[voice] 采样率回落：请求 ${preferRate}Hz 实际 ${ctx.sampleRate}Hz`)
+        }
+        return ctx
       } catch {
         // 采样率不被支持：回落到设备默认值
+        console.warn(`[voice] 不支持 ${preferRate}Hz 播放上下文，回落设备默认采样率`)
       }
     }
     return new Ctor()
@@ -326,6 +360,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
       case 'ai_audio':
         if (msg.data) {
+          // 首块音频到达＝TTS 开始吐字，可以恢复接收麦克风（此时转由 barge-in 接管）
+          releaseMicAfterFirstAudio('收到首块语音')
           playAudioChunk(base64ToArrayBuffer(msg.data as string))
         }
         break
@@ -333,19 +369,25 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       case 'state':
         if (msg.state === 'listening') {
           setState('listening')
+          // 本轮已结束（识别为空/失败时不会有语音，也必须解麦，否则一直锁着）
+          releaseMicAfterFirstAudio('本轮结束')
           // 注意：此处【不能】作废播放队列。listening 表示"服务端生成完毕"，
           // 此刻前端播放队列往往还没播完（后端出音快于实时播放），一旦 cancel
           // 就会把刚收到的语音整段掐断 —— 症状正是"有文字没声音/语音截断"。
           // 真正需要停播的场景只有"用户打断"，统一由 barge-in 路径处理。
         } else if (msg.state === 'processing') {
           setState('processing')
+          // 模型还在生成：等首字的计时重新起算，避免答得慢时被超时提前解麦
+          if (awaitingFirstAiAudio) refreshFirstAiAudioTimer()
         } else if (msg.state === 'speaking') {
           setState('speaking')
+          releaseMicAfterFirstAudio('TTS 开始吐字')
         }
         break
 
       case 'error':
         error.value = (msg.message as string) || '未知错误'
+        releaseMicAfterFirstAudio('服务端报错')
         options.onError?.(error.value)
         break
 
@@ -409,10 +451,23 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     }
 
     // PCM 16bit mono → AudioBuffer
+    // 奇数字节说明采样点被劈成两半（服务端分块未对齐）：Int16Array 会抛
+    // RangeError，异常此前被 playAudioChunk 的 catch 吞掉，表现为静默丢块
+    if (buffer.byteLength % 2 !== 0) {
+      console.warn('[voice] 丢弃奇数字节的音频块 len=', buffer.byteLength)
+      return
+    }
     const samples = new Int16Array(buffer)
     const float32 = new Float32Array(samples.length)
     for (let i = 0; i < samples.length; i++) {
       float32[i] = samples[i] / 32768
+    }
+
+    // 播放上下文不是 16k 时，浏览器会对每个 AudioBuffer 单独重采样，块边界被当作
+    // "信号到此结束"，每次留下约 -54dBFS 的瞬态（256ms 一块即每秒 4 次），连起来
+    // 就是持续的"沙沙 / 电流底噪"。首尾各 16 样本升余弦淡变让边界自然过零。
+    if (playbackAudioCtx.sampleRate !== 16000) {
+      applyEdgeFade(float32, 16)
     }
 
     const audioBuffer = playbackAudioCtx.createBuffer(1, float32.length, 16000)
@@ -600,6 +655,19 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     // 驱动音量回调
     options.onAudioLevel?.(energy)
 
+    // 等首字期间锁麦：AI 还没开口，这会儿的声音只可能是噪声或自己的尾音，
+    // 一律不参与 VAD，也就不会把正在生成的回答当"被打断"掐掉
+    if (awaitingFirstAiAudio) {
+      isSpeaking = false
+      speechStartCandidateAt = 0
+      lastSpeechActivityAt = 0
+      speechOnsetAt = 0
+      bargedIn = false
+      // 音量条归零：视觉上也表明"此刻没在听"，避免用户以为说了也被接收
+      options.onAudioLevel?.(0)
+      return
+    }
+
     // 麦克风静音时冻结语音活动检测：不打断 AI、不触发说话/结束事件，
     // 保证取消静音后从干净状态重新开始识别
     if (isMuted.value) {
@@ -608,6 +676,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       lastSpeechActivityAt = 0
       speechOnsetAt = 0
       bargedIn = false
+      cancelScheduledEndOfSpeech()
+      pendingSpeechOnsetAt = 0
       return
     }
 
@@ -632,6 +702,14 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         isSpeaking = true
         speechOnsetAt = now
         bargedIn = false
+        // 上一轮的"延迟提交"作废：用户只是换气后继续说，
+        // 音频仍在上传，服务端缓冲里是连续一段，撤回即可自然合并
+        if (cancelScheduledEndOfSpeech()) {
+          // 沿用本轮起点，"已说多久"继续累计，阈值保持长句档位
+          if (pendingSpeechOnsetAt) speechOnsetAt = pendingSpeechOnsetAt
+          pendingSpeechOnsetAt = 0
+          console.debug('[voice] 长句续说，已撤回 end_of_speech')
+        }
         options.onSpeechStart?.()
       }
       lastSpeechActivityAt = now
@@ -654,18 +732,101 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
         }
       }
     } else if (isSpeaking) {
-      // 静音持续达到阈值：判定说话结束，通知服务端开始识别
-      if (now - lastSpeechActivityAt >= VOICE_STOP_MS) {
+      // 静音持续达到阈值：判定说话结束，通知服务端开始识别。
+      // 阈值随本轮真实发音时长放宽——说得越久，句中换气越正常
+      const voicedMs = lastSpeechActivityAt - speechOnsetAt
+      if (now - lastSpeechActivityAt >= stopThresholdMs(voicedMs)) {
         isSpeaking = false
+        pendingSpeechOnsetAt = speechOnsetAt
         speechOnsetAt = 0
         bargedIn = false
+        if (voicedMs < MIN_VOICED_MS) {
+          pendingSpeechOnsetAt = 0
+          return
+        }
         // 先把节流缓冲中的尾包音频发出，确保服务端收到的音频完整（识别更准）
         flushPendingAudio()
-        if (ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'end_of_speech' }))
+        if (voicedMs >= LONG_SPEECH_SPAN_MS) {
+          // 长句：延迟确认。用户换气后会重新开口，届时撤回本次提交，
+          // 两段音频在服务端缓冲里是连续的，会被当成一整句识别
+          scheduleEndOfSpeech(END_OF_SPEECH_CONFIRM_MS)
+        } else {
+          pendingSpeechOnsetAt = 0
+          sendEndOfSpeech()
         }
       }
     }
+  }
+
+  /** 收口阈值随本轮真实发音时长放宽：说得越久，句中换气停顿越正常 */
+  function stopThresholdMs(voicedSpanMs: number): number {
+    if (voicedSpanMs >= PARAGRAPH_SPAN_MS) return VOICE_STOP_MS_LONG
+    if (voicedSpanMs >= LONG_SPEECH_SPAN_MS) return VOICE_STOP_MS_PARAGRAPH
+    return VOICE_STOP_MS_ANSWER
+  }
+
+  function sendEndOfSpeech() {
+    if (ws?.readyState === WebSocket.OPEN) {
+      // 先锁麦再发信令：服务端一旦开始识别，此后的麦克风输入只会干扰这一轮
+      lockMicForFirstAudio()
+      ws.send(JSON.stringify({ type: 'end_of_speech' }))
+    }
+  }
+
+  /** 进入「等首字」锁麦态：清空采集中间态，期间不接受任何麦克风输入 */
+  function lockMicForFirstAudio() {
+    awaitingFirstAiAudio = true
+    // 清 VAD 中间态：锁麦期间不累计"已说时长"，解锁后不会立刻误判"说完"
+    isSpeaking = false
+    speechStartCandidateAt = 0
+    speechOnsetAt = 0
+    lastSpeechActivityAt = 0
+    bargedIn = false
+    pendingSpeechOnsetAt = 0
+    pendingAudio = []
+    prerollSamples = []
+    prerollArmed = false
+    refreshFirstAiAudioTimer()
+  }
+
+  /** 等首字超时：识别失败 / 本轮无语音 / 服务端无响应时兜底，避免永久锁麦 */
+  function refreshFirstAiAudioTimer() {
+    if (firstAiAudioTimer) clearTimeout(firstAiAudioTimer)
+    firstAiAudioTimer = setTimeout(() => {
+      firstAiAudioTimer = null
+      if (!awaitingFirstAiAudio) return
+      awaitingFirstAiAudio = false
+      console.warn('[voice] 等首字超时，解锁麦克风')
+    }, FIRST_AI_AUDIO_TIMEOUT_MS)
+  }
+
+  /** AI 已出声或本轮已结束：解除锁麦 */
+  function releaseMicAfterFirstAudio(reason: string) {
+    if (!awaitingFirstAiAudio) return
+    awaitingFirstAiAudio = false
+    if (firstAiAudioTimer) {
+      clearTimeout(firstAiAudioTimer)
+      firstAiAudioTimer = null
+    }
+    console.debug('[voice] 解锁麦克风：', reason)
+  }
+
+  /** 长句的延迟提交：给用户一个"接着说"的窗口，期内重新开口即撤回 */
+  function scheduleEndOfSpeech(delayMs: number) {
+    cancelScheduledEndOfSpeech()
+    endOfSpeechTimer = setTimeout(() => {
+      endOfSpeechTimer = null
+      pendingSpeechOnsetAt = 0
+      flushPendingAudio()
+      sendEndOfSpeech()
+    }, delayMs)
+  }
+
+  function cancelScheduledEndOfSpeech(): boolean {
+    if (!endOfSpeechTimer) return false
+    clearTimeout(endOfSpeechTimer)
+    endOfSpeechTimer = null
+    return true
   }
 
   function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -701,6 +862,20 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     return out
   }
 
+  /** 首尾各做 k 个样本的升余弦淡变（原地修改）。
+   *  只用于"播放上下文不是 16k"的场景：把块边界强行拉到过零点，
+   *  让浏览器对每个 AudioBuffer 的独立重采样不再产生边界瞬态。 */
+  function applyEdgeFade(data: Float32Array, k: number) {
+    const n = data.length
+    const m = Math.min(k, Math.floor(n / 4))
+    if (m <= 0) return
+    for (let i = 0; i < m; i++) {
+      const w = 0.5 - 0.5 * Math.cos((Math.PI * i) / m)
+      data[i] *= w
+      data[n - 1 - i] *= w
+    }
+  }
+
   /** AI 是否正在发声（有排队/播放中的音频块，或服务端已进入播报态） */
   function aiSpeaking(): boolean {
     return activeSources.size > 0 || state.value === 'speaking'
@@ -712,10 +887,24 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
   function handleCapturedAudio(int16: Int16Array) {
     if (isMuted.value) return
 
+    // 等首字期间锁麦：不上传、不攒预滚。这段音频若送上去，只会把噪声
+    // 混进下一轮识别的开头，让 ASR 出乱码
+    if (awaitingFirstAiAudio) {
+      prerollSamples = []
+      prerollArmed = false
+      return
+    }
+
     if (aiSpeaking()) {
       for (let i = 0; i < int16.length; i++) prerollSamples.push(int16[i])
-      if (prerollSamples.length > PREROLL_SAMPLES) {
-        prerollSamples.splice(0, prerollSamples.length - PREROLL_SAMPLES)
+      // 用户已在发声时放宽预滚上限：AI 播报期间这段音频不会上传，
+      // 只有预滚能在打断后补发，300ms 会把开口那几个字整段吃掉
+      const cap =
+        isSpeaking || performance.now() - lastSpeechActivityAt < 800
+          ? PREROLL_SAMPLES_VOICED
+          : PREROLL_SAMPLES
+      if (prerollSamples.length > cap) {
+        prerollSamples.splice(0, prerollSamples.length - cap)
       }
       prerollArmed = true
       return
@@ -805,6 +994,15 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
       // 用户手势窗口内预热播放上下文（自动播放策略只信任手势中创建/恢复的
       // AudioContext），避免首个 ai_audio 到达时被挂起导致播报无声
       await unlockAudio()
+      if (playbackAudioCtx) {
+        // 排查"持续沙沙底噪"的第一现场：16k 原生播放是无损的，
+        // 其它采样率意味着每个音频块都要被浏览器单独重采样
+        console.info(
+          '[voice] 播放采样率 =',
+          playbackAudioCtx.sampleRate,
+          playbackAudioCtx.sampleRate === 16000 ? '(原生 16k)' : '(已启用块边界淡变)',
+        )
+      }
 
       await connectWs()
       const source = await startCapture()
@@ -834,6 +1032,8 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
     lastSpeechActivityAt = 0
     speechOnsetAt = 0
     bargedIn = false
+    cancelScheduledEndOfSpeech()
+    pendingSpeechOnsetAt = 0
     // 丢弃节流缓冲中未发送的音频：静音期间的残留不混入取消静音后的第一段识别
     pendingAudio = []
     lastAudioFlushAt = 0
@@ -853,6 +1053,11 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}) {
 
   function cleanup() {
     stopPing()
+    // 挂断时取消未到期的"延迟提交"，避免通话结束后仍有 end_of_speech 发出
+    cancelScheduledEndOfSpeech()
+    pendingSpeechOnsetAt = 0
+    // 挂断时解除锁麦，否则下次接通首个 VAD 判定会被吞掉
+    releaseMicAfterFirstAudio('通话结束')
 
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout)

@@ -14,6 +14,9 @@ from app.schemas.social import (
     ContactOut,
     ForumMessageOut,
     ForumReadIn,
+    FriendSettingIn,
+    FriendSettingOut,
+    FriendSettingState,
     RelationOut,
     SuggestOut,
 )
@@ -130,3 +133,46 @@ def forum_unread_count(db: Session = Depends(get_db), current_user: User = Depen
         ForumMessage.user_id == current_user.id, ForumMessage.is_read.is_(False)
     ).count()
     return {"count": int(total)}
+
+
+# ==================== 好友设置（个人主页「设置」页） ====================
+
+@router.get("/friend-settings", response_model=list[FriendSettingOut])
+def list_friend_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """我设过的全部联系人：消息列表按 care 给「特别关心」挂标，设置页回填各开关。"""
+    return social_service.friend_settings_all(db, current_user.id)
+
+
+@router.get("/friend-settings/{peer_id}", response_model=FriendSettingState)
+def get_friend_setting(
+    peer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """我 → TA 与 TA → 我两份设置。亲密关系是双方共用展示的标识，所以两份都给。"""
+    if peer_id == current_user.id:
+        raise HTTPException(400, "不能对自己设置好友项")
+    _user_or_404(db, peer_id)
+    return social_service.friend_setting_state(db, current_user.id, peer_id)
+
+
+@router.put("/friend-settings/{peer_id}", response_model=FriendSettingState)
+def update_friend_setting(
+    peer_id: int,
+    payload: FriendSettingIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """局部更新：只传改动的字段，其余保持原值。设置自己的那一条，不碰对方。"""
+    if peer_id == current_user.id:
+        raise HTTPException(400, "不能对自己设置好友项")
+    _user_or_404(db, peer_id)
+    patch = payload.model_dump(exclude_unset=True)
+    try:
+        social_service.save_friend_setting(db, current_user.id, peer_id, patch)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return social_service.friend_setting_state(db, current_user.id, peer_id)

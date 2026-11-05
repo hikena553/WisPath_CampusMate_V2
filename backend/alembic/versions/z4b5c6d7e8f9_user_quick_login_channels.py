@@ -19,16 +19,26 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """QQ 互联 OAuth 登录：保存 openid 与授权昵称，供 QQ 授权登录反查账号。"""
-    op.add_column(
-        'users',
-        sa.Column('qq_openid', sa.String(length=64), nullable=True, comment='QQ 互联 openid，用于 OAuth 登录'),
-    )
-    op.add_column(
-        'users',
-        sa.Column('qq_nickname', sa.String(length=64), nullable=True, comment='QQ 互联授权后获取的昵称'),
-    )
-    op.create_index('ix_users_qq_openid', 'users', ['qq_openid'], unique=False)
+    """QQ 互联 OAuth 登录：保存 openid 与授权昵称，供 QQ 授权登录反查账号。
+
+    可重入：部分环境曾手工 ALTER 补过列，这里按实际结构判断后再执行，
+    避免 Duplicate column name 中断升级（SQLite 的 DDL 非事务，中断会留下半截状态）。
+    """
+    inspector = sa.inspect(op.get_bind())
+    columns = {col["name"] for col in inspector.get_columns("users")}
+    if "qq_openid" not in columns:
+        op.add_column(
+            'users',
+            sa.Column('qq_openid', sa.String(length=64), nullable=True, comment='QQ 互联 openid，用于 OAuth 登录'),
+        )
+    if "qq_nickname" not in columns:
+        op.add_column(
+            'users',
+            sa.Column('qq_nickname', sa.String(length=64), nullable=True, comment='QQ 互联授权后获取的昵称'),
+        )
+    indexes = {idx["name"] for idx in inspector.get_indexes("users")}
+    if "ix_users_qq_openid" not in indexes:
+        op.create_index('ix_users_qq_openid', 'users', ['qq_openid'], unique=False)
 
 
 def downgrade() -> None:

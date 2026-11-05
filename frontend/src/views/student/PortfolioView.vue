@@ -156,57 +156,72 @@
 
     <!-- 项目弹窗（多字段重表单：移动端=全屏子页 / 桌面端=弹窗） -->
     <ResponsivePopup v-model="projectDialogVisible" :title="projectForm.id ? '编辑项目' : '添加项目'" width="520px">
-      <el-form label-width="72px">
-        <el-form-item label="项目名称" required>
-          <el-input v-model="projectForm.project_name" placeholder="例如：校园二手交易小程序" maxlength="60" />
-        </el-form-item>
-        <el-form-item label="我的角色">
-          <el-input v-model="projectForm.my_role" placeholder="例如：前端开发 / 项目负责人" maxlength="30" />
-        </el-form-item>
-        <el-form-item label="技术栈">
-          <el-input v-model="projectForm.tech_stack" placeholder="逗号分隔，例如：Vue3, FastAPI, MySQL" maxlength="100" />
-        </el-form-item>
-        <el-form-item label="开始时间" required>
-          <el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="结束时间">
-          <el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选填，不填则至今" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="是否团队">
-          <el-switch v-model="projectForm.is_team" active-text="团队项目" />
-        </el-form-item>
-        <el-form-item v-if="projectForm.is_team" label="团队成员">
-          <el-input v-model="projectForm.team_members" placeholder="逗号分隔成员姓名" maxlength="100" />
-        </el-form-item>
-        <el-form-item label="项目链接">
-          <el-input v-model="projectForm.project_link" placeholder="https:// 项目地址 / GitHub / 演示链接" maxlength="200" />
-        </el-form-item>
-        <el-form-item label="附件地址">
-          <el-input v-model="projectForm.attachment_url" placeholder="https:// 附件 / 截图地址，选填" maxlength="200" />
-        </el-form-item>
-        <el-form-item label="项目图片">
-          <div class="img-upload-wrap">
-            <div class="img-upload-row">
-              <div v-for="(img, i) in projectForm.images" :key="img + i" class="img-thumb">
-                <el-image :src="img" fit="cover" class="img-thumb-img" :preview-src-list="projectForm.images" :initial-index="i" preview-teleported />
-                <button type="button" class="img-thumb-del" aria-label="移除图片" @click="projectForm.images.splice(i, 1)">✕</button>
-                <span v-if="i === 0" class="img-thumb-cover">封面</span>
+      <!-- 移动端：标签置顶 + 分组，长表单按「基本信息 / 时间与团队 / 展示素材」分段 -->
+      <el-form class="pf-form" :label-position="isMobile ? 'top' : 'right'" label-width="72px">
+        <div class="pf-sec">
+          <h4 class="pf-sec-title">基本信息</h4>
+          <el-form-item label="项目名称" required>
+            <el-input v-model="projectForm.project_name" placeholder="例如：校园二手交易小程序" maxlength="60" />
+          </el-form-item>
+          <el-form-item label="我的角色">
+            <el-input v-model="projectForm.my_role" placeholder="例如：前端开发 / 项目负责人" maxlength="30" />
+          </el-form-item>
+          <el-form-item label="技术栈">
+            <el-input v-model="projectForm.tech_stack" placeholder="逗号分隔，例如：Vue3, FastAPI, MySQL" maxlength="100" />
+          </el-form-item>
+        </div>
+
+        <div class="pf-sec">
+          <h4 class="pf-sec-title">时间与团队</h4>
+          <el-form-item label="开始时间" required>
+            <el-date-picker v-model="projectForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="结束时间">
+            <el-date-picker v-model="projectForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选填，不填则至今" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="是否团队">
+            <el-switch v-model="projectForm.is_team" active-text="团队项目" />
+          </el-form-item>
+          <el-form-item v-if="projectForm.is_team" label="团队成员">
+            <el-input v-model="projectForm.team_members" placeholder="逗号分隔成员姓名" maxlength="100" />
+          </el-form-item>
+        </div>
+
+        <div class="pf-sec">
+          <h4 class="pf-sec-title">展示素材</h4>
+          <el-form-item label="项目链接">
+            <el-input v-model="projectForm.project_link" placeholder="https:// 项目地址 / GitHub / 演示链接" maxlength="200" />
+          </el-form-item>
+          <el-form-item label="附件地址">
+            <el-input v-model="projectForm.attachment_url" placeholder="https:// 附件 / 截图地址，选填" maxlength="200" />
+          </el-form-item>
+          <el-form-item label="项目图片">
+            <div class="img-upload-wrap">
+              <div class="img-upload-row">
+                <div v-for="(img, i) in projectForm.images" :key="img + i" class="img-thumb">
+                  <el-image :src="img" fit="cover" class="img-thumb-img" :preview-src-list="projectForm.images" :initial-index="i" preview-teleported />
+                  <button type="button" class="img-thumb-del" aria-label="移除图片" @click="projectForm.images.splice(i, 1)">✕</button>
+                  <span v-if="i === 0" class="img-thumb-cover">封面</span>
+                </div>
+                <el-upload
+                  v-if="projectForm.images.length < 6"
+                  :show-file-list="false"
+                  :before-upload="uploadProjectImage"
+                  accept="image/*"
+                >
+                  <button type="button" class="img-add-btn" aria-label="添加图片">
+                    <el-icon :size="18"><Plus /></el-icon>
+                    <span class="img-add-txt">添加图片</span>
+                  </button>
+                </el-upload>
               </div>
-              <el-upload
-                v-if="projectForm.images.length < 6"
-                :show-file-list="false"
-                :before-upload="uploadProjectImage"
-                accept="image/*"
-              >
-                <button type="button" class="img-add-btn" aria-label="添加图片"><el-icon :size="18"><Plus /></el-icon></button>
-              </el-upload>
+              <p class="img-upload-hint">已上传 {{ projectForm.images.length }}/6 张，第一张将作为作品墙封面展示</p>
             </div>
-            <p class="img-upload-hint">最多 6 张，第一张将作为作品墙封面展示</p>
-          </div>
-        </el-form-item>
-        <el-form-item label="项目描述">
-          <el-input v-model="projectForm.description" type="textarea" :rows="3" placeholder="项目背景、职责与成果（可点击右上角 AI 优化建议生成）" maxlength="500" />
-        </el-form-item>
+          </el-form-item>
+          <el-form-item label="项目描述">
+            <el-input v-model="projectForm.description" type="textarea" :rows="3" show-word-limit placeholder="项目背景、职责与成果（可点击右上角 AI 优化建议生成）" maxlength="500" />
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="projectDialogVisible = false">取消</el-button>
@@ -216,33 +231,62 @@
 
     <!-- 证书弹窗（多字段表单：移动端=全屏子页 / 桌面端=弹窗） -->
     <ResponsivePopup v-model="certDialogVisible" :title="certForm.id ? '编辑证书' : '添加证书'" width="520px">
-      <el-form label-width="72px">
-        <el-form-item label="证书名称" required>
-          <el-input v-model="certForm.title" placeholder="例如：蓝桥杯省赛一等奖" maxlength="60" />
-        </el-form-item>
-        <el-form-item label="比赛/机构">
-          <el-input v-model="certForm.competition_name" placeholder="颁发机构，例如：工业和信息化部人才交流中心" maxlength="60" />
-        </el-form-item>
-        <el-form-item label="荣誉等级">
-          <el-select v-model="certForm.award_level" placeholder="选择等级" style="width:100%">
-            <el-option v-for="lv in awardLevels" :key="lv.value" :label="lv.label" :value="lv.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="获取日期">
-          <el-date-picker v-model="certForm.date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="佐证图片">
-          <div class="cert-upload-row">
-            <el-upload :show-file-list="false" :before-upload="uploadCertImage" accept="image/*">
-              <el-button size="small" plain>上传图片</el-button>
-            </el-upload>
-            <span v-if="uploadingImg" class="uploading-tip">上传中...</span>
-            <el-image v-if="certForm.image_url" :src="certForm.image_url" fit="cover" class="cert-upload-preview" :preview-src-list="[certForm.image_url]" preview-teleported />
-          </div>
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="certForm.description" type="textarea" :rows="2" placeholder="选填" maxlength="200" />
-        </el-form-item>
+      <!-- 移动端：荣誉等级改为胶囊单选，佐证图片改为整块上传卡 -->
+      <el-form class="pf-form" :label-position="isMobile ? 'top' : 'right'" label-width="72px">
+        <div class="pf-sec">
+          <h4 class="pf-sec-title">证书信息</h4>
+          <el-form-item label="证书名称" required>
+            <el-input v-model="certForm.title" placeholder="例如：蓝桥杯省赛一等奖" maxlength="60" />
+          </el-form-item>
+          <el-form-item label="比赛/机构">
+            <el-input v-model="certForm.competition_name" placeholder="颁发机构，例如：工业和信息化部人才交流中心" maxlength="60" />
+          </el-form-item>
+          <el-form-item label="荣誉等级">
+            <div v-if="isMobile" class="pf-chips">
+              <button
+                v-for="lv in awardLevels" :key="lv.value" type="button"
+                class="pf-chip" :class="{ 'is-active': certForm.award_level === lv.value }"
+                @click="certForm.award_level = certForm.award_level === lv.value ? '' : lv.value"
+              >{{ lv.label }}</button>
+            </div>
+            <el-select v-else v-model="certForm.award_level" placeholder="选择等级" style="width:100%">
+              <el-option v-for="lv in awardLevels" :key="lv.value" :label="lv.label" :value="lv.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="获取日期">
+            <el-date-picker v-model="certForm.date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width:100%" />
+          </el-form-item>
+        </div>
+
+        <div class="pf-sec">
+          <h4 class="pf-sec-title">佐证与备注</h4>
+          <el-form-item label="佐证图片">
+            <div class="cert-upload">
+              <el-upload
+                v-if="!certForm.image_url"
+                class="cert-upload-trigger"
+                :show-file-list="false" :before-upload="uploadCertImage" :disabled="uploadingImg" accept="image/*"
+              >
+                <div class="cert-upload-empty">
+                  <el-icon :size="22"><Plus /></el-icon>
+                  <span>{{ uploadingImg ? '上传中...' : '上传佐证图片' }}</span>
+                </div>
+              </el-upload>
+              <div v-else class="cert-upload-filled">
+                <el-image :src="certForm.image_url" fit="cover" class="cert-upload-img" :preview-src-list="[certForm.image_url]" preview-teleported />
+                <div class="cert-upload-ops">
+                  <el-upload :show-file-list="false" :before-upload="uploadCertImage" :disabled="uploadingImg" accept="image/*">
+                    <button type="button" class="cert-op-btn">更换图片</button>
+                  </el-upload>
+                  <button type="button" class="cert-op-btn is-danger" @click="certForm.image_url = ''">移除</button>
+                </div>
+              </div>
+            </div>
+          </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="certForm.description" type="textarea" :rows="2" show-word-limit placeholder="选填" maxlength="200" />
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="certDialogVisible = false">取消</el-button>
@@ -270,7 +314,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Link, Paperclip } from '@element-plus/icons-vue'
+import { Document, Link, Paperclip, Plus } from '@element-plus/icons-vue'
 import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
@@ -651,10 +695,39 @@ function copyToProjectForm() {
 .resume-meta { font-size: 12px; color: #999; margin-top: 2px; }
 .resume-actions { display: flex; gap: 0; flex-shrink: 0; }
 
-/* 上传 */
-.cert-upload-row { display: flex; align-items: center; gap: 10px; }
+/* 表单分组标题：桌面端隐藏（桌面弹窗保持原平铺表单），移动端显示 */
+.pf-sec-title { display: none; }
+
+/* 佐证图片上传（弹窗内，桌面/移动共用） */
+.cert-upload { width: 100%; }
+.cert-upload-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  width: 140px; height: 88px;
+  border: 1px dashed #c0c4cc; border-radius: 10px;
+  background: #fafafa; color: #909399; font-size: 12px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.cert-upload-empty span { line-height: 1.3; }
+.cert-upload-filled { display: flex; flex-direction: column; gap: 8px; }
+.cert-upload-img { width: 140px; height: 88px; border-radius: 10px; border: 1px solid rgba(0, 0, 0, 0.06); }
+.cert-upload-ops { display: flex; align-items: center; gap: 14px; }
+.cert-op-btn {
+  padding: 0; border: 0; background: transparent;
+  color: #409eff; font-size: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.cert-op-btn.is-danger { color: #f56c6c; }
 .uploading-tip { font-size: 12px; color: #999; }
-.cert-upload-preview { width: 80px; height: 56px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06); }
+
+/* 荣誉等级胶囊（仅移动端渲染） */
+.pf-chips { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.pf-chip {
+  padding: 8px 14px; border-radius: 999px;
+  border: 1px solid #e4e7eb; background: #fff;
+  font-size: 12.5px; line-height: 1; color: #5b6472;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+.pf-chip.is-active { border-color: #b45309; color: #b45309; background: rgba(180, 83, 9, 0.06); font-weight: 600; }
 
 /* 项目多图上传（编辑弹窗，桌面/移动共用） */
 .img-upload-wrap { width: 100%; }
@@ -679,6 +752,7 @@ function copyToProjectForm() {
   border: 1px dashed #c0c4cc; border-radius: 8px;
   background: #fafafa; color: #909399; cursor: pointer;
 }
+.img-add-txt { display: none; }
 .img-upload-hint { margin: 6px 0 0; font-size: 11px; color: #999; }
 
 /* 作品墙封面（仅移动端渲染，桌面隐藏） */
@@ -840,5 +914,82 @@ function copyToProjectForm() {
     font-size: 12px;
     color: #9aa0a8;
   }
+
+  /* ===== 添加/编辑项目、证书表单：顶标签 + 分组 + 填充式输入 =====
+     移动端表单标签置顶后，左侧 72px 标签不再挤压输入区；
+     长表单按 pf-sec 分段，段间用发丝线分隔，降低视觉密度。 */
+  .pf-form :deep(.el-form-item) { margin-bottom: 14px; }
+  .pf-form :deep(.el-form-item:last-child) { margin-bottom: 0; }
+  .pf-form :deep(.el-form-item__label) {
+    padding: 0 0 7px;
+    height: auto;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #5b6472;
+  }
+  .pf-form :deep(.el-input__wrapper),
+  .pf-form :deep(.el-select__wrapper),
+  .pf-form :deep(.el-textarea__inner) {
+    border-radius: 10px;
+    background: #f5f6f8;
+    box-shadow: none;
+  }
+  .pf-form :deep(.el-input__wrapper) { padding: 1px 12px; }
+  .pf-form :deep(.el-textarea__inner) { padding: 9px 12px; }
+  .pf-form :deep(.el-input__wrapper.is-focus),
+  .pf-form :deep(.el-select__wrapper.is-focused),
+  .pf-form :deep(.el-textarea__inner:focus) {
+    background: #fff;
+    box-shadow: 0 0 0 1.5px rgba(64, 158, 255, 0.32);
+  }
+  .pf-form :deep(.el-switch) { --el-switch-on-color: #b45309; }
+
+  .pf-sec + .pf-sec {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #eef0f4;
+  }
+  .pf-form .pf-sec-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #9aa0a8;
+  }
+  .pf-form .pf-sec-title::before {
+    content: '';
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: #b45309;
+  }
+
+  /* 项目图片：放大缩略图与添加入口，入口带文字 */
+  .pf-form .img-thumb { width: 84px; height: 64px; }
+  .pf-form .img-thumb-img { border-radius: 12px; }
+  .pf-form .img-add-btn {
+    width: 84px;
+    height: 64px;
+    flex-direction: column;
+    gap: 3px;
+    border-radius: 12px;
+  }
+  .pf-form .img-add-txt { display: block; font-size: 11px; color: #9aa0a8; }
+  .pf-form .img-upload-hint { font-size: 11px; color: #9aa0a8; }
+
+  /* 证书佐证图：整块可点上传，已上传时为宽幅预览 + 更换/移除 */
+  .pf-form .cert-upload-trigger { display: block; width: 100%; }
+  .pf-form .cert-upload-empty { width: 100%; height: 84px; border-radius: 12px; }
+  .pf-form .cert-upload-filled { width: 100%; }
+  .pf-form .cert-upload-img { width: 100%; height: 150px; border-radius: 12px; }
+  .pf-form .cert-upload-img :deep(img) { object-fit: cover; }
+  .pf-form .cert-upload-ops { justify-content: flex-end; }
+  .pf-form .cert-op-btn { min-height: 32px; padding: 0 4px; font-size: 12.5px; }
+
+  /* 荣誉等级胶囊：整行可换行，触控目标 ≥ 34px */
+  .pf-form .pf-chip { padding: 9px 15px; font-size: 13px; }
 }
 </style>

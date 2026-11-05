@@ -1,39 +1,52 @@
 <template>
   <div class="chat-modern" ref="rootRef">
-    <!-- 移动端顶栏 -->
+    <!-- 移动端顶栏
+         左右两栏等宽（.mh-side）：右侧多了「新建对话」后，标题仍落在屏幕正中，
+         不会因为按钮数量变化被挤偏。 -->
     <div v-if="showMenuButton" class="mobile-header">
-      <!-- 定时任务视图：左侧变成返回对话，标题换成分区名（视图自身不再重复画标题行） -->
-      <template v-if="cronVisible">
-        <el-button text circle class="menu-toggle" aria-label="返回对话" @click="closeCron">
-          <el-icon :size="20"><ArrowLeft /></el-icon>
-        </el-button>
-        <div class="mobile-header-title">
-          <span class="title-text">定时任务</span>
-        </div>
-        <span class="mobile-header-placeholder"></span>
-      </template>
-      <template v-else>
-        <el-button text circle class="menu-toggle" @click="emit('toggleSidebar')">
+      <div class="mh-side mh-left">
+        <el-button text circle class="menu-toggle" aria-label="对话列表" @click="emit('toggleSidebar')">
           <div class="hamburger-icon">
             <span></span>
             <span></span>
             <span></span>
           </div>
         </el-button>
-        <!-- 标题只做展示：对话的重命名/置顶/删除统一收在侧边栏列表里，对话页不再弹操作面板 -->
-        <div class="mobile-header-title">
-          <span class="title-text">{{ currentTitle }}</span>
-        </div>
-        <el-button text circle class="menu-toggle" :disabled="loading" @click="handlePhoneCall">
+      </div>
+
+      <!-- 标题只做展示：对话的重命名/置顶/删除统一收在侧边栏列表里，对话页不再弹操作面板 -->
+      <div class="mobile-header-title">
+        <span class="title-text">{{ currentTitle }}</span>
+      </div>
+
+      <div class="mh-side mh-right">
+        <el-button text circle class="menu-toggle" aria-label="语音通话" :disabled="loading" @click="handlePhoneCall">
           <el-icon :size="20"><Phone /></el-icon>
         </el-button>
-      </template>
+        <!-- 新建对话：对齐 deepseek 移动端顶栏右侧的「方框+笔」图标，一点即开空白新会话 -->
+        <button
+          type="button"
+          class="new-chat-btn"
+          aria-label="新建对话"
+          title="新建对话"
+          :disabled="loading"
+          @click="handleNewChat"
+        >
+          <svg
+            class="new-chat-icon" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12.4 4.4H6.6A2.4 2.4 0 0 0 4.2 6.8v10.6a2.4 2.4 0 0 0 2.4 2.4h10.6a2.4 2.4 0 0 0 2.4-2.4v-5.8" />
+            <path d="M17.4 3.7a2.15 2.15 0 0 1 3.04 3.04l-8.06 8.06-3.86.82.82-3.86z" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- ── 对话视图 ──
-         用 v-show 而非 v-if 切走：切到定时任务时对话实例保持挂载，
-         流式回复的定时器、滚动位置、输入草稿都不会丢。 -->
-    <div v-show="!cronVisible" class="chat-view">
+         用 v-show 切换会话时保持挂载：流式回复的定时器、滚动位置、输入草稿都不会丢。 -->
+    <div class="chat-view">
 
     <!-- Pending Files Preview (top-right) -->
     <div v-if="pendingFiles.length > 0" class="pending-files-corner">
@@ -361,16 +374,6 @@
     </div>
 
     </div>
-    <!-- ── 定时任务视图 ──
-         同一页内的第二种视图（不再弹出覆盖式子页）：点侧边栏「定时任务」或顶栏时钟
-         即把对话区换成任务清单，侧边栏/底部导航留在原位，返回对话一键切回。 -->
-    <AgentCronView
-      v-if="cronVisible"
-      class="chat-cron"
-      :show-head="!showMenuButton"
-      @close="closeCron"
-      @open="openCronConversation"
-    />
   </div>
 </template>
 
@@ -387,16 +390,14 @@ import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, ArrowLeft, Close, Delete,
+  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, Close, Delete,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSiteConfig } from '@/composables/useSiteConfig'
-import { useCronPage } from '@/composables/useCronPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import MianCharacter from './MianCharacter.vue'
-import AgentCronView from './AgentCronView.vue'
 import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
 
@@ -412,7 +413,7 @@ const thinkingState = ref<'idle' | 'thinking' | 'done'>('idle')
 const MAX_INPUT_CHARS = 8000
 
 const props = withDefaults(defineProps<{ role?: 'student' | 'teacher'; conversationId?: number | null; fetching?: boolean; showMenuButton?: boolean; pullRefresh?: boolean }>(), { role: 'student', fetching: false, showMenuButton: false, pullRefresh: false })
-const emit = defineEmits<{ toggleSidebar: []; phoneCall: [] }>()
+const emit = defineEmits<{ toggleSidebar: []; phoneCall: []; new: [] }>()
 const showVoiceCall = ref(false)
 const voiceConvId = ref<number | null>(null)
 const voiceCallRef = ref<InstanceType<typeof VoiceCallOverlay> | null>(null)
@@ -437,6 +438,17 @@ async function handlePhoneCall() {
   // 拨通即接通（豆包式）：在用户手势内同步触发，解锁浏览器音频上下文；
   // 随后智能体先开口问候，无需用户手动开启语音
   voiceCallRef.value?.beginCall(cid)
+}
+
+/**
+ * 新建对话（移动端顶栏入口，与语音通话按钮并排）：
+ * 不在这里自作主张清状态，只把动作抛给外层 ChatShell 的 onNew —— 侧边栏「新对话」
+ * 走的是同一条路径（setActive(null) + 清空消息 + chatKey++ 重挂载），
+ * 两个入口共用一套逻辑，才不会出现「顶栏新建后草稿/滚动位置还挺着」这类状态差。
+ */
+function handleNewChat() {
+  if (loading.value) return
+  emit('new')
 }
 
 async function handleVoiceClose() {
@@ -478,8 +490,6 @@ const msgContentRef = ref<HTMLElement>()
 const rootRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
-// 定时任务视图开关：状态放在 composable 里，由侧边栏入口打开；这里只负责切回对话
-const { cronVisible, closeCron } = useCronPage()
 const previewImage = ref('')
 
 /**
@@ -1206,7 +1216,7 @@ watch(
   () => scrollToBottom(),
 )
 
-/** 通知直达：/student/agent?conv=<id>（Agent 定时任务通知/管理子页的 link），进入即打开对应会话。
+/** 通知直达：/student/agent?conv=<id>，进入即打开对应会话。
     换会话三件套照抄 handleVoiceClose：fetchMessages → replaceMessages → setActive/fetchList。 */
 function openConvFromQuery() {
   const convParam = Number(route.query.conv)
@@ -1223,27 +1233,6 @@ function openConvFromQuery() {
     convStore.setActive(convParam)
     convStore.fetchList()
   })
-}
-
-/**
- * 从定时任务视图点开某个任务的会话：切回对话视图并就地换会话。
- * 不跳路由 —— 定时任务本身就是对话区的一部分，跳 /student/agent 会把侧边栏丢掉。
- * 换会话三件套与 handleVoiceClose / openConvFromQuery 保持一致。
- */
-async function openCronConversation(cid: number) {
-  closeCron()
-  await convStore.fetchMessages(cid)
-  store.replaceMessages(
-    convStore.messages.map(m => ({
-      id: m.id.toString(),
-      role: m.role,
-      content: m.content,
-      timestamp: m.timestamp,
-    })),
-  )
-  convStore.setActive(cid)
-  convStore.fetchList()
-  scrollToBottom(true)
 }
 
 onMounted(() => {
@@ -1329,23 +1318,12 @@ defineExpose({ sendText })
 }
 
 /* ── 对话视图 ──
-   面板里与「定时任务」互为两种视图：撑满剩余高度，切走时只 display:none，
-   对话实例（含流式定时器、草稿、滚动位置）继续存活。 */
+   撑满剩余高度；切换会话时由外层 key 重挂载。 */
 .chat-view {
   display: flex;
   flex-direction: column;
   flex: 1 1 0%;
   min-height: 0;
-}
-
-/* 定时任务视图：同页切换做一个轻量上浮淡入，避免生硬闪切 */
-.chat-cron { animation: cronViewIn .22s ease both; }
-@keyframes cronViewIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .chat-cron { animation: none; }
 }
 
 /* ── Messages Area ── */
@@ -2051,12 +2029,53 @@ defineExpose({ sendText })
 .mobile-header-title .title-text {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.mobile-header-placeholder {
-  width: 36px;
-  flex-shrink: 0;
-}
 .menu-toggle { width: 36px; height: 36px; color: #555; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .menu-toggle:hover { color: #409eff; background: rgba(64,158,255,.08); }
+
+/* 顶栏左右两侧等宽：右侧从 1 个按钮变 2 个时，中间标题仍居中（--mh-btn 跟随按钮尺寸） */
+.mobile-header { --mh-btn: 36px; }
+.mh-side {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  width: calc(var(--mh-btn) * 2 + 2px);
+}
+.mh-left { justify-content: flex-start; }
+.mh-right { justify-content: flex-end; }
+
+/* 新建对话：对齐 deepseek 移动端——纯线条「方框+笔」，默认无底色、中性灰，
+   只有按下（.is-pressed 由 :active 提供）才浮出浅灰圆角。
+   刻意不复用 .menu-toggle：那个类带蓝色 hover，移动端 tap 后 :hover 会粘住，
+   图标会一直亮着蓝，和顶栏其余控件不搭。 */
+.new-chat-btn {
+  width: var(--mh-btn, 36px);
+  height: var(--mh-btn, 36px);
+  color: #555;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .16s ease, color .16s ease, transform .12s ease;
+}
+.new-chat-btn .new-chat-icon { width: 20px; height: 20px; display: block; }
+.new-chat-btn:active:not(:disabled),
+.new-chat-btn:focus-visible {
+  transform: scale(.92);
+  background: rgba(17, 24, 39, .07);
+  color: #1f2328;
+}
+.new-chat-btn:disabled { opacity: .45; cursor: not-allowed; }
+/* 有真实指针时才给 hover 反馈；触屏不参与，避免 tap 后高亮残留 */
+@media (hover: hover) and (pointer: fine) {
+  .new-chat-btn:hover:not(:disabled) { color: #1f2328; background: rgba(17, 24, 39, .05); }
+}
 
 .hamburger-icon {
   display: flex;
@@ -2089,10 +2108,11 @@ defineExpose({ sendText })
     top: calc(54px + env(safe-area-inset-top, 0px));
   }
   /* 顶栏四个控件在 375px 下也要放得下：缩小按钮与间距，标题可点开会话面板 */
-  .mobile-header { padding: 6px 6px; gap: 2px; }
+  .mobile-header { padding: 6px 6px; gap: 2px; --mh-btn: 32px; }
   .mobile-header-title { font-size: 15px; padding: 0 2px; }
   .menu-toggle { width: 32px; height: 32px; }
   .menu-toggle :deep(.el-icon) { font-size: 18px; }
+  .new-chat-btn .new-chat-icon { width: 18px; height: 18px; }
   /* 欢迎语改用固定高度居中：高度取「输入框仍是单行时」的消息区高度
      （--chat-welcome-h 由 syncBaseHeights() 量得，兜底值 ≈ 单行输入栏 + 底部导航）。
      输入框被撑高时 .messages 会被压缩，但 .welcome 高度不变、内容在固定高度里居中，

@@ -147,6 +147,13 @@
             class="pcp-cat" :class="{ active: category === c }"
             @click="chooseCategory(c)"
           >{{ c }}</button>
+          <!-- 失物 / 招领不是帖子分区，而是社区里另一份数据：选中后离开编辑器，
+               交给父页打开对应的登记表单，避免发出无法在「失物 / 招领」胶囊下看到的帖子 -->
+          <button
+            v-for="c in LOST_FOUND_CATEGORIES" :key="c.value" type="button"
+            class="pcp-cat"
+            @click="chooseLostFound(c.value)"
+          >{{ c.label }}</button>
         </div>
       </div>
     </div>
@@ -175,6 +182,8 @@ import { actionConfirm } from '@/composables/useActionSheet'
 const emit = defineEmits<{
   (e: 'closed'): void
   (e: 'published', post: CommunityPost): void
+  /** 选中「失物 / 招领」：父页关掉编辑器并打开对应的登记表单 */
+  (e: 'lostFound', type: 'lost' | 'found'): void
 }>()
 
 const MODES = [
@@ -182,6 +191,12 @@ const MODES = [
   { key: 'article' as const, label: '文章', desc: '长文，适合经验与教程' },
 ]
 const EMOJIS = ['😀', '😄', '😁', '😊', '🙂', '😉', '😍', '🤩', '😎', '🤔', '😅', '😂', '🥲', '😭', '😤', '😴', '👍', '👏', '🙏', '💪', '🎉', '🔥', '✨', '❤️']
+
+/** 交流社区筛选行里另外两个「分区」，数据源是失物招领（/lost-found/items） */
+const LOST_FOUND_CATEGORIES: { label: string; value: 'lost' | 'found' }[] = [
+  { label: '失物', value: 'lost' },
+  { label: '招领', value: 'found' },
+]
 
 const MAX_IMAGES = 9
 const TITLE_MAX = 30
@@ -230,6 +245,13 @@ function switchMode(key: 'post' | 'article') {
 function chooseCategory(c: string) {
   category.value = category.value === c ? '' : c
   categoryOpen.value = false
+}
+
+/** 失物 / 招领：先播退场动画，再把「打开登记表单」交给父页（编辑器里的草稿已自动保存） */
+function chooseLostFound(type: 'lost' | 'found') {
+  categoryOpen.value = false
+  closing.value = true
+  window.setTimeout(() => emit('lostFound', type), 260)
 }
 
 /* ---------- 配图 ---------- */

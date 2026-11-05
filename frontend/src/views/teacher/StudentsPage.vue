@@ -939,6 +939,7 @@ import {
 import { getConversations, type ConversationOut } from '@/api/messages'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import CareRecordPanel from '@/components/teacher/care/CareRecordPanel.vue'
 import StudentInsightPanel from '@/components/teacher/insight/StudentInsightPanel.vue'
@@ -1076,6 +1077,10 @@ function openRoster() {
 
 // 移动端页内二级页面（学生详情 / 班级分析 / 名单子页）：打开时让出底部悬浮导航
 useMobileSubPage(computed(() => isMobile.value && (detailVisible.value || showAnalyticsPage.value || rosterSubPage.value)))
+// 系统返回一次只收一层（见 useBackLayer）：名单 → 详情 / 分析逐层退
+useBackLayer(computed(() => isMobile.value && detailVisible.value), () => { detailVisible.value = false })
+useBackLayer(computed(() => isMobile.value && showAnalyticsPage.value), () => { showAnalyticsPage.value = false })
+useBackLayer(computed(() => isMobile.value && rosterSubPage.value), () => { rosterSubPage.value = false })
 
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 

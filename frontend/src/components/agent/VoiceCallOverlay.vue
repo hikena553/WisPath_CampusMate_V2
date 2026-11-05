@@ -10,7 +10,7 @@
           <div class="vc-grid" />
         </div>
 
-        <!-- 顶部：称谓 + 通话状态 + 关闭 -->
+        <!-- 顶部：称谓 + 通话状态（挂断统一走底部控制条） -->
         <header class="vc-top">
           <div class="vc-brand">
             <span class="vc-live" :class="callState" />
@@ -19,9 +19,6 @@
               <small>语音通话</small>
             </div>
           </div>
-          <button class="vc-icon-btn" title="结束通话" @click="handleClose">
-            <el-icon :size="20"><CloseBold /></el-icon>
-          </button>
         </header>
 
         <!-- 舞台：智能体形象 -->
@@ -29,6 +26,7 @@
           <VoiceMascot :state="charState" :level="smoothedLevel" :size="mascotSize" />
           <div class="vc-status" :class="{ pulse: callState === 'processing', err: callState === 'error' }">{{ statusText }}</div>
           <div v-if="callState === 'speaking'" class="vc-hint">你可以随时开口打断我</div>
+          <div v-else-if="callState === 'processing'" class="vc-hint">正在组织回答，这时说话我收不到</div>
           <div v-else-if="callState === 'listening'" class="vc-hint">我正在听，说完停顿一下就好</div>
           <div v-else-if="callState === 'error'" class="vc-hint">按提示处理后，点下方麦克风重试</div>
         </main>
@@ -79,7 +77,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Microphone, PhoneFilled, CloseBold } from '@element-plus/icons-vue'
+import { Microphone, PhoneFilled } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/token'
 import { useVoiceCall, type VoiceState } from '@/composables/useVoiceCall'
 import { useEmotionDetection, type EmotionSnapshot } from '@/composables/useEmotionDetection'
@@ -120,6 +118,8 @@ function splitSentences(text: string): string[] {
 }
 
 let lastConvId: number | null | undefined
+// 错误提示限频：后端在连续识别轮次里可能多次推 error，避免 toast 刷屏
+let lastErrorToastAt = 0
 
 // 打开时拉取该会话既有回答（仅 assistant 侧），保留历史轮次
 async function loadHistory() {
@@ -182,7 +182,16 @@ const {
     const entry = chatHistory.value.find((e) => e.id === id)
     if (entry) entry.text += text
   },
-  onError: (msg) => { errorMsg.value = msg },
+  onError: (msg) => {
+    errorMsg.value = msg
+    // 识别/合成失败此前只写进 errorMsg，而浮层只在 error 态展示它 ——
+    // 用户看到的就是"没反应、状态乱跳"。这里补一条限频提示，失败原因可见。
+    const now = performance.now()
+    if (now - lastErrorToastAt >= 4000) {
+      lastErrorToastAt = now
+      ElMessage.warning(msg)
+    }
+  },
 })
 
 watch(voiceMuted, (v) => { isMuted.value = v })
@@ -416,13 +425,6 @@ onUnmounted(() => {
 .vc-brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .vc-brand-text strong { font-size: 15px; font-weight: 700; letter-spacing: .5px; }
 .vc-brand-text small { font-size: 11px; color: #8a97ad; }
-.vc-icon-btn {
-  width: 36px; height: 36px; border-radius: 50%; border: none;
-  background: rgba(255,255,255,.7); color: #6b7891; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 10px rgba(64,110,190,.12); transition: all .2s;
-}
-.vc-icon-btn:hover { background: #fff; color: #f56c6c; }
 
 /* 舞台 */
 .vc-stage {

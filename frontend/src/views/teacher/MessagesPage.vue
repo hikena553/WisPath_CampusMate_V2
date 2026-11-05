@@ -249,6 +249,7 @@
                 <div class="conv-info">
                   <div class="conv-top">
                     <span class="conv-name">{{ item.name }}</span>
+                    <span v-if="isCared(item.id)" class="conv-care" title="主页设置里设为特别关心">特别</span>
                     <span class="conv-time">{{ formatConvTime(item.last_message_time) }}</span>
                   </div>
                   <div class="conv-bottom">
@@ -463,9 +464,31 @@
             <div v-if="chatSubtitle && (!isMobile || activeType !== 'single')" class="chat-sub">{{ chatSubtitle }}</div>
           </div>
           <div class="chat-header-right">
-            <!-- 移动端：单枚三横线菜单，承载全部会话操作（与学生端同款）
+            <!-- 移动端单聊：三横线直接进对方个人主页（只看个人主页）。
+                 原先这里是一枚下拉菜单，挂着「查看档案 / 记录关怀 / 加入任务」——
+                 三个动作都能在主页与任务页里找到，聊天头这一格只留「进主页」这一件事，
+                 与 QQ 点标题进资料卡的手感一致。 -->
+            <button
+              v-if="isMobile && activeType === 'single' && activeId"
+              type="button"
+              class="chat-head-ghost"
+              aria-label="查看个人主页"
+              title="查看个人主页"
+              @click="openUserHomepage(activeId)"
+            >
+              <svg width="17" height="14" viewBox="0 0 17 14" aria-hidden="true">
+                <rect x="0" y="0" width="17" height="1.6" rx="0.8" fill="currentColor" />
+                <rect x="0" y="6.2" width="17" height="1.6" rx="0.8" fill="currentColor" />
+                <rect x="0" y="12.4" width="12" height="1.6" rx="0.8" fill="currentColor" />
+              </svg>
+            </button>
+            <!-- 移动端群聊：单枚三横线菜单，承载群设置 / 免打扰 / 加入任务（与学生端同款）
                  小绵管家是智能体会话，没有群/学生档案操作，因此不显示该菜单 -->
-            <el-dropdown v-if="isMobile && activeType !== 'butler' && activeType !== 'notice'" trigger="click" @command="onMobileChatMenuCommand">
+            <el-dropdown
+              v-else-if="isMobile && activeType === 'group'"
+              trigger="click"
+              @command="onMobileChatMenuCommand"
+            >
               <button type="button" class="chat-head-ghost" aria-label="更多操作">
                 <svg width="17" height="14" viewBox="0 0 17 14" aria-hidden="true">
                   <rect x="0" y="0" width="17" height="1.6" rx="0.8" fill="currentColor" />
@@ -475,19 +498,11 @@
               </button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <template v-if="activeType === 'single'">
-                    <el-dropdown-item command="home">查看主页</el-dropdown-item>
-                    <el-dropdown-item v-if="isMyStudent" command="profile">查看档案</el-dropdown-item>
-                    <el-dropdown-item v-if="isMyStudent" command="care">记录关怀</el-dropdown-item>
-                    <el-dropdown-item divided command="task">加入任务</el-dropdown-item>
-                  </template>
-                  <template v-else>
-                    <el-dropdown-item command="settings">群设置</el-dropdown-item>
-                    <el-dropdown-item command="mute">
-                      {{ groupMuted ? '关闭消息免打扰' : '开启消息免打扰' }}
-                    </el-dropdown-item>
-                    <el-dropdown-item divided command="task">加入任务</el-dropdown-item>
-                  </template>
+                  <el-dropdown-item command="settings">群设置</el-dropdown-item>
+                  <el-dropdown-item command="mute">
+                    {{ groupMuted ? '关闭消息免打扰' : '开启消息免打扰' }}
+                  </el-dropdown-item>
+                  <el-dropdown-item divided command="task">加入任务</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -666,37 +681,63 @@
         <div v-else class="msg-composer">
           <!-- 移动端：与学生端同款输入区（上排输入 + 发送，下排工具条） -->
           <template v-if="isMobile">
-            <div class="msg-input-bar mobile">
-              <div class="input-main composer-input">
-                <button v-if="voiceMode" class="hold-talk" type="button"
-                  :class="{ recording: isRecording, cancel: recordCancelled }"
-                  @pointerdown.prevent="onTalkStart"
-                  @pointermove="onTalkMove"
-                  @pointerup="onTalkEnd"
-                  @pointercancel="onTalkCancel"
-                  @contextmenu.prevent>
-                  {{ isRecording ? (recordCancelled ? '松开取消' : '松开发送') : '按住 说话' }}
-                </button>
-                <el-input v-else v-model="newMsg" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
-                  class="composer-textarea" placeholder="发消息…"
-                  @keydown.enter.exact.prevent="sendMsg" />
-              </div>
-              <button class="msg-send-btn" type="button" :disabled="!hasText" @click="sendMsg">发送</button>
+            <div class="msg-composer-bar">
+              <button v-if="voiceMode" class="msg-hold-talk" type="button"
+                :class="{ recording: isRecording, cancel: recordCancelled }"
+                @pointerdown.prevent="onTalkStart"
+                @pointermove="onTalkMove"
+                @pointerup="onTalkEnd"
+                @pointercancel="onTalkCancel"
+                @contextmenu.prevent>
+                {{ isRecording ? (recordCancelled ? '松开取消' : '松开发送') : '按住 说话' }}
+              </button>
+              <textarea v-else ref="mobileComposerEl" v-model="newMsg" rows="1"
+                placeholder="发消息…" @input="autosizeComposer"
+                @keydown.enter.exact.prevent="sendMsg" />
+              <button class="msg-send" type="button" :disabled="!hasText" @click="sendMsg">发送</button>
             </div>
             <div class="msg-composer-tools">
-              <button class="msg-tool" :class="{ active: voiceMode }" type="button"
-                :aria-label="voiceMode ? '切换到键盘' : '语音输入'" @click="toggleVoiceMode">
-                <el-icon :size="21"><EditPen v-if="voiceMode" /><Microphone v-else /></el-icon>
+              <button class="msg-tool" :class="{ 'is-on': voiceMode }" type="button"
+                :aria-label="voiceMode ? '切换到键盘' : '语音消息'"
+                :title="voiceMode ? '切换到键盘' : '语音消息'" @click="toggleVoiceMode">
+                <svg v-if="voiceMode" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="5.6" width="18" height="12.8" rx="3.2" />
+                  <path d="M7 9.4h10M7 12.4h10M7 15.4h5.5" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="2.4" width="6" height="10.8" rx="3" />
+                  <path d="M5.4 11.3a6.6 6.6 0 0 0 13.2 0" />
+                  <path d="M12 17.9v3.6" />
+                </svg>
               </button>
-              <button class="msg-tool" type="button" aria-label="图片" @click="pickImage">
-                <DtIcon name="image" :size="21" />
+              <button class="msg-tool" type="button" aria-label="图片" title="图片" @click="pickImage">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4.6" width="18" height="14.8" rx="4.2" />
+                  <circle cx="8.4" cy="9.7" r="1.45" />
+                  <path d="M4.2 17.2l3.9-3.6a2 2 0 0 1 2.7-.05l2.9 2.6 2.1-2a2 2 0 0 1 2.7 0l1.2 1.1" />
+                </svg>
               </button>
-              <button class="msg-tool" type="button" aria-label="文件" @click="pickFile">
-                <DtIcon name="document" :size="21" />
+              <button class="msg-tool" type="button" aria-label="相机" title="相机" @click="pickCamera">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3.5 10.2A3.7 3.7 0 0 1 7.2 6.5h1.1l.9-1.7a1 1 0 0 1 .9-.5h3.8a1 1 0 0 1 .9.5l.9 1.7h1.1a3.7 3.7 0 0 1 3.7 3.7v6.6a3.7 3.7 0 0 1-3.7 3.7H7.2a3.7 3.7 0 0 1-3.7-3.7z" />
+                  <circle cx="12" cy="13.1" r="3.3" />
+                </svg>
               </button>
-              <button class="msg-tool" :class="{ active: showEmoji }" type="button"
-                aria-label="表情" @click="toggleEmoji">
-                <DtIcon name="smile" :size="21" />
+              <button class="msg-tool" type="button" aria-label="文件" title="文件" @click="pickFile">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14.1 2.9H7.6A3.4 3.4 0 0 0 4.2 6.3v11.4a3.4 3.4 0 0 0 3.4 3.4h8.8a3.4 3.4 0 0 0 3.4-3.4V9.5z" />
+                  <path d="M14.1 2.9v6.6h5.7" />
+                  <path d="M8.4 13.2h7.2M8.4 16.6h4.6" />
+                </svg>
+              </button>
+              <button class="msg-tool" :class="{ 'is-on': showEmoji }" type="button"
+                aria-label="表情" title="表情" @click="toggleEmoji">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9.1" />
+                  <path d="M8.4 14.1c.85 1.55 2.1 2.35 3.6 2.35s2.75-.8 3.6-2.35" />
+                  <circle class="solid" cx="8.9" cy="9.7" r="1" />
+                  <circle class="solid" cx="15.1" cy="9.7" r="1" />
+                </svg>
               </button>
             </div>
             <div v-if="showEmoji" class="msg-emoji-sheet">
@@ -772,6 +813,8 @@
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.csv,.md,.json,.xml,.mp4,.mov,.avi,.mkv" />
           <input type="file" multiple hidden ref="imageInputRef" @change="onFileSelect"
             accept=".jpg,.jpeg,.png,.gif,.bmp" />
+          <input type="file" hidden ref="cameraInputRef" @change="onFileSelect"
+            accept="image/*" capture="environment" />
 
           <!-- 录音浮层：松开发送 / 上滑取消 -->
           <Transition name="fade">
@@ -851,7 +894,7 @@
           <el-button type="primary" @click="openButler">
             <DtIcon name="robot" :size="16" /> 小绵管家
           </el-button>
-          <el-button @click="showAddFriend = true">
+          <el-button @click="goAddFriend">
             <DtIcon name="user" :size="16" /> 发起会话
           </el-button>
           <el-button @click="showCreateGroup = true">
@@ -860,50 +903,6 @@
         </div>
       </div>
     </div>
-
-    <!-- ============= 添加好友弹窗 ============= -->
-    <!-- 选择联系人（搜索+列表：移动端=全屏子页 / 桌面端=弹窗） -->
-    <ResponsivePopup v-model="showAddFriend" class="dt-dialog-limit" title="选择联系人" width="440px" @opened="focusAddFriendInput">
-      <div class="add-friend-dialog">
-        <div class="add-friend-search-box">
-          <el-input ref="addFriendInputRef" v-model="addFriendSearch" placeholder="输入学号、工号或姓名搜索"
-            size="large" clearable @input="onAddFriendSearch">
-            <template #prefix><DtIcon name="search" :size="17" /></template>
-          </el-input>
-          <div class="add-friend-hint">
-            <el-icon><InfoFilled /></el-icon>
-            <span>可搜索全校师生直接发起会话，支持学号/工号/姓名检索</span>
-          </div>
-        </div>
-        <div class="add-friend-results">
-          <div v-if="addFriendSearch.trim() && addFriendLoading" class="search-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
-            <span>搜索中...</span>
-          </div>
-          <div v-else-if="addFriendSearch.trim() && !addFriendLoading && addFriendResults.length === 0" class="empty-state">
-            <el-icon :size="40" color="#ddd"><User /></el-icon>
-            <span>未找到用户</span>
-          </div>
-          <div v-for="u in addFriendResults" :key="u.id" class="add-friend-item">
-            <div class="add-friend-item-left is-clickable" title="查看个人主页" @click="openUserHomepage(u.id)">
-              <el-avatar :size="44" :src="u.avatar || undefined">{{ u.name[0] }}</el-avatar>
-              <div class="add-friend-item-info">
-                <div class="add-friend-item-name">
-                  {{ u.name }}
-                  <el-tag size="small" :type="u.role === 'teacher' ? 'warning' : 'info'">
-                    {{ u.role === 'teacher' ? '教师' : '学生' }}
-                  </el-tag>
-                </div>
-                <div class="add-friend-item-username">{{ u.username }}</div>
-              </div>
-            </div>
-            <el-button type="primary" size="small" @click="addFriendAndChat(u)">
-              <DtIcon name="message" :size="15" /> 聊天
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </ResponsivePopup>
 
     <!-- ============= 创建群聊弹窗 ============= -->
     <!-- 发起群聊（表单+选人：移动端=全屏子页） -->
@@ -1483,6 +1482,7 @@ import { actionConfirm } from '@/composables/useActionSheet'
 import { useRoute, useRouter } from 'vue-router'
 import SlidingTabs from '@/components/common/SlidingTabs.vue'
 import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { useAuthStore } from '@/stores/auth'
 import { getConversations, getMessages, sendMessage, markRead, getSessionPins, setSessionPin, deleteSession } from '@/api/messages'
@@ -1519,13 +1519,15 @@ import ButlerChat from '@/components/butler/ButlerChat.vue'
 // 钉钉风格图标（对齐钉钉设计的组件图案）
 import DtIcon from '@/components/common/DtIcon.vue'
 import { openUserHomepage } from '@/composables/useUserHomepage'
+// 好友设置（特别关心等）：主页设置页与消息列表共用一份缓存
+import { useFriendSettings } from '@/composables/useFriendSettings'
 import { getToken } from '@/utils/token'
 import { ElMessage } from 'element-plus'
 import Cropper from 'cropperjs'
 import QRCode from 'qrcode'
 import {
   User, ChatLineRound,
-  Bell, Loading, InfoFilled, Collection, Notebook,
+  Bell, Loading, Collection, Notebook,
   OfficeBuilding, FolderOpened,
   UploadFilled, Document, WarningFilled, Download,
   Microphone, EditPen, VideoPlay, VideoPause, Plus, Search, Check
@@ -1537,6 +1539,8 @@ const router = useRouter()
 const userId = auth.user?.id ?? 0
 const { isMobile } = useResponsive()
 const { siteMascot, agentName } = useSiteConfig()
+// 特别关心名单：主页「设置」里打开开关后，会话行上挂一枚「特别」标
+const { isCared, loadFriendSettings } = useFriendSettings()
 // 小绵管家入口的动态摘要（取最新一条资讯标题）
 const { butlerPreview, refreshButlerPreview } = useButlerPreview()
 
@@ -1797,39 +1801,10 @@ const filteredList = computed(() => {
 
 function filterConversations() {}
 
-// 发起会话：组织内用户无需「好友关系」，选中即打开单聊（与钉钉一致，无好友概念）
-const showAddFriend = ref(false)
-const addFriendSearch = ref('')
-const addFriendResults = ref<UserSearchResult[]>([])
-const addFriendLoading = ref(false)
-const addFriendInputRef = ref()
-let addFriendTimer: ReturnType<typeof setTimeout> | null = null
-
-function focusAddFriendInput() {
-  nextTick(() => addFriendInputRef.value?.focus())
-}
-
-function onAddFriendSearch() {
-  if (addFriendTimer) clearTimeout(addFriendTimer)
-  if (!addFriendSearch.value.trim()) {
-    addFriendResults.value = []
-    return
-  }
-  addFriendLoading.value = true
-  addFriendTimer = setTimeout(async () => {
-    try {
-      addFriendResults.value = await searchUsers(addFriendSearch.value.trim())
-    } catch { addFriendResults.value = [] }
-    finally { addFriendLoading.value = false }
-  }, 300)
-}
-
-async function addFriendAndChat(user: UserSearchResult) {
-  showAddFriend.value = false
-  addFriendSearch.value = ''
-  addFriendResults.value = []
-  await openChat(user.id, user.name, 'single')
-  ElMessage.success(`已打开与 ${user.name} 的会话`)
+// 发起会话：组织内用户无需「好友关系」，选中即打开单聊（与钉钉一致，无好友概念）。
+// 搜索选人在与学生端同构的「添加朋友」子页里完成，本页只负责跳转。
+function goAddFriend() {
+  void router.push({ name: 'teacher-message-add' })
 }
 
 // 创建群聊弹窗
@@ -1907,8 +1882,7 @@ const groupFileInputRef = ref<HTMLInputElement>()
 const groupAvatarInputRef = ref<HTMLInputElement>()
 const showGroupCrop = ref(false)
 // v6.1：移动端子页无 opened 事件，用 watch 兜底初始化（桌面端 @opened 与之幂等）
-watch([showAddFriend, showManageGroup, showGroupCrop], ([a, m, c]) => {
-  if (a) nextTick(focusAddFriendInput)
+watch([showManageGroup, showGroupCrop], ([m, c]) => {
   if (m) nextTick(onManageDialogOpened)
   if (c) nextTick(onGroupCropOpened)
 })
@@ -2045,6 +2019,8 @@ const dragOver = ref(false)
 const uploadProgress = ref(0)
 const fileInputRef = ref<HTMLInputElement>()
 const imageInputRef = ref<HTMLInputElement>()
+const cameraInputRef = ref<HTMLInputElement>()
+const mobileComposerEl = ref<HTMLTextAreaElement>()
 const previewUrl = ref('')
 
 // 加号展开面板
@@ -2057,9 +2033,23 @@ function pickImage() {
   showAttachPanel.value = false
   imageInputRef.value?.click()
 }
+function pickCamera() {
+  showAttachPanel.value = false
+  showEmoji.value = false
+  cameraInputRef.value?.click()
+}
 function pickFile() {
   showAttachPanel.value = false
   fileInputRef.value?.click()
+}
+
+/** 移动端输入框随内容长高，下限与发送键对齐 */
+function autosizeComposer() {
+  const el = mobileComposerEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  const floor = isMobile.value ? 52 : 0
+  el.style.height = `${Math.min(Math.max(el.scrollHeight, floor), 120)}px`
 }
 
 async function searchMembersToAdd() {
@@ -2828,6 +2818,14 @@ function goBack() {
   groupSubPage.value = null
 }
 
+/** 移动端：会话窗口 / 群设置子页 / 搜索浮层各自算一层，系统返回一次只收一层（见 useBackLayer） */
+useBackLayer(computed(() => isMobile.value && activeId.value !== null), goBack)
+useBackLayer(computed(() => isMobile.value && !!groupSubPage.value), () => {
+  // 群设置 → 群聊；公告 / 文件 / 二维码 → 群设置
+  groupSubPage.value = groupSubPage.value === 'settings' ? null : 'settings'
+})
+useBackLayer(computed(() => isMobile.value && mobileSearchOpen.value), closeMobileSearch)
+
 /** 打开「小绵管家」常驻会话：自动推送资讯 / 总结对话，不占用单聊与群聊状态 */
 function openButler() {
   activeType.value = 'butler'
@@ -2862,6 +2860,7 @@ async function sendTextMsg(text: string) {
       await loadGroups()
     }
     newMsg.value = ''
+    if (isMobile.value) void nextTick(autosizeComposer)
     scrollToBottom()
   } catch { ElMessage.error('发送失败') }
 }
@@ -3135,7 +3134,7 @@ function createGroupFromMenu() {
 }
 function addFriendFromMenu() {
   plusOpen.value = false
-  showAddFriend.value = true
+  void router.push({ name: 'teacher-message-add' })
 }
 function clearUnreadFromMenu() {
   plusOpen.value = false
@@ -3180,6 +3179,8 @@ const chatPull = usePullRefresh(refreshChat, { enabled: () => isMobile.value })
 onMounted(async () => {
   document.addEventListener('click', onGlobalClick)
   loadPins()
+  // 特别关心的「特别」标：一次拉全量，主页改完会写回同一份缓存
+  void loadFriendSettings()
   connectWs()
   void refreshButlerPreview()
   // 通知在会话列表首行：未读角标与摘要都依赖这份数据，进页面就拉一次
@@ -3193,6 +3194,14 @@ onMounted(async () => {
     router.replace({ query: {} })
   } else if (route.query.chat) {
     openFromHomepageQuery()
+  } else if (route.query.view === 'contacts') {
+    // 从「添加朋友」子页的「通讯录」入口回来：直接落到通讯录视图
+    switchView('contacts')
+    router.replace({ query: {} })
+  } else if (route.query.action === 'group') {
+    // 从「添加朋友」子页的「发起群聊」入口回来：直接弹出建群表单
+    showCreateGroup.value = true
+    router.replace({ query: {} })
   }
 })
 
@@ -3567,12 +3576,12 @@ function onGlobalClick(e: MouseEvent) {
 .plus-fn-label { font-size: 12px; color: var(--dt-text-tertiary); }
 
 .input-main { flex: 1; min-width: 0; }
-.input-main .el-textarea__inner {
+.input-main :deep(.el-textarea__inner) {
   min-height: auto !important; padding: 8px 14px; line-height: 20px; resize: none;
   border-radius: var(--dt-radius-sm); border: none; background: #f2f3f5; box-shadow: none;
   transition: background .18s, box-shadow .18s;
 }
-.input-main .el-textarea__inner:focus {
+.input-main :deep(.el-textarea__inner):focus {
   background: var(--dt-surface); box-shadow: 0 0 0 1px var(--dt-primary) inset;
 }
 
@@ -3638,7 +3647,7 @@ function onGlobalClick(e: MouseEvent) {
 :deep(.el-dialog__headerbtn .el-dialog__close) { color: var(--dt-text-tertiary); }
 :deep(.el-dialog__headerbtn:hover) { background: #f2f3f5; }
 :deep(.el-dialog__body) { padding: 16px 18px; color: var(--dt-text-secondary); }
-/* 列表型弹窗（邀请成员 / 群成员 / 群管理 / 选择联系人 / 发起群聊）：
+/* 列表型弹窗（邀请成员 / 群成员 / 群管理 / 发起群聊）：
    高度随内容自适应，最高到视口 2/3，超出才在弹窗内滚动——不是写死 2/3 高度 */
 :deep(.dt-dialog-limit .el-dialog__body) {
   max-height: 66vh;
@@ -3704,7 +3713,6 @@ function onGlobalClick(e: MouseEvent) {
 /* 统一为白底 + 发丝线 + 56px 行高，与钉钉列表行规范一致 */
 .member-search-results,
 .add-member-results,
-.add-friend-results,
 .manage-invite-results,
 .group-members-list {
   max-height: 56vh; overflow-y: auto; overflow-x: hidden;
@@ -3714,7 +3722,6 @@ function onGlobalClick(e: MouseEvent) {
 }
 .member-search-item,
 .add-member-item,
-.add-friend-item,
 .manage-invite-item,
 .group-member-item {
   display: flex; align-items: center; gap: 12px;
@@ -3725,42 +3732,29 @@ function onGlobalClick(e: MouseEvent) {
 }
 .member-search-item:last-child,
 .add-member-item:last-child,
-.add-friend-item:last-child,
 .manage-invite-item:last-child,
 .group-member-item:last-child { border-bottom: none; }
 .member-search-item:hover,
 .add-member-item:hover,
-.add-friend-item:hover,
 .manage-invite-item:hover { background: var(--dt-hover); }
 .member-search-item:active,
-.add-member-item:active,
-.add-friend-item:active { background: var(--dt-surface-press); }
-.add-friend-item { justify-content: space-between; }
-.add-friend-item-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
-/* 头像 / 姓名为个人主页入口：点击查看对方主页，与「聊天」按钮并存不冲突 */
-.add-friend-item-left.is-clickable { cursor: pointer; border-radius: var(--dt-radius-sm); }
-.add-friend-item-left.is-clickable:active { background: #f2f3f5; }
-.add-friend-item-left.is-clickable:hover .add-friend-item-name { color: var(--dt-primary); }
+.add-member-item:active { background: var(--dt-surface-press); }
 /* 可点击头像统一样式：会话头像 / 通讯录头像 / 群成员头像点开个人主页 */
 .conv-avatar-clickable,
 .addr-avatar { cursor: pointer; }
 .member-search-info,
 .add-member-info,
-.manage-invite-info,
-.add-friend-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.add-friend-item-name { font-size: 15px; font-weight: 600; color: var(--dt-text); display: flex; align-items: center; gap: 8px; }
+.manage-invite-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .member-name,
 .add-member-info span,
 .manage-invite-info span { font-size: 15px; font-weight: 600; color: var(--dt-text); }
-.add-friend-item-username,
 .member-username,
 .add-member-info small,
 .manage-invite-info small { font-size: 12px; color: var(--dt-text-tertiary); }
 .member-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
 .member-info .member-name { font-size: 15px; font-weight: 600; color: var(--dt-text); }
 
-/* ===== 选择联系人：搜索框 / 提示 / 已选成员 ===== */
-.add-friend-search-box { margin-bottom: 4px; }
+/* ===== 弹窗内搜索框 ===== */
 .member-search-box { margin-bottom: 4px; }
 
 /* ===== 发起群聊：通讯录「最近联系人」快速勾选 ===== */
@@ -3788,14 +3782,6 @@ function onGlobalClick(e: MouseEvent) {
 .group-pick-row.picked { background: var(--dt-primary-soft); }
 .group-pick-check { pointer-events: none; margin-right: 0; }
 .group-pick-name { flex: 1; min-width: 0; font-size: 14px; color: var(--dt-text); }
-.add-friend-hint {
-  display: flex; align-items: center; gap: 6px; margin-top: 10px;
-  font-size: 11.5px; color: var(--dt-text-quiet);
-}
-.search-loading {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 30px 0; color: var(--dt-text-quiet); font-size: 13px;
-}
 .selected-members { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
 .selected-members .el-tag {
   background: var(--dt-primary-soft); border-color: transparent;
@@ -4247,7 +4233,6 @@ function onGlobalClick(e: MouseEvent) {
   :deep(.el-dialog.is-fullscreen .el-dialog__body) { padding: 12px 12px 16px; }
   .member-search-results,
   .add-member-results,
-  .add-friend-results,
   .manage-invite-results,
   .group-members-list {
     max-height: none; margin-top: 8px;
@@ -4255,7 +4240,6 @@ function onGlobalClick(e: MouseEvent) {
   }
   .member-search-item,
   .add-member-item,
-  .add-friend-item,
   .manage-invite-item,
   .group-member-item {
     padding: 12px 14px;
@@ -4357,6 +4341,17 @@ function onGlobalClick(e: MouseEvent) {
 }
 .gsp-item-switch { cursor: default; }
 .conv-mute { color: var(--dt-text-quiet); flex-shrink: 0; }
+/* 特别关心：会话行名字后面一枚小标，跟在名字后不抢时间的位置 */
+.conv-care {
+  flex-shrink: 0;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.14);
+  color: #d97706;
+  font-size: 10px;
+  line-height: 15px;
+}
 
 /* 桌面端会话行尾操作按钮（置顶 / 删除）：常占位不抖动，悬停显形，已置顶常亮 */
 .conv-pin-btn,
@@ -4533,10 +4528,12 @@ function onGlobalClick(e: MouseEvent) {
   }
   .back-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; margin: 0; padding: 0;
-    border-radius: 50%; background: #f4f5f7; color: #4b5563;
+    width: 30px; height: 30px; min-height: 30px; margin: 0; padding: 0;
+    border: none; border-radius: 50%; background: transparent; color: #4b5563;
+    outline: none;
   }
-  .back-btn:active { background: #eceef1; }
+  .back-btn:active { opacity: .55; }
+  .back-btn:focus, .back-btn:focus-visible { outline: none; box-shadow: none; }
   .chat-header-info { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; text-align: center; }
   .chat-name { max-width: 100%; font-size: 14.5px; font-weight: 600; color: #1f2329; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chat-sub { margin-top: 0; font-size: 10.5px; color: #9aa0a6; }
@@ -4569,41 +4566,52 @@ function onGlobalClick(e: MouseEvent) {
   .theirs .bubble-voice { background: #fff; color: #1f2329; border: none; border-radius: 10px; }
   .bubble-image { border-radius: 10px; }
 
-  /* ----- 输入区：白底、浅灰输入框、常驻蓝色发送键、下排工具条 ----- */
-  .msg-composer { background: #fff; padding: 10px 14px calc(6px + env(safe-area-inset-bottom, 0px)); }
-  .msg-input-bar.mobile { display: flex; align-items: stretch; gap: 10px; padding: 0; border-top: none; background: #fff; }
-  .msg-input-bar.mobile .input-main { display: flex; flex: 1; min-width: 0; }
-  .msg-input-bar.mobile .composer-textarea { flex: 1; min-width: 0; }
-  .msg-input-bar.mobile .input-main .el-textarea__inner {
-    min-height: 52px !important; max-height: 120px; padding: 15px 14px;
-    border-radius: 14px; background: #f5f6f8; border: none; box-shadow: none;
-    font-size: 14px; line-height: 1.45;
+  /* ----- 输入区：与学生端同款（上排输入 + 发送，下排工具条） ----- */
+  .msg-composer { display: block; border-top: none; background: #fff; padding: 10px 14px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .msg-composer-bar { display: flex; align-items: stretch; gap: 10px; }
+  .msg-composer-bar textarea {
+    flex: 1; min-width: 0; resize: none; border: none; outline: none;
+    min-height: 52px; max-height: 120px; padding: 15px 14px;
+    border-radius: 14px; background: #f5f6f8;
+    font-size: 14px; line-height: 1.45; color: #1f2329; font-family: inherit;
   }
-  .msg-input-bar.mobile .input-main .el-textarea__inner:focus { background: #f5f6f8; box-shadow: none; }
-  .msg-input-bar.mobile .composer-textarea :deep(.el-textarea__inner)::placeholder { color: #b9bcc2; }
-  .msg-send-btn {
+  .msg-composer-bar textarea::placeholder { color: #b9bcc2; }
+  .msg-hold-talk {
+    flex: 1; min-height: 52px; padding: 0 12px;
+    border: none; border-radius: 14px; background: #f5f6f8;
+    font-size: 14px; color: #1f2329; font-family: inherit;
+  }
+  .msg-hold-talk.recording { background: #e9f0f9; color: #2f86d6; }
+  .msg-hold-talk.cancel { background: #fdecec; color: #b42318; }
+  .msg-send {
     flex-shrink: 0; align-self: flex-end;
     width: 76px; height: 52px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
     border: none; border-radius: 14px;
     background: #7cb6ea; color: #fff;
     font-size: 14.5px; font-family: inherit; cursor: pointer;
     transition: background .16s;
   }
-  .msg-send-btn:disabled { background: #b7d5f2; cursor: default; }
-  .msg-send-btn:active:not(:disabled) { background: #6aa9e2; }
-  .msg-input-bar.mobile .hold-talk { min-height: 52px; border-radius: 14px; background: #f5f6f8; font-size: 14px; }
-  .hold-talk.recording { background: #e9f0f9; color: #2f86d6; }
-  .hold-talk.cancel { background: #fdecec; color: #b42318; }
+  .msg-send:disabled { background: #b7d5f2; cursor: default; }
+  .msg-send:active:not(:disabled) { background: #6aa9e2; }
 
   .msg-composer-tools { display: flex; align-items: center; justify-content: space-between; padding: 9px 0 2px; }
   .msg-tool {
     width: 46px; height: 34px; padding: 0;
     display: grid; place-items: center;
-    border: none; border-radius: 8px; background: transparent;
+    border: none; background: transparent;
     color: #14161a; cursor: pointer;
+    outline: none; -webkit-tap-highlight-color: transparent;
   }
+  .msg-tool svg {
+    display: block; width: 26px; height: 26px;
+    fill: none; stroke: currentColor;
+    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .msg-tool svg .solid { fill: currentColor; stroke: none; }
   .msg-tool:active { opacity: .45; }
-  .msg-tool.active { background: transparent; color: #2f86d6; }
+  .msg-tool:focus, .msg-tool:focus-visible { outline: none; }
+  .msg-tool.is-on { color: #2f86d6; }
   .msg-composer-tools .msg-tool:first-child { margin-left: -6px; }
   .msg-composer-tools .msg-tool:last-child { margin-right: -6px; }
 

@@ -64,7 +64,7 @@ def _ensure_database():
 _ensure_database()
 
 # SQLite 并发加固（稳定性 p4_2）：
-#   本项目同一进程内有「HTTP 请求 + 5 个后台周期任务线程 + 定时任务执行」
+#   本项目同一进程内有「HTTP 请求 + 多个后台周期任务线程」
 #   同时读写同一个 .db 文件。pysqlite 默认 busy timeout 只有 5 秒，一旦写入
 #   撞车就抛 "database is locked"，轻则接口 500，重则启动阶段的迁移/种子数据
 #   抛异常直接把进程带走（表现为"启动几秒后窗口自己关了"）。

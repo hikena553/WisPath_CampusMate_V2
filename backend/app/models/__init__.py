@@ -15,7 +15,6 @@ from app.models.leave import LeaveRequest
 from app.models.crisis import AIDialogSummary
 from app.models.certificate import Certificate
 from app.models.conversation import Conversation, ConversationMessage
-from app.models.cron_task import AgentCronTask, CronScheduleKind, CronTaskSource
 from app.models.message import Message
 from app.models.group import Group, GroupMember, GroupMessage
 from app.models.announcement import TeacherAnnouncement, AnnouncementRead, TeacherSchedule
@@ -75,3 +74,4 @@ from app.models.help_request import HelpRequest, HelpRequestStatus
 from app.models.learning_event import LearningEvent
 from app.models.badge import UserBadge
 from app.models.password_reset import PasswordResetRequest, PasswordResetStatus
+from app.models.social import Follow, ForumMessage, ForumMessageKind, FriendSetting  # noqa: F401

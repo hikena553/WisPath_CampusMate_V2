@@ -22,6 +22,7 @@ from app.schemas.community import (
     CommunityPostCreate, CommunityPostUpdate, CommunityPostOut,
     CommunityCommentCreate, CommunityCommentOut, LikeOut,
 )
+from app.services import social_service
 
 router = APIRouter(prefix="/api/community", tags=["交流社区"])
 
@@ -88,6 +89,10 @@ def list_posts(
         query = query.filter(
             (CommunityPost.title.like(like)) | (CommunityPost.content.like(like))
         )
+    # 动态权限：不看 TA 的 / TA 不让我看的，都不进信息流（口径见 social_service）
+    hidden = social_service.hidden_author_ids(db, current_user.id)
+    if hidden:
+        query = query.filter(CommunityPost.student_id.notin_(hidden))
     if sort == "hot":
         query = query.order_by(CommunityPost.like_count.desc(), CommunityPost.created_at.desc())
     else:
@@ -111,19 +116,24 @@ def list_following_posts(
        加权排序会让晚发的内容插到早发的前面，用户会怀疑漏看了；
     ③ 关注关系为空时直接走 JOIN 得空结果，不额外查一次关注表。
     """
-    posts = (
+    query = (
         db.query(CommunityPost)
         .join(Follow, Follow.following_id == CommunityPost.student_id)
         .filter(
             Follow.follower_id == current_user.id,
             CommunityPost.student_id != current_user.id,
         )
-        .order_by(CommunityPost.created_at.desc(), CommunityPost.id.desc())
+    )
+    # 与 /posts 同一份动态权限口径：关注了但设了「不看 TA 的动态」的人也不出现
+    hidden = social_service.hidden_author_ids(db, current_user.id)
+    if hidden:
+        query = query.filter(CommunityPost.student_id.notin_(hidden))
+    posts = (
+        query.order_by(CommunityPost.created_at.desc(), CommunityPost.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
-    )
-    # with_content=False：列表只要摘要（120 字），正文留给详情页按需取
+    )    # with_content=False：列表只要摘要（120 字），正文留给详情页按需取
     return [_post_out(db, p, current_user, with_content=False) for p in posts]
 
 
@@ -183,6 +193,10 @@ def list_user_posts(
     """
     if not db.query(User.id).filter(User.id == user_id).first():
         raise HTTPException(404, "用户不存在")
+    # 动态权限：对方设了「不让 TA 看我的动态」，主页这一块就当没有内容（不是报错，
+    # 否则同一份主页在两个人眼里一个能开一个 500）
+    if social_service.hidden_for_viewer(db, user_id, current_user.id):
+        return []
     query = db.query(CommunityPost).filter(CommunityPost.student_id == user_id)
     if before_id:
         query = query.filter(CommunityPost.id < before_id)

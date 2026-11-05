@@ -350,6 +350,7 @@ import {
 import { searchKnowledge, type KnowledgeHit } from '@/api/knowledge'
 // 覆盖式子页外壳：落位 + 进出场动画 + Esc + 滚动锁（与 styles/subpage-transition.css 配套）
 import SubPageShell from '@/components/common/SubPageShell.vue'
+import { useBackLayer } from '@/composables/useBackLayer'
 import { isGuestMode } from '@/utils/guest'
 import { promptLogin } from '@/utils/loginGate'
 
@@ -374,11 +375,16 @@ function close() {
   emit('close-start')
 }
 
+/** 移动端：搜索页是一层页内浮层，系统返回一次只收这一层（见 useBackLayer） */
+useBackLayer(visible, close)
+
 /* ==================== 搜索框 ==================== */
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const keyword = ref('')
 const searchDone = ref(false)
+/** 结果页是本页内的第三层：系统返回先退结果页，再退搜索页（与 Esc / 返回箭头同语义） */
+useBackLayer(computed(() => visible.value && searchDone.value), backToSearch)
 const newsHits = ref<SearchPoolItem[]>([])
 const knowledgeHits = ref<KnowledgeHit[]>([])
 const knowledgeLoading = ref(false)

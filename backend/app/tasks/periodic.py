@@ -8,8 +8,6 @@ logger = logging.getLogger(__name__)
 REFRESH_INTERVAL_SECONDS = 1800
 # 主动触达推送间隔：30 分钟扫一轮全体学生，命中规则即落库站内通知
 PROACTIVE_INTERVAL_SECONDS = 1800
-# Agent 定时任务：每分钟扫一次到期任务
-CRON_TASK_SCAN_INTERVAL_SECONDS = 60
 # 资源探针：10 分钟记一次内存/线程数
 RESOURCE_PROBE_INTERVAL_SECONDS = 600
 # 资讯账号发帖：与外部资讯抓取同节奏（30 分钟），转发新条目 + 到点补发每日汇总
@@ -124,26 +122,6 @@ async def _periodic_chat_file_cleanup() -> None:
         await asyncio.sleep(CHAT_FILE_CLEANUP_INTERVAL_SECONDS)
 
 
-async def _periodic_cron_task_runner() -> None:
-    """Agent 定时任务调度：每分钟扫描一次到期任务并执行。
-
-    测试环境不启动（conftest 注入 TESTING=1）：测试会直接调用
-    execute_due_tasks() 验证内核，避免调度循环抢跑真实任务。
-    """
-    import os
-
-    if os.getenv("TESTING") == "1":
-        return
-    from app.services.cron_task_service import execute_due_tasks
-
-    while True:
-        try:
-            await execute_due_tasks()
-        except Exception:
-            logger.exception("[定时任务] 调度扫描异常")
-        await asyncio.sleep(CRON_TASK_SCAN_INTERVAL_SECONDS)
-
-
 def start_periodic_tasks() -> list[asyncio.Task]:
     """创建全部周期任务，返回任务句柄供应用生命周期管理。"""
     from app.tasks.learning_alert import _periodic_learning_alert
@@ -157,8 +135,6 @@ def start_periodic_tasks() -> list[asyncio.Task]:
         asyncio.create_task(_periodic_learning_alert()),
         # AI 主动触达：每 30 分钟扫描全体学生，命中规则落到站内通知
         asyncio.create_task(_periodic_proactive_push()),
-        # Agent 定时任务：每分钟扫描到期任务，AI 到点自动执行
-        asyncio.create_task(_periodic_cron_task_runner()),
         # 聊天文件：每小时清理超过 7 天的文件（启动时先立即扫一遍）
         asyncio.create_task(_periodic_chat_file_cleanup()),
         # 资源探针：每 10 分钟记录 RSS / 线程数，用于判断进程是否被内存拖死

@@ -81,7 +81,7 @@ const checkState = ref<'checking' | 'ready' | 'missing' | 'unknown'>('checking')
 const statusText = computed(() => {
   if (checkState.value === 'checking') return '正在检查安装包…'
   if (checkState.value === 'missing') return '安装包正在准备中，请稍后再试'
-  return 'Android 7.0 及以上 · 约 20 MB'
+  return 'Android 7.0 及以上'
 })
 
 /**

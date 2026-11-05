@@ -92,7 +92,7 @@
               <span class="pf-tag">资料完整度 {{ profileCompletion }}%</span>
             </div>
 
-            <!-- 快捷入口行：一屏固定 5 个，其余左右滑查看（勋章已移到头像右侧的勋章条） -->
+            <!-- 快捷入口行：一屏固定 6 个，其余左右滑查看（勋章已移到头像右侧的勋章条） -->
             <nav class="pf-quick">
               <div class="pf-quick-track">
                 <button type="button" class="pf-quick-item" @click="openPage('profile')">
@@ -131,51 +131,113 @@
             </nav>
           </div>
 
-          <!-- 收藏的帖子：参考学生端个人中心的两列封面卡；无内容时直接留白，不铺空状态和边框 -->
-          <template v-if="articleFavs.length">
-            <h3 class="pf-section-title">收藏</h3>
-            <section class="pf-fav-area">
-              <div class="pf-fav-grid">
-                <button
-                  v-for="fav in articleFavs.slice(0, 4)"
-                  :key="fav.id"
-                  type="button"
-                  class="pf-fav-card"
-                  @click="openArticleDetail(fav)"
-                >
-                  <div class="pf-fav-cover" :class="`tone-${fav.id % 5}`">
-                    <span class="pf-fav-cover-text">{{ fav.title || '校园资讯' }}</span>
-                    <span v-if="fav.source" class="pf-fav-tag">{{ fav.source }}</span>
-                  </div>
-                  <div class="pf-fav-title">{{ fav.title }}</div>
-                  <div class="pf-fav-meta">
-                    <el-icon :size="11"><Star /></el-icon>
-                    <span>{{ fav.created_at ? fav.created_at.slice(0, 10) : '已收藏' }}</span>
-                  </div>
-                </button>
-              </div>
-            </section>
-          </template>
+          <!-- 帖子 / 收藏：与学生端个人中心同一套框架 —— 同一行 Tab 切换（左右滑可换）
+               + 下方向下铺开的封面卡，每栏只铺 4 张，全量收进各自子页。
+               教师没有项目经历，所以比学生端少一栏；顺序按「本人的 → 收藏的」排。 -->
+          <div class="pf-cards-area">
+            <div class="pf-cards-tabs" role="tablist" aria-label="个人内容">
+              <button
+                type="button"
+                role="tab"
+                class="pf-cards-tab"
+                :class="{ 'is-active': cardTab === 'posts' }"
+                :aria-selected="cardTab === 'posts'"
+                @click="cardTab = 'posts'"
+              >
+                帖子
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="pf-cards-tab"
+                :class="{ 'is-active': cardTab === 'favorites' }"
+                :aria-selected="cardTab === 'favorites'"
+                @click="cardTab = 'favorites'"
+              >
+                收藏
+              </button>
+              <!-- 卡片只铺 4 张：再多就把个人主页挤成第二个资讯列表，
+                   全量收进各自的子页。入口跟着 Tab 走，只在对应页签下出现。 -->
+              <button
+                v-if="cardTab === 'posts' && myPosts.length > CARD_PREVIEW"
+                type="button"
+                class="pf-cards-all"
+                @click="openPage('myposts')"
+              >
+                全部 {{ myPosts.length }} 条
+                <el-icon :size="11"><ArrowRight /></el-icon>
+              </button>
+              <button
+                v-else-if="cardTab === 'favorites' && articleFavs.length"
+                type="button"
+                class="pf-cards-all"
+                @click="openPage('favorites')"
+              >
+                全部 {{ articleFavs.length }} 条
+                <el-icon :size="11"><ArrowRight /></el-icon>
+              </button>
+            </div>
 
-          <!-- 我发布的帖子：交流社区中本人发布的帖子 -->
-          <template v-if="myPosts.length">
-            <h3 class="pf-section-title">我发布的帖子</h3>
-            <section class="pf-fav-area">
-              <div class="pf-fav-grid">
-                <div v-for="post in myPosts.slice(0, 4)" :key="post.id" class="pf-fav-card">
-                  <div class="pf-fav-cover" :class="`tone-${post.id % 5}`">
-                    <span class="pf-fav-cover-text">{{ post.title }}</span>
-                    <span class="pf-fav-tag">{{ post.category }}</span>
-                  </div>
-                  <div class="pf-fav-title">{{ post.title }}</div>
-                  <div class="pf-fav-meta">
-                    <el-icon :size="11"><EditPen /></el-icon>
-                    <span>{{ post.created_at ? post.created_at.slice(0, 10) : '已发布' }}</span>
+            <!-- 左右滑动切换：帖子 → 收藏，向左滑进下一栏，向右滑回上一栏，到头停住 -->
+            <div
+              class="pf-cards-body"
+              @touchstart="onSwipeStart"
+              @touchmove="onSwipeMove"
+              @touchend="onSwipeEnd"
+              @pointerdown="onPointerStart"
+              @pointerup="onPointerEnd"
+            >
+              <!-- 我发布的帖子：交流社区里本人发布的内容，点开在站内详情里看/删 -->
+              <template v-if="cardTab === 'posts'">
+                <div v-if="postLoading" class="pf-cards-loading">加载中…</div>
+                <div v-else-if="!myPosts.length" class="pf-cards-empty">还没有发过帖子</div>
+                <div v-else class="pf-media-grid">
+                  <div
+                    v-for="p in myPosts.slice(0, CARD_PREVIEW)"
+                    :key="p.id"
+                    class="pf-media-card"
+                    @click="openPostDetail(p.id)"
+                  >
+                    <div class="pf-media-cover" :class="`tone-${p.id % 5}`">
+                      <img v-if="p.images && p.images.length" :src="p.images[0]" alt="" loading="lazy" />
+                      <span v-else class="pf-media-cover-text">{{ p.title || '帖子' }}</span>
+                      <span v-if="p.category" class="pf-media-tag">{{ p.category }}</span>
+                    </div>
+                    <div class="pf-media-title">{{ p.title }}</div>
+                    <div class="pf-media-meta">
+                      <el-icon :size="11"><ChatLineSquare /></el-icon>
+                      <span>{{ postDate(p.created_at) }} · {{ p.like_count }} 赞</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
-          </template>
+              </template>
+
+              <!-- 收藏：校园资讯详情「收藏」写入的条目，点开走资讯同款站内详情 -->
+              <template v-else>
+                <div v-if="favLoading" class="pf-cards-loading">加载中…</div>
+                <div v-else-if="!articleFavs.length" class="pf-cards-empty">还没有收藏</div>
+                <div v-else class="pf-media-grid">
+                  <div
+                    v-for="fav in articleFavs.slice(0, CARD_PREVIEW)"
+                    :key="fav.id"
+                    class="pf-media-card"
+                    @click="openArticleDetail(fav)"
+                  >
+                    <div class="pf-media-cover" :class="`tone-${fav.id % 5}`">
+                      <img v-if="fav.image_url" :src="fav.image_url" alt="" loading="lazy" />
+                      <span v-else class="pf-media-cover-text">{{ fav.title || '校园资讯' }}</span>
+                      <span v-if="fav.source" class="pf-media-tag">{{ favSourceLabel(fav.source) }}</span>
+                    </div>
+                    <div class="pf-media-title">{{ fav.title }}</div>
+                    <div class="pf-media-meta">
+                      <el-icon :size="11"><Star /></el-icon>
+                      <span>{{ fav.created_at ? fav.created_at.slice(0, 10) : '已收藏' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
 
           <p class="pf-foot-note">{{ agentName }} · 智慧校园服务平台 v1.0.0</p>
         </div>
@@ -446,6 +508,63 @@
           <div v-else class="badge-placeholder">勋章数据加载中…</div>
         </div>
 
+        <!-- 我的帖子：交流社区里我发布的全部内容（个人主页卡片区只铺 4 张，全量落在这里）。
+             点开走交流社区同款站内详情，删除 / 编辑后回来列表同步更新。 -->
+        <div v-if="activeTab === 'myposts'" class="sub-page-content">
+          <p v-if="postLoading" class="pf-fav-empty">加载中…</p>
+          <p v-else-if="!myPosts.length" class="pf-fav-empty">还没有发过帖子</p>
+          <div v-else class="pf-fav-list">
+            <button
+              v-for="p in myPosts"
+              :key="p.id"
+              type="button"
+              class="pf-fav-row"
+              @click="openPostDetail(p.id)"
+            >
+              <span class="pf-fav-thumb">
+                <img v-if="p.images && p.images.length" :src="p.images[0]" alt="" loading="lazy" />
+                <el-icon v-else :size="18"><ChatLineSquare /></el-icon>
+              </span>
+              <span class="pf-fav-main">
+                <span class="pf-fav-title">{{ p.title }}</span>
+                <span class="pf-fav-meta">
+                  {{ p.category || '交流社区' }} · {{ postDate(p.created_at) }} · {{ p.like_count }} 赞 {{ p.comment_count }} 评论
+                </span>
+              </span>
+              <el-icon class="pf-fav-arrow" :size="14"><ArrowRight /></el-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- 我的收藏：校园资讯详情「收藏」写入的全部条目。
+             收藏这个动作发生在资讯页，回来找的时候人已经在个人中心了，
+             所以列表就落在这里，点开走校园资讯同款站内详情（不跳外部浏览器）。 -->
+        <div v-if="activeTab === 'favorites'" class="sub-page-content">
+          <p v-if="favLoading" class="pf-fav-empty">加载中…</p>
+          <p v-else-if="!articleFavs.length" class="pf-fav-empty">还没有收藏</p>
+          <div v-else class="pf-fav-list">
+            <button
+              v-for="fav in articleFavs"
+              :key="fav.id"
+              type="button"
+              class="pf-fav-row"
+              @click="openArticleDetail(fav)"
+            >
+              <span class="pf-fav-thumb">
+                <img v-if="fav.image_url" :src="fav.image_url" alt="" loading="lazy" />
+                <el-icon v-else :size="18"><Star /></el-icon>
+              </span>
+              <span class="pf-fav-main">
+                <span class="pf-fav-title">{{ fav.title }}</span>
+                <span class="pf-fav-meta">
+                  {{ favSourceLabel(fav.source) }} · {{ fav.created_at ? fav.created_at.slice(0, 10) : '已收藏' }}
+                </span>
+              </span>
+              <el-icon class="pf-fav-arrow" :size="14"><ArrowRight /></el-icon>
+            </button>
+          </div>
+        </div>
+
         <!-- 修改密码：参考 GitHub / Telegram 的安全设置页，单卡片表单 + 强度提示 -->
         <div v-if="activeTab === 'password'" class="sub-page-content sp-page">
           <div class="sp-card">
@@ -712,6 +831,16 @@
       @closed="articleTarget = null"
       @read="onArticleDetailRead"
     />
+
+    <!-- 帖子详情：卡片区的帖子卡片与「我的帖子」子页都从这里打开，
+         挂在根级而不是卡片区内 —— 详情是全屏子页，不该随卡片区一起被裁切/滚动。 -->
+    <PostDetailPage
+      v-if="activePostId"
+      :post-id="activePostId"
+      @closed="activePostId = 0"
+      @updated="onPostUpdated"
+      @deleted="onPostDeleted"
+    />
   </div>
 </template>
 
@@ -733,6 +862,8 @@ import { getMyPosts, type CommunityPost } from '@/api/community'
 import type { Announcement } from '@/types'
 import ArticleReader from '@/components/campus/ArticleReader.vue'
 import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
+// 我发的帖子：详情复用交流社区同款站内详情（与学生端个人中心同一套）
+import PostDetailPage from '@/components/community/PostDetailPage.vue'
 import { getMyBadgeWall, type BadgeItem, type BadgeWall as BadgeWallData } from '@/api/badge'
 import { syncQuickAccount } from '@/utils/quickLogin'
 import { confirmLogout } from '@/utils/logout'
@@ -749,6 +880,7 @@ import BadgeDetail from '@/components/profile/BadgeDetail.vue'
 import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
@@ -756,7 +888,7 @@ import {
   ArrowRight, ArrowLeft, Lock, SwitchButton, Sunny, InfoFilled,
   QuestionFilled, Bell, Camera, User, Check, Plus, Medal,
   DataAnalysis, UserFilled, Calendar, Tickets, Warning, ChatDotRound, EditPen, FolderOpened,
-  Setting, Star
+  Setting, Star, ChatLineSquare
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -777,11 +909,101 @@ const pageStack = ref<string[]>([])
 // 帖子：资讯收藏走校园资讯收藏明细（资讯详情「收藏」写入的表），我发布的走交流社区
 const articleFavs = ref<CampusArticleFavoriteItem[]>([])
 const myPosts = ref<CommunityPost[]>([])
+const favLoading = ref(false)
+const postLoading = ref(false)
+
+/** 卡片区每栏最多铺几张：再多就把个人主页挤成第二个资讯列表 */
+const CARD_PREVIEW = 4
+
+/** 卡片区当前 Tab 顺序：帖子 → 收藏（滑动方向与页签顺序一致） */
+type CardTab = 'posts' | 'favorites'
+const CARD_TABS: CardTab[] = ['posts', 'favorites']
+const cardTab = ref<CardTab>('posts')
+
+/**
+ * 左右滑动切换（触摸为主，鼠标拖拽辅助）。
+ * 用 touchmove 判定而不是只靠 touchend：手指拖动时页面可能开始纵向滚动，
+ * 一旦触发 pointercancel 就收不到 pointerup，touchend 反而是可靠的落点。
+ */
+let swipeStartX: number | null = null
+function swipeBegin(x: number) { swipeStartX = x }
+function swipeCheck(x: number) {
+  if (swipeStartX === null) return
+  const dx = x - swipeStartX
+  if (Math.abs(dx) < 40) return
+  // 按页签顺序走一格：向左滑（dx<0）进下一栏，向右滑回上一栏，到头就停住
+  const i = CARD_TABS.indexOf(cardTab.value)
+  const next = dx < 0 ? Math.min(i + 1, CARD_TABS.length - 1) : Math.max(i - 1, 0)
+  cardTab.value = CARD_TABS[next]
+  swipeStartX = null
+}
+function onSwipeStart(e: TouchEvent) {
+  const t = e.touches[0]
+  if (t) swipeBegin(t.clientX)
+}
+function onSwipeMove(e: TouchEvent) {
+  const t = e.touches[0]
+  if (t) swipeCheck(t.clientX)
+}
+function onSwipeEnd(e: TouchEvent) {
+  const t = e.changedTouches[0]
+  if (t) swipeCheck(t.clientX)
+  swipeStartX = null
+}
+// 鼠标（桌面端预览）拖动：只认 mouse，避免和触摸事件重复触发
+function onPointerStart(e: PointerEvent) {
+  if (e.pointerType === 'mouse') swipeBegin(e.clientX)
+}
+function onPointerEnd(e: PointerEvent) {
+  if (e.pointerType !== 'mouse') return
+  swipeCheck(e.clientX)
+  swipeStartX = null
+}
 
 async function loadProfilePosts() {
-  const [favs, posts] = await Promise.allSettled([getArticleFavorites(), getMyPosts()])
-  articleFavs.value = favs.status === 'fulfilled' ? favs.value : []
-  myPosts.value = posts.status === 'fulfilled' ? posts.value : []
+  favLoading.value = true
+  postLoading.value = true
+  try {
+    const [favs, posts] = await Promise.allSettled([getArticleFavorites(), getMyPosts()])
+    articleFavs.value = favs.status === 'fulfilled' ? favs.value : []
+    myPosts.value = posts.status === 'fulfilled' ? posts.value : []
+  } finally {
+    favLoading.value = false
+    postLoading.value = false
+  }
+}
+
+/** 发帖日期：后端给的是无时区 UTC，只取日期部分展示（与收藏卡口径一致） */
+function postDate(t: string | null) {
+  return t ? t.slice(0, 10) : '已发布'
+}
+
+// ---------- 我发的帖子 → 站内帖子详情 ----------
+const activePostId = ref(0)
+function openPostDetail(id: number) { activePostId.value = id }
+
+/** 详情里点赞/评论后回写计数，避免退回主页还是旧数字 */
+function onPostUpdated(post: CommunityPost) {
+  const i = myPosts.value.findIndex(p => p.id === post.id)
+  if (i > -1) myPosts.value[i] = { ...myPosts.value[i], ...post }
+}
+
+/** 详情里删掉自己的帖子 → 列表立刻少一条，空态跟着出现 */
+function onPostDeleted(id: number) {
+  myPosts.value = myPosts.value.filter(p => p.id !== id)
+}
+
+/** 来源 key → 中文栏目名：与校园资讯页 / 资讯详情的口径一致（三处显示的是同一件事，文案不能各写各的） */
+const FAV_SOURCE_LABELS: Record<string, string> = {
+  jwc_entries: '系统入口',
+  jwc_jxdt: '教学动态',
+  jwc_tzgg: '通知公告',
+  jwc_gjxx: '高教信息',
+  jwc_jxjs: '教学建设',
+  college_news: '学院动态',
+}
+function favSourceLabel(source: string) {
+  return FAV_SOURCE_LABELS[source] || source || '校园资讯'
 }
 
 // 收藏卡片 → 校园资讯同款站内详情页（不直接跳外部浏览器）
@@ -1060,6 +1282,8 @@ const pageTitle = computed(() => {
     profile: '账号与安全',
     settings: '设置',
     badges: '我的勋章',
+    myposts: '我的帖子',
+    favorites: '我的收藏',
     password: '修改密码',
     announcements: '校园公告',
     help: '使用帮助',
@@ -1077,6 +1301,8 @@ const pageSubtitle = computed(() => {
     profile: '管理账号信息与登录安全，保存后即时生效',
     settings: '帮助与反馈、账号安全、个性化与关于',
     badges: '按平台使用进度与深度解锁的勋章，附成长等级与解锁进度',
+    myposts: '我在交流社区发布的全部内容，点开可查看、评论或删除',
+    favorites: '我收藏的校园资讯，点开在站内阅读全文',
     password: '定期更换密码可提升账号安全性',
     banner: '选择预设渐变或上传图片，作为个人中心顶栏背景',
     announcements: '来自学校的通知与公告，点击可在新窗口查看详情',
@@ -1096,6 +1322,13 @@ const desktopMenuGroups = [
     title: '概览',
     items: [
       { key: 'overview', label: '数据概览', icon: DataAnalysis },
+    ],
+  },
+  {
+    title: '我的内容',
+    items: [
+      { key: 'myposts', label: '我的帖子', icon: ChatLineSquare },
+      { key: 'favorites', label: '我的收藏', icon: Star },
     ],
   },
   {
@@ -1154,6 +1387,9 @@ function closePage() {
   slideDirection.value = 'slide-right'
   currentPage.value = pageStack.value.pop() || null
 }
+
+/** 移动端：个人中心子页逐层退（系统返回与页内箭头同一语义，见 useBackLayer） */
+useBackLayer(computed(() => isMobile.value && !!currentPage.value), closePage)
 
 function selectPresetBanner(color: string) {
   bannerUrl.value = ''
@@ -2306,19 +2542,21 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-/* 快捷入口：按文案宽度等距排布，两侧留白与项间空隙同宽；入口多于一屏时左右滑查看 */
+/* 快捷入口：一屏固定 6 个，超出的左右滑查看；列宽按容器等分，适配不同手机宽度 */
 .pf-quick {
   margin-top: 14px;
-  /* 左右内边距与轨道 gap 取同一值，配合 space-evenly 让首尾留白 = 项间空隙 */
+  /* 左右内边距与轨道 gap 取同一值，让首尾留白 = 项间空隙 */
   padding: 12px 12px 6px;
   border-top: 1px solid var(--tui-border);
 }
-/* 滚动交给内部轨道：外层页边距交给 space-evenly 统一分配，避免两侧比项间更空 */
+/* 滚动交给内部轨道：6 列宽度由容器宽度反算（扣除 5 个 gap），窗口变窄时每列同比收窄，
+   不会把第 7、8 个入口挤成第二行 */
 .pf-quick-track {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 60px) / 6);
   gap: 12px;
-  justify-content: space-evenly;
+  align-items: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
@@ -2327,8 +2565,8 @@ onMounted(() => {
 }
 .pf-quick-track::-webkit-scrollbar { display: none; }
 .pf-quick-item {
-  /* 宽度由图标/文案撑开，不再等分格子，否则格子富余会全部堆到两侧 */
-  flex: 0 0 auto;
+  /* 每列固定为轨道的 1/6，文案再长也不撑破格子 */
+  width: 100%;
   min-width: 0;
   scroll-snap-align: start;
   display: flex;
@@ -2355,7 +2593,8 @@ onMounted(() => {
 }
 .pf-quick-label {
   max-width: 100%;
-  font-size: 10.5px;
+  /* 六列并排后格子变窄，字号随视口小幅收缩，320px 宽机型也能完整显示四字文案 */
+  font-size: clamp(9px, 2.8vw, 10.5px);
   line-height: 1.2;
   color: var(--tui-text-secondary);
   white-space: nowrap;
@@ -2384,23 +2623,6 @@ onMounted(() => {
   box-shadow: none;
   overflow: hidden;
 }
-.pf-section-title {
-  margin: 0;
-  padding: 12px 16px 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: #8b929e;
-}
-/* 带右侧动作 / 可折叠的分区头：内边距由头部统一承担 */
-.pf-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 14px 16px 6px;
-}
-.pf-section-head .pf-section-title { padding: 0; }
 .pf-section-body { padding: 12px 16px 14px; }
 .pf-list { display: flex; flex-direction: column; }
 .pf-row {
@@ -2907,26 +3129,137 @@ onMounted(() => {
   color: var(--tui-text-quiet);
 }
 
-/* ===== 收藏的帖子：学生端个人中心同款两列封面卡 ===== */
-.pf-fav-area { padding: 12px 14px 14px; }
-.pf-fav-grid {
+/* ===== 帖子 / 收藏：与学生端个人中心同一套框架 =====
+   Tab 行（抖音「作品 / 喜欢」范式）+ 两列封面卡向下铺开，全量收进子页。 */
+.pf-cards-area { padding: 12px 16px 0; }
+
+/* Tab 行：两个标题同一水平线，选中态加粗 + 短下划线 */
+.pf-cards-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.pf-cards-tab {
+  position: relative;
+  padding: 0 0 7px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tui-text-quiet);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.pf-cards-tab.is-active {
+  font-weight: 600;
+  color: var(--tui-text);
+}
+.pf-cards-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.pf-cards-body { margin-top: 10px; touch-action: pan-y; }
+.pf-cards-loading,
+.pf-cards-empty {
+  padding: 16px 8px;
+  font-size: 12.5px;
+  color: var(--tui-text-quiet);
+  text-align: center;
+}
+
+/* 内容超过 4 条时的出口：贴在页签行右端，跟「帖子 / 收藏」同一水平线。
+   不放卡片下方 —— 那里正好压在底部悬浮胶囊上，点不到（且页面不一定滚得动）。 */
+.pf-cards-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  padding: 0 0 7px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--tui-text-quiet, #9aa0a6);
+  cursor: pointer;
+}
+.pf-cards-all:active { opacity: 0.6; }
+
+/* ===== 我的帖子 / 我的收藏（子页）：一行一条，左缩略图 + 标题 + 来源/日期 ===== */
+.pf-fav-empty {
+  padding: 48px 0;
+  font-size: 13px;
+  color: var(--tui-text-quiet, #9aa0a6);
+  text-align: center;
+}
+/* 一条一条铺在灰底上会散，收进一张白卡里读起来才是一份清单（与设置页同一套卡片语言） */
+.pf-fav-list {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 12px;
+  border-radius: 14px;
+  background: #fff;
+}
+.pf-fav-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 2px;
+  border: none;
+  border-bottom: 1px solid var(--tui-line, #f0f1f3);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-fav-row:last-child { border-bottom: none; }
+.pf-fav-row:active { background: rgba(0, 0, 0, 0.03); }
+/* 缩略图固定 56：有图显示图，没图就放一枚淡图标，别留一块空白的灰方块 */
+.pf-fav-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f4f5f7;
+  color: #b9bcc2;
+  display: grid;
+  place-items: center;
+}
+.pf-fav-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pf-fav-title {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tui-text, #16181d);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pf-fav-meta { font-size: 11.5px; color: var(--tui-text-quiet, #9aa0a6); }
+.pf-fav-arrow { flex-shrink: 0; color: #c8ccd2; }
+
+/* 两列网格，数据向下铺开（不再横向滑动） */
+.pf-media-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 10px;
 }
-.pf-fav-card { min-width: 0; }
-button.pf-fav-card {
-  display: block;
-  width: 100%;
-  border: 0;
-  padding: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.pf-fav-cover {
+.pf-media-card { min-width: 0; cursor: pointer; }
+.pf-media-card:active { opacity: 0.72; }
+
+/* 封面：16:9，圆角 8px；无图时用低饱和渐变 + 分类文字占位（同 B 站专栏封面） */
+.pf-media-cover {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -2937,7 +3270,13 @@ button.pf-fav-card {
   align-items: center;
   justify-content: center;
 }
-.pf-fav-cover-text {
+.pf-media-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pf-media-cover-text {
   padding: 0 10px;
   font-size: 12px;
   font-weight: 600;
@@ -2949,12 +3288,13 @@ button.pf-fav-card {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.pf-fav-cover.tone-0 { background: linear-gradient(135deg, #8ea2c6, #5f739c); }
-.pf-fav-cover.tone-1 { background: linear-gradient(135deg, #9ab6a4, #6b8d78); }
-.pf-fav-cover.tone-2 { background: linear-gradient(135deg, #c2a68e, #96795f); }
-.pf-fav-cover.tone-3 { background: linear-gradient(135deg, #a89cc0, #7a6b96); }
-.pf-fav-cover.tone-4 { background: linear-gradient(135deg, #90aab8, #637f8f); }
-.pf-fav-tag {
+/* 五种低饱和渐变轮换，避免一片同色 */
+.pf-media-cover.tone-0 { background: linear-gradient(135deg, #8ea2c6, #5f739c); }
+.pf-media-cover.tone-1 { background: linear-gradient(135deg, #9ab6a4, #6b8d78); }
+.pf-media-cover.tone-2 { background: linear-gradient(135deg, #c2a68e, #96795f); }
+.pf-media-cover.tone-3 { background: linear-gradient(135deg, #a89cc0, #7a6b96); }
+.pf-media-cover.tone-4 { background: linear-gradient(135deg, #90aab8, #637f8f); }
+.pf-media-tag {
   position: absolute;
   left: 6px;
   bottom: 6px;
@@ -2969,23 +3309,28 @@ button.pf-fav-card {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pf-fav-title {
+/* 标题：两行截断，封面下 6px */
+.pf-media-title {
   margin-top: 6px;
   font-size: 12.5px;
   font-weight: 500;
-  line-height: 1.45;
+  line-height: 1.42;
   color: var(--tui-text);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.pf-fav-meta {
-  margin-top: 4px;
+/* 元信息：灰字小图标一行，同 B 站「播放量 · 弹幕数」位置 */
+.pf-media-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: 3px;
+  margin-top: 3px;
+  font-size: 10.5px;
   color: var(--tui-text-quiet);
+  overflow: hidden;
+  white-space: nowrap;
 }
+
 </style>

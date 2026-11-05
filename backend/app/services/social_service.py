@@ -12,7 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.community import CommunityPost
-from app.models.social import Follow, ForumMessage, ForumMessageKind
+from app.models.social import Follow, ForumMessage, ForumMessageKind, FriendSetting
 from app.models.user import User
 
 
@@ -285,3 +285,134 @@ def suggestions(db: Session, viewer: User, limit: int = 10) -> list[dict]:
         }
         for u in users
     ]
+
+
+# ==================== 好友设置（主页「设置」那一页） ====================
+
+# 亲密关系可用标识：code → 中文名。空串表示「未设置」，不在表内的一律拒绝，
+# 避免前端某个旧版本传了别的值把主页标签写成一串英文。
+INTIMACIES: dict[str, str] = {
+    "bestie": "闺蜜",
+    "buddy": "基友",
+    "partner": "搭子",
+    "deskmate": "同桌",
+}
+
+_FRIEND_SETTING_FIELDS = (
+    "remark", "care", "mute", "blocked",
+    "hide_peer_posts", "hide_my_posts", "intimacy",
+)
+
+
+def _setting_out(row: FriendSetting | None, peer_id: int) -> dict:
+    """把 ORM 行拍平成接口结构；没有行时给一份全默认（等价于「什么都没设」）"""
+    out = {"peer_id": peer_id}
+    for field in _FRIEND_SETTING_FIELDS:
+        out[field] = getattr(row, field) if row is not None else (
+            "" if field in ("remark", "intimacy") else False
+        )
+    return out
+
+
+def _get_row(db: Session, user_id: int, peer_id: int) -> FriendSetting | None:
+    return (
+        db.query(FriendSetting)
+        .filter(FriendSetting.user_id == user_id, FriendSetting.peer_id == peer_id)
+        .first()
+    )
+
+
+def friend_setting_state(db: Session, viewer_id: int, peer_id: int) -> dict:
+    """我设的 + 对方设的，一次给全（主页设置页与亲密关系标签共用）"""
+    return {
+        "mine": _setting_out(_get_row(db, viewer_id, peer_id), peer_id),
+        "peer": _setting_out(_get_row(db, peer_id, viewer_id), viewer_id),
+    }
+
+
+def save_friend_setting(db: Session, user_id: int, peer_id: int, patch: dict) -> dict:
+    """局部更新好友设置；没有任何改动时不写库（避免每次进主页都留一行时间戳）"""
+    if patch.get("intimacy") is not None:
+        code = str(patch["intimacy"]).strip()
+        if code and code not in INTIMACIES:
+            raise ValueError("不支持的亲密关系标识")
+        patch["intimacy"] = code
+    if patch.get("remark") is not None:
+        patch["remark"] = str(patch["remark"]).strip()
+
+    row = _get_row(db, user_id, peer_id)
+    changed = False
+    if row is None:
+        # 全默认 + 本次改动：没有改动就不落库，_setting_out 会给同样的默认值
+        if not any(v not in (None, "", False) for v in patch.values()):
+            return _setting_out(None, peer_id)
+        row = FriendSetting(user_id=user_id, peer_id=peer_id)
+        db.add(row)
+        changed = True
+    for field, value in patch.items():
+        if value is None or field not in _FRIEND_SETTING_FIELDS:
+            continue
+        if getattr(row, field) != value:
+            setattr(row, field, value)
+            changed = True
+    if changed:
+        row.updated_at = _now()
+        db.commit()
+        db.refresh(row)
+    return _setting_out(row, peer_id)
+
+
+def friend_settings_all(db: Session, user_id: int) -> list[dict]:
+    """我设过的全部联系人（消息列表按它给「特别关心」挂标）"""
+    rows = db.query(FriendSetting).filter(FriendSetting.user_id == user_id).all()
+    return [_setting_out(r, r.peer_id) for r in rows]
+
+
+def care_ids(db: Session, user_id: int) -> set[int]:
+    """特别关心名单"""
+    rows = (
+        db.query(FriendSetting.peer_id)
+        .filter(FriendSetting.user_id == user_id, FriendSetting.care.is_(True))
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def hidden_author_ids(db: Session, viewer_id: int) -> set[int]:
+    """信息流里该对 viewer 隐藏的作者集合。
+
+    两个来源合并：
+      ① viewer 自己「不看 TA 的动态」；
+      ② 对方「不让 viewer 看我的动态」（对方那条记录上 hide_my_posts）。
+    ②是单向的、由作者本人设置的，所以必须按 peer_id == viewer 反查。
+    """
+    hidden = {
+        row[0]
+        for row in db.query(FriendSetting.peer_id).filter(
+            FriendSetting.user_id == viewer_id, FriendSetting.hide_peer_posts.is_(True)
+        )
+    }
+    hidden |= {
+        row[0]
+        for row in db.query(FriendSetting.user_id).filter(
+            FriendSetting.peer_id == viewer_id, FriendSetting.hide_my_posts.is_(True)
+        )
+    }
+    hidden.discard(viewer_id)
+    return hidden
+
+
+def hidden_for_viewer(db: Session, author_id: int, viewer_id: int) -> bool:
+    """author 是否对 viewer 隐藏了自己的动态（只有这一条判定，不做集合计算）"""
+    if author_id == viewer_id:
+        return False
+    row = (
+        db.query(FriendSetting.id)
+        .filter(
+            FriendSetting.user_id == author_id,
+            FriendSetting.peer_id == viewer_id,
+            FriendSetting.hide_my_posts.is_(True),
+        )
+        .first()
+    )
+    return row is not None

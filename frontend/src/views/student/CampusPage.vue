@@ -587,6 +587,7 @@
       v-if="composeOpen"
       @closed="composeOpen = false"
       @published="onPostPublished"
+      @lost-found="onComposeLostFound"
     />
 
     <!-- 帖子详情（全屏子页 / 桌面端 760px 居中整页）：交流社区页签点一条就落在这里。
@@ -698,6 +699,24 @@ function onPostPublished() {
   void desktopCommunityFeedRef.value?.refresh()
   void followingFeedRef.value?.refresh()
   if (activeTab.value !== 'community') onTabClick('community')
+}
+
+/** 编辑器里选了「失物 / 招领」：关掉编辑器，切到对应分区并打开登记表单 */
+function onComposeLostFound(type: 'lost' | 'found') {
+  composeOpen.value = false
+  const feed = communityFeedRef.value || desktopCommunityFeedRef.value
+  if (feed) {
+    feed.setMode(type)
+    feed.openCreate()
+    return
+  }
+  // 社区列表还没挂载（例如入口不在交流社区页签）：先切页签，等列表挂载后再开
+  onTabClick('community')
+  void nextTick(() => {
+    const f = communityFeedRef.value || desktopCommunityFeedRef.value
+    f?.setMode(type)
+    f?.openCreate()
+  })
 }
 
 const vTilt = tilt
@@ -1852,13 +1871,6 @@ const readerOpen = ref(false)
 const searchLeaving = ref(false)
 const detailLeaving = ref(false)
 
-/**
- * 详情 → 阅读器的接力标记。
- * 「阅读全文」是同一层的推进（详情收起、阅读器展开），下层不该跟着回位再推回去；
- * 所以这条路径下退场不算「语义关闭」，一直保持让位，由阅读器接管。
- */
-let detailHandoffToReader = false
-
 const campusPushed = computed(
   () =>
     isMobile.value &&
@@ -1935,22 +1947,10 @@ function openDetail(url: string, title?: string, from: 'row' | 'comment' | 'repo
 }
 
 /**
- * 关详情子页。
- * 退场动画在子页内部播（全局 .subpage 的 300ms 右滑）：它把 visible 置 false 后播完才发
- * closed，父页那时再卸载。若这里立刻把 detailTarget 置空，整棵子树（含 Transition）
- * 会当场被卸载，退场动画根本没机会播 —— 只剩进场、没有出场。
- */
-function closeDetail() {
-  detailRef.value?.close()
-}
-
-/**
  * 子页开始退场（详情页 close() 里发的 close 事件）：
  * 立刻把下层从让位态放回来，与子页滑出同一条 0.3s —— 等 after-leave 就晚了 300ms。
- * 「阅读全文」那种层内接力不在此列，见 detailHandoffToReader。
  */
 function onDetailLeaving() {
-  if (detailHandoffToReader) return
   detailLeaving.value = true
 }
 
@@ -1972,21 +1972,14 @@ function onSearchClosed() {
 }
 
 /**
- * 详情子页点「阅读全文」：正文不在详情页渲染，交给站内阅读器（ArticleReader）。
- * 先关详情再开阅读器：两者都是整页覆盖层，同时挂载会互相抢 body 滚动锁与 z-index；
- * 先收起讨论页、露出阅读器，视觉上是「讨论 → 阅读」的一次正常推进，不会叠层。
+ * 详情子页点「阅读全文」：正文不在详情页渲染（列表页链接没有正文），交给站内阅读器。
  *
- * 下层这次保持让位（不回位再推回去）：两条都是「第一层」的子页，
- * 中间回位会闪一下；由阅读器接管 is-subpushed 直到它关闭。
+ * 阅读器盖在详情之上、详情保持打开：返回时先收阅读器、再收详情，一次退一层
+ * （两层整页覆盖的滚动锁已改为引用计数，见 utils/bodyScrollLock）。
  */
 function onDetailRead(url: string) {
   const title = detailTarget.value?.title || ''
-  detailHandoffToReader = true
-  closeDetail()
-  nextTick(() => {
-    openArticle(url, title)
-    detailHandoffToReader = false
-  })
+  openArticle(url, title)
 }
 
 /**

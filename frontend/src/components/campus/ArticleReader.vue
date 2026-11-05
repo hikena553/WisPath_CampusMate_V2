@@ -121,6 +121,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { ArrowLeft, ArrowRight, Document, DocumentDelete, Refresh } from '@element-plus/icons-vue'
 import { readCampusArticle, type CampusArticle } from '@/api/campus'
+import { useBackLayer } from '@/composables/useBackLayer'
+import { lockBodyScroll, unlockBodyScroll } from '@/utils/bodyScrollLock'
 
 const visible = ref(false)
 
@@ -228,14 +230,24 @@ function close() {
   error.value = ''
 }
 
+/** 移动端：阅读器是一层页内浮层，系统返回一次只收这一层（见 useBackLayer） */
+useBackLayer(computed(() => !isDesktop.value && visible.value), close)
+
 function onKeydown(ev: KeyboardEvent) {
   if (ev.key === 'Escape' && visible.value) close()
 }
 
-// 打开时锁定背景滚动
+// 打开时锁定背景滚动（全站引用计数：与压在下面的详情 / 搜索页共用一把锁）
+let bodyLocked = false
 watch(visible, async (v) => {
   await nextTick()
-  document.body.style.overflow = v ? 'hidden' : ''
+  if (v && !bodyLocked) {
+    bodyLocked = true
+    lockBodyScroll()
+  } else if (!v && bodyLocked) {
+    bodyLocked = false
+    unlockBodyScroll()
+  }
 })
 
 onMounted(() => {
@@ -245,7 +257,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', onResize)
-  document.body.style.overflow = ''
+  if (bodyLocked) {
+    bodyLocked = false
+    unlockBodyScroll()
+  }
 })
 
 defineExpose({ open })

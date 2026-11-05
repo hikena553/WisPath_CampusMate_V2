@@ -17,6 +17,7 @@ from app.services.prompts import build_skill_extraction_prompt
 from app.services.tools import TOOL_DEFINITIONS, TEACHER_TOOL_DEFINITIONS, execute_tool
 from app.services.crisis_service import detect_crisis_keywords, save_crisis_summary
 from app.services.llm_service import _get_client, _get_llm_config
+from app.utils.llm_guard import SafetyTagFilter, strip_control_tags
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,8 @@ async def call_llm_with_tools(messages: list[dict], tools: list[dict]) -> tuple[
     msg = resp.choices[0].message
     if msg.tool_calls:
         return "", msg.tool_calls
-    return msg.content or "", None
+    # 非流式兜底：整段清洗上游泄漏的审核标注
+    return strip_control_tags(msg.content or ""), None
 
 
 async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None, deep_think: bool = False):
@@ -148,6 +150,8 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None,
 
     content = ""
     tool_calls_buffer: dict[int, _SimpleToolCall] = {}
+    # 上游可能把安全审核标注（<ds_safety>…</ds_safety>Safe）当正文流出，见 llm_guard
+    guard = SafetyTagFilter()
 
     async for chunk in response:
         if not chunk.choices:
@@ -163,8 +167,10 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None,
             yield ("reasoning", reasoning)
 
         if delta.content:
-            content += delta.content
-            yield ("chunk", delta.content)
+            piece = guard.feed(delta.content)
+            if piece:
+                content += piece
+                yield ("chunk", piece)
 
         if delta.tool_calls:
             for tc in delta.tool_calls:
@@ -178,6 +184,11 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None,
                         tool_calls_buffer[idx].function.name += tc.function.name
                     if tc.function.arguments:
                         tool_calls_buffer[idx].function.arguments += tc.function.arguments
+
+    tail = guard.flush()
+    if tail:
+        content += tail
+        yield ("chunk", tail)
 
     if tool_calls_buffer:
         result_calls = []
@@ -200,9 +211,15 @@ async def generate_reply(prompt: str, user: User):
             model=config['model'], messages=msgs,
             temperature=0.5, max_tokens=2048, stream=True,
         )
+        guard = SafetyTagFilter()
         async for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+                piece = guard.feed(chunk.choices[0].delta.content)
+                if piece:
+                    yield piece
+        tail = guard.flush()
+        if tail:
+            yield tail
     except Exception:
         logger.exception("生成回复失败")
         yield "抱歉，分析暂时不可用，请稍后再试。"

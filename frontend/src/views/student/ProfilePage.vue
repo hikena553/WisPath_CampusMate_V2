@@ -108,7 +108,7 @@
               <span class="pf-tag">画像完整度 {{ imageComplete }}%</span>
             </div>
 
-            <!-- 快捷入口行：一屏固定 5 个，其余左右滑查看（勋章已移到头像右侧的勋章条） -->
+            <!-- 快捷入口行：一屏固定 6 个，其余左右滑查看（勋章已移到头像右侧的勋章条） -->
             <nav class="pf-quick">
               <div class="pf-quick-track">
                 <button type="button" class="pf-quick-item" @click="openPage('profile')">
@@ -855,6 +855,7 @@ import { getMyPosts, type CommunityPost } from '@/api/community'
 import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
 import { useSubpagePush } from '@/composables/useMobileSubPage'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
@@ -1061,11 +1062,10 @@ function closeArticleDetail() {
   articleDetailRef.value?.close()
 }
 
-/** 详情页「阅读全文」：先收起详情再交给站内阅读器，避免两层整页覆盖抢滚动锁 */
+/** 详情页「阅读全文」：阅读器盖在详情之上，详情保持打开，返回一次退一层 */
 function onArticleDetailRead(url: string) {
   const title = articleTarget.value?.title || ''
-  closeArticleDetail()
-  nextTick(() => articleReader.value?.open(url, title))
+  articleReader.value?.open(url, title)
 }
 
 /** 在详情里取消收藏 → 列表立刻少一条；否则回到收藏页还挂着已经取消的那张卡 */
@@ -1302,6 +1302,9 @@ function closePage() {
   slideDirection.value = 'slide-right'
   currentPage.value = null
 }
+
+/** 移动端：个人中心子页是一层页内浮层，系统返回一次只收这一层（见 useBackLayer） */
+useBackLayer(computed(() => isMobile.value && !!currentPage.value), closePage)
 
 // ==================== 我的简历（资料页内管理 + 导出向导入口） ====================
 const resumes = ref<Resume[]>([])
@@ -2196,21 +2199,21 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-/* 快捷入口：按文案宽度等距排布，两侧留白与项间空隙同宽 */
+/* 快捷入口：一屏固定 6 个，超出的左右滑查看；列宽按容器等分，适配不同手机宽度 */
 .pf-quick {
   margin-top: 14px;
-  /* 左右内边距与轨道 gap 取同一值，配合 space-evenly 让首尾留白 = 项间空隙 */
+  /* 左右内边距与轨道 gap 取同一值，让首尾留白 = 项间空隙 */
   padding: 14px 10px 10px;
   border-top: 1px solid var(--tui-border);
 }
-/* 滚动交给内部轨道：外层页边距交给 space-evenly 统一分配，避免两侧比项间更空 */
+/* 滚动交给内部轨道：6 列宽度由容器宽度反算（扣除 5 个 gap），窗口变窄时每列同比收窄，
+   不会把入口挤成第二行 */
 .pf-quick-track {
-  display: flex;
-  align-items: flex-start;
-  /* 每个入口宽度就是文案宽度，剩余空间在所有间隙（含首尾）里均分：
-     padding = gap 时，两侧留白与相邻入口之间的空隙严格相等 */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 50px) / 6);
   gap: 10px;
-  justify-content: space-evenly;
+  align-items: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
@@ -2219,8 +2222,8 @@ onMounted(async () => {
 }
 .pf-quick-track::-webkit-scrollbar { display: none; }
 .pf-quick-item {
-  /* 宽度由图标/文案撑开，不再等分格子，否则格子富余会全部堆到两侧 */
-  flex: 0 0 auto;
+  /* 每列固定为轨道的 1/6，文案再长也不撑破格子 */
+  width: 100%;
   min-width: 0;
   scroll-snap-align: start;
   display: flex;
@@ -2247,7 +2250,8 @@ onMounted(async () => {
 }
 .pf-quick-label {
   max-width: 100%;
-  font-size: 10.5px;
+  /* 六列并排后格子变窄，「我的作品集」这类五字文案也需在窄屏完整显示 */
+  font-size: clamp(8.5px, 2.6vw, 10.5px);
   line-height: 1.2;
   color: var(--tui-text-secondary);
   white-space: nowrap;

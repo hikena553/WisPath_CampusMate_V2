@@ -25,6 +25,8 @@ from app.services.prompts import (  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
+from app.utils.llm_guard import strip_control_tags
+
 _client_instance: AsyncOpenAI | None = None
 _client_config_hash: str = ""
 
@@ -278,7 +280,7 @@ async def complete(prompt: str, *, model: str | None = None,
         max_tokens=config['max_tokens'] if max_tokens is None else max_tokens,
         extra_body=extra_body if extra_body is not None else {"thinking": {"type": "disabled"}},
     )
-    return (resp.choices[0].message.content or "").strip()
+    return strip_control_tags((resp.choices[0].message.content or "").strip())
 
 
 async def chat_stream(messages: list[dict]):
@@ -294,7 +296,7 @@ async def chat_stream(messages: list[dict]):
         async for chunk in response:
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta and delta.content:
-                yield delta.content
+                yield strip_control_tags(delta.content)
     except APIError:
         raise
     except Exception:
