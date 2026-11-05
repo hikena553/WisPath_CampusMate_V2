@@ -139,7 +139,7 @@
             </nav>
           </div>
 
-          <!-- 收藏的帖子 & 项目经历：同一行 Tab 切换（左右滑可换）+ 下方向下铺开的卡片 -->
+          <!-- 项目经历 / 帖子 / 收藏：同一行 Tab 切换（左右滑可换）+ 下方向下铺开的卡片 -->
           <div class="pf-cards-area">
             <div class="pf-cards-tabs" role="tablist" aria-label="个人内容">
               <button
@@ -156,6 +156,16 @@
                 type="button"
                 role="tab"
                 class="pf-cards-tab"
+                :class="{ 'is-active': cardTab === 'posts' }"
+                :aria-selected="cardTab === 'posts'"
+                @click="cardTab = 'posts'"
+              >
+                帖子
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="pf-cards-tab"
                 :class="{ 'is-active': cardTab === 'favorites' }"
                 :aria-selected="cardTab === 'favorites'"
                 @click="cardTab = 'favorites'"
@@ -163,9 +173,18 @@
                 收藏
               </button>
               <!-- 卡片只铺 4 张：再多就把个人主页挤成第二个资讯列表，
-                   全量收进「我的收藏」子页。入口跟着 Tab 走，只在收藏页签下出现。 -->
+                   全量收进各自的子页。入口跟着 Tab 走，只在对应页签下出现。 -->
               <button
-                v-if="cardTab === 'favorites' && articleFavs.length"
+                v-if="cardTab === 'posts' && myPosts.length > CARD_PREVIEW"
+                type="button"
+                class="pf-cards-all"
+                @click="openPage('myposts')"
+              >
+                全部 {{ myPosts.length }} 条
+                <el-icon :size="11"><ArrowRight /></el-icon>
+              </button>
+              <button
+                v-else-if="cardTab === 'favorites' && articleFavs.length"
                 type="button"
                 class="pf-cards-all"
                 @click="openPage('favorites')"
@@ -175,7 +194,7 @@
               </button>
             </div>
 
-            <!-- 左右滑动切换：项目经历在前，向左滑（dx<0）到收藏，向右滑回项目经历 -->
+            <!-- 左右滑动切换：项目经历 → 帖子 → 收藏，向左滑进下一栏，向右滑回上一栏 -->
             <div
               class="pf-cards-body"
               @touchstart="onSwipeStart"
@@ -207,6 +226,31 @@
                   </div>
                 </div>
                 <!-- 卡片只铺 4 张，全量在页签右侧的「全部」里 -->
+              </template>
+
+              <!-- 我发的帖子：交流社区里本人发布的内容，点开在站内详情里看/删 -->
+              <template v-else-if="cardTab === 'posts'">
+                <div v-if="postLoading" class="pf-cards-loading">加载中…</div>
+                <div v-else-if="!myPosts.length" class="pf-cards-empty">还没有发过帖子</div>
+                <div v-else class="pf-media-grid">
+                  <div
+                    v-for="p in myPosts.slice(0, CARD_PREVIEW)"
+                    :key="p.id"
+                    class="pf-media-card"
+                    @click="openPostDetail(p.id)"
+                  >
+                    <div class="pf-media-cover" :class="`tone-${p.id % 5}`">
+                      <img v-if="p.images && p.images.length" :src="p.images[0]" alt="" loading="lazy" />
+                      <span v-else class="pf-media-cover-text">{{ p.title || '帖子' }}</span>
+                      <span v-if="p.category" class="pf-media-tag">{{ p.category }}</span>
+                    </div>
+                    <div class="pf-media-title">{{ p.title }}</div>
+                    <div class="pf-media-meta">
+                      <el-icon :size="11"><ChatLineSquare /></el-icon>
+                      <span>{{ postDate(p.created_at) }} · {{ p.like_count }} 赞</span>
+                    </div>
+                  </div>
+                </div>
               </template>
 
               <template v-else>
@@ -419,6 +463,34 @@
                 <span class="pf-fav-title">{{ fav.title }}</span>
                 <span class="pf-fav-meta">
                   {{ favSourceLabel(fav.source) }} · {{ fav.created_at ? fav.created_at.slice(0, 10) : '已收藏' }}
+                </span>
+              </span>
+              <el-icon class="pf-fav-arrow" :size="14"><ArrowRight /></el-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- 我的帖子：交流社区里我发布的全部内容（个人主页卡片区只铺 4 张，全量落在这里）。
+             点开走交流社区同款站内详情，删除 / 编辑后回来列表同步更新。 -->
+        <div v-if="currentPage === 'myposts'" class="sub-page-content">
+          <p v-if="postLoading" class="pf-fav-empty">加载中…</p>
+          <p v-else-if="!myPosts.length" class="pf-fav-empty">还没有发过帖子</p>
+          <div v-else class="pf-fav-list">
+            <button
+              v-for="p in myPosts"
+              :key="p.id"
+              type="button"
+              class="pf-fav-row"
+              @click="openPostDetail(p.id)"
+            >
+              <span class="pf-fav-thumb">
+                <img v-if="p.images && p.images.length" :src="p.images[0]" alt="" loading="lazy" />
+                <el-icon v-else :size="18"><ChatLineSquare /></el-icon>
+              </span>
+              <span class="pf-fav-main">
+                <span class="pf-fav-title">{{ p.title }}</span>
+                <span class="pf-fav-meta">
+                  {{ p.category || '交流社区' }} · {{ postDate(p.created_at) }} · {{ p.like_count }} 赞 {{ p.comment_count }} 评论
                 </span>
               </span>
               <el-icon class="pf-fav-arrow" :size="14"><ArrowRight /></el-icon>
@@ -729,6 +801,16 @@
       @read="onArticleDetailRead"
       @updated="onArticleUpdated"
     />
+
+    <!-- 帖子详情：卡片区的帖子卡片与「我的帖子」子页都从这里打开，
+         挂在根级而不是卡片区内 —— 详情是全屏子页，不该随卡片区一起被裁切/滚动。 -->
+    <PostDetailPage
+      v-if="activePostId"
+      :post-id="activePostId"
+      @closed="activePostId = 0"
+      @updated="onPostUpdated"
+      @deleted="onPostDeleted"
+    />
   </div>
 </template>
 
@@ -754,6 +836,9 @@ import BadgeDetail from '@/components/profile/BadgeDetail.vue'
 // 收藏列表点开走校园资讯同款站内详情（与教师端个人中心同一套）
 import ArticleDetailPage from '@/components/campus/ArticleDetailPage.vue'
 import ArticleReader from '@/components/campus/ArticleReader.vue'
+// 我发的帖子：数据走交流社区 /community/posts/mine，详情复用社区同款站内详情
+import PostDetailPage from '@/components/community/PostDetailPage.vue'
+import { getMyPosts, type CommunityPost } from '@/api/community'
 import { syncBadgeAwards } from '@/composables/useBadgeAward'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { useResponsive } from '@/composables/useResponsive'
@@ -847,8 +932,17 @@ const projects = ref<StudentProject[]>([])
 const favLoading = ref(false)
 const projLoading = ref(false)
 
-/** 卡片区当前 Tab：项目经历在前，收藏在后 */
-const cardTab = ref<'projects' | 'favorites'>('projects')
+/** 我发布的帖子（交流社区），倒序；卡片区只铺前几条，全量在「我的帖子」子页 */
+const myPosts = ref<CommunityPost[]>([])
+const postLoading = ref(false)
+
+/** 卡片区每栏最多铺几张：再多就把个人主页挤成第二个资讯列表 */
+const CARD_PREVIEW = 4
+
+/** 卡片区当前 Tab 顺序：项目经历 → 帖子 → 收藏（帖子在收藏左边，滑动与页签同一顺序） */
+type CardTab = 'projects' | 'posts' | 'favorites'
+const CARD_TABS: CardTab[] = ['projects', 'posts', 'favorites']
+const cardTab = ref<CardTab>('projects')
 
 /**
  * 左右滑动切换（触摸为主，鼠标拖拽辅助）。
@@ -861,8 +955,10 @@ function swipeCheck(x: number) {
   if (swipeStartX === null) return
   const dx = x - swipeStartX
   if (Math.abs(dx) < 40) return
-  // 项目在前、收藏在后：从右往左滑（dx<0）→ 收藏；从左往右滑 → 项目经历
-  cardTab.value = dx < 0 ? 'favorites' : 'projects'
+  // 按页签顺序走一格：向左滑（dx<0）进下一栏，向右滑回上一栏，到头就停住
+  const i = CARD_TABS.indexOf(cardTab.value)
+  const next = dx < 0 ? Math.min(i + 1, CARD_TABS.length - 1) : Math.max(i - 1, 0)
+  cardTab.value = CARD_TABS[next]
   swipeStartX = null
 }
 function onSwipeStart(e: TouchEvent) {
@@ -894,6 +990,34 @@ async function loadFavorites() {
     articleFavs.value = await getArticleFavorites()
   } catch { articleFavs.value = [] }
   finally { favLoading.value = false }
+}
+
+// ---------- 我发的帖子 → 站内帖子详情 ----------
+async function loadMyPosts() {
+  postLoading.value = true
+  try {
+    myPosts.value = await getMyPosts()
+  } catch { myPosts.value = [] }
+  finally { postLoading.value = false }
+}
+
+/** 发帖日期：后端给的是无时区 UTC，只取日期部分展示（与收藏卡口径一致） */
+function postDate(t: string | null) {
+  return t ? t.slice(0, 10) : '已发布'
+}
+
+const activePostId = ref(0)
+function openPostDetail(id: number) { activePostId.value = id }
+
+/** 详情里点赞/评论后回写计数，避免退回主页还是旧数字 */
+function onPostUpdated(post: CommunityPost) {
+  const i = myPosts.value.findIndex(p => p.id === post.id)
+  if (i > -1) myPosts.value[i] = { ...myPosts.value[i], ...post }
+}
+
+/** 详情里删掉自己的帖子 → 列表立刻少一条，空态跟着出现 */
+function onPostDeleted(id: number) {
+  myPosts.value = myPosts.value.filter(p => p.id !== id)
 }
 
 /** 来源 key → 中文栏目名：与校园资讯页 / 资讯详情的口径一致（三处显示的是同一件事，文案不能各写各的） */
@@ -1114,6 +1238,7 @@ const pageTitle = computed(() => {
     profile: '账号与安全',
     badges: '我的勋章',
     favorites: '我的收藏',
+    myposts: '我的帖子',
     password: '修改密码',
     feedback: '意见反馈',
     help: '使用帮助',
@@ -1147,6 +1272,8 @@ function openPage(page: string) {
   }
   // 收藏在资讯页随时会增减：每次进收藏页重新拉一次，别把进站时的旧快照当现况
   if (page === 'favorites') loadFavorites()
+  // 帖子也一样：可能刚在交流社区发完/删完就点回来
+  if (page === 'myposts') loadMyPosts()
   slideDirection.value = 'slide-left'
   currentPage.value = page
 }
@@ -1467,9 +1594,9 @@ function getStatusLabel(status: string) {
   return labels[status] || status
 }
 
-// 下拉刷新：复用主页面已有的加载函数（画像统计 / 勋章 / 收藏 / 简历），失败静默
+// 下拉刷新：复用主页面已有的加载函数（画像统计 / 勋章 / 帖子 / 收藏 / 简历），失败静默
 async function refreshAll() {
-  await Promise.all([loadGrowth(), refreshBadges(), loadFavorites(), loadResumes()])
+  await Promise.all([loadGrowth(), refreshBadges(), loadMyPosts(), loadFavorites(), loadResumes()])
 }
 
 const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
@@ -1479,13 +1606,14 @@ onMounted(async () => {
   refreshCaptcha()
   loadFeedbacks()
   loadGrowth()
+  loadMyPosts()
   loadFavorites()
   loadResumes()
   refreshBadges()
   applyTheme('light')
   // 支持外部跳转直达子页（如工作台"意见反馈"入口、校园资讯旧收藏链接 → 我的收藏）
   const page = route.query.page as string | undefined
-  if (page && ['settings', 'profile', 'badges', 'favorites', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
+  if (page && ['settings', 'profile', 'badges', 'favorites', 'myposts', 'password', 'feedback', 'help', 'theme', 'about', 'banner'].includes(page)) {
     openPage(page)
     // 落到子页后把参数摘掉：否则从子页退回主页，刷新一次又会被弹回收藏页
     void router.replace({ path: route.path })
