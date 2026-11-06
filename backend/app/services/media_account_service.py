@@ -13,6 +13,7 @@ media_posts 发帖流水，并把内容投递到交流社区（community_posts�
 """
 import asyncio
 import logging
+import re
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func
@@ -40,8 +41,18 @@ STATION_DEFAULT_NAME = "绵小城 AI 资讯站"
 PUBLISH_MODES = {"auto", "digest", "manual"}
 # 逐条转发扫描窗口：略大于 30 分钟抓取间隔，避免两次抓取之间漏条目
 RELAY_WINDOW_MINUTES = 35
-# 防刷屏：单个账号单轮转发上限
-RELAY_PER_CYCLE_LIMIT = 20
+# 转发回溯窗口：候选不只看「上一轮刚入库的」，而是回看这么多小时内尚未转发的条目。
+# 原来只有 35 分钟窗口，等于「抓取当晚没发出去的条目永久作废」：10-31 之后
+# 开源雷达、国产模型、权威榜单这些源就再也没有新链接，账号一条也发不出来。
+# 配合下面的「单账号单轮 1 条」，积压会按 30 分钟一条的节奏慢慢消化，不会刷屏。
+RELAY_LOOKBACK_HOURS = 168
+# 单账号单轮从回溯窗口里取多少条候选（只为标题去重挑一条，取小一点够用）
+RELAY_CANDIDATE_SCAN = 80
+# 单账号单轮转发条数上限。
+# 周期任务每 30 分钟跑一次，而「发帖频率」的最小可配值是 30 分钟 —— 也就是说
+# 一轮最多只该发一条。历史实现是 20，结果一个账号在同一秒里连发 20 条，
+# 社区时间线被同一个号刷屏，与「距上次转发的最小间隔」这个配置语义完全相反。
+RELAY_PER_CYCLE_LIMIT = 1
 # 汇总帖收录的重点条目数
 DIGEST_ITEM_LIMIT = 8
 
@@ -415,6 +426,51 @@ def ensure_station_graph(db: Session) -> int:
     return added
 
 
+def mount_new_builtin_sources(db: Session) -> int:
+    """把「从未被任何账号连接过」的资讯源挂到内容方向匹配的账号下。
+
+    画布只在首次初始化时挂载（ensure_station_graph），之后新增的内置源
+    （如 LMArena 不可达后补的 OpenRouter 模型榜）不会自动出现在任何账号下，
+    账号就永远拿不到内容。这里补一次增量挂载：
+
+    - 只处理「一条连接记录都没有」的源，管理员主动断开（存在且 enabled=False）
+      的连接不会被复活；
+    - 账号的 content_scope 决定它该接哪类源。
+    """
+    pairs = _media_query(db).all()
+    if not pairs:
+        return 0
+    sources = (
+        db.query(FeedSource)
+        .filter(FeedSource.enabled.is_(True))
+        .order_by(FeedSource.sort_order, FeedSource.id)
+        .all()
+    )
+    if not sources:
+        return 0
+    touched = {sid for (sid,) in db.query(MediaSourceLink.feed_source_id).distinct().all()}
+    fresh = [s for s in sources if s.id not in touched]
+    if not fresh:
+        return 0
+
+    added = 0
+    for account, _user in pairs:
+        scope = account.content_scope or None
+        for src in fresh:
+            if scope and src.source_type not in scope:
+                continue
+            db.add(MediaSourceLink(
+                account_id=account.id,
+                feed_source_id=src.id,
+                name=((src.name or "资讯源")[:60]),
+            ))
+            added += 1
+    if added:
+        db.commit()
+        logger.info("[资讯站] 新增资讯源已挂载到账号：%s 条连接", added)
+    return added
+
+
 def linked_source_ids(db: Session) -> set[int]:
     """当前真正参与抓取的资讯源 id：账号已接入资讯站，且连接线/账号/源均启用。"""
     rows = (
@@ -549,6 +605,29 @@ def _item_allowed(account: MediaAccount, feed_keys: set[str] | None, item: Exter
     return True
 
 
+def _norm_title(title: str) -> str:
+    """标题归一化：去掉空白与标点、统一小写，用于跨源识别「同一条新闻」。
+
+    例：`Gemini Omni 1.2 Flash: Fast and cost-effective with longer clips`
+    在 DeepMind 与 Google AI Blog 两个源下标题完全一致，只差域名与摘要，
+    归一化后即可判为重复。
+    """
+    return re.sub(r"[\W_]+", "", (title or "").lower())
+
+
+def _relayed_titles(db: Session, account_user_id: int, limit: int = 500) -> set[str]:
+    """该账号已逐条转发过的标题（归一化），用于跨轮次去重。"""
+    rows = (
+        db.query(CommunityPost.title)
+        .join(MediaPost, MediaPost.post_id == CommunityPost.id)
+        .filter(MediaPost.account_user_id == account_user_id, MediaPost.kind == "relay")
+        .order_by(MediaPost.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return {_norm_title(t) for (t,) in rows if t}
+
+
 
 # ==================== 发帖 ====================
 
@@ -587,16 +666,33 @@ def _pick_digest_items(
     if feed_keys is not None:
         # 连接线决定可用的资讯源；全部断开时集合为空 → in_([]) 命中 0 条
         query = query.filter(ExternalFeedItem.feed_key.in_(list(feed_keys)))
-    return (
+    rows = (
         query.order_by(
             ExternalFeedItem.is_highlight.desc(),
             # MySQL 不支持 NULLS LAST 语法；两种库在 DESC 排序时 NULL 均排在末尾
             ExternalFeedItem.published_at.desc(),
             ExternalFeedItem.created_at.desc(),
         )
-        .limit(DIGEST_ITEM_LIMIT)
+        # 多取一些候选再按标题去重：同一条新闻常被两三个源同时收录，
+        # 不去重的话汇总里会出现两条一模一样的标题（实测 11-06 那期就是）。
+        .limit(DIGEST_ITEM_LIMIT * 4)
         .all()
     )
+    return _unique_by_title(rows, DIGEST_ITEM_LIMIT)
+
+
+def _unique_by_title(items: list[ExternalFeedItem], limit: int) -> list[ExternalFeedItem]:
+    picked: list[ExternalFeedItem] = []
+    seen: set[str] = set()
+    for it in items:
+        key = _norm_title(it.title)
+        if key in seen:
+            continue
+        seen.add(key)
+        picked.append(it)
+        if len(picked) >= limit:
+            break
+    return picked
 
 
 async def _digest_intro(account_name: str, items: list[ExternalFeedItem]) -> str:
@@ -669,8 +765,46 @@ async def publish_digest(
     return {"posted": True, "message": "已发布今日汇总帖", "post_id": post.id, "title": post.title}
 
 
+def _fill_missing_summary(db: Session, item: ExternalFeedItem) -> str | None:
+    """转发前给缺摘要的网页类条目补一段导语。
+
+    只为 news / cn_ai 两类抓详情页：它们是 HTML 列表页抓来的，本来就没有
+    description；其余类型（arXiv / RSS / GitHub）入库时自带摘要。
+    视频页不抓（没有文字稿），抓不到或只是复述标题都返回 None。
+    """
+    if item.source_type not in ("news", "cn_ai") or not item.link:
+        return None
+    try:
+        from app.services.feed_ingest import (
+            _fetch_article_summary, _summary_echoes_title, is_video_url,
+        )
+    except Exception:  # noqa: BLE001 - 补摘要不该阻断发帖
+        return None
+    if is_video_url(item.link):
+        return None
+    summary = _fetch_article_summary(item.link)
+    if not summary or _summary_echoes_title(item.title or "", summary):
+        return None
+    return summary[:600]
+
+
+def _is_video_link(link: str) -> bool:
+    """转发正文用的视频判定（延迟 import，避免模块级循环依赖）。"""
+    try:
+        from app.services.feed_ingest import is_video_url
+    except Exception:  # noqa: BLE001
+        return False
+    return is_video_url(link or "")
+
+
 def relay_new_items(db: Session, window_minutes: int | None = None) -> dict:
-    """把近一窗口期新入库的资讯条目逐条转发给各启用账号（按连接线/内容方向过滤、唯一约束兜底）。"""
+    """把回溯窗口内尚未转发的资讯逐条转发给各启用账号（按连接线/内容方向过滤）。
+
+    每个账号单独取候选：老实现是一份全局候选（最近 35 分钟、前 200 条）再在内存里
+    按账号过滤，静态源（榜单、开源榜）永远进不了这份候选，账号就长期静默。
+    现在改成「该账号可见范围内、尚未转发过的、最新的 N 条」，窗口由
+    RELAY_LOOKBACK_HOURS 决定，配合单轮 1 条的上限，积压会匀速消化。
+    """
     accounts = _media_query(db).filter(
         MediaAccount.is_enabled.is_(True),
         MediaAccount.station_connected.is_(True),
@@ -679,18 +813,12 @@ def relay_new_items(db: Session, window_minutes: int | None = None) -> dict:
     if not accounts:
         return {"relayed": 0, "accounts": 0}
 
-    since = datetime.now(timezone.utc) - timedelta(
-        minutes=max(window_minutes or RELAY_WINDOW_MINUTES, RELAY_WINDOW_MINUTES)
-    )
-    candidates = (
-        db.query(ExternalFeedItem)
-        .filter(ExternalFeedItem.created_at >= since)
-        .order_by(ExternalFeedItem.created_at.desc())
-        .limit(200)
-        .all()
-    )
-    if not candidates:
-        return {"relayed": 0, "accounts": len(accounts)}
+    if window_minutes:
+        since = datetime.now(timezone.utc) - timedelta(
+            minutes=max(window_minutes, RELAY_WINDOW_MINUTES)
+        )
+    else:
+        since = datetime.now(timezone.utc) - timedelta(hours=RELAY_LOOKBACK_HOURS)
 
     relayed = 0
     now_utc = datetime.now(timezone.utc)
@@ -709,16 +837,55 @@ def relay_new_items(db: Session, window_minutes: int | None = None) -> dict:
             continue
         # 连接线决定账号可见的资讯源（未配置连接线时沿用内容方向）
         feed_keys = _linked_feed_keys(db, account)
-        matched = [it for it in candidates if _item_allowed(account, feed_keys, it)]
-        for item in matched[:RELAY_PER_CYCLE_LIMIT]:
-            # 已转发过的条目直接跳过（唯一约束兜底并发）
-            if db.query(MediaPost.id).filter(
-                MediaPost.account_user_id == user.id,
-                MediaPost.feed_item_id == item.id,
-            ).first():
+        if feed_keys is not None and not feed_keys:
+            continue  # 连接线全断，本轮无可用资讯源
+
+        q = db.query(ExternalFeedItem).filter(ExternalFeedItem.created_at >= since)
+        scope = account.content_scope or None
+        if scope:
+            q = q.filter(ExternalFeedItem.source_type.in_(list(scope)))
+        if feed_keys is not None:
+            q = q.filter(ExternalFeedItem.feed_key.in_(list(feed_keys)))
+        # 已转发过的条目在 SQL 侧就排掉，避免窗口放宽后被大量历史条目占满候选
+        relayed_ids = db.query(MediaPost.feed_item_id).filter(
+            MediaPost.account_user_id == user.id,
+            MediaPost.feed_item_id.isnot(None),
+        )
+        matched = (
+            q.filter(~ExternalFeedItem.id.in_(relayed_ids))
+            .order_by(ExternalFeedItem.created_at.desc(), ExternalFeedItem.id.desc())
+            .limit(RELAY_CANDIDATE_SCAN)
+            .all()
+        )
+        if not matched:
+            continue
+
+        posted_titles = _relayed_titles(db, user.id)
+        # 视频条目排在图文之后（各自保持时间倒序）：视频没有文字稿，正文只能
+        # 写「本条为视频报道」，能发图文就别先推视频。全是视频时照常发。
+        matched.sort(key=lambda it: 1 if _is_video_link(it.link or "") else 0)
+        posted = 0
+        for item in matched:
+            if posted >= RELAY_PER_CYCLE_LIMIT:
+                break
+            if not _item_allowed(account, feed_keys, item):
+                continue
+            # 同一条新闻常被多个源同时收录（官方博客 + 科技媒体转述），
+            # 标题归一化后相同就只发一次，否则时间线上会出现两条一模一样的内容。
+            if _norm_title(item.title) in posted_titles:
                 continue
             label = FEED_TYPE_LABELS.get(item.source_type, item.source_type)
+            # 历史条目（尤其 11-05 之前抓的时政要闻）库里没有摘要，正文会只剩
+            # 「来源 + 链接」。发帖前就地补一次详情页导语，补到就回写，
+            # 同一条以后不再重复请求。
+            if not item.summary and item.link:
+                summary = _fill_missing_summary(db, item)
+                if summary:
+                    item.summary = summary
             content_parts = [item.summary.strip()[:600]] if item.summary else []
+            if not item.summary and item.link and _is_video_link(item.link):
+                # 视频新闻没有文字稿，正文别只剩「来源 + 链接」的空壳
+                content_parts.append("本条为视频报道，暂无文字摘要。")
             content_parts.append(f"来源：{item.source_name or item.feed_key or label} · {label}")
             if item.link:
                 content_parts.append(f"原文链接：{item.link}")
@@ -730,6 +897,8 @@ def relay_new_items(db: Session, window_minutes: int | None = None) -> dict:
                 kind="relay",
             ))
             db.commit()
+            posted_titles.add(_norm_title(item.title))
+            posted += 1
             relayed += 1
     return {"relayed": relayed, "accounts": len(accounts)}
 
