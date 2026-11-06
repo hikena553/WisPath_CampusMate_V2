@@ -73,6 +73,8 @@ from app.models.guardian import (  # noqa: E402
 )
 from app.models.learning_event import LearningEvent  # noqa: E402
 from app.models.help_request import HelpRequest  # noqa: E402
+from app.models.growth import GrowthRecord  # noqa: E402
+from app.models.service import ServiceTicket  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
 from app.utils.rate_limiter import reset_rate_limiter  # noqa: E402
 
@@ -187,6 +189,11 @@ def make_user(db):
             db.query(HelpRequest).filter(HelpRequest.student_id == u.id).delete()
             db.query(HelpRequest).filter(HelpRequest.teacher_id == u.id).delete()
             db.query(LeaveRequest).filter(LeaveRequest.student_id == u.id).delete()
+            # 成长记录 / 办事工单：同样没有 FK，但 sqlite 会复用被删用户的主键，
+            # 残留行会被后续用例按 student_id/applicant_id 查到（曾让
+            # test_tools_write 的「刚写入的那条」断言读到上一轮的 2025-01-01 记录）。
+            db.query(GrowthRecord).filter(GrowthRecord.student_id == u.id).delete()
+            db.query(ServiceTicket).filter(ServiceTicket.applicant_id == u.id).delete()
             db.delete(u)
     db.commit()
 

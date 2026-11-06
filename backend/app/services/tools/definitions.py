@@ -102,7 +102,11 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "title": {"type": "string", "description": "申请标题"},
                     "content": {"type": "string", "description": "申请内容详情"},
-                    "request_type": {"type": "string", "enum": ["certificate", "other"], "description": "申请类型"}
+                    "request_type": {
+                        "type": "string",
+                        "enum": ["certificate", "leave", "project"],
+                        "description": "申请类型：certificate=在校证明/成绩单等证明，leave=请假类手续，project=项目相关申请（必须从这三者中选）",
+                    }
                 },
                 "required": ["title", "content", "request_type"]
             }
