@@ -782,8 +782,15 @@ button.tui-stat:active { transform: scale(0.98); }
 }
 
 /* 吸顶栏 */
-:is(.tui-page, .teacher-scope) .tui-appbar { min-height: 52px; padding: 0 4px; }
-:is(.tui-page, .teacher-scope) .tui-appbar-brand { min-height: 56px; padding: 6px 8px 6px 12px; }
+:is(.tui-page, .teacher-scope) .tui-appbar {
+  /* 与学生端同一套自适应高度 + 安全区写法：
+     原来固定 52px 且 padding 抹掉了安全区，标题会在「状态栏高度 + 52px」里居中，
+     视觉上就是标题上方多出一截留白。现在标题只在 46–52px 内容区居中。 */
+  height: calc(var(--sat, 0px) + clamp(46px, 11.8vw, 52px));
+  min-height: calc(var(--sat, 0px) + clamp(46px, 11.8vw, 52px));
+  padding: var(--sat, 0px) 4px 0;
+}
+:is(.tui-page, .teacher-scope) .tui-appbar-brand { min-height: calc(var(--sat, 0px) + 56px); padding: calc(var(--sat, 0px) + 6px) 8px 6px 12px; }
 :is(.tui-page, .teacher-scope) .tui-appbar-back { width: 34px; height: 34px; }
 :is(.tui-page, .teacher-scope) .tui-appbar-title { font-size: 17.5px; font-weight: 680; letter-spacing: -0.2px; }
 :is(.tui-page, .teacher-scope) .tui-mascot-sm { width: 34px; height: 34px; }
