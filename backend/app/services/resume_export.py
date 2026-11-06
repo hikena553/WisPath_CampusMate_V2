@@ -1309,18 +1309,3 @@ def generate(
         "match": match, "template": template_key, "format": ext,
         "sections": [{"key": s.key, "title": s.title, "count": len(s.entries)} for s in sections],
     }
-
-
-def warm_preview_pipeline() -> None:
-    """预热 PDF 渲染管线：导入 fpdf/pymupdf、解析中文字体、跑通一页最小简历并转图。
-
-    首次请求这段开销要 3~7 秒（字体子集化 + MuPDF 冷启动），放在应用启动的后台线程里做掉，
-    用户第一次打开「导出简历」就不必再等。失败只记日志——简历功能会自己报错，不影响启动。
-    """
-    import fitz
-
-    header = {"name": "预热", "contact": [], "target_line": "求职意向：预热", "match": 80}
-    sections = [Section(key="edu", title="教育背景", entries=[Entry(head="预热大学 · 预热专业", lines=["预热文本"])])]
-    pdf_bytes = render_pdf(header, sections, TEMPLATES[0], photo=None)
-    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-        doc[0].get_pixmap(matrix=fitz.Matrix(0.75, 0.75)).tobytes("jpeg", jpg_quality=85)

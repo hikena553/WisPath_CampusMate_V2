@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
+<template>
   <div class="tui-page"
     :class="{ 'pull-enabled': isMobile }"
     @touchstart.passive="pull.onStart"
@@ -93,6 +93,9 @@
                 <div class="an-head">
                   <span v-if="a.urgency === 'urgent'" class="an-pin"><el-icon :size="11"><Top /></el-icon>置顶</span>
                   <span class="tui-chip" :class="urgencyClass(a.urgency)">{{ urgencyLabel(a.urgency) }}</span>
+                  <span class="an-scope" :class="{ 'is-all': !a.class_group_id }">
+                    <el-icon :size="11"><User /></el-icon>{{ scopeLabel(a) }}
+                  </span>
                   <span class="an-date">{{ (a.created_at || '').slice(0, 10) }}</span>
                 </div>
                 <h3 class="an-title">{{ a.title }}</h3>
@@ -106,8 +109,9 @@
                     <i :class="urgencyBarClass(a.urgency)" :style="{ width: reachOf(a) + '%' }"></i>
                   </div>
                 </div>
-                <!-- 操作沿用现有事件：附件查看 / 删除（无附件时用弱化标记占位） -->
+                <!-- 操作沿用现有事件：查看全文 / 附件查看 / 删除 -->
                 <div class="an-ops">
+                  <button class="an-link" @click="openDetail(a)">查看全文</button>
                   <a v-if="a.attachment_url" class="an-link" :href="a.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
                   <span v-else class="an-link an-link-muted">无附件</span>
                   <button class="an-link an-link-danger" @click="remove(a)">删除</button>
@@ -173,16 +177,20 @@
 
           <div v-else class="tm-feed">
             <article v-for="a in paged" :key="a.id" class="tm-fd">
-              <div class="tm-fd-hd">
+              <div class="tm-fd-hd" @click="openDetail(a)">
                 <div class="tm-fd-t">{{ a.title }}</div>
                 <span class="tm-tag" :class="urgencyTagCls(a.urgency)">{{ urgencyLabel(a.urgency) }}</span>
               </div>
               <div class="tm-fd-m">
                 <span>{{ (a.created_at || '').slice(0, 10) }}</span>
                 <i>·</i>
+                <span class="tm-fd-scope">{{ scopeLabel(a) }}</span>
+                <i>·</i>
                 <span>{{ reachDetail(a) ? `已读 ${reachDetail(a)}` : '暂无回执' }}</span>
                 <span v-if="a.urgency === 'urgent'" class="tm-fd-pin">置顶</span>
               </div>
+              <!-- 正文不再只给「标题+触达」：摘要两行，点一下看全文 -->
+              <p class="tm-fd-c" @click="openDetail(a)">{{ a.content }}</p>
               <div class="tm-fd-bar">
                 <div class="tm-fd-tr">
                   <i :style="{ width: reachOf(a) + '%', '--fc': urgencyColor(a.urgency) }"></i>
@@ -190,6 +198,7 @@
                 <span class="tm-fd-v" :style="{ '--fc': urgencyColor(a.urgency) }">{{ reachOf(a) }}% 已读</span>
               </div>
               <div class="tm-fd-ops">
+                <button type="button" class="tm-fd-open" @click="openDetail(a)">查看全文</button>
                 <a v-if="a.attachment_url" :href="a.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
                 <span v-else class="tm-fd-muted">无附件</span>
                 <button type="button" class="tm-fd-del" @click="remove(a)">删除</button>
@@ -228,7 +237,7 @@
       >
         <div class="tui-section-hint">
           <el-icon><InfoFilled /></el-icon>
-          <span>发布后即时推送给你名下全体学生；紧急公告会置顶并高亮角标，请确认标题与内容无误。</span>
+          <span>选择发布范围后即时推送；紧急公告会置顶并高亮角标，请确认标题与内容无误。</span>
         </div>
         <div class="an-ctx">
           <span class="an-ctx-item">已发布公告 <b>{{ items.length }}</b> 条</span>
@@ -239,6 +248,33 @@
           <div class="an-field">
             <label class="an-label">标题</label>
             <el-input v-model="form.title" maxlength="100" placeholder="一句话说明通知主题，如：关于期中考试安排的通知" />
+          </div>
+          <div class="an-field">
+            <label class="an-label">发布班级</label>
+            <el-select
+              v-model="form.classGroupId"
+              :loading="classesLoading"
+              placeholder="请选择发布范围"
+              style="width: 100%"
+              class="an-class-select"
+            >
+              <el-option
+                v-for="o in classSelectOptions"
+                :key="String(o.id)"
+                :label="o.count ? `${o.label}（${o.count} 人）` : o.label"
+                :value="o.id"
+              />
+            </el-select>
+            <div v-if="classesFailed" class="an-field-tip an-field-err">
+              班级列表加载失败（可能是后端服务未更新），已回退为「全体学生」。
+              <button type="button" class="an-field-retry" @click="loadClasses">重试</button>
+            </div>
+            <div v-else-if="!classesLoading && !classOptions.length" class="an-field-tip">
+              你名下暂时没有绑定班级的学生，公告将发给名下全体学生。
+            </div>
+            <div v-else class="an-field-tip">
+              只列出你名下有学生的班级；选「全体学生」则你带的所有学生都会收到。
+            </div>
           </div>
           <div class="an-field">
             <label class="an-label">紧急程度</label>
@@ -259,7 +295,42 @@
         </div>
         <template #footer>
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" :disabled="!valid" @click="submit">发布</el-button>
+          <!-- 不用 :disabled="!valid"：移动端全屏子页里按钮一旦被禁用，用户点它毫无反馈，
+               看起来就是「发布没反应」。改为可点击 + 明确提示缺什么。 -->
+          <el-button type="primary" :loading="saving" @click="submit">发布</el-button>
+        </template>
+      </ResponsivePopup>
+
+      <!-- 查看全文：移动端全屏子页、桌面端居中弹窗。
+           发布后必须能读到完整正文，否则「发出去了什么」无从核对。 -->
+      <ResponsivePopup
+        v-model="detailVisible"
+        :title="detailItem?.title || '公告详情'"
+        width="420px"
+        align-center
+        class="tui-dialog"
+      >
+        <template v-if="detailItem">
+          <div class="an-dt-meta">
+            <span class="tui-chip" :class="urgencyClass(detailItem.urgency)">{{ urgencyLabel(detailItem.urgency) }}</span>
+            <span class="an-scope" :class="{ 'is-all': !detailItem.class_group_id }">
+              <el-icon :size="11"><User /></el-icon>{{ scopeLabel(detailItem) }}
+            </span>
+            <span class="an-date">{{ (detailItem.created_at || '').slice(0, 10) }}</span>
+          </div>
+          <h3 class="an-dt-title">{{ detailItem.title }}</h3>
+          <div class="an-dt-body">{{ detailItem.content }}</div>
+          <div v-if="detailItem.attachment_url" class="an-dt-att">
+            <a class="an-link" :href="detailItem.attachment_url" target="_blank" rel="noopener noreferrer">查看附件</a>
+          </div>
+          <div v-if="reachMap[detailItem.id]" class="an-dt-reach">
+            触达：已读 {{ reachMap[detailItem.id].read }} / 应读 {{ reachMap[detailItem.id].total }}
+            （{{ reachMap[detailItem.id].rate }}%）
+          </div>
+        </template>
+        <template #footer>
+          <el-button @click="detailVisible = false">关闭</el-button>
+          <el-button v-if="detailItem" type="danger" plain @click="removeFromDetail">删除这条公告</el-button>
         </template>
       </ResponsivePopup>
     </div>
@@ -267,11 +338,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref, watch } from 'vue'
 // v6.1 弹窗减负：公告表单走全屏子页，删除确认走底部动作面板
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { actionConfirm } from '@/composables/useActionSheet'
-import { Bell, Plus, InfoFilled, Promotion, Top } from '@element-plus/icons-vue'
+import { Bell, Plus, InfoFilled, Promotion, Top, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
@@ -283,11 +354,13 @@ import AgentLoading from '@/components/common/AgentLoading.vue'
 import {
   createAnnouncement,
   deleteAnnouncement,
+  getAnnouncementClasses,
   getAnnouncementReach,
   getTeacherAnnouncements,
   remindAnnouncementUnread,
   type AnnouncementItem,
   type AnnouncementReachItem,
+  type TeacherClassOption,
 } from '@/api/announcement'
 
 defineOptions({ name: 'teacher-announcement' })
@@ -304,7 +377,51 @@ const loading = ref(false)
 const saving = ref(false)
 const reminding = ref(false)
 const dialogVisible = ref(false)
-const form = reactive({ title: '', content: '', urgency: 'normal' as AnnouncementItem['urgency'] })
+const form = reactive({
+  title: '',
+  content: '',
+  urgency: 'normal' as AnnouncementItem['urgency'],
+  /** 发布目标班级；null = 名下全体学生 */
+  classGroupId: null as number | null,
+})
+
+/* ---------- 可发布班级：来自「名下学生实际所属班级」，不是全校班级 ---------- */
+const classOptions = ref<TeacherClassOption[]>([])
+const classesLoading = ref(false)
+/** 班级列表加载失败必须可见：静默清空会让下拉只剩「全体学生」，
+ *  老师以为功能坏了（实际多数情况是后端未重启/接口 404）。 */
+const classesFailed = ref(false)
+async function loadClasses() {
+  if (classesLoading.value) return
+  classesLoading.value = true
+  classesFailed.value = false
+  try {
+    classOptions.value = await getAnnouncementClasses()
+  } catch {
+    // 「全体学生」仍可选（不选班级即全体），发布功能不被阻塞
+    classOptions.value = []
+    classesFailed.value = true
+  } finally {
+    classesLoading.value = false
+  }
+}
+/** 下拉选项：第一项固定为「全体学生」 */
+const classSelectOptions = computed(() => [
+  { id: null as number | null, label: '全体学生（名下全部）', count: 0 },
+  ...classOptions.value.map(c => ({ id: c.id as number | null, label: c.name, count: c.student_count })),
+])
+
+/* ---------- 公告详情（查看全文） ---------- */
+const detailItem = ref<AnnouncementItem | null>(null)
+const detailVisible = ref(false)
+function openDetail(a: AnnouncementItem) {
+  detailItem.value = a
+  detailVisible.value = true
+}
+/** 班级标签文案：无 class_group_id 即「全体学生」 */
+function scopeLabel(a: AnnouncementItem) {
+  return a.class_group_id ? (a.class_name || '指定班级') : '全体学生'
+}
 
 const urgencyOptions: { value: AnnouncementItem['urgency']; label: string }[] = [
   { value: 'normal', label: '普通通知' },
@@ -333,7 +450,7 @@ const aiDraft = computed(() => {
   return `【班级通知 ${today}】各位同学：现将近期班级安排告知大家，请留意相关时间与要求，提前做好准备。如有疑问，可在课后或群内与我沟通。感谢大家配合。`
 })
 
-const valid = computed(() => form.title.trim().length > 0 && form.content.trim().length > 0)
+// 校验下沉到 submit()：按钮不再禁用，点击时按字段给出具体提示（见 submit）
 
 function urgencyLabel(u: AnnouncementItem['urgency']) {
   return u === 'urgent' ? '紧急' : u === 'important' ? '重要' : '普通'
@@ -482,22 +599,38 @@ async function refreshAll() {
 }
 
 async function submit() {
-  if (!valid.value) return
+  // 移动端没有浏览器原生表单校验，这里显式提示缺哪一项，
+  // 避免用户点了「发布」却因为静默 return 而以为按钮坏了。
+  if (!form.title.trim()) {
+    ElMessage.warning('请先填写公告标题')
+    return
+  }
+  if (!form.content.trim()) {
+    ElMessage.warning('请先填写公告内容，写清时间、地点与需要学生做的事')
+    return
+  }
+  if (saving.value) return
   saving.value = true
   try {
     const fd = new FormData()
     fd.append('title', form.title.trim())
     fd.append('content', form.content.trim())
     fd.append('urgency', form.urgency)
-    await createAnnouncement(fd)
-    ElMessage.success('公告已发布')
+    // 只有选中具体班级才传；不传 = 后端按「名下全体学生」投递
+    if (form.classGroupId) fd.append('class_group_id', String(form.classGroupId))
+    const created = await createAnnouncement(fd)
+    const scope = created?.class_group_id ? created.class_name || '指定班级' : '全体学生'
+    ElMessage.success(`公告已发布给「${scope}」`)
     dialogVisible.value = false
     form.title = ''
     form.content = ''
     form.urgency = 'normal'
+    form.classGroupId = null
     load()
-  } catch {
-    ElMessage.error('发布失败')
+  } catch (e: any) {
+    // 带上后端返回的具体原因，避免所有失败都显示同一句「发布失败」无从排查
+    const detail = e?.response?.data?.detail
+    ElMessage.error(typeof detail === 'string' && detail ? detail : '发布失败，请稍后重试')
   } finally {
     saving.value = false
   }
@@ -512,13 +645,32 @@ async function remove(a: AnnouncementItem) {
   try {
     await deleteAnnouncement(a.id)
     ElMessage.success('已删除')
+    detailVisible.value = false
     load()
   } catch {
     ElMessage.error('删除失败')
   }
 }
 
-onMounted(load)
+/** 详情弹窗里删除：先关弹窗再走同一套确认流程 */
+function removeFromDetail() {
+  const target = detailItem.value
+  if (!target) return
+  remove(target)
+}
+
+onMounted(() => {
+  load()
+  loadClasses()
+})
+
+// keep-alive 缓存本页（见 TeacherLayout cachedNames）：再次激活时静默重拉列表，
+// 首次激活由 onMounted 负责，这里跳过避免双请求。loadClasses 是班级静态数据，不必重拉。
+let firstActivate = true
+onActivated(() => {
+  if (firstActivate) { firstActivate = false; return }
+  void load(true)
+})
 </script>
 
 <style scoped>
@@ -557,6 +709,32 @@ onMounted(load)
 }
 .tm-fd-del { margin-left: auto; color: var(--tm-bad); }
 .tm-fd-muted { margin-right: auto; color: var(--tm-ink3); font-weight: 600; }
+/* 「查看全文」与删除同为文字按钮，靠左边排 */
+.tm-fd-open {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 9.6px;
+  font-weight: 650;
+  color: var(--tm-brand-deep);
+  cursor: pointer;
+}
+.tm-fd-hd { cursor: pointer; }
+/* 正文摘要：两行截断，点击进详情读全文 */
+.tm-fd-c {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--tm-ink2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+.tm-fd-scope { color: var(--tm-brand-deep); font-weight: 650; }
 .tm-more { padding: 8px 14px 0; }
 .tm-more button {
   width: 100%;
@@ -743,6 +921,60 @@ onMounted(load)
   margin-bottom: 7px;
 }
 .an-date { margin-left: auto; font-size: 11px; color: var(--tui-text-quiet); }
+
+/* 发布范围角标：定向班级用品牌色，全体学生弱化为灰 */
+.an-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.an-scope.is-all {
+  background: var(--tui-surface-muted);
+  color: var(--tui-text-tertiary);
+}
+
+/* ===== 详情弹窗（查看全文） ===== */
+.an-dt-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.an-dt-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--tui-text);
+}
+.an-dt-body {
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--tui-surface-muted);
+  font-size: 13px;
+  line-height: 1.78;
+  color: var(--tui-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.an-dt-att { margin-top: 10px; }
+.an-dt-reach {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+}
 .an-pin {
   display: inline-flex;
   align-items: center;
@@ -811,6 +1043,27 @@ onMounted(load)
 
 /* ===== 发布弹窗表单 ===== */
 .an-form { display: flex; flex-direction: column; gap: 14px; }
+/* 字段下方说明：解释「为什么只能选这些班级」 */
+.an-field-tip {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--tui-text-quiet);
+}
+/* 加载失败的提示条：红色 + 行内重试按钮，失败原因必须可见 */
+.an-field-err { color: var(--tui-danger); }
+.an-field-retry {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 4px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--tui-brand);
+  cursor: pointer;
+  text-decoration: underline;
+}
 .an-label {
   display: flex;
   align-items: center;

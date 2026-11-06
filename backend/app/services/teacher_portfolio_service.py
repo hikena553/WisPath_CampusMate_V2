@@ -118,13 +118,21 @@ def list_items(
     item_type: str | None = None,
     limit: int = 200,
     offset: int = 0,
+    visibility: str | PortfolioVisibility | None = None,
 ) -> tuple[list[dict], int]:
+    """本人档案列表。
+
+    visibility 传值时才过滤（如只看公开展示的条目）；不传则不限制——
+    这里服务的永远是「档案所有者本人」，天然可见自己的全部条目。
+    """
     query = db.query(TeacherPortfolioItem).filter(
         TeacherPortfolioItem.teacher_id == teacher_id,
         TeacherPortfolioItem.is_deleted.is_(False),
     )
     if item_type:
         query = query.filter(TeacherPortfolioItem.item_type == _item_type(item_type))
+    if visibility:
+        query = query.filter(TeacherPortfolioItem.visibility == _visibility(visibility))
 
     total = query.count()
     items = (
@@ -139,6 +147,48 @@ def list_items(
         .all()
     )
     return [_serialize(i) for i in items], total
+
+
+def list_public_items(
+    db: Session,
+    *,
+    item_type: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    exclude_teacher_id: int | None = None,
+) -> tuple[list[dict], int]:
+    """公开展示区：只返回 visibility=public 的条目，供同行互看。
+
+    这是 visibility 字段唯一的对外出口——private 的档案不会出现在任何
+    非本人接口里。
+    """
+    query = db.query(TeacherPortfolioItem).filter(
+        TeacherPortfolioItem.is_deleted.is_(False),
+        TeacherPortfolioItem.visibility == PortfolioVisibility.PUBLIC,
+    )
+    if item_type:
+        query = query.filter(TeacherPortfolioItem.item_type == _item_type(item_type))
+    if exclude_teacher_id:
+        query = query.filter(TeacherPortfolioItem.teacher_id != exclude_teacher_id)
+
+    total = query.count()
+    items = (
+        query.order_by(
+            TeacherPortfolioItem.occurred_on.is_(None),
+            TeacherPortfolioItem.occurred_on.desc(),
+            TeacherPortfolioItem.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    rows = []
+    for it in items:
+        data = _serialize(it)
+        owner = db.query(User).filter(User.id == it.teacher_id).first()
+        data["teacher_name"] = owner.name if owner else ""
+        rows.append(data)
+    return rows, total
 
 
 def update_item(db: Session, item: TeacherPortfolioItem, payload: dict) -> TeacherPortfolioItem:

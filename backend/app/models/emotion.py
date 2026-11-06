@@ -14,8 +14,10 @@ class EmotionRecord(Base):
     # 情绪标签：neutral / happy / sad / angry / fearful / disgusted / surprised
     emotion: Mapped[str] = mapped_column(String(20))
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
-    # 来源场景：voice_call（语音通话）/ manual（手动）等
+    # 来源场景：voice_call（语音通话）/ manual（手动）/ ai_dialog（对话情绪台账）等
     source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # 情绪摘要备注（ai_dialog 来源时存脱敏短句，供教师画像侧查看）
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     conversation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)

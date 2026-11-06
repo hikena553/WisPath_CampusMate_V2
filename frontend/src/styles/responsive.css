@@ -6,6 +6,23 @@
 :root {
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+
+  /* ===== 统一页头（appbar）规范 =====
+     起因：教师端曾出现「各页页头留白不一致」——9 处页头 8 种写法，
+     基准内边距在 0 / 4 / 6 / 8 / 10px 之间随页取值，且有的页面完全没处理安全区。
+     这里给出唯一来源，页面只引用变量，不再自行 calc，从根上消除差异。
+
+     高度：内容区 46–52px 随屏宽自适应（窄屏更紧凑，宽屏更舒展），
+           再加上状态栏安全区，保证刘海/挖孔机型标题不会被遮挡。
+     内边距：水平 4px（为长标题争取可用宽度），垂直由高度约束。 */
+  --appbar-h-content: clamp(46px, 11.8vw, 52px);
+  --appbar-h: calc(var(--appbar-h-content) + var(--sat));
+  --appbar-px: 4px;
+  --appbar-title-size: 17.5px;
+  --appbar-title-weight: 680;
+  --appbar-hairline: #e9ebee;
 }
 
 /* ===== 移动端响应式全局样式 ===== */
@@ -27,8 +44,11 @@ body {
   flex-wrap: wrap;
 }
 
-/* ===== 移动端样式覆盖 ===== */
-@media (max-width: 768px) {
+/* ===== 移动端样式覆盖 =====
+   断点统一为 767px（= useResponsive 的 MOBILE_BREAKPOINT 768 的 max-width 写法）。
+   原先这里写 768px，会让正好 768px 宽的设备（部分平板/折叠屏展开态）
+   命中移动端覆盖、却被 JS 判定为非移动端，出现「样式换了但布局没换」的错位。 */
+@media (max-width: 767px) {
 
   /* --- Element Plus: Dialog 紧凑 + 居中（移除旧的 margin-top 偏移，交由全局 auto 外边距居中） --- */
   .el-dialog {

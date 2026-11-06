@@ -179,7 +179,16 @@ def build_teacher_system_prompt(
 
     output_format = section(
         TAG_OUTPUT_FORMAT,
-        bullets("回答简洁专业，控制在 200 字以内", NO_MARKDOWN),
+        bullets(
+            "回答学生整体情况类问题（如'我的学生情况如何''班里怎么样'）时，"
+            "按「先班级、后个人」结构作答："
+            "第一段先对班级整体说明概况（人数、学院、整体状态、分布）；"
+            "第二段只点名有特殊情况或需要关注的学生（如零记录、预警、待办关联），逐人一句话说明原因；"
+            "其余无特殊情况的学生不逐一罗列，不得为凑数点名；"
+            "结尾用一句话询问是否需要查看某位学生的详情或待批请假、学生求助",
+            "回答简洁专业，控制在 200 字以内",
+            NO_MARKDOWN,
+        ),
     )
 
     self_disclosure = section(TAG_SELF_DISCLOSURE, bullets(IDENTITY_GUARD, META_RULE))

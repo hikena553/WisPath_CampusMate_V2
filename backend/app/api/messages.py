@@ -104,7 +104,6 @@ async def send_message(data: MessageSend, user: User = Depends(get_current_user)
         "id": msg.id,
         "sender_id": user.id,
         "sender_name": user.name,
-        "sender_avatar": user.avatar,
         "content": data.content,
         "created_at": created_at,
     })
@@ -435,16 +434,9 @@ def get_messages(user_id: int, user: User = Depends(get_current_user), db: Sessi
             (Message.sender_id == user_id) & (Message.receiver_id == user.id)
         )
     ).order_by(Message.created_at.asc()).all()
-    # 头像一次取齐（本人 + 对方），逐条消息回填：与会话列表的 user_avatar 同源，
-    # 避免「列表有头像、气泡只剩首字母」。对方已注销时留空，由前端退回首字母。
-    peer = db.query(User).filter(User.id == user_id).first()
-    avatars = {user.id: user.avatar}
-    if peer:
-        avatars[peer.id] = peer.avatar
     return [MessageOut(
         id=m.id, sender_id=m.sender_id, receiver_id=m.receiver_id,
-        content=m.content, read=m.read, created_at=m.created_at,
-        sender_avatar=avatars.get(m.sender_id),
+        content=m.content, read=m.read, created_at=m.created_at
     ) for m in msgs]
 
 @router.put("/read/{user_id}")

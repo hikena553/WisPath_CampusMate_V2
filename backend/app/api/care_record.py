@@ -14,6 +14,7 @@ from app.schemas.care_record import (
     WorkloadStats,
 )
 from app.services import care_record_service, teacher_task_service, learning_event_service
+from app.services.realtime import hub as realtime_hub
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,8 @@ def create_record(
         context={"record_type": payload.record_type, "student_id": payload.student_id},
     )
     db.commit()  # 落库学情事件（旁路写入随本请求事务提交）
+    # 工作台「我的工作量」：关怀/谈心/评语计数 + 本周办结可能同时变化
+    realtime_hub.publish(user.id, ["teacher-care", "teacher-tasks", "teacher-dashboard"])
     return care_record_service.serialize_full(db, record)
 
 
@@ -111,6 +114,8 @@ def update_record(
     if user.role != UserRole.ADMIN and record.teacher_id != user.id:
         raise HTTPException(status_code=403, detail="只能修改本人撰写的记录")
     care_record_service.update_record(db, record, payload.model_dump(exclude_unset=True))
+    # 记录类型可能被改（关怀↔谈心↔评语），三类计数都要重算
+    realtime_hub.publish(user.id, ["teacher-care", "teacher-dashboard"])
     return care_record_service.serialize_full(db, record)
 
 
@@ -126,4 +131,5 @@ def delete_record(
     if user.role != UserRole.ADMIN and record.teacher_id != user.id:
         raise HTTPException(status_code=403, detail="只能删除本人撰写的记录")
     care_record_service.soft_delete(db, record)
+    realtime_hub.publish(record.teacher_id, ["teacher-care", "teacher-dashboard"])
     return {"message": "已删除"}

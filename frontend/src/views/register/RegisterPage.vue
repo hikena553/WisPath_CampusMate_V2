@@ -42,7 +42,7 @@
           <h1>{{ isTeacher ? '教师注册' : '学生注册' }}</h1>
           <p>
             {{ isTeacher ? '工号' : '学号' }}作为登录账号，需补全{{ isTeacher ? '所属学院' : '学院、专业、导师' }}与手机号、QQ 号{{
-              thirdPartyAuthEnabled ? '，并完成手机号或 QQ 真实验证' : qqNativeEnabled ? '，并完成 QQ 授权验证' : ''
+              thirdPartyAuthEnabled ? '，并完成手机号或 QQ 真实验证' : ''
             }}
           </p>
         </header>
@@ -211,8 +211,8 @@
             </div>
           </template>
 
-        <!-- 第三方与原生 QQ 通道均不可用（申请期间）：直接收集手机号、QQ 号 -->
-        <template v-if="!thirdPartyAuthEnabled && !qqNativeEnabled">
+        <!-- 短信与 QQ 互联申请中：直接收集手机号、QQ 号 -->
+        <template v-if="!thirdPartyAuthEnabled">
           <div class="field">
             <label class="field-label" for="reg-phone">手机号 <i class="req">*</i></label>
             <input
@@ -255,10 +255,9 @@
           </div>
         </template>
 
-        <!-- 验证通道开放后：手机号短信验证（Web） / QQ 授权（Web 或 App 原生） -->
+        <!-- 第三方通道开放后：手机号短信验证 / QQ 授权 -->
         <template v-else>
-          <!-- App 内仅 QQ 授权可用（短信未开放），不展示验证方式切换 -->
-          <div v-if="thirdPartyAuthEnabled" class="field">
+          <div class="field">
             <span class="field-label">验证方式 <i class="req">*</i></span>
             <div class="verify-tabs">
               <button
@@ -280,7 +279,7 @@
             </div>
           </div>
 
-          <div v-if="thirdPartyAuthEnabled && verifyMode === 'phone'">
+          <div v-if="verifyMode === 'phone'">
             <div class="field">
               <label class="field-label" for="reg-phone">手机号 <i class="req">*</i></label>
               <input
@@ -346,16 +345,9 @@
               QQ 已授权{{ qqNickname ? `：${qqNickname}` : '' }}
             </div>
             <template v-else>
-              <p class="verify-note">
-                {{ qqNativeEnabled ? '拉起手机 QQ 完成授权，再继续填写下方信息完成注册' : '授权 QQ 互联后回到本页，无需短信即可完成注册' }}
-              </p>
-              <button
-                type="button"
-                class="verify-btn"
-                :disabled="qqLoading"
-                @click="qqNativeEnabled ? handleQqNativeAuth() : handleQqAuth()"
-              >
-                {{ qqLoading ? '授权中…' : '授权 QQ 注册' }}
+              <p class="verify-note">授权 QQ 互联后回到本页，无需短信即可完成注册</p>
+              <button type="button" class="verify-btn" :disabled="qqLoading" @click="handleQqAuth">
+                {{ qqLoading ? '跳转中…' : '授权 QQ 注册' }}
               </button>
             </template>
           </div>
@@ -398,7 +390,6 @@ import {
   getCaptcha,
   getQqAuthorizeUrl,
   getRegisterOptions,
-  qqMobileAuthorizeApi,
   registerApi,
   sendRegisterSms,
   verifyRegisterPhone,
@@ -406,8 +397,7 @@ import {
 } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { saveQuickAccountFromLogin } from '@/utils/quickLogin'
-import { THIRD_PARTY_AUTH_ENABLED, QQ_NATIVE_AUTH_ENABLED } from '@/utils/features'
-import { qqNativeAuthAvailable, qqNativeErrorCode, qqNativeErrorMessage, qqNativeLogin } from '@/utils/qqAuth'
+import { THIRD_PARTY_AUTH_ENABLED } from '@/utils/features'
 import RegSelect from './RegSelect.vue'
 
 const DRAFT_KEY = 'mian02_register_draft'
@@ -415,12 +405,10 @@ const DRAFT_KEY = 'mian02_register_draft'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-/** 第三方登录开关（短信 / QQ 互联网站应用申请期间关闭，注册页改为直接填写手机号、QQ 号） */
+/** 第三方登录开关（短信 / QQ 互联申请期间关闭，注册页改为直接填写手机号、QQ 号） */
 const thirdPartyAuthEnabled = THIRD_PARTY_AUTH_ENABLED
-/** QQ 互联移动端（App 壳内原生 SDK 授权），浏览器恒为 false */
-const qqNativeEnabled = QQ_NATIVE_AUTH_ENABLED && qqNativeAuthAvailable()
 /** 未走短信 / QQ 票据验证时，提交注册需图形验证码防刷 */
-const captchaRequired = computed(() => !thirdPartyAuthEnabled && !qqNativeEnabled)
+const captchaRequired = computed(() => !thirdPartyAuthEnabled)
 
 const options = ref<RegisterOptions>({ colleges: [], majors: [], tutors: [] })
 /** 注册流程：先选身份，再填写注册信息 */
@@ -649,40 +637,6 @@ async function handleQqAuth() {
   }
 }
 
-/** App 内：拉起手机 QQ 授权，票据就地保存在页面状态里（无需跳转回跳） */
-async function handleQqNativeAuth() {
-  if (qqLoading.value) return
-  saveDraft()
-  qqLoading.value = true
-  try {
-    const session = await qqNativeLogin()
-    const res = await qqMobileAuthorizeApi(session.accessToken, session.openId)
-    if (res.status === 'unregistered' && res.register_ticket) {
-      qqTicket.value = res.register_ticket
-      qqNickname.value = res.nickname || ''
-      formError.value = ''
-    } else if (res.status === 'login' && res.login?.access_token) {
-      // 该 QQ 已绑定校园账号：无需重复注册，直接登录
-      auth.login(res.login.access_token, res.login.user)
-      saveQuickAccountFromLogin(res.login)
-      ElMessage.success('该 QQ 已绑定校园账号，已直接登录')
-      router.replace(res.login.user.role === 'teacher' ? '/teacher' : '/student')
-      return
-    } else {
-      throw new Error('响应异常')
-    }
-  } catch (e: any) {
-    const code = qqNativeErrorCode(e)
-    if (code === 'QQ_NOT_INSTALLED') {
-      ElMessage.warning('未检测到手机 QQ，请安装后重试')
-    } else if (code !== 'USER_CANCEL') {
-      formError.value = e?.response?.data?.detail || qqNativeErrorMessage(e, 'QQ 授权失败，请稍后重试')
-    }
-  } finally {
-    qqLoading.value = false
-  }
-}
-
 function validate(): string {
   if (!/^\d{5,15}$/.test(form.studentNo)) return `${accountLabel.value}必须为 5-15 位数字`
   if (!/^(?=.*[A-Za-z])(?=.*[0-9])[\x21-\x7e]{8,20}$/.test(form.password)) {
@@ -695,13 +649,9 @@ function validate(): string {
     if (!form.majorId) return '请选择专业'
     // 导师为选填项，不强制选择
   }
-  if (thirdPartyAuthEnabled || qqNativeEnabled) {
-    // App 内仅 QQ 授权可用（手机号短信通道未开放），不展示也不接受手机号验证
-    if (thirdPartyAuthEnabled && verifyMode.value === 'phone') {
-      if (!phoneTicket.value) return '请先完成手机号验证'
-    } else if (!qqTicket.value) {
-      return '请先完成 QQ 授权'
-    }
+  if (thirdPartyAuthEnabled) {
+    if (verifyMode.value === 'phone' && !phoneTicket.value) return '请先完成手机号验证'
+    if (verifyMode.value === 'qq' && !qqTicket.value) return '请先完成 QQ 授权'
     if (!form.qq) return '请填写 QQ 号'
     if (!/^\d{5,12}$/.test(form.qq)) return 'QQ 号格式不正确'
   } else {
@@ -731,16 +681,10 @@ async function handleSubmit() {
       college_id: form.collegeId,
       major_id: isTeacher.value ? 0 : form.majorId,
       tutor_id: isTeacher.value ? 0 : form.tutorId,
-      // QQ 票据通道（含 App 原生授权）下手机号选填，后端已支持
-      phone:
-        thirdPartyAuthEnabled || qqNativeEnabled
-          ? thirdPartyAuthEnabled && verifyMode.value === 'phone'
-            ? phoneVerifiedPhone.value || null
-            : null
-          : form.phone,
+      phone: thirdPartyAuthEnabled ? phoneVerifiedPhone.value || null : form.phone,
       qq: form.qq || null,
       phone_ticket: thirdPartyAuthEnabled ? phoneTicket.value || null : null,
-      qq_ticket: thirdPartyAuthEnabled || qqNativeEnabled ? qqTicket.value || null : null,
+      qq_ticket: thirdPartyAuthEnabled ? qqTicket.value || null : null,
       // 图形验证码一次性使用，后端校验失败时需刷新重填
       captcha_id: captchaRequired.value ? captchaId.value : undefined,
       captcha_code: captchaRequired.value ? captchaCode.value : undefined,
@@ -762,14 +706,14 @@ async function handleSubmit() {
 onMounted(async () => {
   const ticket = typeof route.query.qq_ticket === 'string' ? route.query.qq_ticket : ''
   const nickname = typeof route.query.qq_nickname === 'string' ? route.query.qq_nickname : ''
-  if ((thirdPartyAuthEnabled || qqNativeEnabled) && ticket) {
+  if (thirdPartyAuthEnabled && ticket) {
     qqTicket.value = ticket
     qqNickname.value = nickname
     verifyMode.value = 'qq'
     restoreDraft()
     step.value = 'form'
   }
-  if ((thirdPartyAuthEnabled || qqNativeEnabled) && route.query.error === 'qq_occupied') {
+  if (thirdPartyAuthEnabled && route.query.error === 'qq_occupied') {
     formError.value = '该 QQ 已绑定其他账号，请更换 QQ 或改用手机号验证'
     step.value = 'form'
   }

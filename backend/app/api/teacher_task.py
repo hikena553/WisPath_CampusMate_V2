@@ -16,6 +16,7 @@ from app.schemas.teacher_task import (
     TeacherTaskUpdate,
 )
 from app.services import teacher_task_service, task_autogen_service
+from app.services.realtime import hub as realtime_hub
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ def create_task(
         priority=payload.priority,
         remind_at=payload.remind_at,
     )
+    realtime_hub.publish(user.id, ["teacher-tasks", "teacher-dashboard"])
     return teacher_task_service.serialize_one(db, task)
 
 
@@ -89,6 +91,8 @@ def update_task(
         teacher_task_service.update_task(db, task, payload.model_dump(exclude_unset=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    # 办结/改期都会影响「本周办结」「逾期」「今日待跟进」
+    realtime_hub.publish(user.id, ["teacher-tasks", "teacher-dashboard"])
     return teacher_task_service.serialize_one(db, task)
 
 
@@ -103,4 +107,5 @@ def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     teacher_task_service.delete_task(db, task)
+    realtime_hub.publish(user.id, ["teacher-tasks", "teacher-dashboard"])
     return {"message": "已删除"}

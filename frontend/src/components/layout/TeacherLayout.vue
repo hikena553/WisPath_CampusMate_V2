@@ -174,8 +174,9 @@ import { hasOpenSubPage, isSubpagePushed } from '@/composables/useMobileSubPage'
 import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import DesktopPet from '@/components/teacher/DesktopPet.vue'
 import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
+// SSE 实时通道：服务端数据变更的主更新来源
+import { startRealtime, stopRealtime } from '@/utils/realtime'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
-import { emitDataChange } from '@/utils/dataSync'
 import { confirmLogout } from '@/utils/logout'
 import {
   HomeFilled, User, Message, Notebook,
@@ -202,8 +203,20 @@ watch(
 // 进入端口时拉取最新站点配置，管理员更新设置后教师端立即同步
 onMounted(() => { void loadSiteConfig(true) })
 
-// 缓存 teacher 端重型页面，避免切换时 ECharts 重建与数据重拉
-const cachedNames = ['teacher-home', 'teacher-students']
+// 缓存 teacher 端重型/常切页面，避免切换时整页重建与数据重拉（切换延迟的主因）。
+// 缓存的页面必须在 onActivated 里静默刷新数据，否则会看到过期内容。
+// 注意排除两类页：
+// - teacher-tasks：onMounted 里有 ?student_id / ?filter 等路由参数驱动的跳转逻辑，
+//   keep-alive 后二次进入不再跑 onMounted，会丢跳转 —— 待其改为 onActivated 处理后再加回；
+// - teacher-agent / teacher-messages：长连接与流式会话状态多，缓存收益小、副作用大。
+const cachedNames = [
+  'teacher-home',
+  'teacher-students',
+  'teacher-features',
+  'teacher-announcement',
+  'teacher-approval',
+  'teacher-profile',
+]
 
 const sidebarCollapsed = ref(false)
 /**
@@ -249,11 +262,14 @@ const SUB_ROUTE_PARENT: Record<string, string> = {
  * 桌面端侧边栏导航：教师端定位「育人 + 辅导员工作台 + 个人工作台」三合一。
  *
  * 分组逻辑（按"我为谁做"切分，而不是按"系统里有什么"切分）：
- * 1. 我的成长 —— 个人工作台。先看见自己：能力雷达 / 成长档案 / 影响力曲线。
+ * 1. 我的成长 —— 个人工作台。先看见自己：能力雷达 / 影响力曲线。
  *    放在最上面是刻意的：教师先自我成长，才有能量辅导学生成长。
  * 2. 我的教学 —— 课表查询（我的授课 / 按教师 / 按班级），教务排课只读展示。
  * 3. 班级育人 —— 辅导员主战场。从待办/审批/预警到学生档案、家校、关怀留痕。
  * 4. 个人事物 —— 低频但有必要的收口（消息、个人中心）。
+ *
+ * 注：/teacher/portfolio 主看学生成长记录，归属第 3 组；教师本人的育人档案
+ * （案例 / 荣誉 / 培训 / 研究成果）也沉淀在同一页，入口移入「我的成长」页内。
  */
 const navGroups: { title: string; items: NavItem[] }[] = [
   {
@@ -261,7 +277,6 @@ const navGroups: { title: string; items: NavItem[] }[] = [
     items: [
       { path: '/teacher', label: '首页', icon: HomeFilled },
       { path: '/teacher/growth', label: '我的成长', icon: TrendCharts },
-      { path: '/teacher/portfolio', label: '成长档案', icon: Trophy },
     ],
   },
   {
@@ -277,6 +292,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
       { path: '/teacher/approval', label: '审批管理', icon: Stamp },
       { path: '/teacher/crisis', label: '心理预警', icon: WarningFilled },
       { path: '/teacher/students', label: '工作台', icon: Notebook },
+      { path: '/teacher/portfolio', label: '学生成长档案', icon: Trophy },
       { path: '/teacher/announcement', label: '班级公告', icon: Bell },
       { path: '/teacher/care-center', label: '关怀与家校', icon: Sunny },
     ],
@@ -410,17 +426,14 @@ function updateClock() {
   now.value = `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 /**
- * 应用从后台切回前台 / 从其他标签页切回时，数据可能已经过期：
- * 广播一次全量变更，各页面立即静默刷新，不用等下一轮轮询。
+ * 应用从后台切回前台 / 从其他标签页切回时，数据可能已经过期。
+ * 注：切回前台的重连与补拉已由 utils/realtime.ts 统一处理（含 SSE 补连），
+ * 这里不再重复广播，否则同一次切回会连续刷新两轮。
  */
-function handleVisibilityChange() {
-  if (document.visibilityState === 'visible') emitDataChange('all')
-}
 
 onMounted(() => {
   updateClock()
   clockTimer = window.setInterval(updateClock, 30000)
-  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 /**
@@ -446,13 +459,24 @@ document.body.classList.add('teacher-app')
 
 onMounted(() => {
   startUnreadWatch()
+  // SSE 实时通道：工作台/工作量等数据变更的主更新来源（取代首页 30 秒全量轮询）
+  startRealtime()
   // 勋章结算延后于首屏请求，避免抢占带宽
   window.setTimeout(() => { void syncBadgeAwards() }, 900)
+  // 空闲时预取常用子页的路由 chunk：这些页面都是动态 import，首次切页要现场下载 JS，
+  // 弱网/APK WebView 下就是几百毫秒的空白（「图标慢半拍才出来」的成因之一）。
+  // 只预取不挂载，安全无副作用；放进 idle 回调避免与首屏请求抢带宽。
+  const idle = (cb: () => void) =>
+    ('requestIdleCallback' in window ? window.requestIdleCallback(cb, { timeout: 3000 }) : (window as Window).setTimeout(cb, 1200))
+  idle(() => {
+    void import('@/views/teacher/TasksPage.vue')
+    void import('@/views/teacher/MessagesPage.vue')
+  })
 })
 onUnmounted(() => {
   stopUnreadWatch()
+  stopRealtime()
   if (clockTimer) window.clearInterval(clockTimer)
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
   document.body.classList.remove('teacher-app')
 })
 

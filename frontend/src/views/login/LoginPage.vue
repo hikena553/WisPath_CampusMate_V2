@@ -153,8 +153,8 @@
         还没有账号？注册账号
       </router-link>
 
-      <!-- App 内开放原生 QQ 授权；浏览器侧等网站应用资质下来才展示第三方入口 -->
-      <template v-if="thirdPartyAuthEnabled || qqNativeEnabled">
+      <!-- 短信与 QQ 互联资质申请中，第三方登录入口暂不开放 -->
+      <template v-if="thirdPartyAuthEnabled">
         <div class="other">
           <span class="other-line"></span>
           <span class="other-text">其他登录方式</span>
@@ -162,9 +162,7 @@
         </div>
 
         <div class="quick-row">
-          <!-- 手机号短信登录仅在 Web 第三方通道开放后展示（App 内短信资质未下来） -->
           <button
-            v-if="thirdPartyAuthEnabled"
             type="button"
             class="quick-item"
             :disabled="quickLoading === 'phone'"
@@ -210,7 +208,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getQqAuthorizeUrl, loginApi, phoneLoginApi, qqMobileAuthorizeApi, quickLoginApi, sendSmsCode } from '@/api/auth'
+import { getQqAuthorizeUrl, loginApi, phoneLoginApi, quickLoginApi, sendSmsCode } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import LegalDoc from './LegalDoc.vue'
@@ -227,23 +225,14 @@ import {
   type PendingPasswordReset,
 } from '@/utils/passwordReset'
 import { getLastAccount } from '@/utils/lastAccount'
-import { THIRD_PARTY_AUTH_ENABLED, QQ_NATIVE_AUTH_ENABLED } from '@/utils/features'
-import {
-  qqNativeAuthAvailable,
-  qqNativeErrorCode,
-  qqNativeErrorMessage,
-  qqNativeLogin,
-  qqNativePlatform,
-} from '@/utils/qqAuth'
+import { THIRD_PARTY_AUTH_ENABLED } from '@/utils/features'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const { siteName, siteMascot } = useSiteConfig()
-/** 第三方登录开关（短信 / QQ 互联网站应用申请期间关闭） */
+/** 第三方登录开关（短信 / QQ 互联申请期间关闭） */
 const thirdPartyAuthEnabled = THIRD_PARTY_AUTH_ENABLED
-/** QQ 互联移动端（App 壳内原生 SDK 授权），浏览器恒为 false */
-const qqNativeEnabled = QQ_NATIVE_AUTH_ENABLED && qqNativeAuthAvailable()
 
 watch(
   siteName,
@@ -484,18 +473,9 @@ async function handlePhoneLogin() {
   }
 }
 
-/** QQ 登录：App 内走原生 QQ 互联授权；浏览器未配置网站应用时回退本机快捷登录 */
+/** QQ 登录：未配置 QQ 互联时回退到本机快捷登录 */
 async function handleQqLogin() {
   if (!ensureAgreed()) return
-  if (qqNativeEnabled) {
-    await handleQqNativeLogin()
-    return
-  }
-  // App 壳内但安装包没集成 QQ OpenSDK：Web 网站应用链路也不可用，直接给准确提示
-  if (QQ_NATIVE_AUTH_ENABLED && qqNativePlatform()) {
-    ElMessage.warning('当前安装包未集成 QQ 登录组件，请使用账号密码登录')
-    return
-  }
   quickLoading.value = 'qq'
   try {
     const res: any = await getQqAuthorizeUrl('login')
@@ -511,41 +491,6 @@ async function handleQqLogin() {
       return
     }
     ElMessage.info(detail || 'QQ 登录暂不可用，请使用账号密码登录')
-  } finally {
-    quickLoading.value = ''
-  }
-}
-
-/** App 内：拉起手机 QQ 授权 → 后端核验 → 已绑定直接登录 / 未绑定去注册页补全信息 */
-async function handleQqNativeLogin() {
-  quickLoading.value = 'qq'
-  try {
-    const session = await qqNativeLogin()
-    const res = await qqMobileAuthorizeApi(session.accessToken, session.openId)
-    if (res.status === 'login' && res.login?.access_token) {
-      afterLogin(res.login)
-      return
-    }
-    if (res.status === 'unregistered' && res.register_ticket) {
-      quickLoading.value = ''
-      ElMessage.info('该 QQ 尚未注册校园账号，请补全信息完成注册')
-      router.push({
-        path: '/register',
-        query: { qq_ticket: res.register_ticket, qq_nickname: res.nickname || '' },
-      })
-      return
-    }
-    throw new Error('响应异常')
-  } catch (e: any) {
-    // 插件拒绝码统一归一：取消静默、未装 QQ 引导安装、缺 OpenSDK 明确说明，
-    // 不再把「安装包没集成 QQ 组件」误报成笼统的「QQ 登录失败」
-    const code = qqNativeErrorCode(e)
-    if (code === 'USER_CANCEL') return
-    if (code === 'QQ_NOT_INSTALLED') {
-      ElMessage.warning('未检测到手机 QQ，请安装后重试')
-      return
-    }
-    ElMessage.warning(e?.response?.data?.detail || qqNativeErrorMessage(e, 'QQ 授权失败，请稍后重试'))
   } finally {
     quickLoading.value = ''
   }
@@ -1033,136 +978,6 @@ onBeforeUnmount(() => {
   }
   .agree {
     margin-top: 22px;
-  }
-}
-
-/* ===== 移动端：一屏放下全部内容（含底部协议勾选）=====
-   手机上纵向全是固定 px 间距：844 高度时协议刚好贴到屏幕最下沿、
-   更矮的机型（740/640）直接掉出首屏，被手势条或导航条压住，
-   所以底部「我已阅读并同意《用户协议》《隐私政策》」一直看不到。
-   这里把纵向节奏改成按 vh 伸缩（元素本身是 #app zoom 后的尺寸，
-   vh 仍是布局视口高度），内容总高约为视口的固定比例，
-   从 320×568 到 430×932 都不用滚动就能看到登录按钮、其他登录方式与协议。 */
-@media (max-width: 767px) {
-  /* 底部留出一点余量：安卓全面屏的手势条会盖在 WebView 底部 */
-  .login-page {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
-  }
-  /* 内容比屏幕矮时整体垂直居中（margin auto 在空间不足时自动变 0，
-     表现退化成贴顶，不会像 justify-content:center 那样把顶部裁掉）；
-     配合下面的 vh 伸缩间距，任何高度都不用滚动就能看到底部的「我已阅读并同意…」。 */
-  .login-body {
-    margin-block: auto;
-  }
-  .brand {
-    padding-top: clamp(12px, 2.4vh, 40px);
-  }
-  .brand-logo {
-    width: clamp(50px, 7.4vh, 60px);
-    height: clamp(50px, 7.4vh, 60px);
-    border-radius: clamp(15px, 2.2vh, 19px);
-  }
-  .brand h1 {
-    margin-top: clamp(8px, 1.6vh, 16px);
-    font-size: clamp(21px, 2.85vh, 24px);
-  }
-  .brand p {
-    margin-top: clamp(4px, 1vh, 8px);
-    font-size: 12.5px;
-  }
-
-  .form {
-    margin-top: clamp(14px, 2.8vh, 32px);
-    gap: clamp(8px, 1.45vh, 12px);
-  }
-  .field input,
-  .code-btn {
-    height: clamp(46px, 6.5vh, 54px);
-  }
-  .form-meta {
-    min-height: 16px;
-  }
-  .btn-primary {
-    height: clamp(46px, 6.5vh, 54px);
-    margin-top: 2px;
-  }
-
-  .guest-link {
-    margin-top: clamp(6px, 1.5vh, 14px);
-  }
-  .register-link {
-    margin-top: 0;
-  }
-
-  .other {
-    margin-top: clamp(12px, 3vh, 38px);
-  }
-  .quick-row {
-    margin-top: clamp(8px, 1.9vh, 16px);
-    gap: clamp(36px, 11vw, 52px);
-  }
-  .quick-item {
-    gap: 6px;
-  }
-  .quick-circle {
-    width: clamp(44px, 6.3vh, 52px);
-    height: clamp(44px, 6.3vh, 52px);
-  }
-
-  .agree {
-    margin-top: clamp(10px, 2.4vh, 34px);
-  }
-}
-
-/* 矮屏（640~720 高度的老机型）：再压一档，连安全区一起算进去也不滚动 */
-@media (max-width: 767px) and (max-height: 720px) {
-  .login-page {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 6px);
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-  }
-  .brand {
-    padding-top: 8px;
-  }
-  .brand-logo {
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-  }
-  .brand h1 {
-    margin-top: 6px;
-    font-size: 20px;
-  }
-  .brand p {
-    margin-top: 3px;
-    font-size: 12px;
-  }
-  .form {
-    margin-top: 12px;
-    gap: 8px;
-  }
-  .field input,
-  .code-btn,
-  .btn-primary {
-    height: 44px;
-  }
-  .form-meta {
-    min-height: 15px;
-  }
-  .guest-link {
-    margin-top: 4px;
-  }
-  .other {
-    margin-top: 10px;
-  }
-  .quick-row {
-    margin-top: 8px;
-  }
-  .quick-circle {
-    width: 42px;
-    height: 42px;
-  }
-  .agree {
-    margin-top: 8px;
   }
 }
 

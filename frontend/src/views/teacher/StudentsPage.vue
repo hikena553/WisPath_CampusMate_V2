@@ -71,124 +71,130 @@
           </button>
         </div>
 
-        <!-- 筛选条：搜索独占一行（学生页最常用的动作），筛选器收拢在右侧 -->
-        <div class="roster-toolbar">
-          <el-input
-            v-model="search"
-            class="roster-search"
-            placeholder="搜索姓名 / 学号 / 学院"
-            clearable
-            @input="debouncedLoadStudents"
-          >
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
-          <div class="roster-filters">
-            <el-select v-model="filterCrisis" placeholder="危机等级" clearable class="rf-select">
-              <el-option label="全部" value="" />
-              <el-option label="高危" value="severe" />
-              <el-option label="中度" value="moderate" />
-              <el-option label="轻度" value="mild" />
-              <el-option label="无预警" value="none" />
-            </el-select>
-            <el-select v-model="filterGrowth" placeholder="成长成果" clearable class="rf-select">
-              <el-option label="全部" value="" />
-              <el-option label="有成果" value="has" />
-              <el-option label="无成果" value="none" />
-            </el-select>
-            <el-select v-model="filterScore" placeholder="综合评分" clearable class="rf-select">
-              <el-option label="全部" value="" />
-              <el-option label="突出 (≥80)" value="excellent" />
-              <el-option label="良好 (≥65)" value="good" />
-              <el-option label="一般 (≥50)" value="average" />
-              <el-option label="偏低 (<50)" value="poor" />
-            </el-select>
-            <el-select v-model="filterSkill" placeholder="技能画像" clearable class="rf-select">
-              <el-option label="全部" value="" />
-              <el-option label="有技能" value="has" />
-              <el-option label="无技能" value="none" />
-            </el-select>
-            <button v-if="hasActiveFilter" class="rf-clear" type="button" @click="clearFilters">
-              <el-icon :size="12"><Close /></el-icon>
-              清除
-            </button>
-          </div>
-        </div>
-
-        <div v-if="!filteredStudents.length && loaded" class="empty-wrapper">
-          <el-empty :image-size="96">
-            <template #image>
-              <img :src="siteMascot" :alt="siteName" class="empty-mascot" />
-            </template>
-            <p class="empty-text">{{ hasActiveFilter ? '没有符合条件的学生' : '当前名下暂无学生' }}</p>
-          </el-empty>
-        </div>
-
-        <div v-else class="student-grid">
-          <div
-            v-for="s in pagedStudents"
-            :key="s.id"
-            :class="['student-card', s.crisis_level ? `level-${s.crisis_level}` : '']"
-          >
-            <div class="card-head">
-              <el-avatar :size="40" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
-              <div class="card-info">
-                <strong class="card-name">{{ s.name }}</strong>
-                <span class="card-college">{{ s.college || '未分配' }}</span>
-              </div>
-              <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="crisis-tag">
-                {{ crisisLabel(s.crisis_level) }}
-              </el-tag>
-            </div>
-
-            <!--
-              卡片主体改成一行「关键事实」，不再是三个等宽大数字。
-              教师看名单时真正想知道的是：这人有没有事（预警）、有没有产出（成果）、
-              有没有请假（请假），而不是三个并排的 0。
-            -->
-            <div class="card-facts">
-              <span class="cf-item" :class="{ 'is-quiet': !s.growth_count }">
-                <b>{{ s.growth_count }}</b> 成果
-              </span>
-              <span class="cf-sep" aria-hidden="true"></span>
-              <span class="cf-item" :class="{ 'is-quiet': !s.leave_count }">
-                <b>{{ s.leave_count }}</b> 请假
-              </span>
-              <span class="cf-sep" aria-hidden="true"></span>
-              <span class="cf-item" :class="s.score !== undefined ? scoreClass(s.score) : 'is-quiet'">
-                <b>{{ s.score ?? '—' }}</b> 综合分
-              </span>
-            </div>
-
-            <div v-if="s.latest_crisis_summary" class="card-crisis-note">
-              {{ s.latest_crisis_summary }}
-            </div>
-
-            <div v-if="s.skills_json?.skills?.length" class="card-skills">
-              <el-tag v-for="sk in s.skills_json.skills.slice(0, 3)" :key="sk.name" size="small" round effect="plain">{{ sk.name }}</el-tag>
-            </div>
-
-            <div class="card-actions">
-              <el-button size="small" type="primary" @click="openDetail(s)">
-                <el-icon><View /></el-icon> 详情
-              </el-button>
-              <el-button size="small" type="success" plain @click="openContact(s)">
-                <el-icon><ChatDotRound /></el-icon> 联系
-              </el-button>
+        <!--
+          ===== L1 / L2 二选一 =====
+          L1 班级总览：教师带多个班时，一屏内回答「哪个班出事了、几个人要盯」。
+          L2 班级名单：进班后可选「危机分层」或「不分层」，复用的是原有网格与分页。
+        -->
+        <template v-if="selectedClass">
+          <div class="l2-head">
+            <ClassStatsBar
+              :cls="selectedClass"
+              :only-focus="onlyFocus"
+              @back="closeClass"
+              @toggle-focus="onlyFocus = !onlyFocus"
+            />
+            <div class="l2-controls">
+              <el-input
+                v-model="search"
+                class="roster-search"
+                placeholder="在本班搜索姓名 / 学号"
+                clearable
+              >
+                <template #prefix><el-icon><Search /></el-icon></template>
+              </el-input>
+              <LayerToggle v-model="layerMode" />
             </div>
           </div>
-        </div>
 
-        <div v-if="filteredStudents.length > 0" class="pagination-wrapper">
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :page-sizes="[12, 24, 36, 48]"
-            :total="filteredStudents.length"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handleSizeChange"
-            @current-change="handleCurrentChange"
+          <div v-if="!classStudents.length && loaded" class="empty-wrapper">
+            <el-empty :image-size="96">
+              <template #image>
+                <img :src="siteMascot" :alt="siteName" class="empty-mascot" />
+              </template>
+              <p class="empty-text">{{ onlyFocus ? '本班暂无需要重点关注的学生' : '本班暂无学生' }}</p>
+            </el-empty>
+          </div>
+
+          <!-- 分层视图：桌面/移动共用一套分档逻辑，只切行样式 -->
+          <LayeredRoster
+            v-else-if="layerMode === 'crisis'"
+            :students="classStudents"
+            :is-mobile="false"
+            :last-seen-of="lastSeen"
+            @open="openDetail"
+            @contact="openContact"
           />
-        </div>
+
+          <!--
+            不分层：完全复用改造前的卡片网格 + 分页。
+            这里刻意不新造样式 —— 「不分层」对教师意味着「还是我熟悉的那个名单」。
+          -->
+          <template v-else>
+            <div class="student-grid">
+              <div
+                v-for="s in pagedStudents"
+                :key="s.id"
+                :class="['student-card', s.crisis_level ? `level-${s.crisis_level}` : '']"
+              >
+                <div class="card-head">
+                  <el-avatar :size="40" :src="s.avatar || undefined" class="card-avatar">{{ s.name[0] }}</el-avatar>
+                  <div class="card-info">
+                    <strong class="card-name">{{ s.name }}</strong>
+                    <span class="card-college">{{ s.college || '未分配' }}</span>
+                  </div>
+                  <el-tag v-if="s.crisis_level" :type="crisisType(s.crisis_level)" size="small" effect="dark" class="crisis-tag">
+                    {{ crisisLabel(s.crisis_level) }}
+                  </el-tag>
+                </div>
+
+                <div class="card-facts">
+                  <span class="cf-item" :class="{ 'is-quiet': !s.growth_count }">
+                    <b>{{ s.growth_count }}</b> 成果
+                  </span>
+                  <span class="cf-sep" aria-hidden="true"></span>
+                  <span class="cf-item" :class="{ 'is-quiet': !s.leave_count }">
+                    <b>{{ s.leave_count }}</b> 请假
+                  </span>
+                  <span class="cf-sep" aria-hidden="true"></span>
+                  <span class="cf-item" :class="s.score !== undefined ? scoreClass(s.score) : 'is-quiet'">
+                    <b>{{ s.score ?? '—' }}</b> 综合分
+                  </span>
+                </div>
+
+                <div v-if="s.latest_crisis_summary" class="card-crisis-note">
+                  {{ s.latest_crisis_summary }}
+                </div>
+
+                <div v-if="s.skills_json?.skills?.length" class="card-skills">
+                  <el-tag v-for="sk in s.skills_json.skills.slice(0, 3)" :key="sk.name" size="small" round effect="plain">{{ sk.name }}</el-tag>
+                </div>
+
+                <div class="card-actions">
+                  <el-button size="small" type="primary" @click="openDetail(s)">
+                    <el-icon><View /></el-icon> 详情
+                  </el-button>
+                  <el-button size="small" type="success" plain @click="openContact(s)">
+                    <el-icon><ChatDotRound /></el-icon> 联系
+                  </el-button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="classStudents.length > 0" class="pagination-wrapper">
+              <el-pagination
+                v-model:current-page="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[12, 24, 36, 48]"
+                :total="classStudents.length"
+                layout="total, sizes, prev, pager, next, jumper"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+              />
+            </div>
+          </template>
+        </template>
+
+        <ClassOverview
+          v-else
+          v-model:search="search"
+          v-model:sort="classSort"
+          :classes="classSummaries"
+          :students="students"
+          :loaded="loaded"
+          @select="openClass"
+          @open="openDetail"
+        />
       </section>
 
       <!--
@@ -225,7 +231,7 @@
               <el-avatar :size="56" :src="detail.avatar || undefined">{{ detail.name[0] }}</el-avatar>
               <div class="dialog-profile-info">
                 <strong>{{ detail.name }}</strong>
-                <small>{{ detail.college || '未分配' }}</small>
+                <small>{{ detail.college || '未分配' }}<template v-if="detailClassName"> · {{ detailClassName }}</template></small>
                 <small>学号: {{ detail.username }}</small>
               </div>
             </div>
@@ -407,9 +413,9 @@
           <span class="wb-entry-icon"><el-icon :size="18"><UserFilled /></el-icon></span>
           <span class="wb-entry-main">
             <span class="wb-entry-title">学生名单</span>
-            <span class="wb-entry-hint">按危机等级分诊 · 搜索 / 排序 / 进入档案</span>
+            <span class="wb-entry-hint">按班级查看 · 重点关注提示 · 进入档案</span>
           </span>
-          <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+          <el-icon class="wb-entry-arrow" color="#c0c4cc"><ArrowRight /></el-icon>
         </button>
         <button class="tui-card wb-entry wb-entry-slim" type="button" @click="showAnalyticsPage = true">
           <span class="wb-entry-icon"><el-icon :size="18"><DataAnalysis /></el-icon></span>
@@ -417,141 +423,116 @@
             <span class="wb-entry-title">班级数据分析</span>
             <span class="wb-entry-hint">成绩分布 · 心理危机 · 预警趋势</span>
           </span>
-          <el-icon color="#c0c4cc"><ArrowRight /></el-icon>
+          <el-icon class="wb-entry-arrow" color="#c0c4cc"><ArrowRight /></el-icon>
         </button>
       </section>
 
       <!-- ===== 二级子页：学生名单 ===== -->
+      <!--
+        ===== 移动端二级子页：班级总览 → 班级名单 =====
+        两层都用同一个 .wb-subpage 壳，靠 selectedClass 决定标题与内容。
+        系统返回键由 useBackLayer 逐层收（L3 详情 → L2 班级名单 → L1 班级总览）。
+      -->
       <transition name="subpage" :duration="320">
         <div v-if="rosterSubPage" class="wb-subpage">
           <div class="wb-subpage-head">
-            <button class="wb-back" type="button" aria-label="返回工作台" @click="rosterSubPage = false">
+            <button
+              class="wb-back"
+              type="button"
+              :aria-label="selectedClass ? '返回全部班级' : '返回工作台'"
+              @click="selectedClass ? closeClass() : (rosterSubPage = false)"
+            >
               <el-icon :size="20"><ArrowLeft /></el-icon>
             </button>
-            <span class="wb-subpage-title">学生名单</span>
-            <span class="wb-subpage-count">{{ filteredStudents.length }} 人</span>
+            <span class="wb-subpage-title">{{ selectedClass ? selectedClass.name : '学生名单' }}</span>
+            <!-- 计数用「本班总人数」而不是筛选后的条数：页头是身份说明，不是筛选结果 -->
+            <span class="wb-subpage-count">{{ selectedClass ? selectedClass.total : students.length }} 人</span>
           </div>
           <div class="wb-subpage-body">
-      <!-- 名单控制区：搜索 + 排序，紧贴所筛选的列表 -->
-      <div class="ms-list-search">
-        <el-input v-model="search" class="list-search" placeholder="搜索姓名 / 学号 / 学院" clearable @input="debouncedLoadStudents">
-          <template #prefix><el-icon :size="16"><Search /></el-icon></template>
-        </el-input>
-        <el-dropdown trigger="click" placement="bottom-end" @command="onSortCommand">
-          <button class="ms-icon-btn" type="button" aria-label="排序方式" :title="`排序：${sortLabel}`">
-            <svg class="ms-sort-svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <path d="M7 4v15M4 16l3 3 3-3" />
-              <path d="M14 7h7M14 12h5M14 17h3" />
-            </svg>
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-for="o in sortOptions" :key="o.value" :command="o.value">
-                {{ o.label }}
-                <el-icon v-if="sortMode === o.value" :size="14" class="ms-sort-check"><Check /></el-icon>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-
-      <!-- 危机等级：带计数的 chips，点之前就知道有几条 -->
-      <div class="ms-chip-scroll">
-        <button
-          v-for="c in crisisChips"
-          :key="c.value"
-          class="ms-chip"
-          :class="{ active: filterCrisis === c.value, 'is-risk': filterCrisis === c.value && c.value === 'severe' }"
-          @click="filterCrisis = c.value"
-        >{{ c.label }}<b>{{ crisisCounts[c.value] }}</b></button>
-      </div>
-
-      <div v-if="!filteredStudents.length && loaded" class="ms-empty">
-        <img :src="siteMascot" :alt="siteName" class="ms-empty-mascot" />
-        <span>{{ hasActiveFilter || isSearching ? '没有符合条件的学生' : '当前名下暂无学生' }}</span>
-      </div>
-      <!-- ============================================================
-           分诊队列：不按危机等级单维分组，而是「今天必须处理 / 这周要跟进 / 状态平稳」。
-           搜索时降级回原来的平铺名单（搜索要的是「找到那个人」，不是分档）。
-           ============================================================ -->
-      <template v-if="!isSearching">
-        <div class="tm-page">
-          <div
-            v-for="g in triageGroups"
-            :key="g.key"
-            class="tm-tri"
-            :style="{ '--tm-tri-c': g.color }"
-          >
-            <div class="tm-tri-hd" @click="toggleTri(g.key)">
-              <span class="tm-tri-t">{{ g.title }}</span>
-              <span class="tm-tri-n">{{ g.items.length }} 人</span>
-              <span class="tm-tri-fold">{{ openTri.has(g.key) ? '收起' : '展开' }}</span>
-            </div>
-            <div v-if="openTri.has(g.key)" class="tm-tri-body">
-              <div
-                v-for="s in g.items"
-                :key="s.id"
-                class="tm-row tap"
-                @click="openDetail(s)"
-              >
-                <div class="tm-r-ic" :style="triIconStyle(s)">{{ s.name[0] }}</div>
-                <div class="tm-r-bd">
-                  <div class="tm-r-t">
-                    {{ s.name }}
-                    <span v-if="s.crisis_level" class="tm-tag" :class="crisisTagCls(s.crisis_level)">{{
-                      crisisLabel(s.crisis_level)
-                    }}</span>
-                  </div>
-                  <div class="tm-r-s">
-                    {{ s.college || '未分配' }}<template v-if="lastSeen(s)"> · {{ lastSeen(s) }}</template>
-                  </div>
-                </div>
-                <div class="tm-r-e tm-r-num">
-                  {{ s.growth_count ?? 0 }} 成果 · {{ s.leave_count ?? 0 }} 请假
-                </div>
+            <!-- ===== L2：班级名单 ===== -->
+            <template v-if="selectedClass">
+              <div class="m-class-head">
+                <ClassStatsBar
+                  :cls="selectedClass"
+                  :only-focus="onlyFocus"
+                  @back="closeClass"
+                  @toggle-focus="onlyFocus = !onlyFocus"
+                />
               </div>
-              <div v-if="!g.items.length" class="tm-empty">这一档现在是空的</div>
-            </div>
-          </div>
 
-          <div class="tm-tail">
-            <b>分档依据：</b>危机等级（severe / moderate / mild）· 最近一次预警时间 ·
-            请假与成果记录；分档规则应落到后端 triage_bucket，前端只读不判断
-          </div>
-        </div>
-      </template>
-      <template v-else>
-        <div v-for="s in filteredStudents" :key="s.id" class="ms-row" :data-risk="s.crisis_level || 'calm'" @click="openDetail(s)">
-          <el-avatar :size="40" :src="s.avatar || undefined" class="ms-row-avatar">{{ s.name[0] }}</el-avatar>
-          <div class="ms-row-main">
-            <div class="ms-row-name">
-              <span class="ms-row-nm">{{ s.name }}</span>
-              <span v-if="s.crisis_level" class="ms-tag" :class="`is-${s.crisis_level}`">{{ crisisLabel(s.crisis_level) }}</span>
-            </div>
-            <div class="ms-row-sub">
-              <span class="ms-row-college">{{ s.college || '未分配' }}</span>
-              <span v-if="lastSeen(s)" class="ms-row-time"><i class="ms-row-dot" aria-hidden="true">·</i>{{ lastSeen(s) }}</span>
-            </div>
-          </div>
-          <div class="ms-row-metrics">
-            <div class="ms-m">
-              <b :class="{ 'is-zero': !s.growth_count }">{{ s.growth_count ?? 0 }}</b>
-              <i>成果</i>
-            </div>
-            <span class="ms-m-sep" aria-hidden="true"></span>
-            <div class="ms-m">
-              <b :class="{ 'is-zero': !s.leave_count }">{{ s.leave_count ?? 0 }}</b>
-              <i>请假</i>
-            </div>
-            <span class="ms-m-sep" aria-hidden="true"></span>
-            <div class="ms-m">
-              <b :class="s.score !== undefined ? scoreClass(s.score) : 'is-zero'">{{ s.score ?? '—' }}</b>
-              <i>评分</i>
-            </div>
-          </div>
-        </div>
-            <div class="ms-list-foot">共 {{ filteredStudents.length }} 人 · 已显示全部</div>
-          </template>
+              <div class="ms-list-search is-stacked">
+                <el-input v-model="search" class="list-search" placeholder="在本班搜索姓名 / 学号" clearable>
+                  <template #prefix><el-icon :size="16"><Search /></el-icon></template>
+                </el-input>
+                <LayerToggle v-model="layerMode" />
+              </div>
+
+              <div v-if="!classStudents.length && loaded" class="ms-empty">
+                <img :src="siteMascot" :alt="siteName" class="ms-empty-mascot" />
+                <span>{{ onlyFocus ? '本班暂无需要重点关注的学生' : '本班暂无学生' }}</span>
+              </div>
+
+              <LayeredRoster
+                v-else-if="layerMode === 'crisis'"
+                :students="classStudents"
+                :is-mobile="true"
+                :last-seen-of="lastSeen"
+                @open="openDetail"
+                @contact="openContact"
+              />
+
+              <!-- 不分层：平铺名单，与改造前的移动端列表保持一致 -->
+              <template v-else>
+                <div
+                  v-for="s in classStudents"
+                  :key="s.id"
+                  class="ms-row"
+                  :data-risk="s.crisis_level || 'calm'"
+                  @click="openDetail(s)"
+                >
+                  <el-avatar :size="40" :src="s.avatar || undefined" class="ms-row-avatar">{{ s.name[0] }}</el-avatar>
+                  <div class="ms-row-main">
+                    <div class="ms-row-name">
+                      <span class="ms-row-nm">{{ s.name }}</span>
+                      <span v-if="s.crisis_level" class="ms-tag" :class="`is-${s.crisis_level}`">{{ crisisLabel(s.crisis_level) }}</span>
+                    </div>
+                    <div class="ms-row-sub">
+                      <span class="ms-row-college">{{ s.college || '未分配' }}</span>
+                      <span v-if="lastSeen(s)" class="ms-row-time"><i class="ms-row-dot" aria-hidden="true">·</i>{{ lastSeen(s) }}</span>
+                    </div>
+                  </div>
+                  <div class="ms-row-metrics">
+                    <div class="ms-m">
+                      <b :class="{ 'is-zero': !s.growth_count }">{{ s.growth_count ?? 0 }}</b>
+                      <i>成果</i>
+                    </div>
+                    <span class="ms-m-sep" aria-hidden="true"></span>
+                    <div class="ms-m">
+                      <b :class="{ 'is-zero': !s.leave_count }">{{ s.leave_count ?? 0 }}</b>
+                      <i>请假</i>
+                    </div>
+                    <span class="ms-m-sep" aria-hidden="true"></span>
+                    <div class="ms-m">
+                      <b :class="s.score !== undefined ? scoreClass(s.score) : 'is-zero'">{{ s.score ?? '—' }}</b>
+                      <i>评分</i>
+                    </div>
+                  </div>
+                </div>
+                <div class="ms-list-foot">共 {{ classStudents.length }} 人 · 已显示全部</div>
+              </template>
+            </template>
+
+            <!-- ===== L1：班级总览 ===== -->
+            <ClassOverview
+              v-else
+              v-model:search="search"
+              v-model:sort="classSort"
+              :classes="classSummaries"
+              :students="students"
+              :loaded="loaded"
+              @select="openClass"
+              @open="openDetail"
+            />
           </div>
         </div>
       </transition>
@@ -571,24 +552,19 @@
           @touchend="detailPull.onEnd"
           @touchcancel="detailPull.onCancel">
           <PullRefreshIndicator :indicator-style="detailPull.indicatorStyle" :active="detailPull.active" />
-          <!-- 方案A：档案头卡（渐变 + 身份风险标签 + 主页入口） -->
+          <!-- 档案头卡（简约版：白底单行，身份信息 + 主页入口） -->
           <div class="mstu-hero">
-            <div class="mstu-hero-r1">
-              <el-avatar :size="52" :src="detail.avatar || undefined" class="mstu-hero-avatar">{{ detail.name[0] }}</el-avatar>
-              <div class="mstu-hero-id">
-                <div class="mstu-hero-name">{{ detail.name }}</div>
-                <div class="mstu-hero-meta">{{ detail.college || '未分配' }} · {{ detail.username }}</div>
+            <el-avatar :size="46" :src="detail.avatar || undefined" class="mstu-hero-avatar">{{ detail.name[0] }}</el-avatar>
+            <div class="mstu-hero-id">
+              <div class="mstu-hero-name-row">
+                <span class="mstu-hero-name">{{ detail.name }}</span>
+                <span v-if="detailSummary?.crisis_level" class="mstu-hero-risk">{{ crisisLevelLabel(detailSummary.crisis_level) }}</span>
               </div>
-              <button type="button" class="mstu-hero-home" @click="openStudentHome">
-                <el-icon :size="13"><MagicStick /></el-icon>TA 的主页
-              </button>
+              <div class="mstu-hero-meta">{{ detail.username }} · {{ detail.college || '未分配' }}<template v-if="detailSummary?.class_name"> · {{ detailSummary.class_name }}</template></div>
             </div>
-            <div class="mstu-hero-tags">
-              <span v-if="detailSummary?.crisis_level" class="is-risk">重点关注 · {{ crisisLevelLabel(detailSummary.crisis_level) }}</span>
-              <span v-if="detailSummary?.score !== undefined">综合评分 {{ detailSummary.score }}</span>
-              <span>成长成果 {{ detail.growth_records.length }}</span>
-              <span>请假 {{ detail.leave_requests.length }}</span>
-            </div>
+            <button type="button" class="mstu-hero-home" @click="openStudentHome">
+              TA 的主页<el-icon :size="12"><ArrowRight /></el-icon>
+            </button>
           </div>
           <!-- KPI 四格 -->
           <div class="mstu-kpi">
@@ -781,43 +757,38 @@
     <!-- QQ 风格学生主页（教师查看学生的「个人空间」） -->
     <transition name="slide-right-in">
       <div v-if="homeVisible && detail" class="qhome">
-        <header class="qhome-bar">
-          <el-button text circle @click="homeVisible = false"><el-icon :size="20"><ArrowLeft /></el-icon></el-button>
-          <span class="qhome-bar-title">{{ detail.name }}的主页</span>
-          <el-button text circle @click="ElMessage({ message: '更多操作（演示）', type: 'info' })"><el-icon :size="18"><MoreFilled /></el-icon></el-button>
-        </header>
-
         <div class="qhome-body">
-          <!-- 封面 -->
+          <!-- 深色封面（含返回栏） -->
           <div class="qhome-cover">
-            <div class="qhome-cover-actions">
-              <button type="button" @click="detailSummary && openContact(detailSummary)">打声招呼</button>
-              <button type="button" @click="ElMessage({ message: '更换封面（演示）', type: 'info' })">更换封面</button>
-            </div>
+            <header class="qhome-bar">
+              <button type="button" class="qhome-bar-btn" @click="homeVisible = false"><el-icon :size="20"><ArrowLeft /></el-icon></button>
+              <span class="qhome-bar-title">个人主页</span>
+              <button type="button" class="qhome-bar-btn" @click="ElMessage({ message: '更多操作（演示）', type: 'info' })"><el-icon :size="18"><MoreFilled /></el-icon></button>
+            </header>
           </div>
 
           <!-- 头像 + 身份 -->
           <div class="qhome-head">
-            <el-avatar :size="72" :src="detail.avatar || undefined" class="qhome-avatar">{{ detail.name[0] }}</el-avatar>
+            <el-avatar :size="76" :src="detail.avatar || undefined" class="qhome-avatar">{{ detail.name[0] }}</el-avatar>
             <div class="qhome-name-row">
               <span class="qhome-name">{{ detail.name }}</span>
+              <span class="qhome-role">学生</span>
               <span class="qhome-lv">LV.{{ homeLevel }}</span>
             </div>
-            <div class="qhome-qid">学号：<b>{{ detail.username }}</b> · {{ detail.college || '未分配' }}</div>
             <p class="qhome-sig">{{ homeMotto }}</p>
+            <div class="qhome-qid">学号 {{ detail.username }} · {{ detail.college || '未分配' }}<template v-if="detailSummary?.class_name"> · {{ detailSummary.class_name }}</template></div>
           </div>
 
           <!-- 数据带 -->
           <div class="qhome-stats">
-            <div class="s"><b>{{ detail.growth_records.length }}</b><i>成果</i></div>
-            <div class="s"><b>{{ detail.projects.length }}</b><i>项目</i></div>
+            <div class="s"><b>{{ homeGrowth }}</b><i>成长值</i></div>
+            <div class="s"><b>{{ homeBadges.length }}</b><i>勋章</i></div>
             <div class="s"><b>{{ detailSummary?.score ?? '—' }}</b><i>评分</i></div>
-            <div class="s"><b>{{ detail.leave_requests.length }}</b><i>请假</i></div>
           </div>
 
           <!-- 徽章墙 -->
+          <div class="qhome-sec">徽章墙<span class="spacer">已点亮 {{ homeBadges.length }}/6</span></div>
           <template v-if="homeBadges.length">
-            <div class="qhome-sec">徽章墙</div>
             <div class="qhome-badges tui-scroll-hidden">
               <div v-for="b in homeBadges" :key="b.name" class="qhome-badge">
                 <span class="qhome-badge-ic" :class="`tone-${b.tone}`"><el-icon :size="16"><MagicStick /></el-icon></span>
@@ -825,19 +796,19 @@
               </div>
             </div>
           </template>
+          <p v-else class="qhome-empty">点亮技能即可获得勋章</p>
 
-          <!-- 相册 -->
-          <template v-if="detail.projects.length">
-            <div class="qhome-sec">项目相册<span class="spacer">{{ detail.projects.length }} 个</span></div>
-            <div class="qhome-photos">
-              <div v-for="(p, i) in detail.projects.slice(0, 5)" :key="p.id" class="qhome-photo"
-                :style="{ background: PHOTO_TONES[i % PHOTO_TONES.length] }">
-                <el-icon :size="18"><Picture /></el-icon>
+          <!-- 近期亮点 -->
+          <template v-if="homeHighlights.length">
+            <div class="qhome-sec">近期亮点</div>
+            <div class="qhome-highlights">
+              <div v-for="h in homeHighlights" :key="h.key" class="qhome-hl">
+                <span class="qhome-hl-ic" :class="`tone-${h.tone}`"><el-icon :size="15"><component :is="h.icon" /></el-icon></span>
+                <div class="qhome-hl-tx">
+                  <div class="qhome-hl-title">{{ h.title }}</div>
+                  <div class="qhome-hl-meta">{{ h.kind }} · {{ h.date }}</div>
+                </div>
               </div>
-              <button v-if="detail.projects.length > 5" type="button" class="qhome-photo more"
-                @click="ElMessage({ message: '完整相册（演示）', type: 'info' })">
-                <el-icon :size="16"><Picture /></el-icon>{{ detail.projects.length }} 张
-              </button>
             </div>
           </template>
 
@@ -875,6 +846,11 @@
           </template>
           <el-empty v-else description="TA 还没有发布动态" :image-size="56" />
         </div>
+
+        <!-- 底部固定：发消息 -->
+        <footer class="qhome-foot">
+          <button type="button" class="qhome-msg-btn" @click="detailSummary && openContact(detailSummary)">发消息</button>
+        </footer>
       </div>
     </transition>
     <!-- 导入学生数据（上传+预览：移动端=全屏子页） -->
@@ -922,16 +898,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onActivated, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onActivated, onUnmounted, markRaw } from 'vue'
 import { onDataChange, emitDataChange } from '@/utils/dataSync'
 // v6.1 弹窗减负：导入流程走全屏子页承接
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Search, View, ChatDotRound, Close, ArrowLeft, ArrowRight,
+  Search, View, ChatDotRound, ArrowLeft, ArrowRight,
   Download, Upload, DataAnalysis, MoreFilled,
   MagicStick, WarningFilled, ChatLineRound, Star, Picture,
-  UserFilled, Check,
+  UserFilled,
 } from '@element-plus/icons-vue'
 import {
   getStudents, getStudentDetail, getDashboardStats, getClassEvaluation, getClassStats, importStudents,
@@ -949,7 +925,13 @@ import ClassAnalyticsMobile from '@/components/teacher/analytics/ClassAnalyticsM
 import ClassAnalysisDialog from '@/components/teacher/analytics/ClassAnalysisDialog.vue'
 import { useAiAnalysis } from '@/composables/useAiAnalysis'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
+import { useClassDirectory, useClassSummaries, type ClassSummary } from '@/composables/useClassSummaries'
 import HomeMobileBoard from './HomeMobileBoard.vue'
+// 学生名单三层结构：班级总览 → 班级名单（分层开关）→ 详情
+import ClassOverview from '@/components/teacher/students/ClassOverview.vue'
+import ClassStatsBar from '@/components/teacher/students/ClassStatsBar.vue'
+import LayerToggle, { type LayerMode } from '@/components/teacher/students/LayerToggle.vue'
+import LayeredRoster from '@/components/teacher/students/LayeredRoster.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 
@@ -1022,11 +1004,6 @@ const crisisSummary = computed(() => {
   ]
 })
 
-const filterCrisis = ref('')
-const filterGrowth = ref('')
-const filterScore = ref('')
-const filterSkill = ref('')
-
 const currentPage = ref(1)
 const pageSize = ref(12)
 
@@ -1066,22 +1043,90 @@ const boardRef = ref<InstanceType<typeof HomeMobileBoard> | null>(null)
 /** 下拉指示器位移：类型从 CSSProperties 转成组件接受的 Record<string, string> */
 const pullStyle = computed<Record<string, string>>(() => ({ ...(pull.indicatorStyle as Record<string, string>) }))
 
+/* ============================================================
+   班级 → 名单 → 详情：三层下钻
+   ------------------------------------------------------------
+   L1 班级总览（selectedClass === null）
+   L2 班级名单（selectedClass 有值）
+   L3 详情（detailVisible，原有逻辑不动）
+
+   分层开关（layerMode）属于「教师自己的查看偏好」，与班级无关，
+   所以放在页面级而不是组件级，并用 localStorage 记住：
+   习惯看分层的人每次进班都还得再点一次，那这个开关就是个负担。
+   ============================================================ */
+const LAYER_MODE_KEY = 'teacher.roster.layerMode'
+
 /**
- * 打开名单子页：从首屏看板的「我的学生」KPI、工作量卡、名单摘要卡进来都走这里。
- * 进子页时清掉筛选，避免上次的高危筛选让教师以为「名单只剩这几个人」。
+ * L1/L2 的层级状态：只存「选中了哪个班的 id」，不存班级对象本身。
+ *
+ * 为什么不直接存 ClassSummary 快照：数据一变（导入学生、智能体新增、实时推送），
+ * 快照里的「重点关注 N 人」就停在旧值，而下面的名单已经是新的 ——
+ * 教师会看到「提示条说 3 人，列表里却有 4 条红」。存 id 再派生，两者永远同源。
+ */
+const selectedClassId = ref<number | null>(null)
+/** 「只看重点关注」：L2 头部提示条点一下切换，不是独立筛选器 */
+const onlyFocus = ref(false)
+/** L1 班级卡排序方式 */
+const classSort = ref('focus')
+
+const layerMode = ref<LayerMode>(
+  (() => {
+    try {
+      const saved = localStorage.getItem(LAYER_MODE_KEY)
+      return saved === 'none' || saved === 'crisis' ? saved : 'crisis'
+    } catch {
+      return 'crisis'
+    }
+  })(),
+)
+watch(layerMode, (v) => {
+  try { localStorage.setItem(LAYER_MODE_KEY, v) } catch { /* 隐私模式下写不进去，忽略 */ }
+})
+
+const { classGroups, load: loadClassDirectory } = useClassDirectory()
+const classSummaries = useClassSummaries(students, classGroups)
+
+/** 当前班级（派生）。班级已不存在（被删 / 学生全被转走）时自动回落到 L1 */
+const selectedClass = computed<ClassSummary | null>(() => {
+  if (selectedClassId.value === null) return null
+  return classSummaries.value.find((c) => c.id === selectedClassId.value) || null
+})
+
+/**
+ * 打开名单子页（移动端）/ 回到班级总览（两端共用入口）。
+ * 从首屏看板的「我的学生」KPI、工作量卡进来都走这里 —— 落点是班级总览而不是名单，
+ * 因为「我有几个班、哪个班有人要盯」是比「全部学生混排」更该先回答的问题。
  */
 function openRoster() {
-  filterCrisis.value = ''
   search.value = ''
+  onlyFocus.value = false
+  selectedClassId.value = null
   rosterSubPage.value = true
+}
+
+/** 进入某个班级：清掉上一个班遗留的搜索与「只看关注」，避免串班 */
+function openClass(c: ClassSummary) {
+  selectedClassId.value = c.id
+  search.value = ''
+  onlyFocus.value = false
+  currentPage.value = 1
+}
+
+function closeClass() {
+  selectedClassId.value = null
+  search.value = ''
+  onlyFocus.value = false
+  currentPage.value = 1
 }
 
 // 移动端页内二级页面（学生详情 / 班级分析 / 名单子页）：打开时让出底部悬浮导航
 useMobileSubPage(computed(() => isMobile.value && (detailVisible.value || showAnalyticsPage.value || rosterSubPage.value)))
-// 系统返回一次只收一层（见 useBackLayer）：名单 → 详情 / 分析逐层退
+// 系统返回一次只收一层（见 useBackLayer）：详情 → 班级名单 → 班级总览 / 分析 逐层退
 useBackLayer(computed(() => isMobile.value && detailVisible.value), () => { detailVisible.value = false })
 useBackLayer(computed(() => isMobile.value && showAnalyticsPage.value), () => { showAnalyticsPage.value = false })
-useBackLayer(computed(() => isMobile.value && rosterSubPage.value), () => { rosterSubPage.value = false })
+// L2 → L1 先于 L1 → 工作台 登记：后登记的层先被收掉，正好是「班级名单先退，再退总览」
+useBackLayer(computed(() => isMobile.value && rosterSubPage.value && !!selectedClass.value), () => { closeClass() })
+useBackLayer(computed(() => isMobile.value && rosterSubPage.value && !selectedClass.value), () => { rosterSubPage.value = false })
 
 const { loading: analysisLoading, renderedResult: analysisResult, analyze: runAnalysis } = useAiAnalysis('teacher-class-analysis')
 
@@ -1197,120 +1242,45 @@ function lastSeen(s: StudentSummary) {
   return `${Math.floor(diff / (day * 365))}年前`
 }
 
-// ===== 筛选 chips =====
-const crisisChips = [
-  { label: '全部', value: '' },
-  { label: '高危', value: 'severe' },
-  { label: '中度', value: 'moderate' },
-  { label: '轻度', value: 'mild' },
-  { label: '无预警', value: 'none' },
-]
-
-const hasActiveFilter = computed(() => {
-  return filterCrisis.value || filterGrowth.value || filterScore.value || filterSkill.value
-})
-
-const isSearching = computed(() => search.value.trim() !== '')
-
 /**
- * 危机等级之外的筛选（成长 / 评分 / 技能）。
- * 单独抽出来是因为 chips 上的计数要按「除危机等级以外」的口径统计：
- * 否则选中「高危」时其余 chips 会跟着变成 0，用户无法在档位之间横向切换。
+ * L2 的名单数据源：当前班级 ∩ 搜索 ∩ 「只看重点关注」。
+ * 从 `students`（全量）里过滤而不是重新发请求 —— 切班级零等待，
+ * 且班级卡上的数字与这里列出的行出自同一份数组，永远不会对不上。
+ *
+ * 排序与 LayeredRoster 档内口径保持一致（预警新→旧，其次分数低→高），
+ * 这样同一个班在「分层 / 不分层」之间切换时，同一批人的相对顺序不会突然全变。
  */
-const preStudents = computed(() => {
-  return students.value.filter(s => {
-    if (filterGrowth.value) {
-      if (filterGrowth.value === 'has' && (!s.growth_count || s.growth_count === 0)) return false
-      if (filterGrowth.value === 'none' && s.growth_count && s.growth_count > 0) return false
-    }
-
-    if (filterScore.value && s.score !== undefined) {
-      // 与 scoreClass() 的四档保持完全一致，否则「筛选出的」和「标红的」会打架
-      if (filterScore.value === 'excellent' && s.score < 80) return false
-      if (filterScore.value === 'good' && (s.score < 65 || s.score >= 80)) return false
-      if (filterScore.value === 'average' && (s.score < 50 || s.score >= 65)) return false
-      if (filterScore.value === 'poor' && s.score >= 50) return false
-    }
-
-    if (filterSkill.value) {
-      const hasSkills = s.skills_json?.skills?.length && s.skills_json.skills.length > 0
-      if (filterSkill.value === 'has' && !hasSkills) return false
-      if (filterSkill.value === 'none' && hasSkills) return false
-    }
-
-    return true
-  })
-})
-
-/** chips 计数：键与 crisisChips 的 value 一一对应，'' 为全部 */
-const crisisCounts = computed(() => {
-  const list = preStudents.value
-  const byLevel = (level: string) => list.filter(s => s.crisis_level === level).length
-  return {
-    '': list.length,
-    severe: byLevel('severe'),
-    moderate: byLevel('moderate'),
-    mild: byLevel('mild'),
-    none: list.filter(s => !s.crisis_level).length,
-  } as Record<string, number>
-})
-
-// ===== 排序（移动端搜索框右侧的排序入口） =====
-const sortMode = ref<'recent' | 'risk' | 'score' | 'name'>('recent')
-const sortOptions = [
-  { label: '最近互动', value: 'recent' },
-  { label: '风险优先', value: 'risk' },
-  { label: '评分从高到低', value: 'score' },
-  { label: '按姓名', value: 'name' },
-]
-const sortLabel = computed(() => sortOptions.find(o => o.value === sortMode.value)?.label || '')
-function onSortCommand(cmd: string | number | object) {
-  sortMode.value = cmd as typeof sortMode.value
-}
-const RISK_ORDER: Record<string, number> = { severe: 3, moderate: 2, mild: 1 }
-
-const filteredStudents = computed(() => {
-  const timeMap = conversationTimeMap.value
-  return preStudents.value.filter(s => {
-    if (filterCrisis.value) {
-      if (filterCrisis.value === 'none') {
-        if (s.crisis_level) return false
-      } else {
-        if (s.crisis_level !== filterCrisis.value) return false
+const classStudents = computed(() => {
+  const cls = selectedClass.value
+  if (!cls) return []
+  const kw = search.value.trim().toLowerCase()
+  return students.value
+    .filter((s) => {
+      const inClass = cls.unassigned ? s.class_group_id == null : s.class_group_id === cls.id
+      if (!inClass) return false
+      if (onlyFocus.value && !(s.crisis_level === 'severe' || s.crisis_level === 'moderate')) return false
+      if (kw) {
+        const hay = `${s.name}${s.username}${s.college || ''}`.toLowerCase()
+        if (!hay.includes(kw)) return false
       }
-    }
-    return true
-  }).sort((a, b) => {
-    if (sortMode.value === 'risk') {
-      const diff = (RISK_ORDER[b.crisis_level || ''] || 0) - (RISK_ORDER[a.crisis_level || ''] || 0)
-      if (diff) return diff
-    } else if (sortMode.value === 'score') {
-      return (b.score ?? -1) - (a.score ?? -1)
-    } else if (sortMode.value === 'name') {
-      return a.name.localeCompare(b.name, 'zh-Hans-CN')
-    }
-    // 默认（以及风险/评分相同时）按最近互动倒序：最近沟通过的排前面
-    const ta = timeMap.get(a.id)
-    const tb = timeMap.get(b.id)
-    if (ta && tb) return tb.localeCompare(ta)
-    if (ta) return -1
-    if (tb) return 1
-    return 0
-  })
+      return true
+    })
+    .sort((a, b) => {
+      const ta = a.latest_crisis_time || ''
+      const tb = b.latest_crisis_time || ''
+      if (ta !== tb) return tb.localeCompare(ta)
+      return (a.score ?? 0) - (b.score ?? 0)
+    })
 })
 
-function clearFilters() {
-  filterCrisis.value = ''
-  filterGrowth.value = ''
-  filterScore.value = ''
-  filterSkill.value = ''
-  currentPage.value = 1
-}
-
+/** 不分层网格的分页数据源 */
 const pagedStudents = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filteredStudents.value.slice(start, end)
+  return classStudents.value.slice(start, start + pageSize.value)
+})
+
+watch([search, onlyFocus, selectedClass], () => {
+  currentPage.value = 1
 })
 
 function handleSizeChange() {
@@ -1322,20 +1292,22 @@ function handleCurrentChange() {
 }
 
 // ===== 业务函数 =====
+/**
+ * 学生名单一律拉全量，搜索在前端做。
+ *
+ * 原来是「带着 search 词请求后端」，在班级下钻结构下会出问题：
+ * 班级卡的人数、某档的人数都是按全量算的，一旦 students 被搜索词裁剪，
+ * 卡片数字和名单行就会打架；而且 L1 跨班搜、L2 班内搜两种口径落在同一个 search ref 上，
+ * 带着它请求后端会让 L2 只拿回「被裁过的全量」，切回 L1 时数据不全。
+ * 教师名下学生规模（几十到几百）完全撑得住前端过滤。
+ */
 async function loadStudents() {
   try {
-    students.value = await getStudents(search.value || undefined)
+    students.value = await getStudents()
     loaded.value = true
   } catch {}
 }
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-const debouncedLoadStudents = () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    loadStudents()
-  }, 300)
-}
 
 async function loadDashboard() {
   try {
@@ -1498,45 +1470,10 @@ function crisisLabel(level: string) {
   return map[level] || level
 }
 
-/* ── 移动端分诊队列 ──
-   分档只读真实字段：crisis_level 为主，latest_crisis_time 只用来算「多久没更新」。
-   注意：后端目前没有 triage_bucket，这里是前端临时推导；等后端落字段后改成只读。 */
-const openTri = ref<Set<string>>(new Set())
-function toggleTri(key: string) {
-  const next = new Set(openTri.value)
-  if (next.has(key)) next.delete(key)
-  else next.add(key)
-  openTri.value = next
-}
-const triToday = computed(() => filteredStudents.value.filter((s) => s.crisis_level === 'severe'))
-const triWeek = computed(() => filteredStudents.value.filter((s) => s.crisis_level === 'moderate'))
-const triCalm = computed(() =>
-  filteredStudents.value.filter((s) => s.crisis_level !== 'severe' && s.crisis_level !== 'moderate')
-)
-const triageGroups = computed(() => [
-  { key: 'today', title: '必须今天处理', color: '#dd4257', items: triToday.value },
-  { key: 'week', title: '这周要跟进', color: '#d98317', items: triWeek.value },
-  { key: 'calm', title: '状态平稳', color: '#0f8e6b', items: triCalm.value },
-])
-// 默认不写死档位：数据到位后自动展开「第一个有人的档」，
-// 避免出现「空档摊开、有人的那档反而收起」的情况。
-watch(triageGroups, (gs) => {
-  const nonEmpty = gs.filter((g) => g.items.length)
-  if (!nonEmpty.length) return // 数据还没来，保持全收起
-  if (nonEmpty.some((g) => openTri.value.has(g.key))) return // 已有非空的档展开，不打断用户
-  openTri.value = new Set([nonEmpty[0].key])
-})
-function crisisTagCls(level?: string | null) {
-  if (level === 'severe') return 'tm-bad'
-  if (level === 'moderate') return 'tm-warn'
-  if (level === 'mild') return 'tm-ai'
-  return 'tm-mute'
-}
-function triIconStyle(s: StudentSummary) {
-  if (s.crisis_level === 'severe') return { background: 'var(--tm-bad-soft)', color: 'var(--tm-bad)' }
-  if (s.crisis_level === 'moderate') return { background: 'var(--tm-warn-soft)', color: 'var(--tm-warn)' }
-  return { background: 'var(--tm-brand-soft)', color: 'var(--tm-brand-deep)' }
-}
+/* ── 分诊队列 ──
+   分档逻辑已上移到 LayeredRoster（桌面端与移动端共用一套，见 triageOf）。
+   这里原来那套「前端临时推导 + 只长在移动端模板里」的实现已下线：
+   两个端各写一份必然口径漂移，而分层是教师偏好、不是设备能力。 */
 
 function crisisLevelLabel(level?: string | null) {
   const map: Record<string, string> = { severe: '高危预警', moderate: '中危预警', mild: '低危预警', resolved: '已解决' }
@@ -1650,8 +1587,37 @@ const homePosts = computed(() =>
   }))
 )
 
-function toggleLike(post: { id: number }) {
-  likedPosts.value[post.id] = !likedPosts.value[post.id]
+/** 成长值：按成长成果 / 项目折算的确定性展示值 */
+const homeGrowth = computed(() => {
+  const d = detail.value
+  if (!d) return 0
+  return d.growth_records.length * 120 + d.projects.length * 260
+})
+
+/** 近期亮点：成长记录 + 项目混排，各取前 3 条 */
+const homeHighlights = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  const growth = (d.growth_records || []).slice(0, 3).map((r: any, i: number) => ({
+    key: `g-${r.id}`,
+    kind: '成长记录',
+    title: r.title,
+    date: r.date || '',
+    tone: ['brand', 'success', 'violet'][i % 3],
+    icon: markRaw(MagicStick),
+  }))
+  const projects = (d.projects || []).slice(0, 3).map((p: any, i: number) => ({
+    key: `p-${p.id}`,
+    kind: '项目',
+    title: p.project_name,
+    date: (p.start_date || '').slice(0, 10),
+    tone: ['warn', 'cyan', 'danger'][i % 3],
+    icon: markRaw(Picture),
+  }))
+  return [...growth, ...projects].slice(0, 4)
+})
+
+function toggleLike(post: { id: number }) {  likedPosts.value[post.id] = !likedPosts.value[post.id]
   ElMessage({ message: likedPosts.value[post.id] ? '已点赞，学生端会收到提醒' : '已取消点赞', type: 'success' })
 }
 
@@ -1688,21 +1654,43 @@ function feedbackGuardian(subject: string) {
   })
 }
 
-/** 深链 ?student=<id>：从消息页、预警中心等入口直达该学生成长档案 */
+/**
+ * 深链 ?student=<id>：从消息页、预警中心等入口直达该学生成长档案。
+ * 同时兼容 ?class=<id>：从外部直接进入某个班级的名单。
+ */
 async function applyDeepLink() {
+  const deepClassId = Number(route.query.class)
   const deepId = Number(route.query.student)
-  if (!deepId) return
+  if (!deepClassId && !deepId) return
   if (!students.value.length) await loadStudents()
-  const target = students.value.find((s) => s.id === deepId)
-  if (!target) return
-  openDetail(target)
+  if (deepClassId) {
+    // 班级字典可能还没回来（首次进入就是深链），等它到位再找班级名
+    await loadClassDirectory()
+    const cls = classSummaries.value.find((c) => c.id === deepClassId)
+    if (cls) {
+      openRoster()
+      openClass(cls)
+    } else {
+      ElMessage.warning('未找到该班级，已返回班级总览')
+    }
+  }
+  if (deepId) {
+    const target = students.value.find((s) => s.id === deepId)
+    if (target) openDetail(target)
+  }
   router.replace({ path: '/teacher/students' })
 }
+
+/**
+ * 详情里的班级上下文：详情接口不返回班级，但教师看详情时想知道「这人哪个班的」。
+ * 退而求其次从列表里的那条摘要取，取不到就不显示 —— 不额外发一次请求。
+ */
+const detailClassName = computed(() => detailSummary.value?.class_name || '')
 
 let lastActiveRefreshAt = 0
 
 onMounted(async () => {
-  await loadStudents()
+  await Promise.all([loadStudents(), loadClassDirectory()])
   loadDashboard()
   loadAnalysisData()
   applyDeepLink()
@@ -1726,7 +1714,6 @@ const offDataChange = onDataChange(['teacher-students', 'teacher-tasks', 'teache
 })
 
 onUnmounted(() => {
-  if (searchTimer) clearTimeout(searchTimer)
   offDataChange()
 })
 </script>
@@ -2018,29 +2005,32 @@ onUnmounted(() => {
 }
 .ms-action:hover { border-color: #2563eb; color: #2563eb; background: #eff4ff; }
 
-/* 工具条：搜索独占较大宽度，筛选器靠右成一排 */
-.roster-toolbar {
+/* ===== L2 班级名单头部 =====
+   两段式：上面是「我是谁、有几个人要盯」（ClassStatsBar），
+   下面是「怎么找、怎么看」（搜索 + 分层开关）。
+   不分两行的话，班级名和搜索框会挤在同一行抢宽度，窄屏上必然换行错位。 */
+.l2-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0 12px;
+  border-bottom: 1px solid #f2f4f7;
+  margin-bottom: 10px;
+}
+.l2-controls {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 0 10px;
   flex-wrap: wrap;
 }
+.l2-controls .roster-search { flex: 0 1 280px; }
+
+/* 搜索框（L2 与本班搜索共用） */
 .roster-search { max-width: 320px; }
-.roster-filters { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
-.rf-select { width: 128px; }
-.rf-clear {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  border: none;
-  background: none;
-  padding: 0 2px;
-  font-size: 12px;
-  color: #667085;
-  cursor: pointer;
-}
-.rf-clear:hover { color: #d92d20; }
+
+/* 旧的四个筛选下拉（危机等级 / 成长 / 评分 / 技能）已下线：
+   危机等级改由「危机分层」承担，其余维度对日常查人几乎没有实际使用。
+   保留 .rf-* 的样式只会让后人以为还有地方在用。 */
 
 /* ===== 数据分析折叠区 ===== */
 .analytics-section { margin-bottom: 10px; }
@@ -2240,6 +2230,12 @@ onUnmounted(() => {
 
 /* 名单区搜索：搜索框 + 排序入口，紧贴它所筛选的列表 */
 .ms-list-search { display: flex; align-items: center; gap: 8px; margin: 0 14px 8px; }
+/* 移动端 L2：班级头（提示条）单独一块，与下面的搜索行留出呼吸 */
+.m-class-head { margin: 0 14px 10px; }
+.m-class-head :deep(.cs-main) { display: none; }
+.m-class-head :deep(.cs-focus) { font-size: 12.5px; }
+/* 分层开关在移动端是全宽分段控件，与搜索框同行会互相挤，改为上下两行 */
+.ms-list-search.is-stacked { flex-direction: column; align-items: stretch; gap: 8px; }
 .ms-list-search .list-search { flex: 1; min-width: 0; }
 
 /* 排序入口：与搜索框同高的图标按钮，不抢搜索的注意力 */
@@ -2333,8 +2329,10 @@ onUnmounted(() => {
 }
 .mobile-detail-header {
   display: flex; align-items: center; justify-content: space-between;
-  /* 顶部安全区：学生详情（二级页）白底铺进状态栏 */
-  padding: calc(6px + var(--sat, 0px)) 10px 6px;
+  /* 顶部安全区：学生详情（二级页）白底铺进状态栏。
+     高度/内边距统一取 --appbar-* 变量，与其它页头对齐（原先写死 6px）。 */
+  min-height: var(--appbar-h);
+  padding: var(--sat, 0px) var(--appbar-px) 0;
   background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
 }
 /* 返回键统一规格：34px 触控区，无外圈底色，仅图标本身 */
@@ -2512,37 +2510,38 @@ onUnmounted(() => {
   .app-head-sub { font-size: 12px; margin-top: 3px; }
 }
 
-/* ================= 方案A：档案头卡 + KPI + 风险置顶 ================= */
+/* ================= 档案头卡（简约版：白底单行） ================= */
 .mstu-hero {
-  background: linear-gradient(150deg, #1d4ed8, #2563eb 55%, #3b82f6);
-  border-radius: 20px;
-  padding: 16px;
-  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-radius: 16px;
+  padding: 13px 14px;
 }
-.mstu-hero-r1 { display: flex; align-items: center; gap: 12px; }
-.mstu-hero-avatar { flex-shrink: 0; background: rgba(255, 255, 255, 0.22); border: 2px solid rgba(255, 255, 255, 0.45); color: #fff; font-size: 18px; font-weight: 700; }
+.mstu-hero-avatar { flex-shrink: 0; background: linear-gradient(150deg, #4f8df7, #12b7f5); color: #fff; font-size: 17px; font-weight: 700; }
 .mstu-hero-id { flex: 1; min-width: 0; }
-.mstu-hero-name { font-size: 17px; font-weight: 700; line-height: 1.3; }
-.mstu-hero-meta { font-size: 11.5px; opacity: 0.85; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mstu-hero-name-row { display: flex; align-items: center; gap: 7px; }
+.mstu-hero-name { font-size: 16px; font-weight: 700; color: #101828; line-height: 1.3; }
+.mstu-hero-risk { flex-shrink: 0; font-size: 10.5px; font-weight: 600; color: var(--tui-danger); background: var(--tui-danger-soft); border-radius: 999px; padding: 2px 8px; }
+.mstu-hero-meta { font-size: 11.5px; color: #98a2b3; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mstu-hero-home {
-  margin-left: auto;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11.5px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff4ff;
+  border: none;
   border-radius: 999px;
-  padding: 6px 11px;
+  padding: 7px 12px;
   cursor: pointer;
   font-family: inherit;
 }
-.mstu-hero-home:active { background: rgba(255, 255, 255, 0.28); }
-.mstu-hero-tags { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-.mstu-hero-tags span { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); }
-.mstu-hero-tags span.is-risk { background: rgba(255, 255, 255, 0.92); color: #d92d20; font-weight: 700; }
+.mstu-hero-home:active { background: #dbe6ff; }
 
 .mstu-kpi {
   display: flex;
@@ -2600,68 +2599,81 @@ onUnmounted(() => {
   flex-direction: column;
   background: #f2f4f7;
 }
-.qhome-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 10px;
-  background: transparent;
-}
-.qhome-bar-title { flex: 1; text-align: center; font-size: 15px; font-weight: 600; color: #101828; }
-.qhome-body { flex: 1; overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: 32px; }
+.qhome-body { flex: 1; overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: 16px; }
+/* 深色渐变封面：返回栏叠加在封面上 */
 .qhome-cover {
-  height: 128px;
-  background: linear-gradient(130deg, #12b7f5, #4f8df7 60%, #6a7cf7);
+  height: 172px;
+  background: linear-gradient(155deg, #1e1b4b 0%, #312e81 40%, #4338ca 78%, #6d28d9 100%);
   position: relative;
   overflow: hidden;
-  margin-top: -54px;
 }
 .qhome-cover::after {
   content: '';
   position: absolute;
-  right: -30px;
-  top: -40px;
-  width: 150px;
-  height: 150px;
+  right: -46px;
+  top: -58px;
+  width: 190px;
+  height: 190px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
 }
 .qhome-cover::before {
   content: '';
   position: absolute;
-  left: -20px;
-  bottom: -60px;
-  width: 120px;
-  height: 120px;
+  left: -34px;
+  bottom: -70px;
+  width: 160px;
+  height: 160px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
 }
-.qhome-cover-actions { position: absolute; top: 66px; right: 12px; display: flex; gap: 8px; z-index: 4; }
-.qhome-cover-actions button {
+.qhome-bar {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+}
+.qhome-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
   border: none;
-  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
-  font-size: 11px;
-  border-radius: 999px;
-  padding: 5px 11px;
   cursor: pointer;
   font-family: inherit;
 }
-.qhome-head { padding: 0 14px; margin-top: -36px; position: relative; z-index: 2; }
+.qhome-bar-btn:active { background: rgba(255, 255, 255, 0.26); }
+.qhome-bar-title { flex: 1; text-align: center; font-size: 15px; font-weight: 600; color: rgba(255, 255, 255, 0.92); }
+/* 头像 + 身份：头像压在封面与浅色区交界 */
+.qhome-head { padding: 0 16px; margin-top: -44px; position: relative; z-index: 2; }
 .qhome-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 24px;
-  border: 3px solid #fff;
-  font-size: 24px;
+  width: 76px;
+  height: 76px;
+  border-radius: 26px;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  font-size: 26px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(150deg, #4f8df7, #12b7f5);
-  box-shadow: 0 2px 10px rgba(15, 17, 21, 0.06);
+  background: linear-gradient(150deg, #6d28d9, #4338ca);
+  box-shadow: 0 4px 14px rgba(30, 27, 75, 0.18);
 }
-.qhome-name-row { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; }
-.qhome-name { font-size: 19px; font-weight: 700; color: #0f1115; }
+.qhome-name-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.qhome-name { font-size: 20px; font-weight: 700; color: #0f1115; }
+.qhome-role {
+  font-size: 10.5px;
+  color: #4f46e5;
+  background: #eef2ff;
+  border: 1px solid #e0e7ff;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-weight: 600;
+}
 .qhome-lv {
   font-size: 10.5px;
   color: #b4780a;
@@ -2670,16 +2682,15 @@ onUnmounted(() => {
   padding: 1px 8px;
   font-weight: 600;
 }
-.qhome-qid { font-size: 11.5px; color: #98a2b3; margin-top: 3px; }
-.qhome-qid b { color: #475467; font-weight: 600; }
-.qhome-sig { font-size: 12.5px; color: #475467; margin: 7px 0 0; line-height: 1.55; }
+.qhome-sig { font-size: 12.5px; color: #475467; margin: 8px 0 0; line-height: 1.55; }
+.qhome-qid { font-size: 11.5px; color: #98a2b3; margin-top: 4px; }
 .qhome-stats {
   display: flex;
   background: #fff;
   border-radius: 16px;
   border: 1px solid var(--sp-line);
   padding: 12px 0;
-  margin: 14px 14px 0;
+  margin: 16px 14px 0;
 }
 .qhome-stats .s { flex: 1; text-align: center; position: relative; }
 .qhome-stats .s + .s::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--sp-line); }
@@ -2687,6 +2698,7 @@ onUnmounted(() => {
 .qhome-stats i { font-style: normal; font-size: 10.5px; color: #98a2b3; }
 .qhome-sec { display: flex; align-items: center; gap: 7px; margin: 16px 16px 9px; font-size: 13px; font-weight: 700; color: #101828; }
 .qhome-sec .spacer { margin-left: auto; font-size: 11px; font-weight: 400; color: #98a2b3; }
+.qhome-empty { margin: 0 16px; font-size: 12px; color: #98a2b3; }
 .qhome-badges { display: flex; gap: 8px; overflow-x: auto; padding: 0 14px 2px; scrollbar-width: none; }
 .qhome-badges::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .qhome-badge {
@@ -2716,20 +2728,37 @@ onUnmounted(() => {
 .qhome-badge-ic.tone-cyan { background: #0e9384; }
 .qhome-badge-ic.tone-danger { background: #d92d20; }
 .qhome-badge > span:last-child { font-size: 10.5px; color: #667085; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qhome-photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 0 14px; }
-.qhome-photo {
-  aspect-ratio: 1;
-  border-radius: 10px;
+/* 近期亮点：2 列卡片 */
+.qhome-highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 14px; }
+.qhome-hl {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: #fff;
-  border: none;
-  font-size: 11px;
-  font-family: inherit;
+  gap: 9px;
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-radius: 14px;
+  padding: 11px 12px;
+  min-width: 0;
 }
-.qhome-photo.more { background: #fff; border: 1px dashed #d0d5dd; color: #98a2b3; flex-direction: column; }
+.qhome-hl-ic {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  color: #fff;
+}
+.qhome-hl-ic.tone-brand { background: #2563eb; }
+.qhome-hl-ic.tone-success { background: #079455; }
+.qhome-hl-ic.tone-violet { background: #7f56d9; }
+.qhome-hl-ic.tone-warn { background: #dc6803; }
+.qhome-hl-ic.tone-cyan { background: #0e9384; }
+.qhome-hl-ic.tone-danger { background: #d92d20; }
+.qhome-hl-tx { flex: 1; min-width: 0; }
+.qhome-hl-title { font-size: 12.5px; font-weight: 600; color: #101828; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qhome-hl-meta { font-size: 10.5px; color: #98a2b3; margin-top: 2px; }
 .qhome-post {
   background: #fff;
   border: 1px solid var(--sp-line);
@@ -2756,6 +2785,27 @@ onUnmounted(() => {
   gap: 6px;
   font-size: 12px;
 }
+/* 底部固定：发消息 */
+.qhome-foot {
+  flex-shrink: 0;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-top: 1px solid var(--sp-line);
+}
+.qhome-msg-btn {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.qhome-msg-btn:active { opacity: 0.88; }
 /* ============================================================
    移动端工作台（B 版式）：首屏主导 + 二级子页
    首屏 = 原首页整块（HomeMobileBoard）；学生名单收成一张摘要卡，
@@ -2872,10 +2922,24 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  /* 关键：撑满图标与箭头之间的剩余空间，把「>」以及整行说明一起推到卡片最右
+     —— flex 项默认宽度按内容收缩，箭头只贴着说明文字的末尾，看起来就停在中间。 */
+  flex: 1 1 auto;
 }
 .wb-entry-hint {
   font-size: 11.5px;
   color: var(--tui-text-quiet, #98a2b3);
+  /* 窄屏时说明文字省略，而不是把箭头挤出卡片 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 行尾箭头：不参与收缩，永远钉在最右 */
+.wb-entry-arrow {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 /* ===== 二级子页：学生名单 ===== */

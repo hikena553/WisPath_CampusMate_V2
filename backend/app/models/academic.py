@@ -86,6 +86,14 @@ class Course(Base):
     end_period: Mapped[int] = mapped_column(Integer)
     week_start: Mapped[int] = mapped_column(Integer)
     week_end: Mapped[int] = mapped_column(Integer)
+    # 单次调课：「某周的课被挪到别的时间」时，把被挪走的那一周记在这里，
+    # 读课表时该周不再显示这条课（补课另建一条 week_start==week_end==目标周 的记录）。
+    # 逗号分隔，如 "5,7"；为空表示整段学期正常上课。
+    skip_weeks: Mapped[str | None] = mapped_column(
+        String(100), default=None, comment="跳过的教学周，逗号分隔，如 5,7"
+    )
+    # 这条课是由哪张调课申请补出来的（增课为 None），便于溯源与撤销
+    source_change_id: Mapped[int | None] = mapped_column(Integer, default=None, index=True)
     semester: Mapped[str] = mapped_column(String(20), comment="学期，如 2024-2025-1")
     credit: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)

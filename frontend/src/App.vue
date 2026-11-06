@@ -5,13 +5,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watchEffect } from 'vue'
+import { watchEffect } from 'vue'
 import PasswordChangeReminder from '@/components/common/PasswordChangeReminder.vue'
 import { useVisualViewport } from '@/composables/useVisualViewport'
-import { syncAppVersion } from '@/utils/appVersion'
-
-// 安卓壳里把「关于」页的版本号对齐到安装包真实版本（versionName / versionCode）
-onMounted(() => { void syncAppVersion() })
 
 /* 键盘可见区：写进 CSS 变量，供登录 / 注册 / 找回密码等整屏页在移动端缩到键盘上方。
    这些页面是 fixed 整屏层，键盘弹出时 WebView 只缩 visualViewport，页面本身不会变矮，

@@ -6,10 +6,8 @@
 且管理员写入后各端口读取到最新值。
 """
 from app.models.user import UserRole
-from app.services.setting_service import PUBLIC_SETTING_KEYS
 
-# 直接对齐服务端白名单：白名单本就是对外的契约，测试里再抄一份只会随功能迭代漂移
-PUBLIC_KEYS = set(PUBLIC_SETTING_KEYS)
+PUBLIC_KEYS = {"site_name", "site_logo", "site_mascot", "site_announcement", "agent_name"}
 
 
 def test_public_settings_readable_without_auth(client):

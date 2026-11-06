@@ -32,6 +32,11 @@ class TeachingCourseOut(BaseModel):
     student_count: int = 0
     #: 本学期已点名课次数（用于提示「这周还没点过名」）
     attendance_sessions: int = 0
+    #: 被单次调课挪走的教学周（原课仍在，只是这几周不上）。
+    #: 前端按周渲染时必须跳过这些周，否则会出现「挪走了又还在」。
+    skip_weeks: list[int] = []
+    #: 由哪张调课申请补出来的（增课为 None），用于在卡片上标「补课」
+    source_change_id: int | None = None
 
 
 class TeachingOverviewOut(BaseModel):
@@ -271,6 +276,8 @@ class ScheduleOut(BaseModel):
     today_courses: list[TeachingCourseOut] = []
     today_course_count: int = 0
     week_course_count: int = 0
+    #: 当前教学周（前端周次选择器默认值）
+    current_week: int | None = None
     total_student_count: int = 0
 
 

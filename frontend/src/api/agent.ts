@@ -1,4 +1,3 @@
-import request from '@/utils/request'
 import { getToken } from '@/utils/token'
 
 /** SSE 末尾回传的会话元信息（见后端 agent_service.chat 的 meta 事件） */
@@ -260,37 +259,18 @@ export interface DailyReport {
   generated_at: string
 }
 
-/**
- * 拉取 AI 今日报告；后端已做规则兜底，失败时返回 null 由页面显示空态。
- * @param forceRefresh true = 绕过服务端 10 分钟缓存，真的重新生成（「重新生成」按钮用）
- * @param bustFrontCache 额外加时间戳参数，避免中间层/浏览器命中旧响应
- */
-export async function fetchDailyReport(forceRefresh = false, bustFrontCache = false): Promise<DailyReport | null> {
+/** 拉取 AI 今日报告；后端已做规则兜底，失败时返回 null 由页面显示空态 */
+export async function fetchDailyReport(): Promise<DailyReport | null> {
   const headers: Record<string, string> = {}
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
-  const params = new URLSearchParams()
-  if (forceRefresh) params.set('refresh', '1')
-  if (bustFrontCache) params.set('_t', String(Date.now()))
-  const qs = params.toString()
   try {
-    const resp = await fetch(`/api/agent/daily-report${qs ? `?${qs}` : ''}`, { headers, cache: 'no-store' })
+    const resp = await fetch('/api/agent/daily-report', { headers })
     if (resp.ok) return (await resp.json()) as DailyReport
   } catch (e) {
     console.error('获取今日报告失败', e)
   }
   return null
-}
-
-/** 今日报告导出票据：url 交给浏览器下载（不自己拼 Blob，手机端才有下载进度与落地位置） */
-export interface ReportExportTicket {
-  ticket: string
-  url: string
-  expires_in: number
-}
-
-export function createDailyReportExportLink() {
-  return request.post<ReportExportTicket>('/agent/daily-report/export-ticket')
 }
 
 

@@ -15,9 +15,9 @@ from app.models.conversation import Conversation, ConversationMessage
 from app.services.llm_service import build_system_prompt, build_answer_mode_note
 from app.services.prompts import build_skill_extraction_prompt
 from app.services.tools import TOOL_DEFINITIONS, TEACHER_TOOL_DEFINITIONS, execute_tool
-from app.services.crisis_service import detect_crisis_keywords, save_crisis_summary
+from app.services.crisis_service import detect_crisis_keywords, triage_crisis_signal
 from app.services.llm_service import _get_client, _get_llm_config
-from app.utils.llm_guard import StreamSanitizer, strip_control_tags
+from app.utils.llm_guard import SafetyTagFilter, strip_control_tags
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +150,8 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None,
 
     content = ""
     tool_calls_buffer: dict[int, _SimpleToolCall] = {}
-    # 上游可能把安全审核标注（<ds_safety>…</ds_safety>Safe）与脚手架标签
-    # （<think>/<answer>）当正文流出，见 llm_guard
-    guard = StreamSanitizer()
+    # 上游可能把安全审核标注（<ds_safety>…</ds_safety>Safe）当正文流出，见 llm_guard
+    guard = SafetyTagFilter()
 
     async for chunk in response:
         if not chunk.choices:
@@ -212,7 +211,7 @@ async def generate_reply(prompt: str, user: User):
             model=config['model'], messages=msgs,
             temperature=0.5, max_tokens=2048, stream=True,
         )
-        guard = StreamSanitizer()
+        guard = SafetyTagFilter()
         async for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 piece = guard.feed(chunk.choices[0].delta.content)
@@ -400,7 +399,8 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
         try:
             keywords = detect_crisis_keywords(message, crisis_db)
             if keywords:
-                await save_crisis_summary(crisis_db, user.id, message, full_reply, keywords)
+                # 双轨降噪：硬词直通 / 短时情绪研判分流（预警工作台或情绪台账）
+                await triage_crisis_signal(crisis_db, user.id, message, full_reply, keywords)
         except Exception:
             logger.exception("保存危机预警失败")
         finally:

@@ -14,55 +14,147 @@
     <PullRefreshIndicator v-if="isMobile" :indicator-style="pull.indicatorStyle" :active="pull.active" />
 
     <div class="tui-content">
-      <!-- 桌面端特色头部：档案语义色 + 收藏图标；右侧保留本页专属的导出与建档入口 -->
+      <!-- 桌面端特色头部：档案语义色 + 收藏图标；本页只承载学生维度，
+           教师本人的育人档案已迁至「我的成长」页，入口见下方快捷区 -->
       <TuiPageHero
         v-if="!isMobile"
         title="学生成长档案"
-        sub="选择学生查看其成长徽章与成长轨迹，同步维护你的育人档案"
+        sub="选择学生查看其成长徽章与成长轨迹"
         :icon="Collection"
         tone="violet"
       >
         <div class="tui-hero-metric is-accent"><b>{{ students.length }}</b><span>名下学生</span></div>
-        <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
-        <el-button size="small" :icon="Plus" @click="openCreate">新增档案</el-button>
+        <el-button :icon="TrendCharts" @click="goMyGrowth">我的育人档案</el-button>
       </TuiPageHero>
 
-      <!-- 移动端高频操作 -->
+      <!-- 移动端高频操作：保留「我的育人档案」入口，避免教师在手机上找不到 -->
       <div v-if="isMobile" class="tui-actions pf-topbar">
-        <el-button round :icon="Printer" :loading="reportLoading" @click="openReport">成长报告</el-button>
-        <el-button size="small" :icon="Plus" @click="openCreate">新增档案</el-button>
+        <el-button round :icon="TrendCharts" @click="goMyGrowth">我的育人档案</el-button>
       </div>
 
-      <!-- 1. 学生横向选择器 -->
+      <!-- ============================================================
+           一级：选择班级。教师名下学生往往横跨多个班，先收敛到班，
+           再在班里选人——否则一屏几十张卡片，找人不现实。
+           ============================================================ -->
       <section class="tui-section">
         <div class="tui-section-head">
-          <h3><el-icon><User /></el-icon>学生横向选择器</h3>
-          <span class="tui-section-extra tui-text-quiet">共 {{ students.length }} 人</span>
+          <h3><el-icon><School /></el-icon>选择班级</h3>
+          <span class="tui-section-extra tui-text-quiet">
+            {{ classGroups.length }} 个班 · 共 {{ students.length }} 人
+          </span>
         </div>
         <div class="tui-section-hint">
           <el-icon><InfoFilled /></el-icon>
-          <span>左右滑动选择学生，下方徽章墙与成长时间轴会随之切换。</span>
+          <span>先选班级，再在班级里选择学生查看其成长档案。</span>
         </div>
+
         <div v-if="studentsLoading" class="tui-empty">
-          <AgentLoading block :tips="['正在读取学生名单', '正在整理成果与人像']" />
+          <AgentLoading block :tips="['正在读取学生名单', '正在按班级归类']" />
         </div>
-        <div v-else-if="!students.length" class="tui-empty">
+        <div v-else-if="!classGroups.length" class="tui-empty">
           <span class="tui-empty-icon"><el-icon :size="24"><User /></el-icon></span>
           <span class="tui-empty-title">暂无可查看的学生</span>
           <span class="tui-empty-desc">当前账号名下还没有学生，先到「学生管理」导入名单后再查看。</span>
         </div>
-        <div v-else class="pf-rail">
+
+        <div v-else class="pf-classes">
           <button
-            v-for="s in students"
+            v-for="g in classGroups"
+            :key="g.key"
+            type="button"
+            class="pf-class"
+            :class="{ active: g.key === activeClassKey }"
+            @click="selectClass(g.key)"
+          >
+            <span class="pf-class-name">{{ g.name }}</span>
+            <span class="pf-class-meta">
+              <b>{{ g.students.length }}</b> 人
+              <em v-if="g.engaged">· {{ g.engaged }} 人有记录</em>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           二级：班级内的学生。只有选好班级才展开，
+           避免「全班学生」和「某班学生」两份名单同时铺在屏幕上。
+           ============================================================ -->
+      <section v-if="activeClassKey" class="tui-section">
+        <div class="tui-section-head">
+          <h3><el-icon><User /></el-icon>{{ activeClass?.name }} · 学生</h3>
+          <span class="tui-section-extra tui-text-quiet">
+            {{ activeClass?.students.length ?? 0 }} 人
+          </span>
+        </div>
+        <div class="tui-section-hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>点学生卡片查看其完整成长轨迹；再点一次收起，回到班级列表。</span>
+        </div>
+
+        <!-- 搜索 + 排序：班级人多时能快速定位，默认按成长记录多的排前 -->
+        <div class="pf-tools">
+          <el-input
+            v-model="keyword"
+            placeholder="搜学生姓名 / 学号"
+            :prefix-icon="Search"
+            clearable
+            class="pf-search"
+          />
+          <div class="pf-sort">
+            <button
+              v-for="s in SORTS"
+              :key="s.value"
+              type="button"
+              class="pf-sort-btn"
+              :class="{ active: sortBy === s.value }"
+              @click="sortBy = s.value"
+            >
+              {{ s.label }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="visibleStudents.length" class="pf-grid">
+          <button
+            v-for="s in visibleStudents"
             :key="s.id"
             type="button"
-            class="pf-stu"
+            class="pf-card"
             :class="{ active: s.id === activeStudentId }"
             @click="selectStudent(s.id)"
           >
-            <span class="pf-stu-avatar">{{ s.name.slice(0, 1) }}</span>
-            <span class="pf-stu-name">{{ s.name }}</span>
+            <span class="pf-card-top">
+              <span class="pf-card-avatar">{{ s.name.slice(0, 1) }}</span>
+              <span class="pf-card-id">
+                <span class="pf-card-name">{{ s.name }}</span>
+                <span class="pf-card-sub">{{ s.class_name || s.college || '未分班' }}</span>
+              </span>
+              <span
+                v-if="s.crisis_level"
+                class="pf-card-flag"
+                title="心理关注中"
+              >关注</span>
+            </span>
+            <span class="pf-card-nums">
+              <span class="pf-card-num">
+                <b>{{ s.growth_count ?? 0 }}</b><em>成长记录</em>
+              </span>
+              <span class="pf-card-num">
+                <b>{{ skillCount(s) }}</b><em>技能</em>
+              </span>
+              <span class="pf-card-num">
+                <b>{{ s.score ?? 0 }}</b><em>综合评分</em>
+              </span>
+            </span>
+            <!-- 成长密度条：相对本班最高值，一眼看出谁积累得多 -->
+            <span class="pf-card-bar">
+              <i :style="{ width: growthPct(s) + '%' }"></i>
+            </span>
           </button>
+        </div>
+        <div v-else class="tui-empty">
+          <span class="tui-empty-title">没有匹配的学生</span>
+          <span class="tui-empty-desc">换个姓名或学号试试。</span>
         </div>
       </section>
 
@@ -74,6 +166,14 @@
            后端没有五维能力打分，不编造维度分。
            ============================================================ -->
       <div v-if="isMobile && activeStudent" class="tm-page">
+        <!-- 详情标题：明确「现在看的是谁」，并给一个回到总览的出口 -->
+        <div class="pf-detail-hd">
+          <span class="pf-detail-who">
+            <b>{{ activeStudent.name }}</b>
+            <em>的成长档案</em>
+          </span>
+          <button type="button" class="pf-detail-back" @click="clearStudent">返回总览</button>
+        </div>
         <div class="tm-pp-line">
           <span class="tm-pl-t">指标条</span>
           <span class="tm-pl-c">竖线 = 全班均值 · 满格 = 全班最高</span>
@@ -184,73 +284,6 @@
           </div>
         </div>
       </section>
-
-      <PortfolioItemDialog v-model="dialogVisible" :item="editing" />
-
-      <!-- 成长报告（移动端=全屏子页；操作内联在报告内，不再压底部按钮栏） -->
-      <ResponsivePopup
-        v-model="reportVisible"
-        title="成长报告"
-        width="420px"
-        align-center
-        :close-on-click-modal="false"
-        class="tui-dialog"
-        destroy-on-close
-      >
-        <div v-if="report" class="pf-report">
-          <div class="rpt-cover">
-            <img class="rpt-mascot" :src="siteMascot" :alt="siteName" />
-            <div class="rpt-cover-bd">
-              <h3>{{ report.teacher_name }} · 教师成长报告</h3>
-              <span>生成于 {{ (report.generated_at || '').slice(0, 10) }} · 共 {{ report.total }} 条育人档案</span>
-            </div>
-            <el-button class="rpt-print" size="small" :icon="Printer" @click="printReport">打印 / PDF</el-button>
-          </div>
-
-          <div class="rpt-types">
-            <div v-for="t in report.by_type" :key="t.type" class="rpt-type">
-              <div class="rpt-type-hd">
-                <span class="rpt-lb">{{ t.label }}</span>
-                <span class="rpt-num">{{ t.count }}</span>
-              </div>
-              <div class="rpt-bar">
-                <i
-                  :style="{
-                    width: (report.total ? Math.round((t.count / report.total) * 100) : 0) + '%',
-                    background: PORTFOLIO_TYPE_COLOR[t.type],
-                  }"
-                ></i>
-              </div>
-            </div>
-          </div>
-
-          <template v-if="report.items.length">
-            <div class="rpt-sec">
-              <span>档案明细</span>
-              <span>{{ report.items.length }} 条</span>
-            </div>
-            <div class="rpt-list">
-              <div v-for="(it, i) in report.items" :key="it.id" class="rpt-item">
-                <span class="rpt-idx">{{ i + 1 }}</span>
-                <span class="rpt-dot" :style="{ background: PORTFOLIO_TYPE_COLOR[it.item_type] }"></span>
-                <span class="rpt-title">{{ it.title }}</span>
-                <span class="rpt-meta">
-                  {{ PORTFOLIO_TYPE_LABEL[it.item_type] }}<template v-if="it.occurred_on"> · {{ it.occurred_on }}</template>
-                </span>
-              </div>
-            </div>
-          </template>
-
-          <div v-else class="rpt-empty">
-            <img :src="siteMascot" :alt="siteName" class="rpt-empty-mascot" />
-            <b>还没有可汇总的育人档案</b>
-            <span>工作案例、荣誉表彰、培训研修与研究成果会自动归入成长报告。</span>
-            <el-button type="primary" size="small" :icon="Plus" class="rpt-add-btn" @click="createFromReport">去新增档案</el-button>
-          </div>
-
-          <div class="rpt-note">数据来自你的育人档案，补充档案后重新打开即可生成最新报告。</div>
-        </div>
-      </ResponsivePopup>
     </div>
   </div>
 </template>
@@ -258,63 +291,123 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-// v6.1 弹窗减负：报告走全屏子页
-import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import {
   Clock,
   Collection,
   Document,
   InfoFilled,
   Medal,
-  Plus,
-  Printer,
+  School,
+  Search,
   Star,
   Suitcase,
+  TrendCharts,
   Trophy,
   User,
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
-import { useSiteConfig } from '@/composables/useSiteConfig'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import AgentLoading from '@/components/common/AgentLoading.vue'
-import {
-  getPortfolioReport,
-  PORTFOLIO_TYPE_COLOR,
-  PORTFOLIO_TYPE_LABEL,
-  type PortfolioItem,
-  type PortfolioReport,
-} from '@/api/teacherPortfolio'
 import { getStudents, type StudentSummary } from '@/api/teacher'
 import { getGrowthRecords } from '@/api/growth'
 import type { GrowthRecord } from '@/types'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
-import PortfolioItemDialog from '@/components/teacher/portfolio/PortfolioItemDialog.vue'
 
 defineOptions({ name: 'teacher-portfolio' })
 
 const { isMobile } = useResponsive()
-const { siteMascot, siteName } = useSiteConfig()
 
 // 移动端下拉刷新：桌面端不响应手势
 const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
-const dialogVisible = ref(false)
 const route = useRoute()
 const router = useRouter()
-const editing = ref<PortfolioItem | null>(null)
-const report = ref<PortfolioReport | null>(null)
-const reportVisible = ref(false)
-const reportLoading = ref(false)
 
-// 学生成长：横向选择器 + 徽章墙 + 时间轴
+// 学生成长：班级 → 学生 → 徽章墙 / 时间轴
 const students = ref<StudentSummary[]>([])
 const studentsLoading = ref(false)
 const activeStudentId = ref<number | null>(null)
 const growthRecords = ref<GrowthRecord[]>([])
 const growthLoading = ref(false)
+
+/* ── 一级：班级 ──
+   教师名下学生常横跨多个班，直接铺全部卡片会让人无从下手。
+   这里按 class_group_id 分组，未分班的归入单独一组排在最后。 */
+interface ClassGroup {
+  key: string
+  name: string
+  students: StudentSummary[]
+  /** 组内有成长记录的人数，给选择时一个「哪个班更值得看」的依据 */
+  engaged: number
+}
+const UNASSIGNED = '__unassigned__'
+const activeClassKey = ref<string | null>(null)
+
+const classGroups = computed<ClassGroup[]>(() => {
+  const map = new Map<string, ClassGroup>()
+  for (const s of students.value) {
+    const key = s.class_group_id != null ? String(s.class_group_id) : UNASSIGNED
+    const name = s.class_name || '未分班'
+    let g = map.get(key)
+    if (!g) {
+      g = { key, name, students: [], engaged: 0 }
+      map.set(key, g)
+    }
+    g.students.push(s)
+  }
+  const list = [...map.values()]
+  // 有班级名的按名称排，未分班永远垫底
+  list.sort((a, b) => {
+    if (a.key === UNASSIGNED) return 1
+    if (b.key === UNASSIGNED) return -1
+    return a.name.localeCompare(b.name, 'zh-CN')
+  })
+  for (const g of list) {
+    g.engaged = g.students.filter((s) => (s.growth_count ?? 0) > 0).length
+  }
+  return list
+})
+
+const activeClass = computed(
+  () => classGroups.value.find((g) => g.key === activeClassKey.value) ?? null
+)
+
+/* ── 二级：班级内学生 + 搜索 / 排序 ── */
+const keyword = ref('')
+type SortKey = 'growth' | 'name' | 'score'
+const SORTS: { value: SortKey; label: string }[] = [
+  { value: 'growth', label: '成长记录' },
+  { value: 'name', label: '姓名' },
+  { value: 'score', label: '综合评分' },
+]
+const sortBy = ref<SortKey>('growth')
+
+const visibleStudents = computed(() => {
+  const pool = activeClass.value?.students ?? []
+  const kw = keyword.value.trim().toLowerCase()
+  const filtered = kw
+    ? pool.filter(
+        (s) =>
+          s.name.toLowerCase().includes(kw) ||
+          (s.username || '').toLowerCase().includes(kw)
+      )
+    : [...pool]
+  return filtered.sort((a, b) => {
+    if (sortBy.value === 'name') return a.name.localeCompare(b.name, 'zh-CN')
+    if (sortBy.value === 'score') return (b.score ?? 0) - (a.score ?? 0)
+    return (b.growth_count ?? 0) - (a.growth_count ?? 0)
+  })
+})
+
+/** 成长密度条：以本班最高值为满格，避免跨班量纲不一致 */
+const growthMax = computed(() =>
+  Math.max(1, ...(activeClass.value?.students ?? []).map((s) => s.growth_count ?? 0))
+)
+function growthPct(s: StudentSummary) {
+  return Math.min(100, Math.round(((s.growth_count ?? 0) / growthMax.value) * 100))
+}
 
 const activeStudent = computed(
   () => students.value.find((s) => s.id === activeStudentId.value) ?? null
@@ -384,8 +477,21 @@ const capBars = computed(() => {
   }))
 })
 
+/** 选班级：切换班级时清空当前学生与搜索词，避免看着 A 班的人翻着 B 班的名单 */
+function selectClass(key: string) {
+  if (activeClassKey.value === key) return
+  activeClassKey.value = key
+  activeStudentId.value = null
+  keyword.value = ''
+}
+
 function selectStudent(id: number) {
-  activeStudentId.value = id
+  // 再点同一个学生 = 收起详情，回到班级名单
+  activeStudentId.value = activeStudentId.value === id ? null : id
+}
+
+function clearStudent() {
+  activeStudentId.value = null
 }
 
 /** 下拉刷新：复用学生名单加载，失败不提示 */
@@ -397,8 +503,16 @@ async function loadStudents() {
   studentsLoading.value = true
   try {
     students.value = await getStudents()
-    if (students.value.length && activeStudentId.value === null) {
-      activeStudentId.value = students.value[0].id
+    // 默认落到第一个班级，但不预选学生——先看名单，再决定看谁
+    if (classGroups.value.length && !activeClassKey.value) {
+      activeClassKey.value = classGroups.value[0].key
+    }
+    // 深链指定过学生时，把他的班级一并展开
+    if (activeStudentId.value !== null) {
+      const s = students.value.find((x) => x.id === activeStudentId.value)
+      if (s) {
+        activeClassKey.value = s.class_group_id != null ? String(s.class_group_id) : UNASSIGNED
+      }
     }
   } catch {
     students.value = []
@@ -424,87 +538,24 @@ async function loadGrowth() {
 
 watch(activeStudentId, loadGrowth)
 
-function openCreate() {
-  editing.value = null
-  dialogVisible.value = true
-}
-
-/** 成长报告空态：先收起报告再打开新增档案，避免两层弹层叠加 */
-function createFromReport() {
-  reportVisible.value = false
-  openCreate()
-}
-
-async function openReport() {
-  reportLoading.value = true
-  try {
-    report.value = await getPortfolioReport()
-    reportVisible.value = true
-  } catch {
-    ElMessage.error('成长报告生成失败')
-  } finally {
-    reportLoading.value = false
-  }
-}
-
-/** 打印 / 导出 PDF：打开独立打印窗口，避免页面样式干扰 */
-function printReport() {
-  const r = report.value
-  if (!r) return
-  const rows = r.items
-    .map(
-      (it, i) =>
-        `<tr><td>${i + 1}</td><td>${escapeHtml(it.title)}</td><td>${PORTFOLIO_TYPE_LABEL[it.item_type]}</td><td>${it.occurred_on || '-'}</td></tr>`
-    )
-    .join('')
-  const cards = r.by_type
-    .map((t) => `<span class="chip">${t.label} <b>${t.count}</b></span>`)
-    .join('')
-  const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" />
-<title>${escapeHtml(r.teacher_name)} · 教师成长报告</title>
-<style>
-  body{font-family:"Noto Sans CJK SC","WenQuanYi Micro Hei",system-ui,sans-serif;color:#101828;padding:32px;}
-  h1{font-size:20px;margin:0 0 4px;}
-  .meta{color:#98a2b3;font-size:12px;margin-bottom:18px;}
-  .chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
-  .chip{border:1px solid #eaecf0;border-radius:999px;padding:4px 12px;font-size:12px;color:#475467;}
-  table{width:100%;border-collapse:collapse;font-size:13px;}
-  th,td{border-bottom:1px solid #eaecf0;padding:8px 6px;text-align:left;}
-  th{color:#667085;font-weight:600;font-size:12px;}
-  td:first-child,th:first-child{width:40px;color:#98a2b3;}
-</style></head><body>
-  <h1>${escapeHtml(r.teacher_name)} · 教师成长报告</h1>
-  <div class="meta">生成时间：${(r.generated_at || '').slice(0, 10)} ｜ 共 ${r.total} 条</div>
-  <div class="chips">${cards}</div>
-  <table><thead><tr><th>#</th><th>标题</th><th>类型</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>
-</body></html>`
-  const w = window.open('', '_blank', 'width=900,height=1000')
-  if (!w) {
-    ElMessage.warning('浏览器拦截了打印窗口，请允许弹出窗口后重试')
-    return
-  }
-  w.document.write(html)
-  w.document.close()
-  w.focus()
-  w.print()
-}
-
-function escapeHtml(s: string) {
-  return (s || '').replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
-  )
+/** 教师本人的育人档案（案例/荣誉/培训/研究成果）已整体迁到「我的成长」页 */
+function goMyGrowth() {
+  router.push({ path: '/teacher/growth', query: { tab: 'portfolio' } })
 }
 
 onMounted(async () => {
-  await loadStudents()
-  // 深链 ?student_id=<id>：从关怀聚焦等入口直达该生成长档案
+  // 深链 ?student_id=<id>：从关怀聚焦等入口直达该生成长档案。
+  // 先在加载前记下目标学生，loadStudents 里会按他所属班级展开。
   const deepId = Number(route.query.student_id || route.query.student)
+  if (deepId) activeStudentId.value = deepId
+
+  await loadStudents()
+
   if (deepId) {
-    if (students.value.some((s) => s.id === deepId)) activeStudentId.value = deepId
+    // 不在本人名下：回退到总览，避免停在一个空状态上
+    if (!students.value.some((s) => s.id === deepId)) activeStudentId.value = null
     router.replace({ path: '/teacher/portfolio' })
   }
-  // 从「我的成长」上传入口进入时直接打开新增档案，减少一次点击
-  if (route.query.create === '1') openCreate()
 })
 </script>
 
@@ -520,66 +571,259 @@ onMounted(async () => {
   margin-left: 0;
 }
 
-/* 学生横向选择器 */
-.pf-rail {
-  display: flex;
+/* ── 一级：班级选择 ── */
+.pf-classes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none;
 }
-.pf-rail::-webkit-scrollbar {
-  display: none;
-}
-.pf-stu {
-  flex: 0 0 auto;
+.pf-class {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  width: 62px;
-  padding: 8px 4px;
+  gap: 3px;
+  padding: 11px 13px;
   border: 1px solid var(--tui-border);
   border-radius: var(--tui-radius-sm);
   background: var(--tui-surface);
-  cursor: pointer;
+  text-align: left;
   font-family: inherit;
+  cursor: pointer;
   transition: all 0.18s var(--tui-ease);
 }
-.pf-stu:active {
-  transform: scale(0.97);
+.pf-class:active {
+  transform: scale(0.985);
 }
-.pf-stu.active {
-  border-color: var(--tui-brand);
+.pf-class:hover {
+  border-color: var(--tui-border-strong, #c4c9d2);
+}
+.pf-class.active {
+  border-color: transparent;
   background: var(--tui-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--tui-brand);
 }
-.pf-stu-avatar {
+.pf-class-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-class.active .pf-class-name {
+  color: var(--tui-brand-strong);
+}
+.pf-class-meta {
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+}
+.pf-class-meta b {
+  color: var(--tui-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.pf-class-meta em {
+  font-style: normal;
+  color: var(--tui-text-quiet);
+}
+.pf-class.active .pf-class-meta b {
+  color: var(--tui-brand-strong);
+}
+
+/* ── 二级：搜索 + 排序 ── */
+.pf-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pf-search {
+  flex: 1;
+  min-width: 0;
+}
+.pf-sort {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--tui-surface-sunken);
+  flex-shrink: 0;
+}
+.pf-sort-btn {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tui-text-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.pf-sort-btn.active {
+  background: var(--tui-surface);
+  color: var(--tui-text);
+  font-weight: 600;
+}
+
+/* ── 二级：学生卡片网格 ── */
+.pf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+}
+.pf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.18s var(--tui-ease);
+}
+.pf-card:hover {
+  border-color: var(--tui-border-strong, #c4c9d2);
+}
+.pf-card:active {
+  transform: scale(0.985);
+}
+.pf-card.active {
+  border-color: transparent;
+  background: var(--tui-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--tui-brand);
+}
+.pf-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pf-card-avatar {
   width: 30px;
   height: 30px;
-  border-radius: 50%;
+  flex: 0 0 30px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
   background: var(--tui-surface-sunken);
   color: var(--tui-text-secondary);
   font-size: 13px;
   font-weight: 600;
 }
-.pf-stu.active .pf-stu-avatar {
+.pf-card.active .pf-card-avatar {
   background: var(--tui-brand);
   color: #fff;
 }
-.pf-stu-name {
-  font-size: 11.5px;
-  color: var(--tui-text-secondary);
-  max-width: 100%;
+.pf-card-id {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pf-card-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tui-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pf-stu.active .pf-stu-name {
-  color: var(--tui-brand-strong);
-  font-weight: 600;
+.pf-card-sub {
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-card-flag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--tui-danger-soft, #fef3f2);
+  color: var(--tui-danger, #d92d20);
+  font-size: 10.5px;
+}
+.pf-card-nums {
+  display: flex;
+  gap: 10px;
+}
+.pf-card-num {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.pf-card-num b {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tui-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.pf-card-num em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--tui-text-quiet);
+  white-space: nowrap;
+}
+.pf-card-bar {
+  display: block;
+  height: 3px;
+  border-radius: 99px;
+  background: var(--tui-surface-sunken);
+  overflow: hidden;
+}
+.pf-card-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 99px;
+  background: var(--tui-brand);
+  transition: width 0.3s ease;
+}
+
+/* ── 详情标题：明确「现在看的是谁」+ 回到班级名单 ── */
+.pf-detail-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 10px;
+  padding: 0 14px;
+}
+.pf-detail-who {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+.pf-detail-who b {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--tui-text);
+}
+.pf-detail-who em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--tui-text-quiet);
+}
+.pf-detail-back {
+  flex-shrink: 0;
+  padding: 4px 11px;
+  border: 1px solid var(--tui-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tui-text-secondary);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.pf-detail-back:hover {
+  background: var(--tui-surface-sunken);
 }
 
 /* 徽章墙 */
@@ -690,196 +934,28 @@ onMounted(async () => {
   line-height: 1.55;
 }
 
-/* 成长报告：封面 + 分类占比 + 明细 + 空态（操作内联，不再压底部按钮栏） */
-.pf-report {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.rpt-cover {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--tui-border);
-  border-radius: var(--tui-radius-md, 14px);
-  background: linear-gradient(135deg, #f4f7ff 0%, #fbfcff 70%);
-}
-.rpt-mascot {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  object-fit: contain;
-}
-.rpt-cover-bd {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.rpt-cover-bd h3 {
-  margin: 0;
-  font-size: 14.5px;
-  font-weight: 700;
-  color: var(--tui-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rpt-cover-bd span {
-  font-size: 11.5px;
-  color: var(--tui-text-quiet);
-}
-.rpt-print {
-  flex: 0 0 auto;
-}
-.rpt-types {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.rpt-type {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--tui-surface-muted);
-  border-radius: var(--tui-radius-sm);
-  padding: 8px 10px;
-}
-.rpt-type-hd {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-}
-.rpt-num {
-  font-size: 18px;
-  font-weight: 750;
-  color: var(--tui-brand-strong);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.rpt-lb {
-  font-size: 11px;
-  color: var(--tui-text-quiet);
-}
-.rpt-bar {
-  height: 4px;
-  border-radius: 99px;
-  background: rgba(17, 24, 39, 0.08);
-  overflow: hidden;
-}
-.rpt-bar i {
-  display: block;
-  height: 100%;
-  min-width: 2px;
-  border-radius: 99px;
-  transition: width 0.3s ease;
-}
-.rpt-sec {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11.5px;
-  color: var(--tui-text-quiet);
-}
-.rpt-sec span:first-child {
-  font-weight: 700;
-  color: var(--tui-text-secondary);
-}
-.rpt-list {
-  display: flex;
-  flex-direction: column;
-}
-.rpt-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 2px;
-  border-bottom: 1px solid var(--tui-border);
-  font-size: 12.5px;
-}
-.rpt-item:last-child {
-  border-bottom: none;
-}
-.rpt-idx {
-  width: 16px;
-  text-align: center;
-  color: var(--tui-text-quiet);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-.rpt-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  align-self: center;
-  border-radius: 50%;
-}
-.rpt-title {
-  color: var(--tui-text-secondary);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rpt-meta {
-  font-size: 11px;
-  color: var(--tui-text-quiet);
-  flex-shrink: 0;
-}
-.rpt-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 18px 12px 14px;
-  text-align: center;
-  border: 1px dashed var(--tui-border);
-  border-radius: var(--tui-radius-md, 14px);
-  background: var(--tui-surface-muted);
-}
-.rpt-empty-mascot {
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
-  margin-bottom: 2px;
-}
-.rpt-empty b {
-  font-size: 13.5px;
-  color: var(--tui-text);
-}
-.rpt-empty span {
-  max-width: 260px;
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--tui-text-quiet);
-}
-.rpt-empty .el-button {
-  margin-top: 4px;
-}
-/* 空态入口：紧凑胶囊按钮，不抢内容 */
-.rpt-add-btn {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11.5px;
-}
-.rpt-add-btn :deep(.el-icon) {
-  font-size: 12px;
-}
-.rpt-note {
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--tui-text-quiet);
-  text-align: center;
-}
-
 @media (max-width: 767px) {
   .pf-badges {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* 手机上班级两列、学生一列，触控区域才够大 */
+  .pf-classes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pf-grid {
+    grid-template-columns: 1fr;
+  }
+  .pf-tools {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .pf-sort {
+    justify-content: space-between;
+  }
+  .pf-sort-btn {
+    flex: 1;
+    text-align: center;
   }
 }
 </style>

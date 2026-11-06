@@ -33,19 +33,21 @@
         <span class="wl-ml">本周办结</span>
       </div>
       <div class="wl-metric">
-        <span class="wl-mv purple">{{ leave.awaiting_return }}</span>
-        <span class="wl-ml">待销假</span>
+        <span class="wl-mv purple">{{ leave.pending }}</span>
+        <span class="wl-ml">待请假</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onActivated, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowRight, Histogram } from '@element-plus/icons-vue'
 import { getWorkloadStats, type WorkloadStats } from '@/api/careRecord'
 import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
 import { getLeaveStats, type LeaveStats } from '@/api/leave'
+import { getCachedData } from '@/utils/teacherDashboardCache'
+import { onRealtimeData } from '@/utils/realtime'
 
 const emit = defineEmits<{ 'open-records': [] }>()
 
@@ -57,7 +59,6 @@ const leave = ref<LeaveStats>({
   approved: 0,
   rejected: 0,
   pending: 0,
-  awaiting_return: 0,
   by_type: [],
   by_class: [],
 })
@@ -67,26 +68,60 @@ function pct(n: number) {
   return `${Math.round((n / t) * 100)}%`
 }
 
-async function load(silent = false) {
+/**
+ * 拉取三块数据。
+ *
+ * 要点：
+ * - 首帧用预加载缓存直出（有缓存就不亮 loading），避免切页时数字先归零再跳回来；
+ * - 始终 silent：本卡片数据只由 SSE 事件驱动刷新，不显示 loading，做到「无闪烁」；
+ * - Promise.allSettled：三者互不阻塞，任一失败保留旧值，不会因一个接口抖动导致整卡清空。
+ */
+let inflight: Promise<void> | null = null
+
+async function load(silent = true) {
+  // 并发去重：一次操作可能连发多个域事件，合并成一轮请求
+  if (inflight) return inflight
   if (!silent) loading.value = true
-  const [w, s, l] = await Promise.allSettled([
-    getWorkloadStats(),
-    getTeacherTaskSummary(),
-    getLeaveStats(),
-  ])
-  if (w.status === 'fulfilled') workload.value = w.value
-  if (s.status === 'fulfilled') summary.value = s.value
-  if (l.status === 'fulfilled') leave.value = l.value
-  loading.value = false
+
+  inflight = (async () => {
+    const [w, s, l] = await Promise.allSettled([
+      getWorkloadStats(),
+      getTeacherTaskSummary(),
+      getLeaveStats(),
+    ])
+    if (w.status === 'fulfilled') workload.value = w.value
+    if (s.status === 'fulfilled') summary.value = s.value
+    if (l.status === 'fulfilled') leave.value = l.value
+    loading.value = false
+  })()
+
+  try {
+    await inflight
+  } finally {
+    inflight = null
+  }
 }
 
-onMounted(load)
-/** 从其它页签切回首页时静默刷新：数据已在，不再亮 loading，避免切页瞬间闪一下 */
-let activatedOnce = false
-onActivated(() => {
-  if (activatedOnce) load(true)
-  else activatedOnce = true
-})
+/** 首屏：优先吃布局预加载缓存（同一批接口，避免重复请求） */
+function hydrateFromCache() {
+  const cachedLeave = getCachedData<LeaveStats>('leave-stats')
+  if (cachedLeave) leave.value = cachedLeave
+  const cachedSummary = getCachedData<TeacherTaskSummary>('teacher-task-summary')
+  if (cachedSummary) summary.value = cachedSummary
+}
+
+hydrateFromCache()
+
+// 实时更新：关怀/谈心/评语、任务办结、请假审批 —— 任一变化都静默重拉本卡片。
+// 这是取代「30 秒轮询 + 切页重挂载」的主更新路径，无整页刷新、无闪烁。
+const offRealtime = onRealtimeData(
+  ['teacher-care', 'teacher-tasks', 'teacher-approval', 'teacher-dashboard'],
+  () => { void load(true) },
+)
+
+onMounted(() => { void load(true) })
+onBeforeUnmount(offRealtime)
+
 defineExpose({ reload: load })
 </script>
 

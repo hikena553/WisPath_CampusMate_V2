@@ -783,16 +783,16 @@ button.tui-stat:active { transform: scale(0.98); }
 
 /* 吸顶栏 */
 :is(.tui-page, .teacher-scope) .tui-appbar {
-  /* 与学生端同一套自适应高度 + 安全区写法：
-     原来固定 52px 且 padding 抹掉了安全区，标题会在「状态栏高度 + 52px」里居中，
-     视觉上就是标题上方多出一截留白。现在标题只在 46–52px 内容区居中。 */
-  height: calc(var(--sat, 0px) + clamp(46px, 11.8vw, 52px));
-  min-height: calc(var(--sat, 0px) + clamp(46px, 11.8vw, 52px));
-  padding: var(--sat, 0px) 4px 0;
+  /* 原先这里重复写了一遍 height/padding，与 SubPageHeader 内的 scoped 规则各算一遍，
+     任何一边改数值就会出现「教师端与学生端页头高度不同」。
+     现在统一引用 styles/responsive.css 的 --appbar-* 变量，只此一处定义。 */
+  height: var(--appbar-h);
+  min-height: var(--appbar-h);
+  padding: var(--sat, 0px) var(--appbar-px) 0;
 }
 :is(.tui-page, .teacher-scope) .tui-appbar-brand { min-height: calc(var(--sat, 0px) + 56px); padding: calc(var(--sat, 0px) + 6px) 8px 6px 12px; }
 :is(.tui-page, .teacher-scope) .tui-appbar-back { width: 34px; height: 34px; }
-:is(.tui-page, .teacher-scope) .tui-appbar-title { font-size: 17.5px; font-weight: 680; letter-spacing: -0.2px; }
+:is(.tui-page, .teacher-scope) .tui-appbar-title { font-size: var(--appbar-title-size); font-weight: var(--appbar-title-weight); letter-spacing: -0.2px; }
 :is(.tui-page, .teacher-scope) .tui-mascot-sm { width: 34px; height: 34px; }
 :is(.tui-page, .teacher-scope) .tui-mascot-md { width: 40px; height: 40px; }
 
@@ -1856,6 +1856,118 @@ body.teacher-app .el-dropdown-menu__item--divided::before {
   body.teacher-app .el-dropdown__popper.el-popper { border-radius: 14px; padding: 5px; }
   body.teacher-app .el-dropdown-menu__item { padding: 10px 12px; font-size: 13.5px; }
 }
+
+/* =========================================================================
+   ▼ v8 el-select 下拉弹层：与 v7 下拉菜单同一套圆角矩形浮层
+   -------------------------------------------------------------------------
+   问题（来自「发布公告 → 紧急程度」截图）：v7 只统一了 el-dropdown 的弹层，
+   el-select 的选项面板仍是 Element Plus 原生形态 —— 4px 直角 + 贴边整行高亮 +
+   指向输入框的小三角，放在全站 8–18px 圆角的扁平体系里像系统级控件；
+   移动端尤其突兀（选项行 34px 高、无左右留白，底部还会切到页面文字）。
+
+   做法与 v7 完全对齐：
+   · 浮层：14px 圆角 + 发丝描边 + 一档柔和投影，内边距 4px（移动端 5px）；
+   · 小三角：保留但缩到 8px 并与浮层同色同描边（v7 下拉是点击菜单、无锚点故删除，
+     这里是小三角指向输入框的唯一锚点，删掉会失去「从哪冒出来」的空间关系）；
+   · 选项行：8px 圆角胶囊，hover 中性浅灰，选中浅蓝底 + 品牌字重，
+     不再通栏铺满整块浮层；
+   · 移动端：热区 40px、字号 14px，防止误触。
+
+   ▼ v8.1 尺寸再收一档（反馈「弹窗偏大」）：
+   参照教师端控件口径（输入框 min-height 32px、选项行与输入框同高才不显笨重），
+   浮层 18→14px 圆角、内边距 6→4px；选项行 36→32px、13.5→13px 字号；
+   移动端 44→40px、14.5→14px。圆角仍明显大于 EP 原生 4px，观感不变、体量收窄。
+   作用域：popper teleport 到 body，故用 body.teacher-app 限定；聊天气泡里带
+   自定义 popper-class（pet-select-dropdown / semester-select-popper / file-overflow-dropdown）
+   的下拉不受影响，各自保留原样式。
+
+   ▼ v8.2 去掉作用域前缀（两次「改了没反应」的最终修法）：
+   前两版分别写成 `body.teacher-app X` 与
+   `body:is(...) X, html body:not(...) X`，都依赖「body 上有没有端口标记类」这个
+   运行时前提。该前提不成立时整套规则静默失效、零报错，而它又无法在构建期验证，
+   于是反复出现「改了没生效」。
+   现在直接写成 `body X`：不再依赖任何作用域类，命中稳定、可预测。
+   代价是学生端 / 管理端的 el-select 也会用这套圆角浮层 —— 这本身符合全站视觉
+   规范；而学生端课表（.semester-select-popper）、桌宠（.pet-select-dropdown）
+   等已自定义 popper-class 的下拉权重更高，仍按各自样式渲染，不受影响。
+   ========================================================================= */
+body .el-select__popper.el-popper {
+  border-radius: 14px;
+  border: 1px solid var(--tui-border-strong);
+  background: var(--tui-surface);
+  box-shadow: var(--tui-shadow-2);
+  padding: 4px;
+  overflow: visible; /* 小三角要探出浮层边界 */
+}
+body .el-select__popper .el-select-dropdown {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+/* 小三角：与浮层同底色 + 同描边，拼成一块完整的圆角卡片 */
+body .el-select__popper .el-popper__arrow { width: 8px; height: 8px; }
+body .el-select__popper .el-popper__arrow::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--tui-surface);
+  border: 1px solid var(--tui-border-strong);
+}
+body .el-select__popper[data-popper-placement^='bottom'] .el-popper__arrow { top: -4px; }
+body .el-select__popper[data-popper-placement^='top'] .el-popper__arrow { bottom: -4px; }
+body .el-select__popper[data-popper-placement^='bottom'] .el-popper__arrow::before {
+  border-top-color: transparent;
+  border-left-color: transparent;
+}
+body .el-select__popper[data-popper-placement^='top'] .el-popper__arrow::before {
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+/* 选项列表：去掉通栏 6px 默认内边距，改成与浮层内边距呼应的紧凑列表 */
+/* 列表容器：EP 默认 padding 6px 0 + 虚拟列表另有 margin 6px 0，
+   两端叠加会在首项上方、末项下方留出明显空白（截图里「紧急通知」下方那块）。
+   这里统一清零，间距只由浮层内边距（4px）+ 选项行 margin（1px）控制。 */
+body .el-select-dropdown__list,
+body .el-select-dropdown__list.el-vl__window { padding: 1px; margin: 0; }
+body .el-select-dropdown__item {
+  height: auto;
+  min-height: 32px;
+  padding: 6px 10px;
+  margin: 1px 0;
+  border-radius: 8px;
+  line-height: 18px;
+  font-size: 13px;
+  color: var(--tui-text-secondary);
+  transition: background-color 0.16s var(--tui-ease), color 0.16s var(--tui-ease);
+}
+body .el-select-dropdown__item.is-hovering {
+  background: var(--tui-surface-sunken);
+  color: var(--tui-text);
+}
+body .el-select-dropdown__item.is-selected {
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
+  font-weight: 600;
+}
+body .el-select-dropdown__item.is-disabled { background: transparent; }
+/* 多选打勾标记原本绝对定位到行右侧 20px，胶囊行需要留出内边距 */
+body .el-select-dropdown.is-multiple .el-select-dropdown__item.is-selected::after { right: 10px; }
+
+/* 空态 / 加载：跟随浮层圆角，避免文字贴边 */
+body .el-select-dropdown__empty,
+body .el-select-dropdown__loading { padding: 12px 0; font-size: 12.5px; }
+
+@media (max-width: 767px) {
+  body .el-select__popper.el-popper { border-radius: 14px; padding: 5px; }
+  body .el-select-dropdown__item {
+    min-height: 40px;
+    padding: 10px;
+    font-size: 14px;
+    border-radius: 9px;
+  }
+}
+
 /* ============================================================
    教师端主操作按钮统一为黑白灰：不再使用蓝色实心/蓝色文字
    仅作用于 teacher-app 端口，不影响学生端与管理员端

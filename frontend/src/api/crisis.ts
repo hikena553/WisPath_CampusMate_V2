@@ -117,3 +117,39 @@ export interface CrisisInsight {
 export function getCrisisInsight(days = 30) {
   return request.get<CrisisInsight>('/crisis/analytics/insight', { params: { days } })
 }
+
+/* ============================ AI 处置建议 ============================ */
+
+export interface CrisisAdvice {
+  /** 推荐处置路径：谈话 / 转介心理咨询 / 约谈家长 / 建议休养观察 */
+  scheme: string
+  /** 具体动作步骤（2~4 步） */
+  steps: string[]
+  /** 推荐理由（只引用事实清单） */
+  rationale: string
+  /** 沟通禁忌（2~3 条） */
+  taboo: string[]
+  /** ai：模型生成；rule：规则兜底 */
+  source: 'ai' | 'rule'
+  generated_at: string
+}
+
+/** 单条预警的 AI 处置建议（severe 强制附 24h 面谈） */
+export function getAlertAdvice(id: number) {
+  return request.get<CrisisAdvice>(`/crisis/${id}/advice`)
+}
+
+/* ============================ 干预档案导出 ============================ */
+
+export interface CrisisExportParams {
+  start?: string
+  end?: string
+  level?: string
+  intervention_type?: string
+  resolved?: boolean
+}
+
+/** 按学生导出干预档案 Excel（时间/等级/干预类型/闭环状态可筛选，脱敏序列化） */
+export function exportStudentCrisisArchive(studentId: number, params: CrisisExportParams = {}) {
+  return request.download(`/crisis/students/${studentId}/export`, { params })
+}

@@ -1423,7 +1423,6 @@ function handleChatEvent(event: ChatPushEvent) {
       content: event.content ?? '',
       read: false,
       created_at: event.created_at || new Date().toISOString(),
-      sender_avatar: event.sender_avatar ?? null,
     }
     if (chatLoading.value) pendingChatPush.push({ key: session.key, msg: pushed })
     messages.value = [...messages.value, pushed]
@@ -1453,7 +1452,7 @@ function handleChatEvent(event: ChatPushEvent) {
       group_id: event.group_id ?? session.rawId,
       sender_id: event.sender_id ?? 0,
       sender_name: event.sender_name ?? '',
-      sender_avatar: event.sender_avatar ?? sameSender?.sender_avatar ?? null,
+      sender_avatar: sameSender?.sender_avatar ?? null,
       content: event.content ?? '',
       created_at: event.created_at || new Date().toISOString(),
     }
@@ -1888,20 +1887,8 @@ function senderName(m: ChatMessage) {
   return isMine(m) ? (auth.userName || '我') : activeSession.value?.name || ''
 }
 
-/**
- * 气泡头像：单聊直接读会话列表里的同一份 user_avatar（列表刷新时它也会更新），
- * 保证「列表行」和「聊天气泡」永远是同一枚头像；会话列表里还没有这个人时，
- * 退回打开会话时带进来的头像，再退消息自带的 sender_avatar（历史消息可能没有该字段）。
- * 群聊头像属于群，气泡按发送者取消息里的 sender_avatar。
- */
 function senderAvatar(m: ChatMessage) {
-  const own = 'sender_avatar' in m ? m.sender_avatar : null
-  const session = activeSession.value
-  if (session?.type === 'private' && m.sender_id === session.rawId) {
-    const conv = conversations.value.find((c) => c.user_id === session.rawId)
-    return conv?.user_avatar || session.avatar || own
-  }
-  return own
+  return 'sender_avatar' in m ? m.sender_avatar : null
 }
 
 // ---------- 通讯录 ------

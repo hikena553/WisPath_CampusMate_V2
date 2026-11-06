@@ -90,7 +90,7 @@
               <span class="growth-sub">本学期累计 {{ growthTotal }} 条成长记录</span>
             </div>
             <button class="growth-more" type="button" @click="navigateTo('/teacher/portfolio')">
-              成长档案
+              学生成长档案
               <el-icon :size="12"><ArrowRight /></el-icon>
             </button>
           </div>
@@ -164,7 +164,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, type Component } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, type Component } from 'vue'
 // v6.1 弹窗减负：删除确认走底部动作面板
 import { actionConfirm } from '@/composables/useActionSheet'
 import { useRouter } from 'vue-router'
@@ -532,10 +532,9 @@ async function loadData() {
   taskSummary.value = ts
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
 let lastRefreshAt = 0
 
-// 静默后台刷新：并行加载所有数据，不触发任何加载状态
+// 静默刷新：并行加载所有数据，不触发任何加载状态（无 loading、无闪烁）
 async function silentRefresh() {
   await Promise.all([
     loadData(),
@@ -553,39 +552,26 @@ initFromCache()
 onMounted(() => {
   silentRefresh()
   loadAiDecisions()
-  pollTimer = setInterval(silentRefresh, 30000)
+  // 注：不再使用 30 秒全量轮询。数据更新由 SSE 驱动（见下方 onDataChange 订阅），
+  // 断线时由 utils/realtime.ts 的兜底校验轮询补齐，页面本身不承担轮询职责。
 })
 
-// 智能体 / 其他页面改了任务或学生数据：立即静默刷新，不等下一轮 30 秒轮询
-const offDataChange = onDataChange(['teacher-tasks', 'teacher-students', 'teacher-dashboard', 'teacher-care'], () => {
-  // 页面被 keep-alive 停用时先不刷，等 onActivated 统一拉取
-  if (pollTimer !== null) silentRefresh()
-})
+// 订阅业务域变更：SSE 推送、其他页面写操作、智能体工具调用都会汇入这里，
+// 同一批域在微任务内合并，一次操作只刷新一轮。
+const offDataChange = onDataChange(
+  ['teacher-tasks', 'teacher-students', 'teacher-dashboard', 'teacher-care', 'teacher-approval'],
+  () => { void silentRefresh() },
+)
 
 onActivated(() => {
-  // 回到本页就静默刷新（3 秒内重复切回不重复请求）：数据可能已被智能体 / 其他页面改动
+  // 回到本页静默刷新（3 秒内重复切回不重复请求）：SSE 只推变更事件，
+  // 页面被 keep-alive 停用期间错过的批次靠这一次校验补齐。
   if (Date.now() - lastRefreshAt >= 3_000) {
     silentRefresh()
-  }
-  // 恢复轮询（若被 onDeactivated 暂停）
-  if (pollTimer === null) {
-    pollTimer = setInterval(silentRefresh, 30000)
-  }
-})
-
-onDeactivated(() => {
-  // 暂停轮询，但保留组件状态
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
   }
 })
 
 onUnmounted(() => {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
   offDataChange()
 })
 </script>

@@ -755,6 +755,87 @@ def _reply_help_request(db: Session, args: dict, user: User) -> dict:
     }
 
 
+# ============ 站内通知 / 消息查询（补齐「查询反馈」闭环）============
+
+
+def _query_teacher_notifications(db: Session, args: dict, user: User) -> dict:
+    """查询教师自己的站内通知（与工作台通知页 /api/notifications 同一张表）。"""
+    from app.models.notification import Notification
+
+    only_unread = bool(args.get("unread"))
+    query = db.query(Notification).filter(Notification.user_id == user.id)
+    if only_unread:
+        query = query.filter(Notification.is_read == False)  # noqa: E712
+    notes = query.order_by(Notification.created_at.desc()).limit(15).all()
+    unread_total = (
+        db.query(func.count(Notification.id))
+        .filter(Notification.user_id == user.id, Notification.is_read == False)  # noqa: E712
+        .scalar()
+        or 0
+    )
+    if not notes:
+        return {"message": "暂无站内通知", "unread": unread_total, "notifications": []}
+    type_names = {
+        "system": "系统", "approval": "审批", "leave": "请假", "crisis": "危机",
+        "announcement": "公告", "message": "消息", "feedback": "反馈",
+    }
+    return {
+        "message": f"共{unread_total}条未读，展示最近{len(notes)}条",
+        "unread": unread_total,
+        "notifications": [
+            {
+                "notification_id": n.id,
+                "title": n.title,
+                "content": n.content[:120],
+                "type": type_names.get(safe_enum_val(n.type), str(n.type)),
+                "level": _URGENCY_TEXT.get(safe_enum_val(n.level), str(n.level)),
+                "is_read": n.is_read,
+                "created_at": n.created_at.strftime("%m-%d %H:%M") if n.created_at else "",
+            }
+            for n in notes
+        ],
+    }
+
+
+def _query_messages_with_student(db: Session, args: dict, user: User) -> dict:
+    """查询与某名下学生的会话消息（与工作台消息页 /api/messages 同一张表）。"""
+    from app.models.message import Message
+
+    student = _find_my_student(db, user, args.get("student_name"), args.get("student_id"))
+    if not student:
+        return {"success": False, "message": "未找到该学生（或该学生不在你名下）"}
+    msgs = (
+        db.query(Message)
+        .filter(
+            or_(
+                (Message.sender_id == user.id) & (Message.receiver_id == student.id),
+                (Message.sender_id == student.id) & (Message.receiver_id == user.id),
+            )
+        )
+        .order_by(Message.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    msgs.reverse()  # 时间正序输出，便于 LLM 拼接上下文
+    if not msgs:
+        return {"message": f"与{student.name}暂无消息往来", "messages": []}
+    return {
+        "message": f"与{student.name}的最近{len(msgs)}条消息",
+        "student_name": student.name,
+        "messages": [
+            {
+                "message_id": m.id,
+                "from_me": m.sender_id == user.id,
+                "sender": user.name if m.sender_id == user.id else student.name,
+                "content": m.content[:200],
+                "read": bool(m.read),
+                "created_at": m.created_at.strftime("%m-%d %H:%M") if m.created_at else "",
+            }
+            for m in msgs
+        ],
+    }
+
+
 # ============================================================
 # 教学域工具（PH3）：课表/任课教师、出勤、作业、成绩
 # 与 teaching_service 共用同一套数据口径，保证 AI 看到的数字与页面一致

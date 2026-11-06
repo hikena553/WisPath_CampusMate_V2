@@ -21,6 +21,10 @@ class TeacherAnnouncement(Base):
     content: Mapped[str] = mapped_column(Text)
     urgency: Mapped[UrgencyLevel] = mapped_column(SAEnum(UrgencyLevel), default=UrgencyLevel.NORMAL)
     attachment_url: Mapped[str | None] = mapped_column(String(500))
+    class_group_id: Mapped[int | None] = mapped_column(
+        Integer, index=True, default=None,
+        comment="发布目标班级；NULL 表示发给名下全体学生（历史数据即为此语义）",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

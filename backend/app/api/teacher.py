@@ -39,6 +39,11 @@ class StudentOut(BaseModel):
     latest_crisis_summary: str | None = None
     latest_crisis_time: str | None = None
     tutor_id: int | None = None
+    # 班级归属：前端「班级 → 学生名单」下钻按它分组。
+    # 为什么不复用 class_group_id 参数去逐班请求：教师带多个班时那就成了 N 次请求，
+    # 而且班级卡上的统计会与名单行来自两次独立查询，容易出现数字对不上。
+    class_group_id: int | None = None
+    class_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -307,6 +312,8 @@ def list_students(
             latest_crisis_summary=latest_crisis.summary if latest_crisis else None,
             latest_crisis_time=latest_crisis.created_at.isoformat() if latest_crisis and latest_crisis.created_at else None,
             tutor_id=s.tutor_id,
+            class_group_id=s.class_group_id,
+            class_name=s.class_name,
         ))
     return result
 

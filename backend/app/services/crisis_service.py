@@ -29,7 +29,7 @@ from app.schemas.crisis import (
     CrisisTrendPointOut,
 )
 from app.services.llm_service import _get_llm_config, complete
-from app.services.prompts import build_crisis_summary_prompt, build_semantic_risk_prompt
+from app.services.prompts import build_crisis_summary_prompt, build_semantic_risk_prompt, build_short_term_triage_prompt
 from app.utils.enum_helpers import safe_enum_val
 
 logger = logging.getLogger(__name__)
@@ -433,3 +433,301 @@ async def insight(db: Session, teacher_id: int | None, days: int = 30) -> Crisis
     except Exception:
         logger.warning("危机智能分析生成失败，使用规则化研判", exc_info=True)
         return fallback
+
+
+# ============================ 双轨降噪：硬词直通 + 短时情绪分流 ============================
+
+# 极端行为信号词：命中即旁路一切降噪，直接进预警工作台并实时推送（fail-open）。
+# 注意：只收「行为/手段类」词；"不想活/想死"这类情绪化表达交给 LLM 短时研判分流，
+# 避免随口抱怨全部触发硬词直通造成狼来了效应。
+EXTREME_KEYWORDS = [
+    "自杀", "自残", "割腕", "跳楼", "轻生", "了结", "安眠药", "遗书",
+]
+# 计划/方式暗示词：与极端词同现时等级升至 severe
+_PLAN_HINT_WORDS = ["计划", "准备", "遗书", "告别", "明天", "今晚", "已经买", "攒了"]
+
+SETTING_EXTREME_KEYWORDS = "crisis_extreme_keywords"
+TRIAGE_SOURCE_HARD_GATE = "hard_gate"
+TRIAGE_SOURCE_LLM = "llm"
+TRIAGE_SOURCE_FREQUENCY = "frequency"
+
+# 同一学生同词去重窗口（小时内不重复落库）
+_DEDUPE_HOURS = 2
+# 频次升级：近 7 天情绪台账 ≥ N 条或同词 ≥ M 次，强制生成 mild 预警
+_LEDGER_ESCALATION_COUNT = 5
+_SAME_KEYWORD_ESCALATION_COUNT = 3
+
+
+def get_extreme_keywords(db: Session | None = None) -> list[str]:
+    """极端行为信号词：管理员可经 SystemSetting 覆盖，未配置时回退内置词库。"""
+    if db is not None:
+        try:
+            from app.models.setting import SystemSetting
+            row = db.query(SystemSetting).filter(SystemSetting.key == SETTING_EXTREME_KEYWORDS).first()
+            if row and row.value:
+                custom = [k.strip() for k in re.split(r"[,，、;；\s]+", str(row.value)) if k.strip()]
+                if custom:
+                    return custom
+        except Exception:
+            pass
+    return list(EXTREME_KEYWORDS)
+
+
+def detect_extreme_keywords(text: str, db: Session | None = None) -> list[str]:
+    return [kw for kw in get_extreme_keywords(db) if kw in text]
+
+
+def _recent_signal_counts(db: Session, student_id: int) -> tuple[int, int]:
+    """近 24h 信号窗口：历史预警条数 + 负面情绪台账条数。"""
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    alert_count = (
+        db.query(AIDialogSummary)
+        .filter(AIDialogSummary.student_id == student_id, AIDialogSummary.created_at >= since)
+        .count()
+    )
+    from app.models.emotion import EmotionRecord
+    emo_count = (
+        db.query(EmotionRecord)
+        .filter(
+            EmotionRecord.user_id == student_id,
+            EmotionRecord.source == "ai_dialog",
+            EmotionRecord.created_at >= since,
+        )
+        .count()
+    )
+    return alert_count, emo_count
+
+
+async def judge_short_term_risk(
+    db: Session,
+    student_id: int,
+    user_message: str,
+    ai_reply: str,
+    keywords: list[str],
+) -> tuple[str, str]:
+    """24h 窗口短时情绪研判。失败时 fail-open 判 mid（轻度预警，不进台账）。"""
+    alert_count, emo_count = _recent_signal_counts(db, student_id)
+    try:
+        from app.services.llm_service import _get_client as get_client
+        prompt = build_short_term_triage_prompt(
+            user_message=user_message,
+            ai_reply=ai_reply,
+            keywords=keywords,
+            recent_alert_count=alert_count,
+            recent_negative_emotions=emo_count,
+        )
+        config = _get_llm_config()
+        resp = await get_client().chat.completions.create(
+            model=config["model"],
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        obj = json.loads(resp.choices[0].message.content or "{}")
+        risk = str(obj.get("acute_risk") or "").strip().lower()
+        reason = str(obj.get("reason") or "").strip()[:200]
+        if risk in ("none", "low", "mid", "high"):
+            return risk, reason or "模型未给出理由"
+        return "mid", "研判结果异常，保守处理"
+    except Exception:
+        logger.warning("短时情绪研判失败，按轻度预警保守处理 student=%s", student_id, exc_info=True)
+        return "mid", "研判服务不可用，按轻度预警保守处理"
+
+
+def _write_ledger_record(db: Session, student_id: int, note: str, keywords: list[str]) -> None:
+    """轻度情绪走情绪台账（emotion_records），教师画像侧可见，不进预警工作台。"""
+    from app.models.emotion import EmotionRecord
+    note = (note or "")[:200]
+    db.add(EmotionRecord(
+        user_id=student_id,
+        emotion="negative",
+        confidence=0.6,
+        source="ai_dialog",
+        note=note or f"对话中出现情绪信号：{', '.join(keywords[:3])}",
+    ))
+
+
+def _notify_crisis_alert(db: Session, student_id: int, level: str, summary: str) -> None:
+    """分级实时推送：moderate/severe 落库后推送给辅导员（SSE 域事件 + 站内通知）。
+
+    SSE 通知教师端即时刷新；站内 Notification 保证离线补偿；失败不阻塞预警主流程。
+    """
+    if level not in ("moderate", "severe"):
+        return
+    try:
+        from app.services.realtime import hub as realtime_hub
+        from app.services import notification_service
+        from app.models.user import User, UserRole
+        from app.models.notification import NotificationType, UrgencyLevel
+
+        student = db.query(User).filter(User.id == student_id).first()
+        receiver_ids: set[int] = set()
+        if student is not None and student.tutor_id:
+            receiver_ids.add(student.tutor_id)
+        receiver_ids.update(
+            uid for (uid,) in db.query(User.id).filter(User.role == UserRole.ADMIN).all()
+        )
+        level_name = {"moderate": "中度", "severe": "高危"}.get(level, level)
+        title = f"心理预警（{level_name}）"
+        content = (summary or "学生出现心理风险信号")[:120]
+        link = "/teacher/crisis"
+        urgency = UrgencyLevel.URGENT if level == "severe" else UrgencyLevel.IMPORTANT
+        for uid in receiver_ids:
+            try:
+                notification_service.send_notification(
+                    db,
+                    user_id=uid,
+                    title=title,
+                    content=content,
+                    notification_type=NotificationType.SYSTEM,
+                    link=link,
+                    level=urgency,
+                )
+            except Exception:
+                logger.warning("危机站内通知发送失败 receiver=%s", uid, exc_info=True)
+            try:
+                realtime_hub.publish(uid, ["teacher-crisis", "teacher-dashboard"])
+            except Exception:
+                logger.warning("危机 SSE 推送失败 receiver=%s", uid, exc_info=True)
+    except Exception:
+        logger.warning("危机实时推送流程异常 student=%s", student_id, exc_info=True)
+
+
+def _frequency_escalation(db: Session, student_id: int, keywords: list[str]) -> bool:
+    """频次升级兜底：近 7 天情绪台账 ≥5 条或同词预警 ≥3 次 → 返回 True。"""
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+    from app.models.emotion import EmotionRecord
+    ledger_count = (
+        db.query(EmotionRecord)
+        .filter(
+            EmotionRecord.user_id == student_id,
+            EmotionRecord.source == "ai_dialog",
+            EmotionRecord.created_at >= since,
+        )
+        .count()
+    )
+    if ledger_count >= _LEDGER_ESCALATION_COUNT:
+        return True
+    for kw in keywords:
+        same_kw = (
+            db.query(AIDialogSummary)
+            .filter(
+                AIDialogSummary.student_id == student_id,
+                AIDialogSummary.keywords_matched.contains(kw),
+                AIDialogSummary.created_at >= since,
+            )
+            .count()
+        )
+        if same_kw >= _SAME_KEYWORD_ESCALATION_COUNT:
+            return True
+    return False
+
+
+def _dedupe_recent(db: Session, student_id: int, keywords: list[str]) -> AIDialogSummary | None:
+    """2 小时内同词命中只更新首条，避免刷屏。"""
+    since = datetime.now(timezone.utc) - timedelta(hours=_DEDUPE_HOURS)
+    if not keywords:
+        return None
+    rows = (
+        db.query(AIDialogSummary)
+        .filter(
+            AIDialogSummary.student_id == student_id,
+            AIDialogSummary.created_at >= since,
+        )
+        .order_by(AIDialogSummary.created_at.desc())
+        .all()
+    )
+    for row in rows:
+        matched = (row.keywords_matched or "").split(",")
+        if any(kw in matched for kw in keywords):
+            return row
+    return None
+
+
+async def triage_crisis_signal(
+    db: Session,
+    student_id: int,
+    user_message: str,
+    ai_reply: str,
+    keywords: list[str],
+    source: str = TRIAGE_SOURCE_LLM,
+) -> dict:
+    """双轨降噪主入口：硬词直通 → LLM 短时研判 → 分流（预警工作台 / 情绪台账）。
+
+    返回 {"outcome": "alert" | "ledger" | "deduped", "level": str|None, "reason": str}
+    """
+    if not keywords:
+        return {"outcome": "ledger", "level": None, "reason": "无命中关键词"}
+
+    # 1. 硬词直通闸：旁路一切降噪，fail-open
+    extreme = detect_extreme_keywords(user_message, db)
+    if extreme:
+        plan_hint = any(w in user_message for w in _PLAN_HINT_WORDS)
+        level = "severe" if plan_hint else "moderate"
+        existing = _dedupe_recent(db, student_id, keywords)
+        if existing is not None:
+            existing.level = CrisisLevel(level) if level in ("severe", "moderate") else existing.level
+            db.commit()
+            return {"outcome": "deduped", "level": level, "reason": "硬词命中，2h 内去重"}
+        result = await generate_crisis_summary(user_message, ai_reply, keywords) or {}
+        record = AIDialogSummary(
+            student_id=student_id,
+            summary=result.get("summary") or f"命中极端行为信号词：{', '.join(extreme)}",
+            level=CrisisLevel(level),
+            keywords_matched=",".join(keywords),
+            raw_snippet=user_message[:200],
+            triage_status=AIDialogSummary.TRIAGE_ALERT,
+            triage_source=TRIAGE_SOURCE_HARD_GATE,
+            judge_reason=f"硬词直通：{', '.join(extreme)}" + ("；含计划/方式暗示" if plan_hint else ""),
+        )
+        db.add(record)
+        db.commit()
+        _notify_crisis_alert(db, student_id, level, record.summary)
+        return {"outcome": "alert", "level": level, "reason": "硬词直通"}
+
+    # 2. 同词 2h 去重
+    existing = _dedupe_recent(db, student_id, keywords)
+    if existing is not None:
+        return {"outcome": "deduped", "level": safe_enum_val(existing.level), "reason": "短时去重"}
+
+    # 3. LLM 短时情绪研判
+    acute_risk, reason = await judge_short_term_risk(db, student_id, user_message, ai_reply, keywords)
+
+    # 4. 分流
+    if acute_risk in ("none", "low"):
+        _write_ledger_record(db, student_id, reason or f"命中：{', '.join(keywords[:3])}", keywords)
+        # 频次升级兜底：台账高频也生成 mild 预警
+        if _frequency_escalation(db, student_id, keywords):
+            record = AIDialogSummary(
+                student_id=student_id,
+                summary=f"近 7 天情绪信号频次升高，建议关注：{reason or ', '.join(keywords[:3])}"[:180],
+                level=CrisisLevel.MILD,
+                keywords_matched=",".join(keywords),
+                raw_snippet=user_message[:200],
+                triage_status=AIDialogSummary.TRIAGE_ALERT,
+                triage_source=TRIAGE_SOURCE_FREQUENCY,
+                judge_reason="频次升级：轻度情绪记录多次累积",
+            )
+            db.add(record)
+            db.commit()
+            return {"outcome": "alert", "level": "mild", "reason": "频次升级"}
+        db.commit()
+        return {"outcome": "ledger", "level": None, "reason": reason}
+
+    # mid → mild 预警；high → moderate 预警
+    level = "moderate" if acute_risk == "high" else "mild"
+    result = await generate_crisis_summary(user_message, ai_reply, keywords) or {}
+    record = AIDialogSummary(
+        student_id=student_id,
+        summary=result.get("summary") or f"短时情绪研判：{reason}"[:180],
+        level=CrisisLevel(level),
+        keywords_matched=",".join(keywords),
+        raw_snippet=user_message[:200],
+        triage_status=AIDialogSummary.TRIAGE_ALERT,
+        triage_source=source,
+        judge_reason=reason,
+    )
+    db.add(record)
+    db.commit()
+    _notify_crisis_alert(db, student_id, level, record.summary)
+    return {"outcome": "alert", "level": level, "reason": reason}

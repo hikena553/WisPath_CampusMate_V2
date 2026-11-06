@@ -98,6 +98,11 @@ const request = {
   delete<T = unknown>(url: string, config?: AppRequestConfig): Promise<T> {
     return instance.delete(url, config) as unknown as Promise<T>
   },
+  /** 下载二进制（Excel/PDF 等）：返回 Blob，由调用方触发保存 */
+  async download(url: string, config?: AppRequestConfig): Promise<Blob> {
+    const res = await instance.get(url, { ...config, responseType: 'blob' })
+    return res as unknown as Blob
+  },
 }
 
 export default request

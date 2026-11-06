@@ -54,19 +54,63 @@ function close() {
   emit('update:modelValue', false)
 }
 
+/**
+ * 承接 el-dialog 的 update:modelValue。
+ * el-dialog 在打开/关闭时都会派发该事件，旧实现直接绑 close 会无条件回传 false，
+ * 语义上等同于「弹窗一被打开就被自己关掉」。这里只在真正的关闭动作（v===false）时回传。
+ */
+function onDialogVisibleChange(v: boolean) {
+  if (v === false) emit('update:modelValue', false)
+}
+
+/**
+ * 移动端全屏子页的滚动锁（引用计数）。
+ *
+ * 旧实现每个实例各自写 `document.body.style.overflow = ''`，弹窗叠加时
+ * （例如公告子页里再起一个确认层）先关掉的那个会把锁清空，底层页面跟着滚起来。
+ * 这里改成模块级计数：只有最后一个打开者关闭时才真正恢复滚动。
+ */
+let scrollLockCount = 0
+let savedOverflow = ''
+
+function lockScroll() {
+  if (typeof document === 'undefined') return
+  if (scrollLockCount === 0) {
+    savedOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  scrollLockCount++
+}
+
+function unlockScroll() {
+  if (typeof document === 'undefined') return
+  if (scrollLockCount === 0) return
+  scrollLockCount--
+  if (scrollLockCount === 0) document.body.style.overflow = savedOverflow
+}
+
+// 本实例当前是否持有锁，避免重复加锁/重复解锁
+let holdingLock = false
+
+function syncScrollLock(shouldLock: boolean) {
+  if (shouldLock === holdingLock) return
+  holdingLock = shouldLock
+  shouldLock ? lockScroll() : unlockScroll()
+}
+
 // 移动端：子页出现后补发一次 opened（桌面端由 el-dialog 原生触发，经 $attrs 透传）
-watch(() => props.modelValue, (v) => {
-  if (v && isMobile.value) {
+// 同时跟踪 isMobile：打开状态下视口切到桌面会改走 el-dialog，此时必须释放滚动锁
+watch([() => props.modelValue, isMobile], ([v, mobile], [, prevMobile]) => {
+  if (v && mobile && !prevMobile) {
     nextTick(() => emit('opened'))
   }
-  // 全屏子页打开时锁住底层页面滚动，关闭时恢复
-  if (typeof document !== 'undefined') {
-    document.body.style.overflow = v && isMobile.value ? 'hidden' : ''
-  }
+  // 只有「移动端且打开」才需要锁；切换视口到桌面时也要释放
+  syncScrollLock(!!v && mobile)
 }, { immediate: true })
 
 onUnmounted(() => {
-  if (typeof document !== 'undefined') document.body.style.overflow = ''
+  // 组件销毁时若仍持锁，必须归还，否则 body 会永久无法滚动
+  syncScrollLock(false)
 })
 </script>
 
@@ -112,7 +156,7 @@ onUnmounted(() => {
     :title="title"
     :width="width || '560px'"
     :top="top || '8vh'"
-    @update:model-value="close"
+    @update:model-value="onDialogVisibleChange"
     @opened="$emit('opened')"
   >
     <slot />
@@ -126,14 +170,7 @@ onUnmounted(() => {
 /* ===== 外层：全屏承载（桌面窄窗口下限宽 480px 居中，真机全宽） ===== */
 .rp-wrap {
   position: fixed;
-  /* 键盘弹出时缩到可见区：与登录/注册等整屏页共用 App.vue 写入的 --auth-vh/--auth-vtop
-     （iOS WKWebView 不会自己缩，底部输入框会被键盘盖住；安卓 adjustResize 下这两个值
-     与窗口一致，等价于 inset:0，不影响原行为）。不能用 inset:0 —— top/bottom 同时存在时
-     height 会被忽略，键盘态就失效了。 */
-  top: var(--auth-vtop, 0px);
-  left: 0;
-  right: 0;
-  height: var(--auth-vh, 100%);
+  inset: 0;
   z-index: 2700;
   display: flex;
   justify-content: center;
@@ -149,18 +186,15 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ===== 子页头：与 tui-appbar 同规格（48px 白底 + 发丝线 + 顶部安全区） =====
-   --sat 必须让出来（与 SubPageHeader 一致）：Android 15 edge-to-edge / iPhone 刘海下，
-   页面内容会铺到状态栏底下，不留安全区的话返回键和标题会被状态栏直接压住。 */
+/* ===== 子页头：与 tui-appbar 同规格（48px 白底 + 发丝线） ===== */
 .rp-appbar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  height: calc(var(--sat, 0px) + 48px);
-  min-height: calc(var(--sat, 0px) + 48px);
-  padding: var(--sat, 0px) 12px 0;
-  box-sizing: border-box;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 12px;
   background: #fff;
   border-bottom: 1px solid #e9ebee;
 }

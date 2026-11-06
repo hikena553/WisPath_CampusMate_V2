@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, type Component } from 'vue'
+import { computed, onActivated, onMounted, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
@@ -141,7 +141,7 @@ const groups: FeatureGroup[] = [
   {
     title: '学生成长与关怀',
     items: [
-      { path: '/teacher/portfolio', label: '成长档案', desc: '学生成长记录、徽章与育人档案管理', icon: Collection, color: '#6941c6', tint: '#f4f3ff' },
+      { path: '/teacher/portfolio', label: '学生成长档案', desc: '学生的成长记录、徽章与轨迹，按学生查看', icon: Collection, color: '#6941c6', tint: '#f4f3ff' },
       { path: '/teacher/care-center', label: '关怀与家校', desc: '谈心、家访、激励与家长沟通台账，同一处留痕', icon: Sunny, color: '#f79009', tint: '#fffaeb' },
     ],
   },
@@ -193,6 +193,14 @@ async function refreshAll() {
     /* 角标拉取失败保持原值 */
   }
 }
+
+// keep-alive 缓存本页（见 TeacherLayout cachedNames）：再次激活时静默重拉角标，
+// 首次激活由 onMounted 负责，这里跳过避免双请求。
+let firstActivate = true
+onActivated(() => {
+  if (firstActivate) { firstActivate = false; return }
+  void refreshAll()
+})
 
 /** 搜索：按名称 / 分区名 / 说明匹配，命中后仅保留命中的模块 */
 const visibleGroups = computed(() => {

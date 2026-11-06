@@ -182,6 +182,7 @@ const router = createRouter({
         { path: 'password-requests', redirect: '/admin/students' },
         { path: 'organizations', meta: { title: '院系班级' }, component: () => import('@/views/admin/OrganizationsPage.vue') },
         { path: 'courses', meta: { title: '课程表管理' }, component: () => import('@/views/admin/CourseSchedulePage.vue') },
+        { path: 'schedule-approval', meta: { title: '调课增课审批' }, component: () => import('@/views/admin/ScheduleApprovalPage.vue') },
         { path: 'crisis', name: 'admin-crisis', meta: { title: '危机预警' }, component: () => import('@/views/admin/CrisisMonitorPage.vue') },
         { path: 'feedbacks', meta: { title: '反馈管理' }, component: () => import('@/views/admin/FeedbackPage.vue') },
         { path: 'system', name: 'admin-system', meta: { title: '系统监控' }, component: () => import('@/views/admin/SystemMonitorPage.vue') },

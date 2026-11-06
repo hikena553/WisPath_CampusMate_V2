@@ -73,11 +73,8 @@ export interface LeaveRequestOut {
   leave_type: string
   status: string
   reject_reason: string | null
-  /** 销假闭环：已通过后是否完成返校确认 */
-  return_confirmed?: boolean
-  return_confirmed_at?: string | null
   created_at: string
-  /** 审批处理时间（审批 / 销假会刷新），台账按它倒序排 */
+  /** 审批处理时间（通过 / 拒绝会刷新），台账按它倒序排 */
   updated_at?: string
 }
 
@@ -157,6 +154,10 @@ export interface Course {
   semester: string
   credit: number | null
   class_group_id: number
+  /** 被单次调课挪走的教学周：这几周不上（补课是另一条记录） */
+  skip_weeks?: number[]
+  /** 由哪张调课申请补出来的单次补课 */
+  source_change_id?: number | null
 }
 
 export interface College {

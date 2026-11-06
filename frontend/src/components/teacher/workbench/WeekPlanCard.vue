@@ -35,10 +35,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ArrowRight, Calendar } from '@element-plus/icons-vue'
 import { getTeacherSchedules, type ScheduleItem } from '@/api/teacher'
 import { getTeacherTasks, type TeacherTask } from '@/api/teacherTask'
+import { onRealtimeData } from '@/utils/realtime'
 import { mergePlanItems, type PlanItem } from '@/utils/teacherPlan'
 
 const emit = defineEmits<{ 'open-schedule': [] }>()
@@ -121,13 +122,16 @@ async function load(silent = false) {
   }
 }
 
-onMounted(load)
-/** 从其它页签切回首页时静默刷新：数据已在，不再亮 loading，避免切页瞬间闪一下 */
-let activatedOnce = false
-onActivated(() => {
-  if (activatedOnce) load(true)
-  else activatedOnce = true
-})
+onMounted(() => { void load(true) })
+
+/**
+ * 实时更新：本周计划 = 任务 + 旧日程，任务变更即静默重拉。
+ * 原先用 onActivated 刷新 —— 本组件是工作台内嵌卡片、不是 keep-alive 直达的路由页面，
+ * onActivated 永不触发（死代码），新增/办结任务后本周计划一直不更新。
+ */
+const offRealtime = onRealtimeData(['teacher-tasks', 'teacher-dashboard'], () => { void load(true) })
+onBeforeUnmount(offRealtime)
+
 defineExpose({ reload: load })
 </script>
 

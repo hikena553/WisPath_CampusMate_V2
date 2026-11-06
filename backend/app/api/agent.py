@@ -1,14 +1,10 @@
-import asyncio
 import json
 import logging
-import secrets
 import time
 from datetime import date, timedelta
-from types import SimpleNamespace
-from urllib.parse import quote
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request, Query
-from fastapi.responses import Response, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -24,11 +20,10 @@ from app.models.leave import LeaveRequest, LeaveStatus
 from app.models.plan import PlanTask, StudyPlan, TaskStatus
 from app.schemas.agent import ChatRequest
 from app.services.agent_service import chat, generate_reply
-from app.services.llm_service import speech_to_text, _get_client, _get_llm_config, build_system_prompt
-from app.services.prompts import build_recommend_questions_prompt
+from app.services.llm_service import speech_to_text, build_system_prompt
 from app.services.proactive_engine import evaluate_student
 from app.services.proactive_insight import generate_insight, get_cached_insight
-from app.services.daily_report import build_daily_report, render_markdown, report_filename
+from app.services.daily_report import build_daily_report
 from app.services.teacher_daily_report import build_teacher_daily_report
 from app.utils.rate_limiter import check_rate_limit
 
@@ -40,8 +35,6 @@ RATE_CHAT_PER_MIN = 30
 RATE_ANALYZE_PER_MIN = 20
 RATE_RECOMMENDATIONS_PER_MIN = 10
 RATE_STT_PER_MIN = 10
-# 导出票据：每张票 3 分钟有效，正常用户点两三次够了；限流挡住连点/脚本换票
-RATE_REPORT_EXPORT_PER_MIN = 6
 
 
 def _client_ip(request: Request) -> str:
@@ -145,7 +138,8 @@ async def speech_to_text_api(
         raise HTTPException(502, str(e))
 
 
-# 各角色默认推荐问题（统一 4 条：无历史/取数失败时的兜底）
+# 各角色默认推荐问题（固定 4 条，全部必须是智能体工具真实支持的问法；
+# 推荐语句只来自「数据信号 + 本清单」，不做 LLM 自由生成，避免推荐出系统不支持的问题）
 DEFAULT_RECOMMENDATIONS: dict[UserRole, list[str]] = {
     UserRole.STUDENT: [
         "帮我查一下下周的课程安排",
@@ -155,27 +149,20 @@ DEFAULT_RECOMMENDATIONS: dict[UserRole, list[str]] = {
     ],
     UserRole.TEACHER: [
         "帮我查看今天的待办任务",
-        "查一下班级学生的考勤情况",
-        "帮我看看最近的校园公告",
-        "查询学生的成长记录",
+        "我的学生情况如何",
+        "有哪些学生请假待我审批",
+        "有哪些学生求助待我受理",
     ],
     UserRole.ADMIN: [
-        "帮我查看本周的校园公告",
-        "查一下平台的用户统计",
-        "有什么待处理的系统事项",
-        "帮我查一下通知发布情况",
+        "帮我查看今天的待办任务",
+        "帮我看看最近的教务处公告",
+        "帮我记一条成长档案",
+        "帮我查看这个月的日程安排",
     ],
 }
 
 # 推荐条数：与前端推荐区排版一致（固定 4 条，给矮屏留出欢迎语空间）
 RECOMMEND_COUNT = 4
-
-# 各角色可涵盖的功能范围（用于引导 LLM 生成推荐）
-ROLE_FEATURES: dict[UserRole, str] = {
-    UserRole.STUDENT: "课表、成绩、请假、通知、考试、成长记录、学习计划、今日任务、打卡、作品集、社区帖子、资源中心、个人画像等",
-    UserRole.TEACHER: "待办任务、学生考勤、学生档案、成长记录、校园公告、班级公告、教学日程等",
-    UserRole.ADMIN: "校园公告、通知发布、用户管理、数据统计、系统事项等",
-}
 
 
 def _collect_recommend_signals(user: User, db: Session) -> tuple[list[str], list[str]]:
@@ -333,12 +320,10 @@ def _collect_recommend_signals(user: User, db: Session) -> tuple[list[str], list
     return context, questions
 
 
-# ==================== 推荐缓存 / 后台生成 ====================
-# 首屏不能等 LLM：一次生成 1~10s，用户感知就是「为你推荐很久才出来」。
-# 策略：响应只走「信号 + 默认」的本地计算（毫秒级），个性化 LLM 结果放后台算，
-# 算完写回缓存给下一次请求用；同一用户 5 分钟内直接命中缓存。
+# ==================== 推荐缓存 ====================
+# 推荐只走「数据信号 + 预设清单」的本地计算（毫秒级）；
+# 同一用户 5 分钟内直接命中缓存。
 _RECO_CACHE_TTL_SECONDS = 300
-_RECO_LLM_TIMEOUT_SECONDS = 8.0
 _reco_cache: dict = {}
 
 
@@ -373,75 +358,18 @@ def _merge_recommendations(*groups) -> list:
     return merged
 
 
-async def _refresh_recommendations_in_background(
-    user_id: int, role: UserRole, history_text: str, context: list
-) -> None:
-    """响应之后再让 LLM 生成个性化推荐，写回缓存给下一次用。"""
-    try:
-        generated = await asyncio.wait_for(
-            _generate_recommendations_by_llm(
-                SimpleNamespace(role=role), history_text, context
-            ),
-            timeout=_RECO_LLM_TIMEOUT_SECONDS,
-        )
-    except Exception as e:
-        logger.warning("后台生成推荐失败/超时: %s", e)
-        return
-    defaults = DEFAULT_RECOMMENDATIONS.get(role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT])
-    merged = _merge_recommendations(generated, defaults)
-    _reco_cache_set(user_id, role, merged)
-
-
-async def _generate_recommendations_by_llm(
-    user: User, history_text: str, context: list[str]
-) -> list[str]:
-    """有历史对话时，让 LLM 结合画像/信号/历史生成推荐。失败返回空列表。"""
-    role_label = "学生" if user.role == UserRole.STUDENT else "教师" if user.role == UserRole.TEACHER else "管理员"
-    context_text = "\n".join(context) if context else "（暂无）"
-    prompt = build_recommend_questions_prompt(
-        role_label=role_label,
-        context_text=context_text,
-        history_text=history_text,
-        count=RECOMMEND_COUNT,
-        features=ROLE_FEATURES.get(user.role, ROLE_FEATURES[UserRole.STUDENT]),
-    )
-
-    try:
-        config = _get_llm_config()
-        client = _get_client()
-        response = await client.chat.completions.create(
-            model=config['model'],
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-            max_tokens=300,
-        )
-        content = response.choices[0].message.content or ""
-        import re
-        match = re.search(r'\[.*?\]', content, re.DOTALL)
-        if not match:
-            return []
-        items = json.loads(match.group())
-        return [str(q).strip() for q in items if isinstance(q, str) and str(q).strip()]
-    except Exception as e:
-        logger.error("生成推荐失败: %s", e)
-        return []
-
-
 @router.get("/recommendations")
 async def get_recommendations(
     request: Request,
-    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """根据用户角色、画像与真实待办生成推荐问题（固定返回 RECOMMEND_COUNT 条）。
+    """根据用户角色与真实待办数据生成推荐问题（固定返回 RECOMMEND_COUNT 条）。
 
-    首屏必须秒回：LLM 生成动辄 1~10s，放在响应路径里就是「打开 App 后为你推荐很久才出来」。
-    所以：
-      1. 命中缓存（同一用户 5 分钟内）直接返回；
-      2. 未命中先用「信号 + 默认」的本地计算立刻返回（毫秒级）；
-      3. 有历史对话时，把 LLM 个性化生成丢到后台任务，算完写回缓存，
-         下一次请求（重新进页面 / 再开 App）拿到个性化结果。"""
+    推荐语句只允许来自两个来源，保证每一条都是智能体真实支持的问法：
+      1. `_collect_recommend_signals` 由真实数据信号得出的候选（有到期任务/待审批请假等才出现）；
+      2. `DEFAULT_RECOMMENDATIONS` 各角色预设清单。
+    不做 LLM 自由生成——生成的问题可能指向已下线或不存在的功能。"""
     check_rate_limit(f"agent:rec:user:{user.id}", RATE_RECOMMENDATIONS_PER_MIN, 60, "请求过于频繁，请稍候再试")
 
     cached = _reco_cache_get(user.id, user.role)
@@ -451,27 +379,7 @@ async def get_recommendations(
     default_recommendations = DEFAULT_RECOMMENDATIONS.get(
         user.role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT]
     )[:RECOMMEND_COUNT]
-    context, signal_questions = _collect_recommend_signals(user, db)
-
-    # 最近对话只用于个性化：不在响应路径上等 LLM
-    recent_messages = (
-        db.query(ConversationMessage)
-        .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
-        .filter(Conversation.user_id == user.id)
-        .order_by(ConversationMessage.timestamp.desc())
-        .limit(20)
-        .all()
-    )
-
-    history_text = ""
-    for msg in reversed(recent_messages):
-        role = "用户" if msg.role == "user" else "助手"
-        history_text += role + ": " + msg.content[:200] + chr(10)
-
-    if history_text.strip():
-        background_tasks.add_task(
-            _refresh_recommendations_in_background, user.id, user.role, history_text, context
-        )
+    _context, signal_questions = _collect_recommend_signals(user, db)
 
     merged = _merge_recommendations(signal_questions, default_recommendations)
     _reco_cache_set(user.id, user.role, merged)
@@ -543,99 +451,25 @@ async def get_proactive_insight(user: User = Depends(get_current_user), db: Sess
 
 
 @router.get("/daily-report")
-async def get_daily_report(
-    refresh: bool = Query(False, description="true=跳过服务端 10 分钟缓存，重新生成（「重新生成」按钮用）"),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+async def get_daily_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """AI 今日报告：心情（今日优先，缺省沿用昨晚）+ 今日/遗留任务 + 已实现积累 + 实时天气。
 
     报告含运势、四段带标注的正文，以及可一键加入学习计划的建议。
     天气/LLM 不可用时自动降级，接口始终返回可渲染的内容。
-    ``refresh=1`` 强制重跑（事实指纹未变时也会重新措辞），供页面「重新生成」使用。
     """
     if user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="今日报告仅学生可用")
-    return await build_daily_report(db, user, force_refresh=refresh)
-
-
-# ==================== 今日报告导出（浏览器下载） ====================
-# 导出必须走浏览器下载：前端拼 Blob + a.download 在手机端（尤其 WebView）没有下载器接管，
-# 点了既没有进度也没有「文件去哪了」的提示。这里给一个带 Content-Disposition 的真实链接，
-# 浏览器/系统浏览器会用自己的下载器接住，用户能在通知栏和「下载」里看到。
-#
-# 认证用一次性短票据而不是 Cookie：外跳到系统浏览器后拿不到 WebView 里的登录态，
-# 票据只绑定本人、有效期 3 分钟，够浏览器发起下载即可。
-
-_EXPORT_TICKETS: dict[str, tuple[int, float]] = {}
-EXPORT_TICKET_TTL = 180
-
-
-def _prune_export_tickets(now: float) -> None:
-    for key, (_, expire_at) in list(_EXPORT_TICKETS.items()):
-        if expire_at < now:
-            _EXPORT_TICKETS.pop(key, None)
-
-
-@router.post("/daily-report/export-ticket")
-def create_daily_report_export_ticket(user: User = Depends(get_current_user)):
-    """换一枚导出票据：前端拿到 url 后交给浏览器下载，不再自己生成文件。"""
-    if user.role != UserRole.STUDENT:
-        raise HTTPException(status_code=403, detail="今日报告仅学生可用")
-    check_rate_limit(
-        f"agent:daily-report:export:user:{user.id}",
-        RATE_REPORT_EXPORT_PER_MIN, 60, "导出太频繁了，请稍后再试",
-    )
-    now = time.time()
-    _prune_export_tickets(now)
-    ticket = secrets.token_urlsafe(24)
-    _EXPORT_TICKETS[ticket] = (user.id, now + EXPORT_TICKET_TTL)
-    return {
-        "ticket": ticket,
-        "url": f"/api/agent/daily-report/export?ticket={ticket}",
-        "expires_in": EXPORT_TICKET_TTL,
-    }
-
-
-@router.get("/daily-report/export")
-async def export_daily_report(ticket: str = Query(..., description="导出票据"), db: Session = Depends(get_db)):
-    """按票据导出今日报告（Markdown 附件）。票据过期/伪造一律 401，需回页面重新导出。"""
-    hit = _EXPORT_TICKETS.get(ticket)
-    if not hit or hit[1] < time.time():
-        _EXPORT_TICKETS.pop(ticket, None)
-        raise HTTPException(status_code=401, detail="下载链接已过期，请回到页面重新导出")
-
-    user = db.query(User).filter(User.id == hit[0]).first()
-    if not user or user.role != UserRole.STUDENT:
-        _EXPORT_TICKETS.pop(ticket, None)
-        raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录后再导出")
-
-    report = await build_daily_report(db, user)
-    filename = report_filename(report)
-    # filename 用 ASCII 兜底 + filename* 给中文名：老浏览器不认 filename* 时也不会存成乱码
-    disposition = (
-        f"attachment; filename=\"AI-report-{report.get('date', '')}.md\"; "
-        f"filename*=UTF-8''{quote(filename)}"
-    )
-    return Response(
-        content=render_markdown(report),
-        media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": disposition, "Cache-Control": "no-store"},
-    )
+    return await build_daily_report(db, user)
 
 
 @router.get("/teacher-daily-report")
-async def get_teacher_daily_report(
-    refresh: bool = Query(False, description="true=跳过服务端 10 分钟缓存"),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+async def get_teacher_daily_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """教师 AI 日报：昨日复盘 + 今日梳理 + 学生成长关注 + 明日规划 + 今日运势。
 
     事实全部由服务端按教师名下数据计算，LLM 仅负责措辞与重点标注；
     LLM 不可用时自动降级为规则文案，接口始终返回可渲染的内容。
-    刷新会带 ``?refresh=1`` 绕过服务端缓存（同一事实指纹不再复用旧文案）。
+    刷新会带 ``?refresh=1`` 绕过前端缓存，服务端 10 分钟内的事实相同即复用。
     """
     if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="教师日报仅教师可用")
-    return await build_teacher_daily_report(db, user, force_refresh=refresh)
+    return await build_teacher_daily_report(db, user)

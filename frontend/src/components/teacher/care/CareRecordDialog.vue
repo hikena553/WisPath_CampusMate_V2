@@ -80,6 +80,7 @@ import { InfoFilled, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
+import { emitDataChange } from '@/utils/dataSync'
 import {
   createCareRecord,
   updateCareRecord,
@@ -195,6 +196,9 @@ async function submit() {
       })
     }
     ElMessage.success(isEdit.value ? '记录已更新' : '记录已保存')
+    // 广播业务域变更：工作台「我的工作量」（关怀/谈心/评语、本周办结）立即静默重拉。
+    // 后端虽已通过 SSE 推送，但本地写操作走本地总线可以省掉一次往返，体感是「关弹窗即变」。
+    emitDataChange(['teacher-care', 'teacher-tasks', 'teacher-dashboard'], false)
     emit('update:modelValue', false)
     emit('saved', saved)
   } catch {

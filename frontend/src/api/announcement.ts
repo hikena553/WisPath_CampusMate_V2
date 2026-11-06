@@ -8,7 +8,18 @@ export interface AnnouncementItem {
   content: string
   urgency: 'normal' | 'important' | 'urgent'
   attachment_url: string | null
+  /** 发布目标班级；null 表示发给名下全体学生 */
+  class_group_id: number | null
+  /** 后端冗余回传的班级名，null/空串表示「全体学生」 */
+  class_name: string
   created_at: string
+}
+
+/** 教师可选的可发布班级（来自名下学生实际所属班级） */
+export interface TeacherClassOption {
+  id: number
+  name: string
+  student_count: number
 }
 
 // 教师端
@@ -16,10 +27,15 @@ export function getTeacherAnnouncements() {
   return request.get<AnnouncementItem[]>('/teacher/announcements')
 }
 
+/** 发布公告时可选的班级列表，只含该教师名下有学生的班级 */
+export function getAnnouncementClasses() {
+  return request.get<TeacherClassOption[]>('/teacher/announcement-classes')
+}
+
 export function createAnnouncement(formData: FormData) {
-  return request.post<AnnouncementItem>('/teacher/announcements', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  // 不要手写 Content-Type: multipart/form-data —— 那样会丢掉 boundary，
+  // 后端无法解析表单体。交给 axios/浏览器按 FormData 自动生成带 boundary 的头。
+  return request.post<AnnouncementItem>('/teacher/announcements', formData)
 }
 
 export function deleteAnnouncement(id: number) {

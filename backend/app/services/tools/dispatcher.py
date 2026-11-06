@@ -52,9 +52,11 @@ from .teacher import (
     _query_growth_stats,
     _query_help_requests,
     _query_learning_events,
+    _query_messages_with_student,
     _query_my_courses,
     _query_my_portfolio,
     _query_my_survey_results,
+    _query_teacher_notifications,
     _query_pending_leaves,
     _query_student_detail,
     _query_student_insight,
@@ -154,6 +156,9 @@ async def execute_tool(name: str, args: dict, user: User, conv_id: int | None = 
             "reply_help_request": _reply_help_request,
             # 教学域（只读课表 / 任课教师）
             "query_my_courses": _query_my_courses,
+            # 站内通知 / 消息查询（查询反馈闭环）
+            "query_teacher_notifications": _query_teacher_notifications,
+            "query_messages_with_student": _query_messages_with_student,
         }
         fn = handler.get(name)
         if not fn:

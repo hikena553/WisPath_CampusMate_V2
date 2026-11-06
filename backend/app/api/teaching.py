@@ -137,6 +137,8 @@ def _to_course_out(
                 credit=c.credit,
                 student_count=counts.get(c.class_group_id, 0),
                 attendance_sessions=sessions.get(c.id, 0),
+                skip_weeks=[int(x) for x in (c.skip_weeks or "").split(",") if x.strip().isdigit()],
+                source_change_id=c.source_change_id,
             )
         )
     return out
@@ -333,7 +335,15 @@ def schedule_view(
     out = _to_course_out(db, courses, semester=sem)
 
     today_wd = date.today().isoweekday()
-    today_courses = [c for c in out if c.day_of_week == today_wd]
+    cur_week, _week_label = _week_of_semester(sem)
+
+    def _in_week(c) -> bool:
+        """这条课在第 cur_week 周是否真的要上（学期范围 + 单次调课挪走的周）。"""
+        if not (c.week_start <= (cur_week or c.week_start) <= c.week_end):
+            return False
+        return cur_week not in (c.skip_weeks or [])
+
+    today_courses = [c for c in out if c.day_of_week == today_wd and _in_week(c)]
 
     return ScheduleOut(
         semester=sem,
@@ -343,6 +353,7 @@ def schedule_view(
         courses=out,
         today_courses=today_courses if scope == "mine" else today_courses,
         today_course_count=len(today_courses),
-        week_course_count=len(out),
+        week_course_count=len([c for c in out if _in_week(c)]) if cur_week else len(out),
+        current_week=cur_week,
         total_student_count=sum(c.student_count for c in out),
     )

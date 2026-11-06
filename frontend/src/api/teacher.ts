@@ -13,6 +13,9 @@ export interface StudentSummary {
   latest_crisis_summary: string | null
   latest_crisis_time: string | null
   score: number
+  /** 所属班级：学生名单「班级 → 名单」下钻的分组依据；未分班为 null */
+  class_group_id?: number | null
+  class_name?: string | null
 }
 
 export interface StudentProject {

@@ -686,7 +686,7 @@ const charRatio = computed(() => Math.min(inputCharCount.value / MAX_INPUT_CHARS
 const RECOMMEND_COUNT = 4
 /** 推荐缓存有效期：期内直接复用，避免每次进页面都等一次生成（1~3s） */
 const RECOMMEND_CACHE_TTL = 5 * 60 * 1000
-const RECOMMEND_CACHE_KEY = 'campus_agent_recommend_cache_v2'
+const RECOMMEND_CACHE_KEY = 'campus_agent_recommend_cache_v3' // v3：后端推荐改为纯预设清单，v2 缓存可能存有旧 LLM 随机生成的问题
 
 interface RecommendCacheEntry { items: string[]; at: number }
 
@@ -742,9 +742,16 @@ const FALLBACK_RECOMMENDATIONS: Record<string, string[]> = {
   ],
   teacher: [
     '帮我查看今天的待办任务',
-    '查一下班级学生的考勤情况',
-    '帮我看看最近的校园公告',
-    '查询学生的成长记录',
+    '我的学生情况如何',
+    '有哪些学生请假待我审批',
+    '有哪些学生求助待我受理',
+  ],
+  // 与后端 DEFAULT_RECOMMENDATIONS 对齐：每一条都必须是智能体工具真实支持的问法
+  admin: [
+    '帮我查看今天的待办任务',
+    '帮我看看最近的教务处公告',
+    '帮我记一条成长档案',
+    '帮我查看这个月的日程安排',
   ],
 }
 

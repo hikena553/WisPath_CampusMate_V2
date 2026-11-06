@@ -24,6 +24,8 @@ export interface PortfolioItem {
   review_comment: string | null
   created_at: string
   updated_at: string
+  /** 公开区列表才带：档案所有者姓名 */
+  teacher_name?: string
 }
 
 export interface PortfolioItemPayload {
@@ -77,6 +79,14 @@ export const PORTFOLIO_TYPE_COLOR: Record<PortfolioItemType, string> = {
 
 export function getPortfolioItems(params?: { item_type?: PortfolioItemType; limit?: number; offset?: number }) {
   return request.get<PortfolioItem[]>('/teacher-portfolio', { params })
+}
+
+/**
+ * 公开展示区：只返回标记为「公开展示」的条目。
+ * 这是 visible 字段唯一的对外出口——「仅自己可见」的档案不会出现在这里。
+ */
+export function getPublicPortfolioItems(params?: { item_type?: PortfolioItemType; limit?: number; offset?: number }) {
+  return request.get<PortfolioItem[]>('/teacher-portfolio/public', { params })
 }
 
 export function createPortfolioItem(data: PortfolioItemPayload) {

@@ -28,6 +28,10 @@ export interface TeachingCourse {
   student_count: number
   /** 本学期已点名课次数（后端历史字段，前端课表不再展示） */
   attendance_sessions: number
+  /** 被单次调课挪走的教学周：这几周该课不上（补课是另一条记录） */
+  skip_weeks?: number[]
+  /** 由哪张调课申请补出来的单次补课（普通课为 null） */
+  source_change_id?: number | null
 }
 
 // ── 课表：我的 / 按任课教师 / 按班级 ─────────────────────────────
@@ -74,6 +78,8 @@ export interface ScheduleView {
   today_courses: TeachingCourse[]
   today_course_count: number
   week_course_count: number
+  /** 当前教学周（周次选择器默认值；学期外为 null） */
+  current_week: number | null
   total_student_count: number
 }
 

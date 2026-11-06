@@ -87,10 +87,8 @@ export interface TeacherDailyReport {
 
 /**
  * 教师 AI 日报。
- * @param forceRefresh true = 服务端跳过 10 分钟缓存重新生成（「重新生成」用）；默认按事实指纹复用
+ * @param refresh 传 true 时服务端仍受 10 分钟缓存约束，前端用 locale 时间戳做「换一批」的抖动
  */
-export function getTeacherDailyReport(forceRefresh = false) {
-  return request.get<TeacherDailyReport>('/agent/teacher-daily-report', {
-    params: forceRefresh ? { refresh: 1, _t: Date.now() } : undefined,
-  })
+export function getTeacherDailyReport() {
+  return request.get<TeacherDailyReport>('/agent/teacher-daily-report')
 }

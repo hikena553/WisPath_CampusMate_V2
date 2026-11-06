@@ -4240,9 +4240,11 @@ function onGlobalClick(e: MouseEvent) {
     backdrop-filter: saturate(180%) blur(14px);
     -webkit-backdrop-filter: saturate(180%) blur(14px);
     border-bottom: 1px solid var(--dt-divider);
-    /* 顶部安全区：聊天标题栏白底铺进状态栏，键盘把聊天列贴到可见区顶端时也不会钻进状态栏下面 */
-    min-height: calc(52px + env(safe-area-inset-top, 0px));
-    padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 6px;
+    /* 顶部安全区：聊天标题栏白底铺进状态栏，键盘把聊天列贴到可见区顶端时也不会钻进状态栏下面。
+       高度改取 --appbar-h（原先固定 52px），与其它页头的高度曲线保持一致，
+       窄屏手机上不再比别的页高一截。 */
+    min-height: var(--appbar-h);
+    padding: var(--sat, 0px) var(--appbar-px) 0;
   }
   .chat-header .el-button { color: var(--dt-text); }
   .chat-name { color: var(--dt-text); font-size: 16.5px; }

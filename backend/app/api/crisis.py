@@ -1,5 +1,6 @@
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.user import User, UserRole
-from app.models.crisis import AIDialogSummary, InterventionType
+from app.models.crisis import AIDialogSummary, CrisisLevel, InterventionType
 from app.schemas.crisis import (
     AIDialogSummaryOut,
     CrisisAnalyticsOut,
@@ -203,6 +204,207 @@ def list_student_alerts(student_id: int, user: User = Depends(get_current_user),
             follow_up_date=str(a.follow_up_date) if a.follow_up_date else None,
         ) for a in alerts
     ]
+
+
+@router.get("/monthly-report")
+def get_monthly_report(
+    month: str | None = None,
+    class_group_id: int | None = None,
+    days: int = 30,
+    user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """月度心理工作月报数据：等级分布 / 处置阶段 / SLA / 高频信号（按月聚合）。
+
+    month 格式 YYYY-MM，缺省当月；class_group_id 可选，教师仅限名下学生。
+    """
+    from app.services.crisis_service import analytics as crisis_analytics
+
+    if month:
+        try:
+            _dt = datetime.strptime(month, "%Y-%m")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="month 格式应为 YYYY-MM")
+        now = datetime.now(timezone.utc)
+        span_days = max(1, (now - _dt).days + 1)
+    else:
+        span_days = days
+
+    teacher_id = None if user.role == UserRole.ADMIN else user.id
+    data = crisis_analytics(db, teacher_id=teacher_id, days=span_days)
+
+    rows = []
+    if class_group_id is not None:
+        if user.role != UserRole.ADMIN:
+            in_class = db.query(User).filter(
+                User.class_group_id == class_group_id, User.tutor_id == user.id
+            ).count()
+            if in_class == 0 and db.query(User).filter(User.class_group_id == class_group_id).count() > 0:
+                raise HTTPException(status_code=403, detail="无权查看该班级")
+        class_students = [u.id for u in db.query(User).filter(User.class_group_id == class_group_id).all()]
+        alerts = db.query(AIDialogSummary).filter(AIDialogSummary.student_id.in_(class_students)).all() \
+            if class_students else []
+        rows = [_alert_export_row(db, a) for a in alerts
+                if a.created_at and a.created_at.strftime("%Y-%m") == (month or datetime.now(timezone.utc).strftime("%Y-%m"))]
+    return {
+        "month": month or datetime.now(timezone.utc).strftime("%Y-%m"),
+        "analytics": data.model_dump() if hasattr(data, "model_dump") else data.dict(),
+        "rows": rows,
+    }
+
+
+@router.get("/{alert_id}/advice")
+async def get_alert_advice(alert_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """AI 处置建议：scheme/steps/rationale/taboo（severe 强制附 24h 面谈；模型不可用走规则）。"""
+    if user.role != UserRole.TEACHER and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="仅教师可查看")
+    alert = db.query(AIDialogSummary).filter(AIDialogSummary.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="预警记录不存在")
+    if user.role != UserRole.ADMIN:
+        s = db.query(User).filter(User.id == alert.student_id).first()
+        if not s or s.tutor_id != user.id:
+            raise HTTPException(status_code=403, detail="无权查看该预警")
+    from app.services import crisis_advisor_service
+    return await crisis_advisor_service.get_advice(db, alert)
+
+
+# ============================ 干预档案导出（脱敏） ============================
+
+# 触发信号分类映射：导出与家长侧内容只出现分类，不出现敏感词原文与对话片段
+_SIGNAL_CATEGORY = [
+    ("极端行为信号", ("自杀", "自残", "不想活", "想死", "轻生", "了结", "割腕", "跳楼", "安眠药")),
+    ("睡眠困扰", ("失眠", "睡不着", "熬夜")),
+    ("情绪低落", ("抑郁", "没意思", "活着累", "撑不住", "崩溃", "绝望", "想哭", "难受", "消极")),
+    ("焦虑压力", ("焦虑", "压力大", "心慌", "害怕", "紧张")),
+    ("适应困扰", ("不想上学", "厌学", "逃避")),
+]
+
+
+def _signal_category(keywords_matched: str | None) -> str:
+    """把命中敏感词归为脱敏分类，保证原始词不出库。"""
+    if not keywords_matched:
+        return "情绪信号"
+    kws = [k.strip() for k in keywords_matched.split(",") if k.strip()]
+    for category, words in _SIGNAL_CATEGORY:
+        if any(any(w in kw or kw in w for w in words) for kw in kws):
+            return category
+    return "情绪信号"
+
+
+def _alert_export_row(db: Session, a: AIDialogSummary) -> dict:
+    """导出统一序列化层：物理上不含 raw_snippet 与敏感词原文。"""
+    student = db.query(User).filter(User.id == a.student_id).first()
+    resolver = db.query(User).filter(User.id == a.resolved_by).first() if a.resolved_by else None
+    return {
+        "student_name": student.name if student else "",
+        "date": a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "",
+        "signal_category": _signal_category(a.keywords_matched),
+        "level": {"severe": "高危", "moderate": "中度", "mild": "轻度", "normal": "正常"}.get(
+            safe_enum_val(a.level) or "normal", "正常"
+        ),
+        "summary": (a.summary or "")[:120],
+        "intervention": a.intervention_type.value if a.intervention_type else "未登记",
+        "intervention_note": (a.intervention_note or "")[:120],
+        "follow_up_date": str(a.follow_up_date) if a.follow_up_date else "",
+        "resolved": "已闭环" if a.resolved else "未闭环",
+        "resolved_at": a.resolved_at.strftime("%Y-%m-%d %H:%M") if a.resolved_at else "",
+        "resolver": resolver.name if resolver else "",
+    }
+
+
+@router.get("/students/{student_id}/export")
+def export_student_crisis_archive(
+    student_id: int,
+    start: str | None = None,
+    end: str | None = None,
+    level: str | None = None,
+    intervention_type: str | None = None,
+    resolved: bool | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """按学生导出干预档案 Excel：支持时间范围/等级/干预类型/闭环状态筛选。
+
+    合规：导出动作写审计日志；内容经 _alert_export_row 序列化，不含原始对话与敏感词原文。
+    """
+    from fastapi.responses import StreamingResponse
+    import io
+    from datetime import datetime as _dt
+    from openpyxl import Workbook
+
+    if user.role != UserRole.TEACHER and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="仅教师可导出")
+    student = db.query(User).filter(User.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    if user.role != UserRole.ADMIN and student.tutor_id != user.id:
+        raise HTTPException(status_code=403, detail="无权导出该学生档案")
+
+    query = db.query(AIDialogSummary).filter(AIDialogSummary.student_id == student_id)
+    if start:
+        try:
+            query = query.filter(AIDialogSummary.created_at >= _dt.strptime(start, "%Y-%m-%d"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start 格式应为 YYYY-MM-DD")
+    if end:
+        try:
+            query = query.filter(
+                AIDialogSummary.created_at < _dt.strptime(end, "%Y-%m-%d") + timedelta(days=1)
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="end 格式应为 YYYY-MM-DD")
+    if level:
+        try:
+            query = query.filter(AIDialogSummary.level == CrisisLevel(level))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"无效等级: {level}")
+    if intervention_type:
+        try:
+            query = query.filter(AIDialogSummary.intervention_type == InterventionType(intervention_type))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"无效干预类型: {intervention_type}")
+    if resolved is not None:
+        query = query.filter(AIDialogSummary.resolved == resolved)
+
+    rows = [_alert_export_row(db, a) for a in query.order_by(AIDialogSummary.created_at.asc()).all()]
+
+    # 审计：谁在何时导出了谁的档案、什么范围
+    logger.info(
+        "[AUDIT][crisis-export] teacher=%s student=%s rows=%s range=%s~%s level=%s intervention=%s resolved=%s",
+        user.id, student_id, len(rows), start, end, level, intervention_type, resolved,
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "干预档案"
+    headers = ["学生", "时间", "触发信号分类", "等级", "摘要", "干预类型", "处置记录",
+               "随访日期", "闭环状态", "闭环时间", "处置人"]
+    keys = ["student_name", "date", "signal_category", "level", "summary", "intervention",
+            "intervention_note", "follow_up_date", "resolved", "resolved_at", "resolver"]
+    ws.append(headers)
+    for r in rows:
+        ws.append([r[k] for k in keys])
+    # 汇总行
+    ws.append([])
+    ws.append([
+        "汇总：共", len(rows), "条",
+        f"高危 {sum(1 for r in rows if r['level'] == '高危')}",
+        f"中度 {sum(1 for r in rows if r['level'] == '中度')}",
+        f"已闭环 {sum(1 for r in rows if r['resolved'] == '已闭环')}",
+    ])
+    for col_idx, width in zip("ABCDEFGHIJK", (10, 18, 14, 8, 40, 12, 40, 12, 10, 18, 10)):
+        ws.column_dimensions[col_idx].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"crisis-archive-{student.name or student_id}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @router.post("/{alert_id}/resolve")

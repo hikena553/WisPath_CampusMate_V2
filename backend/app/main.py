@@ -160,17 +160,6 @@ for _noisy_logger in ("httpx", "httpcore", "hpack", "openai", "urllib3"):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
 
-def _warm_resume_render() -> None:
-    """后台预热简历 PDF 渲染（首次要 3~7 秒），失败只记日志，不影响启动。"""
-    try:
-        from app.services.resume_export import warm_preview_pipeline
-
-        warm_preview_pipeline()
-        logger.info("简历渲染管线预热完成")
-    except Exception as exc:  # noqa: BLE001 - 预热失败不该影响任何功能
-        logger.info("简历渲染预热跳过: %s", exc)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 崩溃取证：必须最早启用，才能覆盖迁移/种子阶段的意外退出
@@ -188,27 +177,8 @@ async def lifespan(app: FastAPI):
         logger.error("schema 对账异常（不影响启动）: %s", exc)
     # 初始化种子数据（幂等）
     _with_retry(lambda: importlib.import_module("app.seed"), label="种子数据初始化")
-    # 数据修复（幂等）：早期 arXiv / LMArena 抓取把 feed_key 写死成 "arxiv" / "lmarena"，
-    # 与 feed_sources.feed_key（按域名生成）不一致。资讯账号的画布连接线与每日汇总都按
-    # 后者过滤，这些条目因此既不转发也不进汇总 —— 「论文速递」账号会静默停更。
-    # 抓取端已修，这里把库里残留的旧值对齐一次（无旧值时只开销一条 SELECT）。
-    try:
-        from app.core.database import SessionLocal
-        from app.services.feed_ingest import backfill_source_feed_keys
-
-        _fix_db = SessionLocal()
-        try:
-            backfill_source_feed_keys(_fix_db)
-        finally:
-            _fix_db.close()
-    except Exception as exc:  # noqa: BLE001 - 修复失败不影响启动
-        logger.warning("资讯条目 feed_key 回填跳过: %s", exc)
     # 启动后台周期任务，退出时统一回收
     tasks = start_periodic_tasks()
-    # 简历渲染预热：导入 fpdf/pymupdf、解析中文字体要好几秒，放后台线程跑，
-    # 别让第一个打开「导出简历」的同学替全站等这段冷启动（测试环境跳过）。
-    if not os.environ.get("TESTING"):
-        threading.Thread(target=_warm_resume_render, name="resume-render-warmup", daemon=True).start()
     logger.info("应用启动完成，后台周期任务 %d 个", len(tasks))
     try:
         yield

@@ -91,26 +91,6 @@ export function unbindQqApi() {
   return request.post<UserInfo>('/auth/qq/unbind')
 }
 
-/** QQ 互联移动端（Android SDK 直通）授权：已绑定 → login；未绑定 → 注册票据引导补全信息 */
-export interface QqMobileAuthorizeResult {
-  status: 'login' | 'unregistered'
-  login?: LoginResponse
-  register_ticket?: string
-  nickname?: string | null
-}
-
-export function qqMobileAuthorizeApi(accessToken: string, openid: string) {
-  return request.post<QqMobileAuthorizeResult>('/auth/qq/mobile/authorize', {
-    access_token: accessToken,
-    openid,
-  })
-}
-
-/** App 内把当前登录账号与 SDK 授权的 QQ 建立绑定（被其他账号占用时 409） */
-export function qqMobileBindApi(accessToken: string, openid: string) {
-  return request.post<UserInfo>('/auth/qq/mobile/bind', { access_token: accessToken, openid })
-}
-
 // ─── 学生自助注册 ───────────────────────────────────────
 export interface RegisterOptions {
   colleges: { id: number; name: string }[]

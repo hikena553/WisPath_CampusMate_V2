@@ -30,6 +30,24 @@ def get_report(user: User = Depends(_teacher_only), db: Session = Depends(get_db
     return teacher_portfolio_service.report(db, user.id)
 
 
+@router.get("/public", response_model=list[PortfolioItemOut])
+def list_public(
+    item_type: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(_teacher_only),
+    db: Session = Depends(get_db),
+):
+    """公开展示区：仅返回建了「公开展示」的条目，private 一律不出现。
+
+    这是 ``visibility`` 字段的唯一对外出口，让「公开 / 仅自己」真正生效。
+    """
+    items, _ = teacher_portfolio_service.list_public_items(
+        db, item_type=item_type, limit=limit, offset=offset
+    )
+    return items
+
+
 @router.post("/ai-draft", response_model=PortfolioAIDraftOut)
 async def ai_draft(
     payload: PortfolioAIDraftIn,

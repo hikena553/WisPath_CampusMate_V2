@@ -25,8 +25,6 @@ export interface ChatPushEvent {
   id?: number
   sender_id?: number
   sender_name?: string
-  /** 发送者头像：单聊推送直接带，群聊推送可能为空 */
-  sender_avatar?: string | null
   content?: string
   created_at?: string
   group_id?: number

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<template>
+<template>
   <div
     class="tui-page"
     :class="{ 'pull-enabled': isMobile }"
@@ -15,7 +15,8 @@
       <div v-if="!isMobile" class="apm-head">
         <div class="apm-head-main">
           <h2>审批管理</h2>
-          <p>请假 {{ pendingLeaves.length }} · 办事 {{ pendingTickets.length }} · 材料 {{ pendingMaterials.length }}</p>
+          <p>请假 {{ pendingLeaves.length }} · 办事 {{ pendingTickets.length }} · 材料 {{ pendingMaterials.length }}
+          <template v-if="pendingScheduleChanges.length"> · 调课 {{ pendingScheduleChanges.length }}</template></p>
         </div>
         <span class="apm-head-total"><b>{{ totalPending }}</b> 条待处理</span>
       </div>
@@ -24,7 +25,6 @@
         v-model="activeTab"
         class="tui-seg-wrap ap-status-tabs"
         :options="tabOptions"
-        @update:model-value="() => loadData()"
       />
 
       <!-- 闭环：从学生成长档案聚焦该生审批事项（桌面 / 移动共用） -->
@@ -43,7 +43,8 @@
         <div class="apm-sum">
           <b>{{ totalPending }}</b><span>条待你处理</span>
           <div class="sp"></div>
-          <span class="apm-sum-meta">请假 {{ pendingLeaves.length }} · 办事 {{ pendingTickets.length }} · 材料 {{ pendingMaterials.length }}</span>
+          <span class="apm-sum-meta">请假 {{ pendingLeaves.length }} · 办事 {{ pendingTickets.length }} · 材料 {{ pendingMaterials.length }}
+          <template v-if="pendingScheduleChanges.length"> · 调课 {{ pendingScheduleChanges.length }}</template></span>
         </div>
 
         <div class="apm-filters">
@@ -119,10 +120,31 @@
           <div v-if="mobileKind === 'material' && !pendingMaterials.length" class="apm-none">暂无待归档材料</div>
         </div>
 
+        <!-- 调课 / 增课：教师自己提交、等教务审批的申请（进度自查） -->
+        <div v-if="mobileKind === 'all' || mobileKind === 'schedule'" class="apm-group">
+          <div v-if="mobileKind === 'all' && pendingScheduleChanges.length" class="apm-group-hd">
+            <span>调课 / 增课</span><em>{{ pendingScheduleChanges.length }} 条审批中</em>
+          </div>
+          <div v-for="r in pendingScheduleChanges" :key="'schedule-' + r.id" class="apm-row apm-row-schedule">
+            <span class="apm-av apm-av-schedule">{{ r.kind === 'swap' ? '调' : '增' }}</span>
+            <div class="apm-row-main">
+              <b>{{ r.course_name }}</b>
+              <span>
+                {{ r.class_name }} · {{ weekdayText(r.day_of_week) }} 第{{ r.start_period }}-{{ r.end_period }}节
+                · {{ timeLabel(r.created_at) }}
+              </span>
+            </div>
+            <div class="apm-room-ops">
+              <button type="button" class="apm-mini" @click="cancelMyChange(r.id)">撤回</button>
+            </div>
+          </div>
+          <div v-if="mobileKind === 'schedule' && !pendingScheduleChanges.length" class="apm-none">暂无审批中的调课 / 增课申请</div>
+        </div>
+
         <div v-if="!totalPending" class="tui-empty">
           <span class="tui-empty-icon"><el-icon :size="24"><CircleCheck /></el-icon></span>
           <span class="tui-empty-title">待办已清空</span>
-          <span class="tui-empty-desc">新的请假、办事或材料提交后会出现在这里</span>
+          <span class="tui-empty-desc">新的请假、办事、材料或调课增课申请提交后会出现在这里</span>
         </div>
       </div>
 
@@ -207,7 +229,6 @@
             v-model="ticketScope"
             class="ap-ticket-scope"
             :options="ticketScopeOptions"
-            @update:model-value="() => loadData()"
           />
 
           <!-- 桌面端卡片网格：申请人 / 事项类型 / 事由 / 附件 / 时间 全部收进单张卡片，
@@ -300,7 +321,7 @@
         <div v-if="!totalPending" class="tui-empty">
           <span class="tui-empty-icon"><el-icon :size="24"><CircleCheck /></el-icon></span>
           <span class="tui-empty-title">待办已清空</span>
-          <span class="tui-empty-desc">新的请假、办事或材料提交后会出现在这里</span>
+          <span class="tui-empty-desc">新的请假、办事、材料或调课增课申请提交后会出现在这里</span>
         </div>
       </template>
 
@@ -336,14 +357,16 @@
                   <el-tag :type="row.statusType" size="small" effect="plain">{{ row.statusLabel }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="110" fixed="right">
+              <el-table-column label="操作" width="90" fixed="right">
                 <template #default="{ row }">
+                  <!-- 能进「已通过」的请假只剩查阅，审批动作已在别处完成 -->
                   <el-button
-                    v-if="row.leave && !row.leave.return_confirmed"
+                    v-if="row.leave"
                     type="primary"
                     size="small"
-                    @click="handleConfirmReturn(row.leave)"
-                  >确认返校</el-button>
+                    text
+                    @click="openLeaveDetail(row.leave)"
+                  >详情</el-button>
                   <el-button
                     v-else-if="row.ticket"
                     type="primary"
@@ -351,7 +374,6 @@
                     text
                     @click="openTicketDetail(row.ticket)"
                   >详情</el-button>
-                  <span v-else class="closed-hint">已闭环</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -370,18 +392,17 @@
               <div class="apm-ledger-ft">
                 <span class="apm-status" :class="'is-' + row.statusType">{{ row.statusLabel }}</span>
                 <button
-                  v-if="row.leave && !row.leave.return_confirmed"
+                  v-if="row.leave"
                   type="button"
-                  class="apm-btn apm-btn-ok apm-btn-sm"
-                  @click="handleConfirmReturn(row.leave)"
-                >确认返校</button>
+                  class="apm-mini"
+                  @click="openLeaveDetail(row.leave)"
+                >详情</button>
                 <button
                   v-else-if="row.ticket"
                   type="button"
                   class="apm-mini"
                   @click="openTicketDetail(row.ticket)"
                 >详情</button>
-                <span v-else class="apm-closed">已闭环</span>
               </div>
             </article>
           </div>
@@ -448,7 +469,13 @@
                     text
                     @click="openTicketDetail(row.ticket)"
                   >详情</el-button>
-                  <span v-else class="closed-hint">—</span>
+                  <el-button
+                    v-else-if="row.leave"
+                    type="primary"
+                    size="small"
+                    text
+                    @click="openLeaveDetail(row.leave)"
+                  >详情</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -471,6 +498,12 @@
                   type="button"
                   class="apm-mini"
                   @click="openTicketDetail(row.ticket)"
+                >详情</button>
+                <button
+                  v-else-if="row.leave"
+                  type="button"
+                  class="apm-mini"
+                  @click="openLeaveDetail(row.leave)"
                 >详情</button>
               </div>
             </article>
@@ -654,6 +687,62 @@
       </template>
     </ResponsivePopup>
 
+    <!-- ===================== 请假详情（只读留痕） ===================== -->
+    <!-- 请假审批完成后没有任何操作入口，但老师仍需要回看：起止 / 天数 / 事由 / 审批结论 -->
+    <ResponsivePopup
+      v-model="leaveDetailVisible"
+      title="请假详情"
+      width="420px"
+      align-center
+      destroy-on-close
+      class="ap-dialog"
+    >
+      <div v-if="leaveDetailTarget" class="ap-detail">
+        <div class="tui-section-hint success">
+          <el-icon><InfoFilled /></el-icon>
+          <span>此处为请假留痕信息，仅供查阅，不可再变更状态。</span>
+        </div>
+
+        <div class="ap-detail-head">
+          <div class="ap-detail-who">
+            <span class="ap-detail-name">{{ leaveDetailTarget.student_name || '—' }}</span>
+            <span class="ap-detail-meta">学号 {{ leaveDetailTarget.student_id }}</span>
+          </div>
+          <div class="ap-detail-tags">
+            <el-tag size="small" effect="plain">{{ typeLabel(leaveDetailTarget.leave_type) }}</el-tag>
+            <el-tag size="small" effect="light" :type="leaveDetailStatus(leaveDetailTarget).type">
+              {{ leaveDetailStatus(leaveDetailTarget).label }}
+            </el-tag>
+          </div>
+        </div>
+
+        <el-descriptions :column="1" border size="small" class="ap-detail-desc">
+          <el-descriptions-item label="起止日期">
+            {{ leaveDetailTarget.start_date }} ~ {{ leaveDetailTarget.end_date }}
+          </el-descriptions-item>
+          <el-descriptions-item label="请假天数">{{ leaveDays(leaveDetailTarget) }} 天</el-descriptions-item>
+          <el-descriptions-item label="请假类型">{{ typeLabel(leaveDetailTarget.leave_type) }}</el-descriptions-item>
+          <el-descriptions-item label="请假事由">{{ leaveDetailTarget.reason || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="提交时间">
+            {{ leaveDetailTarget.created_at ? leaveDetailTarget.created_at.slice(0, 16).replace('T', ' ') : '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="leaveDetailTarget.status === 'approved'" label="审批结果">
+            <span class="ap-ok">已通过</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="leaveDetailTarget.status === 'approved'" label="审批时间">
+            {{ leaveDetailTarget.updated_at ? leaveDetailTarget.updated_at.slice(0, 16).replace('T', ' ') : '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="leaveDetailTarget.status === 'rejected'" label="拒绝理由">
+            <span class="ap-bad">{{ leaveDetailTarget.reject_reason || '—' }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+
+      <template #footer>
+        <el-button @click="leaveDetailVisible = false">关闭</el-button>
+      </template>
+    </ResponsivePopup>
+
     <!-- ===================== 请假拒绝（1 字段：移动端=底部动作面板） ===================== -->
     <ActionSheet
       v-model="rejectVisible"
@@ -738,12 +827,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onActivated, onMounted, watch } from 'vue'
 // v6.1 弹窗减负：详情走全屏子页，单字段审批走底部动作面板
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import { useRoute, useRouter } from 'vue-router'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
+
+// keep-alive 缓存需要显式组件名（include 按 name 匹配，见 TeacherLayout cachedNames）
+defineOptions({ name: 'teacher-approval' })
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import TuiSegmented from '@/components/teacher/ui/TuiSegmented.vue'
@@ -754,9 +846,10 @@ import {
   View, Paperclip, Clock, DataAnalysis
 } from '@element-plus/icons-vue'
 import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
-import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, confirmLeaveReturn, getLeaveStats, type LeaveStats } from '@/api/leave'
+import { getPendingLeaves, reviewLeave as reviewLeaveApi, getAllLeaves, analyzeLeave, getLeaveStats, type LeaveStats } from '@/api/leave'
 import { getTickets, approveTicket as approveTicketApi, claimTicket } from '@/api/service'
 import { getApprovalPending, reviewApproval, getApprovalStats, type ApprovalItem, type ApprovalStats } from '@/api/approval'
+import { cancelScheduleChange, getPendingScheduleChanges, WEEKDAY_LABELS, type ScheduleChangeItem } from '@/api/scheduleChange'
 import type { LeaveRequestOut, ServiceTicket } from '@/types'
 import { useResponsive } from '@/composables/useResponsive'
 
@@ -782,17 +875,20 @@ function byStudent(id?: number | null, name?: string | null) {
 function clearStudentFilter() {
   studentFilter.value = null
   router.replace({ path: '/teacher/approval' })
-  loadData()
+  // 聚焦范围变了：徽标计数与当前页签数据都要按「全部学生」重算
+  void loadAllCounts()
+  void loadData()
 }
 
 const activeTab = ref('pending')
-/** 移动端列表筛选：默认全部，请假 / 办事 / 材料一键收窄 */
-const mobileKind = ref<'all' | 'leave' | 'ticket' | 'material'>('all')
+/** 移动端列表筛选：默认全部，请假 / 办事 / 材料 / 调课增课一键收窄 */
+const mobileKind = ref<'all' | 'leave' | 'ticket' | 'material' | 'schedule'>('all')
 const mobileFilterOptions = computed(() => [
   { value: 'all' as const, label: '全部', count: totalPending.value },
   { value: 'leave' as const, label: '请假', count: pendingLeaves.value.length },
   { value: 'ticket' as const, label: '办事', count: pendingTickets.value.length },
   { value: 'material' as const, label: '材料', count: pendingMaterials.value.length },
+  { value: 'schedule' as const, label: '调课', count: pendingScheduleChanges.value.length },
 ])
 
 /** 办事工单视图：共享队列（先到先审）/ 我受理的（责任人是我）——对齐成熟工单系统的 Queue / My tickets */
@@ -804,6 +900,30 @@ const ticketScopeOptions = [
 const pendingLeaves = ref<LeaveRequestOut[]>([])
 const pendingTickets = ref<ServiceTicket[]>([])
 const pendingMaterials = ref<ApprovalItem[]>([])
+/** 我提交、仍在等教务审批的调课 / 增课申请 */
+const pendingScheduleChanges = ref<ScheduleChangeItem[]>([])
+
+function weekdayText(d: number | null | undefined) {
+  return (d && WEEKDAY_LABELS[d]) || '—'
+}
+
+async function loadMyScheduleChanges() {
+  try {
+    pendingScheduleChanges.value = await getPendingScheduleChanges()
+  } catch {
+    pendingScheduleChanges.value = []
+  }
+}
+
+async function cancelMyChange(id: number) {
+  try {
+    await cancelScheduleChange(id)
+    ElMessage.success('已撤回')
+    await loadMyScheduleChanges()
+  } catch {
+    ElMessage.error('撤回失败')
+  }
+}
 
 const stats = ref<ApprovalStats | null>(null)
 const approvedLeaves = ref<LeaveRequestOut[]>([])
@@ -811,7 +931,7 @@ const approvedTickets = ref<ServiceTicket[]>([])
 const rejectedLeaves = ref<LeaveRequestOut[]>([])
 const rejectedTickets = ref<ServiceTicket[]>([])
 const leaveStats = ref<LeaveStats>({
-  total: 0, approved: 0, rejected: 0, pending: 0, awaiting_return: 0,
+  total: 0, approved: 0, rejected: 0, pending: 0,
   by_type: [], by_class: [],
 })
 const analysisMap = ref<Record<number, { suggestion: string; reason: string }>>({})
@@ -845,7 +965,13 @@ const pageSizeApproved = ref(10)
 const currentPageRejected = ref(1)
 const pageSizeRejected = ref(10)
 
-const totalPending = computed(() => pendingLeaves.value.length + pendingTickets.value.length + pendingMaterials.value.length)
+const totalPending = computed(
+  () =>
+    pendingLeaves.value.length +
+    pendingTickets.value.length +
+    pendingMaterials.value.length +
+    pendingScheduleChanges.value.length,
+)
 
 /** 审批流程统计口径（天）：链路条与统计页共用，避免两处天数各写一个 */
 const FLOW_DAYS = 30
@@ -915,8 +1041,8 @@ const approvedRows = computed<LedgerRow[]>(() =>
       desc: l.reason || '',
       note: '',
       time: ledgerTime(l.updated_at, l.created_at),
-      statusLabel: l.return_confirmed ? '已销假' : '待销假',
-      statusType: l.return_confirmed ? ('success' as const) : ('warning' as const),
+      statusLabel: '已通过',
+      statusType: 'success' as const,
       sortAt: ledgerSortAt(l.updated_at, l.created_at),
       leave: l,
     })),
@@ -1119,6 +1245,21 @@ function openTicketDetail(row: ServiceTicket) {
   ticketDetailTarget.value = row
   ticketDetailVisible.value = true
 }
+/** 请假详情弹窗：只读留痕，不复用审批表单（审批动作仍走原来的审批弹窗） */
+const leaveDetailVisible = ref(false)
+const leaveDetailTarget = ref<LeaveRequestOut | null>(null)
+function openLeaveDetail(row: LeaveRequestOut) {
+  leaveDetailTarget.value = row
+  leaveDetailVisible.value = true
+}
+/** 请假详情里的状态胶囊：与台账 statusLabel 保持同一口径 */
+function leaveDetailStatus(l: LeaveRequestOut) {
+  if (l.status === 'pending') return { label: '待审批', type: 'warning' as const }
+  if (l.status === 'rejected') return { label: '已拒绝', type: 'danger' as const }
+  if (l.status === 'approved') return { label: '已通过', type: 'success' as const }
+  return { label: l.status || '—', type: 'info' as const }
+}
+
 /** 详情弹窗内直接审批：关闭详情并复用统一的审批弹窗 */
 function reviewFromDetail(row: ServiceTicket, action: 'approve' | 'reject') {
   ticketDetailVisible.value = false
@@ -1128,6 +1269,7 @@ function reviewFromDetail(row: ServiceTicket, action: 'approve' | 'reject') {
 async function loadData() {
   const sid = studentFilter.value?.id || undefined
   loadStats()
+  void loadMyScheduleChanges()
   if (activeTab.value === 'pending') {
     try {
       pendingLeaves.value = (await getPendingLeaves(sid)).filter((l) => byStudent(l.student_id, l.student_name))
@@ -1164,18 +1306,38 @@ async function loadLeaveStats() {
   try { leaveStats.value = await getLeaveStats() } catch { /* 统计失败不影响其它 Tab */ }
 }
 
+/**
+ * 一次性预取三个页签的列表，只为了把页签徽标上的数字（待审批 N / 已通过 N / 已拒绝 N）填上。
+ *
+ * 背景：loadData() 是按当前页签【分支】只拉一个页签，其余页签的数组一直是空的，
+ * 于是「已通过 8」「已拒绝 2」这些计数只有切过去之后才有值 —— 视觉上就是数据没同步。
+ * 这里在进入页面时把三份列表并发拉一次；数据量本就是分页展示的，一次拉全量可接受。
+ * 注意：只填充计数用的数组，不改变当前页签的展示，也不额外触发渲染分支。
+ */
+async function loadAllCounts() {
+  const sid = studentFilter.value?.id || undefined
+  await Promise.allSettled([
+    (async () => {
+      approvedLeaves.value = (await getAllLeaves('approved', sid)).filter((l) => byStudent(l.student_id, l.student_name))
+    })(),
+    (async () => {
+      approvedTickets.value = (await getTickets({ status: 'approved', student_id: sid }))
+        .filter((t: ServiceTicket) => byStudent(undefined, t.applicant_name))
+    })(),
+    (async () => {
+      rejectedLeaves.value = (await getAllLeaves('rejected', sid)).filter((l) => byStudent(l.student_id, l.student_name))
+    })(),
+    (async () => {
+      rejectedTickets.value = (await getTickets({ status: 'rejected', student_id: sid }))
+        .filter((t: ServiceTicket) => byStudent(undefined, t.applicant_name))
+    })(),
+  ])
+}
+
 /** 统计条形图分段宽度百分比 */
 function pct(part: number, total: number) {
   if (!total) return '0%'
   return `${Math.round((part / total) * 100)}%`
-}
-
-async function handleConfirmReturn(row: LeaveRequestOut) {
-  try {
-    await confirmLeaveReturn(row.id)
-    ElMessage.success('已确认返校')
-    loadData()
-  } catch { ElMessage.error('操作失败') }
 }
 
 async function loadStats() {
@@ -1308,8 +1470,28 @@ onMounted(() => {
   const sid = Number(route.query.student_id)
   const sname = route.query.student_name ? String(route.query.student_name) : ''
   if (sid || sname) studentFilter.value = { id: sid || 0, name: sname }
+  void loadAllCounts()
   loadData()
 })
+
+// keep-alive 缓存本页：再次激活时静默重拉审批列表与角标数，首次激活由 onMounted 负责。
+let firstActivate = true
+onActivated(() => {
+  if (firstActivate) { firstActivate = false; return }
+  void loadAllCounts()
+  loadData()
+})
+
+/**
+ * 页签切换后加载对应数据。
+ *
+ * 原来用模板上的 @update:model-value="() => loadData()"：TuiSegmented 先 emit，
+ * 父组件此时 activeTab 仍是【旧值】，loadData() 于是按旧页签又拉了一遍，
+ * 表现为「点了没反应，要再点一次才更新」。
+ * 改用 watch：回调在 activeTab 已经变更之后执行，读到的就是新页签。
+ */
+watch(activeTab, () => { void loadData() })
+watch(ticketScope, () => { void loadData() })
 </script>
 
 <style scoped>
@@ -1426,6 +1608,9 @@ onMounted(() => {
 .ap-detail-tags { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .ap-detail-desc { border-radius: 10px; overflow: hidden; }
 .ap-detail-block { border-top: 1px solid var(--tui-border); padding-top: 10px; }
+/* 请假详情里的结论色：通过 / 拒绝 */
+.ap-ok { color: #0f8e6b; font-weight: 600; }
+.ap-bad { color: #d63a4f; font-weight: 600; }
 .ap-detail-block-title {
   display: flex;
   align-items: center;
@@ -1562,8 +1747,6 @@ onMounted(() => {
 .dot-approved { background: #10b981; }
 .dot-pending { background: #f59e0b; }
 .dot-rejected { background: #ef4444; }
-
-.closed-hint { font-size: 12px; color: #98a2b3; }
 
 /* ========== 移动端卡片（对齐 tui 规范：白卡 + 发丝边 + 去边框感）
    叠层切换由 ApprovalCardStack 组件负责，这里只管单张卡片的样式 ========== */
@@ -2451,8 +2634,10 @@ onMounted(() => {
   padding-top: 9px;
   border-top: 1px solid #f2f5f9;
 }
-.apm-ledger-ft .apm-btn,
-.apm-ledger-ft .apm-mini { margin-left: auto; }
+/* 尾部操作靠右：由状态胶囊吃剩余空间，右侧按钮成组紧贴右边。
+   注意不要给「每个」.apm-btn/.apm-mini 都加 margin-left:auto ——
+   那样每个按钮各自被推一次，第一个按钮会跑到中间。 */
+.apm-ledger-ft .apm-status { margin-right: auto; }
 .apm-status {
   padding: 3px 8px;
   border-radius: 999px;
@@ -2464,7 +2649,6 @@ onMounted(() => {
 .apm-status.is-success { background: #e4f6f0; color: #0f8e6b; }
 .apm-status.is-warning { background: #fdf3e2; color: #c4700e; }
 .apm-status.is-danger { background: #fdecef; color: #d63a4f; }
-.apm-closed { margin-left: auto; font-size: 10.5px; color: #9aa6b8; }
 .apm-none {
   padding: 22px 0;
   text-align: center;

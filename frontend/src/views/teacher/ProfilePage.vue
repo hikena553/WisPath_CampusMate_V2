@@ -125,7 +125,7 @@
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/teacher/portfolio')">
                   <span class="pf-quick-icon"><el-icon :size="25"><FolderOpened /></el-icon></span>
-                  <span class="pf-quick-label">成长档案</span>
+                  <span class="pf-quick-label">学生成长档案</span>
                 </button>
               </div>
             </nav>
@@ -430,7 +430,7 @@
             <div class="set-list">
               <button type="button" class="set-row" @click="openPage('about')">
                 <span class="set-row-label">关于{{ agentName }}</span>
-                <span class="set-row-value">{{ appVersionLabel }}</span>
+                <span class="set-row-value">v1.0.0</span>
                 <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
             </div>
@@ -444,7 +444,7 @@
             </div>
           </div>
 
-          <p class="set-version">{{ agentName }} {{ appVersionLabel }}</p>
+          <p class="set-version">{{ agentName }} v1.0.0</p>
         </div>
 
         <!-- 账号与安全（抖音设置页范式）：只读展示 + 点按行弹窗编辑，不再铺一屏输入框 -->
@@ -681,7 +681,7 @@
           <div class="about-header">
             <img :src="siteLogo" class="about-logo" />
             <div class="about-name">{{ siteName }}</div>
-            <div class="about-version">{{ appVersionLabel }}</div>
+            <div class="about-version">v1.0.0</div>
             <div class="about-slogan">你的校园智能管家</div>
           </div>
 
@@ -844,7 +844,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onActivated, onMounted, nextTick } from 'vue'
+// keep-alive 缓存需要显式组件名（include 按 name 匹配，见 TeacherLayout cachedNames）
+defineOptions({ name: 'teacher-profile' })
 // v6.1 弹窗减负：单字段编辑走底部动作面板
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import QuickLoginBind from '@/components/profile/QuickLoginBind.vue'
@@ -866,7 +868,6 @@ import PostDetailPage from '@/components/community/PostDetailPage.vue'
 import { getMyBadgeWall, type BadgeItem, type BadgeWall as BadgeWallData } from '@/api/badge'
 import { syncQuickAccount } from '@/utils/quickLogin'
 import { confirmLogout } from '@/utils/logout'
-import { appVersionLabel } from '@/utils/appVersion'
 import { getDashboardStats, getClassStats, type DashboardStats, type ClassStats, type ClassEvaluation } from '@/api/teacher'
 import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
 import { getApprovalStats, type ApprovalStats } from '@/api/approval'
@@ -1674,6 +1675,14 @@ onMounted(() => {
   loadProfilePosts()
   // 身份名片（移动端与桌面端）都要展示「所带班级 / 资料完整度」，故挂载即回填表单
   fillProfileForm()
+})
+
+// keep-alive 缓存本页：再次激活时静默重拉概览/勋章/动态，避免切回来看到过期数据。
+// 首次激活由 onMounted 负责（含表单回填），这里跳过；表单回填不重做，防止覆盖未保存的编辑。
+let firstActivate = true
+onActivated(() => {
+  if (firstActivate) { firstActivate = false; return }
+  void refreshAll()
 })
 </script>
 

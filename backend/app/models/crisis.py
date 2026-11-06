@@ -23,6 +23,10 @@ class InterventionType(str, enum.Enum):
 class AIDialogSummary(Base):
     __tablename__ = "ai_dialog_summaries"
 
+    # 分流状态：alert=进教师预警工作台；ledger=仅情绪台账（不推送不过工作台）
+    TRIAGE_ALERT = "alert"
+    TRIAGE_LEDGER = "ledger"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     student_id: Mapped[int] = mapped_column(index=True)
     summary: Mapped[str] = mapped_column(Text)
@@ -36,3 +40,7 @@ class AIDialogSummary(Base):
     resolved_by: Mapped[int | None] = mapped_column(nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     follow_up_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # 双轨降噪：本条信号的分流结果与判定依据（存量数据默认 alert，行为不变）
+    triage_status: Mapped[str] = mapped_column(String(20), default=TRIAGE_ALERT, server_default="alert")
+    triage_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # hard_gate / llm / frequency / voice
+    judge_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

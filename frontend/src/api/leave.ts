@@ -9,7 +9,6 @@ export function createLeave(data: LeaveRequestCreate) {
   return request.post<LeaveRequestOut>('/leave/create', data)
 }
 
-/** 撤销请假申请：仅「待审批（pending）」可撤，已通过 / 已退回会被后端 400 拒绝 */
 export function deleteLeave(id: number) {
   return request.delete(`/leave/${id}`)
 }
@@ -33,13 +32,6 @@ export function analyzeLeave(id: number) {
   return request.get<{ suggestion: string; reason: string }>(`/leave/${id}/analyze`)
 }
 
-/** 销假确认：审批通过的请假，学生返校后由教师确认闭环 */
-export function confirmLeaveReturn(id: number) {
-  return request.post<{ message: string; return_confirmed: boolean }>(
-    `/leave/${id}/confirm-return`
-  )
-}
-
 export interface LeaveStatsItem {
   key: string
   label: string
@@ -54,8 +46,6 @@ export interface LeaveStats {
   approved: number
   rejected: number
   pending: number
-  /** 已通过但尚未销假确认的数量 */
-  awaiting_return: number
   by_type: LeaveStatsItem[]
   by_class: LeaveStatsItem[]
 }

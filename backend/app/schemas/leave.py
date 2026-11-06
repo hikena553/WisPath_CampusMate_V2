@@ -19,10 +19,8 @@ class LeaveRequestOut(BaseModel):
     leave_type: str
     status: str
     reject_reason: str | None = None
-    return_confirmed: bool = False
-    return_confirmed_at: str | None = None
     created_at: str
-    # 审批处理时间（审批/销假动作会刷新 updated_at），台账按它倒序排
+    # 审批处理时间（通过 / 拒绝会刷新 updated_at），台账按它倒序排
     updated_at: str = ""
 
     model_config = ConfigDict(from_attributes=True)
@@ -47,6 +45,5 @@ class LeaveStats(BaseModel):
     approved: int = 0
     rejected: int = 0
     pending: int = 0
-    awaiting_return: int = 0
     by_type: list[LeaveStatsItem] = []
     by_class: list[LeaveStatsItem] = []

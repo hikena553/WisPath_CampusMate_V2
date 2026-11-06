@@ -18,6 +18,7 @@ export type DataDomain =
   | 'teacher-dashboard'
   | 'teacher-care'
   | 'teacher-approval'
+  | 'teacher-crisis'
 
 export const ALL_DOMAINS: DataDomain[] = [
   'teacher-tasks',
@@ -25,6 +26,7 @@ export const ALL_DOMAINS: DataDomain[] = [
   'teacher-dashboard',
   'teacher-care',
   'teacher-approval',
+  'teacher-crisis',
 ]
 
 type Listener = (domains: ReadonlySet<DataDomain>) => void

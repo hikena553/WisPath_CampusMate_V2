@@ -149,6 +149,7 @@
                 <button type="button" class="dt-op" :disabled="row.resolved" @click="openIntervene(row)">登记</button>
                 <button type="button" class="dt-op" :disabled="row.resolved" @click="handleResolve(row)">闭环</button>
                 <button type="button" class="dt-op" @click="gotoStudent(row)">档案</button>
+                <button type="button" class="dt-op" @click="exportArchive(row)">导出</button>
               </span>
             </div>
           </template>
@@ -581,6 +582,26 @@
         <p class="wb-ctx-summary">{{ current.summary }}</p>
         <div v-if="current.keywords_matched" class="wb-ctx-kw">命中关键词：{{ current.keywords_matched }}</div>
       </div>
+      <!-- AI 处置建议卡：打开弹窗自动生成，可一键回填干预方式与处置备注 -->
+      <div v-if="current" class="wb-advice">
+        <div class="wb-advice-head">
+          <b>AI 处置建议</b>
+          <button type="button" class="wb-advice-btn" :disabled="adviceLoading" @click="loadAdvice(true)">
+            {{ adviceLoading ? '生成中…' : (advice ? '重新生成' : '生成建议') }}
+          </button>
+        </div>
+        <template v-if="advice">
+          <p class="wb-advice-scheme">推荐：{{ advice.scheme }}</p>
+          <ol class="wb-advice-steps">
+            <li v-for="(s, i) in advice.steps" :key="i">{{ s }}</li>
+          </ol>
+          <p class="wb-advice-why">{{ advice.rationale }}</p>
+          <p v-if="advice.taboo.length" class="wb-advice-taboo">禁忌：{{ advice.taboo.join('；') }}</p>
+          <button type="button" class="wb-advice-apply" @click="applyAdvice">采纳并回填表单</button>
+          <span class="wb-advice-src">{{ advice.source === 'ai' ? 'AI 基于学生档案生成' : '规则化建议（模型暂不可用）' }}</span>
+        </template>
+        <p v-else-if="!adviceLoading" class="wb-advice-why">尚无建议，点击右上角生成。</p>
+      </div>
       <el-form v-if="current" label-width="80px">
         <el-form-item label="干预方式">
           <el-select v-model="form.intervention_type" placeholder="请选择干预方式" style="width: 100%">
@@ -614,7 +635,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 // v6.1 弹窗减负：处置表单走全屏子页，闭环确认走底部动作面板
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { actionConfirm } from '@/composables/useActionSheet'
@@ -623,6 +644,7 @@ import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import AgentLoading from '@/components/common/AgentLoading.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
+import { onDataChange } from '@/utils/dataSync'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import CrisisAnalytics from '@/components/teacher/crisis/CrisisAnalytics.vue'
 import {
@@ -636,7 +658,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
-import { getAlerts, resolveAlert, interveneAlert, getCrisisAnalytics, getCrisisInsight } from '@/api/crisis'
+import { getAlerts, resolveAlert, interveneAlert, getCrisisAnalytics, getCrisisInsight, getAlertAdvice, exportStudentCrisisArchive, type CrisisAdvice } from '@/api/crisis'
 import type { CrisisAlert } from '@/types'
 import type { CrisisAnalytics as CrisisAnalyticsData, CrisisInsight } from '@/api/crisis'
 
@@ -1068,6 +1090,52 @@ function openIntervene(row: CrisisAlert) {
     resolved: true,
   }
   dialogVisible.value = true
+  loadAdvice(false)
+}
+
+/** AI 处置建议：同一条预警只请求一次，可手动强制重新生成 */
+const advice = ref<CrisisAdvice | null>(null)
+const adviceLoading = ref(false)
+let adviceForId = 0
+
+async function loadAdvice(force: boolean) {
+  if (!current.value) return
+  if (!force && adviceForId === current.value.id && advice.value) return
+  adviceForId = current.value.id
+  advice.value = null
+  adviceLoading.value = true
+  try {
+    advice.value = await getAlertAdvice(current.value.id)
+  } catch {
+    ElMessage.warning('AI 处置建议暂不可用')
+  } finally {
+    adviceLoading.value = false
+  }
+}
+
+function applyAdvice() {
+  if (!advice.value) return
+  const match = interventionOptions.find((o) => o.label.includes(advice.value!.scheme) || advice.value!.scheme.includes(o.label))
+  if (match) form.value.intervention_type = match.value
+  if (!form.value.intervention_note) {
+    form.value.intervention_note = advice.value.steps.join('；')
+  }
+  ElMessage.success('已按建议回填表单')
+}
+
+/** 按学生导出干预档案 Excel（默认全量；导出动作为脱敏内容并留审计） */
+async function exportArchive(row: CrisisAlert) {
+  try {
+    const blob = await exportStudentCrisisArchive(row.student_id)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `crisis-archive-${row.student_name}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('导出失败')
+  }
 }
 
 async function submitIntervene() {
@@ -1104,6 +1172,24 @@ async function handleResolve(row: CrisisAlert) {
     ElMessage.error('操作失败')
   }
 }
+
+/** SSE 实时推送：teacher-crisis 域变更时自动刷新预警清单（不再依赖手动刷新）。
+    severe/moderate 会同时收到站内强提醒，这里负责把工作台数据拉成最新。 */
+let crisisSyncTimer: ReturnType<typeof setTimeout> | null = null
+onDataChange(['teacher-crisis'], () => {
+  if (crisisSyncTimer) return
+  crisisSyncTimer = setTimeout(() => {
+    crisisSyncTimer = null
+    loadAlerts()
+  }, 800)
+})
+
+onUnmounted(() => {
+  if (crisisSyncTimer) {
+    clearTimeout(crisisSyncTimer)
+    crisisSyncTimer = null
+  }
+})
 
 onMounted(loadAlerts)
 </script>
@@ -2271,4 +2357,18 @@ onMounted(loadAlerts)
 }
 .wb-ctx-kw { font-size: 11.5px; color: var(--tui-text-quiet); }
 .wb-draft { margin-bottom: 14px; }
+
+/* AI 处置建议卡 */
+.wb-advice { border: 1px solid #b5d4f4; background: var(--tui-surface, #f4f8fd); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+.wb-advice-head { display: flex; justify-content: space-between; align-items: center; }
+.wb-advice-head b { font-size: 12.5px; }
+.wb-advice-btn { border: none; background: none; color: var(--tui-brand, #185FA5); font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.wb-advice-btn:disabled { opacity: .6; cursor: default; }
+.wb-advice-scheme { font-size: 13px; font-weight: 600; margin: 6px 0 4px; }
+.wb-advice-steps { margin: 0 0 6px; padding-left: 18px; font-size: 12px; color: var(--tui-text-main, #333); }
+.wb-advice-steps li { margin: 2px 0; }
+.wb-advice-why { font-size: 11.5px; color: var(--tui-text-quiet); margin: 4px 0; }
+.wb-advice-taboo { font-size: 11.5px; color: #A32D2D; margin: 4px 0; }
+.wb-advice-apply { border: none; border-radius: 6px; background: var(--tui-brand, #185FA5); color: #fff; font-size: 12px; padding: 5px 10px; cursor: pointer; margin-right: 8px; }
+.wb-advice-src { font-size: 11px; color: var(--tui-text-quiet); }
 </style>

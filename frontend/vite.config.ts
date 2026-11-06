@@ -10,19 +10,6 @@ const HTTPS_ENABLED = process.env.VITE_HTTPS === '1'
 const HTTPS_KEY = join(CERT_DIR, 'dev-server.key')
 const HTTPS_CERT = join(CERT_DIR, 'dev-server.crt')
 
-/**
- * 软件版本唯一来源：package.json。
- * 网页端注入成 __APP_VERSION__ 常量；Android 壳的 versionName 也从同一份文件读
- * （见 android/app/build.gradle），两边不会再各写一个版本号。
- */
-const APP_VERSION: string = (() => {
-  try {
-    return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')).version || '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-})()
-
 const ORT_MIME: Record<string, string> = {
   '.mjs': 'text/javascript',
   '.js': 'text/javascript',
@@ -102,9 +89,6 @@ if (HTTPS_ENABLED && !httpsOptions) {
 
 export default defineConfig({
   plugins: [vue(), ortStaticPlugin(), devCertDownloadPlugin()],
-  define: {
-    __APP_VERSION__: JSON.stringify(APP_VERSION),
-  },
   optimizeDeps: {
     include: ['d3-cloud', 'd3-dispatch']
   },
@@ -119,8 +103,8 @@ export default defineConfig({
     strictPort: true,
     https: httpsOptions,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true, ws: true },
-      '/uploads': { target: 'http://127.0.0.1:8000', changeOrigin: true }
+      '/api': { target: process.env.VITE_API_TARGET || 'http://127.0.0.1:8000', changeOrigin: true, ws: true },
+      '/uploads': { target: process.env.VITE_API_TARGET || 'http://127.0.0.1:8000', changeOrigin: true }
     }
   }
 })

@@ -11,6 +11,10 @@ class AnnouncementOut(BaseModel):
     content: str
     urgency: str
     attachment_url: Optional[str] = None
+    # 发布范围：class_group_id 为空 = 名下全体学生
+    class_group_id: Optional[int] = None
+    # 冗余的班级名，前端直接用，省一次字典查询
+    class_name: str = ""
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -20,6 +24,15 @@ class AnnouncementCreate(BaseModel):
     title: str
     content: str
     urgency: str = "normal"
+    class_group_id: Optional[int] = None
+
+
+class TeacherClassOption(BaseModel):
+    """教师可选的可发布班级（来自其名下学生实际所属班级）。"""
+
+    id: int
+    name: str
+    student_count: int = 0
 
 
 class UnreadCountOut(BaseModel):

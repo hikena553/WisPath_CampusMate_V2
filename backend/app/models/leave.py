@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import datetime
 from sqlalchemy import String, Text, Boolean, Enum as SAEnum, DateTime, Date, Index
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
@@ -24,16 +24,16 @@ class LeaveRequest(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     student_id: Mapped[int] = mapped_column(index=True)
-    # 列是 Date，注解必须是 date：写成 Mapped[str] 会误导调用方直接塞字符串，
-    # SQLite 方言在 commit 时才报 TypeError（曾经就是这么坏的）
-    start_date: Mapped[date] = mapped_column(Date)
-    end_date: Mapped[date] = mapped_column(Date)
+    start_date: Mapped[str] = mapped_column(Date)
+    end_date: Mapped[str] = mapped_column(Date)
     reason: Mapped[str] = mapped_column(Text)
     leave_type: Mapped[LeaveType] = mapped_column(SAEnum(LeaveType))
     status: Mapped[LeaveStatus] = mapped_column(SAEnum(LeaveStatus), default=LeaveStatus.PENDING)
     tutor_id: Mapped[int | None] = mapped_column(default=None)
     reject_reason: Mapped[str | None] = mapped_column(Text, default=None)
-    # 销假闭环：学生返校后确认，审批流程才算真正结束
+    # 历史遗留列：销假链路已下线（审批通过即流程结束）。
+    # 保留列定义只为兼容既有表结构（含 NOT NULL 的 return_confirmed），
+    # 业务代码不再读写这两个字段；后续可随一次正式迁移一并删除。
     return_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     return_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

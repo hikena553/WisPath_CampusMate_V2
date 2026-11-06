@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, onMounted, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { ArrowRight, List } from '@element-plus/icons-vue'
 import {
   getTeacherTaskSummary,
@@ -52,6 +52,7 @@ import {
   type TeacherTask,
   type TeacherTaskSummary,
 } from '@/api/teacherTask'
+import { onRealtimeData } from '@/utils/realtime'
 
 const emit = defineEmits<{ 'open-tasks': [] }>()
 
@@ -65,8 +66,9 @@ const summary = ref<TeacherTaskSummary>({
   total: 0,
 })
 
-async function load() {
-  loading.value = true
+async function load(silent = false) {
+  // 事件驱动刷新一律静默：卡片已在屏幕上，不能再亮整块 loading 造成闪烁
+  if (!silent) loading.value = true
   try {
     const [s, today, overdue] = await Promise.all([
       getTeacherTaskSummary(),
@@ -83,8 +85,16 @@ async function load() {
   }
 }
 
-onMounted(load)
-onActivated(load)
+onMounted(() => { void load(true) })
+
+/**
+ * 实时更新：本卡展示今日/逾期任务与办结数，都是 teacher-tasks 域。
+ * 原先用 onActivated 刷新 —— 但本组件是工作台内嵌卡片、不是 keep-alive 直达的路由页面，
+ * onActivated 永远不会触发（死代码），任务变更后卡片一直停在首次加载的数字。
+ */
+const offRealtime = onRealtimeData(['teacher-tasks', 'teacher-dashboard'], () => { void load(true) })
+onBeforeUnmount(offRealtime)
+
 defineExpose({ reload: load })
 </script>
 

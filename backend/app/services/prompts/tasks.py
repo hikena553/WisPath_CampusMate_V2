@@ -108,6 +108,48 @@ def build_semantic_risk_prompt(user_message: str) -> str:
     return compose(identity, goal, context, constraints, output_format)
 
 
+def build_short_term_triage_prompt(
+    *,
+    user_message: str,
+    ai_reply: str,
+    keywords: list[str],
+    recent_alert_count: int,
+    recent_negative_emotions: int,
+) -> str:
+    """24h 窗口短时情绪研判：判定孤立随口话与真实困扰，输出三级急性风险。
+
+    供双轨降噪使用：low/none → 情绪台账；mid → mild 预警；high → moderate 预警。
+    """
+    identity = section(TAG_IDENTITY, "你是校园心理健康辅助研判助手，任务是判断学生当前短时间内的情绪状态。")
+    goal = section(TAG_GOAL, (
+        "结合当前消息与近 24 小时信号，判定该学生此刻的急性风险，"
+        "重点区分「随口一说 / 玩笑 / 引用他人 / 转述 / 明确否定」与「真实持续困扰」。"
+    ))
+    context = section(TAG_CONTEXT, (
+        f"当前消息：{user_message}\n"
+        f"AI回复：{ai_reply}\n"
+        f"命中敏感词：{', '.join(keywords) if keywords else '无'}\n"
+        f"近 24 小时历史预警条数：{recent_alert_count}\n"
+        f"近 24 小时负面情绪记录条数：{recent_negative_emotions}"
+    ))
+    constraints = section(TAG_CONSTRAINTS, bullets(
+        "只判断「当前短时状态」，不预测未来，不做医学诊断",
+        "以下情形应判 low：作业难、考试难的夸张抱怨；引用歌词/台词/他人的话；玩笑语气且上下文无负面信号；孤立出现且 24h 内无其他负面信号",
+        "以下情形应判 high：表达持续痛苦、睡眠/食欲明显受影响、出现具体计划或行为倾向、24h 内多条负面信号叠加",
+        ANTI_FABRICATION,
+        INJECTION_GUARD,
+    ))
+    output_format = section(TAG_OUTPUT_FORMAT, """以 JSON 返回：
+{"acute_risk": "none" 或 "low" 或 "mid" 或 "high", "reason": "30字以内的判定依据"}
+
+- none/low: 随口一说或轻微情绪波动（走情绪台账）
+- mid: 存在真实但轻度的情绪困扰（轻度预警）
+- high: 存在需要教师关注的明显困扰（中风险预警）
+
+只返回 JSON，不要其他内容。""")
+    return compose(identity, goal, context, constraints, output_format)
+
+
 # ==================== 对话记忆：摘要与洞察 ====================
 
 def build_conversation_summary_prompt(message_text: str) -> str:

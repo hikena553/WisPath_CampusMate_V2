@@ -124,7 +124,7 @@ import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import {
   House, Library, TriangleAlert,
   User, Users, Building2,
-  CalendarDays, MessageSquare, Settings,
+  CalendarDays, CalendarClock, MessageSquare, Settings,
   LogOut, PanelLeftClose, PanelLeftOpen, X, Rss, Activity, KeyRound
 } from 'lucide-vue-next'
 
@@ -240,9 +240,15 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: '系统管理',
+    label: '教务管理',
     items: [
       { path: '/admin/courses', label: '课程表管理', icon: CalendarDays },
+      { path: '/admin/schedule-approval', label: '调课增课审批', icon: CalendarClock },
+    ],
+  },
+  {
+    label: '系统管理',
+    items: [
       { path: '/admin/feedbacks', label: '反馈管理', icon: MessageSquare },
       { path: '/admin/system', label: '系统监控', icon: Activity },
       { path: '/admin/settings', label: '系统设置', icon: Settings },

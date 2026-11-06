@@ -146,16 +146,42 @@
       <div class="pf-field">
         <label class="pf-label">
           证据材料
-          <small>附件名 + 链接，可多条</small>
+          <small>可直接上传文件，也可粘贴外部链接</small>
         </label>
+
+        <!-- 上传后逐条展示：文件名可点开、可移除 -->
         <div v-for="(e, i) in form.evidence" :key="i" class="pf-evidence">
-          <el-input v-model="e.name" placeholder="名称（如：帮扶记录.pdf）" class="pf-ev-name" />
-          <el-input v-model="e.url" placeholder="链接 / 附件地址" class="pf-ev-url" />
-          <el-button text circle type="danger" @click="removeEvidence(i)">
-            <el-icon><Delete /></el-icon>
-          </el-button>
+          <span class="pf-ev-ic"><el-icon :size="14"><Document /></el-icon></span>
+          <div class="pf-ev-bd">
+            <span class="pf-ev-name" :title="e.name || e.url">{{ e.name || fileNameOf(e.url) }}</span>
+            <span class="pf-ev-url">{{ e.url }}</span>
+          </div>
+          <el-button text circle :icon="View" title="预览" @click="previewEvidence(e.url)" />
+          <el-button text circle type="danger" :icon="Delete" title="移除" @click="removeEvidence(i)" />
         </div>
-        <el-button round :icon="Plus" @click="addEvidence">添加证据</el-button>
+
+        <div class="pf-ev-actions">
+          <el-button round :icon="Upload" :loading="uploading" @click="pickFiles">上传文件</el-button>
+          <el-button round :icon="Link" @click="linkOpen = !linkOpen">粘贴链接</el-button>
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            class="pf-ev-file"
+            accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+            @change="onFilesPicked"
+          />
+        </div>
+        <div class="pf-ev-hint">
+          支持 PDF / Word / Excel / PPT / 图片 / 压缩包，单个文件不超过 50MB
+        </div>
+
+        <!-- 外链录入：默认收起，避免抢主流程 -->
+        <div v-if="linkOpen" class="pf-ev-link">
+          <el-input v-model="linkForm.name" placeholder="名称（选填）" class="pf-ev-link-name" />
+          <el-input v-model="linkForm.url" placeholder="https://..." class="pf-ev-link-url" />
+          <el-button size="small" type="primary" @click="confirmLink">添加</el-button>
+        </div>
       </div>
 
       <!-- 反思：AI 提醒式填写（AI 帮写入上方统一触发） -->
@@ -184,12 +210,14 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 // v6.1 弹窗减负：移动端弹窗改用全屏子页承接（桌面端仍为 el-dialog）
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import {
-  ArrowDown, Calendar, Check, Delete, Medal, Plus, Reading, Suitcase, TrendCharts,
+  ArrowDown, Calendar, Check, Delete, Document, Link, Medal, Reading, Suitcase,
+  TrendCharts, Upload, View,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
 import AiDraftField from '@/components/teacher/ui/AiDraftField.vue'
 import AiMascotMark from '@/components/teacher/ui/AiMascotMark.vue'
+import { uploadFile } from '@/api/upload'
 import {
   aiDraftPortfolio,
   createPortfolioItem,
@@ -343,6 +371,9 @@ function resetAi() {
 function reset() {
   resetAi()
   dateOpen.value = false
+  linkOpen.value = false
+  linkForm.name = ''
+  linkForm.url = ''
   if (props.item) {
     form.item_type = props.item.item_type
     form.title = props.item.title
@@ -393,11 +424,81 @@ async function runAiDraft() {
   }
 }
 
-function addEvidence() {
-  form.evidence.push({ name: '', url: '' })
-}
 function removeEvidence(i: number) {
   form.evidence.splice(i, 1)
+}
+
+/** 外链录入面板 */
+const linkOpen = ref(false)
+const linkForm = reactive({ name: '', url: '' })
+
+function confirmLink() {
+  const url = linkForm.url.trim()
+  if (!url) {
+    ElMessage.warning('请填写链接地址')
+    return
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    ElMessage.warning('链接需以 http:// 或 https:// 开头')
+    return
+  }
+  form.evidence.push({ name: linkForm.name.trim(), url })
+  linkForm.name = ''
+  linkForm.url = ''
+  linkOpen.value = false
+}
+
+/* ── 证据材料：文件上传 ──
+   后端 /api/upload 已支持 pdf/doc/xls/ppt/图片/压缩包，单文件 50MB，
+   返回 { url: '/api/files/root/xxx', filename }，直接存进 evidence.url 即可。 */
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+/** 单文件上限，与后端 MAX_FILE_SIZE 保持一致 */
+const MAX_SIZE = 50 * 1024 * 1024
+
+function fileNameOf(url: string) {
+  if (!url) return ''
+  // /api/files/root/xxx_ab12cd.pdf → 优先还原可读名
+  return decodeURIComponent(url.split('/').pop() || url)
+}
+
+function pickFiles() {
+  if (uploading.value) return
+  fileInputRef.value?.click()
+}
+
+async function onFilesPicked(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  input.value = '' // 允许重复选同一个文件
+  if (!files.length) return
+
+  const oversize = files.filter((f) => f.size > MAX_SIZE)
+  if (oversize.length) {
+    ElMessage.warning(`${oversize[0].name} 超过 50MB，已跳过`)
+  }
+  const todo = files.filter((f) => f.size <= MAX_SIZE)
+  if (!todo.length) return
+
+  uploading.value = true
+  let ok = 0
+  for (const f of todo) {
+    try {
+      const res = await uploadFile(f)
+      form.evidence.push({ name: f.name, url: res.url })
+      ok += 1
+    } catch (err) {
+      ElMessage.error(`${f.name} 上传失败：${(err as Error).message || '请稍后重试'}`)
+    }
+  }
+  uploading.value = false
+  if (ok) ElMessage.success(`已上传 ${ok} 个文件`)
+}
+
+/** 预览：上传件直链打开；外部链接同样新窗口打开 */
+function previewEvidence(url: string) {
+  if (!url) return
+  window.open(url, '_blank', 'noopener')
 }
 
 async function submit() {
@@ -801,19 +902,73 @@ async function submit() {
   gap: 10px;
 }
 
+/* 证据材料：文件条目 + 上传 / 链接入口 */
 .pf-evidence {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 6px;
+  padding: 7px 9px;
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+  background: #fbfcfe;
 }
-.pf-ev-name { flex: 0 0 34%; }
-.pf-ev-url { flex: 1; }
+.pf-ev-ic {
+  flex: 0 0 auto;
+  display: flex;
+  color: #667085;
+}
+.pf-ev-bd {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pf-ev-name {
+  font-size: 12.5px;
+  color: #1f2430;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-ev-url {
+  font-size: 10.5px;
+  color: #98a2b3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-ev-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pf-ev-file {
+  display: none;
+}
+.pf-ev-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #98a2b3;
+}
+.pf-ev-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f7f8fa;
+}
+.pf-ev-link-name { flex: 0 0 32%; }
+.pf-ev-link-url { flex: 1; }
 
 @media (max-width: 767px) {
   .pf-grid2 { grid-template-columns: 1fr; }
-  .pf-evidence { flex-wrap: wrap; }
-  .pf-ev-name { flex: 1 1 100%; }
-  .pf-ev-url { flex: 1 1 70%; }
+  .pf-ev-link { flex-wrap: wrap; }
+  .pf-ev-link-name { flex: 1 1 100%; }
+  .pf-ev-link-url { flex: 1 1 100%; }
 }
 </style>

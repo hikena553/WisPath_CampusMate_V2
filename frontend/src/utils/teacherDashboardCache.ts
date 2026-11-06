@@ -5,7 +5,7 @@
 
 import { getDashboardStats, getClassEvaluation, getClassStats } from '@/api/teacher'
 import { getAlerts } from '@/api/crisis'
-import { getPendingLeaves } from '@/api/leave'
+import { getPendingLeaves, getLeaveStats } from '@/api/leave'
 import { getTeacherAnnouncements } from '@/api/announcement'
 import { getTeacherSchedules, getOverdueSchedules } from '@/api/teacher'
 import { getTeacherTaskSummary } from '@/api/teacherTask'
@@ -43,6 +43,8 @@ export function prefetchDashboardData(): void {
     getOverdueSchedules().then(d => setCache('overdue-schedules', d)),
     // 任务汇总：页头指标带与「今日重点」共用同一份数字，避免两处各拉一次
     getTeacherTaskSummary().then(d => setCache('teacher-task-summary', d)),
+    // 请假统计：工作台「我的工作量」的待请假/本周办结数字，首屏直接吃缓存不做二次等待
+    getLeaveStats().then(d => setCache('leave-stats', d)),
   ]).then(() => {}).catch(() => {}).finally(() => {
     prefetchPromise = null
   })

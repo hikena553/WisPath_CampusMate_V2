@@ -7,8 +7,6 @@ export interface MessageOut {
   content: string
   read: boolean
   created_at: string
-  /** 发送者头像（与会话列表 user_avatar 同源）；历史接口未返回时为空 */
-  sender_avatar?: string | null
 }
 
 export interface ConversationOut {

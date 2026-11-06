@@ -47,13 +47,10 @@ def _create_leave(db: Session, args: dict, user: User) -> dict:
     if (end_d - start_d).days > 14:
         return {"success": False, "message": "请假时长不能超过15天"}
 
-    # 必须传 date 对象：leave_requests.start_date/end_date 是 Date 列，
-    # SQLite 方言只接受 Python date，直接塞 "2026-11-07" 这种字符串会在 commit 时报
-    # TypeError（Date type only accepts Python date objects），表现为「请假总是提交失败」。
     leave = LeaveRequest(
         student_id=user.id,
-        start_date=start_d,
-        end_date=end_d,
+        start_date=start_date,
+        end_date=end_date,
         reason=reason,
         leave_type=args.get("leave_type", "other"),
     )
@@ -121,16 +118,7 @@ def _confirm_growth_record(db: Session, args: dict, user: User) -> dict:
     record_type = type_map.get(record_type_str, RecordType.HONOR)
     title = args.get("title", "")
     from datetime import date as date_type
-    # 同请假：growth_records.date 是 Date 列，模型给的 "2026-05-01" 字符串必须先转 date，
-    # 否则 commit 抛 TypeError，学生看到的是「成长档案保存失败」。
-    raw_date = args.get("date")
-    if raw_date:
-        try:
-            record_date = date_type.fromisoformat(str(raw_date)[:10])
-        except ValueError:
-            return {"success": False, "message": "日期格式不正确，请使用 YYYY-MM-DD 格式"}
-    else:
-        record_date = date_type.today()
+    record_date = args.get("date") or date_type.today().isoformat()
     record = GrowthRecord(
         student_id=user.id,
         type=record_type,
@@ -181,17 +169,9 @@ def _submit_service_request(db: Session, args: dict, user: User) -> dict:
         missing.append("content（内容详情）")
     if missing:
         return {"success": False, "message": f"缺少必要参数：{', '.join(missing)}"}
-    # type 是 SAEnum(TicketType)，合法值只有 leave/certificate/project。
-    # 之前默认值写成 "other"，落库时 SQLAlchemy 抛 LookupError，被 chat() 兜底成
-    # 「系统暂时不可用」——办事申请因此从来没成功过。
-    raw_type = str(args.get("request_type") or "certificate")
-    try:
-        ticket_type = TicketType(raw_type)
-    except ValueError:
-        return {"success": False, "message": "申请类型仅支持 certificate（证明）/ leave（请假）/ project（项目）"}
     ticket = ServiceTicket(
         applicant_id=user.id,
-        type=ticket_type,
+        type=args.get("request_type", "other"),
         title=title,
         content=content,
     )
@@ -290,7 +270,9 @@ def _query_announcements(db: Session, args: dict, user: User) -> dict:
         items = [{"title": p.title, "date": p.date} for p in parsed]
         return {"message": f"教务处最新通知（共{len(items)}条）", "announcements": items[:10]}
     except Exception as e:
-        return {"message": "通知获取失败", "announcements": []}
+        # 不再静默返回空列表：告知失败原因，避免用户误以为"没有通知"
+        detail = str(e)[:100] or e.__class__.__name__
+        return {"message": f"通知获取失败（外网不可达：{detail}），可稍后重试", "announcements": [], "error": True}
 
 
 # ============ 数据分析工具 ============

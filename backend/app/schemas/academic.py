@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import date, time
 from typing import Optional, List, Any
 
@@ -17,8 +17,24 @@ class CourseOut(BaseModel):
     semester: str
     credit: Optional[float] = None
     class_group_id: int
+    #: 被单次调课挪走的教学周，前端渲染时跳过（原课仍在，只是这几周不上）。
+    #: 对外统一暴露成 int 列表，但库里存的是 "5,7" 这种逗号分隔字符串，
+    #: 所以不能靠 from_attributes 自动转换 —— 由读取端的 _course_out 手动填。
+    skip_weeks: List[int] = Field(default_factory=list)
+    #: 由哪张调课申请补出来的课（增课为 None）
+    source_change_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("skip_weeks", mode="before")
+    @classmethod
+    def _parse_skip_weeks(cls, v):
+        """库里的 skip_weeks 是 "5,7" 逗号分隔字符串，统一转成 int 列表。"""
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [int(x) for x in v.split(",") if x.strip().isdigit()]
+        return v
 
 
 class CourseCreate(BaseModel):

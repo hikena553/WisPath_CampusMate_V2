@@ -89,13 +89,17 @@
           </div>
         </div>
 
-        <!-- ①-C 教学成果上传入口：成长时间线需要教师自己的成果来生长 -->
-        <div class="tm-upload">
-          <div class="tm-upload-bd">
-            <b>上传教学成果</b>
-            <span>课例、论文、获奖、公开课都可沉淀到成长时间线，并推动徽章进度</span>
+        <!-- ①-C 我的育人档案：案例 / 荣誉 / 培训 / 研究成果 + 成长报告导出 -->
+        <div class="tm-archive">
+          <div class="tm-archive-hd">
+            <b>我的育人档案</b>
+            <em>{{ archiveCount }} 条</em>
           </div>
-          <button type="button" class="tm-upload-btn" @click="go('/teacher/portfolio?create=1')">上传</button>
+          <div class="tm-archive-sub">课例、论文、获奖、公开课都可沉淀进来，并推动徽章进度</div>
+          <div class="tm-archive-act">
+            <button type="button" class="tm-upload-btn" @click="openItemDialog()">新增档案</button>
+            <button type="button" class="tm-archive-ghost" @click="openArchiveReport">成长报告</button>
+          </div>
         </div>
 
         <!-- ② 徽章墙 -->
@@ -556,6 +560,74 @@
           </div>
         </section>
 
+        <!-- ===== 6.5 我的育人档案（原「学生成长档案」页里的教师维度内容） ===== -->
+        <section class="tui-card" ref="archiveRef">
+          <div class="card-head">
+            <h2 class="card-title">我的育人档案</h2>
+            <span class="card-hint">案例 / 荣誉 / 培训研修 / 研究成果，共 {{ archiveCount }} 条</span>
+          </div>
+
+          <div v-if="archiveLoading" class="empty-tip">正在读取育人档案…</div>
+          <div v-else-if="!archiveItems.length" class="empty-tip">
+            还没有育人档案。添加一条案例或荣誉，它会同时进入成长时间线与成长报告。
+          </div>
+          <template v-else>
+            <!-- 可见性筛选：让「公开 / 仅自己」在列表上真正可感知 -->
+            <div class="arch-tabs">
+              <button
+                v-for="t in ARCHIVE_TABS"
+                :key="t.value"
+                type="button"
+                class="arch-tab"
+                :class="{ active: archiveTab === t.value }"
+                @click="archiveTab = t.value"
+              >
+                {{ t.label }}
+                <em>{{ archiveTabCount(t.value) }}</em>
+              </button>
+            </div>
+
+            <div v-if="archiveFiltered.length" class="arch-list">
+              <div v-for="it in archiveFiltered.slice(0, 20)" :key="it.id" class="arch-item">
+                <span class="arch-dot" :style="{ background: PORTFOLIO_TYPE_COLOR[it.item_type] }"></span>
+                <span class="arch-title">{{ it.title }}</span>
+                <span class="arch-type">{{ PORTFOLIO_TYPE_LABEL[it.item_type] }}</span>
+                <span class="arch-date">{{ it.occurred_on || '—' }}</span>
+                <span class="arch-vis" :class="{ 'is-public': it.visibility === 'public' }">
+                  {{ it.visibility === 'public' ? '公开展示' : '仅自己可见' }}
+                </span>
+                <el-button text size="small" :icon="Edit" @click="openItemDialog(it)" />
+              </div>
+            </div>
+            <div v-else class="empty-tip">
+              该分类下还没有档案。
+            </div>
+
+            <!-- 同行公开展示区：只有标记「公开展示」的档案会出现在这里 -->
+            <div v-if="publicItems.length" class="arch-public">
+              <div class="arch-public-hd">
+                <span>同行公开展示</span>
+                <em>其他教师公开的 {{ publicItems.length }} 条</em>
+              </div>
+              <div v-for="it in publicItems.slice(0, 5)" :key="`p-${it.id}`" class="arch-public-item">
+                <span class="arch-dot" :style="{ background: PORTFOLIO_TYPE_COLOR[it.item_type] }"></span>
+                <span class="arch-title">{{ it.title }}</span>
+                <span class="arch-type">{{ it.teacher_name || '—' }}</span>
+              </div>
+            </div>
+          </template>
+
+          <div class="arch-act">
+            <el-button round :icon="Plus" @click="openItemDialog()">新增档案</el-button>
+            <el-button round :icon="Printer" :loading="reportLoading" @click="openArchiveReport">
+              成长报告
+            </el-button>
+          </div>
+          <div class="arch-note">
+            成长报告汇总的是你自己的育人档案，与学生无关；学生的成长记录请看「学生成长档案」。
+          </div>
+        </section>
+
         <!-- ===== 7. 成长时间线 ===== -->
         <section class="tui-card">
           <div class="card-head">
@@ -577,10 +649,7 @@
             </div>
           </div>
           <div v-else class="empty-tip">
-            还没有成长记录。去「成长档案」添加一条案例或荣誉，这里会按时间串联你的职业轨迹。
-            <el-button size="small" text type="primary" @click="go('/teacher/portfolio')">
-              去添加
-            </el-button>
+            还没有成长记录。在上面「我的育人档案」里添加一条案例或荣誉，这里会按时间串联你的职业轨迹。
           </div>
         </section>
       </template>
@@ -589,26 +658,229 @@
         <el-button type="primary" @click="load">重试</el-button>
       </el-empty>
     </div>
+
+    <!-- 育人档案：新增 / 编辑（桌面端 el-dialog，移动端全屏子页） -->
+    <PortfolioItemDialog
+      v-model="itemDialogVisible"
+      :item="editingItem"
+      @saved="reloadArchive"
+    />
+
+    <!-- 成长报告：教师本人育档案的汇总导出，与学生无关 -->
+    <ResponsivePopup
+      v-model="reportVisible"
+      title="成长报告"
+      width="420px"
+      align-center
+      :close-on-click-modal="false"
+      class="tui-dialog"
+      destroy-on-close
+    >
+      <div v-if="report" class="rpt">
+        <div class="rpt-cover">
+          <img v-if="siteMascot" class="rpt-mascot" :src="siteMascot" :alt="siteName" />
+          <div class="rpt-cover-bd">
+            <h3>{{ report.teacher_name }} · 教师成长报告</h3>
+            <span>生成于 {{ (report.generated_at || '').slice(0, 10) }} · 共 {{ report.total }} 条育人档案</span>
+          </div>
+          <el-button class="rpt-print" size="small" :icon="Printer" @click="printReport">打印 / PDF</el-button>
+        </div>
+
+        <div class="rpt-types">
+          <div v-for="t in report.by_type" :key="t.type" class="rpt-type">
+            <div class="rpt-type-hd">
+              <span class="rpt-lb">{{ t.label }}</span>
+              <span class="rpt-num">{{ t.count }}</span>
+            </div>
+            <div class="rpt-bar">
+              <i
+                :style="{
+                  width: (report.total ? Math.round((t.count / report.total) * 100) : 0) + '%',
+                  background: PORTFOLIO_TYPE_COLOR[t.type],
+                }"
+              ></i>
+            </div>
+          </div>
+        </div>
+
+        <template v-if="report.items.length">
+          <div class="rpt-sec">
+            <span>档案明细</span>
+            <span>{{ report.items.length }} 条</span>
+          </div>
+          <div class="rpt-list">
+            <div v-for="(it, i) in report.items" :key="it.id" class="rpt-item">
+              <span class="rpt-idx">{{ i + 1 }}</span>
+              <span class="rpt-dot" :style="{ background: PORTFOLIO_TYPE_COLOR[it.item_type] }"></span>
+              <span class="rpt-title">{{ it.title }}</span>
+              <span class="rpt-meta">
+                {{ PORTFOLIO_TYPE_LABEL[it.item_type] }}<template v-if="it.occurred_on"> · {{ it.occurred_on }}</template>
+              </span>
+            </div>
+          </div>
+        </template>
+
+        <div v-else class="rpt-empty">
+          <b>还没有可汇总的育人档案</b>
+          <span>工作案例、荣誉表彰、培训研修与研究成果会自动归入成长报告。</span>
+        </div>
+
+        <div class="rpt-note">数据来自你的育人档案，补充档案后重新打开即可生成最新报告。</div>
+      </div>
+    </ResponsivePopup>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Refresh, WarningFilled, TrendCharts, ArrowRight, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { Refresh, WarningFilled, TrendCharts, ArrowRight, ArrowUp, ArrowDown, Plus, Printer, Edit } from '@element-plus/icons-vue'
 import SubPageHeader from '@/components/common/SubPageHeader.vue'
 import TuiPageHero from '@/components/common/TuiPageHero.vue'
+import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
+import PortfolioItemDialog from '@/components/teacher/portfolio/PortfolioItemDialog.vue'
 import { useResponsive } from '@/composables/useResponsive'
+import { useSiteConfig } from '@/composables/useSiteConfig'
 import { getMyGrowth, type TeacherGrowth, type GrowthBadge } from '@/api/teacherMe'
+import {
+  getPortfolioItems,
+  getPortfolioReport,
+  getPublicPortfolioItems,
+  PORTFOLIO_TYPE_COLOR,
+  PORTFOLIO_TYPE_LABEL,
+  type PortfolioItem,
+  type PortfolioReport,
+} from '@/api/teacherPortfolio'
 
 const router = useRouter()
+const route = useRoute()
 const { isMobile } = useResponsive()
+const { siteMascot, siteName } = useSiteConfig()
 
 const loading = ref(false)
 const data = ref<TeacherGrowth | null>(null)
 const showAllBadges = ref(false)
 const showAdviceEvidence = ref(false)
+
+/* ── 我的育人档案：原「学生成长档案」页的教师维度能力，迁到本人成长页 ── */
+const archiveRef = ref<HTMLElement | null>(null)
+const archiveItems = ref<PortfolioItem[]>([])
+const publicItems = ref<PortfolioItem[]>([])
+const archiveLoading = ref(false)
+const itemDialogVisible = ref(false)
+const editingItem = ref<PortfolioItem | null>(null)
+const report = ref<PortfolioReport | null>(null)
+const reportVisible = ref(false)
+const reportLoading = ref(false)
+const archiveCount = computed(() => archiveItems.value.length)
+
+/* 可见性筛选：让「公开 / 仅自己」成为页面上可感知的状态 */
+type ArchiveTab = 'all' | 'private' | 'public'
+const ARCHIVE_TABS: { value: ArchiveTab; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'private', label: '仅自己可见' },
+  { value: 'public', label: '公开展示' },
+]
+const archiveTab = ref<ArchiveTab>('all')
+const archiveFiltered = computed(() =>
+  archiveTab.value === 'all'
+    ? archiveItems.value
+    : archiveItems.value.filter((it) => it.visibility === archiveTab.value)
+)
+function archiveTabCount(tab: ArchiveTab) {
+  return tab === 'all'
+    ? archiveItems.value.length
+    : archiveItems.value.filter((it) => it.visibility === tab).length
+}
+
+function openItemDialog(item: PortfolioItem | null = null) {
+  editingItem.value = item
+  itemDialogVisible.value = true
+}
+
+async function loadArchive() {
+  archiveLoading.value = true
+  try {
+    const [mine, pub] = await Promise.all([
+      getPortfolioItems({ limit: 200 }),
+      // 公开区失败不该拖垮本人的档案列表
+      getPublicPortfolioItems({ limit: 10 }).catch(() => []),
+    ])
+    archiveItems.value = mine
+    publicItems.value = pub.filter((p) => p.visibility === 'public')
+  } catch {
+    archiveItems.value = []
+    publicItems.value = []
+  } finally {
+    archiveLoading.value = false
+  }
+}
+
+/** 保存后同时刷新档案列表与成长数据（徽章 / 时间线依赖档案条数） */
+async function reloadArchive() {
+  await Promise.all([loadArchive(), load()])
+}
+
+async function openArchiveReport() {
+  reportLoading.value = true
+  try {
+    report.value = await getPortfolioReport()
+    reportVisible.value = true
+  } catch {
+    ElMessage.error('成长报告生成失败')
+  } finally {
+    reportLoading.value = false
+  }
+}
+
+/** 打印 / 导出 PDF：打开独立打印窗口，避免页面样式干扰 */
+function printReport() {
+  const r = report.value
+  if (!r) return
+  const rows = r.items
+    .map(
+      (it, i) =>
+        `<tr><td>${i + 1}</td><td>${escapeHtml(it.title)}</td><td>${PORTFOLIO_TYPE_LABEL[it.item_type]}</td><td>${it.occurred_on || '-'}</td></tr>`
+    )
+    .join('')
+  const cards = r.by_type
+    .map((t) => `<span class="chip">${t.label} <b>${t.count}</b></span>`)
+    .join('')
+  const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" />
+<title>${escapeHtml(r.teacher_name)} · 教师成长报告</title>
+<style>
+  body{font-family:"Noto Sans CJK SC","WenQuanYi Micro Hei",system-ui,sans-serif;color:#101828;padding:32px;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .meta{color:#98a2b3;font-size:12px;margin-bottom:18px;}
+  .chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+  .chip{border:1px solid #eaecf0;border-radius:999px;padding:4px 12px;font-size:12px;color:#475467;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{border-bottom:1px solid #eaecf0;padding:8px 6px;text-align:left;}
+  th{color:#667085;font-weight:600;font-size:12px;}
+  td:first-child,th:first-child{width:40px;color:#98a2b3;}
+</style></head><body>
+  <h1>${escapeHtml(r.teacher_name)} · 教师成长报告</h1>
+  <div class="meta">生成时间：${(r.generated_at || '').slice(0, 10)} ｜ 共 ${r.total} 条</div>
+  <div class="chips">${cards}</div>
+  <table><thead><tr><th>#</th><th>标题</th><th>类型</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>
+</body></html>`
+  const w = window.open('', '_blank', 'width=900,height=1000')
+  if (!w) {
+    ElMessage.warning('浏览器拦截了打印窗口，请允许弹出窗口后重试')
+    return
+  }
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  w.print()
+}
+
+function escapeHtml(s: string) {
+  return (s || '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+  )
+}
 
 /** 最弱能力项：用于 AI 建议与「查看依据」 */
 const weakestCapability = computed(() => {
@@ -942,7 +1214,14 @@ function shortDate(d: string) {
   return parts.length >= 3 ? `${Number(parts[1])}/${Number(parts[2])}` : d
 }
 
-onMounted(load)
+onMounted(async () => {
+  await Promise.all([load(), loadArchive()])
+  // 从「学生成长档案」页的「我的育人档案」入口进来时，直接定位到档案区块
+  if (route.query.tab === 'portfolio') {
+    await nextTick()
+    archiveRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+})
 </script>
 
 <style scoped>
@@ -1097,6 +1376,23 @@ onMounted(load)
 .tm-upload-btn {
   flex: 0 0 auto; padding: 7px 13px; border-radius: 9px; border: 0;
   background: #1f2430; color: #fff; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+
+/* 移动端：我的育人档案卡片 */
+.tm-archive {
+  margin: 0 14px 10px; padding: 11px 13px;
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--tm-surf); border: 1px solid var(--tm-line); border-radius: var(--tm-r);
+}
+.tm-archive-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tm-archive-hd b { font-size: 13.5px; color: var(--tm-ink); }
+.tm-archive-hd em { font-style: normal; font-size: 11.5px; color: var(--tm-ink3); }
+.tm-archive-sub { font-size: 11.5px; line-height: 1.5; color: var(--tm-ink3); }
+.tm-archive-act { display: flex; gap: 8px; margin-top: 2px; }
+.tm-archive-ghost {
+  flex: 0 0 auto; padding: 7px 13px; border-radius: 9px;
+  border: 1px solid var(--tm-line); background: transparent;
+  color: var(--tm-ink2); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
 }
 
 .growth-page {
@@ -1749,5 +2045,297 @@ onMounted(load)
   .tui-card {
     padding: 14px;
   }
+}
+
+/* ===== 我的育人档案（桌面端） ===== */
+.arch-list {
+  display: flex;
+  flex-direction: column;
+}
+.arch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--tui-border);
+  font-size: 13px;
+}
+.arch-item:last-child {
+  border-bottom: none;
+}
+.arch-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+.arch-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--tui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.arch-type {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--tui-text-tertiary);
+}
+.arch-date {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+  font-variant-numeric: tabular-nums;
+}
+.arch-vis {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--tui-text-tertiary);
+  background: var(--tui-surface-sunken);
+}
+.arch-vis.is-public {
+  color: var(--tui-success);
+  background: var(--tui-success-soft);
+}
+.arch-act {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.arch-note {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--tui-text-quiet);
+}
+.arch-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.arch-tab {
+  padding: 4px 11px;
+  border: 1px solid var(--tui-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tui-text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.arch-tab em {
+  margin-left: 4px;
+  font-style: normal;
+  color: var(--tui-text-quiet);
+  font-variant-numeric: tabular-nums;
+}
+.arch-tab.active {
+  border-color: transparent;
+  background: var(--tui-brand-soft);
+  color: var(--tui-brand-strong);
+  font-weight: 600;
+}
+.arch-tab.active em {
+  color: var(--tui-brand-strong);
+  opacity: 0.7;
+}
+
+/* 同行公开展示区 */
+.arch-public {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--tui-radius-sm);
+  background: var(--tui-surface-muted);
+}
+.arch-public-hd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tui-text-secondary);
+}
+.arch-public-hd em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+}
+.arch-public-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 12.5px;
+}
+
+/* ===== 成长报告弹窗 ===== */
+.rpt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rpt-cover {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--tui-border);
+  border-radius: var(--tui-radius-md, 14px);
+  background: var(--tui-surface-muted);
+}
+.rpt-mascot {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  object-fit: contain;
+}
+.rpt-cover-bd {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rpt-cover-bd h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--tui-text);
+}
+.rpt-cover-bd span {
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+}
+.rpt-print {
+  flex: 0 0 auto;
+}
+.rpt-types {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.rpt-type {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--tui-surface-muted);
+  border-radius: var(--tui-radius-sm);
+  padding: 8px 10px;
+}
+.rpt-type-hd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.rpt-num {
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--tui-brand-strong);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.rpt-lb {
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+}
+.rpt-bar {
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(17, 24, 39, 0.08);
+  overflow: hidden;
+}
+.rpt-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+.rpt-sec {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--tui-text-quiet);
+}
+.rpt-sec span:first-child {
+  font-weight: 700;
+  color: var(--tui-text-secondary);
+}
+.rpt-list {
+  display: flex;
+  flex-direction: column;
+}
+.rpt-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--tui-border);
+  font-size: 12.5px;
+}
+.rpt-item:last-child {
+  border-bottom: none;
+}
+.rpt-idx {
+  width: 16px;
+  text-align: center;
+  color: var(--tui-text-quiet);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.rpt-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  align-self: center;
+  border-radius: 50%;
+}
+.rpt-title {
+  color: var(--tui-text-secondary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rpt-meta {
+  font-size: 11px;
+  color: var(--tui-text-quiet);
+  flex-shrink: 0;
+}
+.rpt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 18px 12px;
+  text-align: center;
+  border: 1px dashed var(--tui-border);
+  border-radius: var(--tui-radius-md, 14px);
+  background: var(--tui-surface-muted);
+}
+.rpt-empty b {
+  font-size: 13.5px;
+  color: var(--tui-text);
+}
+.rpt-empty span {
+  max-width: 260px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--tui-text-quiet);
+}
+.rpt-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--tui-text-quiet);
+  text-align: center;
 }
 </style>

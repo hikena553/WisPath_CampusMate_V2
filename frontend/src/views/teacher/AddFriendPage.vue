@@ -266,7 +266,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+  /* 统一页头规范：高度/内边距取 --appbar-* 变量（styles/responsive.css），
+     原先是写死的 calc(8px + env(...))，比其它页多 2px 留白。 */
+  min-height: var(--appbar-h);
+  padding: var(--sat, 0px) var(--appbar-px) 0;
   background: #fff;
   border-bottom: 1px solid #f0f1f3;
 }

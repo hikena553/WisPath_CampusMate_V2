@@ -102,11 +102,7 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "title": {"type": "string", "description": "申请标题"},
                     "content": {"type": "string", "description": "申请内容详情"},
-                    "request_type": {
-                        "type": "string",
-                        "enum": ["certificate", "leave", "project"],
-                        "description": "申请类型：certificate=在校证明/成绩单等证明，leave=请假类手续，project=项目相关申请（必须从这三者中选）",
-                    }
+                    "request_type": {"type": "string", "enum": ["certificate", "other"], "description": "申请类型"}
                 },
                 "required": ["title", "content", "request_type"]
             }
@@ -757,6 +753,34 @@ TEACHER_TOOL_DEFINITIONS = [
                     "content": {"type": "string", "description": "消息内容"}
                 },
                 "required": ["student_name", "content"]
+            }
+        }
+    },
+    # ============ 站内通知 / 消息查询：补齐教师端「查询反馈」闭环 ============
+    {
+        "type": "function",
+        "function": {
+            "name": "query_teacher_notifications",
+            "description": "查询教师自己的站内通知（未读提醒、系统通知、学生请假/求助动态等）。教师说'有什么新通知''未读消息''站内通知'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "unread": {"type": "boolean", "description": "是否只看未读，默认查全部"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_messages_with_student",
+            "description": "查询与某名下学生的站内会话消息记录。教师说'我和某某聊过什么''看看和某某的聊天记录''他给我发过消息吗'时调用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "student_name": {"type": "string", "description": "学生姓名（支持模糊）"}
+                },
+                "required": ["student_name"]
             }
         }
     },

@@ -75,3 +75,8 @@ from app.models.learning_event import LearningEvent
 from app.models.badge import UserBadge
 from app.models.password_reset import PasswordResetRequest, PasswordResetStatus
 from app.models.social import Follow, ForumMessage, ForumMessageKind, FriendSetting  # noqa: F401
+from app.models.schedule_change import (  # noqa: F401
+    ScheduleChangeKind,
+    ScheduleChangeRequest,
+    ScheduleChangeStatus,
+)

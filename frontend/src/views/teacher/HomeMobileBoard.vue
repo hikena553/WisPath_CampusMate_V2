@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -227,7 +227,7 @@ const featureEntries = computed(() => [
   { path: '/teacher/approval', label: '审批', icon: Stamp, color: '#b54708', tint: '#fffaeb', count: stats.value.pending_leave_count || 0, tone: 'warn' },
   { path: '/teacher/crisis', label: '预警', icon: WarnIcon, color: '#d92d20', tint: '#fef3f2', count: stats.value.severe_alert_count || 0, tone: 'danger' },
   { path: '/teacher/announcement', label: '公告', icon: Bell, color: '#2563eb', tint: '#eff4ff', count: 0, tone: 'brand' },
-  { path: '/teacher/portfolio', label: '成长档案', icon: Collection, color: '#6941c6', tint: '#f4f3ff', count: 0, tone: 'violet' },
+  { path: '/teacher/portfolio', label: '学生成长档案', icon: Collection, color: '#6941c6', tint: '#f4f3ff', count: 0, tone: 'violet' },
   { path: '/teacher/survey', label: '问卷互评', icon: EditPen, color: '#2563eb', tint: '#eff4ff', count: 0, tone: 'brand' },
   { path: '/teacher/care-center', label: '关怀与家校', icon: Sunny, color: '#f79009', tint: '#fffaeb', count: 0, tone: 'warn' },
   { path: '/teacher/growth', label: '我的成长', icon: TrendCharts, color: '#6941c6', tint: '#f4f3ff', count: 0, tone: 'violet' },
@@ -403,10 +403,9 @@ async function loadData() {
   taskSummary.value = ts
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
 let lastRefreshAt = 0
 
-/** 静默后台刷新：并行加载全部数据，不触发任何加载状态 */
+/** 静默后台刷新：并行加载全部数据，不触发任何加载状态（无 loading、无闪烁） */
 async function silentRefresh() {
   await Promise.all([
     loadData(),
@@ -419,32 +418,24 @@ async function silentRefresh() {
 
 onMounted(() => {
   silentRefresh()
-  pollTimer = setInterval(silentRefresh, 30000)
+  // 注：不再使用 30 秒全量轮询。移动端切到后台时 EventSource 会被系统挂起，
+  // 由 utils/realtime.ts 在 visibilitychange 时断连/补连并做一次校验，
+  // 因此本页只需订阅业务域变更，不自己承担轮询节奏。
 })
 
-// 智能体 / 其他页面改了数据：立即静默刷新，不等下一轮 30 秒轮询
-const offDataChange = onDataChange(['teacher-tasks', 'teacher-students', 'teacher-dashboard', 'teacher-care'], () => {
-  if (pollTimer !== null) silentRefresh()
-})
+// 订阅业务域变更：SSE 推送 / 其他页面写操作 / 智能体工具调用汇入同一入口
+const offDataChange = onDataChange(
+  ['teacher-tasks', 'teacher-students', 'teacher-dashboard', 'teacher-care', 'teacher-approval'],
+  () => { void silentRefresh() },
+)
 
 onActivated(() => {
   selectedTaskDate.value = new Date().toISOString().slice(0, 10)
+  // 停用期间可能错过事件批次，切回时补一次校验（3 秒内不重复）
   if (Date.now() - lastRefreshAt >= 3_000) silentRefresh()
-  if (pollTimer === null) pollTimer = setInterval(silentRefresh, 30000)
-})
-
-onDeactivated(() => {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
 })
 
 onUnmounted(() => {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
   offDataChange()
 })
 

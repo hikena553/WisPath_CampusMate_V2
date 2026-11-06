@@ -31,11 +31,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ArrowRight, Sunrise } from '@element-plus/icons-vue'
 import { getTeacherTasks, type TeacherTask } from '@/api/teacherTask'
 import { getPendingLeaves } from '@/api/leave'
 import { getAlerts } from '@/api/crisis'
+import { onRealtimeData } from '@/utils/realtime'
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 
 const emit = defineEmits<{ navigate: [path: string] }>()
@@ -198,13 +199,20 @@ async function load(silent = false) {
   }
 }
 
-onMounted(load)
-/** 从其它页签切回首页时静默刷新：数据已在，不再亮 loading，避免切页瞬间闪一下 */
-let activatedOnce = false
-onActivated(() => {
-  if (activatedOnce) load(true)
-  else activatedOnce = true
-})
+onMounted(() => { void load(true) })
+
+/**
+ * 实时更新：今日重点 = 请假审批 + 心理预警 + 逾期/今日任务，
+ * 这四类变化都已被 SSE 覆盖。原先只靠父页面手动调 reload()，
+ * 离开首页时（如去审批页处理完假条）回到首页仍显示旧数字。
+ * 现在订阅对应业务域，变更即静默重拉，无整页刷新、无 loading 闪烁。
+ */
+const offRealtime = onRealtimeData(
+  ['teacher-tasks', 'teacher-approval', 'teacher-dashboard'],
+  () => { void load(true) },
+)
+onBeforeUnmount(offRealtime)
+
 defineExpose({ reload: load })
 </script>
 
@@ -219,7 +227,10 @@ defineExpose({ reload: load })
   margin-bottom: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* 段间距从 12 收到 8：本卡三段的「段间空白 = gap + 该段自身 padding」，
+     原来卡头 12+12=24px、主体到口径 12+10=22px，视觉上两段之间松散发空。
+     收到 8 后分别为 16px / 14px，仍保留可读的分隔感但不显空。 */
+  gap: 8px;
 }
 
 .tf-head {
@@ -228,7 +239,7 @@ defineExpose({ reload: load })
   justify-content: space-between;
   gap: 10px;
   /* 卡头与正文之间用发丝分割线区分，避免标题、主体、口径说明糊成一整块 */
-  padding-bottom: 12px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--tui-border);
 }
 .tf-title {
@@ -351,7 +362,9 @@ defineExpose({ reload: load })
 .tf-breakdown {
   font-size: 11.5px;
   color: var(--tui-text-quiet);
-  padding: 10px 1px 0;
+  /* 口径说明紧贴主体：上方留白由卡片 gap 提供，这里只补 6px，
+     避免「gap 8 + padding 10」叠成 18px 的空档。 */
+  padding: 6px 1px 0;
   border-top: 1px solid var(--tui-border);
 }
 </style>

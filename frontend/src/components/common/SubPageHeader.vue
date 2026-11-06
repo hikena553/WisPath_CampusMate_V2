@@ -4,6 +4,7 @@
       <el-icon :size="20"><ArrowLeft /></el-icon>
     </button>
     <div class="tui-appbar-title">
+      <span v-if="accent" class="tui-appbar-dot" :style="{ background: accent }" aria-hidden="true"></span>
       <span class="tui-appbar-txt">
         {{ title }}
       </span>
@@ -43,6 +44,8 @@ const props = defineProps<{
   title: string
   /** 无历史记录时的兜底返回路径 */
   fallback: string
+  /** 可选模块识别色：标题前的小圆点，与学业中心子页头一致（48px 白底 + 发丝线） */
+  accent?: string
 }>()
 
 const { isMobile } = useResponsive()
@@ -51,7 +54,7 @@ const route = useRoute()
 
 /** 归属父级：这些子路由未在侧边栏单列，面包屑给出其所属的一级入口 */
 const PARENT_CRUMBS: { prefix: string; label: string; path: string }[] = [
-  { prefix: '/teacher/portfolio', label: '学生档案', path: '/teacher/students' },
+  { prefix: '/teacher/portfolio', label: '学生成长档案', path: '/teacher/portfolio' },
   { prefix: '/teacher/survey', label: '学生档案', path: '/teacher/students' },
   { prefix: '/teacher/ai', label: '首页', path: '/teacher' },
 ]
@@ -94,19 +97,21 @@ function goBack() {
    48px 固定高度 + 白底 + 永久发丝线 + 识别色圆点，与学业中心子页 .subpage-bar 同规格。
    教师端沿用 .tui-page 的 sticky 行为，不受影响。 */
 .tui-appbar {
-  /* 顶部安全区：白底铺进状态栏，返回键/标题让到状态栏与挖孔下方（Android 15 edge-to-edge） */
-  height: calc(clamp(46px, 11.8vw, 52px) + var(--sat, 0px));
-  min-height: calc(clamp(46px, 11.8vw, 52px) + var(--sat, 0px));
+  /* 顶部安全区：白底铺进状态栏，返回键/标题让到状态栏与挖孔下方（Android 15 edge-to-edge）。
+     高度与内边距统一取 styles/responsive.css 的 --appbar-* 变量，
+     保证与各页自有页头（消息页、学生档案、加好友）完全一致。
+     用 min-height 而非 height：标题过长/字号放大时可自然撑高，不会裁字。 */
+  min-height: var(--appbar-h);
   gap: 8px;
   /* 左右内边距从 12 收到 4：抬头本身就是满宽（390=视口），
      能让它"更宽"的只有内边距和字号这两个变量。
      12px 时标题可用区只剩 334px（返回键 + 内边距占掉 56px），
      中文六个字以上的页面名会直接贴边；收到 4px 后可用区 344px。 */
-  padding: var(--sat, 0px) 4px 0;
+  padding: var(--sat, 0px) var(--appbar-px) 0;
   background: var(--sp-surface, #ffffff);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-bottom: 1px solid var(--sp-border, #e9ebee);
+  border-bottom: 1px solid var(--sp-border, var(--appbar-hairline));
 }
 
 /* 学生端：固定在顶部，滚动内容从其下方穿过（与学业中心子页头一致） */
@@ -131,9 +136,13 @@ function goBack() {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 17.5px;
-  font-weight: 680;
+  font-size: var(--appbar-title-size);
+  font-weight: var(--appbar-title-weight);
   letter-spacing: -0.2px;
+}
+.tui-appbar-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  flex: none;
 }
 .tui-appbar-txt {
   display: flex;

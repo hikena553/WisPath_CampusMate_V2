@@ -237,7 +237,6 @@ async def send_group_message(group_id: int, data: GroupMessageSend, user: User =
             "id": msg.id,
             "sender_id": user.id,
             "sender_name": user.name,
-            "sender_avatar": user.avatar,
             "content": data.content,
             "created_at": msg.created_at.isoformat() if msg.created_at else "",
         })

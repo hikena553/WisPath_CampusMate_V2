@@ -11,7 +11,6 @@ from datetime import date, datetime, timedelta
 
 from app.models.care_record import CareRecord, CareRecordType
 from app.models.crisis import AIDialogSummary, CrisisLevel
-from app.models.leave import LeaveRequest, LeaveStatus
 from app.models.teacher_task import TaskSourceType, TaskStatus, TeacherTask
 from app.models.user import UserRole
 
@@ -166,11 +165,11 @@ def test_care_record_rejects_foreign_student(client, api, make_user, db):
     assert db.query(CareRecord).filter(CareRecord.student_id == stranger.id).count() == 0
 
 
-# ── 模块 5：销假确认 + 统计 ─────────────────────────────────────────────
+# ── 模块 5：请假审批统计（销假链路已下线） ──────────────────────────────
 
 
-def test_leave_confirm_return_and_stats(client, api, make_user, db):
-    """请假闭环：审批通过 → 返校确认；统计口径含待销假数。"""
+def test_leave_approve_and_stats(client, api, make_user, db):
+    """请假闭环：审批通过即流程结束，统计口径随之变化。"""
     teacher = make_user(role=UserRole.TEACHER)
     student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id)
     s_headers = _login(client, student)
@@ -190,22 +189,21 @@ def test_leave_confirm_return_and_stats(client, api, make_user, db):
     assert created.status_code == 200, created.text
     leave_id = created.json()["id"]
 
+    stats_initial = api.get("/api/leave/stats", headers=t_headers).json()
+    assert stats_initial["pending"] == 1
+    assert stats_initial["approved"] == 0
+
     approved = api.post(
         f"/api/leave/{leave_id}/review", json={"action": "approve"}, headers=t_headers
     )
     assert approved.status_code == 200, approved.text
 
-    stats_before = api.get("/api/leave/stats", headers=t_headers).json()
-    assert stats_before["approved"] == 1
-    assert stats_before["awaiting_return"] == 1
-
-    confirmed = api.post(f"/api/leave/{leave_id}/confirm-return", headers=t_headers)
-    assert confirmed.status_code == 200, confirmed.text
-    assert confirmed.json()["return_confirmed"] is True
-    assert db.get(LeaveRequest, leave_id).return_confirmed is True
-
     stats_after = api.get("/api/leave/stats", headers=t_headers).json()
-    assert stats_after["awaiting_return"] == 0
+    assert stats_after["approved"] == 1
+    assert stats_after["pending"] == 0
+    assert stats_after["total"] == stats_initial["total"]
+    # 销假链路已下线：统计不再包含待销假口径
+    assert "awaiting_return" not in stats_after
 
 
 def test_frequent_leave_triggers_alert_task(client, api, make_user, db):
@@ -248,8 +246,8 @@ def test_frequent_leave_triggers_alert_task(client, api, make_user, db):
     assert "频繁请假" in alerts[0].title
 
 
-def test_confirm_return_rejects_pending_leave(client, api, make_user):
-    """未通过的请假不允许确认返校。"""
+def test_confirm_return_endpoint_removed(client, api, make_user):
+    """销假链路已下线：confirm-return 接口不应再存在。"""
     teacher = make_user(role=UserRole.TEACHER)
     student = make_user(role=UserRole.STUDENT, tutor_id=teacher.id)
     s_headers = _login(client, student)
@@ -268,8 +266,7 @@ def test_confirm_return_rejects_pending_leave(client, api, make_user):
     ).json()["id"]
 
     resp = api.post(f"/api/leave/{leave_id}/confirm-return", headers=t_headers)
-    assert resp.status_code == 400
-    assert "已通过" in resp.json()["detail"]
+    assert resp.status_code == 404
 
 
 # ── 模块 4：随访到期提醒 ────────────────────────────────────────────────

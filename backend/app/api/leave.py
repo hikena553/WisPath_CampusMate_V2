@@ -19,6 +19,7 @@ from app.schemas.leave import (
 )
 from app.services import teacher_task_service
 from app.services import learning_event_service
+from app.services.realtime import hub as realtime_hub
 from app.services.llm_service import _get_client, _get_llm_config
 from app.services.prompts import build_leave_analysis_prompt
 from app.utils.enum_helpers import safe_enum_val, safe_enum_str
@@ -73,8 +74,6 @@ def _to_out(r: LeaveRequest, student_name: str = "") -> LeaveRequestOut:
         leave_type=safe_enum_val(r.leave_type),
         status=safe_enum_val(r.status),
         reject_reason=r.reject_reason,
-        return_confirmed=bool(r.return_confirmed),
-        return_confirmed_at=r.return_confirmed_at.isoformat() if r.return_confirmed_at else None,
         created_at=r.created_at.isoformat() if r.created_at else "",
         updated_at=r.updated_at.isoformat() if r.updated_at else "",
     )
@@ -123,45 +122,22 @@ def create_leave(req: LeaveRequestCreate, user: User = Depends(get_current_user)
     )
     db.commit()
     db.refresh(leave)
+    # 学生提交假条 → 导师工作台「待请假」立即可见（无需等轮询）
+    if user.tutor_id:
+        realtime_hub.publish(user.tutor_id, ["teacher-approval", "teacher-dashboard"])
     return _to_out(leave, user.name)
 
 
 @router.delete("/{leave_id}")
 def delete_leave(leave_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """撤销请假申请（仅限待审批）。
-
-    口径与工单撤销（``PUT /api/service/tickets/{id}/cancel``）保持一致：只有还没被审批的
-    才能撤。旧实现没有任何状态校验，已批准的记录也能被学生单方面删掉 —— 辅导员台账、
-    出勤统计和「销假」闭环会因此对不上，属于越权抹除已生效凭证。
-
-    撤销是硬删除（同工单）：pending 状态的申请还没产生任何审批动作和通知，删掉不留残链；
-    同时补一条 ``leave.cancel`` 学情事件，保留「申请过又撤回」这一事实用于分析与预警。
-    """
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == leave_id, LeaveRequest.student_id == user.id).first()
     if not leave:
         raise HTTPException(status_code=404, detail="请假申请不存在")
-    status = safe_enum_val(leave.status)
-    if status == "approved":
-        raise HTTPException(status_code=400, detail="请假已通过审批，不能撤销；如需变更请联系辅导员")
-    if status == "rejected":
-        raise HTTPException(status_code=400, detail="已退回的申请无需撤销")
-    if status != "pending":
-        raise HTTPException(status_code=400, detail="当前状态不可撤销")
-    learning_event_service.emit(
-        db,
-        actor_id=user.id,
-        verb="leave.cancel",
-        object_type="leave",
-        object_id=leave.id,
-        context={
-            "leave_type": safe_enum_val(leave.leave_type),
-            "start_date": str(leave.start_date),
-            "end_date": str(leave.end_date),
-        },
-    )
     db.delete(leave)
     db.commit()
-    return {"message": "已撤销"}
+    if user.tutor_id:
+        realtime_hub.publish(user.tutor_id, ["teacher-approval", "teacher-dashboard"])
+    return {"message": "已删除"}
 
 
 @router.get("/pending", response_model=list[LeaveRequestOut])
@@ -229,6 +205,8 @@ def review_leave(leave_id: int, req: LeaveApprove, user: User = Depends(require_
     # 闭环（模块 5）：同生频繁请假 → 生成 alert 跟进任务
     if student and leave.status == LeaveStatus.APPROVED:
         _maybe_alert_frequent_leave(db, student.tutor_id or user.id, student, leave)
+    # 审批结果影响工作台「待请假」计数（待处理假条减少）与统计报表
+    realtime_hub.publish(user.id, ["teacher-approval", "teacher-dashboard"])
     return {"message": f"已{req.action}"}
 
 
@@ -286,8 +264,6 @@ def leave_stats(user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADM
         stats.total += 1
         if status == "approved":
             stats.approved += 1
-            if not r.return_confirmed:
-                stats.awaiting_return += 1
         elif status == "rejected":
             stats.rejected += 1
         else:
@@ -315,41 +291,6 @@ def _bump(item: LeaveStatsItem, status: str) -> None:
         item.rejected += 1
     else:
         item.pending += 1
-
-
-@router.post("/{leave_id}/confirm-return")
-def confirm_return(leave_id: int, user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)), db: Session = Depends(get_db)):
-    """销假确认：审批通过的请假，学生返校后由教师确认，闭环结束。"""
-    leave = db.query(LeaveRequest).filter(LeaveRequest.id == leave_id).first()
-    if not leave:
-        raise HTTPException(status_code=404, detail="请假申请不存在")
-    if user.role != UserRole.ADMIN:
-        student = db.query(User).filter(User.id == leave.student_id).first()
-        if not student or student.tutor_id != user.id:
-            raise HTTPException(status_code=403, detail="无权操作该请假")
-    if safe_enum_val(leave.status) != "approved":
-        raise HTTPException(status_code=400, detail="仅已通过的请假可确认返校")
-    if leave.return_confirmed:
-        return {"message": "已确认返校", "return_confirmed": True}
-
-    leave.return_confirmed = True
-    leave.return_confirmed_at = datetime.now()
-    db.commit()
-
-    student = db.query(User).filter(User.id == leave.student_id).first()
-    if student:
-        from app.models.notification import NotificationType
-        from app.services.notification_service import send_notification
-        send_notification(
-            db, student.id,
-            title="销假确认",
-            content=f"你的请假（{leave.start_date}~{leave.end_date}）已完成销假确认，欢迎返校。",
-            notification_type=NotificationType.LEAVE,
-            link="/student/schedule?tab=service",
-            related_id=leave.id,
-            sender_id=user.id,
-        )
-    return {"message": "已确认返校", "return_confirmed": True}
 
 
 @router.get("/{id}/analyze")

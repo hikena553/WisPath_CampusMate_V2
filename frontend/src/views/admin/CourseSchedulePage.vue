@@ -28,6 +28,81 @@
       </div>
     </div>
 
+    <!-- ══════════ 教师调课 / 增课审批（总览模式常驻，有待审时置顶）══════════ -->
+    <section v-if="!activeClassId" class="change-panel" :class="{ 'is-empty': !changePending.length }">
+      <div class="cp-head">
+        <span class="cp-title">
+          调课 / 增课申请
+          <b v-if="changePending.length" class="cp-badge">{{ changePending.length }}</b>
+        </span>
+        <span class="cp-sub">{{ changePending.length ? '待你审批' : '暂无待审申请' }}</span>
+        <div class="cp-actions">
+          <el-button size="small" text @click="toggleChangeList">
+            {{ showChangeList ? '收起台账' : '查看全部台账' }}
+          </el-button>
+          <el-button size="small" text :loading="changeLoading" @click="loadChanges">刷新</el-button>
+        </div>
+      </div>
+
+      <div v-if="changePending.length" class="cp-list">
+        <article v-for="r in changePending" :key="r.id" class="cp-item">
+          <div class="cp-item-main">
+            <div class="cp-item-hd">
+              <span class="cp-kind" :class="`is-${r.kind}`">{{ r.kind_label }}</span>
+              <b class="cp-name">{{ r.course_name }}</b>
+              <span class="cp-class">{{ r.class_name }}</span>
+            </div>
+            <div class="cp-when">
+              <template v-if="r.kind === 'swap' && r.origin_day_of_week">
+                <span class="cp-origin">{{ weekdayText(r.origin_day_of_week) }} 第{{ r.origin_start_period }}-{{ r.origin_end_period }}节</span>
+                <span class="cp-arrow">→</span>
+              </template>
+              <span class="cp-target">{{ weekdayText(r.day_of_week) }} 第{{ r.start_period }}-{{ r.end_period }}节</span>
+              <span v-if="r.location" class="cp-loc">· {{ r.location }}</span>
+            </div>
+            <div class="cp-meta">{{ r.applicant_name }} 提交 · {{ (r.created_at || '').slice(0, 16).replace('T', ' ') }}</div>
+            <div v-if="r.reason" class="cp-reason">理由：{{ r.reason }}</div>
+            <div v-if="r.conflicts && r.conflicts.length" class="cp-conflict">
+              ⚠ {{ r.conflicts.join('；') }}
+            </div>
+          </div>
+          <div class="cp-item-ops">
+            <el-button size="small" @click="rejectChange(r)">驳回</el-button>
+            <el-button size="small" type="primary" :disabled="!!(r.conflicts && r.conflicts.length)" @click="approveChange(r)">
+              通过
+            </el-button>
+          </div>
+        </article>
+      </div>
+
+      <div v-if="showChangeList" class="cp-table-wrap">
+        <el-table :data="changeAll" size="small" empty-text="暂无申请记录" max-height="360">
+          <el-table-column label="类型" width="70">
+            <template #default="{ row }">
+              <span class="cp-kind" :class="`is-${row.kind}`">{{ row.kind_label }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="course_name" label="课程" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="class_name" label="班级" min-width="130" show-overflow-tooltip />
+          <el-table-column label="调整后" min-width="150">
+            <template #default="{ row }">
+              {{ weekdayText(row.day_of_week) }} 第{{ row.start_period }}-{{ row.end_period }}节
+            </template>
+          </el-table-column>
+          <el-table-column prop="applicant_name" label="申请人" width="90" />
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" effect="light" :type="changeTagType(row.status)">{{ row.status_label }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="approver_name" label="审批人" width="90" />
+          <el-table-column label="提交时间" width="120">
+            <template #default="{ row }">{{ (row.created_at || '').slice(5, 16).replace('T', ' ') }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </section>
+
     <!-- ══════════ 总览模式：学期分页 + 课程表卡片 ══════════ -->
     <template v-if="!activeClassId">
       <div v-if="semesterTabs.length" class="semester-tabs">
@@ -134,7 +209,7 @@
           <!-- 表头 -->
           <div class="grid-row header">
             <div class="cell period-header">节次</div>
-            <div class="cell day-header" v-for="d in 7" :key="d">周{{ ['一','二','三','四','五','六','日'][d-1] }}</div>
+            <div class="cell day-header" v-for="d in WEEKDAY_OPTIONS" :key="d.value">{{ d.label }}</div>
           </div>
           <!-- 课表行 -->
           <div class="grid-row" v-for="p in periods" :key="p">
@@ -165,7 +240,9 @@
         <el-form-item label="上课地点" required><el-input v-model="courseForm.location" placeholder="如：教学楼A-301" /></el-form-item>
         <el-form-item label="星期" required>
           <el-select v-model="courseForm.day_of_week" placeholder="请选择星期" style="width: 100%">
-            <el-option v-for="d in 5" :key="d" :label="'周' + ['一','二','三','四','五'][d-1]" :value="d" />
+            <!-- 网格本身是 7 天，下拉也必须给满 7 天：旧版只给周一到周五，
+                 周六周日的课在网格里显示得出来、却没法在这里新增或改过去 -->
+            <el-option v-for="d in WEEKDAY_OPTIONS" :key="d.value" :label="d.label" :value="d.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="节次">
@@ -394,6 +471,10 @@ import {
   adminGetManagedSemesters, adminCreateSemester, adminUpdateSemester, adminDeleteSemester,
   type ScheduleSummaryItem, type ManagedSemester,
 } from '@/api/academic'
+import {
+  getAllScheduleChanges, getPendingScheduleChanges,
+  reviewScheduleChange, WEEKDAY_LABELS, type ScheduleChangeItem,
+} from '@/api/scheduleChange'
 
 // ─── 组织数据 ─────────────────────────────────────────────
 const colleges = ref<College[]>([])
@@ -516,6 +597,16 @@ async function loadCourses() {
 }
 
 // ─── 新增/编辑 ─────────────────────────────────────────────
+/** 星期下拉选项：与网格表头（一~日）保持同一份定义，避免两处各写一遍导致不一致 */
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: '周一' },
+  { value: 2, label: '周二' },
+  { value: 3, label: '周三' },
+  { value: 4, label: '周四' },
+  { value: 5, label: '周五' },
+  { value: 6, label: '周六' },
+  { value: 7, label: '周日' },
+]
 const dialogVisible = ref(false)
 const editingCourse = ref<Course | null>(null)
 const courseForm = ref({
@@ -823,12 +914,92 @@ async function loadSemesters() {
   }
 }
 
+// ─── 教师调课 / 增课审批 ──────────────────────────────────
+const changePending = ref<ScheduleChangeItem[]>([])
+const changeAll = ref<ScheduleChangeItem[]>([])
+const changeLoading = ref(false)
+const showChangeList = ref(false)
+
+function weekdayText(d: number | null | undefined) {
+  return (d && WEEKDAY_LABELS[d]) || '—'
+}
+
+function changeTagType(s: string): 'warning' | 'success' | 'danger' | 'info' {
+  if (s === 'approved') return 'success'
+  if (s === 'rejected') return 'danger'
+  if (s === 'pending') return 'warning'
+  return 'info'
+}
+
+async function loadChanges() {
+  changeLoading.value = true
+  try {
+    const [pending, all] = await Promise.all([
+      getPendingScheduleChanges(),
+      getAllScheduleChanges(),
+    ])
+    changePending.value = pending
+    changeAll.value = all
+  } catch {
+    // 审批面板是辅助区，拉取失败不打断排课主流程
+    changePending.value = []
+    changeAll.value = []
+  } finally {
+    changeLoading.value = false
+  }
+}
+
+function toggleChangeList() {
+  showChangeList.value = !showChangeList.value
+}
+
+/** 通过：服务端会再查一次冲突（提交后可能有人先占了同一时段），冲突时返回 409 */
+async function approveChange(r: ScheduleChangeItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确认通过「${r.applicant_name}」的${r.kind_label}申请？\n${r.class_name}《${r.course_name}》→ ` +
+        `${weekdayText(r.day_of_week)} 第${r.start_period}-${r.end_period}节\n通过后将立即写入正式课表并通知该班学生。`,
+      '确认审批',
+      { type: 'warning', confirmButtonText: '通过', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await reviewScheduleChange(r.id, 'approve')
+    ElMessage.success('已通过，课表已更新')
+    await loadChanges()
+    // 当前正在看的班级可能被改动，顺手刷新网格
+    if (activeClassId.value) void loadCourses()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '审批失败')
+  }
+}
+
+async function rejectChange(r: ScheduleChangeItem) {
+  try {
+    const { value } = await ElMessageBox.prompt('请填写驳回原因（会通知申请人）', '驳回申请', {
+      confirmButtonText: '驳回',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputValidator: (v: string) => (!!v && v.trim().length > 0) || '请填写驳回原因',
+    })
+    await reviewScheduleChange(r.id, 'reject', value.trim())
+    ElMessage.success('已驳回')
+    await loadChanges()
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.response?.data?.detail || '操作失败')
+  }
+}
+
 onMounted(async () => {
   const [c, m] = await Promise.all([getColleges(), getMajors()])
   colleges.value = c as any
   majors.value = m as any
   loadSemesters()
   loadSummary()
+  void loadChanges()
 })
 </script>
 
@@ -996,5 +1167,53 @@ onMounted(async () => {
   .search-input { width: 120px; }
   .detail-title { flex-direction: column; align-items: flex-start; gap: 2px; }
   .detail-actions { flex-direction: column; align-items: stretch; }
+}
+
+/* ══════════ 调课 / 增课审批面板 ══════════ */
+.change-panel {
+  background: #fff; border: 1px solid #fde3c8; border-radius: 10px;
+  padding: 10px 16px 12px; margin-bottom: 4px;
+}
+.change-panel.is-empty { border-color: #eef2f7; }
+.cp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cp-title { font-size: 14px; font-weight: 600; color: #1e293b; display: inline-flex; align-items: center; gap: 6px; }
+.cp-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px;
+  background: #f97316; color: #fff; font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.cp-sub { font-size: 12px; color: #94a3b8; }
+.cp-actions { margin-left: auto; display: flex; gap: 4px; }
+.cp-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.cp-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  border: 1px solid #f1f5f9; border-radius: 8px; padding: 10px 12px; background: #fffdfa;
+}
+.cp-item-main { flex: 1; min-width: 0; }
+.cp-item-hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cp-kind {
+  font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 6px;
+  background: #eff6ff; color: #2563eb; white-space: nowrap;
+}
+.cp-kind.is-add { background: #ecfdf5; color: #059669; }
+.cp-name { font-size: 13.5px; color: #1e293b; }
+.cp-class { font-size: 12px; color: #64748b; }
+.cp-when { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; font-size: 12.5px; color: #475569; }
+.cp-origin { text-decoration: line-through; color: #94a3b8; }
+.cp-arrow { color: #cbd5e1; }
+.cp-target { font-weight: 600; color: #1e293b; }
+.cp-loc { color: #64748b; }
+.cp-meta { margin-top: 4px; font-size: 11.5px; color: #94a3b8; }
+.cp-reason { margin-top: 5px; font-size: 12px; color: #475569; line-height: 1.6; }
+.cp-conflict {
+  margin-top: 6px; font-size: 12px; color: #b45309;
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 5px 8px; line-height: 1.6;
+}
+.cp-item-ops { display: flex; gap: 6px; flex: 0 0 auto; }
+.cp-table-wrap { margin-top: 10px; }
+
+@media (max-width: 767px) {
+  .cp-item { flex-direction: column; }
+  .cp-item-ops { width: 100%; justify-content: flex-end; }
 }
 </style>
