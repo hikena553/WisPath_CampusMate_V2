@@ -35,7 +35,31 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- QQ 互联移动端：QQ 客户端授权后经 tencent{appid} scheme 回跳到 SDK 的 AuthActivity -->
+        <activity
+            android:name="com.tencent.tauth.AuthActivity"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tencent${qqAppId}" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.tencent.connect.common.AssistActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
     </application>
+
+    <!-- Android 11+（API 30+）包可见性：不声明则 isQQInstalled 恒为 false、无法拉起 QQ 客户端 -->
+    <queries>
+        <package android:name="com.tencent.mobileqq" />
+    </queries>
 
     <!-- Permissions -->
 

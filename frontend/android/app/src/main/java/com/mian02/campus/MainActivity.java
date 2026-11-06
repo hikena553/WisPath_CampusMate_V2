@@ -12,6 +12,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.Plugin;
 
 /**
  * Android 返回键 / 全面屏侧滑返回处理。
@@ -40,6 +41,17 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // QQ 互联移动端授权插件：官方 SDK aar（android/app/libs/）就位后才会编译进包，
+        // 未就位时这里按缺失处理跳过注册，QQ 授权入口在网页侧自动回退。
+        try {
+            @SuppressWarnings("unchecked")
+            Class<? extends Plugin> qqPlugin =
+                    (Class<? extends Plugin>) Class.forName("com.mian02.campus.QQAuthPlugin");
+            registerPlugin(qqPlugin);
+        } catch (ClassNotFoundException ignored) {
+            // libs 里还没有 QQ OpenSDK aar：不注册插件，其余功能不受影响
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             backCallback = this::handleBack;
