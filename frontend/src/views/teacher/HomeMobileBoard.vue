@@ -25,7 +25,7 @@
     />
 
     <!-- ===== 今日重点（置顶，突出教师个人事务） ===== -->
-    <TodayFocusCard @navigate="navigateTo" />
+    <TodayFocusCard ref="todayFocusRef" @navigate="navigateTo" />
 
     <!-- ===== 第一层：KPI统计卡片 ===== -->
     <HomeKpiCards :cards="statCards" @navigate="navigateTo" />
@@ -71,26 +71,26 @@
         <span class="workbench-title">我的节奏</span>
       </div>
       <div class="workbench-grid">
-        <WeekPlanCard @open-schedule="openSchedulePanel" />
+        <WeekPlanCard ref="weekPlanRef" @open-schedule="openSchedulePanel" />
         <WorkloadCard @open-records="emit('open-records')" />
       </div>
     </section>
 
     <!-- 本周计划「去安排」子页（移动端）：任务管理页，直观展示并可直接添加任务 -->
     <HomeMobileTodayTasks v-if="showTodaySubPage" :selected-date="selectedTaskDate"
-      :today-leaves="todayLeaves" :today-schedules="todaySchedules" :overdue-schedules="overdueSchedules"
-      :schedules="schedules" :pending-leaves="pendingLeaves" :urgency-options="urgencyOptions"
+      :today-leaves="todayLeaves" :today-items="todayItems" :overdue-items="overdueItems"
+      :plan-items="planItems" :pending-leaves="pendingLeaves" :urgency-options="urgencyOptions"
       @close="showTodaySubPage = false" @select-date="handlePopupDateSelect"
-      @open-quick-add="openQuickAddDialog" @toggle-complete="toggleScheduleComplete"
-      @delete-schedule="handleDeleteSchedule" @navigate="navigateTo" @task-added="handleTaskAdded" />
+      @open-quick-add="openQuickAddDialog" @toggle-item="togglePlanItem"
+      @delete-item="handleDeletePlanItem" @navigate="navigateTo" @task-added="handleTaskAdded" />
 
     <!-- 快捷添加任务弹窗 -->
     <HomeQuickAddTask v-model:visible="quickAddDialogVisible" :selected-task-date="selectedTaskDate"
       :urgency-options="urgencyOptions" @added="handleQuickTaskAdded" />
 
-    <!-- 添加日程弹窗 -->
+    <!-- 添加待办弹窗 -->
     <HomeAddScheduleDialog v-model:visible="scheduleDialogVisible" v-model:date="selectedDateStr"
-      v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="loadSchedules" />
+      v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="reloadPlans" />
 
     <!-- 待批请假弹窗 -->
     <HomeLeaveDetailDialog v-model:visible="leaveDetailVisible" :leaves="selectedDayLeaves" @navigate="navigateTo('/teacher/approval')" />
@@ -114,7 +114,11 @@ import {
   getOverdueSchedules,
 } from '@/api/teacher'
 import type { DashboardStats, ScheduleItem, ScheduleUrgency } from '@/api/teacher'
-import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
+import {
+  getTeacherTaskSummary, getTeacherTasks, updateTeacherTask, deleteTeacherTask,
+  type TeacherTask, type TeacherTaskSummary,
+} from '@/api/teacherTask'
+import { mergePlanItems, isPlanItemOverdue, type PlanItem } from '@/utils/teacherPlan'
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 import { ElMessage } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
@@ -167,6 +171,9 @@ const taskSummary = ref<TeacherTaskSummary>({ pending: 0, overdue: 0, today: 0, 
 
 // 移动端「去安排」任务管理子页
 const showTodaySubPage = ref(false)
+// 计划/今日重点卡片各自取数，添加或勾选后需要显式刷新
+const todayFocusRef = ref<InstanceType<typeof TodayFocusCard> | null>(null)
+const weekPlanRef = ref<InstanceType<typeof WeekPlanCard> | null>(null)
 // 移动端「今日任务」子页：打开时让出底部悬浮导航
 useMobileSubPage(computed(() => showTodaySubPage.value))
 // 系统返回一次只收这一层（见 useBackLayer）
@@ -248,6 +255,7 @@ const now = new Date()
 const calYear = ref(now.getFullYear())
 const calMonth = ref(now.getMonth() + 1)
 const schedules = ref<ScheduleItem[]>([])
+const tasks = ref<TeacherTask[]>([])
 const overdueSchedules = ref<ScheduleItem[]>([])
 const scheduleDialogVisible = ref(false)
 const scheduleContent = ref('')
@@ -262,8 +270,13 @@ let overdueReqSeq = 0
 const todayLeaves = computed(() =>
   pendingLeaves.value.filter(l => l.start_date <= selectedTaskDate.value && l.end_date >= selectedTaskDate.value)
 )
-const todaySchedules = computed(() =>
-  schedules.value.filter(s => s.date === selectedTaskDate.value)
+/** 计划 = 待办 + 旧日程（同一天在日历/列表里只出现一次逻辑由 key 区分） */
+const planItems = computed(() => mergePlanItems(tasks.value, schedules.value))
+const todayItems = computed(() =>
+  planItems.value.filter(i => i.date === selectedTaskDate.value)
+)
+const overdueItems = computed(() =>
+  mergePlanItems(tasks.value, overdueSchedules.value).filter(i => isPlanItemOverdue(i))
 )
 
 /** 我的节奏：周计划「去安排」——移动端进任务管理子页 */
@@ -271,21 +284,25 @@ function openSchedulePanel() {
   showTodaySubPage.value = true
 }
 
-/** 勾选/取消完成：持久化到后端；原地更新状态不重排列表 */
-async function toggleScheduleComplete(s: ScheduleItem) {
-  const target = !s.completed
+/** 勾选/取消完成：按条目来源落库；原地更新状态不重排列表 */
+async function togglePlanItem(item: PlanItem) {
+  const target = !item.completed
   try {
-    await updateTeacherSchedule(s.id, target)
-    overdueReqSeq++
-    s.completed = target
-    s.completed_at = target ? new Date().toISOString() : null
-    const today = new Date().toISOString().slice(0, 10)
-    if (target) {
-      overdueSchedules.value = overdueSchedules.value.filter(o => o.id !== s.id)
-    } else if (s.date < today) {
-      overdueSchedules.value = [s, ...overdueSchedules.value.filter(o => o.id !== s.id)]
+    if (item.kind === 'task') {
+      const updated = await updateTeacherTask(item.rawId, { status: target ? 'done' : 'pending' })
+      const idx = tasks.value.findIndex(t => t.id === item.rawId)
+      if (idx !== -1) tasks.value[idx] = updated
+    } else {
+      const updated = await updateTeacherSchedule(item.rawId, target)
+      const idx = schedules.value.findIndex(s => s.id === item.rawId)
+      if (idx !== -1) schedules.value[idx] = updated
+      const oidx = overdueSchedules.value.findIndex(s => s.id === item.rawId)
+      if (oidx !== -1) overdueSchedules.value[oidx] = updated
+      await loadOverdueSchedules()
     }
-    await loadOverdueSchedules()
+    overdueReqSeq++
+    todayFocusRef.value?.reload()
+    weekPlanRef.value?.reload()
   } catch {
     ElMessage.error('操作失败')
   }
@@ -307,21 +324,32 @@ function handleTaskAdded() {
   const d = new Date(selectedTaskDate.value)
   calYear.value = d.getFullYear()
   calMonth.value = d.getMonth() + 1
-  loadSchedules()
+  reloadPlans()
 }
 
 function handleQuickTaskAdded(date: string) {
   const d = new Date(date)
   calYear.value = d.getFullYear()
   calMonth.value = d.getMonth() + 1
-  loadSchedules()
+  reloadPlans()
 }
 
-async function handleDeleteSchedule(id: number) {
+/** 计划数据统一刷新：本人待办 + 旧日程 + 逾期，外加两张卡片自身 */
+function reloadPlans() {
+  loadTasks()
+  loadSchedules()
+  loadOverdueSchedules()
+  loadData()
+  todayFocusRef.value?.reload()
+  weekPlanRef.value?.reload()
+}
+
+async function handleDeletePlanItem(item: PlanItem) {
   try {
-    await deleteTeacherSchedule(id)
+    if (item.kind === 'task') await deleteTeacherTask(item.rawId)
+    else await deleteTeacherSchedule(item.rawId)
     ElMessage.success('已删除')
-    loadSchedules()
+    reloadPlans()
   } catch { ElMessage.error('删除失败') }
 }
 
@@ -332,6 +360,12 @@ async function loadSchedules() {
   if (cached && schedules.value.length === 0) schedules.value = cached
   try {
     schedules.value = await getTeacherSchedules(calYear.value, calMonth.value)
+  } catch { /* ignore */ }
+}
+
+async function loadTasks() {
+  try {
+    tasks.value = await getTeacherTasks({ limit: 100 })
   } catch { /* ignore */ }
 }
 
@@ -376,6 +410,7 @@ let lastRefreshAt = 0
 async function silentRefresh() {
   await Promise.all([
     loadData(),
+    loadTasks(),
     loadSchedules(),
     loadOverdueSchedules(),
   ]).catch(() => {})

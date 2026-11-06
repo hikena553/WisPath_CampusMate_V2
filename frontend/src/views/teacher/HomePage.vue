@@ -47,13 +47,14 @@
         <div class="dash-col">
           <!-- 今日重点：可执行待办 -->
           <section class="dash-cell">
-            <TodayFocusCard @navigate="navigateTo" />
+            <TodayFocusCard ref="todayFocusRef" @navigate="navigateTo" />
           </section>
 
           <!-- 日程与公告：日历 + 我的公告双栏 -->
           <section class="dash-cell">
             <HomeDesktopSchedule
               :schedules="schedules"
+              :task-dates="taskDates"
               :pending-leaves="pendingLeaves"
               :my-announcements="myAnnouncements"
               :cal-year="calYear"
@@ -71,7 +72,7 @@
         <aside class="dash-col dash-col-side">
           <!-- 我的节奏：本周计划 / 工作量 -->
           <section class="dash-cell">
-            <WeekPlanCard @open-schedule="openSchedulePanel" />
+            <WeekPlanCard ref="weekPlanRef" @open-schedule="openSchedulePanel" />
           </section>
           <section class="dash-cell">
             <WorkloadCard @open-records="router.push('/teacher/students')" />
@@ -156,9 +157,9 @@
     <!-- 待批请假弹窗 -->
     <HomeLeaveDetailDialog v-model:visible="leaveDetailVisible" :leaves="selectedDayLeaves" @navigate="navigateTo('/teacher/approval')" />
 
-    <!-- 添加日程弹窗（桌面端「去安排」/ 桌面日历点击日期） -->
+    <!-- 添加待办弹窗（桌面端「去安排」/ 桌面日历点击日期） -->
     <HomeAddScheduleDialog v-model:visible="scheduleDialogVisible" v-model:date="selectedDateStr"
-      v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="loadSchedules" />
+      v-model:content="scheduleContent" v-model:urgency="scheduleUrgency" @added="reloadPlans" />
   </div>
 </template>
 
@@ -181,7 +182,7 @@ import { getPendingLeaves } from '@/api/leave'
 import { getDashboardStats, getTeacherSchedules, suggestContacts, getTeacherGrowthStats, getClassEvaluation } from '@/api/teacher'
 import type { DashboardStats, ScheduleItem, ScheduleUrgency, ContactSuggestion, GrowthStats, ClassEvaluation } from '@/api/teacher'
 import { getTeacherAnnouncements, deleteAnnouncement, type AnnouncementItem } from '@/api/announcement'
-import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTask'
+import { getTeacherTaskSummary, getTeacherTasks, type TeacherTask, type TeacherTaskSummary } from '@/api/teacherTask'
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 import { ElMessage } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
@@ -406,6 +407,13 @@ const now = new Date()
 const calYear = ref(now.getFullYear())
 const calMonth = ref(now.getMonth() + 1)
 const schedules = ref<ScheduleItem[]>([])
+// 待办即计划：日历上的蓝点同时反映待办截止日
+const tasks = ref<TeacherTask[]>([])
+const taskDates = computed(() =>
+  tasks.value.map((t) => (t.due_at || '').slice(0, 10)).filter(Boolean)
+)
+const todayFocusRef = ref<InstanceType<typeof TodayFocusCard> | null>(null)
+const weekPlanRef = ref<InstanceType<typeof WeekPlanCard> | null>(null)
 const scheduleDialogVisible = ref(false)
 const scheduleContent = ref('')
 const scheduleUrgency = ref<ScheduleUrgency>('normal')
@@ -453,6 +461,21 @@ async function loadSchedules() {
   try {
     schedules.value = await getTeacherSchedules(calYear.value, calMonth.value)
   } catch { /* ignore */ }
+}
+
+async function loadTasks() {
+  try {
+    tasks.value = await getTeacherTasks({ limit: 100 })
+  } catch { /* ignore */ }
+}
+
+/** 新增待办后：日历蓝点、KPI、今日重点、我的计划一起刷新 */
+function reloadPlans() {
+  loadTasks()
+  loadSchedules()
+  loadData()
+  todayFocusRef.value?.reload()
+  weekPlanRef.value?.reload()
 }
 
 async function loadMyAnnouncements() {
@@ -516,6 +539,7 @@ let lastRefreshAt = 0
 async function silentRefresh() {
   await Promise.all([
     loadData(),
+    loadTasks(),
     loadSchedules(),
     loadMyAnnouncements(),
     loadGrowthAndEval(),

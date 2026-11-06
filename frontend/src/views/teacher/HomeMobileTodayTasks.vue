@@ -144,19 +144,19 @@
       </div>
 
       <!-- 逾期未完成（累积全部，不限日期） -->
-      <div v-if="props.overdueSchedules.length > 0" class="task-section">
+      <div v-if="props.overdueItems.length > 0" class="task-section">
         <div class="task-section-head">
           <span class="task-section-dot" style="background:#ef4444"></span>
           <span class="task-section-title">逾期未完成</span>
-          <span class="task-section-badge is-danger">{{ props.overdueSchedules.length }}</span>
+          <span class="task-section-badge is-danger">{{ props.overdueItems.length }}</span>
         </div>
         <div
-          v-for="s in props.overdueSchedules"
-          :key="'od-'+s.id"
+          v-for="s in props.overdueItems"
+          :key="'od-'+s.key"
           class="task-card schedule-card"
           :class="['task-pending', { 'task-urgent': s.urgency === 'urgent' }]"
         >
-          <div class="task-card-check" @click="emit('toggle-complete', s)">
+          <div class="task-card-check" @click="emit('toggle-item', s)">
             <div class="tc-check">
               <el-icon v-if="s.completed"><Check /></el-icon>
             </div>
@@ -169,29 +169,29 @@
               <span v-else-if="s.urgency === 'important'" class="ur-badge ur-important">重要</span>
             </div>
           </div>
-          <button class="task-card-del" @click="emit('delete-schedule', s.id)">
+          <button class="task-card-del" @click="emit('delete-item', s)">
             <el-icon><Delete /></el-icon>
           </button>
         </div>
       </div>
 
-      <!-- 日程安排（当前所选日期） -->
-      <div v-if="props.todaySchedules.length > 0" class="task-section">
+      <!-- 当日计划（当前所选日期：待办 + 旧日程） -->
+      <div v-if="props.todayItems.length > 0" class="task-section">
         <div class="task-section-head">
           <span class="task-section-dot" style="background:#3b82f6"></span>
-          <span class="task-section-title">日程安排</span>
-          <span class="task-section-badge is-info">{{ props.todaySchedules.length }}</span>
+          <span class="task-section-title">当日计划</span>
+          <span class="task-section-badge is-info">{{ props.todayItems.length }}</span>
         </div>
         <div
-          v-for="s in props.todaySchedules"
-          :key="'ts-'+s.id"
+          v-for="s in props.todayItems"
+          :key="'ts-'+s.key"
           class="task-card schedule-card"
           :class="[
             s.completed ? 'task-completed' : 'task-pending',
             { 'task-urgent': !s.completed && s.urgency === 'urgent' }
           ]"
         >
-          <div class="task-card-check" @click="emit('toggle-complete', s)">
+          <div class="task-card-check" @click="emit('toggle-item', s)">
             <div class="tc-check" :class="{ checked: s.completed }">
               <el-icon v-if="s.completed"><Check /></el-icon>
             </div>
@@ -201,17 +201,17 @@
             <div class="task-card-tags">
               <span v-if="!s.completed && s.urgency === 'urgent'" class="ur-badge ur-urgent">紧急</span>
               <span v-else-if="!s.completed && s.urgency === 'important'" class="ur-badge ur-important">重要</span>
-              <span v-if="!s.completed && isOverdueSchedule(s)" class="ur-badge ur-overdue">已逾期</span>
+              <span v-if="!s.completed && isOverdueItem(s)" class="ur-badge ur-overdue">已逾期</span>
             </div>
           </div>
-          <button class="task-card-del" @click="emit('delete-schedule', s.id)">
+          <button class="task-card-del" @click="emit('delete-item', s)">
             <el-icon><Delete /></el-icon>
           </button>
         </div>
       </div>
 
       <!-- 空状态 -->
-      <div v-if="props.todayLeaves.length === 0 && props.todaySchedules.length === 0 && props.overdueSchedules.length === 0" class="task-empty">
+      <div v-if="props.todayLeaves.length === 0 && props.todayItems.length === 0 && props.overdueItems.length === 0" class="task-empty">
         <img :src="siteMascot" class="task-empty-mascot" />
         <div class="task-empty-text">暂无任务安排</div>
         <div class="task-empty-sub">点击下方 + 按钮添加新任务</div>
@@ -224,8 +224,9 @@
 import { ref, computed } from 'vue'
 import { ArrowLeft, DArrowRight, Plus, Check, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { createTeacherSchedule } from '@/api/teacher'
-import type { ScheduleItem, ScheduleUrgency } from '@/api/teacher'
+import { createTeacherTask } from '@/api/teacherTask'
+import type { ScheduleUrgency } from '@/api/teacher'
+import { urgencyToPriority, type PlanItem } from '@/utils/teacherPlan'
 import type { LeaveRequestOut } from '@/types'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 
@@ -235,9 +236,9 @@ const { siteMascot } = useSiteConfig()
 const props = defineProps<{
   selectedDate: string
   todayLeaves: LeaveRequestOut[]
-  todaySchedules: ScheduleItem[]
-  overdueSchedules: ScheduleItem[]
-  schedules: ScheduleItem[]
+  todayItems: PlanItem[]
+  overdueItems: PlanItem[]
+  planItems: PlanItem[]
   pendingLeaves: LeaveRequestOut[]
   urgencyOptions: { value: ScheduleUrgency; label: string }[]
 }>()
@@ -246,18 +247,18 @@ const emit = defineEmits<{
   close: []
   'select-date': [date: string]
   'open-quick-add': []
-  'toggle-complete': [s: ScheduleItem]
-  'delete-schedule': [id: number]
+  'toggle-item': [s: PlanItem]
+  'delete-item': [s: PlanItem]
   navigate: [path: string]
   'task-added': []
 }>()
 
-// 任务统计：完成口径只计入日程（请假以审批为完成路径）
-const totalTodayCount = computed(() => props.todayLeaves.length + props.todaySchedules.length)
-const completedTodayCount = computed(() => props.todaySchedules.filter(s => s.completed).length)
+// 任务统计：完成口径只计入计划条目（请假以审批为完成路径）
+const totalTodayCount = computed(() => props.todayLeaves.length + props.todayItems.length)
+const completedTodayCount = computed(() => props.todayItems.filter(s => s.completed).length)
 const pendingTodayCount = computed(() => Math.max(totalTodayCount.value - completedTodayCount.value, 0))
 
-function isOverdueSchedule(s: ScheduleItem) {
+function isOverdueItem(s: PlanItem) {
   const today = new Date().toISOString().slice(0, 10)
   return !s.completed && s.date < today
 }
@@ -303,7 +304,7 @@ const popupDays = computed(() => {
       taskDates.add(l.start_date)
     }
   })
-  props.schedules.forEach(s => taskDates.add(s.date))
+  props.planItems.forEach(s => taskDates.add(s.date))
 
   const days: { num: number; date: string; other: boolean; isToday: boolean; hasTask: boolean }[] = []
   const totalCells = Math.ceil((first + daysInMonth) / 7) * 7
@@ -356,10 +357,10 @@ const popupTasks = computed(() => {
       tasks.push({ id: 'l-' + l.id, text: `${l.student_name} · ${typeLabel(l.leave_type)}`, color: '#f59e0b' })
     }
   })
-  props.schedules.forEach(s => {
+  props.planItems.forEach(s => {
     if (s.date === date) {
       const color = s.completed ? '#10b981' : s.urgency === 'urgent' ? '#ef4444' : '#3b82f6'
-      tasks.push({ id: 's-' + s.id, text: s.content, color })
+      tasks.push({ id: s.key, text: s.content, color })
     }
   })
   return tasks
@@ -381,12 +382,17 @@ function closePopup() {
   showDatePopup.value = false
 }
 
-// 弹窗内添加任务
+// 弹窗内添加待办
 async function addTaskFromPopup() {
   if (!popupTaskContent.value.trim()) return
   try {
-    await createTeacherSchedule(props.selectedDate, popupTaskContent.value.trim(), popupTaskUrgency.value)
-    ElMessage.success('任务已添加')
+    await createTeacherTask({
+      title: popupTaskContent.value.trim(),
+      due_at: props.selectedDate,
+      priority: urgencyToPriority(popupTaskUrgency.value),
+      source_type: 'manual',
+    })
+    ElMessage.success('待办已添加')
     popupTaskContent.value = ''
     popupTaskUrgency.value = 'normal'
     popupAdding.value = false

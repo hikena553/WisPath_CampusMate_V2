@@ -21,7 +21,7 @@
           <template v-if="d.items.length">
             <span
               v-for="it in d.items"
-              :key="it.id"
+              :key="it.key"
               class="wk-chip"
               :class="[`u-${it.urgency}`, { done: it.completed }]"
               :title="it.content"
@@ -38,11 +38,13 @@
 import { computed, onActivated, onMounted, ref } from 'vue'
 import { ArrowRight, Calendar } from '@element-plus/icons-vue'
 import { getTeacherSchedules, type ScheduleItem } from '@/api/teacher'
+import { getTeacherTasks, type TeacherTask } from '@/api/teacherTask'
+import { mergePlanItems, type PlanItem } from '@/utils/teacherPlan'
 
 const emit = defineEmits<{ 'open-schedule': [] }>()
 
 const loading = ref(false)
-const items = ref<ScheduleItem[]>([])
+const items = ref<PlanItem[]>([])
 
 const WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
@@ -94,15 +96,24 @@ async function load(silent = false) {
       `${start.getFullYear()}-${start.getMonth()}`,
       `${end.getFullYear()}-${end.getMonth()}`,
     ])
-    const results = await Promise.all(
-      [...months].map((m) => {
-        const [y, mo] = m.split('-').map(Number)
-        return getTeacherSchedules(y, mo + 1)
-      })
-    )
-    const merged = results.flat()
+    // 计划 = 待办（新数据源）+ 旧日程（历史数据兼容）
+    const monthList = [...months]
+    const [taskList, scheduleLists] = await Promise.all([
+      getTeacherTasks({ limit: 100 }).catch((): TeacherTask[] => []),
+      Promise.all(
+        monthList.map((m) => {
+          const [y, mo] = m.split('-').map(Number)
+          return getTeacherSchedules(y, mo + 1).catch((): ScheduleItem[] => [])
+        })
+      ),
+    ])
     const seen = new Set<number>()
-    items.value = merged.filter((it) => (seen.has(it.id) ? false : seen.add(it.id)))
+    const schedules = scheduleLists.flat().filter((it) => {
+      if (seen.has(it.id)) return false
+      seen.add(it.id)
+      return true
+    })
+    items.value = mergePlanItems(taskList, schedules)
   } catch {
     // 容错：本块失败不影响其它工作台卡片
   } finally {

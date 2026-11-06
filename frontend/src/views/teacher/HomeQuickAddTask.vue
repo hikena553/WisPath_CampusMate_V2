@@ -1,7 +1,7 @@
 <template>
   <div v-if="visible" class="quick-add-overlay" @click.self="emit('update:visible', false)">
     <div class="quick-add-popup">
-      <div class="quick-add-title">添加任务</div>
+      <div class="quick-add-title">添加待办</div>
       <div class="quick-add-date">{{ selectedTaskDate }}</div>
       <input
         ref="quickAddInputRef"
@@ -29,8 +29,9 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { createTeacherSchedule } from '@/api/teacher'
+import { createTeacherTask } from '@/api/teacherTask'
 import type { ScheduleUrgency } from '@/api/teacher'
+import { urgencyToPriority } from '@/utils/teacherPlan'
 import { ElMessage } from 'element-plus'
 
 // 快捷添加任务弹窗：由 HomeMobileTodayTasks 的 @open-quick-add 触发，成功后通知父级刷新当月数据
@@ -64,8 +65,13 @@ watch(() => props.visible, (open) => {
 async function handleQuickAddTask() {
   if (!quickTaskContent.value.trim()) return
   try {
-    await createTeacherSchedule(props.selectedTaskDate, quickTaskContent.value.trim(), quickTaskUrgency.value)
-    ElMessage.success('任务已添加')
+    await createTeacherTask({
+      title: quickTaskContent.value.trim(),
+      due_at: props.selectedTaskDate,
+      priority: urgencyToPriority(quickTaskUrgency.value),
+      source_type: 'manual',
+    })
+    ElMessage.success('待办已添加')
     quickTaskContent.value = ''
     quickTaskUrgency.value = 'normal'
     emit('update:visible', false)

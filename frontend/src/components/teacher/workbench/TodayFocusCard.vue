@@ -41,19 +41,20 @@ import type { CrisisAlert, LeaveRequestOut } from '@/types'
 const emit = defineEmits<{ navigate: [path: string] }>()
 
 const loading = ref(false)
+const todayTasks = ref<TeacherTask[]>([])
 const overdueTasks = ref<TeacherTask[]>([])
 const pendingLeaves = ref<LeaveRequestOut[]>([])
 const alerts = ref<CrisisAlert[]>([])
 
 interface FocusItem {
-  kind: 'alert' | 'leave' | 'overdue'
+  kind: 'alert' | 'leave' | 'overdue' | 'today'
   key: string
   student: string
   /** 该事项的动作名，如「请假审批」「心理跟进」 */
   action: string
   title: string
   link: string
-  /** 越大越优先：高危预警 > 逾期任务 > 待批请假 */
+  /** 越大越优先：高危预警 > 逾期任务 > 今日任务 > 待批请假 */
   weight: number
 }
 
@@ -87,6 +88,19 @@ const items = computed<FocusItem[]>(() => {
       title: t.title,
       link: `/teacher/tasks?filter=overdue&task=${t.id}`,
       weight: 5,
+    })
+  }
+
+  // 今日到期但尚未办结的任务：此前只统计逾期任务，导致「今天的待办」反而不出现在今日重点
+  for (const t of todayTasks.value) {
+    out.push({
+      kind: 'today',
+      key: `td-${t.id}`,
+      student: t.student_name || '',
+      action: '今日任务',
+      title: t.title,
+      link: `/teacher/tasks?filter=today&task=${t.id}`,
+      weight: t.priority === 'high' ? 4.5 : 4,
     })
   }
 
@@ -156,20 +170,24 @@ const breakdown = computed(() => {
   const lv = count('leave')
   const al = count('alert')
   const od = count('overdue')
+  const td = count('today')
   if (lv) parts.push(`${lv} 条请假审批`)
   if (al) parts.push(`${al} 条心理预警跟进`)
   if (od) parts.push(`${od} 项逾期任务`)
+  if (td) parts.push(`${td} 项今日任务`)
   return parts.join(' · ')
 })
 
 async function load(silent = false) {
   if (!silent) loading.value = true
   try {
-    const [od, lv, al] = await Promise.allSettled([
+    const [td, od, lv, al] = await Promise.allSettled([
+      getTeacherTasks({ due: 'today', limit: 100 }),
       getTeacherTasks({ due: 'overdue', limit: 100 }),
       getPendingLeaves(),
       getAlerts(false),
     ])
+    if (td.status === 'fulfilled') todayTasks.value = td.value
     if (od.status === 'fulfilled') overdueTasks.value = od.value
     if (lv.status === 'fulfilled') pendingLeaves.value = lv.value
     if (al.status === 'fulfilled') alerts.value = al.value

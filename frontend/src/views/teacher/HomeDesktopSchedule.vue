@@ -4,7 +4,7 @@
     <div class="schedule-section">
       <div class="section-title">
         <el-icon><Calendar /></el-icon>
-        <span>日程安排</span>
+        <span>计划与日程</span>
       </div>
       <div class="calendar-wrapper">
         <div class="cal-nav">
@@ -32,7 +32,7 @@
                 <span class="cal-day-num">{{ day.num }}</span>
                 <div class="cal-dots">
                   <span v-if="day.hasLeave" class="dot-leave" title="有待批请假"></span>
-                  <span v-if="day.hasSchedule" class="dot-schedule" title="有日程"></span>
+                  <span v-if="day.hasSchedule" class="dot-schedule" title="有待办或日程"></span>
                 </div>
               </td>
             </tr>
@@ -40,7 +40,7 @@
         </table>
         <div class="cal-legend">
           <span><span class="dot-leave"></span> 待批请假</span>
-          <span><span class="dot-schedule"></span> 日程安排</span>
+          <span><span class="dot-schedule"></span> 待办 / 日程</span>
         </div>
       </div>
     </div>
@@ -129,6 +129,8 @@ const props = defineProps<{
   calYear: number
   calMonth: number
   schedules: ScheduleItem[]
+  /** 待办截止日：计划已并入待办，日历蓝点需要同时反映两者 */
+  taskDates?: string[]
   pendingLeaves: LeaveRequestOut[]
   myAnnouncements: AnnouncementItem[]
 }>()
@@ -162,6 +164,7 @@ const calWeeks = computed(() => {
 
   const scheduleMap = new Map<string, boolean>()
   props.schedules.forEach(s => { scheduleMap.set(s.date, true) })
+  ;(props.taskDates || []).forEach(d => { scheduleMap.set(d, true) })
 
   const weeks: CalDay[][] = []
   let week: CalDay[] = []

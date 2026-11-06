@@ -1,5 +1,5 @@
 <template>
-  <!-- 添加日程表单字段：桌面端弹窗与移动端子页共用同一套字段与样式，
+  <!-- 添加待办表单字段：桌面端弹窗与移动端子页共用同一套字段与样式，
        避免两端各写一份导致观感与交互再次分叉。 -->
   <div class="sf">
     <div class="sf-field">
@@ -17,7 +17,7 @@
     </div>
 
     <div class="sf-field">
-      <label class="sf-label">日程内容</label>
+      <label class="sf-label">待办内容</label>
       <el-input
         :model-value="content"
         type="textarea"
