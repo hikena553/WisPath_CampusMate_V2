@@ -32,6 +32,32 @@
         @open="openSubPage"
       />
     </div>
+    <!-- ===== 移动端子页面：固定顶栏（Head） =====
+         三个子页共用同一个顶栏，高度恒为 48px，钉在视口顶部 —— 滚动时不再消失。
+         旧版是一个 38px 的圆角卡片，作为普通流节点躺在滚动内容里，滚 600px 后
+         top 变成 -592（整条滚出视口）。左右两个 .sp-side 等宽，保证标题真正居中
+         （而不是被右侧占位挤偏）；只保留主标题，高度恒定避免布局跳动。
+
+         ⚠️ 必须放在 .content-row **外面**：顶栏是 position: fixed，而 .content-row
+         在滑入/滑出时带 transform 动画（animations.css 的 .subpage-*）。带 transform
+         的元素会成为 fixed 后代的包含块，于是顶栏的 top:0 解析成「.content-row 的顶边」
+         （= 状态栏 + 标题栏高度，实测 38px）而不是视口顶部 —— 表现为刚进子页时顶栏
+         低一截、动画结束 transform 被移除后又「跳」回顶部。放在外面后它只受视口约束，
+         进场时用同一套 .subpage 过渡单独平移，与内容区同步滑入/滑出。 -->
+    <Transition :name="subpageTransitionName" :duration="subpageTransitionName ? 320 : undefined">
+      <div v-if="isMobile && activeTab !== 'home'" key="subpage-bar" class="subpage-bar"
+        :class="{ 'is-scrolled': subpageScrolled }">
+        <div class="sp-side sp-left">
+          <button class="sp-back" type="button" :aria-label="backLabel" @click="backToHome">
+            <el-icon :size="19"><ArrowLeft /></el-icon>
+          </button>
+        </div>
+        <div class="sp-title-wrap">
+          <span class="sp-title">{{ subPageTitle }}</span>
+        </div>
+        <div class="sp-side sp-right"></div>
+      </div>
+    </Transition>
     <!-- ===== 内容区：移动端子页面 / 桌面端两栏布局 =====
          只有本块参与过渡（覆盖式：从右滑入 / 原路向右滑出），主页在 Transition 之外不动。 -->
     <Transition :name="subpageTransitionName" :duration="subpageTransitionName ? 320 : undefined">
@@ -43,25 +69,7 @@
       @touchcancel="subPull.onCancel"
     >
       <div class="content-main">
-        <!-- ===== 移动端子页面：固定顶栏（Head） =====
-             三个子页共用同一个顶栏，高度恒为 48px 且 sticky 吸顶 —— 滚动时不再消失。
-             旧版是一个 38px 的圆角卡片，作为普通流节点躺在滚动内容里，滚 600px 后
-             top 变成 -592（整条滚出视口）。现在 .content-row 仍是滚动容器，
-             顶栏改为 sticky 后贴在它的顶部；内容区自带 8px 上下留白也一并交给滚动区。
-             左右两个 .sp-side 等宽，保证标题真正居中（而不是被右侧占位挤偏）。
-             顶栏只保留主标题，高度恒为 48px（避免布局跳动）。 -->
-        <div v-if="isMobile" class="subpage-bar" :class="{ 'is-scrolled': subpageScrolled }">
-          <div class="sp-side sp-left">
-            <button class="sp-back" type="button" :aria-label="backLabel" @click="backToHome">
-              <el-icon :size="19"><ArrowLeft /></el-icon>
-            </button>
-          </div>
-          <div class="sp-title-wrap">
-            <span class="sp-title">{{ subPageTitle }}</span>
-          </div>
-          <div class="sp-side sp-right"></div>
-        </div>
-        <!-- 子页下拉刷新：指示器放在吸顶栏之后，顶栏保持不动，其下内容整体下移 -->
+        <!-- 子页下拉刷新：指示器放在顶栏之后，顶栏保持不动，其下内容整体下移 -->
         <PullRefreshIndicator v-if="isMobile" :indicator-style="subPull.indicatorStyle" :active="subPull.active" />
         <Transition name="tab-fade" mode="out-in">
         <div v-if="activeTab === 'schedule'" key="schedule" class="schedule-view">
@@ -1032,7 +1040,18 @@
               <div class="svc-step cur"><i></i><p>审批中</p></div>
               <div class="svc-step"><i></i><p>完成</p></div>
             </div>
-            <p class="svc-hint">预计 24 小时内出结果，进展会同步到主页心情卡提醒</p>
+            <!-- 撤销入口只对「待审批的请假」开放：工单有自己的处理流程，
+                 已通过/已退回的请假撤不了（后端同样会拒）。 -->
+            <div class="svc-foot">
+              <p class="svc-hint">预计 24 小时内出结果，进展会同步到主页心情卡提醒</p>
+              <button
+                v-if="svCurrent.kind === 'leave' && svCurrent.status === 'pending'"
+                type="button"
+                class="svc-cancel"
+                :disabled="svCancellingId === svCurrent.id"
+                @click="svCancelLeave(svCurrent)"
+              >{{ svCancellingId === svCurrent.id ? '撤销中…' : '撤销申请' }}</button>
+            </div>
           </div>
           <button v-if="isMobile" type="button" class="sv-cta" @click="svShowForms = !svShowForms">
             {{ svShowForms ? '收起申请表单' : '＋ 发起新申请' }}
@@ -1153,6 +1172,13 @@
             </div>
             <div v-for="r in svVisibleRecords" :key="r.kind + '-' + r.id" class="svr-row">
               <div class="svr-main"><h5>{{ r.title }}</h5><small>{{ r.date }}</small></div>
+              <button
+                v-if="r.kind === 'leave' && r.status === 'pending'"
+                type="button"
+                class="svr-act"
+                :disabled="svCancellingId === r.id"
+                @click.stop="svCancelLeave(r)"
+              >{{ svCancellingId === r.id ? '撤销中' : '撤销' }}</button>
               <span class="svr-st" :class="svStatusClass(r.status)">{{ svStatusLabel(r.status) }}</span>
             </div>
             <p v-if="!svVisibleRecords.length && !svRecordsLoading" class="ai-empty">
@@ -1224,9 +1250,15 @@
                   <template v-else-if="dailyReport.mood.from === 'last_night'">昨晚 · {{ dailyReport.mood.label }}</template>
                   <template v-else>今天 · {{ dailyReport.mood.label }}</template>
                 </span>
-                <button type="button" class="rp-chip rp-chip-btn" @click="aiRefresh">
-                  <AiMascotMark :size="12" />重新生成
+                <button
+                  type="button"
+                  class="rp-chip rp-chip-btn"
+                  :disabled="reportRefreshing"
+                  @click="aiRefresh"
+                >
+                  <AiMascotMark :size="12" />{{ reportRefreshing ? '生成中…' : '重新生成' }}
                 </button>
+                <span v-if="reportUpdatedAt" class="rp-updated">更新于 {{ reportUpdatedAt }}</span>
               </div>
             </section>
 
@@ -1288,8 +1320,8 @@
             </section>
 
             <div class="rp-export-row">
-              <button type="button" class="rp-export-btn" @click="exportReport">
-                <el-icon :size="12"><Download /></el-icon>一键导出
+              <button type="button" class="rp-export-btn" :disabled="exportLoading" @click="exportReport">
+                <el-icon :size="12"><Download /></el-icon>{{ exportLoading ? '导出中…' : '一键导出' }}
               </button>
             </div>
           </template>
@@ -1359,9 +1391,9 @@ import { getStreak, createQuickTask, getPlans, createTask } from '@/api/plan'
 import type { Streak } from '@/api/plan'
 import type { GrowthRecord } from '@/types'
 import { renderMarkdown } from '@/utils/markdown'
-import { createLeave, getMyLeaves } from '@/api/leave'
+import { createLeave, deleteLeave, getMyLeaves } from '@/api/leave'
 import { createTicket, getTickets } from '@/api/service'
-import { fetchDailyReport, type DailyReport } from '@/api/agent'
+import { fetchDailyReport, createDailyReportExportLink, type DailyReport } from '@/api/agent'
 import UploadBtn from '@/components/upload/UploadBtn.vue'
 import RichMarkText from '@/components/common/RichMarkText.vue'
 import GrowthDashboard from '@/components/growth/GrowthDashboard.vue'
@@ -1489,6 +1521,9 @@ async function svSubmitLeave() {
     })
     ElMessage.success('请假申请已提交，等待辅导员审批')
     svResetLeave()
+    // 立刻刷新记录：「当前进行中的申请」卡片和列表里的撤销入口要马上出现 ——
+    // 填错日期时用户第一时间就能撤，而不是等下次进子页才发现。
+    void loadServiceRecords()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') } finally { svSubmitting.value = false }
 }
 async function svSubmitCert() {
@@ -1504,6 +1539,7 @@ async function svSubmitCert() {
     })
     ElMessage.success('证明申请已提交')
     Object.assign(f, { certificate_type: '', content: '', quantity: 1, attachments: [] })
+    void loadServiceRecords()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') } finally { svSubmitting.value = false }
 }
 async function svSubmitProject() {
@@ -1520,6 +1556,7 @@ async function svSubmitProject() {
     })
     ElMessage.success('项目申请已提交')
     Object.assign(f, { project_type: '', title: '', advisor: '', content: '', team_members: '', start_date: '', end_date: '', budget: 0, attachments: [] })
+    void loadServiceRecords()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') } finally { svSubmitting.value = false }
 }
 
@@ -1552,22 +1589,42 @@ watch(reportLoading, (busy) => {
 })
 onUnmounted(() => { if (reportStepTimer) clearInterval(reportStepTimer) })
 
-/** 加载报告；失败时保留旧内容，页面显示空态 */
-async function loadAiFeed() {
+/** 加载报告；失败时保留旧内容，页面显示空态。force=true 时绕过服务端缓存真的重跑 */
+async function loadAiFeed(force = false): Promise<boolean> {
   reportLoading.value = true
   try {
-    const data = await fetchDailyReport()
+    const data = await fetchDailyReport(force, force)
     // 接口异常时可能返回 [] / {}，直接塞进来会让整页读 fortune.level 崩溃，先做结构校验
     if (data && !Array.isArray(data) && data.fortune && data.date) {
       dailyReport.value = data
       aiAdded.value = {}
+      return true
     }
+    return false
   } finally { reportLoading.value = false }
 }
 
-function aiRefresh() {
-  void loadAiFeed()
+/** 「重新生成」在途标记：按钮转成「生成中…」，避免连点、也让用户看到点击确实生效 */
+const reportRefreshing = ref(false)
+async function aiRefresh() {
+  if (reportRefreshing.value) return
+  reportRefreshing.value = true
+  try {
+    // 服务端按「事实指纹」缓存 10 分钟，不带 refresh 会原样返回旧文案 → 看起来像点了没反应
+    const ok = await loadAiFeed(true)
+    if (ok) ElMessage.success('今日报告已重新生成')
+    else ElMessage.warning('重新生成失败，请稍后再试')
+  } finally { reportRefreshing.value = false }
 }
+
+/** 报告生成时间：重新生成后跟着变，给用户一个「确实刷新过」的客观依据 */
+const reportUpdatedAt = computed(() => {
+  const at = dailyReport.value?.generated_at
+  if (!at) return ''
+  const d = new Date(at)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+})
 
 /** 报告日期：2026-10-29 周四 */
 const reportDateText = computed(() => {
@@ -1632,8 +1689,17 @@ function stripReportMarks(text: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '$1')
 }
 
-/** 一键导出今日报告为 Markdown 文件 */
-function exportReport() {
+/** 安卓壳（Capacitor）判断：与 router / useAndroidBack 同一口径 */
+function isNativeShell() {
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
+  return !!cap?.isNativePlatform?.()
+}
+
+/** 壳内原生外跳桥（MainActivity 注入）；老版本 APK 没有这个对象 */
+type ShellBridge = { openExternal?: (url: string) => void }
+
+/** 老版本壳兜底：没有外跳桥时仍用 Blob 落地，避免把 WebView 导航到文件页 */
+function downloadReportLocally() {
   const r = dailyReport.value
   if (!r) return
   const w = r.weather
@@ -1667,7 +1733,54 @@ function exportReport() {
   a.download = `AI今日报告_${r.date}.md`
   a.click()
   URL.revokeObjectURL(url)
-  ElMessage.success('已导出今日报告')
+}
+
+const exportLoading = ref(false)
+
+/**
+ * 一键导出今日报告。
+ *
+ * 文件由服务端渲染并带 Content-Disposition 返回，前端只负责「打开链接」：
+ * 浏览器的下载器会接住它 —— 有进度、能在通知栏和「下载」里找到文件。
+ * 旧实现用 Blob + a.download，在手机浏览器/WebView 里既没有下载进度，
+ * 也没有任何「存哪了」的提示。
+ */
+async function exportReport() {
+  if (!dailyReport.value || exportLoading.value) return
+  exportLoading.value = true
+  try {
+    // 票据而不是 Cookie：跳到系统浏览器后拿不到 WebView 的登录态
+    const { url } = await createDailyReportExportLink()
+    const abs = new URL(url, window.location.origin).href
+    const bridge = (window as unknown as { Mian02Shell?: ShellBridge }).Mian02Shell
+
+    if (isNativeShell()) {
+      if (bridge?.openExternal) {
+        bridge.openExternal(abs)
+        ElMessage.success('已交给浏览器下载，可在通知栏查看进度')
+      } else {
+        // 老版本 APK 未注入外跳桥：保持原有落地方式，不把壳内 WebView 导航到文件页
+        downloadReportLocally()
+        ElMessage.success('文件已生成；升级到最新版 App 可直接调起浏览器下载')
+      }
+      return
+    }
+
+    // 浏览器：用带 download 的同源链接触发下载 —— 不新开标签、也不把当前页导航走，
+    // 下载进度交给浏览器自己的下载器（手机端能在通知栏和「下载」里看到文件）。
+    const a = document.createElement('a')
+    a.href = abs
+    a.download = ''
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    ElMessage.success('已开始下载，可在浏览器下载列表查看')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '导出失败，请稍后重试')
+  } finally {
+    exportLoading.value = false
+  }
 }
 
 // ===== 请假服务 v5：美团订单流 + 申请/工单记录（「我的申请」「我的工单」分视图） =====
@@ -1720,6 +1833,33 @@ async function loadServiceRecords() {
   } catch { /* 静默：失败时显示空态 */ } finally { svRecordsLoading.value = false }
 }
 
+/** 正在撤销的记录 id：按钮置灰用，避免连点产生两次请求 */
+const svCancellingId = ref<number | null>(null)
+
+/** 撤销待审批的请假。
+ *
+ *  只有 pending 能撤：后端同口径（DELETE /leave/{id} 已加状态校验），
+ *  已通过/已退回的申请调用会被 400 拒绝 —— 这里提前用 status 收敛入口，
+ *  不把「点了才报错」的挫败感留给用户。撤销后申请记录会被删除（同工单撤销），
+ *  所以刷新列表而不是本地打补丁，保证「当前进行中的申请」卡片也跟着消失。 */
+async function svCancelLeave(r: SvRecord) {
+  if (r.kind !== 'leave' || r.status !== 'pending' || svCancellingId.value !== null) return
+  const ok = await actionConfirm(
+    '撤销后这条请假申请会被删除，辅导员也看不到它。确定撤销吗？',
+    '撤销请假申请',
+    { danger: true, confirmButtonText: '撤销' },
+  )
+  if (!ok) return
+  svCancellingId.value = r.id
+  try {
+    await deleteLeave(r.id)
+    ElMessage.success('已撤销请假申请')
+    await loadServiceRecords()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '撤销失败，请稍后重试')
+  } finally { svCancellingId.value = null }
+}
+
 /** 子页顶栏的滚动收起状态：监听 .content-row 的滚动（它是子页真正的滚动容器） */
 const subpageScrolled = ref(false)
 function onSubpageScroll(e: Event) {
@@ -1733,10 +1873,39 @@ function onSubpageScroll(e: Event) {
 // 不会有任何动画；只有子页在动 —— 与工作台子页、校园资讯阅读器结构一致。
 const subpageTransitionName = computed(() => (isMobile.value ? 'subpage' : ''))
 
-/** .schedule-page 是整页滚动容器；进出子页统一从顶部开始更符合移动端导航习惯
-    （子页滑入时若沿用主页的滚动位置，新页会显示在中段，观感突兀） */
+/** .schedule-page 是整页滚动容器（驾驶舱主页的滚动层）。
+ *
+ *  进子页时先把主页滚动位置**存下来**，返回时再还原 ——
+ *  不能像旧版那样进子页就 scrollTop = 0：用户往下翻了两屏点卡片进来，
+ *  退出后被扔回顶部，等于每次都要重新找位置。
+ *
+ *  为什么必须自己存：子页激活后 `.dashboard-home` 变成绝对定位（脱离文档流），
+ *  `.content-row` 又是 fixed，于是 .schedule-page 的可滚动高度塌成 0，
+ *  浏览器会把 scrollTop 直接夹成 0 —— 位置在那一刻就丢了，晚点再读只会拿到 0。 */
 const pageEl = ref<HTMLElement | null>(null)
-function resetPageScroll() { if (pageEl.value) pageEl.value.scrollTop = 0 }
+let homeScrollTop = 0
+
+function rememberHomeScroll() {
+  homeScrollTop = pageEl.value?.scrollTop ?? 0
+}
+
+function restoreHomeScroll() {
+  if (!isMobile.value || !homeScrollTop) return
+  // 必须等 has-subpage 移除、仪表盘回到文档流之后再写：此时页面高度才有地方可滚，
+  // 否则 scrollTop 会被夹回 0。nextTick 是微任务，浏览器绘第一帧前就已生效，不会看到跳动。
+  void nextTick(() => {
+    const el = pageEl.value
+    if (!el) return
+    el.scrollTop = homeScrollTop
+    // 仪表盘里的课程 / 待办是异步渲染的，高度偶尔还没到位会把 scrollTop 夹小；
+    // 下一帧补一次，避免「回来只滚到一半」。
+    if (el.scrollTop < homeScrollTop) {
+      requestAnimationFrame(() => {
+        if (pageEl.value) pageEl.value.scrollTop = homeScrollTop
+      })
+    }
+  })
+}
 
 // 下拉刷新（移动端）：手势逻辑与吉祥物指示器与教师端首页 / 学生工作台共用同一模块
 const dashboardRef = ref<InstanceType<typeof GrowthDashboard> | null>(null)
@@ -1745,7 +1914,8 @@ const planRef = ref<InstanceType<typeof PlanView> | null>(null)
 function openSubPage(tab: string) {
   if (activeTab.value === tab) return
   if (isMobile.value && activeTab.value === 'home') {
-    resetPageScroll()
+    // 下钻前记下主页位置，返回时还原（见 rememberHomeScroll 注释）
+    rememberHomeScroll()
     // 驾驶舱里点卡片下钻：这一步不产生新的历史记录，
     // 所以「从别的页面进来」的标记在这里失效 —— 返回应当回驾驶舱主页。
     enteredSubPageByRoute.value = false
@@ -1825,8 +1995,9 @@ function backToHome() {
     return
   }
 
-  if (isMobile.value) resetPageScroll()
   activeTab.value = 'home'
+  // 还原进子页前的主页位置（不是回顶部）：此时仪表盘重新挂载，nextTick 后高度才成立
+  restoreHomeScroll()
   // 地址上的 ?tab= / ?view= 只在「从别的页面点进来」时写入，回驾驶舱主页后一并抹掉：
   // 否则页面显示的是主页、地址还写着 tab=plan，刷新就又被丢回那个子页。
   if (isMobile.value) {
@@ -2917,7 +3088,7 @@ function ensureTabData(tab: string): Promise<void> {
   if (tab === 'schedule') return (tabLoadPromises.schedule ??= loadScheduleData())
   if (tab === 'grades') return (tabLoadPromises.grades ??= loadGradesData())
   if (tab === 'growth') return (tabLoadPromises.growth ??= loadGrowthData())
-  if (tab === 'ai') return (tabLoadPromises.ai ??= loadAiFeed())
+  if (tab === 'ai') return (tabLoadPromises.ai ??= loadAiFeed().then(() => undefined))
   if (tab === 'service') return loadServiceRecords()
   return Promise.resolve()
 }
@@ -3396,18 +3567,24 @@ watch(() => route.query.tab, (val) => {
       不会在顶栏底部多裁 48px。
    最终方案：**脱离滚动流**。顶栏改 position: fixed 钉在视口顶部，
    滚动内容用 padding-top 让出 48px，内容就永远滑不到它下面。
-   底色改为实底（半透明会让内容从标题后透出来）。 */
+   底色改为实底（半透明会让内容从标题后透出来）。
+
+   4) fixed 之后仍有「进场时低一截、动画结束才归位」的问题：fixed 只是相对
+      *包含块* 固定，而 .content-row 在做 transform 滑入 —— 带 transform 的元素
+      会成为 fixed 后代的包含块，于是 top:0 变成「.content-row 的顶边」（38px），
+      动画一结束 transform 被移除、包含块换回视口才跳回 0。
+      修法是把顶栏移到 .content-row 外面（模板里那个独立 <Transition>），
+      它只受视口约束；滑入/滑出仍由同一套 .subpage 过渡驱动，与内容区同步。 */
 .subpage-bar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  /* z-index 必须高于兄弟内容：父容器 .content-row 是 z-index:1500 的堆叠上下文，
-     子元素的 z-index 只在**这个上下文内部**比较。
-     写 20 时它低于同一上下文里创建了层叠的子页根节点（.growth-view 等有背景），
-     结果滚动内容直接绘制到顶栏之上 —— 标题和下面的轴标签叠在一行，就是这个问题。
-     抬到 100 后仍远低于 popup 基准（2000+），学期选择等弹层照常浮在上面。 */
-  z-index: 100;
+  /* z-index 1600：顶栏已移到 .content-row 之外（见模板注释），不再共享它那个
+     z-index:1500 的堆叠上下文，因此必须自己压在滚动区（1500）之上，
+     否则内容会盖住顶栏；同时仍远低于 Element Plus 弹层基准（2000+），
+     学期选择、日期选择等弹出层照常浮在顶栏之上。 */
+  z-index: 1600;
   display: flex;
   align-items: center;
   /* 顶部安全区：白底铺进状态栏，返回键/标题让到状态栏下方 */
@@ -4412,6 +4589,9 @@ watch(() => route.query.tab, (val) => {
   -webkit-tap-highlight-color: transparent;
 }
 .rp-chip-btn:active { transform: scale(0.97); }
+.rp-chip-btn:disabled { opacity: .6; cursor: default; transform: none; }
+/* 「更新于 21:40」：重新生成后时间跟着变，给用户一个确实刷新过的依据 */
+.rp-updated { font-size: 11px; color: #a3a9b2; }
 
 /* 运势卡：中性底 + 单色点缀，避免整块彩色渐变压迫感 */
 .rp-fortune {
@@ -4515,6 +4695,7 @@ watch(() => route.query.tab, (val) => {
   -webkit-tap-highlight-color: transparent;
 }
 .rp-export-btn:active { transform: scale(0.97); background: #f7f8f9; }
+.rp-export-btn:disabled { opacity: .6; cursor: default; transform: none; }
 
 /* ===== 请假服务 v5（美团订单流，少图标） ===== */
 .sv-current {
@@ -4539,6 +4720,17 @@ watch(() => route.query.tab, (val) => {
 .svc-step p { font-size: 10.5px; color: var(--sp-ink-3, #9aa0a8); margin: 6px 0 0; }
 .svc-step.cur p { color: #3d4a57; font-weight: 600; }
 .svc-hint { margin: 10px 0 0; font-size: 11px; color: var(--sp-ink-3, #9aa0a8); line-height: 16px; }
+/* 撤销入口：提示与按钮同一行，按钮靠右、次要描边样式（不抢「当前进行中」的主体地位） */
+.svc-foot { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; }
+.svc-foot .svc-hint { flex: 1; min-width: 0; margin: 0; }
+.svc-cancel {
+  flex: none; padding: 6px 10px; border-radius: 9px;
+  border: 1px solid var(--sp-border, #e9ebee); background: #fff;
+  color: #3d4a57; font-family: inherit; font-size: 11.5px; font-weight: 600; line-height: 1.2;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.svc-cancel:active { background: #f7f8f9; transform: scale(.97); }
+.svc-cancel:disabled { color: #b6bac1; }
 .sv-cta {
   display: block; width: 100%; padding: 12px 0; margin-top: 2px;
   border: none; border-radius: 12px; cursor: pointer;
@@ -4561,6 +4753,15 @@ watch(() => route.query.tab, (val) => {
 .svr-main { flex: 1; min-width: 0; }
 .svr-main h5 { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--sp-ink, #14171a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .svr-main small { font-size: 10.5px; color: var(--sp-ink-3, #9aa0a8); }
+/* 行内撤销：只有待审批的请假出现，描边小按钮，视觉上弱于右侧状态标签 */
+.svr-act {
+  flex: none; padding: 5px 9px; border-radius: 8px;
+  border: 1px solid var(--sp-border, #e9ebee); background: #fff;
+  color: var(--sp-ink-2, #5b6472); font-family: inherit; font-size: 11.5px; font-weight: 600;
+  line-height: 1.2; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.svr-act:active { background: #f7f8f9; transform: scale(.97); }
+.svr-act:disabled { color: #b6bac1; }
 .svr-st { font-size: 11px; font-weight: 600; flex: none; }
 .svr-st.ing { color: #b45309; }
 .svr-st.ok { color: #2f9e63; }
