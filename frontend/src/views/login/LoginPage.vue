@@ -153,8 +153,8 @@
         还没有账号？注册账号
       </router-link>
 
-      <!-- 短信与 QQ 互联资质申请中，第三方登录入口暂不开放 -->
-      <template v-if="thirdPartyAuthEnabled">
+      <!-- App 内开放原生 QQ 授权；浏览器侧等网站应用资质下来才展示第三方入口 -->
+      <template v-if="thirdPartyAuthEnabled || qqNativeEnabled">
         <div class="other">
           <span class="other-line"></span>
           <span class="other-text">其他登录方式</span>
@@ -162,7 +162,9 @@
         </div>
 
         <div class="quick-row">
+          <!-- 手机号短信登录仅在 Web 第三方通道开放后展示（App 内短信资质未下来） -->
           <button
+            v-if="thirdPartyAuthEnabled"
             type="button"
             class="quick-item"
             :disabled="quickLoading === 'phone'"
