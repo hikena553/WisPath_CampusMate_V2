@@ -1135,4 +1135,17 @@ onBeforeUnmount(() => {
     padding-top: 40px;
   }
 }
+
+/* ===== 移动端：整屏自滚 + 状态栏/手势条安全区 ===== */
+@media (max-width: 767px) {
+  .reg-page {
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 36px);
+  }
+  .reg-shell {
+    max-width: 480px;
+  }
+  .reg-back {
+    margin-bottom: 10px;
+  }
+}
 </style>

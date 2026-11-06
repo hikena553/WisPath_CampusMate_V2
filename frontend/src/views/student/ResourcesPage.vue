@@ -674,6 +674,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
   min-width: 0;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   background: #f5f6fa;
   color: #1a1a2e;
   padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));

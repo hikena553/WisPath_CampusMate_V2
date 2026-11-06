@@ -165,13 +165,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tui-appbar-sub {
-  display: block;
-  font-size: 11.5px;
-  font-weight: 400;
-  color: var(--tui-text-quiet);
-  margin-top: 1px;
-}
 .tui-appbar-actions {
   display: flex;
   align-items: center;
@@ -793,7 +786,6 @@ button.tui-stat:active { transform: scale(0.98); }
 :is(.tui-page, .teacher-scope) .tui-appbar-brand { min-height: 56px; padding: 6px 8px 6px 12px; }
 :is(.tui-page, .teacher-scope) .tui-appbar-back { width: 34px; height: 34px; }
 :is(.tui-page, .teacher-scope) .tui-appbar-title { font-size: 17.5px; font-weight: 680; letter-spacing: -0.2px; }
-:is(.tui-page, .teacher-scope) .tui-appbar-sub { font-size: 11px; }
 :is(.tui-page, .teacher-scope) .tui-mascot-sm { width: 34px; height: 34px; }
 :is(.tui-page, .teacher-scope) .tui-mascot-md { width: 40px; height: 40px; }
 

@@ -66,7 +66,8 @@ defineProps<{
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 0;
-  padding: 14px 16px;
+  /* 顶部安全区：吸顶头白底铺进状态栏 */
+  padding: calc(14px + var(--sat, 0px)) 16px 14px;
   border-radius: 14px;
   border: 1px solid rgba(37, 99, 235, 0.12);
   background: linear-gradient(135deg, #ffffff 0%, #f3f8ff 100%);

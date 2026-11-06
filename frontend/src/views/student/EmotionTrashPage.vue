@@ -351,6 +351,8 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
     top: 0;
     z-index: 5;
   }
+  /* 整屏子页没有底部导航，末行要自己让出手势条 */
+  .emotion-page { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
 
 .emotion-hero {

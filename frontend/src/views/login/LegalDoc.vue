@@ -123,7 +123,7 @@ const doc = computed(() => DOCS[props.type])
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
   border-bottom: 1px solid #f0f0f2;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(8px);
@@ -153,7 +153,7 @@ const doc = computed(() => DOCS[props.type])
 .legal-body {
   flex: 1;
   overflow-y: auto;
-  padding: 22px 22px calc(env(safe-area-inset-bottom) + 40px);
+  padding: 22px 22px calc(env(safe-area-inset-bottom, 0px) + 40px);
   -webkit-overflow-scrolling: touch;
 }
 

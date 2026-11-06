@@ -1,7 +1,7 @@
 <template>
   <div class="tui-page notif-page">
     <!-- 移动端吸顶子页头；桌面端由教师布局的页签承担导航，这里只留返回语义 -->
-    <SubPageHeader title="通知" sub="审批 · 预警 · 公告" fallback="/teacher/messages" />
+    <SubPageHeader title="通知" fallback="/teacher/messages" />
 
     <div class="notif-inner">
       <!-- 桌面端特色头部（教师子页统一规范）；移动端标题由子页头承担 -->

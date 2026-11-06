@@ -182,7 +182,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 .material-page { width: 100%; max-width: 480px; min-width: 0; margin: 0 auto; min-height: 100%; background: #f5f7fb; padding-bottom: 40px; }
 /* 移动端：页面自身即滚动容器，下拉刷新才能接管顶部手势 */
 @media (max-width: 767px) {
-  .material-page { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; }
+  .material-page { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
 }
 .topbar {
   position: sticky; top: 0; z-index: 20;

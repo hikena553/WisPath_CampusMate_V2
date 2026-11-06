@@ -5,10 +5,10 @@
       :http-request="handleUpload"
       :before-upload="beforeUpload"
     >
-      <el-button size="small" :type="modelValue ? 'success' : 'primary'">
-        <el-icon style="margin-right:4px"><Upload /></el-icon>
-        {{ modelValue ? '已上传' : '选择文件' }}
-      </el-button>
+      <button type="button" class="upload-trigger" :class="{ 'is-done': !!modelValue }">
+        <el-icon class="upload-trigger-icon"><Upload /></el-icon>
+        <span>{{ modelValue ? '重新上传' : '上传文件 / 图片' }}</span>
+      </button>
     </el-upload>
     <span v-if="modelValue" class="uploaded-hint">
       <el-icon style="margin-right:2px"><Document /></el-icon>
@@ -70,5 +70,18 @@ async function handleUpload({ file }: { file: File }) {
 
 <style scoped>
 .upload-btn-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.uploaded-hint { display: inline-flex; align-items: center; font-size: 12px; color: #666; }
+/* 上传入口：中性描边胶囊，不再用蓝/绿实心按钮抢视线 */
+.upload-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 38px; padding: 0 14px;
+  border: 1px dashed #d5d9e0; border-radius: 10px;
+  background: #fbfcfd; color: #4b5563;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.upload-trigger:active { background: #f2f4f7; }
+.upload-trigger.is-done { border-style: solid; border-color: #dbe1ea; background: #f2f4f7; color: #374151; }
+.upload-trigger-icon { font-size: 15px; color: #6b7280; }
+.uploaded-hint { display: inline-flex; align-items: center; font-size: 12px; color: #6b7280; }
 </style>

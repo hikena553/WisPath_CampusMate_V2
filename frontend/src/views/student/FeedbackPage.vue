@@ -321,7 +321,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 
 /* ===== Mobile ===== */
 @media (max-width: 767px) {
-  .feedback-page { padding: 16px; }
+  .feedback-page { padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
   .page-header h2 { font-size: 18px; }
   .content-row { flex-direction: column; gap: 16px; }
   .history-section { width: 100%; }

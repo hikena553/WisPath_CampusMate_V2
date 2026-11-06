@@ -257,7 +257,7 @@ const pull = usePullRefresh(refreshAll, { enabled: () => isMobile.value })
 .visit-teacher { font-size: 11px; color: var(--text-muted); margin-top: 7px; }
 
 @media (max-width: 767px) {
-  .care-page { padding: 8px 12px 24px; }
+  .care-page { padding: 8px 12px calc(24px + env(safe-area-inset-bottom, 0px)); }
   .care-hero { padding: 16px; }
   .hero-stats { gap: 12px; }
   .hs-num { font-size: 19px; }

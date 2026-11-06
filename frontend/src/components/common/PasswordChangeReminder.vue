@@ -228,7 +228,7 @@ onBeforeUnmount(stopAutoDismiss)
 /* 桌面端让出顶栏高度 */
 @media (min-width: 769px) {
   .pwd-banner {
-    top: calc(52px + 12px);
+    top: calc(clamp(46px, 11.8vw, 52px) + 12px);
   }
 }
 

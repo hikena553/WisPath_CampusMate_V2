@@ -13,11 +13,18 @@
     <div class="fi-root">
       <header class="fi-head">
         <div class="fi-title-row">
-          <span class="fi-title">互动消息</span>
-          <button v-if="unreadTotal" type="button" class="fi-read-all" @click="markAllRead">全部已读</button>
-          <button type="button" class="fi-close" aria-label="关闭" @click="open = false">
-            <el-icon :size="16"><Close /></el-icon>
+          <!-- 移动端：左上角返回（与全站子页 52px 顶栏同一语义，只关这一层）；
+               桌面端抽屉仍用右上角 ✕。两者的关闭回调一致，都只收当前浮层。 -->
+          <button type="button" class="fi-back" aria-label="返回" @click="open = false">
+            <el-icon :size="20"><ArrowLeft /></el-icon>
           </button>
+          <span class="fi-title">互动消息</span>
+          <div class="fi-acts">
+            <button v-if="unreadTotal" type="button" class="fi-read-all" @click="markAllRead">全部已读</button>
+            <button type="button" class="fi-close" aria-label="关闭" @click="open = false">
+              <el-icon :size="16"><Close /></el-icon>
+            </button>
+          </div>
         </div>
         <div class="fi-tabs">
           <button
@@ -50,7 +57,7 @@
           >
             <div class="fi-avatar-wrap">
               <el-avatar
-                :size="40"
+                :size="isMobile ? 44 : 40"
                 :src="item.actor_avatar || undefined"
                 class="fi-avatar"
                 :style="avatarStyle(item.actor_name)"
@@ -92,12 +99,14 @@ import { useRouter } from 'vue-router'
 import {
   Message,
   Close,
+  ArrowLeft,
   Pointer,
   Star,
   ChatDotRound,
   UserFilled,
 } from '@element-plus/icons-vue'
 import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
 import { useUnreadSummary } from '@/composables/useUnreadSummary'
 import { openUserHomepage } from '@/composables/useUserHomepage'
 import { parseServerTime } from '@/utils/datetime'
@@ -118,6 +127,15 @@ const { forum, refresh: refreshUnread } = useUnreadSummary()
 const open = computed({
   get: () => props.modelValue,
   set: (v: boolean) => emit('update:modelValue', v),
+})
+
+/**
+ * 移动端返回层级：面板打开时在历史顶部压一条同地址哨兵，
+ * 系统返回键 / 全面屏侧滑先把这一层收掉，而不是直接退掉整个「校园资讯」页
+ * （与帖子详情、个人中心子页、聊天窗口同一套，见 composables/useBackLayer.ts）。
+ */
+useBackLayer(computed(() => isMobile.value && props.modelValue), () => {
+  open.value = false
 })
 
 type TabValue = 'all' | ForumKind
@@ -299,6 +317,8 @@ watch(forum, (v) => {
 .fi-read-all { border: none; background: none; color: #6b7280; font-size: 12px; cursor: pointer; }
 .fi-read-all:hover { color: #111827; text-decoration: underline; }
 .fi-close { border: none; background: #f4f5f7; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: #6b7280; }
+.fi-acts { display: flex; align-items: center; gap: 10px; }
+.fi-back { display: none; }
 .fi-tabs { display: flex; gap: 8px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
 .fi-tabs::-webkit-scrollbar { display: none; }
 .fi-tab { position: relative; border: 1px solid transparent; background: #f5f6f8; color: #4b5563; font-size: 12px; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
@@ -358,6 +378,50 @@ watch(forum, (v) => {
 
 .fi-thumb { flex: none; width: 56px; height: 56px; border-radius: 8px; overflow: hidden; background: #f4f5f7; }
 .fi-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ==================== 移动端（≤767px）：按全站子页口径适配 ====================
+   这个抽屉被 teleport 到 body，不在 #app 的移动端 zoom 里，所以字号 / 行高 / 触控面积
+   在这里单独给一套手机口径：
+     · 顶部让出状态栏（--sat），底部让出系统手势条（safe-area-inset-bottom）；
+     · 顶栏换成「返回箭头 + 标题 + 全部已读」的子页样式，✕ 只留给桌面抽屉；
+     · 正文放大到 14~14.5px，头像 / 缩略图同步放大，与资讯流、帖子详情一致。 */
+@media (max-width: 767px) {
+  .fi-head { padding: calc(var(--sat, 0px) + 4px) 12px 6px; }
+  .fi-title-row { min-height: 46px; gap: 4px; }
+  .fi-title { font-size: 17.5px; }
+  .fi-back {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; margin-left: -8px;
+    border: none; border-radius: 50%; background: transparent; color: #1f2329;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fi-back:active { background: #f2f3f5; }
+  .fi-close { display: none; }
+  .fi-acts { gap: 6px; }
+  .fi-read-all { font-size: 13px; padding: 8px 4px; }
+  .fi-tabs { margin-top: 4px; gap: 8px; padding: 2px 0; -webkit-overflow-scrolling: touch; }
+  .fi-tab { font-size: 13px; padding: 7px 14px; }
+  .fi-body {
+    padding: 0 0 calc(18px + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .fi-avatar-wrap { width: 44px; height: 44px; }
+  .fi-avatar { font-size: 16px; }
+  .fi-item { padding: 13px 14px; gap: 11px; }
+  .fi-item:hover { background: none; }
+  .fi-item.unread:hover { background: #f7f8fa; }
+  .fi-line { font-size: 14px; }
+  .fi-post { font-size: 14.5px; margin-top: 4px; }
+  .fi-quote { font-size: 13px; margin-top: 6px; }
+  .fi-time { font-size: 12px; margin-top: 6px; }
+  .fi-thumb { width: 64px; height: 64px; border-radius: 9px; }
+  .fi-kind { width: 18px; height: 18px; }
+  .fi-empty { padding: 64px 24px; }
+  .fi-empty p { font-size: 15px; }
+  .fi-empty span { font-size: 13px; }
+}
+
 </style>
 
 <!-- 不能写在 scoped 里：抽屉被 teleport 到 body 下，是页面级浮层。
