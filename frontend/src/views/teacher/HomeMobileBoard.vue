@@ -118,6 +118,7 @@ import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTas
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 import { ElMessage } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
+import { onDataChange } from '@/utils/dataSync'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
 import HomeKpiCards from './HomeKpiCards.vue'
 import HomeTopBanner from './HomeTopBanner.vue'
@@ -386,9 +387,14 @@ onMounted(() => {
   pollTimer = setInterval(silentRefresh, 30000)
 })
 
+// 智能体 / 其他页面改了数据：立即静默刷新，不等下一轮 30 秒轮询
+const offDataChange = onDataChange(['teacher-tasks', 'teacher-students', 'teacher-dashboard', 'teacher-care'], () => {
+  if (pollTimer !== null) silentRefresh()
+})
+
 onActivated(() => {
   selectedTaskDate.value = new Date().toISOString().slice(0, 10)
-  if (Date.now() - lastRefreshAt >= 60_000) silentRefresh()
+  if (Date.now() - lastRefreshAt >= 3_000) silentRefresh()
   if (pollTimer === null) pollTimer = setInterval(silentRefresh, 30000)
 })
 
@@ -404,6 +410,7 @@ onUnmounted(() => {
     clearInterval(pollTimer)
     pollTimer = null
   }
+  offDataChange()
 })
 
 /** 供父页面的下拉刷新一并带上本块数据 */

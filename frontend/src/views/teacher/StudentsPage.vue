@@ -923,6 +923,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onActivated, onUnmounted } from 'vue'
+import { onDataChange, emitDataChange } from '@/utils/dataSync'
 // v6.1 弹窗减负：导入流程走全屏子页承接
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -1476,6 +1477,8 @@ async function confirmImport() {
     importVisible.value = false
     importRows.value = []
     await loadStudents()
+    // 名单已变化：通知工作台 / 其他已打开页面立即刷新
+    emitDataChange(['teacher-students'])
     loadDashboard()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || '导入失败')
@@ -1696,18 +1699,35 @@ async function applyDeepLink() {
   router.replace({ path: '/teacher/students' })
 }
 
+let lastActiveRefreshAt = 0
+
 onMounted(async () => {
   await loadStudents()
   loadDashboard()
   loadAnalysisData()
   applyDeepLink()
+  lastActiveRefreshAt = Date.now()
 })
 
-// 本页 keepAlive：从预警中心返回时不会重新 mount，靠 onActivated 兜住深链
-onActivated(applyDeepLink)
+// 本页 keepAlive：从预警中心返回时不会重新 mount，靠 onActivated 兜住深链 + 刷新数据
+onActivated(() => {
+  applyDeepLink()
+  // keep-alive 页面切回来时数据可能已被智能体 / 其他页面 / 管理端改动：
+  // 距上次刷新超过 3 秒就整页静默重拉一次，避免看到过期名单
+  if (Date.now() - lastActiveRefreshAt > 3_000) {
+    lastActiveRefreshAt = Date.now()
+    refreshAll()
+  }
+})
+
+// 收到任务 / 学生数据变更：立即静默刷新（智能体新增学生、导入学生等）
+const offDataChange = onDataChange(['teacher-students', 'teacher-tasks', 'teacher-dashboard', 'teacher-care'], () => {
+  refreshAll()
+})
 
 onUnmounted(() => {
   if (searchTimer) clearTimeout(searchTimer)
+  offDataChange()
 })
 </script>
 
@@ -2313,7 +2333,9 @@ onUnmounted(() => {
 }
 .mobile-detail-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px; background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
+  /* 顶部安全区：学生详情（二级页）白底铺进状态栏 */
+  padding: calc(6px + var(--sat, 0px)) 10px 6px;
+  background: #fff; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
 }
 /* 返回键统一规格：34px 触控区，无外圈底色，仅图标本身 */
 .mobile-detail-header > .el-button:first-child,

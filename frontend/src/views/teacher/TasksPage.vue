@@ -485,7 +485,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { onDataChange, emitDataChange } from '@/utils/dataSync'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -788,6 +789,7 @@ async function completeAllAuto() {
   } finally {
     bulkCompleting.value = false
     await Promise.all([load(true), loadTasks()])
+    emitDataChange(['teacher-tasks', 'teacher-students'])
   }
 }
 
@@ -901,6 +903,7 @@ async function completeTask(a: TeacherReportAction) {
     doneIds.add(a.id)
     ElMessage.success('已办结')
     await Promise.all([load(true), loadTasks()])
+    emitDataChange(['teacher-tasks', 'teacher-students'])
   } catch {
     ElMessage.error('办结失败，请稍后重试')
   } finally {
@@ -926,6 +929,7 @@ async function addSuggestion(s: TeacherReportSuggestion, i: number) {
     addedSet.add(i)
     ElMessage.success('已加入今日任务')
     await Promise.all([load(true), loadTasks()])
+    emitDataChange(['teacher-tasks', 'teacher-students'])
   } catch {
     ElMessage.error('添加失败，请稍后重试')
   } finally {
@@ -1031,6 +1035,7 @@ async function finishTask(t: TeacherTask) {
     await updateTeacherTask(t.id, { status: 'done' })
     ElMessage.success('已办结')
     await Promise.all([load(true), loadTasks()])
+    emitDataChange(['teacher-tasks', 'teacher-students'])
   } catch {
     t.status = prev
     ElMessage.error('办结失败，请稍后重试')
@@ -1054,6 +1059,8 @@ function toDateStr(d: Date) {
 
 async function refreshAll() {
   await Promise.all([load(true), loadTasks()])
+  // 任务已变更：通知工作台等页面同步刷新
+  emitDataChange(['teacher-tasks', 'teacher-students'])
 }
 
 function openCreate() {
@@ -1094,6 +1101,15 @@ async function openTaskFromQuery() {
     /* 打不开就保持在清单页，用户仍可手动找到该任务 */
   }
 }
+
+// 智能体 / 其他页面变更了任务或学生：立即刷新任务清单
+// （AI 日报重算较慢，这里只刷清单，日报仍由页面自身的刷新入口触发）
+const offDataChange = onDataChange(['teacher-tasks', 'teacher-students'], () => {
+  loadTasks()
+})
+onUnmounted(() => {
+  offDataChange()
+})
 
 onMounted(async () => {
   // ?filter=overdue 仍然认：老链接直接把逾期那组展开，而不是跳到不存在的筛选页

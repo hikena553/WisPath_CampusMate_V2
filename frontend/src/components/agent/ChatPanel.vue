@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-modern" ref="rootRef">
+  <div class="chat-modern" ref="rootRef" :class="{ 'is-typing': isMobile && keyboardOpen }">
     <!-- 移动端顶栏
          左右两栏等宽（.mh-side）：右侧多了「新建对话」后，标题仍落在屏幕正中，
          不会因为按钮数量变化被挤偏。 -->
@@ -21,7 +21,7 @@
 
       <div class="mh-side mh-right">
         <el-button text circle class="menu-toggle" aria-label="语音通话" :disabled="loading" @click="handlePhoneCall">
-          <el-icon :size="20"><Phone /></el-icon>
+          <PhoneIcon :size="20" :stroke-width="2" />
         </el-button>
         <!-- 新建对话：对齐 deepseek 移动端顶栏右侧的「方框+笔」图标，一点即开空白新会话 -->
         <button
@@ -34,7 +34,7 @@
         >
           <svg
             class="new-chat-icon" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+            stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
             aria-hidden="true"
           >
             <path d="M12.4 4.4H6.6A2.4 2.4 0 0 0 4.2 6.8v10.6a2.4 2.4 0 0 0 2.4 2.4h10.6a2.4 2.4 0 0 0 2.4-2.4v-5.8" />
@@ -354,7 +354,7 @@
               :disabled="loading"
               @click="handlePhoneCall"
             >
-              <el-icon :size="18"><Phone /></el-icon>
+              <PhoneIcon :size="18" :stroke-width="2" />
             </button>
           </el-tooltip>
 
@@ -386,14 +386,18 @@ import { useConversationStore } from '@/stores/conversation'
 import { useTeacherConversationStore } from '@/stores/teacherConversation'
 import { sendChatMessage, fetchRecommendations } from '@/api/agent'
 import { getToken } from '@/utils/token'
+import { emitAgentDataChange } from '@/utils/dataSync'
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useMediaRecorder } from '@/composables/useMediaRecorder'
 import type { ChatMessage, Suggestion } from '@/types'
 import {
-  Promotion, Paperclip, Picture, Document, Microphone, Phone, CopyDocument, EditPen, ArrowDown, Close, Delete,
+  Promotion, Paperclip, Picture, Document, Microphone, CopyDocument, EditPen, ArrowDown, Close, Delete,
 } from '@element-plus/icons-vue'
+import { Phone as PhoneIcon } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import { useResponsive } from '@/composables/useResponsive'
+import { useBackLayer } from '@/composables/useBackLayer'
+import { useVisualViewport } from '@/composables/useVisualViewport'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
@@ -402,6 +406,8 @@ import DeepThinking from './DeepThinking.vue'
 import VoiceCallOverlay from './VoiceCallOverlay.vue'
 
 const { isMobile } = useResponsive()
+/* 键盘展开时收起吉祥物：屏幕变矮后它会把问候语挤到悬浮顶栏下面 */
+const { keyboardOpen } = useVisualViewport()
 
 // AI 助手称谓取自站点配置（管理端「自我称谓」）：各端对话界面同步显示
 const { agentName } = useSiteConfig()
@@ -491,6 +497,16 @@ const rootRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement>()
 const loading = ref(false)
 const previewImage = ref('')
+
+/**
+ * 大图预览是一层页内浮层：系统返回先收它，而不是直接离开智能体页（见 useBackLayer）。
+ * 与消息页同一套口径：图片预览、相机这类全屏浮层都要各自算一层。
+ *
+ * 必须放在 previewImage 声明之后：useBackLayer 内部的 watch 是 immediate 的，
+ * 写在 ref 之前会立刻求值到 TDZ（Cannot access before initialization），
+ * setup 直接抛错 —— 表现就是整个对话页白屏 / 加载不出来。
+ */
+useBackLayer(computed(() => isMobile.value && !!previewImage.value), () => closePreview())
 
 /**
  * 移动端下拉刷新（由外层 ChatShell 通过 pull-refresh 开启，如学生端首页）：
@@ -605,12 +621,21 @@ function syncBaseHeights() {
   const boxH = box.getBoundingClientRect().height
   if (boxH > 0) boxBaseHeight = boxH
   const h = msg.getBoundingClientRect().height
-  if (h > 0) root.style.setProperty('--chat-welcome-h', `${h}px`)
+  // 键盘展开时消息区是被压缩过的，不能当基准：否则收起键盘后欢迎语按小高度居中，
+  // 「你好，我是…」两行会被 overflow: hidden 裁掉。收起键盘后由 watch(keyboardOpen) 重算。
+  if (h > 0 && !keyboardOpen.value) root.style.setProperty('--chat-welcome-h', h + 'px')
   const bar = box.closest('.input-bar') as HTMLElement | null
   const barH = bar ? bar.getBoundingClientRect().height : 0
   if (barH > 0) {
     root.style.setProperty('--chat-input-bar-h', `${barH}px`)
   }
+}
+
+/** 把悬浮顶栏的真实高度写进 --chat-header-h：欢迎语按它让位，适配不同状态栏 / 安全区高度 */
+function syncHeaderHeight() {
+  const el = rootRef.value?.querySelector('.mobile-header') as HTMLElement | null
+  const h = el ? el.getBoundingClientRect().height : 0
+  if (h > 0) rootRef.value?.style.setProperty('--chat-header-h', h + 'px')
 }
 
 function handleViewportResize() {
@@ -622,6 +647,18 @@ function handleViewportResize() {
 
 watch(input, () => {
   nextTick(autoResize)
+})
+
+/* 键盘收起后重新校准欢迎语基准高度：展开期间不写 --chat-welcome-h，
+   收起后必须主动补一次，否则会沿用小屏幕下的旧基准 */
+watch(keyboardOpen, (open) => {
+  if (open) return
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      syncBaseHeights()
+      updateRecommendHidden()
+    })
+  })
 })
 
 watch(() => recorder.transcript.value, (val) => {
@@ -649,14 +686,17 @@ const charRatio = computed(() => Math.min(inputCharCount.value / MAX_INPUT_CHARS
 const RECOMMEND_COUNT = 4
 /** 推荐缓存有效期：期内直接复用，避免每次进页面都等一次生成（1~3s） */
 const RECOMMEND_CACHE_TTL = 5 * 60 * 1000
-const RECOMMEND_CACHE_KEY = 'campus_agent_recommend_cache'
+const RECOMMEND_CACHE_KEY = 'campus_agent_recommend_cache_v2'
 
 interface RecommendCacheEntry { items: string[]; at: number }
 
-/** 推荐缓存：按角色分开存，落 sessionStorage 以便刷新页面也能秒开 */
+/** 推荐缓存：按角色分开存。
+ * 必须落 localStorage：App 每次冷启动都是新的 WebView 会话，sessionStorage 会被清空 ——
+ * 那正是「每次打开 App，为你推荐都要等很久才出来」的根因。localStorage 跨启动保留，
+ * 进页面先用上次的真实结果铺上（stale-while-revalidate），后台再静默刷新。 */
 const _recommendCache: Record<string, RecommendCacheEntry> = (() => {
   try {
-    const raw = sessionStorage.getItem(RECOMMEND_CACHE_KEY)
+    const raw = localStorage.getItem(RECOMMEND_CACHE_KEY)
     return raw ? (JSON.parse(raw) as Record<string, RecommendCacheEntry>) : {}
   } catch {
     return {}
@@ -665,7 +705,7 @@ const _recommendCache: Record<string, RecommendCacheEntry> = (() => {
 
 function saveRecommendCache() {
   try {
-    sessionStorage.setItem(RECOMMEND_CACHE_KEY, JSON.stringify(_recommendCache))
+    localStorage.setItem(RECOMMEND_CACHE_KEY, JSON.stringify(_recommendCache))
   } catch { /* 隐私模式等场景下忽略 */ }
 }
 
@@ -737,6 +777,8 @@ let singleLineContentHeight = 0
 let msgObserver: ResizeObserver | null = null
 /** 监听输入栏尺寸变化的观察者：移动端按钮换行等会改变输入栏高度，需重新校准 */
 let inputBarObserver: ResizeObserver | null = null
+/** 监听悬浮顶栏尺寸变化的观察者：安全区 / 字号不同时机型高度不同，欢迎语要按真实高度让位 */
+let headerObserver: ResizeObserver | null = null
 /** 监听消息内容高度变化的观察者：任何增高（流式正文/思考/建议标签/图片）都强制落到最新 */
 let msgContentObserver: ResizeObserver | null = null
 
@@ -1001,6 +1043,11 @@ async function send() {
         charState.value = 'idle'
         charBubble.value = ''
         lastAssistantContent = full
+        // 兜底：流结束但一个字都没收到（服务端异常 / SSE 帧损坏）时，别留一个永远转圈的空气泡
+        const lastMsg = store.messages[store.messages.length - 1]
+        if (lastMsg?.role === 'assistant' && !lastMsg.content) {
+          store.updateMessage(lastMsg.id, { content: '抱歉，我暂时无法回答，请稍后再试。' })
+        }
         setTimeout(() => { charBubble.value = '有什么可以帮你的？' }, 500)
       },
       (suggestions) => {
@@ -1038,6 +1085,11 @@ async function send() {
         }
       },
     )
+
+    // 智能体这一轮可能通过工具调用改了任务 / 学生 / 关怀数据：
+    // 立即广播变更，让已打开的教师端页面马上静默刷新（见 utils/dataSync.ts），
+    // 不再等 30 秒轮询或页面重新挂载。
+    emitAgentDataChange()
 
     // 兜底：正常路径由后端落库（meta.saved=true）；只有服务端明确未保存时才补写一次，
     // 避免旧实现里"后端存一次 + 前端再存一次"造成的重复消息
@@ -1267,6 +1319,12 @@ onMounted(() => {
     })
     inputBarObserver.observe(inputBarEl)
   }
+  const headerEl = rootRef.value?.querySelector('.mobile-header') as HTMLElement | null
+  if (headerEl && typeof ResizeObserver !== 'undefined') {
+    headerObserver = new ResizeObserver(() => syncHeaderHeight())
+    headerObserver.observe(headerEl)
+  }
+  syncHeaderHeight()
   window.addEventListener('resize', handleViewportResize)
   // 动态获取推荐（缓存新鲜则直接复用，否则后台静默刷新）
   loadRecommendations()
@@ -1277,6 +1335,8 @@ watch(() => route.query.conv, openConvFromQuery)
 
 onUnmounted(() => {
   closePreview()
+  headerObserver?.disconnect()
+  headerObserver = null
   msgObserver?.disconnect()
   msgObserver = null
   inputBarObserver?.disconnect()
@@ -1310,9 +1370,12 @@ defineExpose({ sendText })
   position: relative;
   display: flex; 
   flex-direction: column; 
-  /* 整页对话区按视口高度撑满；管理端/教师端桌面端会把 --ui-zoom 置为 0.9，
-     缩放后 100vh 只剩 90%，这里换算回局部高度，避免底部留白（学生端 --ui-zoom 为 1，等价原值） */
-  height: calc(100vh / var(--ui-zoom)); 
+  /* 撑满父级内容盒，而不是写死 100vh：对话页上方还有顶栏（桌面端约 56px），
+     移动端页面根还带 82px 的悬浮胶囊底部让位。用 100vh 面板会比可用区域更高，
+     底部「深度思考 / 上传 / 发送」这一行被顶到视口外（移动端还会压在胶囊下面），
+     表现为功能点不到、像“无法启用”。height:100% 跟随父级（父级已按 --ui-zoom
+     缩放，故不再需要 100vh / --ui-zoom 的换算）。 */
+  height: 100%; 
   background: linear-gradient(180deg, #f0f8ff 0%, #fafcff 40%, #fff 100%); 
   overflow: hidden;
 }
@@ -2064,7 +2127,10 @@ defineExpose({ sendText })
   -webkit-tap-highlight-color: transparent;
   transition: background .16s ease, color .16s ease, transform .12s ease;
 }
-.new-chat-btn .new-chat-icon { width: 20px; height: 20px; display: block; }
+/* 图标尺寸按「视觉占位」对齐同排的电话图标（lucide 20px：路径 20/24 格 + 2 描边 → 实际着墨 ~18.3px）。
+   这个「方框+笔」的路径只占 16.2/24 格，同样给 20px 会小一圈，看着就是「两个图标不一样大」；
+   放大到 24px 后着墨 ~17.9px、描边 1.7px，与电话图标基本一致。 */
+.new-chat-btn .new-chat-icon { width: 24px; height: 24px; display: block; }
 .new-chat-btn:active:not(:disabled),
 .new-chat-btn:focus-visible {
   transform: scale(.92);
@@ -2108,18 +2174,50 @@ defineExpose({ sendText })
     top: calc(54px + env(safe-area-inset-top, 0px));
   }
   /* 顶栏四个控件在 375px 下也要放得下：缩小按钮与间距，标题可点开会话面板 */
-  .mobile-header { padding: 6px 6px; gap: 2px; --mh-btn: 32px; }
+  /* 注意：这里的 padding 简写必须带上安全区，否则会把基础样式里
+     padding-top: calc(6px + env(safe-area-inset-top)) 覆盖掉 —— 顶栏标题会重新钻到
+     状态栏/挖孔下面，同时消息区预留的 58px 顶部内边距会露出一大块空白。 */
+  .mobile-header { padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px; gap: 2px; --mh-btn: 32px; }
   .mobile-header-title { font-size: 15px; padding: 0 2px; }
   .menu-toggle { width: 32px; height: 32px; }
   .menu-toggle :deep(.el-icon) { font-size: 18px; }
-  .new-chat-btn .new-chat-icon { width: 18px; height: 18px; }
+  /* 与同排电话图标等大：覆盖基础尺寸时不能跟着按钮一起缩小，否则又会小一圈 */
+  .new-chat-btn .new-chat-icon { width: 24px; height: 24px; }
   /* 欢迎语改用固定高度居中：高度取「输入框仍是单行时」的消息区高度
      （--chat-welcome-h 由 syncBaseHeights() 量得，兜底值 ≈ 单行输入栏 + 底部导航）。
      输入框被撑高时 .messages 会被压缩，但 .welcome 高度不变、内容在固定高度里居中，
      所以欢迎语不会被往上顶。 */
-  .welcome { min-height: 0; height: var(--chat-welcome-h, calc(100vh - 178px)); }
-  .welcome-content { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; }
+  .welcome {
+    min-height: 0;
+    height: var(--chat-welcome-h, calc(100vh - 178px));
+    /* 顶栏是 absolute 悬浮层：欢迎语按实测顶栏高度让位（--chat-header-h 由 ResizeObserver 写），
+       兜底 58px + 安全区，兼容顶栏尚未挂载 / 不支持 ResizeObserver 的情况 */
+    padding-top: var(--chat-header-h, calc(58px + env(safe-area-inset-top, 0px)));
+    box-sizing: border-box;
+  }
+  .welcome-content {
+    margin: 0 auto;
+    padding: 20px 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0;
+  }
   .ai-character { transform: scale(1.15); margin-bottom: 16px; }
+  /* 键盘展开（用户正在输入）时：吉祥物直接收起，欢迎区高度改跟随可见的消息区，
+     问候语仍然居中显示，不会被压缩后的视口裁掉 */
+  /* 键盘展开（正在输入）时：吉祥物、问候语 / slogan、为你推荐一起淡出收起，只留输入区；
+     键盘收起后再淡入恢复。用 opacity + visibility 过渡（display 不可动画）。 */
+  .welcome,
+  .recommend-bar {
+    transition: opacity .18s ease, transform .18s ease, visibility 0s linear;
+  }
+  .chat-modern.is-typing .welcome,
+  .chat-modern.is-typing .recommend-bar {
+    opacity: 0;
+    transform: translateY(8px);
+    visibility: hidden;
+    pointer-events: none;
+    /* visibility 延迟到淡出结束再切，避免动画被瞬间掐断 */
+    transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
+  }
   .welcome-greeting h1 { font-size: 22px; margin-bottom: 6px; }
   .welcome-greeting p { font-size: 13px; margin-bottom: 20px; }
   .msg-row { padding: 0 12px; margin-bottom: 8px; margin-left: 0; margin-right: 0; }

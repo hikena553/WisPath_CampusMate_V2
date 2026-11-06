@@ -449,7 +449,7 @@
     </div>
 
     <!-- 聊天区域 -->
-    <div class="msg-chat" v-show="!isMobile || !!activeId">
+    <div class="msg-chat" v-show="!isMobile || !!activeId" :style="chatPaneStyle">
       <template v-if="activeId">
         <!-- 桌面端：聊天主列 + 右侧常驻会话信息面板（≥1200px 显示的列，窄屏由 CSS 隐藏） -->
         <div class="chat-body">
@@ -1474,6 +1474,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import type { CSSProperties } from 'vue'
 // v6.1 弹窗减负：列表/表单走全屏子页，裁剪走底部动作面板
 import ResponsivePopup from '@/components/common/ResponsivePopup.vue'
 // v6.1 弹窗减负：单输入面板与删除确认走底部动作面板
@@ -1482,6 +1483,7 @@ import { actionConfirm } from '@/composables/useActionSheet'
 import { useRoute, useRouter } from 'vue-router'
 import SlidingTabs from '@/components/common/SlidingTabs.vue'
 import { useResponsive } from '@/composables/useResponsive'
+import { useVisualViewport } from '@/composables/useVisualViewport'
 import { useBackLayer } from '@/composables/useBackLayer'
 import { useMobileSubPage } from '@/composables/useMobileSubPage'
 import { useAuthStore } from '@/stores/auth'
@@ -1588,6 +1590,32 @@ const activeType = ref<'single' | 'group' | 'butler' | 'notice'>('single')
 const messages = ref<any[]>([])
 const newMsg = ref('')
 const msgListRef = ref<HTMLDivElement>()
+
+/* 软键盘：键盘弹出时浏览器只缩/平移 visualViewport，聊天列要临时钉到可见区，
+   否则整页会被系统上推、页头消失、输入栏被键盘盖住。 */
+const { offsetTop: vvTop, height: vvHeight, keyboardOpen } = useVisualViewport()
+/** 读取移动端整体缩放比（#app 的 --app-zoom）：fixed 浮层要按它折算，否则会大出 6% */
+function appZoom() {
+  const raw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-zoom'))
+  return Number.isFinite(raw) && raw > 0 ? raw : 1
+}
+
+const chatPaneStyle = computed<CSSProperties>(() => {
+  if (!isMobile.value || !activeId.value || !keyboardOpen.value) return {}
+  const z = appZoom()
+  return {
+    position: 'fixed',
+    left: '0',
+    right: '0',
+    top: vvTop.value / z + 'px',
+    height: vvHeight.value / z + 'px',
+    bottom: 'auto',
+    zIndex: 60,
+  }
+})
+watch(keyboardOpen, (open) => {
+  if (open && activeId.value) scrollToBottom()
+})
 
 // 单聊对方是否为名下学生（用于展示档案 / 关怀快捷操作）
 const myStudentIds = ref<Set<number>>(new Set())
@@ -2048,7 +2076,7 @@ function autosizeComposer() {
   const el = mobileComposerEl.value
   if (!el) return
   el.style.height = 'auto'
-  const floor = isMobile.value ? 52 : 0
+  const floor = isMobile.value ? 36 : 0
   el.style.height = `${Math.min(Math.max(el.scrollHeight, floor), 120)}px`
 }
 
@@ -2825,6 +2853,8 @@ useBackLayer(computed(() => isMobile.value && !!groupSubPage.value), () => {
   groupSubPage.value = groupSubPage.value === 'settings' ? null : 'settings'
 })
 useBackLayer(computed(() => isMobile.value && mobileSearchOpen.value), closeMobileSearch)
+/** 大图预览压在聊天之上：系统返回先收预览，不要连聊天一起退（学生端同一套） */
+useBackLayer(computed(() => isMobile.value && !!previewUrl.value), () => { previewUrl.value = '' })
 
 /** 打开「小绵管家」常驻会话：自动推送资讯 / 总结对话，不占用单聊与群聊状态 */
 function openButler() {
@@ -4210,7 +4240,9 @@ function onGlobalClick(e: MouseEvent) {
     backdrop-filter: saturate(180%) blur(14px);
     -webkit-backdrop-filter: saturate(180%) blur(14px);
     border-bottom: 1px solid var(--dt-divider);
-    min-height: 52px; padding: 6px 8px;
+    /* 顶部安全区：聊天标题栏白底铺进状态栏，键盘把聊天列贴到可见区顶端时也不会钻进状态栏下面 */
+    min-height: calc(52px + env(safe-area-inset-top, 0px));
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 6px;
   }
   .chat-header .el-button { color: var(--dt-text); }
   .chat-name { color: var(--dt-text); font-size: 16.5px; }
@@ -4571,25 +4603,25 @@ function onGlobalClick(e: MouseEvent) {
   .msg-composer-bar { display: flex; align-items: stretch; gap: 10px; }
   .msg-composer-bar textarea {
     flex: 1; min-width: 0; resize: none; border: none; outline: none;
-    min-height: 52px; max-height: 120px; padding: 15px 14px;
-    border-radius: 14px; background: #f5f6f8;
+    min-height: 36px; max-height: 120px; padding: 8px 12px;
+    border-radius: 11px; background: #f5f6f8;
     font-size: 14px; line-height: 1.45; color: #1f2329; font-family: inherit;
   }
   .msg-composer-bar textarea::placeholder { color: #b9bcc2; }
   .msg-hold-talk {
-    flex: 1; min-height: 52px; padding: 0 12px;
-    border: none; border-radius: 14px; background: #f5f6f8;
+    flex: 1; min-height: 36px; padding: 0 12px;
+    border: none; border-radius: 11px; background: #f5f6f8;
     font-size: 14px; color: #1f2329; font-family: inherit;
   }
   .msg-hold-talk.recording { background: #e9f0f9; color: #2f86d6; }
   .msg-hold-talk.cancel { background: #fdecec; color: #b42318; }
   .msg-send {
     flex-shrink: 0; align-self: flex-end;
-    width: 76px; height: 52px; padding: 0;
+    width: 60px; height: 36px; padding: 0;
     display: inline-flex; align-items: center; justify-content: center;
-    border: none; border-radius: 14px;
+    border: none; border-radius: 11px;
     background: #7cb6ea; color: #fff;
-    font-size: 14.5px; font-family: inherit; cursor: pointer;
+    font-size: 13.5px; font-family: inherit; cursor: pointer;
     transition: background .16s;
   }
   .msg-send:disabled { background: #b7d5f2; cursor: default; }

@@ -175,6 +175,7 @@ import MobileTabBar from '@/components/responsive/MobileTabBar.vue'
 import DesktopPet from '@/components/teacher/DesktopPet.vue'
 import SiteAnnouncementBar from '@/components/common/SiteAnnouncementBar.vue'
 import { prefetchDashboardData } from '@/utils/teacherDashboardCache'
+import { emitDataChange } from '@/utils/dataSync'
 import { confirmLogout } from '@/utils/logout'
 import {
   HomeFilled, User, Message, Notebook,
@@ -408,9 +409,18 @@ function updateClock() {
   const d = new Date()
   now.value = `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+/**
+ * 应用从后台切回前台 / 从其他标签页切回时，数据可能已经过期：
+ * 广播一次全量变更，各页面立即静默刷新，不用等下一轮轮询。
+ */
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') emitDataChange('all')
+}
+
 onMounted(() => {
   updateClock()
   clockTimer = window.setInterval(updateClock, 30000)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 /**
@@ -442,6 +452,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopUnreadWatch()
   if (clockTimer) window.clearInterval(clockTimer)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   document.body.classList.remove('teacher-app')
 })
 
@@ -458,7 +469,11 @@ function goProfilePage() {
 </script>
 
 <style>
-body { overflow: hidden; margin: 0; background-color: #0f172a; }
+/* 手机端首屏底色与页面同色，避免冷启动先闪一屏深色；宽屏预览仍用深色 */
+body { overflow: hidden; margin: 0; background-color: #f5f6f7; }
+@media (min-width: 600px) {
+  body { background-color: #0f172a; }
+}
 </style>
 <style scoped>
 /* ============================================================

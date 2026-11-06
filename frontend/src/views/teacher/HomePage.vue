@@ -16,7 +16,7 @@
             </p>
           </div>
           <div class="hero-actions">
-            <span class="hero-sync"><i class="hero-sync-dot" />每 30 秒自动同步</span>
+            <span class="hero-sync"><i class="hero-sync-dot" />数据变动即时同步 · 30 秒兜底校验</span>
           </div>
         </div>
 
@@ -185,6 +185,7 @@ import { getTeacherTaskSummary, type TeacherTaskSummary } from '@/api/teacherTas
 import type { CrisisAlert, LeaveRequestOut } from '@/types'
 import { ElMessage } from 'element-plus'
 import { getCachedData, getPrefetchPromise } from '@/utils/teacherDashboardCache'
+import { onDataChange } from '@/utils/dataSync'
 import HomeAiPanel from './HomeAiPanel.vue'
 import HomeDesktopSchedule from './HomeDesktopSchedule.vue'
 // 移动端首页 = 学生端校园资讯（同一组件，UI 与内容零改动；教师端通过插槽补一枚发布入口）
@@ -531,9 +532,15 @@ onMounted(() => {
   pollTimer = setInterval(silentRefresh, 30000)
 })
 
+// 智能体 / 其他页面改了任务或学生数据：立即静默刷新，不等下一轮 30 秒轮询
+const offDataChange = onDataChange(['teacher-tasks', 'teacher-students', 'teacher-dashboard', 'teacher-care'], () => {
+  // 页面被 keep-alive 停用时先不刷，等 onActivated 统一拉取
+  if (pollTimer !== null) silentRefresh()
+})
+
 onActivated(() => {
-  // 距上次刷新超过60秒才触发静默刷新（后台更新数据，不触发加载动画）
-  if (Date.now() - lastRefreshAt >= 60_000) {
+  // 回到本页就静默刷新（3 秒内重复切回不重复请求）：数据可能已被智能体 / 其他页面改动
+  if (Date.now() - lastRefreshAt >= 3_000) {
     silentRefresh()
   }
   // 恢复轮询（若被 onDeactivated 暂停）
@@ -555,6 +562,7 @@ onUnmounted(() => {
     clearInterval(pollTimer)
     pollTimer = null
   }
+  offDataChange()
 })
 </script>
 

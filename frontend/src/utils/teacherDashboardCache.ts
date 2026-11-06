@@ -9,6 +9,7 @@ import { getPendingLeaves } from '@/api/leave'
 import { getTeacherAnnouncements } from '@/api/announcement'
 import { getTeacherSchedules, getOverdueSchedules } from '@/api/teacher'
 import { getTeacherTaskSummary } from '@/api/teacherTask'
+import { onDataChange } from '@/utils/dataSync'
 
 interface CacheEntry<T> {
   data: T
@@ -71,3 +72,9 @@ export function getCachedData<T>(key: string): T | null {
 function setCache<T>(key: string, data: T): void {
   cache.set(key, { data, timestamp: Date.now() })
 }
+
+// 收到数据变更广播时作废旧缓存，避免页面刷新后又被 60 秒旧缓存覆盖
+onDataChange('all', () => {
+  cache.clear()
+  prefetchPromise = null
+})
