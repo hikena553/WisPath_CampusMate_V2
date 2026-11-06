@@ -29,7 +29,7 @@ from app.core.database import SessionLocal
 from app.core.config import settings
 from app.core.crypto import decrypt_value
 from app.services.crisis_service import detect_crisis_keywords
-from app.utils.llm_guard import SafetyTagFilter
+from app.utils.llm_guard import StreamSanitizer
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +395,46 @@ def _is_speakable(text: str) -> bool:
     导致该段没有声音（表现为"播报一段后中断"）。
     """
     return any(ch.isalnum() for ch in text)
+
+
+def _is_natural_reply(text: str, min_chars: int = 2) -> bool:
+    """回复是否含有自然语言内容（按字母/数字/汉字计数）。
+
+    上游代理偶发退化输出（纯标点竖线串、"\\n-1" 这类残片）：这类内容过不了
+    _is_speakable，一句语音都合成不出来（表现为"接通后没声音"），落库后还会
+    以乱码形式留在聊天页。入库与问候重试的判定统一走这里。
+    """
+    if not text:
+        return False
+    return sum(1 for ch in text if ch.isalnum()) >= min_chars
+
+
+def _greeting_history_slice(history: list[dict], keep: int = 4) -> list[dict]:
+    """问候轮次的上下文切片：取最近 keep 条，并裁掉末尾的 assistant 消息。
+
+    上游代理对"末尾是 assistant 消息"的上下文极不稳定（实测连续输出 '\\n'、
+    竖线串、泄漏 <answer> 标签）。问候轮次天然没有新的用户消息，历史尾巴
+    往往就是上一轮回答，正好踩中这个退化。裁掉尾部 assistant 让上下文止于
+    用户消息，模型接"该我说话"的轮次，实测 5/5 正常输出。
+    """
+    window = list(history[-keep:])
+    while window and window[-1].get("role") == "assistant":
+        window.pop()
+    return window
+
+
+def _is_stt_language_hallucination(text: str) -> bool:
+    """识别结果是否为语种幻觉。
+
+    SenseVoice / qwen-audio 对被回声污染的音频可能整段输出其它语言
+    （实测把中文识别成整句韩文）。中文场景下，含谚文且不含汉字的结果
+    一律按识别失败处理，不进入对话。
+    """
+    if not text:
+        return False
+    has_hangul = any(0xAC00 <= ord(ch) <= 0xD7A3 for ch in text)
+    has_han = any(0x4E00 <= ord(ch) <= 0x9FFF for ch in text)
+    return has_hangul and not has_han
 
 
 def _take_tts_phrases(buffer: str, first_early: bool = False) -> tuple[list[str], str]:
@@ -789,7 +829,12 @@ _PCM_TAIL_SILENCE = 384    # 24ms
 
 def _apply_edge_fade(pcm: bytes, fade_in: bool, fade_out: bool) -> bytes:
     """对一段 PCM16 做首/尾线性淡变，返回新的 bytes。极短片段不处理，避免整段被压掉。"""
-    import numpy as np
+    try:
+        import numpy as np
+    except ImportError:
+        # 淡变只是边界音质增强：环境缺 numpy 时跳过，绝不能让整段 TTS
+        # 合成失败（此前直接抛 ModuleNotFoundError，每句都 0 字节 → 全程无声）
+        return pcm
 
     data = np.frombuffer(pcm, dtype="<i2").astype(np.float32)
     n = int(data.size)
@@ -989,6 +1034,11 @@ async def handle_voice_connection(
             t0 = time.monotonic()
             try:
                 text = await local_sensevoice_stt(audio_bytes)
+                if text and _is_stt_language_hallucination(text):
+                    logger.warning(
+                        "[STT] 本地识别疑似语种幻觉（谚文无汉字），丢弃回退云端: %r", text[:50],
+                    )
+                    text = ""
                 if text:
                     logger.info(
                         "[STT] engine=local-sensevoice bytes=%d ms=%d text=%r",
@@ -1000,6 +1050,9 @@ async def handle_voice_connection(
                 logger.warning("本地 SenseVoice 识别失败，回退云端 STT", exc_info=True)
             t1 = time.monotonic()
             text = await tokenplan_stt(audio_bytes, client=http_client)
+            if _is_stt_language_hallucination(text):
+                logger.warning("[STT] 云端识别疑似语种幻觉（谚文无汉字），丢弃: %r", text[:50])
+                return ""
             logger.info(
                 "[STT] engine=cloud-qwen-asr bytes=%d ms=%d text=%r",
                 len(audio_bytes), int((time.monotonic() - t1) * 1000), text,
@@ -1117,7 +1170,8 @@ async def handle_voice_connection(
                 # 上游会把安全审核标注（<ds_safety>…</ds_safety>Safe）当正文吐出来。
                 # 这段文字会进气泡，还会被 _take_tts_phrases 切碎后逐句朗读，
                 # 必须在 delta 层面就掐掉；过滤器带状态，能处理被 token 切碎的标签。
-                guard = SafetyTagFilter()
+                # StreamSanitizer 在此基础上再剥 <think>/<answer> 等脚手架标签泄漏。
+                guard = StreamSanitizer()
                 async for chunk in stream:
                     delta = chunk.choices[0].delta if chunk.choices else None
                     if not (delta and delta.content):
@@ -1191,6 +1245,28 @@ async def handle_voice_connection(
         # ============================================================
         # 接通问候：智能体先开口（豆包式"AI 先说话"），按摄像头表情状态定制开场语
         # ============================================================
+        async def _speak_text(text: str) -> None:
+            """静态文本播报（问候兜底用）：ai_text + 流式 TTS，语义与 run_llm_tts 一致。"""
+            if not await safe_send_json(websocket, {"type": "ai_text", "text": text}):
+                return
+            await safe_send_json(websocket, {"type": "state", "state": "speaking"})
+            try:
+                async for chunk in _normalize_pcm_stream(synthesize_speech(text)):
+                    if cancel_event.is_set():
+                        return
+                    for i in range(0, len(chunk), 8192):
+                        if not await safe_send_json(websocket, {
+                            "type": "ai_audio",
+                            "data": base64.b64encode(chunk[i:i + 8192]).decode(),
+                        }):
+                            return
+            except Exception as exc:
+                logger.warning("问候兜底播报失败: %s", exc)
+                if not _is_quota_error(exc):
+                    await safe_send_json(websocket, {"type": "error", "message": "语音合成暂时不可用，已继续显示文字"})
+                else:
+                    await safe_send_json(websocket, {"type": "error", "message": "语音合成服务额度已用尽，已继续显示文字"})
+
         async def process_greeting(emotion: str | None) -> None:
             """通话接通瞬间由 AI 先说话：结合当前表情状态生成一句自然口语化问候"""
             try:
@@ -1205,8 +1281,26 @@ async def handle_voice_connection(
                         emotion_hint=GREETING_EMOTION_HINT.get(emotion, "") if emotion else "",
                     ),
                 })
-                greet_messages.extend(history[-4:])  # 续聊时让问候承接上文
-                full_response, interrupted = await run_llm_tts(greet_messages)
+                # 上下文止于用户消息：末尾的 assistant 回答会触发上游模板退化
+                # （输出 '\n'/竖线串/<answer> 标签），必须裁掉
+                greet_messages.extend(_greeting_history_slice(history))
+
+                full_response = ""
+                interrupted = False
+                for attempt in (1, 2):
+                    full_response, interrupted = await run_llm_tts(greet_messages)
+                    if interrupted or _is_natural_reply(full_response, min_chars=4):
+                        break
+                    logger.warning(
+                        "[GREET] 问候输出退化 chars=%d（第 %s 次），重试", len(full_response), attempt,
+                    )
+
+                if not interrupted and not _is_natural_reply(full_response, min_chars=4):
+                    # 两次仍退化：静态兜底问候，保证"接通必开口"（否则用户面对无声通话）
+                    logger.warning("[GREET] 问候两次退化，使用静态兜底问候")
+                    full_response = "你好呀，我在呢～有什么想聊的或者要办的事，直接说就行。"
+                    await _speak_text(full_response)
+
                 if not interrupted and full_response.strip():
                     history.append({"role": "assistant", "content": full_response})
                     if len(history) > 50:
@@ -1297,9 +1391,10 @@ async def handle_voice_connection(
                     text, len(full_response), interrupted_llm,
                 )
 
-                # 4. 保存对话历史（被打断的轮次不保留半截回复）
+                # 4. 保存对话历史（被打断的轮次不保留半截回复；退化乱码不落库，
+                #    否则会以乱码形式留在聊天页，还会污染后续轮次的上下文）
                 history.append({"role": "user", "content": text})
-                if not interrupted_llm and full_response.strip():
+                if not interrupted_llm and _is_natural_reply(full_response):
                     history.append({"role": "assistant", "content": full_response})
                 if len(history) > 50:
                     history[:] = history[-50:]
@@ -1307,7 +1402,7 @@ async def handle_voice_connection(
                 if conversation_id:
                     try:
                         db.add(ConversationMessage(conversation_id=conversation_id, role="user", content=text))
-                        if not interrupted_llm and full_response.strip():
+                        if not interrupted_llm and _is_natural_reply(full_response):
                             db.add(ConversationMessage(conversation_id=conversation_id, role="assistant", content=full_response))
                         conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
                         if conv:

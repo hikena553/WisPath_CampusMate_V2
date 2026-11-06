@@ -17,7 +17,7 @@ from app.services.prompts import build_skill_extraction_prompt
 from app.services.tools import TOOL_DEFINITIONS, TEACHER_TOOL_DEFINITIONS, execute_tool
 from app.services.crisis_service import detect_crisis_keywords, save_crisis_summary
 from app.services.llm_service import _get_client, _get_llm_config
-from app.utils.llm_guard import SafetyTagFilter, strip_control_tags
+from app.utils.llm_guard import StreamSanitizer, strip_control_tags
 
 logger = logging.getLogger(__name__)
 
@@ -150,8 +150,9 @@ async def call_llm_stream(messages: list[dict], tools: list[dict] | None = None,
 
     content = ""
     tool_calls_buffer: dict[int, _SimpleToolCall] = {}
-    # 上游可能把安全审核标注（<ds_safety>…</ds_safety>Safe）当正文流出，见 llm_guard
-    guard = SafetyTagFilter()
+    # 上游可能把安全审核标注（<ds_safety>…</ds_safety>Safe）与脚手架标签
+    # （<think>/<answer>）当正文流出，见 llm_guard
+    guard = StreamSanitizer()
 
     async for chunk in response:
         if not chunk.choices:
@@ -211,7 +212,7 @@ async def generate_reply(prompt: str, user: User):
             model=config['model'], messages=msgs,
             temperature=0.5, max_tokens=2048, stream=True,
         )
-        guard = SafetyTagFilter()
+        guard = StreamSanitizer()
         async for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 piece = guard.feed(chunk.choices[0].delta.content)

@@ -151,4 +151,110 @@ def strip_control_tags(text: str) -> str:
     cleaned = _BLOCK_RE.sub("", text)
     # 只有闭合/开标签没有配对的残片，一并清掉，避免半个标签露出来
     cleaned = cleaned.replace(_OPEN, "").replace(_CLOSE, "")
+    cleaned = _SCAFFOLD_BLOCK_RE.sub("", cleaned)
+    cleaned = _SCAFFOLD_BARE_RE.sub("", cleaned)
     return cleaned.strip()
+
+
+# ===== 脚手架标签：推理/答案结构标记泄漏进正文 =====
+# 上游代理偶发把模型内部的结构标签当正文吐出（实测问候轮次输出
+# "<answer>好，我记住了…"）。这些标签会进气泡、被 _is_speakable 判定为
+# 可朗读后由 TTS 念出 "answer"，必须在流式边界剥离：
+#   <think>…</think>   推理块：整体丢弃（推理过程不该给用户，更不能被朗读）
+#   <answer> </answer>  答案结构标签：只剥标签、保留正文
+_THINK_OPEN = "<think>"
+_THINK_CLOSE = "</think>"
+_SCAFFOLD_STRIP_TAGS = ("<answer>", "</answer>")
+_SCAFFOLD_TAGS = (_THINK_OPEN, _THINK_CLOSE) + _SCAFFOLD_STRIP_TAGS
+# 非流式兜底：整段清洗
+_SCAFFOLD_BLOCK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+_SCAFFOLD_BARE_RE = re.compile(r"</?(?:think|answer)>", re.IGNORECASE)
+
+
+class ScaffoldTagFilter:
+    """流式剥离泄漏的脚手架标签（<think> 块整体丢弃，<answer> 只剥标签）。
+
+    与 SafetyTagFilter 同一套状态机思路：标签可能被 token 切碎
+    （"<answ" + "er>"），末尾可能是半个标签前缀的部分必须扣住等下一个 delta。
+    """
+
+    def __init__(self) -> None:
+        self._pending = ""        # 可能是半个标签的尾巴，等下一个 delta
+        self._inside_think = False  # 正在推理块内，内容整体丢弃
+
+    @staticmethod
+    def _partial_tail_len(buf: str) -> int:
+        """buf 末尾有多少字符可能是任一脚手架标签的前缀。"""
+        max_len = max(len(t) for t in _SCAFFOLD_TAGS)
+        for k in range(min(max_len - 1, len(buf)), 0, -1):
+            if any(t.startswith(buf[-k:]) for t in _SCAFFOLD_TAGS):
+                return k
+        return 0
+
+    def feed(self, text: str) -> str:
+        buf = self._pending + (text or "")
+        self._pending = ""
+        if not buf:
+            return ""
+
+        out: list[str] = []
+        i = 0
+        n = len(buf)
+        while i < n:
+            if self._inside_think:
+                j = buf.find(_THINK_CLOSE, i)
+                if j < 0:
+                    # 闭合标签可能没到齐：扣住疑似半个 "</think>" 的尾巴
+                    keep = self._partial_tail_len(buf[i:])
+                    self._pending = buf[n - keep:] if keep else ""
+                    return "".join(out)
+                i = j + len(_THINK_CLOSE)
+                self._inside_think = False
+                continue
+
+            hits = [(j, t) for t in _SCAFFOLD_TAGS if (j := buf.find(t, i)) >= 0]
+            if not hits:
+                keep = self._partial_tail_len(buf[i:])
+                visible = buf[i:n - keep] if keep else buf[i:]
+                self._pending = buf[n - keep:] if keep else ""
+                if visible:
+                    out.append(visible)
+                return "".join(out)
+
+            j, tag = min(hits, key=lambda x: x[0])
+            if j > i:
+                out.append(buf[i:j])
+            i = j + len(tag)
+            if tag == _THINK_OPEN:
+                self._inside_think = True
+            # <answer>/</answer>：只剥标签本身，正文保留
+        return "".join(out)
+
+    def flush(self) -> str:
+        """流结束时吐出残留；未闭合的推理块按推理内容丢弃。"""
+        rest, self._pending = self._pending, ""
+        if self._inside_think:
+            self._inside_think = False
+            return ""
+        return rest
+
+
+class StreamSanitizer(SafetyTagFilter):
+    """SafetyTagFilter + ScaffoldTagFilter 串联。
+
+    一条流式边界同时剥离安全审核标注与脚手架标签。feed/flush 接口与
+    SafetyTagFilter 完全一致，可直接原地替换。
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._scaffold = ScaffoldTagFilter()
+
+    def feed(self, text: str) -> str:
+        return self._scaffold.feed(super().feed(text))
+
+    def flush(self) -> str:
+        # super().flush() 吐出的扣留尾巴是"新文本"，须先过 scaffold.feed
+        # 处理其中可能被切碎的标签，再取 scaffold 自身的残留
+        tail = self._scaffold.feed(super().flush())
+        return tail + self._scaffold.flush()
