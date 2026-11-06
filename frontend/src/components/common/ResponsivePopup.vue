@@ -126,7 +126,14 @@ onUnmounted(() => {
 /* ===== 外层：全屏承载（桌面窄窗口下限宽 480px 居中，真机全宽） ===== */
 .rp-wrap {
   position: fixed;
-  inset: 0;
+  /* 键盘弹出时缩到可见区：与登录/注册等整屏页共用 App.vue 写入的 --auth-vh/--auth-vtop
+     （iOS WKWebView 不会自己缩，底部输入框会被键盘盖住；安卓 adjustResize 下这两个值
+     与窗口一致，等价于 inset:0，不影响原行为）。不能用 inset:0 —— top/bottom 同时存在时
+     height 会被忽略，键盘态就失效了。 */
+  top: var(--auth-vtop, 0px);
+  left: 0;
+  right: 0;
+  height: var(--auth-vh, 100%);
   z-index: 2700;
   display: flex;
   justify-content: center;
@@ -142,15 +149,18 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ===== 子页头：与 tui-appbar 同规格（48px 白底 + 发丝线） ===== */
+/* ===== 子页头：与 tui-appbar 同规格（48px 白底 + 发丝线 + 顶部安全区） =====
+   --sat 必须让出来（与 SubPageHeader 一致）：Android 15 edge-to-edge / iPhone 刘海下，
+   页面内容会铺到状态栏底下，不留安全区的话返回键和标题会被状态栏直接压住。 */
 .rp-appbar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 48px;
-  min-height: 48px;
-  padding: 0 12px;
+  height: calc(var(--sat, 0px) + 48px);
+  min-height: calc(var(--sat, 0px) + 48px);
+  padding: var(--sat, 0px) 12px 0;
+  box-sizing: border-box;
   background: #fff;
   border-bottom: 1px solid #e9ebee;
 }
