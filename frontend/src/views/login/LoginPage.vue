@@ -228,7 +228,13 @@ import {
 } from '@/utils/passwordReset'
 import { getLastAccount } from '@/utils/lastAccount'
 import { THIRD_PARTY_AUTH_ENABLED, QQ_NATIVE_AUTH_ENABLED } from '@/utils/features'
-import { qqNativeAuthAvailable, qqNativeLogin } from '@/utils/qqAuth'
+import {
+  qqNativeAuthAvailable,
+  qqNativeErrorCode,
+  qqNativeErrorMessage,
+  qqNativeLogin,
+  qqNativePlatform,
+} from '@/utils/qqAuth'
 
 const router = useRouter()
 const route = useRoute()
@@ -485,6 +491,11 @@ async function handleQqLogin() {
     await handleQqNativeLogin()
     return
   }
+  // App 壳内但安装包没集成 QQ OpenSDK：Web 网站应用链路也不可用，直接给准确提示
+  if (QQ_NATIVE_AUTH_ENABLED && qqNativePlatform()) {
+    ElMessage.warning('当前安装包未集成 QQ 登录组件，请使用账号密码登录')
+    return
+  }
   quickLoading.value = 'qq'
   try {
     const res: any = await getQqAuthorizeUrl('login')
@@ -526,14 +537,15 @@ async function handleQqNativeLogin() {
     }
     throw new Error('响应异常')
   } catch (e: any) {
-    const code = String(e?.message || '')
-    // 用户主动取消不提示；未装 QQ 给出可行动的引导
+    // 插件拒绝码统一归一：取消静默、未装 QQ 引导安装、缺 OpenSDK 明确说明，
+    // 不再把「安装包没集成 QQ 组件」误报成笼统的「QQ 登录失败」
+    const code = qqNativeErrorCode(e)
     if (code === 'USER_CANCEL') return
     if (code === 'QQ_NOT_INSTALLED') {
       ElMessage.warning('未检测到手机 QQ，请安装后重试')
       return
     }
-    ElMessage.warning(e?.response?.data?.detail || 'QQ 登录失败，请使用账号密码登录')
+    ElMessage.warning(e?.response?.data?.detail || qqNativeErrorMessage(e, 'QQ 授权失败，请稍后重试'))
   } finally {
     quickLoading.value = ''
   }
@@ -1021,6 +1033,136 @@ onBeforeUnmount(() => {
   }
   .agree {
     margin-top: 22px;
+  }
+}
+
+/* ===== 移动端：一屏放下全部内容（含底部协议勾选）=====
+   手机上纵向全是固定 px 间距：844 高度时协议刚好贴到屏幕最下沿、
+   更矮的机型（740/640）直接掉出首屏，被手势条或导航条压住，
+   所以底部「我已阅读并同意《用户协议》《隐私政策》」一直看不到。
+   这里把纵向节奏改成按 vh 伸缩（元素本身是 #app zoom 后的尺寸，
+   vh 仍是布局视口高度），内容总高约为视口的固定比例，
+   从 320×568 到 430×932 都不用滚动就能看到登录按钮、其他登录方式与协议。 */
+@media (max-width: 767px) {
+  /* 底部留出一点余量：安卓全面屏的手势条会盖在 WebView 底部 */
+  .login-page {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+  }
+  /* 内容比屏幕矮时整体垂直居中（margin auto 在空间不足时自动变 0，
+     表现退化成贴顶，不会像 justify-content:center 那样把顶部裁掉）；
+     配合下面的 vh 伸缩间距，任何高度都不用滚动就能看到底部的「我已阅读并同意…」。 */
+  .login-body {
+    margin-block: auto;
+  }
+  .brand {
+    padding-top: clamp(12px, 2.4vh, 40px);
+  }
+  .brand-logo {
+    width: clamp(50px, 7.4vh, 60px);
+    height: clamp(50px, 7.4vh, 60px);
+    border-radius: clamp(15px, 2.2vh, 19px);
+  }
+  .brand h1 {
+    margin-top: clamp(8px, 1.6vh, 16px);
+    font-size: clamp(21px, 2.85vh, 24px);
+  }
+  .brand p {
+    margin-top: clamp(4px, 1vh, 8px);
+    font-size: 12.5px;
+  }
+
+  .form {
+    margin-top: clamp(14px, 2.8vh, 32px);
+    gap: clamp(8px, 1.45vh, 12px);
+  }
+  .field input,
+  .code-btn {
+    height: clamp(46px, 6.5vh, 54px);
+  }
+  .form-meta {
+    min-height: 16px;
+  }
+  .btn-primary {
+    height: clamp(46px, 6.5vh, 54px);
+    margin-top: 2px;
+  }
+
+  .guest-link {
+    margin-top: clamp(6px, 1.5vh, 14px);
+  }
+  .register-link {
+    margin-top: 0;
+  }
+
+  .other {
+    margin-top: clamp(12px, 3vh, 38px);
+  }
+  .quick-row {
+    margin-top: clamp(8px, 1.9vh, 16px);
+    gap: clamp(36px, 11vw, 52px);
+  }
+  .quick-item {
+    gap: 6px;
+  }
+  .quick-circle {
+    width: clamp(44px, 6.3vh, 52px);
+    height: clamp(44px, 6.3vh, 52px);
+  }
+
+  .agree {
+    margin-top: clamp(10px, 2.4vh, 34px);
+  }
+}
+
+/* 矮屏（640~720 高度的老机型）：再压一档，连安全区一起算进去也不滚动 */
+@media (max-width: 767px) and (max-height: 720px) {
+  .login-page {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 6px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+  .brand {
+    padding-top: 8px;
+  }
+  .brand-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+  .brand h1 {
+    margin-top: 6px;
+    font-size: 20px;
+  }
+  .brand p {
+    margin-top: 3px;
+    font-size: 12px;
+  }
+  .form {
+    margin-top: 12px;
+    gap: 8px;
+  }
+  .field input,
+  .code-btn,
+  .btn-primary {
+    height: 44px;
+  }
+  .form-meta {
+    min-height: 15px;
+  }
+  .guest-link {
+    margin-top: 4px;
+  }
+  .other {
+    margin-top: 10px;
+  }
+  .quick-row {
+    margin-top: 8px;
+  }
+  .quick-circle {
+    width: 42px;
+    height: 42px;
+  }
+  .agree {
+    margin-top: 8px;
   }
 }
 

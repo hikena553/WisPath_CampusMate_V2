@@ -14,6 +14,8 @@ export const THIRD_PARTY_AUTH_ENABLED: boolean = false
  *
  * 走的是 QQ 互联「移动应用」链路（AppID 已配置），不需要网站应用资质：
  * - 仅在 Capacitor 原生壳内生效（配合 android QQAuthPlugin，见 utils/qqAuth.ts）；
+ * - 开关只是「允许尝试」，真正能否用由 qqNativeAuthAvailable() 运行时探测：
+ *   安装包缺 android/app/libs/open_sdk_*.aar 时插件不注册，QQ 入口自动隐藏；
  * - 浏览器环境不受此开关影响，行为与之前完全一致。
  */
 export const QQ_NATIVE_AUTH_ENABLED: boolean = true

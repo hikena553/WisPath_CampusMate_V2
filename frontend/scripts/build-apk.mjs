@@ -77,6 +77,21 @@ const noPublish = args.includes('--no-publish')
 const androidDir = join(root, 'android')
 if (!existsSync(androidDir)) fail('缺少 android/ 工程，请先执行：npx cap add android')
 
+// QQ 互联移动端授权：官方 OpenSDK aar 未放入 libs/ 时 QQAuthPlugin 不编译、不注册，
+// 打包仍可成功，但安装包里的 QQ 登录入口会被运行时探测自动隐藏（见 src/utils/qqAuth.ts）。
+// 这里提前告警，避免再出现「安装包能出、QQ 登录一点就失败」的排查成本。
+const qqLibsDir = join(androidDir, 'app', 'libs')
+const qqSdkReady =
+  existsSync(qqLibsDir) && readdirSync(qqLibsDir).some((file) => file.toLowerCase().endsWith('.aar'))
+if (!qqSdkReady) {
+  console.warn('')
+  console.warn('⚠ 未检测到 QQ OpenSDK aar（android/app/libs/*.aar）')
+  console.warn('  本次安装包不含 QQ 授权插件，App 内「QQ」登录入口会自动隐藏（不会误报登录失败）。')
+  console.warn('  需要 App 内 QQ 登录时：QQ 互联控制台（open.qq.com → 应用管理 → SDK 下载）')
+  console.warn('  下载 Android OpenSDK aar → 放入 android/app/libs/ → 重新执行 npm run apk。')
+  console.warn('')
+}
+
 const localProperties = join(androidDir, 'local.properties')
 if (!existsSync(localProperties)) {
   const sdkRoot = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT

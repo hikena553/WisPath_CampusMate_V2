@@ -407,7 +407,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { saveQuickAccountFromLogin } from '@/utils/quickLogin'
 import { THIRD_PARTY_AUTH_ENABLED, QQ_NATIVE_AUTH_ENABLED } from '@/utils/features'
-import { qqNativeAuthAvailable, qqNativeLogin } from '@/utils/qqAuth'
+import { qqNativeAuthAvailable, qqNativeErrorCode, qqNativeErrorMessage, qqNativeLogin } from '@/utils/qqAuth'
 import RegSelect from './RegSelect.vue'
 
 const DRAFT_KEY = 'mian02_register_draft'
@@ -672,11 +672,11 @@ async function handleQqNativeAuth() {
       throw new Error('响应异常')
     }
   } catch (e: any) {
-    const code = String(e?.message || '')
+    const code = qqNativeErrorCode(e)
     if (code === 'QQ_NOT_INSTALLED') {
       ElMessage.warning('未检测到手机 QQ，请安装后重试')
     } else if (code !== 'USER_CANCEL') {
-      formError.value = e?.response?.data?.detail || 'QQ 授权失败，请稍后重试'
+      formError.value = e?.response?.data?.detail || qqNativeErrorMessage(e, 'QQ 授权失败，请稍后重试')
     }
   } finally {
     qqLoading.value = false

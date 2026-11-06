@@ -183,16 +183,25 @@ public class QQAuthPlugin extends Plugin {
         call.resolve();
     }
 
-    /** QQ 客户端授权结果经 AuthActivity 转回，必须转发给 SDK 才会触发 IUiListener */
+    /**
+     * QQ SDK 直接 Activity.startActivityForResult 拉起授权页，没有经过 Capacitor 的
+     * Plugin.startActivityForResult 登记 requestCode，Bridge 的常规分发找不到本插件，
+     * 所以由 MainActivity.onActivityResult 反射调用这里（见 MainActivity#forwardQqActivityResult）。
+     * 必须把结果交给 SDK，IUiListener 才会回调。
+     */
+    public void onQQActivityResult(int requestCode, int resultCode, Intent data) {
+        if (loginListener == null || requestCode != Constants.REQUEST_LOGIN) return;
+        Tencent.onActivityResultData(requestCode, resultCode, data, loginListener);
+        // 结果异常中断（ resultCode != OK 且 SDK 不回调）时，避免 pendingCall 悬挂
+        if (pendingCall != null && resultCode != Activity.RESULT_OK) {
+            rejectPending("QQ_ERROR", "QQ 授权未完成，请重试");
+        }
+    }
+
+    /** Capacitor 的常规 activity result 入口；与显式转发共用同一段处理 */
     @Override
     protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
         super.handleOnActivityResult(requestCode, resultCode, data);
-        if (requestCode == Constants.REQUEST_LOGIN && loginListener != null) {
-            Tencent.onActivityResultData(requestCode, resultCode, data, loginListener);
-            // 结果异常中断（ resultCode != OK 且 SDK 不回调）时，避免 pendingCall 悬挂
-            if (pendingCall != null && resultCode != Activity.RESULT_OK) {
-                rejectPending("QQ_ERROR", "QQ 授权未完成，请重试");
-            }
-        }
+        onQQActivityResult(requestCode, resultCode, data);
     }
 }

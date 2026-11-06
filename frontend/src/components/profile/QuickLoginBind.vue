@@ -83,7 +83,13 @@ import { bindPhoneApi, getQqAuthorizeUrl, qqMobileBindApi, sendSmsCode, unbindQq
 import { useAuthStore } from '@/stores/auth'
 import { syncQuickAccount } from '@/utils/quickLogin'
 import { QQ_NATIVE_AUTH_ENABLED } from '@/utils/features'
-import { qqNativeAuthAvailable, qqNativeLogin } from '@/utils/qqAuth'
+import {
+  qqNativeAuthAvailable,
+  qqNativeErrorCode,
+  qqNativeErrorMessage,
+  qqNativeLogin,
+  qqNativePlatform,
+} from '@/utils/qqAuth'
 import type { UserInfo } from '@/types'
 
 defineOptions({ name: 'QuickLoginBind' })
@@ -139,6 +145,11 @@ function handleQqRow() {
     handleQqNativeBind()
     return
   }
+  // App 壳内但安装包缺 QQ OpenSDK：Web 回跳链路也不可用，别再去请求后端 503
+  if (qqNativePlatform()) {
+    ElMessage.warning('当前安装包未集成 QQ 登录组件，暂时无法绑定 QQ')
+    return
+  }
   startQqAuth('bind')
 }
 
@@ -146,6 +157,10 @@ function handleQqRow() {
 function handleQqReauth() {
   if (qqNativeEnabled) {
     handleQqNativeBind()
+    return
+  }
+  if (qqNativePlatform()) {
+    ElMessage.warning('当前安装包未集成 QQ 登录组件，暂时无法重新授权')
     return
   }
   startQqAuth('bind')
@@ -178,11 +193,11 @@ async function handleQqNativeBind() {
     ElMessage.success('QQ 绑定成功')
     qqSheet.value = false
   } catch (e: any) {
-    const code = String(e?.message || '')
+    const code = qqNativeErrorCode(e)
     if (code === 'QQ_NOT_INSTALLED') {
       ElMessage.warning('未检测到手机 QQ，请安装后重试')
     } else if (code !== 'USER_CANCEL') {
-      ElMessage.warning(e?.response?.data?.detail || 'QQ 授权失败，请稍后重试')
+      ElMessage.warning(e?.response?.data?.detail || qqNativeErrorMessage(e, 'QQ 授权失败，请稍后重试'))
     }
   } finally {
     authorizing.value = false

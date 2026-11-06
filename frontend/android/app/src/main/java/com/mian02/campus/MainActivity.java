@@ -16,6 +16,9 @@ import androidx.core.view.WindowInsetsCompat;
 
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginHandle;
+
+import java.lang.reflect.Method;
 
 /**
  * Android 返回键 / 全面屏侧滑返回处理。
@@ -43,18 +46,11 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // QQ 插件必须在 super.onCreate() 之前注册：BridgeActivity.onCreate() 内部就会
+        // 创建 Bridge（Bridge.Builder.create() 一次消费完插件列表并注入 PluginHeaders），
+        // 之后再 registerPlugin() 只是往 Builder 里追加，插件永远不会生效。
+        registerQqPlugin();
         super.onCreate(savedInstanceState);
-
-        // QQ 互联移动端授权插件：官方 SDK aar（android/app/libs/）就位后才会编译进包，
-        // 未就位时这里按缺失处理跳过注册，QQ 授权入口在网页侧自动回退。
-        try {
-            @SuppressWarnings("unchecked")
-            Class<? extends Plugin> qqPlugin =
-                    (Class<? extends Plugin>) Class.forName("com.mian02.campus.QQAuthPlugin");
-            registerPlugin(qqPlugin);
-        } catch (ClassNotFoundException ignored) {
-            // libs 里还没有 QQ OpenSDK aar：不注册插件，其余功能不受影响
-        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             backCallback = this::handleBack;
@@ -85,6 +81,47 @@ public class MainActivity extends BridgeActivity {
         // 下载由浏览器的下载器接管（通知栏有进度，文件在「下载」里）。
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().addJavascriptInterface(new ShellBridge(this), "Mian02Shell");
+        }
+    }
+
+    /**
+     * 注册 QQ 互联移动端授权插件：官方 SDK aar（android/app/libs/）就位后才会编译进包，
+     * 未就位时按缺失处理跳过注册，App 内 QQ 入口由网页侧运行时探测自动隐藏。
+     */
+    private void registerQqPlugin() {
+        try {
+            @SuppressWarnings("unchecked")
+            Class<? extends Plugin> qqPlugin =
+                    (Class<? extends Plugin>) Class.forName("com.mian02.campus.QQAuthPlugin");
+            registerPlugin(qqPlugin);
+        } catch (ClassNotFoundException ignored) {
+            // libs 里还没有 QQ OpenSDK aar：不注册插件，其余功能不受影响
+        }
+    }
+
+    /**
+     * QQ SDK 是用 Activity.startActivityForResult 直接拉起授权页的，不经过
+     * Capacitor 的 Plugin.startActivityForResult 登记 requestCode，Bridge 的常规分发
+     * 找不到 QQAuthPlugin，也不会回调它的 handleOnActivityResult。
+     * 这里把结果显式转发给已注册的插件（反射调用，缺 aar 时类不存在也不影响其它功能）。
+     */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        forwardQqActivityResult(requestCode, resultCode, data);
+    }
+
+    private void forwardQqActivityResult(int requestCode, int resultCode, Intent data) {
+        if (getBridge() == null) return;
+        PluginHandle handle = getBridge().getPlugin("QQAuth");
+        if (handle == null || handle.getInstance() == null) return;
+        try {
+            Method method = handle.getInstance().getClass()
+                    .getDeclaredMethod("onQQActivityResult", int.class, int.class, Intent.class);
+            method.setAccessible(true);
+            method.invoke(handle.getInstance(), requestCode, resultCode, data);
+        } catch (Exception ignored) {
+            // 插件未随包编译（缺 aar）或方法签名变化：静默，网页侧会给出失败/取消提示
         }
     }
 
