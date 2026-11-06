@@ -339,7 +339,7 @@
             <div class="set-list">
               <button type="button" class="set-row" @click="openPage('about')">
                 <span class="set-row-label">关于{{ agentName }}</span>
-                <span class="set-row-value">v1.0.0</span>
+                <span class="set-row-value">{{ appVersionLabel }}</span>
                 <el-icon class="set-row-arrow" :size="14"><ArrowRight /></el-icon>
               </button>
             </div>
@@ -353,7 +353,7 @@
             </div>
           </div>
 
-          <p class="set-version">{{ agentName }} v1.0.0</p>
+          <p class="set-version">{{ agentName }} {{ appVersionLabel }}</p>
         </div>
 
         <!-- 账号与安全（抖音设置页范式）：只读展示 + 点按行弹窗编辑，不再铺一屏输入框 -->
@@ -649,7 +649,7 @@
           <div class="about-header">
             <img :src="siteLogo" class="about-logo" />
             <div class="about-name">{{ siteName }}</div>
-            <div class="about-version">v1.0.0</div>
+            <div class="about-version">{{ appVersionLabel }}</div>
             <div class="about-slogan">你的校园智能管家</div>
           </div>
 
@@ -868,6 +868,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getResumes, createResume, setCurrentResume, deleteResume, type Resume } from '@/api/portfolio'
 import ResumeExportWizard from '@/components/resume/ResumeExportWizard.vue'
+import { appVersionLabel } from '@/utils/appVersion'
 
 const router = useRouter()
 const route = useRoute()

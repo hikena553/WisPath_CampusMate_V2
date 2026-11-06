@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+// 版本号唯一来源：frontend/package.json（网页端 __APP_VERSION__ 也读同一份）。
+// 改版本只改这一个文件，APK 的 versionName 与「关于」页显示的版本不会再分叉。
+def appPkg = new groovy.json.JsonSlurper().parseText(file("../../package.json").getText("UTF-8"))
+
 // QQ 互联移动端 AppID（单一来源）：QQ 互联后台的移动应用，同时用于
 // AndroidManifest 的 tencent{appid} scheme 与插件运行时 createInstance。
 // 环境变量 QQ_APP_ID 可覆盖（出包脚本/CI 不用改代码）。
@@ -18,7 +22,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 9
-        versionName "1.8"
+        versionName appPkg.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
