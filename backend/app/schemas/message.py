@@ -12,6 +12,9 @@ class MessageOut(BaseModel):
     content: str
     read: bool
     created_at: datetime
+    # 发送者头像：会话列表（ConversationOut.user_avatar）与聊天气泡共用同一份用户头像，
+    # 缺了它气泡只能退回首字母，和列表里的头像对不上。
+    sender_avatar: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class ConversationOut(BaseModel):
