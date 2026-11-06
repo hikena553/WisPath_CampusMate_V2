@@ -376,7 +376,12 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
                 except json.JSONDecodeError:
                     fn_args = {}
                 # execute_tool 已内置 S5 脱敏（学号移除/摘要截断/列表限条），结果仅进入 LLM 上下文，不落库
-                result = await execute_tool(fn_name, fn_args, user, conv_id=conv_id)
+                # 单个工具抛异常（模型/表结构漂移等）不应打断整轮对话：作为工具错误回给模型，让它自然收敛
+                try:
+                    result = await execute_tool(fn_name, fn_args, user, conv_id=conv_id)
+                except Exception:
+                    logger.exception("工具执行失败: %s", fn_name)
+                    result = {"error": f"工具 {fn_name} 暂时不可用，请基于已有信息回答，不要编造数据"}
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -416,6 +421,8 @@ async def chat(message: str, history: list[dict], user: User, conv_id: int | Non
         logger.exception("AI对话处理异常")
         error_msg = "抱歉，我暂时无法回答，请稍后再试。你也可以联系辅导员获取帮助。"
         yield error_msg
+        # 明确告知前端「本轮没有落库」：否则前端会把这条错误文案当正常回复补写进历史
+        yield {"type": "meta", "conversation_id": conv_id, "title": None, "saved": False}
         return
 
 

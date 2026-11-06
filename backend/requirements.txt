@@ -12,18 +12,24 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.29
 httpx==0.27.2
 openai==2.38.0
+requests==2.34.2
 openpyxl==3.1.2
-bcrypt==4.1.3
 beautifulsoup4==4.15.0
 pdfplumber==0.11.10
 PyPDF2==3.0.1
 python-docx==1.2.0
+fpdf2==2.9.0
+pymupdf==2.0
+pillow==12.3.0
 # 文件类型嗅探（upload 接口的 MIME 硬校验）：
 # Linux/macOS 走 python-magic + 系统 libmagic（见 Dockerfile 的 libmagic1）；
 # Windows 无 libmagic，python-magic 会抛 ImportError 使 /api/upload 直接 503，故改用自带 DLL 的 python-magic-bin。
 python-magic==0.4.27; sys_platform != "win32"
 python-magic-bin==0.4.14; sys_platform == "win32"
 jieba==0.42.1
+numpy==2.5.0
+soundfile==0.14.0
+psutil==7.2.2
 
 # 测试依赖
 pytest==8.3.3
@@ -32,3 +38,6 @@ pytest==8.3.3
 # playwright>=1.40.0 —— 校园资讯爬虫的可选渲染引擎（app/services/impression_crawler.py
 # 内部 try/except 可选导入，未安装时自动回退 httpx 抓取；需要时手动安装并
 # 执行 `playwright install chromium` 拉取浏览器二进制）。
+# sentry-sdk>=2.0.0 —— 可观测性预留口子（app/main.py 仅在配置 SENTRY_DSN 且已安装时启用）。
+# edge_tts / sherpa-onnx —— 语音合成与本地识别依赖，走 backend/vendor_packages 内置目录，
+# 不经 pip 安装；需要时把对应包放入该目录（缺失时自动回退云端 TTS/ASR）。

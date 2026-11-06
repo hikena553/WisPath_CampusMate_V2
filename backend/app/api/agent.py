@@ -1,8 +1,11 @@
+import asyncio
 import json
 import logging
+import time
 from datetime import date, timedelta
+from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -84,7 +87,9 @@ async def chat_api(
                     suggestions_data = event[len("__SUGGESTIONS__:"):]
                     yield f"event: suggestions\ndata: {suggestions_data}\n\n"
                 else:
-                    yield event
+                    # 纯文本兜底（如 agent_service 的异常文案）：必须补 SSE 帧，
+                    # 裸写前端解析不到，会表现为「空回复 + 输入中动画一直转」
+                    yield "event: content\ndata: " + json.dumps(str(event), ensure_ascii=False) + "\n\n"
 
     return StreamingResponse(
         generate(),
@@ -324,6 +329,65 @@ def _collect_recommend_signals(user: User, db: Session) -> tuple[list[str], list
     return context, questions
 
 
+# ==================== 推荐缓存 / 后台生成 ====================
+# 首屏不能等 LLM：一次生成 1~10s，用户感知就是「为你推荐很久才出来」。
+# 策略：响应只走「信号 + 默认」的本地计算（毫秒级），个性化 LLM 结果放后台算，
+# 算完写回缓存给下一次请求用；同一用户 5 分钟内直接命中缓存。
+_RECO_CACHE_TTL_SECONDS = 300
+_RECO_LLM_TIMEOUT_SECONDS = 8.0
+_reco_cache: dict = {}
+
+
+def _reco_cache_get(user_id: int, role: UserRole):
+    entry = _reco_cache.get((user_id, role))
+    if not entry:
+        return None
+    if time.time() - entry[0] > _RECO_CACHE_TTL_SECONDS:
+        _reco_cache.pop((user_id, role), None)
+        return None
+    return list(entry[1])
+
+
+def _reco_cache_set(user_id: int, role: UserRole, items: list) -> None:
+    if items:
+        _reco_cache[(user_id, role)] = (time.time(), list(items))
+        # 缓存别无限长：只保留最近 2000 个用户，避免长期运行内存缓慢上涨
+        if len(_reco_cache) > 2000:
+            for key in list(_reco_cache.keys())[:500]:
+                _reco_cache.pop(key, None)
+
+
+def _merge_recommendations(*groups) -> list:
+    merged: list = []
+    for group in groups:
+        for q in group or []:
+            q = (q or '').strip()
+            if q and q not in merged:
+                merged.append(q)
+            if len(merged) >= RECOMMEND_COUNT:
+                return merged
+    return merged
+
+
+async def _refresh_recommendations_in_background(
+    user_id: int, role: UserRole, history_text: str, context: list
+) -> None:
+    """响应之后再让 LLM 生成个性化推荐，写回缓存给下一次用。"""
+    try:
+        generated = await asyncio.wait_for(
+            _generate_recommendations_by_llm(
+                SimpleNamespace(role=role), history_text, context
+            ),
+            timeout=_RECO_LLM_TIMEOUT_SECONDS,
+        )
+    except Exception as e:
+        logger.warning("后台生成推荐失败/超时: %s", e)
+        return
+    defaults = DEFAULT_RECOMMENDATIONS.get(role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT])
+    merged = _merge_recommendations(generated, defaults)
+    _reco_cache_set(user_id, role, merged)
+
+
 async def _generate_recommendations_by_llm(
     user: User, history_text: str, context: list[str]
 ) -> list[str]:
@@ -362,21 +426,30 @@ async def _generate_recommendations_by_llm(
 @router.get("/recommendations")
 async def get_recommendations(
     request: Request,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """根据用户角色、画像与真实待办生成推荐问题（固定返回 RECOMMEND_COUNT 条）。
 
-    无历史对话时直接用信号+默认兜底，不再等一次 LLM（首屏秒开）；
-    有历史对话时由 LLM 生成，并用信号/默认补齐到 RECOMMEND_COUNT 条。
-    """
+    首屏必须秒回：LLM 生成动辄 1~10s，放在响应路径里就是「打开 App 后为你推荐很久才出来」。
+    所以：
+      1. 命中缓存（同一用户 5 分钟内）直接返回；
+      2. 未命中先用「信号 + 默认」的本地计算立刻返回（毫秒级）；
+      3. 有历史对话时，把 LLM 个性化生成丢到后台任务，算完写回缓存，
+         下一次请求（重新进页面 / 再开 App）拿到个性化结果。"""
     check_rate_limit(f"agent:rec:user:{user.id}", RATE_RECOMMENDATIONS_PER_MIN, 60, "请求过于频繁，请稍候再试")
+
+    cached = _reco_cache_get(user.id, user.role)
+    if cached:
+        return {"recommendations": cached}
+
     default_recommendations = DEFAULT_RECOMMENDATIONS.get(
         user.role, DEFAULT_RECOMMENDATIONS[UserRole.STUDENT]
     )[:RECOMMEND_COUNT]
     context, signal_questions = _collect_recommend_signals(user, db)
 
-    # 用户最近的对话消息
+    # 最近对话只用于个性化：不在响应路径上等 LLM
     recent_messages = (
         db.query(ConversationMessage)
         .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
@@ -389,22 +462,15 @@ async def get_recommendations(
     history_text = ""
     for msg in reversed(recent_messages):
         role = "用户" if msg.role == "user" else "助手"
-        history_text += f"{role}: {msg.content[:200]}\n"
+        history_text += role + ": " + msg.content[:200] + chr(10)
 
-    candidates: list[str] = []
     if history_text.strip():
-        candidates.extend(await _generate_recommendations_by_llm(user, history_text, context))
-    # 信号问题与默认问题用于补位（LLM 少给、或没有历史时）
-    candidates.extend(signal_questions)
-    candidates.extend(default_recommendations)
+        background_tasks.add_task(
+            _refresh_recommendations_in_background, user.id, user.role, history_text, context
+        )
 
-    merged: list[str] = []
-    for q in candidates:
-        q = (q or "").strip()
-        if q and q not in merged:
-            merged.append(q)
-        if len(merged) >= RECOMMEND_COUNT:
-            break
+    merged = _merge_recommendations(signal_questions, default_recommendations)
+    _reco_cache_set(user.id, user.role, merged)
     return {"recommendations": merged}
 
 
