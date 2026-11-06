@@ -226,14 +226,14 @@
             />
           </div>
           <div class="field">
-            <label class="field-label" for="reg-qq">QQ 号 <em class="opt">选填</em></label>
+            <label class="field-label" for="reg-qq">QQ 号 <i class="req">*</i></label>
             <input
               id="reg-qq"
               v-model.trim="form.qq"
               type="text"
               inputmode="numeric"
               maxlength="12"
-              placeholder="用于找回密码"
+              placeholder="必填，用于找回密码"
             />
           </div>
           <div class="field">
@@ -353,14 +353,14 @@
           </div>
 
           <div class="field">
-            <label class="field-label" for="reg-qq">QQ 号 <em class="opt">选填</em></label>
+            <label class="field-label" for="reg-qq">QQ 号 <i class="req">*</i></label>
             <input
               id="reg-qq"
               v-model.trim="form.qq"
               type="text"
               inputmode="numeric"
               maxlength="12"
-              placeholder="用于找回密码"
+              placeholder="必填，用于找回密码"
             />
           </div>
         </template>
@@ -652,9 +652,11 @@ function validate(): string {
   if (thirdPartyAuthEnabled) {
     if (verifyMode.value === 'phone' && !phoneTicket.value) return '请先完成手机号验证'
     if (verifyMode.value === 'qq' && !qqTicket.value) return '请先完成 QQ 授权'
-    if (form.qq && !/^\d{5,12}$/.test(form.qq)) return 'QQ 号格式不正确'
+    if (!form.qq) return '请填写 QQ 号'
+    if (!/^\d{5,12}$/.test(form.qq)) return 'QQ 号格式不正确'
   } else {
     if (!/^1[3-9]\d{9}$/.test(form.phone)) return '请输入正确的 11 位手机号'
+    if (!form.qq) return '请填写 QQ 号'
     if (!/^\d{5,12}$/.test(form.qq)) return '请填写有效的 QQ 号（5-12 位数字）'
     if (!captchaCode.value.trim()) return '请输入图形验证码'
   }
