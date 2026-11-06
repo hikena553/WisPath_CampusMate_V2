@@ -4,7 +4,6 @@
       <el-icon :size="20"><ArrowLeft /></el-icon>
     </button>
     <div class="tui-appbar-title">
-      <span v-if="accent" class="tui-appbar-dot" :style="{ background: accent }" aria-hidden="true"></span>
       <span class="tui-appbar-txt">
         {{ title }}
       </span>
@@ -44,8 +43,6 @@ const props = defineProps<{
   title: string
   /** 无历史记录时的兜底返回路径 */
   fallback: string
-  /** 可选模块识别色：标题前的小圆点，与学业中心子页头一致（48px 白底 + 发丝线） */
-  accent?: string
 }>()
 
 const { isMobile } = useResponsive()
@@ -137,10 +134,6 @@ function goBack() {
   font-size: 17.5px;
   font-weight: 680;
   letter-spacing: -0.2px;
-}
-.tui-appbar-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  flex: none;
 }
 .tui-appbar-txt {
   display: flex;

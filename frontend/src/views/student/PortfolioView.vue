@@ -5,7 +5,7 @@
     @touchend="pull.onEnd"
     @touchcancel="pull.onCancel"
   >
-    <SubPageHeader title="作品集" accent="#b45309" fallback="/student">
+    <SubPageHeader title="作品集" fallback="/student">
       <!-- 移动端：AI 建议压成 Head 右侧图标按钮，避免正文顶部再顶一个蓝色大按钮 -->
       <template #right>
         <button class="pf-ai-btn" type="button" aria-label="AI 优化建议" :disabled="aiLoading" @click="openAISuggest">
@@ -985,6 +985,9 @@ function copyToProjectForm() {
 
   /* 证书佐证图：整块可点上传，已上传时为宽幅预览 + 更换/移除 */
   .pf-form .cert-upload-trigger { display: block; width: 100%; }
+  /* el-upload 的内层根是 inline-flex，宽度只跟内容走（实测 74px）。不把它撑开的话
+     外层设了 100% 也没用，空态卡会缩成一小块、文字换行溢出虚线框。 */
+  .pf-form .cert-upload-trigger :deep(.el-upload) { display: block; width: 100%; }
   .pf-form .cert-upload-empty { width: 100%; height: 84px; border-radius: 12px; }
   .pf-form .cert-upload-filled { width: 100%; }
   .pf-form .cert-upload-img { width: 100%; height: 150px; border-radius: 12px; }
