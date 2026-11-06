@@ -1,12 +1,14 @@
 import asyncio
 import json
 import logging
+import secrets
 import time
 from datetime import date, timedelta
 from types import SimpleNamespace
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -26,7 +28,7 @@ from app.services.llm_service import speech_to_text, _get_client, _get_llm_confi
 from app.services.prompts import build_recommend_questions_prompt
 from app.services.proactive_engine import evaluate_student
 from app.services.proactive_insight import generate_insight, get_cached_insight
-from app.services.daily_report import build_daily_report
+from app.services.daily_report import build_daily_report, render_markdown, report_filename
 from app.services.teacher_daily_report import build_teacher_daily_report
 from app.utils.rate_limiter import check_rate_limit
 
@@ -38,6 +40,8 @@ RATE_CHAT_PER_MIN = 30
 RATE_ANALYZE_PER_MIN = 20
 RATE_RECOMMENDATIONS_PER_MIN = 10
 RATE_STT_PER_MIN = 10
+# 导出票据：每张票 3 分钟有效，正常用户点两三次够了；限流挡住连点/脚本换票
+RATE_REPORT_EXPORT_PER_MIN = 6
 
 
 def _client_ip(request: Request) -> str:
@@ -539,25 +543,99 @@ async def get_proactive_insight(user: User = Depends(get_current_user), db: Sess
 
 
 @router.get("/daily-report")
-async def get_daily_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_daily_report(
+    refresh: bool = Query(False, description="true=跳过服务端 10 分钟缓存，重新生成（「重新生成」按钮用）"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """AI 今日报告：心情（今日优先，缺省沿用昨晚）+ 今日/遗留任务 + 已实现积累 + 实时天气。
 
     报告含运势、四段带标注的正文，以及可一键加入学习计划的建议。
     天气/LLM 不可用时自动降级，接口始终返回可渲染的内容。
+    ``refresh=1`` 强制重跑（事实指纹未变时也会重新措辞），供页面「重新生成」使用。
     """
     if user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="今日报告仅学生可用")
-    return await build_daily_report(db, user)
+    return await build_daily_report(db, user, force_refresh=refresh)
+
+
+# ==================== 今日报告导出（浏览器下载） ====================
+# 导出必须走浏览器下载：前端拼 Blob + a.download 在手机端（尤其 WebView）没有下载器接管，
+# 点了既没有进度也没有「文件去哪了」的提示。这里给一个带 Content-Disposition 的真实链接，
+# 浏览器/系统浏览器会用自己的下载器接住，用户能在通知栏和「下载」里看到。
+#
+# 认证用一次性短票据而不是 Cookie：外跳到系统浏览器后拿不到 WebView 里的登录态，
+# 票据只绑定本人、有效期 3 分钟，够浏览器发起下载即可。
+
+_EXPORT_TICKETS: dict[str, tuple[int, float]] = {}
+EXPORT_TICKET_TTL = 180
+
+
+def _prune_export_tickets(now: float) -> None:
+    for key, (_, expire_at) in list(_EXPORT_TICKETS.items()):
+        if expire_at < now:
+            _EXPORT_TICKETS.pop(key, None)
+
+
+@router.post("/daily-report/export-ticket")
+def create_daily_report_export_ticket(user: User = Depends(get_current_user)):
+    """换一枚导出票据：前端拿到 url 后交给浏览器下载，不再自己生成文件。"""
+    if user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="今日报告仅学生可用")
+    check_rate_limit(
+        f"agent:daily-report:export:user:{user.id}",
+        RATE_REPORT_EXPORT_PER_MIN, 60, "导出太频繁了，请稍后再试",
+    )
+    now = time.time()
+    _prune_export_tickets(now)
+    ticket = secrets.token_urlsafe(24)
+    _EXPORT_TICKETS[ticket] = (user.id, now + EXPORT_TICKET_TTL)
+    return {
+        "ticket": ticket,
+        "url": f"/api/agent/daily-report/export?ticket={ticket}",
+        "expires_in": EXPORT_TICKET_TTL,
+    }
+
+
+@router.get("/daily-report/export")
+async def export_daily_report(ticket: str = Query(..., description="导出票据"), db: Session = Depends(get_db)):
+    """按票据导出今日报告（Markdown 附件）。票据过期/伪造一律 401，需回页面重新导出。"""
+    hit = _EXPORT_TICKETS.get(ticket)
+    if not hit or hit[1] < time.time():
+        _EXPORT_TICKETS.pop(ticket, None)
+        raise HTTPException(status_code=401, detail="下载链接已过期，请回到页面重新导出")
+
+    user = db.query(User).filter(User.id == hit[0]).first()
+    if not user or user.role != UserRole.STUDENT:
+        _EXPORT_TICKETS.pop(ticket, None)
+        raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录后再导出")
+
+    report = await build_daily_report(db, user)
+    filename = report_filename(report)
+    # filename 用 ASCII 兜底 + filename* 给中文名：老浏览器不认 filename* 时也不会存成乱码
+    disposition = (
+        f"attachment; filename=\"AI-report-{report.get('date', '')}.md\"; "
+        f"filename*=UTF-8''{quote(filename)}"
+    )
+    return Response(
+        content=render_markdown(report),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": disposition, "Cache-Control": "no-store"},
+    )
 
 
 @router.get("/teacher-daily-report")
-async def get_teacher_daily_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_teacher_daily_report(
+    refresh: bool = Query(False, description="true=跳过服务端 10 分钟缓存"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """教师 AI 日报：昨日复盘 + 今日梳理 + 学生成长关注 + 明日规划 + 今日运势。
 
     事实全部由服务端按教师名下数据计算，LLM 仅负责措辞与重点标注；
     LLM 不可用时自动降级为规则文案，接口始终返回可渲染的内容。
-    刷新会带 ``?refresh=1`` 绕过前端缓存，服务端 10 分钟内的事实相同即复用。
+    刷新会带 ``?refresh=1`` 绕过服务端缓存（同一事实指纹不再复用旧文案）。
     """
     if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="教师日报仅教师可用")
-    return await build_teacher_daily_report(db, user)
+    return await build_teacher_daily_report(db, user, force_refresh=refresh)

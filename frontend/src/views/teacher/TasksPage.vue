@@ -795,7 +795,7 @@ async function completeAllAuto() {
 
 /** 拉取今日重点：失败时记录真实原因（HTTP 状态 / 业务 detail），
  *  并区分「首次载入失败」与「刷新失败但已有旧数据」——后者保留旧内容只提示，不清空页面。 */
-async function load(silent = false) {
+async function load(silent = false, forceRefresh = false) {
   const startedAt = performance.now()
   if (!silent) loading.value = true
   loadError.value = null
@@ -809,7 +809,7 @@ async function load(silent = false) {
   */
   let next: TeacherDailyReport | null = null
   try {
-    const data = await getTeacherDailyReport()
+    const data = await getTeacherDailyReport(forceRefresh)
     if (data) {
       next = data
     } else {
@@ -881,13 +881,13 @@ function reloadPage() {
   window.location.reload()
 }
 
-/** 重新生成：服务端 10 分钟内事实未变会复用缓存，这里给到明确的「已刷新」反馈 */
+/** 重新生成：带 refresh 让服务端跳过 10 分钟缓存，真的重跑一遍文案 */
 async function refresh() {
   if (refreshing.value) return
   refreshing.value = true
   try {
-    await load(true)
-    if (!loadError.value) ElMessage.success('已按最新数据重新整理')
+    await load(true, true)
+    if (!loadError.value) ElMessage.success('已按最新数据重新生成')
   } finally {
     refreshing.value = false
   }

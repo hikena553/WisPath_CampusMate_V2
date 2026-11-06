@@ -661,13 +661,15 @@ def _build_suggestions(facts: dict) -> list[dict]:
 
 # ==================== 主流程 ====================
 
-async def build_teacher_daily_report(db: Session, teacher: User) -> dict:
+async def build_teacher_daily_report(db: Session, teacher: User, force_refresh: bool = False) -> dict:
+    """构建教师日报；``force_refresh=True`` 跳过 10 分钟缓存（「重新生成」按钮用）。"""
     facts = collect_facts(db, teacher)
     weather = await get_weather()
     cache_key = f"{teacher.id}-{_fingerprint(facts, weather)}"
-    hit = _report_cache.get(cache_key)
-    if hit and time.time() - hit[0] < REPORT_TTL:
-        return hit[1]
+    if not force_refresh:
+        hit = _report_cache.get(cache_key)
+        if hit and time.time() - hit[0] < REPORT_TTL:
+            return hit[1]
 
     fortune = _fortune(facts, weather, teacher)
     sections = _rule_sections(facts)

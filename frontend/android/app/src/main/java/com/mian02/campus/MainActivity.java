@@ -1,9 +1,12 @@
 
 package com.mian02.campus;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 
@@ -76,6 +79,56 @@ public class MainActivity extends BridgeActivity {
             }
             return insets;
         });
+
+        // 网页侧的外跳桥：今日报告「一键导出」在这里把下载链接交给系统浏览器。
+        // WebView 自身没有下载器，Blob 下载既无进度也无落点提示；交给浏览器后
+        // 下载由浏览器的下载器接管（通知栏有进度，文件在「下载」里）。
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().addJavascriptInterface(new ShellBridge(this), "Mian02Shell");
+        }
+    }
+
+    /**
+     * 暴露给网页的极小桥接：只做一件事 —— 用系统浏览器打开 http(s) 链接。
+     *
+     * 安全性：addJavascriptInterface 对 WebView 里所有页面可见，因此这里只放行
+     * http/https，挡掉 intent: / javascript: 等可被用来拉起任意组件的 scheme。
+     */
+    private static class ShellBridge {
+        private final MainActivity activity;
+
+        ShellBridge(MainActivity activity) {
+            this.activity = activity;
+        }
+
+        @JavascriptInterface
+        public void openExternal(String url) {
+            if (url == null) return;
+            Uri uri;
+            try {
+                uri = Uri.parse(url);
+            } catch (Exception e) {
+                return;
+            }
+            String scheme = uri.getScheme();
+            if (scheme == null) return;
+            scheme = scheme.toLowerCase();
+            if (!scheme.equals("http") && !scheme.equals("https")) return;
+            try {
+                final Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                // @JavascriptInterface 回调跑在 JavaBridge 线程，startActivity 交回主线程执行
+                activity.runOnUiThread(() -> {
+                    try {
+                        activity.startActivity(intent);
+                    } catch (Exception ignored) {
+                        // 设备没有可用浏览器：保持静默，网页侧会给出兜底提示
+                    }
+                });
+            } catch (Exception ignored) {
+                // 构建 Intent 失败：同样静默
+            }
+        }
     }
 
     /**

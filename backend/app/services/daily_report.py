@@ -603,13 +603,19 @@ def _suggestions(db: Session, user: User, facts: dict, fortune: dict) -> list[di
     return with_slot(out)
 
 
-async def build_daily_report(db: Session, user: User) -> dict:
+async def build_daily_report(db: Session, user: User, force_refresh: bool = False) -> dict:
+    """构建今日报告。
+
+    ``force_refresh=True`` 跳过 10 分钟缓存：用户点「重新生成」时必须真的重跑一遍
+    LLM，否则事实未变会命中缓存，返回逐字相同的文案，看起来像「点了没反应」。
+    """
     facts = collect_facts(db, user)
     weather = await get_weather()
     cache_key = f"{user.id}-{_fingerprint(facts, weather)}"
-    hit = _report_cache.get(cache_key)
-    if hit and time.time() - hit[0] < REPORT_TTL:
-        return hit[1]
+    if not force_refresh:
+        hit = _report_cache.get(cache_key)
+        if hit and time.time() - hit[0] < REPORT_TTL:
+            return hit[1]
 
     fortune = _fortune(facts, weather, user)
     sections = _rule_sections(facts, weather, fortune)
@@ -638,3 +644,74 @@ def clear_cache() -> None:
     """清空天气与报告缓存（测试或配置变更时使用）。"""
     _weather_cache.clear()
     _report_cache.clear()
+
+
+# ==================== 导出（Markdown） ====================
+# 导出放在服务端而不是前端拼字符串 / Blob：浏览器拿到的是带 Content-Disposition 的
+# 真实链接，下载交给浏览器自己的下载器（有进度、能在下载列表里找到文件）。
+# 前端只负责打开这个链接，不再自己生成文件。
+
+_MARK_PATTERNS = (re.compile(r"==([^=]+)=="), re.compile(r"__([^_]+)__"), re.compile(r"\*\*([^*]+)\*\*"))
+_WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+
+
+def _strip_marks(text: str) -> str:
+    """去掉 ==重点== / __留意__ / **加粗** 标注，导出为纯文本。"""
+    out = text or ""
+    for pattern in _MARK_PATTERNS:
+        out = pattern.sub(r"\1", out)
+    return out
+
+
+def report_filename(report: dict) -> str:
+    return f"AI今日报告_{report.get('date', '')}.md"
+
+
+def render_markdown(report: dict) -> str:
+    """把报告渲染为 Markdown（与前端展示口径一致：过滤纯告知类建议、去掉标注记号）。"""
+    date_text = str(report.get("date") or "")
+    try:
+        weekday = _WEEKDAY_CN[datetime.fromisoformat(date_text).weekday()]
+        date_text = f"{date_text} {weekday}"
+    except ValueError:
+        pass
+
+    lines: list[str] = [f"# AI 今日报告 · {date_text}", "", str(report.get("greeting") or "")]
+
+    weather = report.get("weather")
+    if weather:
+        lines.append(
+            f"天气：{weather.get('city', '')} {weather.get('temp', '')}℃ {weather.get('desc', '')}"
+            f"（{weather.get('low', '')}~{weather.get('high', '')}℃，降水 {weather.get('rain', '')}%）"
+        )
+
+    mood = report.get("mood") or {}
+    if mood.get("from") == "none":
+        mood_text = "还没记录心情"
+    elif mood.get("from") == "last_night":
+        mood_text = f"昨晚 · {mood.get('label', '')}"
+    else:
+        mood_text = f"今天 · {mood.get('label', '')}"
+    lines.append(f"心情：{mood_text}")
+
+    fortune = report.get("fortune") or {}
+    lines += ["", f"## 今日运势 · {fortune.get('level', '')} {fortune.get('score', '')} 分"]
+    if fortune.get("keyword"):
+        lines.append(f"关键词：{fortune['keyword']}")
+    if fortune.get("summary"):
+        lines.append(str(fortune["summary"]))
+    lines.append(f"幸运色：{fortune.get('lucky_color', '')}　幸运时段：{fortune.get('lucky_time', '')}")
+
+    for sec in report.get("sections") or []:
+        lines += ["", f"## {sec.get('title', '')}"]
+        for item in sec.get("items") or []:
+            lines.append(f"- {_strip_marks(str(item))}")
+
+    suggestions = [s for s in (report.get("suggestions") or []) if s.get("trigger") not in NOTICE_TRIGGERS]
+    if suggestions:
+        lines += ["", "## 学习计划建议"]
+        for s in suggestions:
+            when = f"[{s['when']}] " if s.get("when") else ""
+            lines.append(f"- {when}{s.get('title', '')}：{_strip_marks(str(s.get('content') or ''))}")
+
+    return "\n".join(lines) + "\n"
