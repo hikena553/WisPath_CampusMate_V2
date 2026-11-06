@@ -241,6 +241,23 @@ router.beforeEach(async (to) => {
   const roleHome = (u: Record<string, unknown>) =>
     ({ teacher: '/teacher', admin: '/admin' } as Record<string, string>)[u.role as string] || '/student'
 
+  // 移动端壳（Capacitor APK）启动时不要停在官网首页：
+  // 已登录直接进对应工作台，未登录进引导页/登录页。
+  const isNativeApp =
+    typeof window !== 'undefined' &&
+    !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+  if (isNativeApp && to.path === '/') {
+    if (user) return roleHome(user)
+    let seenWelcome = false
+    try {
+      seenWelcome = !!localStorage.getItem(WELCOME_SEEN_KEY)
+    } catch {
+      seenWelcome = true
+    }
+    return seenWelcome ? '/login' : '/welcome'
+  }
+
+
   // 改密页：登录后可随时进入（未改密用户不再被强制跳转，仅由提醒横幅引导）
   if (to.path === '/change-password') {
     return user ? true : '/login'
@@ -262,7 +279,7 @@ router.beforeEach(async (to) => {
   }
 
   // 官网首页与下载页：完全公开，无论是否登录、是否为游客都直接展示，不做角色重定向
-  if (to.path === '/' || to.path === '/download') {
+  if (to.path === '/' || to.path === '/download' || to.path === '/download/') {
     return true
   }
 

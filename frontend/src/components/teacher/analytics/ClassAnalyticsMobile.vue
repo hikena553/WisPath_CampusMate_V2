@@ -114,8 +114,9 @@ function handleMascotClick() {
 }
 .sub-page-header {
   /* 与 SubPageHeader .tui-appbar 同尺寸：52px 高 / 左右 4px / 标题 17.5px·680 */
+  /* 顶部安全区：二级子页面白底铺进状态栏 */
   display: flex; align-items: center; gap: 8px;
-  min-height: 52px; padding: 0 4px; background: #fff;
+  min-height: calc(clamp(46px, 11.8vw, 52px) + var(--sat, 0px)); padding: var(--sat, 0px) 4px 0; background: #fff;
   border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
 }
 .sub-page-title {

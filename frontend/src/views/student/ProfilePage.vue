@@ -112,27 +112,27 @@
             <nav class="pf-quick">
               <div class="pf-quick-track">
                 <button type="button" class="pf-quick-item" @click="openPage('profile')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><User /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><User /></el-icon></span>
                   <span class="pf-quick-label">我的资料</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/student/growth')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><TrendCharts /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><TrendCharts /></el-icon></span>
                   <span class="pf-quick-label">成长档案</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/student/plan')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><Calendar /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><Calendar /></el-icon></span>
                   <span class="pf-quick-label">学习计划</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/student/portfolio')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><FolderOpened /></el-icon></span>
                   <span class="pf-quick-label">我的作品集</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="openPage('badges')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><Medal /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><Medal /></el-icon></span>
                   <span class="pf-quick-label">勋章墙</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="openPage('feedback')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><ChatLineSquare /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><ChatLineSquare /></el-icon></span>
                   <span class="pf-quick-label">意见反馈</span>
                 </button>
               </div>
@@ -279,7 +279,6 @@
             </div>
           </div>
 
-          <p class="pf-foot-note">{{ agentName }} · 智慧校园服务平台 v1.0.0</p>
         </div>
       </div>
     </transition>
@@ -1705,7 +1704,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  /* 顶部安全区：二级/三级页面（设置、我的文件、申请、勋章…）白底铺进状态栏 */
+  padding: calc(12px + var(--sat, 0px)) 16px 12px;
   background: #fff;
   border-bottom: 1px solid #f0f0f0;
   flex-shrink: 0;
@@ -1892,6 +1892,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* 顶部安全区：封面图仍铺满状态栏，操作按钮下移到状态栏/挖孔下方 */
+  padding-top: var(--sat, 0px);
 }
 .pf-top-pill {
   display: inline-flex;
@@ -2212,7 +2214,7 @@ onMounted(async () => {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: calc((100% - 50px) / 6);
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
@@ -2251,7 +2253,8 @@ onMounted(async () => {
 .pf-quick-label {
   max-width: 100%;
   /* 六列并排后格子变窄，「我的作品集」这类五字文案也需在窄屏完整显示 */
-  font-size: clamp(8.5px, 2.6vw, 10.5px);
+  /* 快捷入口放大：字号略增，五字文案在 360px 屏仍完整显示 */
+  font-size: clamp(9.5px, 2.9vw, 12px);
   line-height: 1.2;
   color: var(--tui-text-secondary);
   white-space: nowrap;
@@ -2363,16 +2366,6 @@ onMounted(async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 页脚说明：收住列表下方的灰底空白，避免页面尾部大段留白 */
-.pf-foot-note {
-  margin: 6px 0 0;
-  padding: 4px 16px 0;
-  text-align: center;
-  font-size: 10.5px;
-  letter-spacing: 0.2px;
-  color: var(--tui-text-quiet);
-}
-
 /* ===== 收藏的帖子 & 项目经历：同一行 Tab 切换 + 向下铺开的封面卡 ===== */
 .pf-cards-area { padding: 12px 16px 0; }
 
@@ -2643,7 +2636,12 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .set-page .set-row-value.is-empty { color: var(--tui-text-quiet); }
-.set-page .set-row-arrow { color: #c7ccd4; flex-shrink: 0; }
+.set-page .set-row-arrow {
+  color: #c7ccd4;
+  flex-shrink: 0;
+  /* 箭头永远贴最右：无右侧 value 的行（账号与安全 / 修改密码）靠 auto 外边距顶到行尾 */
+  margin-left: auto;
+}
 /* 退出登录：抖音式独立白卡片，整行居中、无箭头 */
 .set-page .set-row-logout {
   justify-content: center;
@@ -3184,5 +3182,15 @@ onMounted(async () => {
     -webkit-tap-highlight-color: transparent;
   }
   .pf-export-btn:active { background: #2a2f34; border-color: #2a2f34; }
+}
+
+/* ===== 移动端：快捷入口一行展示 5 个（第 6 个起横向滑动）=====
+   原为 6 列并排，一屏挤 6 个格子、文案被迫缩到 8.5px；
+   改成 5 列后每格更宽，超出部分交给轨道横向滚动。 */
+@media (max-width: 767px) {
+  /* 快捷入口放大：图标/字号变大、列间距收窄，5 列依然一屏放得下 */
+  .pf-quick { padding: 12px 8px 8px; }
+  .pf-quick-item { gap: 8px; }
+  .pf-quick-track { grid-auto-columns: calc((100% - 32px) / 5); }
 }
 </style>

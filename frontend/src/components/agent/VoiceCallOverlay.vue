@@ -64,7 +64,7 @@
             <span v-if="isMuted" class="btn-slash" />
           </button>
           <button class="ctrl-btn hangup" title="结束通话" @click="handleClose">
-            <el-icon :size="24"><PhoneFilled /></el-icon>
+            <el-icon :size="26"><PhoneFilled /></el-icon>
           </button>
         </footer>
 
@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Microphone, PhoneFilled } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/token'
@@ -102,7 +102,28 @@ const isMuted = ref(false)
 const errorMsg = ref('')
 const audioLevel = ref(0)
 
-const mascotSize = computed(() => (isMobile.value ? 190 : 260))
+/* 移动端视口高度：通话页没有键盘，主要影响矮屏 / 横屏下吉祥物的占位与按钮大小 */
+const viewportH = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
+function syncViewportH() { viewportH.value = window.innerHeight }
+onMounted(() => {
+  syncViewportH()
+  window.addEventListener('resize', syncViewportH)
+  window.addEventListener('orientationchange', syncViewportH)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', syncViewportH)
+  window.removeEventListener('orientationchange', syncViewportH)
+})
+
+/* 吉祥物尺寸：手机按可见高度分档，避免矮屏上形象把状态文案/字幕挤掉 */
+const mascotSize = computed(() => {
+  if (!isMobile.value) return 260
+  const h = viewportH.value
+  if (h < 520) return 118
+  if (h < 600) return 142
+  if (h < 700) return 166
+  return 190
+})
 
 // 回答记录：仅保留智能体侧文本（需求 1：不展示用户识别内容）
 interface ChatEntry { id: string; role: 'assistant'; text: string }
@@ -379,9 +400,11 @@ onUnmounted(() => {
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  padding: 0 22px;
-  padding-top: env(safe-area-inset-top, 18px);
-  padding-bottom: env(safe-area-inset-bottom, 16px);
+  /* 四边都让出安全区：横屏刘海在左右，状态栏 / 手势条在上下 */
+  padding-left: max(22px, env(safe-area-inset-left, 0px));
+  padding-right: max(22px, env(safe-area-inset-right, 0px));
+  padding-top: max(18px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   color: #1f2d43;
   overflow: hidden;
 }
@@ -451,7 +474,8 @@ onUnmounted(() => {
 
 /* 通话字幕：无气泡、无头像；当前回答为主字幕，上一条淡出 */
 .vc-say {
-  flex-shrink: 0; min-height: 26vh;
+  flex-shrink: 0; min-height: 26vh; max-height: 38vh; overflow-y: auto;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
   gap: 10px; padding: 0 6px 6px;
   mask-image: linear-gradient(180deg, transparent 0, #000 26%, #000 100%);
@@ -522,7 +546,8 @@ onUnmounted(() => {
 .mic.muted .mic-ring { opacity: .25; animation: none; }
 .btn-slash { position: absolute; width: 2.5px; height: 32px; background: #ef4444; transform: rotate(45deg); border-radius: 2px; z-index: 2; }
 .hangup {
-  width: 60px; height: 60px; color: #fff;
+  /* 与麦克风按钮同直径：电话页两个圆形图标按钮视觉尺寸统一 */
+  width: 70px; height: 70px; color: #fff;
   background: linear-gradient(135deg, #ff6b6b, #e93c3c);
   box-shadow: 0 6px 18px rgba(233,60,60,.36);
 }
@@ -536,11 +561,41 @@ onUnmounted(() => {
 .voice-overlay-leave-to { opacity: 0; }
 
 @media (max-width: 767px) {
-  .vc { padding: 0 16px; }
-  .vc-say { min-height: 22vh; }
+  /* 简写会覆盖上面的安全区 padding，必须显式带上 env：否则顶栏钻进状态栏、控制条被手势条顶住 */
+  .vc {
+    padding-top: max(16px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .vc-top { padding: 4px 0 2px; }
+  .vc-say { min-height: 20vh; max-height: 34vh; }
   .vc-line:not(.prev) { font-size: 18px; }
-  .vc-controls { gap: 30px; }
+  .vc-controls { gap: 30px; padding: 12px 0 6px; }
   .mic { width: 62px; height: 62px; }
-  .hangup { width: 54px; height: 54px; }
+  .hangup { width: 62px; height: 62px; }
+  .ctrl-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+}
+
+/* 矮屏（小尺寸手机 / 分屏）：进一步压缩间距，保证控制条和免责声明都在屏幕内 */
+@media (max-width: 767px) and (max-height: 640px) {
+  .vc-say { min-height: 16vh; max-height: 30vh; }
+  .vc-line:not(.prev) { font-size: 16px; line-height: 1.55; }
+  .vc-line.prev { font-size: 12.5px; }
+  .vc-controls { gap: 26px; padding: 8px 0 4px; }
+  .mic { width: 56px; height: 56px; }
+  .hangup { width: 56px; height: 56px; }
+  .vc-status { font-size: 14px; }
+  .vc-disclaimer { font-size: 10px; padding: 2px 0 0; }
+}
+
+/* 极矮 / 横屏：隐藏提示行与装饰文案，优先保住形象、字幕、控制条 */
+@media (max-width: 767px) and (max-height: 540px) {
+  .vc-hint { display: none; }
+  .vc-status { font-size: 13px; }
+  .vc-say { min-height: 14vh; max-height: 26vh; }
+  .vc-say-empty { padding: 8px 0; font-size: 12px; }
+  .vc-controls { padding: 6px 0 2px; }
+  .vc-disclaimer { display: none; }
 }
 </style>

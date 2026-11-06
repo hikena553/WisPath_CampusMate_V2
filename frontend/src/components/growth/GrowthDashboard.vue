@@ -1054,4 +1054,5 @@ defineExpose({ refresh })
 .gd-ledger-lb { font-size: 13px; color: var(--gd-ink); }
 .gd-ledger-src { margin-left: auto; font-size: 11px; color: var(--gd-ink-3); }
 .gd-ledger-tm { font-size: 11px; color: var(--gd-ink-3); font-variant-numeric: tabular-nums; }
+
 </style>

@@ -530,7 +530,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   display: flex;
   justify-content: center;
-  padding: calc(env(safe-area-inset-top) + 10px) 24px calc(env(safe-area-inset-bottom) + 14px);
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 24px calc(env(safe-area-inset-bottom, 0px) + 14px);
   /* 纯色铺满：不再叠加顶部白色径向渐变，避免四角/顶部露出白色 */
   background: #f2f2f4;
   color: #16161a;

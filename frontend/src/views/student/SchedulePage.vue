@@ -1049,33 +1049,46 @@
           <div v-show="svTab === 'leave'" class="sv-card">
             <div class="sv-tip"><el-icon :size="13"><InfoFilled /></el-icon><span>提交后由辅导员审批，请如实填写</span></div>
             <div class="sv-field">
-              <label class="sv-label">请假类型</label>
+              <label class="sv-label">请假类型<i class="sv-req">*</i></label>
               <el-select v-model="svLeave.leave_type" placeholder="请选择" style="width:100%">
                 <el-option label="课假" value="课假" /><el-option label="公假" value="公假" /><el-option label="宿假" value="宿假" />
                 <el-option label="事假" value="事假" /><el-option label="病假" value="病假" /><el-option label="其他" value="其他" />
               </el-select>
             </div>
             <div class="sv-row2">
-              <div class="sv-field"><label class="sv-label">开始日期</label>
+              <div class="sv-field"><label class="sv-label">开始日期<i class="sv-req">*</i></label>
                 <el-date-picker v-model="svLeave.start_date" type="date" value-format="YYYY-MM-DD" placeholder="开始" style="width:100%" :disabled-date="svDisableStart" /></div>
-              <div class="sv-field"><label class="sv-label">结束日期</label>
+              <div class="sv-field"><label class="sv-label">结束日期<i class="sv-req">*</i></label>
                 <el-date-picker v-model="svLeave.end_date" type="date" value-format="YYYY-MM-DD" placeholder="结束" style="width:100%" :disabled-date="svDisableEnd" /></div>
             </div>
-            <div class="sv-field">
-              <label class="sv-label">请假理由</label>
-              <el-input v-model="svLeave.reason" type="textarea" :rows="3" placeholder="请描述请假原因" />
+            <!-- 宿假专属：宿舍位置 -->
+            <div v-if="svLeave.leave_type === '宿假'" class="sv-row2">
+              <div class="sv-field"><label class="sv-label">宿舍楼<i class="sv-req">*</i></label><el-input v-model="svLeave.dormitory_building" placeholder="如：A栋" /></div>
+              <div class="sv-field"><label class="sv-label">宿舍号<i class="sv-req">*</i></label><el-input v-model="svLeave.dormitory_room" placeholder="如：301" /></div>
             </div>
-            <template v-if="svLeave.leave_type === '课假' || svLeave.leave_type === '公假'">
-              <div class="sv-field"><label class="sv-label">证明材料</label><UploadBtn @uploaded="svLeave.attachments.push($event)" />
-                <div class="sv-files"><el-tag v-for="(f, i) in svLeave.attachments" :key="i" closable @close="svLeave.attachments.splice(i, 1)">{{ svFileName(f) }}</el-tag></div></div>
-            </template>
-            <template v-if="svLeave.leave_type === '宿假'">
-              <div class="sv-row2">
-                <div class="sv-field"><label class="sv-label">宿舍楼</label><el-input v-model="svLeave.dormitory_building" placeholder="如：A栋" /></div>
-                <div class="sv-field"><label class="sv-label">宿舍号</label><el-input v-model="svLeave.dormitory_room" placeholder="如：301" /></div>
+            <!-- 类型相关补充信息：不同假种要交代的内容不同 -->
+            <div v-if="svLeaveExtra" class="sv-field">
+              <label class="sv-label">{{ svLeaveExtra.label }}<i class="sv-req">*</i></label>
+              <el-input v-model="svLeave.extra" :placeholder="svLeaveExtra.placeholder" />
+            </div>
+            <div class="sv-field">
+              <label class="sv-label">请假理由<i class="sv-req">*</i></label>
+              <el-input v-model="svLeave.reason" type="textarea" :rows="3" :placeholder="svLeaveReasonPlaceholder" />
+            </div>
+            <!-- 证明材料：任何假种都必须上传 -->
+            <div class="sv-field">
+              <label class="sv-label">{{ svLeaveProofLabel }}<i class="sv-req">*</i></label>
+              <UploadBtn @uploaded="svLeave.attachments.push($event)" />
+              <div v-if="svLeave.attachments.length" class="sv-files">
+                <el-tag v-for="(f, i) in svLeave.attachments" :key="i" closable type="info" @close="svLeave.attachments.splice(i, 1)">{{ svFileName(f) }}</el-tag>
               </div>
-              <div class="sv-field"><label class="sv-label">家长证明</label><UploadBtn v-model="svLeave.parent_proof" /></div>
-            </template>
+              <p class="sv-hint-text">{{ svLeaveProofHint }}</p>
+            </div>
+            <!-- 宿假额外要求家长知情同意 -->
+            <div v-if="svLeave.leave_type === '宿假'" class="sv-field">
+              <label class="sv-label">家长知情同意<i class="sv-req">*</i></label>
+              <UploadBtn v-model="svLeave.parent_proof" />
+            </div>
             <button class="sv-submit" type="button" :disabled="svSubmitting" @click="svSubmitLeave">{{ svSubmitting ? '提交中…' : '提交申请' }}</button>
           </div>
 
@@ -1409,7 +1422,37 @@ const SERVICE_TABS = [
 ] as const
 const svTab = ref<'leave' | 'certificate' | 'project'>('leave')
 const svSubmitting = ref(false)
-const svLeave = ref({ leave_type: '', start_date: '', end_date: '', reason: '', dormitory_building: '', dormitory_room: '', parent_proof: '', attachments: [] as string[] })
+const svLeave = ref({ leave_type: '', start_date: '', end_date: '', reason: '', extra: '', dormitory_building: '', dormitory_room: '', parent_proof: '', attachments: [] as string[] })
+
+/** 不同假种需要补充的信息不同：病假写就诊信息、公假写活动、课假写课程…… */
+const svLeaveExtra = computed(() => {
+  const t = svLeave.value.leave_type
+  if (t === '病假') return { label: '就诊信息', placeholder: '医院 / 科室 / 就诊时间，如：校医院 内科 11月5日' }
+  if (t === '公假') return { label: '活动信息', placeholder: '活动名称与主办单位，如：校运会 · 体育学院' }
+  if (t === '课假') return { label: '涉及课程', placeholder: '课程名称与上课时间，如：Web前端开发 周五 3-4 节' }
+  if (t === '事假') return { label: '事由补充', placeholder: '具体事由，如：回家办理身份证' }
+  if (t === '其他') return { label: '补充说明', placeholder: '请补充说明请假情况' }
+  return null
+})
+/** 证明材料标题随假种变化 */
+const svLeaveProofLabel = computed(() => {
+  const t = svLeave.value.leave_type
+  if (t === '病假') return '医院证明（病假条 / 病历）'
+  if (t === '公假') return '公假证明（活动通知 / 公函）'
+  if (t === '课假') return '课程证明（课表 / 任课教师说明）'
+  if (t === '事假') return '事由证明（家长沟通截图等）'
+  if (t === '宿假') return '离校证明（家长知情截图等）'
+  return '证明材料'
+})
+const svLeaveProofHint = computed(() => '任何请假都必须附证明；支持图片 / PDF / Word，单个不超过 10MB。')
+const svLeaveReasonPlaceholder = computed(() => {
+  const t = svLeave.value.leave_type
+  if (t === '病假') return '请描述症状与就医情况'
+  if (t === '事假') return '请描述具体事由'
+  if (t === '公假') return '请说明参加的活动与时间'
+  if (t === '宿假') return '请说明离校与返校安排'
+  return '请描述请假原因'
+})
 const svCert = ref({ certificate_type: '', content: '', quantity: 1, attachments: [] as string[] })
 const svProject = ref({ project_type: '', title: '', advisor: '', team_members: '', start_date: '', end_date: '', budget: 0, content: '', attachments: [] as string[] })
 function svFileName(u: string) { try { return decodeURIComponent(u.split('/').pop() || u).split('?')[0] } catch { return u } }
@@ -1420,17 +1463,30 @@ function svMapLeaveType(label: string): string {
   const m: Record<string, string> = { '课假': 'other', '公假': 'competition', '宿假': 'personal', '事假': 'personal', '病假': 'sick', '其他': 'other' }
   return m[label] || 'other'
 }
-function svResetLeave() { Object.assign(svLeave.value, { leave_type: '', start_date: '', end_date: '', reason: '', dormitory_building: '', dormitory_room: '', parent_proof: '', attachments: [] }) }
+function svResetLeave() { Object.assign(svLeave.value, { leave_type: '', start_date: '', end_date: '', reason: '', extra: '', dormitory_building: '', dormitory_room: '', parent_proof: '', attachments: [] }) }
 
 async function svSubmitLeave() {
   const f = svLeave.value
-  if (!f.leave_type || !f.start_date || !f.end_date || !f.reason) { ElMessage.warning('请填写所有必填项'); return }
+  if (!f.leave_type || !f.start_date || !f.end_date || !f.reason.trim()) { ElMessage.warning('请填写所有必填项'); return }
+  if (svLeaveExtra.value && !f.extra.trim()) { ElMessage.warning('请填写' + svLeaveExtra.value.label); return }
+  if (f.leave_type === '宿假' && (!f.dormitory_building || !f.dormitory_room)) { ElMessage.warning('请填写宿舍楼与宿舍号'); return }
+  if (!f.attachments.length) { ElMessage.warning('请上传' + svLeaveProofLabel.value); return }
+  if (f.leave_type === '宿假' && !f.parent_proof) { ElMessage.warning('请上传家长知情同意证明'); return }
   if (f.start_date < svToday()) { ElMessage.error('开始日期不能早于今天'); return }
   if (f.end_date < f.start_date) { ElMessage.error('结束日期不能早于开始日期'); return }
   if ((new Date(f.end_date + 'T00:00:00').getTime() - new Date(f.start_date + 'T00:00:00').getTime()) / 86400000 > 14) { ElMessage.error('请假时长不能超过15天'); return }
   svSubmitting.value = true
   try {
-    await createLeave({ start_date: f.start_date, end_date: f.end_date, reason: `[${f.leave_type}] ${f.reason}`, leave_type: svMapLeaveType(f.leave_type) })
+    const extraText = svLeaveExtra.value && f.extra ? '（' + svLeaveExtra.value.label + '：' + f.extra + '）' : ''
+    const dormText = f.leave_type === '宿假' ? '（' + f.dormitory_building + ' ' + f.dormitory_room + '）' : ''
+    const proofText = '\n证明材料：' + f.attachments.join(' ')
+    const parentText = f.parent_proof ? '\n家长知情证明：' + f.parent_proof : ''
+    await createLeave({
+      start_date: f.start_date,
+      end_date: f.end_date,
+      reason: '[' + f.leave_type + '] ' + dormText + f.reason + extraText + proofText + parentText,
+      leave_type: svMapLeaveType(f.leave_type),
+    })
     ElMessage.success('请假申请已提交，等待辅导员审批')
     svResetLeave()
   } catch (e: any) { ElMessage.error(e?.response?.data?.detail || '提交失败') } finally { svSubmitting.value = false }
@@ -2921,7 +2977,10 @@ watch(() => route.query.tab, (val) => {
    Head 是唯一常驻的白色横条，滚动内容从它下面穿过（48px 以上被裁掉），边界始终清晰 */
 .home-bar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  display: flex; align-items: center; height: 48px; padding: 0 12px; box-sizing: border-box;
+  /* 顶部安全区：白底铺进状态栏，标题让到状态栏/挖孔下方 */
+  display: flex; align-items: center;
+  height: calc(var(--sat, 0px) + var(--m-head-h, 48px));
+  padding: var(--sat, 0px) 12px 0; box-sizing: border-box;
   background: var(--sp-surface, #ffffff);
   border-bottom: 1px solid var(--sp-border, #e9ebee);
 }
@@ -2931,8 +2990,8 @@ watch(() => route.query.tab, (val) => {
    区与区之间用发丝线分隔；内边距保留，视觉密度不变。
    成绩面板 / 成长卡片 / 服务表单统一处理；课程表本身是表格不受影响。 */
 @media (max-width: 767px) {
-  .grades-view .panel,
-  .service-view .sv-card {
+  /* 成绩面板保留去卡片化；请假服务表单（v6）重新设计为白卡，不再扁平化 */
+  .grades-view .panel {
     background: transparent !important;
     box-shadow: none !important;
     border-radius: 0 !important;
@@ -3351,8 +3410,9 @@ watch(() => route.query.tab, (val) => {
   z-index: 100;
   display: flex;
   align-items: center;
-  height: 48px;
-  padding: 0 12px;
+  /* 顶部安全区：白底铺进状态栏，返回键/标题让到状态栏下方 */
+  height: calc(var(--sat, 0px) + var(--m-head-h, 48px));
+  padding: var(--sat, 0px) 12px 0;
   margin: 0;
   box-sizing: border-box;
   background: var(--sp-surface, #ffffff);
@@ -3949,7 +4009,11 @@ watch(() => route.query.tab, (val) => {
   /* ── 请假服务子页（v3）──
      分段控制：三枚等宽按钮，选中态用识别色胶囊；表单全部收进一张白卡。
      Element 表单控件在此前的全局主题里偏桌面（32px 高、16px 字），这里统一压到移动尺寸。 */
-  .service-view { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+  /* 请假服务页：内容自带 16px 左右留白（此前依赖 .content-main，去掉后文字会贴边） */
+  .service-view { display: flex; flex-direction: column; gap: 10px; padding: 2px 16px 16px; }
+
+  /* 记录区：标题与过滤胶囊之间收紧一点，空态不显得散 */
+  .sv-records { margin-top: 2px; }
   .sv-segment {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
     background: #ececef; border-radius: 10px; padding: 3px;
@@ -3978,45 +4042,82 @@ watch(() => route.query.tab, (val) => {
     font-weight: 600;
   }
   .sv-rec-switch-item:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 1px; }
+  /* ── 请假服务表单（v6 美化）──
+     白卡 + 细描边 + 40px 控件 + 灰底输入：标签小一档、控件统一高度、
+     聚焦态用识别色描边，主按钮 46px 通栏，整体按 8px 节奏排布。 */
   .sv-card {
-    background: var(--sp-surface, #ffffff); border-radius: var(--sp-radius-lg, 16px);
-    box-shadow: var(--sp-shadow-card, 0 1px 2px rgba(20,23,26,.04)); padding: 14px;
-    display: flex; flex-direction: column; gap: 12px;
+    background: var(--sp-surface, #ffffff);
+    border: 1px solid #eef0f3;
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(20, 23, 26, .03);
+    padding: 16px 14px;
+    display: flex; flex-direction: column; gap: 14px;
   }
   .sv-tip {
     display: flex; align-items: center; gap: 6px;
-    padding: 8px 10px; border-radius: var(--sp-radius-sm);
-    background: var(--sp-accent-soft); font-size: 11px; color: var(--sp-accent-ink);
+    padding: 9px 11px; border-radius: 9px;
+    background: var(--sp-accent-soft);
+    font-size: 11.5px; line-height: 1.5; color: var(--sp-accent-ink);
   }
   .sv-tip .el-icon { flex: none; }
-  .sv-field { display: flex; flex-direction: column; gap: 5px; }
+  .sv-field { display: flex; flex-direction: column; gap: 6px; }
   .sv-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .sv-label { font-size: 12px; font-weight: 500; color: var(--sp-ink-2); line-height: 1.2; }
+  .sv-label {
+    font-size: 12.5px; font-weight: 500; line-height: 1.2;
+    color: #4b5563; letter-spacing: .1px;
+  }
+  /* 必填星号：红色、贴标签右侧，不撑行高 */
+  .sv-req {
+    margin-left: 2px; font-style: normal;
+    font-size: 12px; font-weight: 600; color: #e5484d;
+  }
+  .sv-hint-text { margin: 0; font-size: 11px; line-height: 1.5; color: #9aa1ab; }
   .sv-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
-  /* Element 控件移动端紧凑化：高度 36px、字号 13px、边框收中性灰 */
+  /* Element 控件：统一 40px 高、灰底无描边，聚焦时白底 + 识别色描边 */
   .sv-card :deep(.el-input__wrapper),
-  .sv-card :deep(.el-select__wrapper),
-  .sv-card :deep(.el-textarea__inner) { border-radius: 9px; box-shadow: 0 0 0 1px var(--sp-border-strong) inset; }
+  .sv-card :deep(.el-select__wrapper) {
+    min-height: 40px; padding: 1px 12px;
+    border-radius: 10px; background: #f6f7f9; box-shadow: none;
+    transition: background .16s ease, box-shadow .16s ease;
+  }
+  .sv-card :deep(.el-textarea__inner) {
+    border-radius: 10px; padding: 10px 12px;
+    background: #f6f7f9; box-shadow: none;
+    font-size: 13.5px; line-height: 1.5;
+  }
   .sv-card :deep(.el-input__wrapper.is-focus),
   .sv-card :deep(.el-select__wrapper.is-focused),
-  .sv-card :deep(.el-textarea__inner:focus) { box-shadow: 0 0 0 1.5px var(--sp-accent) inset; }
-  .sv-card :deep(.el-input__inner) { font-size: 13px; }
-  .sv-card :deep(.el-select__placeholder) { font-size: 13px; }
-  .sv-card :deep(.el-textarea__inner) { font-size: 13px; padding: 8px 11px; }
+  .sv-card :deep(.el-textarea__inner:focus) {
+    background: #fff;
+    box-shadow: 0 0 0 1.5px var(--sp-accent) inset;
+  }
+  .sv-card :deep(.el-input__inner) { font-size: 13.5px; }
+  .sv-card :deep(.el-select__placeholder) { font-size: 13.5px; color: #9aa1ab; }
   .sv-card :deep(.el-input-number) { width: 100%; }
   .sv-card :deep(.el-input-number .el-input__inner) { text-align: left; }
+  .sv-card :deep(.el-date-editor) { width: 100%; }
   .sv-submit {
-    height: 44px; border: 0; border-radius: 11px;
+    height: 46px; border: 0; border-radius: 12px;
     background: var(--sp-accent); color: #fff;
-    font-size: 15px; font-weight: 600; cursor: pointer;
+    font-size: 15px; font-weight: 600; letter-spacing: .5px;
+    box-shadow: 0 6px 16px -6px rgba(61, 74, 87, .45);
+    cursor: pointer;
     transition: transform .15s ease, opacity .15s ease;
     -webkit-tap-highlight-color: transparent;
   }
+  .sv-submit:active { transform: scale(.985); opacity: .94; }
 
 @media (max-width: 767px) {
-  .schedule-page { padding: 8px 12px 0; --sp-pad-t: 8px; --sp-pad-x: 12px; }
+  .schedule-page {
+    padding: 8px 0 0;
+    --sp-pad-t: 8px;
+    --sp-pad-x: 0px;
+    /* 标题栏高度按屏宽自适应（320px → 34px，390px → 约 36px，430px+ → 42px），
+       配合顶部安全区使「状态栏 → 标题」的留白在不同机型上观感一致且更紧凑 */
+    --m-head-h: clamp(34px, 9.2vw, 42px);
+  }
   /* 主页：整页滚动容器给固定 Head 让出高度（Head 48 + 4 遮罩带） */
-  .schedule-page:not(.has-subpage) { padding-top: 48px; }
+  .schedule-page:not(.has-subpage) { padding-top: calc(var(--sat, 0px) + var(--m-head-h, 48px)); }
   .dashboard-home { gap: 0; }
   .content-main { max-width: 100%; }
   .content-row { flex-direction: column; }
@@ -4045,7 +4146,7 @@ watch(() => route.query.tab, (val) => {
      水平 12px 交给 .content-main，顶栏自己负责左右内边距。 */
   .content-row {
     position: fixed;
-    top: 48px;
+    top: calc(var(--sat, 0px) + var(--m-head-h, 48px));
     right: 0;
     bottom: 0;
     left: 0;
@@ -4055,7 +4156,8 @@ watch(() => route.query.tab, (val) => {
     padding: 0;
     box-sizing: border-box;
   }
-  .content-row .content-main { padding: 0 12px; }
+  .content-row { overflow-x: hidden; }
+  .content-row .content-main { padding: 0; }
   /* 顶部留白给到 14px：滚动时上一张卡的圆角顶边会从这个缝里划过，
      8px 时露出一条白色弧线，看着像顶栏底部有毛边。加宽后弧线落在阴影带里，不再显眼。 */
   .content-row .content-main > .schedule-view,
@@ -4739,5 +4841,28 @@ watch(() => route.query.tab, (val) => {
   border-radius: 8px;
   border: 1px solid #e4e7ed;
   box-shadow: 0 6px 18px rgba(0,0,0,.1);
+}
+
+/* ===== 请假服务（移动端）：发起新申请按钮 =====
+   基础 .sv-cta 是通栏深色大按钮（padding 12px、约 45px 高），且在文件里位置更靠后；
+   这里追加一段同媒体查询的覆盖，改成左侧紧凑胶囊：36px 高、宽度随文字，
+   既保持主操作的可点性，又不再一屏占掉一大块深色。 */
+@media (max-width: 767px) {
+  /* 该段落在非 scoped 样式块中，用 !important 压过 scoped 的基础 .sv-cta 规则 */
+  .service-view .sv-cta {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    align-self: flex-start !important;
+    height: 36px !important;
+    padding: 0 16px !important;
+    margin: 2px 0 !important;
+    border-radius: 10px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    line-height: 36px !important;
+  }
+  .service-view .sv-cta:active { transform: scale(.98); }
 }
 </style>

@@ -401,8 +401,9 @@ onBeforeUnmount(() => window.clearTimeout(draftTimer))
   display: grid;
   grid-template-columns: 56px 1fr 76px;
   align-items: center;
-  height: 52px;
-  padding: 0 6px;
+  /* 顶部安全区：发帖页（二级）白底铺进状态栏 */
+  height: calc(clamp(46px, 11.8vw, 52px) + var(--sat, 0px));
+  padding: var(--sat, 0px) 6px 0;
   border-bottom: 1px solid rgba(15, 23, 42, .06);
   background: #fff;
   flex-shrink: 0;

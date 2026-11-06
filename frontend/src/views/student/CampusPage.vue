@@ -193,7 +193,8 @@
       class="campus-pager"
       :model-value="activeTab"
       :pages="feedTabKeys"
-      start-selector=".campus-feed"
+      start-selector=".campus-pager-page"
+      ignore-selector="button, input, textarea, .cfeed-chips, .cfeed-bar, .ffeed-people, .campus-hero-carousel, .hero-track"
       @update:model-value="onPagerChange"
     >
       <!-- v-memo：拖动时跟手位移每帧变化会让本页重渲染，三页信息流（含图标 SVG）
@@ -614,7 +615,7 @@ defineOptions({ name: 'campus-page' })
  */
 withDefaults(defineProps<{ role?: 'student' | 'teacher' }>(), { role: 'student' })
 
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ElCarousel } from 'element-plus'
 // v6.1 弹窗减负：搜索改用底部动作面板承接
 import ActionSheet from '@/components/common/ActionSheet.vue'
@@ -1294,6 +1295,23 @@ function onPagerChange(key: string) {
  *   ② 把组件的即时状态转给 SlidingTabs，让滑条与文字染色跟手指严格同步。
  */
 const pagerRef = ref<InstanceType<typeof SwipePager> | null>(null)
+
+/**
+ * 「关注」等页内容少时，分页轨道只有内容那么高，下面整块留白不在页容器里：
+ * 既显得空，也接不到左右翻页手势。这里量出内容区剩余高度，
+ * 写进 --campus-pager-fill，让分页页白卡默认铺满可视区。
+ */
+function syncPagerFill() {
+  const root = pagerRef.value ? (pagerRef.value as unknown as { $el?: HTMLElement }).$el : null
+  const pageEl = root ? (root.closest('.campus-page') as HTMLElement | null) : null
+  if (!root || !pageEl) return
+  const pageRect = pageEl.getBoundingClientRect()
+  const rootRect = root.getBoundingClientRect()
+  // 用「内容内偏移」而不是视口坐标，滚动位置变化时也稳定
+  const offsetInContent = rootRect.top - pageRect.top + pageEl.scrollTop
+  const fill = Math.max(0, Math.round(pageEl.clientHeight - offsetInContent - 8))
+  root.style.setProperty('--campus-pager-fill', fill + 'px')
+}
 
 /** 全部分类的 key（有序）：组件据此判断左右邻居与首尾边界 */
 const feedTabKeys = FEED_TABS.map(t => t.key)
@@ -2017,6 +2035,10 @@ onMounted(() => {
   // 因此不能用「组件是否已挂载」来判断要不要加载，只能看模块级缓存：
   // - 命中缓存（10 分钟内已加载过）→ 直接复用，不发请求，页面首帧即真实内容，不闪；
   // - 未命中 → 拉取一次并写回缓存，供下次进入复用。
+  // 分页页最小高度：首帧测一次，之后随窗口尺寸 / 旋转重测
+  nextTick(syncPagerFill)
+  window.addEventListener('resize', syncPagerFill)
+  window.addEventListener('orientationchange', syncPagerFill)
   const cached = getCampusImpressionCache()
   if (cached) {
     impressionData.value = cached
@@ -2024,6 +2046,14 @@ onMounted(() => {
   }
   loadImpression()
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncPagerFill)
+  window.removeEventListener('orientationchange', syncPagerFill)
+})
+
+/* 切换页签后内容高度变化，重测一次（页头/吸顶 Tab 高度也可能因换行变化） */
+watch(activeTab, () => { nextTick(syncPagerFill) })
 
 /** 地址里的 ?post=<id>：切到社区页签并打开这条帖子（同页再次点消息里的帖子也走这里） */
 function openDeepLinkedPost() {
@@ -2868,8 +2898,10 @@ function openDeepLinkedCommunityView() {
     /* 顶部不再留 8px：页头已改成通栏吸顶，上沿要直接贴住滚动容器顶边，
        否则吸顶瞬间上方会悬出一条背景色细缝 */
     padding: 0 16px;
-    /* 页头高度：Tab 的吸顶偏移量必须与它严格相等，否则两层之间会漏出滚动内容 */
-    --campus-appbar-h: 56px;
+    /* 页头高度：Tab 的吸顶偏移量必须与它严格相等，否则两层之间会漏出滚动内容。
+       按屏宽自适应（320px → 44px，390px → 约 46px，430px+ → 52px）：
+       原来固定 56px 叠加状态栏安全区后，顶部留白在手机上看偏多 */
+    --campus-appbar-h: clamp(44px, 11.8vw, 52px);
     display: flex;
     flex-direction: column;
     background: transparent;
@@ -2894,9 +2926,10 @@ function openDeepLinkedCommunityView() {
     position: sticky;
     top: 0;
     z-index: 30;
-    min-height: var(--campus-appbar-h);
+    /* 顶部安全区：白底铺进状态栏，标题与图标让到状态栏/挖孔下方 */
+    min-height: calc(var(--campus-appbar-h) + var(--sat, 0px));
     margin: 0 -16px;
-    padding: 0 16px;
+    padding: var(--sat, 0px) 16px 0;
     background: #fff;
     box-shadow: none;
     border-radius: 0;
@@ -3119,6 +3152,8 @@ function openDeepLinkedCommunityView() {
   .campus-pager-page {
     background: #fff;
     border-radius: 0 0 13px 13px;
+    /* 内容少时也铺满内容区（数值由 syncPagerFill 实测写入）：空白处同样能接住左右翻页手势 */
+    min-height: var(--campus-pager-fill, 0px);
   }
 
   /* 分页里的轮播不再是 .campus-page 的直接子元素，

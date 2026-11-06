@@ -172,6 +172,12 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick, true))
 .rs-popup-list::-webkit-scrollbar {
   display: none;
 }
+@media (max-width: 767px) {
+  /* 移动端弹层限高：矮屏 / 键盘弹出时不会被挤出可视区 */
+  .rs-popup-list {
+    max-height: min(240px, 34vh);
+  }
+}
 .rs-option {
   display: block;
   width: 100%;

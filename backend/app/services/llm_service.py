@@ -144,20 +144,45 @@ def build_system_prompt(user: User | None = None) -> str:
     )
 
 
+def _transcode_to_wav(audio_bytes: bytes, filename: str) -> bytes:
+    """把 webm / m4a / mp3 / ogg 等任意容器转成 16kHz 单声道 WAV。
+
+    ASR 上游（qwen-audio-3.0-asr-flash）只对「真 WAV」稳定：直接把 WebView 录的
+    webm 原样贴个 wav 的 MIME 发上去，短音频会被上游直接 400 拒绝。
+    """
+    import os
+    import subprocess
+    import tempfile
+
+    suffix = os.path.splitext(filename or "")[1].lower() or ".bin"
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "in" + suffix)
+        dst = os.path.join(tmp, "out.wav")
+        with open(src, "wb") as f:
+            f.write(audio_bytes)
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", src,
+             "-ar", "16000", "-ac", "1", "-f", "wav", dst],
+            capture_output=True, timeout=40,
+        )
+        if proc.returncode != 0 or not os.path.exists(dst):
+            detail = (proc.stderr or b"").decode("utf-8", "ignore")[-200:]
+            raise RuntimeError(f"音频转码失败：{detail or 'ffmpeg 处理失败'}")
+        with open(dst, "rb") as f:
+            return f.read()
+
+
 def speech_to_text(audio_bytes: bytes, filename: str) -> str:
-    """调用 Token Plan 语音识别（qwen-audio-3.0-asr-flash，多模态生成端点）"""
+    """调用 Token Plan 语音识别（qwen-audio-3.0-asr-flash，多模态生成端点）。
+
+    链路：上传音频 -> ffmpeg 统一转 16kHz WAV -> 以 WAV 上传识别。
+    """
     config = _get_llm_config()
     if not config['api_key']:
         raise RuntimeError("LLM 未配置 API Key")
 
-    name_lower = (filename or "").lower()
-    if name_lower.endswith(".mp3"):
-        mime, fmt = "audio/mpeg", "mp3"
-    elif name_lower.endswith(".opus") or name_lower.endswith(".ogg"):
-        mime, fmt = "audio/ogg", "opus"
-    else:
-        mime, fmt = "audio/wav", "wav"
-    data_uri = f"data:{mime};base64," + base64.b64encode(audio_bytes).decode()
+    wav_bytes = _transcode_to_wav(audio_bytes, filename)
+    data_uri = "data:audio/wav;base64," + base64.b64encode(wav_bytes).decode()
 
     payload = {
         "model": "qwen-audio-3.0-asr-flash",
@@ -171,19 +196,26 @@ def speech_to_text(audio_bytes: bytes, filename: str) -> str:
                 }
             ]
         },
-        "parameters": {"format": fmt, "sample_rate": "16000"},
+        "parameters": {"format": "wav", "sample_rate": 16000},
     }
     url = f"{settings.llm_native_base}/api/v1/services/aigc/multimodal-generation/generation"
     headers = {"Authorization": f"Bearer {config['api_key']}", "Content-Type": "application/json"}
     try:
         resp = httpx.post(url, headers=headers, json=payload, timeout=120)
-        resp.raise_for_status()
-        body = resp.json()
-        out = body.get("output") or body
-        return (out.get("text") or (out.get("sentence") or {}).get("text") or "").strip()
     except Exception as e:
-        raise RuntimeError(f"语音识别失败: {e}")
+        raise RuntimeError(f"语音识别请求失败: {e}")
 
+    if resp.status_code == 400:
+        # 上游对「没有检测到语音」的音频统一回 400，这里翻译成用户能理解的提示
+        logger.warning("[STT] upstream 400: %s", (resp.text or "")[:300])
+        raise RuntimeError("没有识别到语音内容，请靠近麦克风完整说一句再试")
+    if resp.status_code >= 400:
+        logger.warning("[STT] upstream %s: %s", resp.status_code, (resp.text or "")[:300])
+        raise RuntimeError(f"语音识别服务暂时不可用（{resp.status_code}）")
+
+    body = resp.json()
+    out = body.get("output") or body
+    return (out.get("text") or (out.get("sentence") or {}).get("text") or "").strip()
 
 def _parse_json_loose(text: str) -> dict | None:
     """从可能带代码块或前后缀文字的模型回复中提取第一个 JSON 对象。"""

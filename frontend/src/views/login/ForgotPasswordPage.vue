@@ -380,7 +380,7 @@ onBeforeUnmount(stopPolling)
 .forgot-body {
   width: 100%;
   max-width: 400px;
-  padding: calc(env(safe-area-inset-top) + 10px) 22px calc(env(safe-area-inset-bottom) + 28px);
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 22px calc(env(safe-area-inset-bottom, 0px) + 28px);
   display: flex;
   flex-direction: column;
 }

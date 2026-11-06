@@ -96,35 +96,35 @@
             <nav class="pf-quick">
               <div class="pf-quick-track">
                 <button type="button" class="pf-quick-item" @click="openPage('profile')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><User /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><User /></el-icon></span>
                   <span class="pf-quick-label">我的资料</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="openPage('announcements')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><Bell /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><Bell /></el-icon></span>
                   <span class="pf-quick-label">校园公告</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/teacher/tasks')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><Calendar /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><Calendar /></el-icon></span>
                   <span class="pf-quick-label">待办任务</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/teacher/approval')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><Tickets /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><Tickets /></el-icon></span>
                   <span class="pf-quick-label">请假审批</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/teacher/crisis')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><Warning /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><Warning /></el-icon></span>
                   <span class="pf-quick-label">学生预警</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/teacher/care-center?tab=guardian')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><ChatDotRound /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><ChatDotRound /></el-icon></span>
                   <span class="pf-quick-label">家校沟通</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/teacher/survey')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><EditPen /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><EditPen /></el-icon></span>
                   <span class="pf-quick-label">匿名互评</span>
                 </button>
                 <button type="button" class="pf-quick-item" @click="router.push('/teacher/portfolio')">
-                  <span class="pf-quick-icon"><el-icon :size="21"><FolderOpened /></el-icon></span>
+                  <span class="pf-quick-icon"><el-icon :size="25"><FolderOpened /></el-icon></span>
                   <span class="pf-quick-label">成长档案</span>
                 </button>
               </div>
@@ -239,7 +239,6 @@
             </div>
           </div>
 
-          <p class="pf-foot-note">{{ agentName }} · 智慧校园服务平台 v1.0.0</p>
         </div>
       </div>
     </transition>
@@ -2043,8 +2042,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 52px;
-  padding: 0 4px;
+  /* 顶部安全区：二级/三级子页面白底铺进状态栏，返回键/标题让位 */
+  min-height: calc(clamp(46px, 11.8vw, 52px) + var(--sat, 0px));
+  padding: var(--sat, 0px) 4px 0;
   background: #fff;
   border-bottom: 1px solid #f0f0f0;
   flex-shrink: 0;
@@ -2555,7 +2555,7 @@ onMounted(() => {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: calc((100% - 60px) / 6);
-  gap: 12px;
+  gap: 8px;
   align-items: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
@@ -2594,7 +2594,8 @@ onMounted(() => {
 .pf-quick-label {
   max-width: 100%;
   /* 六列并排后格子变窄，字号随视口小幅收缩，320px 宽机型也能完整显示四字文案 */
-  font-size: clamp(9px, 2.8vw, 10.5px);
+  /* 快捷入口放大：字号略增，五字文案在 360px 屏仍完整显示 */
+  font-size: clamp(9.5px, 2.9vw, 12px);
   line-height: 1.2;
   color: var(--tui-text-secondary);
   white-space: nowrap;
@@ -2693,16 +2694,6 @@ onMounted(() => {
   border: 2px solid #fff;
 }
 
-/* 页脚说明：收住列表下方的灰底空白，避免页面尾部大段留白 */
-.pf-foot-note {
-  margin: 6px 0 0;
-  padding: 4px 16px 0;
-  text-align: center;
-  font-size: 10.5px;
-  letter-spacing: 0.2px;
-  color: var(--tui-text-quiet);
-}
-
 /* ===== 设置项列表（与学生端同一套抖音设置页范式）=====
    灰底画布 + 白色圆角卡片，行内只有「左标签 / 右值 / 箭头」三段；
    分隔线内缩到文字起点，卡片之间靠灰色间隙分块，不用分组标题与彩色图标。 */
@@ -2770,7 +2761,12 @@ onMounted(() => {
   white-space: nowrap;
 }
 .set-page .set-row-value.is-empty { color: var(--tui-text-quiet); }
-.set-page .set-row-arrow { color: #c7ccd4; flex-shrink: 0; }
+.set-page .set-row-arrow {
+  color: #c7ccd4;
+  flex-shrink: 0;
+  /* 箭头永远贴最右：无右侧 value 的行（账号与安全 / 修改密码）靠 auto 外边距顶到行尾 */
+  margin-left: auto;
+}
 /* 退出登录：抖音式独立白卡片，整行居中、无箭头 */
 .set-page .set-row-logout {
   justify-content: center;
@@ -3333,4 +3329,13 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+
+/* ===== 移动端：快捷入口一行展示 5 个（第 6 个起横向滑动）=====
+   原为 6 列并排，一屏挤 6 个格子；改成 5 列后每格更宽，超出部分横向滚动。 */
+@media (max-width: 767px) {
+  /* 快捷入口放大：图标/字号变大、列间距收窄，5 列依然一屏放得下 */
+  .pf-quick { padding: 12px 8px 8px; }
+  .pf-quick-item { gap: 8px; }
+  .pf-quick-track { grid-auto-columns: calc((100% - 32px) / 5); }
+}
 </style>

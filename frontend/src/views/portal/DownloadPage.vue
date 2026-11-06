@@ -21,16 +21,19 @@
           <a
             class="dl-btn"
             :class="{ disabled: checkState === 'missing' }"
-            :href="checkState === 'missing' ? undefined : apkUrl"
+            :href="inWeChat || checkState === 'missing' ? undefined : apkUrl"
             :aria-disabled="checkState === 'missing'"
             @click="onDownloadClick"
           >
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14" />
             </svg>
-            下载 Android 安装包
+            {{ inWeChat ? '在浏览器中打开下载' : '下载 Android 安装包' }}
           </a>
 
+          <p v-if="inWeChat" class="dl-wechat-tip">
+            微信内无法直接下载，请点右上角「···」→「在浏览器打开」
+          </p>
           <p class="dl-hint" :class="{ warn: checkState === 'missing' }">
             {{ statusText }}
           </p>
@@ -57,6 +60,8 @@
     <footer class="dl-footer">
       © {{ year }} 绵阳城市学院 · {{ siteName }}
     </footer>
+
+    <WeChatOpenGuide :open="guideOpen" :url="pageUrl" @close="guideOpen = false" />
   </div>
 </template>
 
@@ -64,6 +69,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import QrCode from '@/components/common/QrCode.vue'
+import WeChatOpenGuide from '@/components/common/WeChatOpenGuide.vue'
+import { isWeChatBrowser } from '@/utils/wechat'
 
 const { siteName, siteLogo, siteBaseUrl } = useSiteConfig()
 const year = new Date().getFullYear()
@@ -73,12 +80,17 @@ const pageUrl = computed(() => `${siteBaseUrl.value}/download`)
 const apkUrl = computed(
   () =>
     ((import.meta.env.VITE_APK_DOWNLOAD_URL as string | undefined) || '').trim() ||
-    `${siteBaseUrl.value}/download/mian02.apk`
+    `${siteBaseUrl.value}/download/SmartCampus.apk`
 )
 
 const checkState = ref<'checking' | 'ready' | 'missing' | 'unknown'>('checking')
 
+// 微信内置浏览器无法直接下载 APK：进页面即弹出「用浏览器打开」指引
+const inWeChat = ref(false)
+const guideOpen = ref(false)
+
 const statusText = computed(() => {
+  if (inWeChat.value) return '微信内请先用浏览器打开本页'
   if (checkState.value === 'checking') return '正在检查安装包…'
   if (checkState.value === 'missing') return '安装包正在准备中，请稍后再试'
   return 'Android 7.0 及以上'
@@ -100,12 +112,25 @@ async function checkApk() {
 }
 
 function onDownloadClick(event: MouseEvent) {
+  if (inWeChat.value) {
+    event.preventDefault()
+    guideOpen.value = true
+    return
+  }
   if (checkState.value === 'missing') {
     event.preventDefault()
   }
 }
 
-onMounted(checkApk)
+onMounted(() => {
+  inWeChat.value = isWeChatBrowser()
+  if (inWeChat.value) {
+    window.setTimeout(() => {
+      guideOpen.value = true
+    }, 260)
+  }
+  void checkApk()
+})
 // 站点配置异步加载，域名变化后重新探测安装包地址
 watch(apkUrl, () => void checkApk())
 
@@ -270,6 +295,17 @@ watch(
 
 .dl-hint.warn {
   color: #8a6d3b;
+}
+
+.dl-wechat-tip {
+  margin: 14px 0 0;
+  padding: 8px 13px;
+  border-radius: 10px;
+  background: rgba(7, 193, 96, 0.1);
+  color: #059449;
+  font-size: 12px;
+  line-height: 1.55;
+  font-weight: 550;
 }
 
 .dl-steps {

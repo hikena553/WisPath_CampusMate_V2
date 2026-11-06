@@ -228,7 +228,7 @@ onBeforeUnmount(stopAutoDismiss)
 /* 桌面端让出顶栏高度 */
 @media (min-width: 769px) {
   .pwd-banner {
-    top: calc(52px + 12px);
+    top: calc(clamp(46px, 11.8vw, 52px) + 12px);
   }
 }
 
@@ -244,6 +244,16 @@ onBeforeUnmount(stopAutoDismiss)
   }
   .pwd-banner-action {
     font-size: 12px;
+  }
+  /* 手机端：不压在页头标题上 —— 改到内容区底部、悬浮页签栏上方；12 秒自动收起 */
+  .pwd-banner {
+    top: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
+  }
+  /* 从下方浮入（覆盖桌面端向上浮入的位移） */
+  .pwd-banner.pwd-banner-enter-from,
+  .pwd-banner.pwd-banner-leave-to {
+    transform: translateX(-50%) translateY(10px);
   }
 }
 

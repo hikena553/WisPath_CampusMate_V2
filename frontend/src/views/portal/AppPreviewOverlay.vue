@@ -43,7 +43,7 @@
 
             <div class="pv-actions">
               <button v-if="preview.device === 'browser'" type="button" class="pv-cta" @click="emit('admin')">
-                管理员登录
+                登录
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M5 12h13M12.5 6.5 18 12l-5.5 5.5" />
                 </svg>

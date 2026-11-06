@@ -321,7 +321,7 @@
            （从右滑入 / 向右滑出，本体在 styles/subpage-transition.css，这里不另写动画）。
            桌面端这个节点恒存在（!isMobile），Transition 全程不触发，桌面零变化。 -->
       <Transition name="subpage" :duration="320" @after-leave="onChatClosed">
-        <section v-if="!isMobile || chatOpen" :class="['msg-pane', { 'is-mobile-chat': isMobile }]">
+        <section v-if="!isMobile || chatOpen" :class="['msg-pane', { 'is-mobile-chat': isMobile }]" :style="chatPaneStyle">
           <template v-if="activeSession">
             <header class="msg-pane-head">
               <button v-if="isMobile" type="button" class="msg-back" aria-label="返回" @click="closeChat">
@@ -693,11 +693,12 @@ import SlidingTabs from '@/components/common/SlidingTabs.vue'
 import SwipePager from '@/components/common/SwipePager.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useResponsive } from '@/composables/useResponsive'
+import { useVisualViewport } from '@/composables/useVisualViewport'
 import { useSubpagePush } from '@/composables/useMobileSubPage'
 import { useBackLayer } from '@/composables/useBackLayer'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import PullRefreshIndicator from '@/components/common/PullRefreshIndicator.vue'
-import { useUnreadSummary } from '@/composables/useUnreadSummary'
+import { useUnreadSummary, type ChatPushEvent } from '@/composables/useUnreadSummary'
 import { openUserHomepage } from '@/composables/useUserHomepage'
 // 好友设置（特别关心）：与主页「设置」页共用同一份缓存
 import { useFriendSettings } from '@/composables/useFriendSettings'
@@ -755,7 +756,9 @@ const { isMobile } = useResponsive()
 const auth = useAuthStore()
 // 特别关心名单：主页「设置」里打开开关后，会话行上挂一枚「特别」标
 const { isCared, loadFriendSettings } = useFriendSettings()
-const { refresh: refreshUnread, forum: forumUnread, isOnline, syncPresence } = useUnreadSummary()
+const { refresh: refreshUnread, forum: forumUnread, isOnline, syncPresence, onChatEvent, wsConnected } = useUnreadSummary()
+/** 当前登录用户 id：WS 增量消息补 receiver_id、判断「对方发来的未读」用 */
+const meId = computed(() => auth.user?.id ?? 0)
 
 type TabValue = 'sessions' | 'contacts' | 'forum'
 type ChatMessage = MessageOut | GroupMessageOut
@@ -821,6 +824,30 @@ const chatLoading = ref(false)
 const sending = ref(false)
 const scrollEl = ref<HTMLElement | null>(null)
 
+/* 软键盘：键盘只缩/平移 visualViewport，整屏聊天浮层贴的是 layout viewport，
+   不跟随就会随可见区平移被顶出屏幕（页头消失、输入栏被键盘盖住）。 */
+const { offsetTop: vvTop, height: vvHeight, keyboardOpen } = useVisualViewport()
+/** 读取移动端整体缩放比（#app 的 --app-zoom）：整屏 fixed 浮层要按它折算，否则会大出 6% */
+function appZoom() {
+  const raw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-zoom'))
+  return Number.isFinite(raw) && raw > 0 ? raw : 1
+}
+
+/* 聊天浮层高度必须按「真实可视区 ÷ 缩放比」算：
+   #app 有全局 zoom（1.05~1.07），fixed 浮层的盒子也被放大同样比例，
+   直接写视口高度会让浮层底部超出屏幕 6%（输入栏下面那排图标刚好被裁掉）。 */
+const chatPaneStyle = computed(() => {
+  if (!isMobile.value) return {}
+  const z = appZoom()
+  const open = keyboardOpen.value
+  const top = open ? vvTop.value : 0
+  const height = open && vvHeight.value > 0 ? vvHeight.value : window.innerHeight
+  return { top: top / z + 'px', height: height / z + 'px', bottom: 'auto' }
+})
+watch(keyboardOpen, (open) => {
+  if (open && chatOpen.value) void scrollBottom()
+})
+
 /* ===== 附件消息（图片 / 语音）=====
    消息体只有 content 一个字段，附件是一条 JSON 文本（见 utils/messageAttach.ts）。
    渲染前统一解析一次放进 chatRows，避免模板里每条气泡都 JSON.parse 四遍。 */
@@ -883,6 +910,14 @@ const contactsLoading = ref(false)
 const forumList = ref<ForumMessageOut[]>([])
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+/** 6 秒心跳计数：WS 在线时每 5 拍（约 30 秒）才做一次全量兜底 */
+let pollTick = 0
+/** 聊天事件订阅的取消函数（onBeforeUnmount 调用） */
+let offChatEvent: (() => void) | null = null
+/** 会话列表刷新防抖定时器 */
+let sessionsRefreshTimer: ReturnType<typeof setTimeout> | null = null
+/** 首次打开的在途请求可能早于 WS 推送：先暂存，等快照落地后把缺的补上（按会话 key 隔离） */
+const pendingChatPush: Array<{ key: string; msg: ChatMessage }> = []
 
 // ---------- 「消息通知」系统会话 ----------
 /* 会话列表顶部的一条系统通知会话：长得和私聊 / 群聊一样，只是头顶是铃铛。
@@ -1041,7 +1076,7 @@ async function loadForum() {
 async function refreshAll() {
   await Promise.all([loadSessions(), loadForum()])
   if (activeTab.value === 'contacts') await loadContacts()
-  if (activeSession.value) await loadChat(false)
+  if (activeSession.value) await loadChat(false, true)
   void refreshUnread()
 }
 
@@ -1223,6 +1258,15 @@ function closeChat() {
 /** 移动端：会话窗口是一层页内浮层，系统返回一次只收这一层（见 useBackLayer） */
 useBackLayer(computed(() => isMobile.value && chatOpen.value), closeChat)
 
+/**
+ * 大图预览 / 相机是压在聊天之上的全屏浮层，各算一层：
+ * 系统返回先收它们，不要连聊天一起退 —— 否则在聊天里点开大图按返回，
+ * 会直接跳过会话退到消息主页。
+ * 注册顺序 = 打开顺序：聊天先注册，预览 / 相机后注册，栈顶永远是最上面那一层。
+ */
+useBackLayer(computed(() => isMobile.value && !!previewUrl.value), () => closeImagePreview())
+useBackLayer(computed(() => isMobile.value && cameraOpen.value), () => closeCamera())
+
 /** 离场动画播完再丢弃会话上下文；若动画期间又点开了别的会话，则不清 */
 function onChatClosed() {
   if (chatOpen.value) return
@@ -1250,7 +1294,13 @@ function privateSession(user: { id: number; name: string; avatar: string | null 
   }
 }
 
-async function loadChat(scrollToBottom: boolean) {
+/**
+ * 打开 / 刷新当前会话。
+ * @param scrollToBottom 加载后是否滚到底部（打开会话、自己发完消息时）
+ * @param silent 后台刷新（轮询 / WS 兜底 / 下拉刷新）：不闪「加载中」、无新增不重建列表、
+ *               没有未读就不发已读写请求 —— 之前每 6 秒无条件闪一次加载、写一次库的根源都在这里
+ */
+async function loadChat(scrollToBottom: boolean, silent = false) {
   const session = activeSession.value
   if (!session) return
   // 系统通知：内容在本地（utils/systemNotice.ts），不发请求、也不走已读上报；
@@ -1264,26 +1314,165 @@ async function loadChat(scrollToBottom: boolean) {
     return
   }
   noticeCards.value = []
-  chatLoading.value = true
+  // 请求期间用户可能已经切到别的会话：响应回来先对门牌号，防止旧会话的消息串到新会话来
+  const expectedKey = session.key
+  const wasAtBottom = silent ? isNearBottom() : false
+  if (!silent) chatLoading.value = true
   try {
-    if (session.type === 'group') {
-      messages.value = await getGroupMessages(session.rawId)
-      void markGroupRead(session.rawId)
-      const g = groups.value.find((x) => x.id === session.rawId)
-      if (g) g.unread_count = 0
-    } else {
-      messages.value = await getMessages(session.rawId)
-      void markRead(session.rawId)
-      const c = conversations.value.find((x) => x.user_id === session.rawId)
-      if (c) c.unread_count = 0
+    const next = session.type === 'group'
+      ? await getGroupMessages(session.rawId)
+      : await getMessages(session.rawId)
+    if (activeSession.value?.key !== expectedKey) return
+    const appended = next.length > messages.value.length
+    if (!silent) {
+      // 合并「首次打开请求在途期间」通过 WS 到达的消息：服务端快照可能还没包含它们
+      let merged: ChatMessage[] = next
+      const pending = pendingChatPush.filter((p) => p.key === expectedKey)
+      if (pending.length) {
+        for (const p of pending) {
+          const idx = pendingChatPush.indexOf(p)
+          if (idx >= 0) pendingChatPush.splice(idx, 1)
+        }
+        const seen = new Set(next.map((m) => m.id))
+        const extra = pending.map((p) => p.msg).filter((m) => !seen.has(m.id))
+        if (extra.length) merged = [...next, ...extra]
+      }
+      messages.value = merged
+      markSessionRead(session, merged, true)
+    } else if (appended) {
+      messages.value = next
+      markSessionRead(session, next)
+      if (scrollToBottom || wasAtBottom) await scrollBottom()
     }
-    void refreshUnread()
-    if (scrollToBottom) await scrollBottom()
+    if (appended) void refreshUnread()
+    if (!silent && scrollToBottom) await scrollBottom()
   } catch {
-    messages.value = []
+    // 后台刷新失败保留旧消息，只有首次打开才落空态
+    if (!silent) {
+      messages.value = []
+      for (let i = pendingChatPush.length - 1; i >= 0; i -= 1) {
+        if (pendingChatPush[i].key === expectedKey) pendingChatPush.splice(i, 1)
+      }
+    }
   } finally {
-    chatLoading.value = false
+    if (!silent) chatLoading.value = false
   }
+}
+
+/** 聊天滚动区是否贴近底部：决定后台刷新 / 新消息到达时要不要自动跟随，用户翻历史时不能拽回来 */
+function isNearBottom() {
+  const el = scrollEl.value
+  if (!el) return true
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 48
+}
+
+/**
+ * 上报已读：只在「首次打开」或「确实有新消息」时调用。
+ * 之前每次轮询都无条件 PUT 一次已读，等于每 6 秒打一次写库；现在没有未读就没有写请求。
+ */
+function markSessionRead(session: SessionItem, list: ChatMessage[], force = false) {
+  if (session.type === 'group') {
+    void markGroupRead(session.rawId)
+    const g = groups.value.find((x) => x.id === session.rawId)
+    if (g) g.unread_count = 0
+    return
+  }
+  const hasUnread = force || list.some((m) => {
+    const msg = m as MessageOut
+    return msg.receiver_id === meId.value && !msg.read
+  })
+  if (!hasUnread) return
+  void markRead(session.rawId)
+  const c = conversations.value.find((x) => x.user_id === session.rawId)
+  if (c) c.unread_count = 0
+}
+
+/** 会话列表刷新防抖：一批推送合并成 600ms 一次列表请求，避免「来一条消息拉一次列表」 */
+function scheduleSessionsRefresh() {
+  if (sessionsRefreshTimer) return
+  sessionsRefreshTimer = setTimeout(() => {
+    sessionsRefreshTimer = null
+    void loadSessions()
+    void refreshUnread()
+  }, 600)
+}
+
+/**
+ * 布局层 WebSocket 推送的聊天事件：命中当前会话就增量追加（不整页重拉、不闪加载），
+ * 不命中只刷新会话列表；用消息 id 去重，断线重连后的兜底拉取不会重复上屏。
+ */
+function handleChatEvent(event: ChatPushEvent) {
+  const session = activeSession.value
+  // 聊天页未打开，或 App 在后台（此时不该替用户把消息标成已读）：只让列表摘要 / 红点跟上
+  if (!chatOpen.value || !session || document.visibilityState !== 'visible') {
+    scheduleSessionsRefresh()
+    return
+  }
+  if (event.type === 'new_message') {
+    if (session.type !== 'private' || event.sender_id !== session.rawId) {
+      scheduleSessionsRefresh()
+      return
+    }
+    const id = event.id ?? Date.now()
+    if (messages.value.some((m) => m.id === id)) return
+    const stayBottom = isNearBottom()
+    const pushed: MessageOut = {
+      id,
+      sender_id: event.sender_id ?? 0,
+      receiver_id: meId.value,
+      content: event.content ?? '',
+      read: false,
+      created_at: event.created_at || new Date().toISOString(),
+    }
+    if (chatLoading.value) pendingChatPush.push({ key: session.key, msg: pushed })
+    messages.value = [...messages.value, pushed]
+    void markRead(session.rawId)
+    const conv = conversations.value.find((x) => x.user_id === session.rawId)
+    if (conv) conv.unread_count = 0
+    void refreshUnread()
+    if (stayBottom) void scrollBottom()
+    scheduleSessionsRefresh()
+    return
+  }
+  if (event.type === 'new_group_message') {
+    if (session.type !== 'group' || event.group_id !== session.rawId) {
+      scheduleSessionsRefresh()
+      return
+    }
+    const id = event.id ?? Date.now()
+    if (messages.value.some((m) => m.id === id)) return
+    const stayBottom = isNearBottom()
+    // 推送里没有头像：复用本会话中同一发送者最近一条消息的头像，避免新消息只显示首字母
+    const sameSender = messages.value.find((m) => {
+      const prev = m as GroupMessageOut
+      return 'sender_avatar' in prev && prev.sender_id === event.sender_id && !!prev.sender_avatar
+    }) as GroupMessageOut | undefined
+    const pushed: GroupMessageOut = {
+      id,
+      group_id: event.group_id ?? session.rawId,
+      sender_id: event.sender_id ?? 0,
+      sender_name: event.sender_name ?? '',
+      sender_avatar: sameSender?.sender_avatar ?? null,
+      content: event.content ?? '',
+      created_at: event.created_at || new Date().toISOString(),
+    }
+    if (chatLoading.value) pendingChatPush.push({ key: session.key, msg: pushed })
+    messages.value = [...messages.value, pushed]
+    void markGroupRead(session.rawId)
+    const g = groups.value.find((x) => x.id === session.rawId)
+    if (g) g.unread_count = 0
+    void refreshUnread()
+    if (stayBottom) void scrollBottom()
+    scheduleSessionsRefresh()
+  }
+}
+
+/** 从后台回到前台：立即对齐一次未读与会话（Android WebView 休眠期间 WS 可能已被回收） */
+function onPageVisible() {
+  if (document.visibilityState !== 'visible') return
+  void refreshUnread()
+  void loadSessions()
+  if (activeSession.value) void loadChat(false, true)
 }
 
 async function scrollBottom() {
@@ -1306,7 +1495,7 @@ function autosizeComposer() {
   if (!el) return
   el.style.height = 'auto'
   // 移动端把下限钉在 52px，和发送键的高度对齐；桌面端由内容自然撑开
-  const floor = isMobile.value ? 52 : 0
+  const floor = isMobile.value ? 36 : 0
   el.style.height = `${Math.min(Math.max(el.scrollHeight, floor), 120)}px`
 }
 
@@ -1331,7 +1520,7 @@ async function sendContent(content: string): Promise<boolean> {
   try {
     if (session.type === 'group') await sendGroupMessage(session.rawId, content)
     else await sendMessage(session.rawId, content)
-    await loadChat(true)
+    await loadChat(true, true)
     void loadSessions()
     return true
   } catch {
@@ -2117,6 +2306,8 @@ watch(
 )
 
 onMounted(async () => {
+  // 先订阅布局层 WebSocket 推送：后面几个 await 期间到达的消息也不会漏（兜底拉取按 id 去重）
+  offChatEvent = onChatEvent(handleChatEvent)
   // 特别关心的「特别」标：一次拉全量，主页改完会写回同一份缓存
   void loadFriendSettings()
   // 页头收起要按实测高度位移：字体缩放 / 边框算不算进盒高，都会让「收干净」差一两个像素
@@ -2131,17 +2322,33 @@ onMounted(async () => {
   // 地址里带 chat（搜索子页刚点了某条结果）：直接把那条会话打开
   await openChatFromQuery()
   void loadForum()
-  // 会话未读与聊天轮询：移动端回到页面时不重复拉，靠 visibility 判断
+  // 聊天正文优先走布局层 WebSocket 推送：命中当前会话直接增量上屏，不再靠 6 秒全量轮询
+  // 轮询只做兜底：WS 在线时约 30 秒一次全量对齐；断线（或代理不支持 WS）时恢复 6 秒补齐
   pollTimer = setInterval(() => {
     if (document.visibilityState !== 'visible') return
+    if (!wsConnected.value) {
+      void loadSessions()
+      if (activeSession.value) void loadChat(false, true)
+      return
+    }
+    pollTick += 1
+    if (pollTick % 5 !== 0) return
     void loadSessions()
-    if (activeSession.value) void loadChat(false)
+    if (activeSession.value) void loadChat(false, true)
   }, 6000)
+  document.addEventListener('visibilitychange', onPageVisible)
 })
 
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = null
+  offChatEvent?.()
+  offChatEvent = null
+  if (sessionsRefreshTimer) {
+    clearTimeout(sessionsRefreshTimer)
+    sessionsRefreshTimer = null
+  }
+  document.removeEventListener('visibilitychange', onPageVisible)
   window.removeEventListener('resize', measureAppbar)
   document.removeEventListener('keydown', onCameraEscape)
   // 页面被卸载时麦克风可能还开着、语音可能还在播：一并收干净
@@ -2177,7 +2384,9 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   display: flex;
   align-items: stretch;
-  height: 48px;
+  /* 顶部安全区：白底铺进状态栏，页签与操作图标让到状态栏/挖孔下方 */
+  height: calc(48px + var(--sat, 0px));
+  padding-top: var(--sat, 0px);
   background: #fff;
   border-bottom: 1px solid #f0f1f3;
   /* 收起用 margin-top 而不是 transform：整条页头要真的「让出位置」，
@@ -2225,7 +2434,8 @@ onBeforeUnmount(() => {
 .msg-appbar-acts {
   position: absolute;
   right: 8px;
-  top: 50%;
+  /* 绝对定位以 padding box 为基准：补上安全区高度，才能仍落在 48px 内容区的中线 */
+  top: calc(var(--sat, 0px) + 24px);
   transform: translateY(-50%);
   display: flex;
   align-items: center;
@@ -2768,10 +2978,10 @@ onBeforeUnmount(() => {
   }
   .msg-composer-bar { align-items: stretch; gap: 10px; }
   .msg-composer textarea {
-    min-height: 52px;
+    min-height: 36px;
     max-height: 120px;
-    padding: 15px 14px;
-    border-radius: 14px;
+    padding: 8px 12px;
+    border-radius: 11px;
     background: #f5f6f8;
     font-size: 14px;
     line-height: 1.45;
@@ -2779,8 +2989,8 @@ onBeforeUnmount(() => {
   .msg-composer textarea::placeholder { color: #b9bcc2; }
   /* 语音模式那块「按住 说话」与输入框同高同圆角，切换时块面不跳 */
   .msg-hold-talk {
-    min-height: 52px;
-    border-radius: 14px;
+    min-height: 36px;
+    border-radius: 11px;
     background: #f5f6f8;
     font-size: 14px;
   }
@@ -2790,13 +3000,13 @@ onBeforeUnmount(() => {
      所以它固定 52px 并贴底对齐，与第一行输入并排 */
   .msg-send {
     align-self: flex-end;
-    width: 76px;
-    height: 52px;
+    width: 60px;
+    height: 36px;
     padding: 0;
     justify-content: center;
-    border-radius: 14px;
+    border-radius: 11px;
     background: #7cb6ea;
-    font-size: 14.5px;
+    font-size: 13.5px;
   }
   /* 参考图的发送键只有两个字：图标挤进去会让这枚键在 88px 里显得局促 */
   .msg-send .el-icon { display: none; }

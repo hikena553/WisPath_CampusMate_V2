@@ -9,7 +9,6 @@
   >
     <SubPageHeader
       :title="isMobile ? '心理预警' : '心理预警工作台'"
-      :sub="isMobile ? '风险处置台 · 今日' : ''"
       fallback="/teacher"
     />
     <PullRefreshIndicator :indicator-style="pull.indicatorStyle" :active="pull.active" />

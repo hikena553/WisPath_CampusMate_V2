@@ -9,7 +9,12 @@
  * 也可用环境变量 CAPACITOR_SERVER_URL 代替 --url。
  *
  * 脚本做的事：构建 Web → 同步到 Android 工程 → Gradle 出包 →
- * 复制到 public/download/mian02.apk（官网下载页与二维码直接生效）。
+ * 复制到 public/download/SmartCampus.apk 与 <项目根>/apk/download/mian02.apk
+ * （官网下载页与 nginx /download/ 直接生效），最后自动发布到腾讯云 COS。
+ * COS 公网对象为无扩展名 key（<prefix>/mian02-latest、<prefix>/releases/...，
+ * Content-Type: application/octet-stream，Content-Disposition 仅用 filename*=UTF-8''SmartCampus.apk 让浏览器存成 SmartCampus.apk），
+ * 因为 COS 默认域名禁止匿名分发 .apk 后缀 / APK 类型对象（GET 会 403 DownloadForbidden）。
+ * 上传失败 / 未配置密钥只告警，不影响本地出包；--no-publish 或 COS_SKIP=1 可跳过上传。
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -62,7 +67,11 @@ if (siteUrl.startsWith('http://')) {
 
 const isRelease = args.includes('--release')
 const skipBuild = args.includes('--skip-build')
-const apkOutput = join(root, 'public', 'download', 'mian02.apk')
+const apkOutput = join(root, 'public', 'download', 'SmartCampus.apk')
+const projectRoot = resolve(root, '..')
+const publishedApk = join(projectRoot, 'apk', 'download', 'mian02.apk')
+const publishScript = join(root, 'scripts', 'publish-apk.mjs')
+const noPublish = args.includes('--no-publish')
 
 // ---------- 2. 检查 Android SDK ----------
 const androidDir = join(root, 'android')
@@ -134,11 +143,54 @@ const produced = join(outputDir, apkFiles[0])
 mkdirSync(dirname(apkOutput), { recursive: true })
 copyFileSync(produced, apkOutput)
 
+// 兼容旧下载页命名：public/download/ 下再留一份 mian02.apk
+const mirrorApk = join(root, 'public', 'download', 'mian02.apk')
+if (mirrorApk !== apkOutput) copyFileSync(apkOutput, mirrorApk)
+
+// 线上 nginx 的 /download/ 实际读取 <项目根>/apk/download/，项目根必须有一份
+mkdirSync(dirname(publishedApk), { recursive: true })
+copyFileSync(apkOutput, publishedApk)
+
 const sizeMb = (statSync(apkOutput).size / 1024 / 1024).toFixed(1)
-console.log('\n✔ 安装包已生成')
-console.log(`  源文件：${produced}`)
-console.log(`  下载页：${apkOutput}（${sizeMb} MB）`)
-console.log(`  下载地址：${siteUrl}/download/mian02.apk`)
-console.log('\n下一步（项目根目录执行，让官网下载页拿到新包）：')
+console.log('')
+console.log('✔ 安装包已生成')
+console.log('  源文件：' + produced)
+console.log('  下载页：' + apkOutput + '（' + sizeMb + ' MB）')
+console.log('  线上目录：' + publishedApk + '（nginx /download/mian02.apk 读取此处）')
+console.log('  下载地址：' + siteUrl + '/download/SmartCampus.apk')
+
+// ---------- 8. 自动发布到腾讯云 COS（失败只告警，不影响打包） ----------
+if (noPublish) {
+  console.log('')
+  console.log('• 已指定 --no-publish，跳过 COS 上传')
+} else if (String(process.env.COS_SKIP || '').trim() === '1') {
+  console.log('')
+  console.log('• 已设置 COS_SKIP=1，跳过 COS 上传')
+} else if (!existsSync(publishScript)) {
+  console.warn('')
+  console.warn('⚠ 未找到发布脚本 ' + publishScript + '，跳过 COS 上传')
+} else {
+  console.log('')
+  console.log('▶ 发布安装包到腾讯云 COS（失败只告警，不影响本地出包）')
+  const publishResult = spawnSync(process.execPath, [publishScript, '--apk', publishedApk], {
+    cwd: root,
+    stdio: 'inherit',
+    env: process.env,
+    shell: false,
+  })
+  if (publishResult.error) {
+    console.warn('⚠ COS 上传未执行：' + publishResult.error.message)
+  } else if (publishResult.status === 2) {
+    console.warn('⚠ 未配置腾讯云 COS 密钥，已跳过上传（配置方式见 deploy/cos.env.example）')
+  } else if (publishResult.status !== 0) {
+    console.warn('⚠ COS 上传失败（退出码 ' + publishResult.status + '），不影响本地出包；详情见上方日志')
+  } else {
+    console.log('✔ 已完成 COS 上传（公网对象为无扩展名 key，匿名可直接下载）')
+  }
+}
+
+console.log('')
+console.log('下一步（让官网下载页拿到新包）：')
 console.log('  docker compose build frontend && docker compose up -d frontend')
-console.log('\n手机验收：扫码官网二维码 → 下载 → 允许「未知来源」→ 安装 → 登录')
+console.log('')
+console.log('手机验收：扫码官网二维码 → 下载 → 允许「未知来源」→ 安装 → 登录')

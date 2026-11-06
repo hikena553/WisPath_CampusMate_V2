@@ -154,6 +154,18 @@ function onLogout() {
   background: linear-gradient(135deg, #0a0a2e 0%, #1a1a4e 30%, #0d2137 70%, #0a0a2e 100%);
 }
 
+@media (max-width: 767px) {
+  /* 整屏自滚（见全局 responsive.css）：顶对齐，内容多时不被裁；四边让出安全区 */
+  .pwd-page {
+    align-items: flex-start;
+    padding: calc(env(safe-area-inset-top, 0px) + 20px) 16px calc(env(safe-area-inset-bottom, 0px) + 32px);
+  }
+  .pwd-card {
+    max-width: none;
+    width: 100%;
+  }
+}
+
 .pwd-card {
   width: 100%;
   max-width: 420px;

@@ -185,7 +185,16 @@ def _submit_service_request(db: Session, args: dict, user: User) -> dict:
 
 
 def _query_schedule(db: Session, args: dict, user: User) -> dict:
-    courses = db.query(Course).filter(Course.student_id == user.id).order_by(Course.day_of_week, Course.start_period).all()
+    # 课程已按「班级」维度建表（Course.class_group_id），学生没有自己的 course 行；
+    # 旧实现按 Course.student_id 过滤，模型重构后会直接 AttributeError 打断整轮对话。
+    if not getattr(user, "class_group_id", None):
+        return {"message": "暂无课表信息", "courses": []}
+    from app.services.teaching_scope import default_semester
+    q = db.query(Course).filter(Course.class_group_id == user.class_group_id)
+    semester = default_semester(db)
+    if semester:
+        q = q.filter(Course.semester == semester)
+    courses = q.order_by(Course.day_of_week, Course.start_period).all()
     if not courses:
         return {"message": "暂无课表信息", "courses": []}
     day_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -281,7 +290,15 @@ def _analyze_grades(db: Session, args: dict, user: User) -> dict:
 
 
 def _analyze_schedule(db: Session, args: dict, user: User) -> dict:
-    courses = db.query(Course).filter(Course.student_id == user.id).order_by(Course.day_of_week, Course.start_period).all()
+    # 同 _query_schedule：课表按班级取，不能再按 Course.student_id 过滤
+    if not getattr(user, "class_group_id", None):
+        return {"message": "暂无课表数据"}
+    from app.services.teaching_scope import default_semester
+    q = db.query(Course).filter(Course.class_group_id == user.class_group_id)
+    semester = default_semester(db)
+    if semester:
+        q = q.filter(Course.semester == semester)
+    courses = q.order_by(Course.day_of_week, Course.start_period).all()
     if not courses:
         return {"message": "暂无课表数据"}
     day_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]

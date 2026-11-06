@@ -1151,7 +1151,7 @@ async function handleAdd() {
 
 /* ===== Mobile ===== */
 @media (max-width: 767px) {
-  .growth-page { padding: 8px 12px 24px; }
+  .growth-page { padding: 8px 12px calc(24px + env(safe-area-inset-bottom, 0px)); }
   .score-header { flex-direction: column; align-items: center; gap: 16px; padding: 16px; }
   .score-stats { gap: 16px; justify-content: center; }
   .stat-num { font-size: 20px; }

@@ -1,7 +1,7 @@
 <template>
   <div class="files-page">
     <!-- 移动端吸顶子页头；桌面端学生布局有侧边栏，不渲染该头，标题由下方 .files-title 承担 -->
-    <SubPageHeader title="我的文件" sub="聊天里发过的文档" :fallback="messagesPath" />
+    <SubPageHeader title="我的文件" :fallback="messagesPath" />
 
     <div class="files-inner">
       <h2 class="files-title">我的文件</h2>
@@ -300,6 +300,8 @@ onUnmounted(() => {
     right: auto;
     z-index: 5;
   }
+  /* 整屏子页没有底部导航，末行要自己让出手势条 */
+  .files-inner { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 }
 
 .files-inner {

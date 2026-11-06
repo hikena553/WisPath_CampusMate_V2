@@ -121,6 +121,12 @@ function goBack() {
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
+@media (max-width: 767px) {
+  .callback-page {
+    padding: calc(env(safe-area-inset-top, 0px) + 24px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  }
+}
+
 .callback-card {
   width: 100%;
   max-width: 360px;

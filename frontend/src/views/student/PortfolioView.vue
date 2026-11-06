@@ -5,7 +5,7 @@
     @touchend="pull.onEnd"
     @touchcancel="pull.onCancel"
   >
-    <SubPageHeader title="作品集" sub="项目 · 证书 · 简历" accent="#b45309" fallback="/student">
+    <SubPageHeader title="作品集" accent="#b45309" fallback="/student">
       <!-- 移动端：AI 建议压成 Head 右侧图标按钮，避免正文顶部再顶一个蓝色大按钮 -->
       <template #right>
         <button class="pf-ai-btn" type="button" aria-label="AI 优化建议" :disabled="aiLoading" @click="openAISuggest">
@@ -592,6 +592,7 @@ function copyToProjectForm() {
   padding: 16px;
   background: #f8f9fc;
   min-height: 100vh;
+  min-height: 100dvh;
   color: #1a1a2e;
 }
 
@@ -615,7 +616,8 @@ function copyToProjectForm() {
     left: auto; right: auto;
     z-index: 5;
     margin: 0 -14px 2px;   /* 横向铺满，抵掉页面内边距 */
-    padding: 0 14px;
+    /* 顶部安全区：页面级 scoped 样式会盖掉 SubPageHeader 里的 padding-top，这里必须再让一次 */
+    padding: var(--sat, 0px) 14px 0;
   }
 }
 
@@ -776,8 +778,9 @@ function copyToProjectForm() {
   .portfolio-page {
     background: var(--sp-bg, #f5f6f7);
     /* Head 是 sticky 且在文档流内，自己占 48px；这里不再额外让位，否则顶部会多出一条白带 */
-    padding: 0 14px 24px;
+    padding: 0 14px calc(24px + env(safe-area-inset-bottom, 0px));
     min-height: 100vh;
+    min-height: 100dvh;
     box-sizing: border-box;
   }
 

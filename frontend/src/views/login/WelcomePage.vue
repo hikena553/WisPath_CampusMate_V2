@@ -123,7 +123,7 @@ function finish(path: string) {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  padding: calc(env(safe-area-inset-top) + 56px) 28px calc(env(safe-area-inset-bottom) + 20px);
+  padding: calc(env(safe-area-inset-top, 0px) + 56px) 28px calc(env(safe-area-inset-bottom, 0px) + 20px);
 }
 
 /* ===== 主视觉：吉祥物直接裸露，无任何圈层装饰 ===== */
@@ -291,8 +291,8 @@ function finish(path: string) {
 
 @media (max-height: 720px) {
   .welcome-body {
-    padding-top: calc(env(safe-area-inset-top) + 32px);
-    padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 32px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
   }
   .hero {
     margin-top: 14px;

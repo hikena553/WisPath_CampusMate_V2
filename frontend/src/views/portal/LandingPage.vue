@@ -18,7 +18,7 @@
             <router-link to="/download">移动端下载</router-link>
             <div class="nav-qr-pop">
               <div class="nav-qr-card">
-                <QrCode :value="downloadPageUrl" :size="112" />
+                <QrCode :value="qrTargetUrl" :size="112" />
                 <div class="nav-qr-copy">
                   <strong>扫码下载移动端</strong>
                   <span>教师端 / 学生端统一安装包</span>
@@ -28,7 +28,7 @@
             </div>
           </div>
           <button type="button" class="nav-login" @click="goAdmin">
-            {{ adminLoggedIn ? '进入后台' : '管理员登录' }}
+            {{ adminLoggedIn ? '进入后台' : '登录' }}
           </button>
         </nav>
       </div>
@@ -57,7 +57,7 @@
             <h2>管理员控制台</h2>
             <p>处理账号与内容、维护站点配置、跟进密码重置与危机预警。</p>
             <button type="button" class="admin-btn" @click="goAdmin">
-              <span>{{ adminLoggedIn ? '进入管理后台' : '管理员登录' }}</span>
+              <span>{{ adminLoggedIn ? '进入管理后台' : '登录' }}</span>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M5 12h13M12.5 6.5 18 12l-5.5 5.5" />
               </svg>
@@ -69,7 +69,7 @@
 
           <div class="entry-qr">
             <div class="qr-frame">
-              <QrCode :value="downloadPageUrl" :size="128" />
+              <QrCode :value="qrTargetUrl" :size="128" />
               <span class="qr-corner tl" aria-hidden="true"></span>
               <span class="qr-corner tr" aria-hidden="true"></span>
               <span class="qr-corner bl" aria-hidden="true"></span>
@@ -77,7 +77,7 @@
             </div>
             <div class="qr-copy">
               <h3>扫码下载移动端</h3>
-              <p>教师端 / 学生端统一安装包<br />支持 Android 手机</p>
+              <p>教师端 / 学生端统一安装包<br />微信扫码后请按提示用浏览器打开</p>
               <a class="qr-direct" :href="downloadPageUrl">在手机浏览器打开下载页</a>
               <button type="button" class="qr-copy-link" @click="copyDownloadLink">
                 {{ copyLabel }}
@@ -211,7 +211,7 @@
         </div>
         <div class="closing-actions">
           <button type="button" class="admin-btn" @click="goAdmin">
-            <span>{{ adminLoggedIn ? '进入管理后台' : '管理员登录' }}</span>
+            <span>{{ adminLoggedIn ? '进入管理后台' : '登录' }}</span>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M5 12h13M12.5 6.5 18 12l-5.5 5.5" />
             </svg>
@@ -228,7 +228,7 @@
       </div>
       <div class="footer-links">
         <router-link to="/download">移动端下载</router-link>
-        <button type="button" @click="goAdmin">{{ adminLoggedIn ? '管理后台' : '管理员登录' }}</button>
+        <button type="button" @click="goAdmin">{{ adminLoggedIn ? '管理后台' : '登录' }}</button>
       </div>
       <p class="footer-copy">
         <span>© {{ year }} 绵阳城市学院 · 保留所有权利</span>
@@ -274,6 +274,8 @@ const adminLoggedIn = computed(() => auth.user?.role === 'admin')
 
 /** 对外地址：管理端配置的域名优先，其次构建变量，最后回退当前访问域 */
 const downloadPageUrl = computed(() => `${siteBaseUrl.value}/download`)
+/** 二维码指向下载页：微信里扫码后按页内指引用浏览器打开再下载 */
+const qrTargetUrl = computed(() => downloadPageUrl.value)
 const isLocalPreview = computed(() => {
   try {
     return ['localhost', '127.0.0.1'].includes(new URL(downloadPageUrl.value).hostname)

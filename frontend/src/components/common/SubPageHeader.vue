@@ -7,7 +7,6 @@
       <span v-if="accent" class="tui-appbar-dot" :style="{ background: accent }" aria-hidden="true"></span>
       <span class="tui-appbar-txt">
         {{ title }}
-        <span v-if="sub" class="tui-appbar-sub">{{ sub }}</span>
       </span>
     </div>
     <div v-if="$slots.right" class="tui-appbar-actions">
@@ -43,8 +42,6 @@ import { useResponsive } from '@/composables/useResponsive'
 const props = defineProps<{
   /** 页面标题（移动端吸顶栏 / 桌面端面包屑末级展示） */
   title: string
-  /** 可选副标题：移动端标题下方一行小灰字，说明本页包含什么 */
-  sub?: string
   /** 无历史记录时的兜底返回路径 */
   fallback: string
   /** 可选模块识别色：标题前的小圆点，与学业中心子页头一致（48px 白底 + 发丝线） */
@@ -100,14 +97,15 @@ function goBack() {
    48px 固定高度 + 白底 + 永久发丝线 + 识别色圆点，与学业中心子页 .subpage-bar 同规格。
    教师端沿用 .tui-page 的 sticky 行为，不受影响。 */
 .tui-appbar {
-  height: 52px;
-  min-height: 52px;
+  /* 顶部安全区：白底铺进状态栏，返回键/标题让到状态栏与挖孔下方（Android 15 edge-to-edge） */
+  height: calc(clamp(46px, 11.8vw, 52px) + var(--sat, 0px));
+  min-height: calc(clamp(46px, 11.8vw, 52px) + var(--sat, 0px));
   gap: 8px;
   /* 左右内边距从 12 收到 4：抬头本身就是满宽（390=视口），
      能让它"更宽"的只有内边距和字号这两个变量。
      12px 时标题可用区只剩 334px（返回键 + 内边距占掉 56px），
      中文六个字以上的页面名会直接贴边；收到 4px 后可用区 344px。 */
-  padding: 0 4px;
+  padding: var(--sat, 0px) 4px 0;
   background: var(--sp-surface, #ffffff);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -149,16 +147,5 @@ function goBack() {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-}
-/* 标题 + 副标题两行：主标题 15px 单行截断，副标题 10.5px 轻灰，共处 48px 内 */
-.tui-appbar-sub {
-  display: block;
-  font-size: 10.5px;
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--sp-ink-3, #9aa0a8);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 </style>

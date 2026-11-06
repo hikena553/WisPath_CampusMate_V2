@@ -134,3 +134,33 @@ webroot 模式申请（前端不停机）→ 证书同步为固定文件名 → 
 - **构建上下文**：`backend/.dockerignore` 排除 `.venv`、`frontend/.dockerignore` 排除 `node_modules`。删掉会导致镜像把本机 Windows 依赖带进 Linux 容器，构建失败；
 - **换行符**：`.gitattributes` 已对 `.sh`/`.dockerignore`/`Dockerfile`/`*.conf` 锁定 LF。缺了它，Windows 上 `core.autocrlf=true` 会让入口脚本变 CRLF，容器内 `sh` 报 `: not found`；
 - **后端直连调试**：`docker compose exec backend sh` 进入容器。
+
+## 9. 安装包对象存储（COS）发布
+
+APK 除了留在本机 `apk/download/` 供 nginx 直接下载外，每次出包还会同步一份到腾讯云 COS；
+下载页 / 网关按 [COS对象存储接入说明.md](./COS对象存储接入说明.md) 切到 COS 回源。
+
+1. **配置密钥**（仅服务器本地保存，不入库）：
+
+   ```bash
+   cp deploy/cos.env.example .cos.env
+   # 填入 COS_SECRET_ID / COS_SECRET_KEY
+   chmod 600 .cos.env && chown www:www .cos.env
+   ```
+
+2. **手动发布当前安装包**：`cd frontend && npm run apk:publish`
+   （`--dry-run` 只看 sha256/目标对象/URL；`--sync` 远端已是最新则跳过；`--setup-cors` 顺手配置桶 CORS）
+3. **打包自动上传**：`npm run apk:release -- --url https://mianxiaocheng.cn` 出包成功后自动发布；
+   未配置密钥或上传失败只告警，不影响本地出包（`COS_SKIP=1` 可临时关闭，`--no-publish` 只跳过上传）。
+4. **定时兜底**：`/etc/cron.d/smartcampus-cos` 每 5 分钟执行 `deploy/cos-sync-apk.sh`，
+   远端 `latest.json` 的 sha256/url 一致、且 canonical 对象匿名 Range 探测通过时自动跳过；
+   日志写在 `logs/cos-sync.log`。
+
+上传对象（均 `public-read` / `application/octet-stream`）：`apk/mian02-latest`（no-cache）、
+`apk/releases/mian02-<版本名>-<版本号>`（immutable）、`apk/latest.json`（版本清单，no-cache）。
+
+> ⚠ 公开下载对象**刻意不带 `.apk` 扩展名**、Content-Type 用 `application/octet-stream`：
+> 腾讯云 COS 默认域名禁止匿名分发 `.apk`/`.ipa` 后缀或 APK 类型的对象，真实 GET 会返回
+> `403 DownloadForbidden`（HEAD 却是 200）。Content-Disposition 只能用 `filename*=UTF-8''SmartCampus.apk`
+> 这一种写法（`filename="SmartCampus.apk"` 同样会被拦截），浏览器据此保存为安装包；
+> 若后续绑定自定义 CDN/域名，可另行调整。

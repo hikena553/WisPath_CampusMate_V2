@@ -417,11 +417,17 @@ function logout() {
 </style>
 
 <style>
+/* 手机端首屏底色与页面同色：App 冷启动时 CSS 先到、Vue 还没挂载，
+   若这里写深色会先闪一屏深蓝（用户反馈的「启动时出现一会儿深色页面」）。
+   宽屏预览（≥600px）才用深色，给居中的手机容器当背景。 */
 html, body, #app {
   height: 100vh;
   overflow: hidden;
   margin: 0;
-  background-color: #0f172a;
+  background-color: #f5f6f7;
+}
+@media (min-width: 600px) {
+  html, body, #app { background-color: #0f172a; }
 }
 .el-drawer__header { margin-bottom: 0 !important; padding: 6px 16px !important; }
 .el-drawer__body { padding: 0 !important; }

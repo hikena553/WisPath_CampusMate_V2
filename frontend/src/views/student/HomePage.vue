@@ -112,6 +112,10 @@ onMounted(checkUnread)
   margin-bottom: 16px;
   border: 1px solid rgba(91,141,239,0.1);
 }
+@media (max-width: 767px) {
+  /* 移动端顶部导航隐藏，公告横幅是第一行：让出状态栏 / 挖孔高度 */
+  .announce-banner { margin-top: var(--sat, 0px); }
+}
 .banner-item {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px; border-radius: 8px;

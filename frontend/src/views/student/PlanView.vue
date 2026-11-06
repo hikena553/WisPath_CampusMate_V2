@@ -1610,6 +1610,8 @@ defineExpose({ refreshAll })
     inset: 0;
     z-index: 1500;
     max-width: none;
+    /* 整屏子页没有底部导航，末行要自己让出手势条 */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .plan-page > .tui-appbar {
     position: sticky;

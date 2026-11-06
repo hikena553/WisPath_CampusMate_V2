@@ -439,7 +439,8 @@ async function addTaskFromPopup() {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
+    /* 顶部安全区：背景图仍铺满状态栏，返回键下移到挖孔下方 */
+    padding: calc(10px + var(--sat, 0px)) 12px 10px;
   }
   .task-hero-back {
     width: 34px;

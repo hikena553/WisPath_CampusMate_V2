@@ -66,7 +66,10 @@ defineProps<{
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 0;
-  padding: 14px 16px;
+  /* 顶部安全区：吸顶头白底铺进状态栏 */
+  /* 顶部安全区：吸顶头白底铺进状态栏；上方留白与学生端同一口径，按屏宽自适应
+     （320–430px 屏约 6–8px，不再固定 14px），标题不被顶出一截空白 */
+  padding: calc(var(--sat, 0px) + clamp(6px, 1.8vw, 10px)) 16px clamp(10px, 2.6vw, 14px);
   border-radius: 14px;
   border: 1px solid rgba(37, 99, 235, 0.12);
   background: linear-gradient(135deg, #ffffff 0%, #f3f8ff 100%);

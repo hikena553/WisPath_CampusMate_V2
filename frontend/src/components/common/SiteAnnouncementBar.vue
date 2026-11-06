@@ -88,6 +88,8 @@ function dismiss() {
   color: #92510a;
 }
 @media (max-width: 767px) {
+  /* 移动端顶部导航是隐藏的，公告条直接贴屏幕顶：必须让出状态栏 / 挖孔高度 */
+  .site-announce { padding-top: calc(7px + var(--sat, 0px)); }
   .sa-text {
     white-space: normal;
   }
