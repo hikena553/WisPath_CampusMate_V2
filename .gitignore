@@ -309,3 +309,22 @@ backend/.tmpci/
 backend/.cijobs.json
 backend/.ciq.json
 backend/.runid.txt
+
+# ---------- 腾讯云 COS 安装包发布（本地密钥与状态，不入库）----------
+.cos.env
+.cos-last-upload.json
+.cos-sync.lock
+
+# ---------- 服务器本地运行产物 / 密钥（不入库）----------
+# 安装包及扫码下载运行时目录（构建产物，单包 100MB+）
+apk/
+# 数据同步改造时的现场备份
+_backup_*/
+# 本机 AI 助手配置（settings.local.json 为个人偏好）
+.claude/
+# 宝塔生成的 Apache 伪静态占位文件（服务器本地配置）
+backend/.htaccess
+# 签名密钥说明（含口令，仅保存在服务器）
+deploy/keystore-info.txt
+# 升级/替换前的临时备份文件
+*.bak
