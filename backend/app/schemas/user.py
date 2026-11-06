@@ -83,6 +83,22 @@ class QqExchangeRequest(BaseModel):
     ticket: str
 
 
+class QqMobileTokenRequest(BaseModel):
+    """QQ 互联移动端（Android SDK）直通授权：客户端上报 SDK 拿到的凭证。"""
+
+    access_token: str
+    openid: str
+
+
+class QqMobileAuthorizeOut(BaseModel):
+    """mobile/authorize 响应：已绑定 → login 分支直接登录；未绑定 → 注册票据引导补全信息。"""
+
+    status: str  # "login" | "unregistered"
+    login: LoginResponse | None = None
+    register_ticket: str | None = None
+    nickname: str | None = None
+
+
 class RegisterSmsRequest(BaseModel):
     """注册场景发送短信：先过图形验证码，再下发短信验证码。"""
 

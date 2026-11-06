@@ -10,9 +10,15 @@
 2. QQ 带 code 回跳 /api/auth/qq/callback；
 3. 后端用 code 换 access_token → 取 openid → 按 openid 找到已授权绑定的校园账号；
 4. 回跳前端 /qq-callback?ticket=...，前端用 ticket 换正式 access_token。
+
+移动端链路（Android SDK 直通，见 verify_mobile_token）：
+App 内原生 SDK 拉起 QQ 授权拿到 access_token + openid 后，由前端直接调
+/api/auth/qq/mobile/authorize 交给后端核验，不走 authorize/callback 回跳，
+因此只需要 QQ_APP_ID，无需 AppKey 与备案回调域名。
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -82,6 +88,18 @@ def build_authorize_url(mode: str, redirect_uri: str, user_id: int | None = None
     return f"{QQ_AUTHORIZE_URL}?{urlencode(params)}"
 
 
+def _parse_me_payload(text: str) -> dict:
+    """解析 /oauth2.0/me 的响应：兼容 JSON 与 callback( {...} ) 两种形式。"""
+    text = (text or "").strip()
+    try:
+        return json.loads(text)
+    except ValueError:
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end < 0:
+            raise RuntimeError("QQ 授权失败：openid 解析失败")
+        return json.loads(text[start : end + 1])
+
+
 def exchange_code(code: str, redirect_uri: str) -> tuple[str, str]:
     """用授权 code 换取 access_token 与 openid。"""
     resp = httpx.get(
@@ -109,21 +127,39 @@ def exchange_code(code: str, redirect_uri: str) -> tuple[str, str]:
         raise RuntimeError(token_data.get("error_description") or "QQ 授权失败：未获取到 access_token")
 
     me_resp = httpx.get(QQ_ME_URL, params={"access_token": access_token, "fmt": "json"}, timeout=10)
-    me_text = me_resp.text.strip()
-    try:
-        me_data = me_resp.json()
-    except ValueError:
-        # 兼容 callback( {"client_id":"...","openid":"..."} ); 形式
-        start, end = me_text.find("{"), me_text.rfind("}")
-        if start < 0 or end < 0:
-            raise RuntimeError("QQ 授权失败：openid 解析失败")
-        import json as _json
-
-        me_data = _json.loads(me_text[start : end + 1])
+    me_data = _parse_me_payload(me_resp.text)
     openid = me_data.get("openid")
     if not openid:
         raise RuntimeError("QQ 授权失败：未获取到 openid")
     return access_token, openid
+
+
+def verify_mobile_token(access_token: str, openid: str) -> str | None:
+    """移动端（Android SDK）直通校验。
+
+    客户端上报的 openid 不可信，这里以 access_token 反查 /me：
+    client_id 必须是本应用、openid 必须与上报一致，两者对不上即拒绝。
+    校验通过后顺带取昵称（失败不影响结果），access_token 用后即弃、不落库。
+    """
+    access_token = (access_token or "").strip()
+    openid = (openid or "").strip()
+    if not access_token or not openid:
+        raise RuntimeError("QQ 授权信息缺失")
+    try:
+        resp = httpx.get(
+            QQ_ME_URL, params={"access_token": access_token, "fmt": "json"}, timeout=10
+        )
+        me_data = _parse_me_payload(resp.text)
+    except RuntimeError:
+        raise
+    except Exception as exc:  # pragma: no cover - 外部服务
+        raise RuntimeError(f"QQ 授权校验失败：{exc}")
+    client_id = me_data.get("client_id")
+    if client_id and client_id != settings.QQ_APP_ID:
+        raise RuntimeError("QQ 授权不属于本应用")
+    if me_data.get("openid") != openid:
+        raise RuntimeError("QQ 授权信息与设备上报不一致")
+    return fetch_nickname(access_token, openid)
 
 
 def fetch_nickname(access_token: str, openid: str) -> str | None:

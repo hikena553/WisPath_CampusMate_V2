@@ -39,6 +39,8 @@ from app.schemas.user import (
     PhoneLoginRequest,
     ProfileUpdate,
     QqExchangeRequest,
+    QqMobileAuthorizeOut,
+    QqMobileTokenRequest,
     QuickCredentialOut,
     QuickLoginRequest,
     RegisterPhoneVerifyRequest,
@@ -530,6 +532,71 @@ def unbind_qq(user: User = Depends(get_current_user), db: Session = Depends(get_
     return UserInfo.model_validate(user)
 
 
+# ==================== QQ 互联移动端（Android SDK 直通） ====================
+
+_QQ_MOBILE_NOT_CONFIGURED = "QQ 互联未配置：请在 .env 填写 QQ_APP_ID"
+
+
+def _qq_mobile_verify(req: QqMobileTokenRequest) -> str | None:
+    """核验移动端上报的 SDK 凭证，失败统一 401。返回 QQ 昵称（可为空）。"""
+    if not (settings.QQ_APP_ID or "").strip():
+        raise HTTPException(status_code=503, detail=_QQ_MOBILE_NOT_CONFIGURED)
+    try:
+        return qq_oauth_service.verify_mobile_token(req.access_token, req.openid)
+    except Exception as exc:  # 网络异常 / 伪造凭证 / openid 不一致
+        logger.warning("[QQ] 移动端凭证核验失败: %s", exc)
+        raise HTTPException(status_code=401, detail="QQ 授权信息校验失败，请重新授权")
+
+
+@router.post("/qq/mobile/authorize", response_model=QqMobileAuthorizeOut)
+def qq_mobile_authorize(
+    req: QqMobileTokenRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """App 内 QQ 登录：原生 SDK 授权后前端直报 access_token/openid。
+
+    已绑定校园账号 → 直接登录；未绑定 → 下发 15 分钟注册票据，
+    前端引导到注册页补全学籍信息后凭 qq_ticket 完成注册。
+    与网站应用 OAuth 不同，本通道只需要 QQ_APP_ID（无需 AppKey 与回调域名）。
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    check_login_rate_limit(client_ip)
+    nickname = _qq_mobile_verify(req)
+
+    openid = req.openid.strip()
+    user = db.query(User).filter(User.qq_openid == openid).first()
+    if user:
+        _assert_login_allowed(user)
+        result = _attach_quick(user, _login_result(user))
+        _set_auth_cookie(response, result["access_token"])
+        return {"status": "login", "login": result}
+
+    ticket = qq_oauth_service.create_register_ticket(openid, nickname)
+    return {"status": "unregistered", "register_ticket": ticket, "nickname": nickname}
+
+
+@router.post("/qq/mobile/bind", response_model=UserInfo)
+def qq_mobile_bind(
+    req: QqMobileTokenRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """App 内绑定 QQ：当前登录账号与 SDK 授权的 QQ 建立绑定，被占用即拒绝。"""
+    nickname = _qq_mobile_verify(req)
+
+    openid = req.openid.strip()
+    occupied = db.query(User).filter(User.qq_openid == openid, User.id != user.id).first()
+    if occupied:
+        raise HTTPException(status_code=409, detail="该 QQ 已绑定其他校园账号")
+    user.qq_openid = openid
+    user.qq_nickname = nickname or user.qq_nickname
+    db.commit()
+    db.refresh(user)
+    return UserInfo.model_validate(user)
+
+
 # ==================== 学生自助注册 ====================
 
 _REG_PHONE_TICKET_PURPOSE = "reg_phone_ticket"
@@ -671,6 +738,9 @@ def register_student(req: RegisterRequest, request: Request, response: Response,
         if req.phone and _normalize_phone(req.phone) != ticket_phone:
             raise HTTPException(status_code=400, detail="手机号与验证凭证不一致")
         verified_phone = ticket_phone
+    elif req.qq_ticket:
+        # QQ 授权通道：QQ 已完成真实验证，手机号改为选填
+        verified_phone = None
     else:
         # 短信通道申请期间，注册页直接收集手机号，不做短信归属校验
         verified_phone = _require_phone(req.phone)
@@ -684,8 +754,9 @@ def register_student(req: RegisterRequest, request: Request, response: Response,
         if db.query(User).filter(User.qq_openid == qq_openid).first():
             raise HTTPException(status_code=409, detail="该 QQ 已绑定其他账号")
 
-    # 手机号需唯一；手动填写的 QQ 号仅作展示/找回密码辅助，不做登录凭据
-    if db.query(User).filter(User.phone == verified_phone).first():
+    # 手机号需唯一（QQ 票据通道下可为空，空值不做查询，避免 == None 误匹配 NULL 行）；
+    # 手动填写的 QQ 号仅作展示/找回密码辅助，不做登录凭据
+    if verified_phone and db.query(User).filter(User.phone == verified_phone).first():
         raise HTTPException(status_code=409, detail="该手机号已绑定校园账号，请直接登录")
     manual_qq = (req.qq or "").strip() or None
     if manual_qq and not re.fullmatch(r"[0-9]{5,12}", manual_qq):

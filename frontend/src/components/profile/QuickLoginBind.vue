@@ -64,8 +64,8 @@
     <template #footer>
       <div class="qlb-foot three">
         <button type="button" class="qlb-btn ghost" @click="qqSheet = false">取消</button>
-        <button type="button" class="qlb-btn ghost" :disabled="authorizing" @click="startQqAuth('bind')">
-          {{ authorizing ? '跳转中…' : '重新授权' }}
+        <button type="button" class="qlb-btn ghost" :disabled="authorizing" @click="handleQqReauth">
+          {{ authorizing ? '授权中…' : '重新授权' }}
         </button>
         <button type="button" class="qlb-btn solid" :disabled="unbinding" @click="handleUnbind">
           {{ unbinding ? '解绑中…' : '解除绑定' }}
@@ -79,9 +79,11 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import ActionSheet from '@/components/common/ActionSheet.vue'
-import { bindPhoneApi, getQqAuthorizeUrl, sendSmsCode, unbindQqApi } from '@/api/auth'
+import { bindPhoneApi, getQqAuthorizeUrl, qqMobileBindApi, sendSmsCode, unbindQqApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { syncQuickAccount } from '@/utils/quickLogin'
+import { QQ_NATIVE_AUTH_ENABLED } from '@/utils/features'
+import { qqNativeAuthAvailable, qqNativeLogin } from '@/utils/qqAuth'
 import type { UserInfo } from '@/types'
 
 defineOptions({ name: 'QuickLoginBind' })
@@ -91,6 +93,9 @@ const emit = defineEmits<{
 }>()
 
 const auth = useAuthStore()
+
+/** QQ 互联移动端（App 壳内原生 SDK 授权），浏览器恒为 false */
+const qqNativeEnabled = QQ_NATIVE_AUTH_ENABLED && qqNativeAuthAvailable()
 
 const userPhone = computed(() => auth.user?.phone || '')
 const qqBound = computed(() => !!auth.user?.qq_bound)
@@ -130,6 +135,19 @@ function handleQqRow() {
     qqSheet.value = true
     return
   }
+  if (qqNativeEnabled) {
+    handleQqNativeBind()
+    return
+  }
+  startQqAuth('bind')
+}
+
+/** 绑定态的「重新授权」入口：App 内走原生，浏览器走网站应用回跳 */
+function handleQqReauth() {
+  if (qqNativeEnabled) {
+    handleQqNativeBind()
+    return
+  }
   startQqAuth('bind')
 }
 
@@ -143,6 +161,29 @@ async function startQqAuth(mode: 'login' | 'bind') {
   } catch (e: any) {
     const detail = e?.response?.data?.detail
     ElMessage.info(detail || 'QQ 授权暂不可用，请稍后重试')
+  } finally {
+    authorizing.value = false
+  }
+}
+
+/** App 内：拉起手机 QQ 授权 → 后端核验后绑定到当前账号 */
+async function handleQqNativeBind() {
+  if (authorizing.value) return
+  authorizing.value = true
+  try {
+    const session = await qqNativeLogin()
+    const updated = await qqMobileBindApi(session.accessToken, session.openId)
+    auth.updateUser(updated)
+    syncQuickAccount(updated)
+    ElMessage.success('QQ 绑定成功')
+    qqSheet.value = false
+  } catch (e: any) {
+    const code = String(e?.message || '')
+    if (code === 'QQ_NOT_INSTALLED') {
+      ElMessage.warning('未检测到手机 QQ，请安装后重试')
+    } else if (code !== 'USER_CANCEL') {
+      ElMessage.warning(e?.response?.data?.detail || 'QQ 授权失败，请稍后重试')
+    }
   } finally {
     authorizing.value = false
   }

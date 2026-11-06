@@ -208,7 +208,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getQqAuthorizeUrl, loginApi, phoneLoginApi, quickLoginApi, sendSmsCode } from '@/api/auth'
+import { getQqAuthorizeUrl, loginApi, phoneLoginApi, qqMobileAuthorizeApi, quickLoginApi, sendSmsCode } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfig } from '@/composables/useSiteConfig'
 import LegalDoc from './LegalDoc.vue'
@@ -225,14 +225,17 @@ import {
   type PendingPasswordReset,
 } from '@/utils/passwordReset'
 import { getLastAccount } from '@/utils/lastAccount'
-import { THIRD_PARTY_AUTH_ENABLED } from '@/utils/features'
+import { THIRD_PARTY_AUTH_ENABLED, QQ_NATIVE_AUTH_ENABLED } from '@/utils/features'
+import { qqNativeAuthAvailable, qqNativeLogin } from '@/utils/qqAuth'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const { siteName, siteMascot } = useSiteConfig()
-/** 第三方登录开关（短信 / QQ 互联申请期间关闭） */
+/** 第三方登录开关（短信 / QQ 互联网站应用申请期间关闭） */
 const thirdPartyAuthEnabled = THIRD_PARTY_AUTH_ENABLED
+/** QQ 互联移动端（App 壳内原生 SDK 授权），浏览器恒为 false */
+const qqNativeEnabled = QQ_NATIVE_AUTH_ENABLED && qqNativeAuthAvailable()
 
 watch(
   siteName,
@@ -473,9 +476,13 @@ async function handlePhoneLogin() {
   }
 }
 
-/** QQ 登录：未配置 QQ 互联时回退到本机快捷登录 */
+/** QQ 登录：App 内走原生 QQ 互联授权；浏览器未配置网站应用时回退本机快捷登录 */
 async function handleQqLogin() {
   if (!ensureAgreed()) return
+  if (qqNativeEnabled) {
+    await handleQqNativeLogin()
+    return
+  }
   quickLoading.value = 'qq'
   try {
     const res: any = await getQqAuthorizeUrl('login')
@@ -491,6 +498,40 @@ async function handleQqLogin() {
       return
     }
     ElMessage.info(detail || 'QQ 登录暂不可用，请使用账号密码登录')
+  } finally {
+    quickLoading.value = ''
+  }
+}
+
+/** App 内：拉起手机 QQ 授权 → 后端核验 → 已绑定直接登录 / 未绑定去注册页补全信息 */
+async function handleQqNativeLogin() {
+  quickLoading.value = 'qq'
+  try {
+    const session = await qqNativeLogin()
+    const res = await qqMobileAuthorizeApi(session.accessToken, session.openId)
+    if (res.status === 'login' && res.login?.access_token) {
+      afterLogin(res.login)
+      return
+    }
+    if (res.status === 'unregistered' && res.register_ticket) {
+      quickLoading.value = ''
+      ElMessage.info('该 QQ 尚未注册校园账号，请补全信息完成注册')
+      router.push({
+        path: '/register',
+        query: { qq_ticket: res.register_ticket, qq_nickname: res.nickname || '' },
+      })
+      return
+    }
+    throw new Error('响应异常')
+  } catch (e: any) {
+    const code = String(e?.message || '')
+    // 用户主动取消不提示；未装 QQ 给出可行动的引导
+    if (code === 'USER_CANCEL') return
+    if (code === 'QQ_NOT_INSTALLED') {
+      ElMessage.warning('未检测到手机 QQ，请安装后重试')
+      return
+    }
+    ElMessage.warning(e?.response?.data?.detail || 'QQ 登录失败，请使用账号密码登录')
   } finally {
     quickLoading.value = ''
   }
