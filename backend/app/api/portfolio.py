@@ -1,5 +1,8 @@
 """我的作品集 API：项目经历（复用成长档案 projects）+ 证书荣誉 + 个人简历。仅 HTTP 语义，业务下沉 services。"""
 import base64
+import threading
+import time
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
@@ -112,6 +115,38 @@ def resume_options():
     }
 
 
+# ==================== 简历模板预览缓存 ====================
+# 一次真实渲染（收集档案 → 排版 → PDF → 位图）要几百毫秒，而第 3 步来回切步骤、
+# 重新打开向导都会重复请求同一张缩略图。这里按「用户 + 模板 + 证件照 + 求职目标」
+# 缓存渲染结果：TTL 3 分钟兜住档案编辑后的过期，LRU 上限兜住内存。
+_PREVIEW_TTL = 180
+_PREVIEW_MAX = 200
+_preview_cache: "OrderedDict[str, tuple[float, str]]" = OrderedDict()
+_preview_lock = threading.Lock()
+
+
+def _preview_cache_get(key: str) -> str | None:
+    now = time.time()
+    with _preview_lock:
+        hit = _preview_cache.get(key)
+        if not hit:
+            return None
+        ts, image = hit
+        if now - ts > _PREVIEW_TTL:
+            _preview_cache.pop(key, None)
+            return None
+        _preview_cache.move_to_end(key)
+        return image
+
+
+def _preview_cache_put(key: str, image: str) -> None:
+    with _preview_lock:
+        _preview_cache[key] = (time.time(), image)
+        _preview_cache.move_to_end(key)
+        while len(_preview_cache) > _PREVIEW_MAX:
+            _preview_cache.popitem(last=False)
+
+
 @router.get("/resume/template-preview")
 def resume_template_preview(
     template_key: str = "classic",
@@ -127,15 +162,31 @@ def resume_template_preview(
     """模板预览 = 真实渲染。
 
     用学生自己的档案按该模板走与导出完全相同的渲染管线（render_pdf +
-    build_header/build_sections）出一页 PDF，再用 pymupdf 转 PNG 回给前端。
+    build_header/build_sections）出一页 PDF，再转成图片回给前端。
     这样第 3 步看到的缩略图就是导出效果本身——模板样式不会再和 docx/pdf
     对不上，上传的证件照也会如实出现在预览里。
-    """
-    import fitz  # pymupdf
 
+    缩略图只显示在 68×93 的卡片里，按 A4 的 0.75 倍渲染已足够清晰：
+    比原来的 1.6 倍少一半以上的像素，编码和传输都快得多。渲染结果按
+    「用户 + 模板 + 证件照 + 求职目标」缓存 3 分钟，来回切步骤不用重算。
+    """
     template = resume_export.TEMPLATE_MAP.get(template_key)
     if not template:
         raise HTTPException(404, "模板不存在")
+
+    cache_key = "|".join((
+        str(current_user.id), template_key, photo_url or "",
+        industry or "", job_key or "", custom_job or "", job_type or "", city or "",
+    ))
+    cached = _preview_cache_get(cache_key)
+    if cached:
+        return {"template_key": template_key, "image": cached, "cached": True}
+
+    try:
+        import fitz  # pymupdf
+    except ImportError as exc:  # 依赖没装时不抛 500，让前端能给出「直接导出」的提示
+        raise HTTPException(503, "预览组件未安装，可直接导出简历") from exc
+
     profile = resume_export.collect_profile(db, current_user)
     target = resume_export.find_job(industry, job_key, custom_job)
     match = resume_export.evaluate(profile, industry, job_key, custom_job)
@@ -150,13 +201,15 @@ def resume_template_preview(
         )
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    pix = doc[0].get_pixmap(matrix=fitz.Matrix(1.6, 1.6))
-    png = pix.tobytes("png")
-    return {
-        "template_key": template_key,
-        "image": "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
-    }
+    except ImportError as exc:
+        raise HTTPException(503, "简历渲染组件未安装，可直接导出或联系管理员") from exc
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        pix = doc[0].get_pixmap(matrix=fitz.Matrix(0.75, 0.75))
+        image = "data:image/jpeg;base64," + base64.b64encode(
+            pix.tobytes("jpeg", jpg_quality=85)
+        ).decode("ascii")
+    _preview_cache_put(cache_key, image)
+    return {"template_key": template_key, "image": image}
 
 
 @router.post("/resume/match", response_model=ResumeMatchOut)

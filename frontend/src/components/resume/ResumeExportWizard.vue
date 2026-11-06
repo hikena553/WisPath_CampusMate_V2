@@ -192,6 +192,7 @@
                   <span class="rw-tpl-shot">
                     <!-- 真实预览：后端用你的档案按该模板渲染出的 PDF 首页，所见即所得 -->
                     <img v-if="tplShots[t.key]" :src="tplShots[t.key]" alt="" />
+                    <span v-else-if="tplFailed[t.key]" class="rw-tpl-fail">预览暂不可用</span>
                     <span v-else class="rw-tpl-skeleton" :class="{ spin: tplLoading }"></span>
                   </span>
                   <span class="rw-tpl-main">
@@ -390,6 +391,9 @@ async function runMatch() {
     ElMessage.error(errorMsg.value)
   } finally {
     matching.value = false
+    // 匹配度一出来就先把模板缩略图排上：用户在第 2 步读分数的时间，
+    // 正好把第 3 步要用的三张图渲染掉，点「挑模板」时基本已经好了。
+    if (props.modelValue) void loadTplShots()
   }
 }
 
@@ -518,16 +522,41 @@ async function onPhotoFile(e: Event) {
   }
 }
 
-// ── 模板预览：后端用学生自己的档案按该模板真实渲染一页 PDF 转 PNG ──
+// ── 模板预览：后端用学生自己的档案按该模板真实渲染一页 PDF 转图片 ──
 // 与导出走同一渲染管线，缩略图即导出效果（含证件照），不会再对不上。
+// 渲染要几百毫秒，所以：第 2 步算完匹配度就先预取，进第 3 步基本已经好了；
+// 同一份「目标 + 证件照」的预览只拉一次，来回切步骤不再重复请求。
 const tplShots = reactive<Record<string, string>>({})
+/** 渲染失败的模板：卡片上给出「预览暂不可用」，别让人对着骨架一直等 */
+const tplFailed = ref<Record<string, boolean>>({})
 const tplLoading = ref(false)
+/** 当前预览对应的输入指纹；一致就不重复拉 */
+const tplLoadedKey = ref('')
+/** 上一次全部渲染成功的时刻：超过 5 分钟重拉一次，兼顾「快」与「档案改过」 */
+const tplLoadedAt = ref(0)
+const TPL_TTL = 5 * 60 * 1000
 
-async function loadTplShots() {
+/** 决定预览内容的所有输入：目标变了或换了证件照才需要重渲染 */
+const tplKey = computed(() => JSON.stringify([
+  photoUrl.value || '',
+  form.industry,
+  form.job_key,
+  form.job_key === 'custom' ? form.custom_job.trim() : '',
+  form.job_type,
+  form.city,
+]))
+
+async function loadTplShots(force = false) {
   if (tplLoading.value || !options.value.templates.length) return
+  const key = tplKey.value
+  const fresh = tplLoadedKey.value === key && Date.now() - tplLoadedAt.value < TPL_TTL
+  if (!force && fresh) return
   tplLoading.value = true
   try {
-    await Promise.all(options.value.templates.map(async (t) => {
+    let done = 0
+    // 一张一张来：渲染是 CPU 活（字体子集化），并发只会让三个请求在服务端互相抢 GIL，
+    // 反而都要等两三秒；串行时第一张 0.4s 就出来，骨架逐个变图，观感更快也更稳。
+    for (const t of options.value.templates) {
       try {
         const r = await getTemplatePreview(t.key, photoUrl.value || null, {
           industry: form.industry, job_key: form.job_key, custom_job: form.custom_job,
@@ -535,24 +564,44 @@ async function loadTplShots() {
         })
         // 后端按当前选择的行业/岗位渲染，预览的求职意向与导出一致
         tplShots[t.key] = r.image
-      } catch { /* 拉取失败保留骨架，不挡导出 */ }
-    }))
+        if (tplFailed.value[t.key]) delete tplFailed.value[t.key]
+        done += 1
+      } catch {
+        // 拉取失败：卡片改成「预览暂不可用」，不挡导出
+        tplFailed.value[t.key] = true
+      }
+    }
+    // 三张都成功才记指纹；有失败的，下次进第 3 步会重试（服务端已缓存，重试也很快）
+    if (done === options.value.templates.length) {
+      tplLoadedKey.value = key
+      tplLoadedAt.value = Date.now()
+    }
   } finally {
     tplLoading.value = false
   }
 }
 
-// 打开向导即清缓存：行业/岗位可能换了，预览要跟着重渲染
-watch(() => props.modelValue, (v) => {
-  if (v) Object.keys(tplShots).forEach(k => delete tplShots[k])
+// 目标或证件照变了：旧缩略图立刻作废，避免「标题写着 A 岗位、图还是 B 岗位」
+watch(tplKey, () => {
+  Object.keys(tplShots).forEach(k => delete tplShots[k])
+  tplFailed.value = {}
+  tplLoadedKey.value = ''
+  tplLoadedAt.value = 0
+  if (step.value >= 2 && props.modelValue) void loadTplShots()
 })
 
-// 进入第 3 步、或照片更换后都重拉（照片会出现在预览里）
-watch(step, (s) => { if (s === 3 && props.modelValue) loadTplShots() })
-watch(photoUrl, () => {
+// 每次打开向导作废一次：档案可能在别的页面改过，重新渲染虽然要走服务端，
+// 但第 2 步的预取会把它藏掉；服务端 3 分钟缓存还在时更是几毫秒的事。
+watch(() => props.modelValue, (v) => {
+  if (!v) return
   Object.keys(tplShots).forEach(k => delete tplShots[k])
-  if (step.value === 3 && props.modelValue) loadTplShots()
+  tplFailed.value = {}
+  tplLoadedKey.value = ''
+  tplLoadedAt.value = 0
 })
+
+// 进第 3 步兜底再拉一次（第 2 步的预取失败 / 超过 TTL 时这里会补上）
+watch(step, (s) => { if (s === 3 && props.modelValue) void loadTplShots() })
 </script>
 
 <style scoped>
@@ -811,6 +860,12 @@ watch(photoUrl, () => {
   width: 100%; height: 100%;
   object-fit: cover; object-position: top center;
   display: block;
+}
+/* 单张预览渲染失败：给一句「预览暂不可用」，别让人对着骨架一直等 */
+.rw-tpl-fail {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 0 4px; text-align: center;
+  font-size: 9.5px; line-height: 1.4; color: #a9b1b7;
 }
 .rw-tpl-skeleton {
   flex: 1; margin: 6px;
