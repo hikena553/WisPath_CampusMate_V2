@@ -9,6 +9,7 @@ export function createLeave(data: LeaveRequestCreate) {
   return request.post<LeaveRequestOut>('/leave/create', data)
 }
 
+/** 撤销请假申请：仅「待审批（pending）」可撤，已通过 / 已退回会被后端 400 拒绝 */
 export function deleteLeave(id: number) {
   return request.delete(`/leave/${id}`)
 }

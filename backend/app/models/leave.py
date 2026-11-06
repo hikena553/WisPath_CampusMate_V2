@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from sqlalchemy import String, Text, Boolean, Enum as SAEnum, DateTime, Date, Index
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
@@ -24,8 +24,10 @@ class LeaveRequest(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     student_id: Mapped[int] = mapped_column(index=True)
-    start_date: Mapped[str] = mapped_column(Date)
-    end_date: Mapped[str] = mapped_column(Date)
+    # 列是 Date，注解必须是 date：写成 Mapped[str] 会误导调用方直接塞字符串，
+    # SQLite 方言在 commit 时才报 TypeError（曾经就是这么坏的）
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
     reason: Mapped[str] = mapped_column(Text)
     leave_type: Mapped[LeaveType] = mapped_column(SAEnum(LeaveType))
     status: Mapped[LeaveStatus] = mapped_column(SAEnum(LeaveStatus), default=LeaveStatus.PENDING)
