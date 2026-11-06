@@ -38,6 +38,19 @@ function currentUrl(): string {
   return window.location.pathname + window.location.search
 }
 
+/**
+ * 历史顶部那一条还是我们的哨兵吗？
+ * 路由 replace 会把 state 换回它自己的（__mian02Layer 标记随之消失），
+ * 但 sentinelActive 这个布尔值不会知道 —— 只信标记，才不会在哨兵已经没了
+ * 的时候还去 history.back()（那会退到上一个真实页面，用户就「跳级」了）。
+ */
+function sentinelPresent(): boolean {
+  const state: unknown = window.history.state
+  return (
+    !!state && typeof state === 'object' && (state as Record<string, unknown>).__mian02Layer === true
+  )
+}
+
 function pushSentinel() {
   const state = window.history.state
   window.history.pushState(
@@ -53,20 +66,31 @@ function pushSentinel() {
  * 把「层数 / 哨兵」对齐。放进微任务里合并执行：
  * 同一帧里「关一层、开一层」（如搜索页 → 会话）时层数不变，就不必动历史。
  */
+/**
+ * 路由切换后重新对齐哨兵：router.replace 会用路由自己的 state 覆盖当前历史条目的 state，
+ * 上一轮压进去的 __mian02Layer 标记随之消失 —— 哨兵名存实亡，返回键就会「跳级」到上一个页面。
+ * 这里只在「有浮层但哨兵标记丢了」时补一条，不主动退历史，避免和路由提交抢历史。
+ */
+export function resyncBackLayer(): void {
+  if (layers.length > 0 && (!sentinelActive || !sentinelPresent())) pushSentinel()
+}
+
 function scheduleSync() {
   if (syncQueued) return
   syncQueued = true
   queueMicrotask(() => {
     syncQueued = false
     if (layers.length > 0) {
-      if (!sentinelActive) pushSentinel()
+      // 哨兵丢了（被 replace 吃掉 / 上一轮 popstate 已消费）就补一条，保证浮层始终有历史兜底
+      if (!sentinelActive || !sentinelPresent()) pushSentinel()
       return
     }
     // 最后一层已关闭：把哨兵退掉，避免历史里留下一次「空按返回」
     if (!sentinelActive) return
     const sameUrl = currentUrl() === sentinelUrl
+    const stillOurs = sentinelPresent()
     sentinelActive = false
-    if (!sameUrl) return
+    if (!sameUrl || !stillOurs) return
     suppressPops += 1
     window.history.back()
   })
@@ -124,4 +148,27 @@ export function useBackLayer(open: Ref<boolean>, close: () => void) {
 
   watch(open, (value) => (value ? register() : unregister()), { immediate: true })
   onBeforeUnmount(() => unregister(true))
+}
+
+
+/**
+ * 给 Android 原生层用的返回入口（MainActivity 的 OnBackInvokedCallback 会先调用它）。
+ *
+ * 为什么需要：原生只看得到 WebView 历史（canGoBack / goBack），而页内浮层是靠哨兵
+ * 「间接」进历史的 —— 哨兵被路由 replace 吃掉、或页面本来就是历史第一条（深链 / 通知
+ * 直接落到聊天窗口）时，canGoBack() 为 false，原生会判定「已在一级页面」直接退后台，
+ * 用户看到的就是「在聊天里侧滑，App 直接回到桌面」。
+ *
+ * 所以让原生先问页面：有浮层就收掉最上面一层并返回 true；没有才让原生走历史 / 退后台。
+ */
+function handleNativeBack(): boolean {
+  const top = layers[layers.length - 1]
+  if (!top) return false
+  top.close()
+  // 关闭后由 unregister -> scheduleSync 负责把哨兵退掉（与页内返回箭头同一套）
+  return true
+}
+
+if (typeof window !== 'undefined') {
+  ;(window as Window & { __mian02HandleBack?: () => boolean }).__mian02HandleBack = handleNativeBack
 }

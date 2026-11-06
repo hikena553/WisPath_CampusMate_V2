@@ -17,6 +17,11 @@
       property="og:description"
       content="把校园资讯、学业记录与 AI 陪伴装进口袋。教师端与学生端共用一个移动客户端，管理员通过网页控制台管理全站。"
     />
+    <!-- 首屏底色：在打包 CSS 加载/执行前就铺浅色，与 App 一致，避免冷启动闪深色或白屏 -->
+    <style>
+      html, body { background: #f5f6f7; }
+      @media (min-width: 600px) { html, body { background: #0f172a; } }
+    </style>
   </head>
   <body>
     <div id="app"></div>

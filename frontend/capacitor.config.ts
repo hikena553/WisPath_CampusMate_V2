@@ -31,6 +31,10 @@ const config: CapacitorConfig = {
     : {
         androidScheme: 'https',
       },
+  // 返回键完全交给 MainActivity 原生处理，避免插件与原生重复响应
+  plugins: {
+    App: { disableBackButtonHandler: true },
+  },
   android: {
     // 线上站点一律 HTTPS，禁止 WebView 混入 HTTP 资源
     allowMixedContent: false,
